@@ -28,8 +28,10 @@ export interface WritePathDeps {
 export interface WritePathInput {
   /** True when editing an existing notification (seed carried ids). */
   isEdit: boolean;
-  /** True when the (audience, channel) unique-key components are unchanged. */
+  /** True when the routing (audience, channel) unique-key components are unchanged. */
   keyUnchanged: boolean;
+  /** True when the template key (audience, channel, LOCALE) is unchanged; defaults to keyUnchanged. */
+  templateKeyUnchanged?: boolean;
   /** Deterministic uids mirroring MDMS's server-side x-unique derivation. */
   routingUid: string;
   templateUid: string;
@@ -86,6 +88,15 @@ export async function saveNotificationPair(deps: WritePathDeps, input: WritePath
     isEdit, keyUnchanged, routingUid, templateUid,
     routingData, templateData, seedRoutingId, seedTemplateId,
   } = input;
+  const templateKeyUnchanged = input.templateKeyUnchanged ?? keyUnchanged;
+
+  if (isEdit && seedRoutingId && keyUnchanged && !templateKeyUnchanged) {
+    // Same routing row, different locale: add the new-locale template and update the
+    // routing in place. The old-locale template stays — it is still a valid body.
+    await upsert(deps, 'notification-template', templateUid, templateData);
+    await deps.update('notification-routing', { id: seedRoutingId, data: routingData, previousData: {} }, RETURN_PROMISE);
+    return;
+  }
 
   if (isEdit && seedRoutingId && seedTemplateId && keyUnchanged) {
     // In-place edit, key unchanged: plain updates (with returnPromise).

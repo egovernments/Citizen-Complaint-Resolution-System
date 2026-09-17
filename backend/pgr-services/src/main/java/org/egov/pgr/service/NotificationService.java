@@ -16,8 +16,6 @@ import org.egov.pgr.service.notification.TemplateRenderer;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.NotificationUtil;
-import org.egov.pgr.web.models.Notification.*;
-import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.pgr.web.models.RequestInfoWrapper;
 import org.egov.pgr.web.models.ServiceRequest;
 import org.egov.pgr.web.models.workflow.ProcessInstance;
@@ -75,484 +73,16 @@ public class NotificationService {
     @Autowired
     private Producer producer;
 
-    public void process(ServiceRequest request, String topic) {
-        // Config-driven path (MDMS NotificationRouting + NotificationTemplate). When the flag is
-        // off, fall through to the verbatim legacy behavior below.
-        if (Boolean.TRUE.equals(config.getNotificationConfigDriven())) {
-            processConfigDriven(request, topic);
-            return;
-        }
-        try {
-            log.info("request for notification :" + request);
-            String tenantId = request.getService().getTenantId();
-            ServiceWrapper serviceWrapper = ServiceWrapper.builder().service(request.getService()).workflow(request.getWorkflow()).build();
-            String applicationStatus = request.getService().getApplicationStatus();
-            String action = request.getWorkflow().getAction();
-
-
-            if (!(NOTIFICATION_ENABLE_FOR_STATUS.contains(action+"_"+applicationStatus))) {
-                log.info("Notification Disabled For State :" + applicationStatus);
-                return;
-            }
-
-            Map<String, List<String>> finalMessage = getFinalMessage(request, topic, applicationStatus);
-            org.egov.pgr.web.models.User citizenUser = request.getService().getCitizen();
-            String citizenCountryCode = citizenUser != null ? citizenUser.getCountryCode() : null;
-            String citizenMobileNumber = buildMobileWithCountryCode(
-                    citizenUser != null ? citizenUser.getMobileNumber() : null, citizenCountryCode);
-            String employeeMobileNumber = null;
-
-            if(applicationStatus.equalsIgnoreCase(PENDINGFORASSIGNMENT) && action.equalsIgnoreCase(PGR_WF_REOPEN)) {
-                ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-                employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
-            }
-            else if(applicationStatus.equalsIgnoreCase(PENDINGFORASSIGNMENT) && action.equalsIgnoreCase(APPLY)) {
-                employeeMobileNumber = null;
-            }
-            else if(applicationStatus.equalsIgnoreCase(REJECTED) && action.equalsIgnoreCase(REJECT)) {
-                employeeMobileNumber = null;
-            }
-            else  if (applicationStatus.equalsIgnoreCase(RESOLVED)  && action.equalsIgnoreCase(PGR_WF_RESOLVE)){
-                ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-                employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
-            }
-            else  if ((applicationStatus.equalsIgnoreCase(CLOSED_AFTER_RESOLUTION) || applicationStatus.equalsIgnoreCase(CLOSED_AFTER_REJECTION)) && action.equalsIgnoreCase(RATE)) {
-                ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-                employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
-            }
-            else if ((applicationStatus.equalsIgnoreCase(PENDINGATLME) && action.equalsIgnoreCase(ASSIGN)) || (applicationStatus.equalsIgnoreCase(PENDING_FOR_REASSIGNMENT) && action.equalsIgnoreCase(REASSIGN))){
-                org.egov.pgr.web.models.User empUser = fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId());
-                employeeMobileNumber = buildMobileWithCountryCode(empUser.getMobileNumber(), empUser.getCountryCode());
-            }
-            else if(applicationStatus.equalsIgnoreCase(PENDINGATLME) && action.equalsIgnoreCase(REASSIGN))
-            {
-                org.egov.pgr.web.models.User empUser = fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId());
-                employeeMobileNumber = buildMobileWithCountryCode(empUser.getMobileNumber(), empUser.getCountryCode());
-            }
-            else {
-                org.egov.pgr.web.models.User empUser = fetchUserByUUID(request.getService().getAuditDetails().getCreatedBy(), request.getRequestInfo(), request.getService().getTenantId());
-                employeeMobileNumber = buildMobileWithCountryCode(empUser.getMobileNumber(), empUser.getCountryCode());
-            }
-
-            if(!StringUtils.isEmpty(finalMessage)) {
-                if (config.getIsUserEventsNotificationEnabled() != null && config.getIsUserEventsNotificationEnabled()) {
-                    for (Map.Entry<String, List<String>> entry : finalMessage.entrySet()) {
-                        for (String msg : entry.getValue()) {
-                            EventRequest eventRequest = enrichEventRequest(request, msg);
-                            if (eventRequest != null) {
-                                notificationUtil.sendEventNotification(tenantId, eventRequest);
-                            }
-                        }
-                    }
-                }
-
-                if (config.getIsSMSEnabled() != null && config.getIsSMSEnabled()) {
-
-                    for (Map.Entry<String, List<String>> entry : finalMessage.entrySet()) {
-
-                        if (entry.getKey().equalsIgnoreCase(CITIZEN)) {
-                            for (String msg : entry.getValue()) {
-                                List<SMSRequest> smsRequests = new ArrayList<>();
-                                smsRequests = enrichSmsRequest(citizenMobileNumber, msg);
-                                if (!CollectionUtils.isEmpty(smsRequests)) {
-                                    notificationUtil.sendSMS(tenantId, smsRequests);
-                                }
-                            }
-                        } else {
-                            for (String msg : entry.getValue()) {
-                                List<SMSRequest> smsRequests = new ArrayList<>();
-                                smsRequests = enrichSmsRequest(employeeMobileNumber, msg);
-                                if (!CollectionUtils.isEmpty(smsRequests)) {
-                                    notificationUtil.sendSMS(tenantId, smsRequests);
-                                }
-                            }
-                        }
-                    }
-
-                }
-
-
-            }
-
-        } catch (Exception ex) {
-            log.error("Error occured while processing the record from topic : " + topic, ex);
-        }
-    }
-
     /**
-     *
-     * @param request PGR Request
-     * @param topic Topic Name
-     * @param applicationStatus Application Status
-     * @return Returns list of SMSRequest
+     * Entry point from the Kafka notification consumer. Routing, recipients and message
+     * bodies come from MDMS (RAINMAKER-PGR.NotificationRouting / NotificationTemplate /
+     * NotificationProviderTemplate); PGR renders the final text and publishes one
+     * pre-rendered event per (recipient x channel) for novu-bridge to deliver.
      */
-    private Map<String, List<String>> getFinalMessage(ServiceRequest request, String topic, String applicationStatus) {
-        String tenantId = request.getService().getTenantId();
-        String localizationMessage = notificationUtil.getLocalizationMessages(tenantId, request.getRequestInfo(),PGR_MODULE);
-
-        ServiceWrapper serviceWrapper = ServiceWrapper.builder().service(request.getService()).workflow(request.getWorkflow()).build();
-        Map<String, List<String>> message = new HashMap<>();
-
-        String messageForCitizen = null;
-        String messageForEmployee = null;
-        String defaultMessage = null;
-
-        String localisedStatus = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,"CS_COMMON_"+serviceWrapper.getService().getApplicationStatus());
-
-        /**
-         * Confirmation SMS to citizens, when they will raise any complaint
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(PENDINGFORASSIGNMENT) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(APPLY)) {
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            if (defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-
-        }
-        /**
-         * SMS to citizens and employee both, when a complaint is assigned to an employee
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(PENDINGATLME) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(ASSIGN)) {
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            messageForEmployee = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, EMPLOYEE, localizationMessage);
-            if (messageForEmployee == null) {
-                log.info("No message Found For Employee On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-
-            Map<String, String> reassigneeDetails  = getHRMSEmployee(request);
-
-            if (messageForCitizen.contains("{emp_department}"))
-                messageForCitizen = messageForCitizen.replace("{emp_department}",reassigneeDetails.get(DEPARTMENT));
-
-            if (messageForCitizen.contains("{emp_designation}"))
-                messageForCitizen = messageForCitizen.replace("{emp_designation}",reassigneeDetails.get(DESIGNATION));
-
-            if (messageForCitizen.contains("{emp_name}"))
-                messageForCitizen = messageForCitizen.replace("{emp_name}", fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getName());
-
-            if(messageForEmployee.contains("{ulb}")) {
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String localisedULB = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,serviceWrapper.getService().getAddress().getDistrict());
-                messageForEmployee = messageForEmployee.replace("{ulb}",localisedULB);
-            }
-
-            if (messageForEmployee.contains("{emp_name}"))
-                messageForEmployee = messageForEmployee.replace("{emp_name}", fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getName());
-
-            if(messageForEmployee.contains("{ao_designation}")){
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String path = "$..messages[?(@.code==\"COMMON_MASTERS_DESIGNATION_AO\")].message";
-
-                try {
-                    ArrayList<String> messageObj = JsonPath.parse(localisationMessageForPlaceholder).read(path);
-                    if(messageObj != null && messageObj.size() > 0) {
-                        messageForEmployee = messageForEmployee.replace("{ao_designation}", messageObj.get(0));
-                    }
-                } catch (Exception e) {
-                    log.warn("Fetching from localization failed", e);
-                }
-            }
-        }
-
-        /**
-         * SMS to citizens and employee, when the complaint is re-assigned to an employee
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(PENDING_FOR_REASSIGNMENT) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(REASSIGN)){
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            messageForEmployee = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, EMPLOYEE, localizationMessage);
-            if (messageForEmployee == null) {
-                log.info("No message Found For Employee On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-
-            Map<String, String> reassigneeDetails  = getHRMSEmployee(request);
-            if (messageForCitizen.contains("{emp_department}"))
-                messageForCitizen = messageForCitizen.replace("{emp_department}",reassigneeDetails.get(DEPARTMENT));
-
-            if (messageForCitizen.contains("{emp_designation}"))
-                messageForCitizen = messageForCitizen.replace("{emp_designation}",reassigneeDetails.get(DESIGNATION));
-
-
-            if (messageForCitizen.contains("{emp_name}"))
-                messageForCitizen = messageForCitizen.replace("{emp_name}", fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getName());
-
-            if(messageForEmployee.contains("{ulb}")) {
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String localisedULB = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,serviceWrapper.getService().getAddress().getDistrict());
-                messageForEmployee = messageForEmployee.replace("{ulb}",localisedULB);
-            }
-
-            if (messageForEmployee.contains("{emp_name}"))
-                messageForEmployee = messageForEmployee.replace("{emp_name}", fetchUserByUUID(request.getRequestInfo().getUserInfo().getUuid(), request.getRequestInfo(), request.getService().getTenantId()).getName());
-
-            if(messageForEmployee.contains("{ao_designation}")){
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String path = "$..messages[?(@.code==\"COMMON_MASTERS_DESIGNATION_AO\")].message";
-
-                try {
-                    ArrayList<String> messageObj = JsonPath.parse(localisationMessageForPlaceholder).read(path);
-                    if(messageObj != null && messageObj.size() > 0) {
-                        messageForEmployee = messageForEmployee.replace("{ao_designation}", messageObj.get(0));
-                    }
-                } catch (Exception e) {
-                    log.warn("Fetching from localization failed", e);
-                }
-            }
-        }
-
-        /**
-         * SMS to citizens, when complaint got rejected with reason
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(REJECTED) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(REJECT)) {
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-            if (messageForCitizen.contains("{additional_comments}"))
-                messageForCitizen = messageForCitizen.replace("{additional_comments}", serviceWrapper.getWorkflow().getComments());
-        }
-
-        /**
-         * SMS to citizens and employee, when the complaint has been re-opened on citizen request
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(PENDINGFORASSIGNMENT) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(PGR_WF_REOPEN)) {
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            messageForEmployee = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, EMPLOYEE, localizationMessage);
-            if (messageForEmployee == null) {
-                log.info("No message Found For Employee On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-            if(messageForEmployee.contains("{ulb}")) {
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String localisedULB = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,serviceWrapper.getService().getAddress().getDistrict());
-                messageForEmployee = messageForEmployee.replace("{ulb}",localisedULB);
-            }
-
-            if (messageForEmployee.contains("{emp_name}"))
-                messageForEmployee = messageForEmployee.replace("{emp_name}", processInstance.getAssignes().get(0).getName());
-        }
-
-        /**
-         * SMS to citizens, when complaint got resolved
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(RESOLVED) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(PGR_WF_RESOLVE)) {
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-            if (messageForCitizen.contains("{emp_name}"))
-                messageForCitizen = messageForCitizen.replace("{emp_name}", processInstance.getAssignes().get(0).getName());
-        }
-
-        /**
-         * SMS to citizens and employee, when the complaint has been re-opened on citizen request
-         */
-        if((serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(CLOSED_AFTER_RESOLUTION) ||
-                serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(CLOSED_AFTER_REJECTION)) &&
-                serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(RATE)) {
-            messageForEmployee = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, EMPLOYEE, localizationMessage);
-            if (messageForEmployee == null) {
-                log.info("No message Found For Employee On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-
-            if(messageForEmployee.contains("{rating}"))
-                messageForEmployee=messageForEmployee.replace("{rating}",serviceWrapper.getService().getRating().toString());
-
-            if (messageForEmployee.contains("{emp_name}"))
-                messageForEmployee = messageForEmployee.replace("{emp_name}", processInstance.getAssignes().get(0).getName());
-        }
-
-        /**
-         * SMS to citizens and employee, when the complaint is re-assigned to LME
-         */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(PENDINGATLME) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(REASSIGN)){
-            messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
-            if (messageForCitizen == null) {
-                log.info("No message Found For Citizen On Topic : " + topic);
-                return null;
-            }
-
-            messageForEmployee = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, EMPLOYEE, localizationMessage);
-            if (messageForEmployee == null) {
-                log.info("No message Found For Employee On Topic : " + topic);
-                return null;
-            }
-
-            defaultMessage = notificationUtil.getDefaultMsg(CITIZEN, localizationMessage);
-            if (defaultMessage == null) {
-                log.info("No default message Found For Topic : " + topic);
-                return null;
-            }
-
-            if(defaultMessage.contains("{status}"))
-                defaultMessage = defaultMessage.replace("{status}", localisedStatus);
-
-
-            Map<String, String> reassigneeDetails  = getHRMSEmployee(request);
-            if (messageForCitizen.contains("{emp_department}"))
-                messageForCitizen = messageForCitizen.replace("{emp_department}",reassigneeDetails.get(DEPARTMENT));
-
-            if (messageForCitizen.contains("{emp_designation}"))
-                messageForCitizen = messageForCitizen.replace("{emp_designation}",reassigneeDetails.get(DESIGNATION));
-
-            if (messageForCitizen.contains("{emp_name}"))
-                messageForCitizen = messageForCitizen.replace("{emp_name}", fetchUserByUUID(request.getWorkflow().getAssignes().get(0), request.getRequestInfo(), request.getService().getTenantId()).getName());
-
-            if(messageForEmployee.contains("{ulb}")) {
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String localisedULB = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,serviceWrapper.getService().getAddress().getDistrict());
-                messageForEmployee = messageForEmployee.replace("{ulb}",localisedULB);
-            }
-
-            if (messageForEmployee.contains("{emp_name}"))
-                messageForEmployee = messageForEmployee.replace("{emp_name}", fetchUserByUUID(request.getRequestInfo().getUserInfo().getUuid(), request.getRequestInfo(), request.getService().getTenantId()).getName());
-
-            if(messageForEmployee.contains("{ao_designation}")){
-                String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-                String path = "$..messages[?(@.code==\"COMMON_MASTERS_DESIGNATION_AO\")].message";
-
-                try {
-                    ArrayList<String> messageObj = JsonPath.parse(localisationMessageForPlaceholder).read(path);
-                    if(messageObj != null && messageObj.size() > 0) {
-                        messageForEmployee = messageForEmployee.replace("{ao_designation}", messageObj.get(0));
-                    }
-                } catch (Exception e) {
-                    log.warn("Fetching from localization failed", e);
-                }
-            }
-        }
-
-
-        String localisedComplaint = getLocalisedComplaintType(localizationMessage, request.getService().getServiceCode());
-        // An entry missing from both namespaces must not abort the notification: a null
-        // replacement makes String.replace throw. Fall back to the raw service code.
-        if (!StringUtils.hasText(localisedComplaint))
-            localisedComplaint = StringUtils.hasText(request.getService().getServiceCode())
-                    ? request.getService().getServiceCode() : "";
-
-        Long createdTime = serviceWrapper.getService().getAuditDetails().getCreatedTime();
-        LocalDate date = Instant.ofEpochMilli(createdTime > 1_000_000_000_000L ? createdTime : createdTime * 1000)
-                .atZone(ZoneId.systemDefault()).toLocalDate();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_PATTERN);
-
-        String appLink = notificationUtil.getShortnerURL(config.getMobileDownloadLink());
-
-        if(messageForCitizen != null) {
-            messageForCitizen = messageForCitizen.replace("{complaint_type}", localisedComplaint);
-            messageForCitizen = messageForCitizen.replace("{id}", serviceWrapper.getService().getServiceRequestId());
-            messageForCitizen = messageForCitizen.replace("{date}", date.format(formatter));
-            messageForCitizen = messageForCitizen.replace("{download_link}", appLink);
-        }
-
-        if(messageForEmployee != null) {
-            messageForEmployee = messageForEmployee.replace("{complaint_type}", localisedComplaint);
-            messageForEmployee = messageForEmployee.replace("{id}", serviceWrapper.getService().getServiceRequestId());
-            messageForEmployee = messageForEmployee.replace("{date}", date.format(formatter));
-            messageForEmployee = messageForEmployee.replace("{download_link}", appLink);
-        }
-
-
-        message.put(CITIZEN, Arrays.asList(new String[] {messageForCitizen, defaultMessage}));
-        message.put(EMPLOYEE, Arrays.asList(messageForEmployee));
-
-        return message;
+    public void process(ServiceRequest request, String topic) {
+        processConfigDriven(request, topic);
     }
+
 
     /**
      * Resolves the localized complaint-type label for a service code: the current
@@ -680,26 +210,6 @@ public class NotificationService {
         return processInstanceToReturn;
     }
 
-    public String getDepartment(ServiceRequest request){
-        Object mdmsData = mdmsUtils.mDMSCall(request);
-        String serviceCode = request.getService().getServiceCode();
-        String jsonPath = MDMS_SERVICEDEF_SEARCH.replace("{SERVICEDEF}",serviceCode);
-
-        List<Object> res = null;
-
-        try{
-            res = JsonPath.read(mdmsData,jsonPath);
-        }
-        catch (Exception e){
-            throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response");
-        }
-
-        if(CollectionUtils.isEmpty(res))
-            throw new CustomException("INVALID_SERVICECODE","The service code: "+serviceCode+" is not present in MDMS");
-
-        return res.get(0).toString();
-
-    }
 
     public Map<String, String> getHRMSEmployee(ServiceRequest request){
         Map<String, String> reassigneeDetails = new HashMap<>();
@@ -754,90 +264,6 @@ public class NotificationService {
         return reassigneeDetails;
     }
 
-    private List<SMSRequest> enrichSmsRequest(String mobileNumber, String finalMessage) {
-        List<SMSRequest> smsRequest = new ArrayList<>();
-        SMSRequest req = SMSRequest.builder().mobileNumber(mobileNumber).message(finalMessage).build();
-        smsRequest.add(req);
-        return smsRequest;
-    }
-
-    private EventRequest enrichEventRequest(ServiceRequest request, String finalMessage) {
-        String tenantId = request.getService().getTenantId();
-        String mobileNumber = request.getService().getCitizen().getMobileNumber();
-
-        Map<String, String> mapOfPhoneNoAndUUIDs = fetchUserUUIDs(mobileNumber, request.getRequestInfo(),tenantId);
-
-        if (CollectionUtils.isEmpty(mapOfPhoneNoAndUUIDs.keySet())) {
-            log.info("UUID search failed!");
-        }
-
-        List<Event> events = new ArrayList<>();
-        List<String> toUsers = new ArrayList<>();
-        toUsers.add(mapOfPhoneNoAndUUIDs.get(mobileNumber));
-
-        Action action = null;
-        if(request.getWorkflow().getAction().equals("RESOLVE")) {
-
-            List<ActionItem> items = new ArrayList<>();
-            String rateLink = "";
-            String reopenLink = "";
-            String rateUrl = config.getRateLink();
-            String reopenUrl = config.getReopenLink();
-            rateLink = rateUrl.replace("{application-id}", request.getService().getServiceRequestId());
-            reopenLink = reopenUrl.replace("{application-id}", request.getService().getServiceRequestId());
-            rateLink = getUiAppHost(tenantId) + rateLink;
-            reopenLink = getUiAppHost(tenantId) + reopenLink;
-            ActionItem rateItem = ActionItem.builder().actionUrl(rateLink).code(config.getRateCode()).build();
-            ActionItem reopenItem = ActionItem.builder().actionUrl(reopenLink).code(config.getReopenCode()).build();
-            items.add(rateItem);
-            items.add(reopenItem);
-
-            action = Action.builder().actionUrls(items).build();
-        }
-        Recepient recepient = Recepient.builder().toUsers(toUsers).toRoles(null).build();
-        events.add(Event.builder().tenantId(tenantId).description(finalMessage).eventType(USREVENTS_EVENT_TYPE)
-                .name(USREVENTS_EVENT_NAME).postedBy(USREVENTS_EVENT_POSTEDBY)
-                .source(Source.WEBAPP).recepient(recepient).actions(action).eventDetails(null).build());
-
-        if (!CollectionUtils.isEmpty(events)) {
-            return EventRequest.builder().requestInfo(request.getRequestInfo()).events(events).build();
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Fetches UUIDs of CITIZEN based on the phone number.
-     *
-     * @param mobileNumber - Mobile Numbers
-     * @param requestInfo - Request Information
-     * @param tenantId - Tenant Id
-     * @return Returns List of MobileNumbers and UUIDs
-     */
-    public Map<String, String> fetchUserUUIDs(String mobileNumber, RequestInfo requestInfo, String tenantId) {
-        Map<String, String> mapOfPhoneNoAndUUIDs = new HashMap<>();
-        StringBuilder uri = new StringBuilder();
-        uri.append(config.getUserHost()).append(config.getUserSearchEndpoint());
-        Map<String, Object> userSearchRequest = new HashMap<>();
-        userSearchRequest.put("RequestInfo", requestInfo);
-        userSearchRequest.put("tenantId", tenantId);
-        userSearchRequest.put("userType", "CITIZEN");
-        userSearchRequest.put("userName", mobileNumber);
-        try {
-            Object user = serviceRequestRepository.fetchResult(uri, userSearchRequest);
-            if(null != user) {
-                String uuid = JsonPath.read(user, "$.user[0].uuid");
-                mapOfPhoneNoAndUUIDs.put(mobileNumber, uuid);
-            }else {
-                log.error("Service returned null while fetching user for username - "+mobileNumber);
-            }
-        }catch(Exception e) {
-            log.error("Exception while fetching user for username - "+mobileNumber);
-            log.error("Exception trace: ",e);
-        }
-
-        return mapOfPhoneNoAndUUIDs;
-    }
 
     private User getInternalMicroserviceUser(String tenantId)
     {
@@ -855,11 +281,6 @@ public class NotificationService {
         return userInfo;
     }
 
-    public String getUiAppHost(String tenantId)
-    {
-        String stateLevelTenantId = centralInstanceUtil.getStateLevelTenant(tenantId);
-        return config.getUiAppHostMap().get(stateLevelTenantId);
-    }
 
     private String buildMobileWithCountryCode(String mobileNumber, String countryCode) {
         if (mobileNumber == null) return null;
@@ -871,8 +292,7 @@ public class NotificationService {
     }
 
     // ==================== Config-driven notification path (MDMS-driven) ====================
-    // Replaces the legacy gate + 7 if-blocks: routing comes from RAINMAKER-PGR.NotificationRouting,
-    // bodies from RAINMAKER-PGR.NotificationTemplate. PGR renders+localizes here, then publishes ONE
+    // Routing comes from RAINMAKER-PGR.NotificationRouting, bodies from RAINMAKER-PGR.NotificationTemplate. PGR renders+localizes here, then publishes ONE
     // pre-rendered event per (recipient x channel) to complaints.domain.events. novu-bridge delivers.
 
     /**
@@ -880,12 +300,10 @@ public class NotificationService {
      * (businessService, action, toState), fans each matched (audience, channel) out to its recipients,
      * renders+localizes the body, and publishes ONE pre-rendered event per (recipient x channel).
      *
-     * KNOWN LIMITATION (accepted for the single-locale pilot): rendering uses the
-     * instance default locale (pgr.notification.default.locale) for every
-     * recipient. The NotificationTemplate `locale` dimension and Contact.locale
-     * are carried but not yet resolved per recipient. Per-recipient localization
-     * requires resolving a real user locale and rendering per (audience, channel,
-     * locale) group — tracked in the design doc's open items.
+     * Locale: each recipient renders in their preferredLanguage (digit-user-preferences-service,
+     * one cached lookup per tenant) with pgr.notification.default.locale as the fallback; the
+     * renderer additionally falls back to the default locale when a template is missing in the
+     * recipient's language.
      */
     private void processConfigDriven(ServiceRequest request, String topic) {
         try {
@@ -905,6 +323,8 @@ public class NotificationService {
             String eventName = EVENT_NAME_PREFIX + action.toUpperCase(Locale.ROOT);
             String locale = config.getNotificationDefaultLocale();
             Map<String, String> values = buildPlaceholderValues(request);
+            // uuid -> preferredLanguage for this tenant (one cached lookup per fan-out; empty = default for all).
+            Map<String, String> preferredLocales = fetchPreferredLocales(tenantId, request.getRequestInfo());
 
             Set<String> emitted = new HashSet<>();
             // Memoize resolved recipients per (audience, assigneeOnly) so a role authored on
@@ -938,24 +358,11 @@ public class NotificationService {
                 // null templateId: the bridge persists an auditable SKIPPED/NB_TEMPLATE_NOT_APPROVED row
                 // and never falls back to a free-form WhatsApp send. Dropping the event here (an earlier
                 // `continue`) made the skip invisible — no nb_dispatch_log row. SMS/EMAIL are unaffected.
-                String providerTemplateId = null;
-                Map<String, Object> contentVariables = null;
-                if ("WHATSAPP".equalsIgnoreCase(channel)) {
-                    Map<String, Object> pt = resolveProviderTemplate(tenantId, "twilio",
-                            audience, action, toState, locale);
-                    if (pt == null) {
-                        log.info("No approved WhatsApp provider-template for {}.{}.{}.{} on complaint {}; "
-                                + "emitting for an auditable bridge-side SKIP (NB_TEMPLATE_NOT_APPROVED)",
-                                audience, action, toState, locale,
-                                request.getService().getServiceRequestId());
-                    } else {
-                        providerTemplateId = String.valueOf(pt.get("templateId"));
-                        contentVariables = buildContentVariables(pt.get("variables"), values);
-                    }
-                }
-                String body = null;
-                String subject = null;
-                boolean rendered = false;
+                // Everything below is per LOCALE: recipients render in their own preferredLanguage
+                // (falling back to the instance default), so one (audience, channel) row can fan out
+                // in several languages. Rendered bodies and provider templates are memoized per locale.
+                Map<String, Rendered> renderedByLocale = new HashMap<>();
+                Map<String, Map<String, Object>> providerTemplateByLocale = new HashMap<>();
                 for (ResolvedRecipient recipient : recipients) {
                     if (recipient == null) continue;
                     // Per-channel contact requirement: EMAIL needs an email; SMS + WHATSAPP need a
@@ -972,24 +379,39 @@ public class NotificationService {
                     // message per channel. Audience is intentionally NOT part of the key.
                     String dedupeKey = channel + "|" + recipient.subscriberKey();
                     if (emitted.contains(dedupeKey)) continue;
+                    String rLocale = localeFor(preferredLocales, recipient, locale);
                     try {
-                        if (!rendered) {
-                            body = templateRenderer.render(tenantId, audience, action, toState,
-                                    channel, locale, values);
-                            // EMAIL requires a non-empty subject (Novu's email step rejects a blank
-                            // one, dropping the whole send). Render the template's subject and fall
-                            // back to a sensible default if it is missing/blank.
-                            if ("EMAIL".equalsIgnoreCase(channel)) {
-                                subject = templateRenderer.renderSubject(tenantId, audience, action, toState,
-                                        channel, locale, values);
-                                if (!StringUtils.hasText(subject))
-                                    subject = "Complaint " + request.getService().getServiceRequestId();
-                            }
-                            rendered = true;
+                        Rendered rd = renderedByLocale.get(rLocale);
+                        if (rd == null) {
+                            rd = renderFor(request, tenantId, audience, action, toState, channel, rLocale, values);
+                            renderedByLocale.put(rLocale, rd);
                         }
-                        if (body == null) break; // template missing for this (audience,channel): skip whole row
-                        publishRenderedEvent(request, recipient, channel, eventName, action, toState, body, subject,
-                                providerTemplateId, contentVariables);
+                        if (rd.body == null) {
+                            // No template in this locale nor the default: nothing to send this recipient.
+                            log.info("No template for {}.{}.{}.{} in {} (or default) on complaint {}; skipping recipient",
+                                    audience, action, toState, channel, rLocale, request.getService().getServiceRequestId());
+                            continue;
+                        }
+                        String providerTemplateId = null;
+                        Map<String, Object> contentVariables = null;
+                        if ("WHATSAPP".equalsIgnoreCase(channel)) {
+                            // WHATSAPP: business-initiated messages must reference an APPROVED provider
+                            // template. If none/unapproved we still EMIT with a null templateId: the bridge
+                            // persists an auditable SKIPPED/NB_TEMPLATE_NOT_APPROVED row and never falls
+                            // back to free-form WhatsApp. Dropping the event here made the skip invisible.
+                            Map<String, Object> pt = providerTemplateByLocale.computeIfAbsent(rLocale,
+                                    l -> providerTemplateFor(tenantId, audience, action, toState, l, locale));
+                            if (pt.isEmpty()) {
+                                log.info("No approved WhatsApp provider-template for {}.{}.{}.{} on complaint {}; "
+                                        + "emitting for an auditable bridge-side SKIP (NB_TEMPLATE_NOT_APPROVED)",
+                                        audience, action, toState, rLocale, request.getService().getServiceRequestId());
+                            } else {
+                                providerTemplateId = String.valueOf(pt.get("templateId"));
+                                contentVariables = buildContentVariables(pt.get("variables"), values);
+                            }
+                        }
+                        publishRenderedEvent(request, recipient, rLocale, channel, eventName, action, toState, rd.body, rd.subject,
+                                rd.templateKey, providerTemplateId, contentVariables);
                         emitted.add(dedupeKey);   // only a successful publish consumes the key
                     } catch (Exception ex) {
                         log.error("Failed to render/publish {} for audience {} on complaint {}",
@@ -1000,6 +422,102 @@ public class NotificationService {
         } catch (Exception ex) {
             log.error("Error in config-driven notification processing for topic {}", topic, ex);
         }
+    }
+
+    /** One rendered (body, subject, templateKey) for a locale. body==null means no template exists. */
+    private static final class Rendered {
+        final String body; final String subject; final String templateKey;
+        Rendered(String body, String subject, String templateKey) { this.body = body; this.subject = subject; this.templateKey = templateKey; }
+    }
+
+    private Rendered renderFor(ServiceRequest request, String tenantId, String audience, String action, String toState,
+                               String channel, String rLocale, Map<String, String> values) {
+        String body = templateRenderer.render(tenantId, audience, action, toState, channel, rLocale, values);
+        if (body == null) return new Rendered(null, null, null);
+        String templateKey = templateRenderer.resolveTemplateKey(tenantId, audience, action, toState, channel, rLocale);
+        String subject = null;
+        // EMAIL requires a non-empty subject (Novu's email step rejects a blank one, dropping the
+        // whole send). Render the template's subject and fall back to a sensible default.
+        if ("EMAIL".equalsIgnoreCase(channel)) {
+            subject = templateRenderer.renderSubject(tenantId, audience, action, toState, channel, rLocale, values);
+            if (!StringUtils.hasText(subject)) subject = "Complaint " + request.getService().getServiceRequestId();
+        }
+        return new Rendered(body, subject, templateKey);
+    }
+
+    /** Approved WhatsApp provider template for the recipient's locale, else the default locale's; empty map if none. */
+    private Map<String, Object> providerTemplateFor(String tenantId, String audience, String action, String toState,
+                                                    String rLocale, String defaultLocale) {
+        Map<String, Object> pt = resolveProviderTemplate(tenantId, "twilio", audience, action, toState, rLocale);
+        if (pt == null && StringUtils.hasText(defaultLocale) && !defaultLocale.equalsIgnoreCase(rLocale)) {
+            pt = resolveProviderTemplate(tenantId, "twilio", audience, action, toState, defaultLocale);
+        }
+        return pt != null ? pt : Collections.emptyMap();
+    }
+
+    private static String localeFor(Map<String, String> preferredLocales, ResolvedRecipient r, String defaultLocale) {
+        if (r != null && StringUtils.hasText(r.userUuid)) {
+            String preferred = preferredLocales.get(r.userUuid);
+            if (StringUtils.hasText(preferred)) return preferred.trim();
+        }
+        return defaultLocale;
+    }
+
+    private static final class TimedLocales {
+        final Map<String, String> byUuid; final long fetchedAt = System.currentTimeMillis();
+        TimedLocales(Map<String, String> byUuid) { this.byUuid = byUuid; }
+        boolean fresh(long ttl) { return System.currentTimeMillis() - fetchedAt < ttl; }
+    }
+    private final Map<String, TimedLocales> preferredLocaleCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * uuid -> preferredLanguage for the tenant, from digit-user-preferences-service
+     * (preferenceCode USER_NOTIFICATION_PREFERENCES). One paged call per tenant per cache
+     * window; failures and empties are cached too so an absent service costs one call per
+     * window, not one per recipient. Off when the host is blank or the flag is false.
+     */
+    @SuppressWarnings("unchecked")
+    Map<String, String> fetchPreferredLocales(String tenantId, RequestInfo requestInfo) {
+        if (Boolean.FALSE.equals(config.getNotificationLocalePerRecipient())
+                || !StringUtils.hasText(config.getUserPreferenceHost())) {
+            return Collections.emptyMap();
+        }
+        String stateTenant = null;
+        try { stateTenant = centralInstanceUtil.getStateLevelTenant(tenantId); } catch (Exception ignore) { }
+        String tenant = StringUtils.hasText(stateTenant) ? stateTenant : tenantId;
+        long ttl = config.getNotificationMdmsCacheTtlMs() != null ? config.getNotificationMdmsCacheTtlMs() : 60_000L;
+        TimedLocales cached = preferredLocaleCache.get(tenant);
+        if (cached != null && cached.fresh(ttl)) return cached.byUuid;
+        Map<String, String> out = new HashMap<>();
+        try {
+            Map<String, Object> criteria = new LinkedHashMap<>();
+            criteria.put("tenantId", tenant);
+            criteria.put("preferenceCode", config.getNotificationPreferenceCode());
+            criteria.put("limit", 1000);
+            criteria.put("offset", 0);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("RequestInfo", requestInfo != null ? requestInfo : new RequestInfo());
+            body.put("criteria", criteria);
+            StringBuilder uri = new StringBuilder(config.getUserPreferenceHost()).append(config.getUserPreferenceSearchPath());
+            Object res = serviceRequestRepository.fetchResult(uri, body);
+            Object prefs = res instanceof Map ? ((Map<String, Object>) res).get("preferences") : null;
+            if (prefs instanceof List) {
+                for (Object o : (List<Object>) prefs) {
+                    if (!(o instanceof Map)) continue;
+                    Map<String, Object> p = (Map<String, Object>) o;
+                    Object uid = p.get("userId");
+                    Object payload = p.get("payload");
+                    Object lang = payload instanceof Map ? ((Map<String, Object>) payload).get("preferredLanguage") : null;
+                    if (uid != null && lang != null && StringUtils.hasText(lang.toString())) {
+                        out.put(uid.toString(), lang.toString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Preferred-language lookup unavailable for tenant {} ({}); rendering in the default locale", tenant, e.getMessage());
+        }
+        preferredLocaleCache.put(tenant, new TimedLocales(out));
+        return out;
     }
 
     /**
@@ -1259,9 +777,9 @@ public class NotificationService {
         return date.format(DateTimeFormatter.ofPattern(DATE_PATTERN));
     }
 
-    private void publishRenderedEvent(ServiceRequest request, ResolvedRecipient r, String channel,
+    private void publishRenderedEvent(ServiceRequest request, ResolvedRecipient r, String locale, String channel,
                                       String eventName, String action, String toState, String body, String subject,
-                                      String providerTemplateId, Map<String, Object> contentVariables) {
+                                      String templateKey, String providerTemplateId, Map<String, Object> contentVariables) {
         org.egov.pgr.web.models.Service service = request.getService();
         String tenantId = service.getTenantId();
         String subKey = r.subscriberKey();
@@ -1279,7 +797,7 @@ public class NotificationService {
         contact.put("name", r.name);
         contact.put("phone", r.phone);
         contact.put("email", r.email);
-        contact.put("locale", r.locale);
+        contact.put("locale", StringUtils.hasText(locale) ? locale : r.locale);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("complaintNo", service.getServiceRequestId());
@@ -1288,6 +806,7 @@ public class NotificationService {
         data.put("toState", toState);
 
         Map<String, Object> event = new LinkedHashMap<>();
+        event.put("schemaVersion", "1");   // novu-bridge envelope version
         event.put("eventId", UUID.randomUUID().toString());
         event.put("eventType", "COMPLAINTS_WORKFLOW_TRANSITIONED");
         event.put("eventName", eventName);
@@ -1303,6 +822,7 @@ public class NotificationService {
         event.put("renderedBody", body);
         event.put("subject", subject);   // EMAIL subject (rendered); null for SMS/WHATSAPP
         event.put("transactionId", transactionId);
+        if (StringUtils.hasText(templateKey)) event.put("templateKey", templateKey);   // MDMS uid actually rendered
         event.put("data", data);
         // Provider-template (Twilio WhatsApp Content SID) delivery: carried only for WHATSAPP with an
         // approved template. When present, novu-bridge sends the ContentSid + positional variables via

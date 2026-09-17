@@ -54,8 +54,6 @@ auth_provider: ""              # keep '' unless enable_keycloak: true
 enable_mcp: true               # REQUIRED on a cold box — bootstraps ke.
 build_mcp: true                #   (kit has false because the real Bomet DB
                                #    already contains ke; a pg-dump box doesn't)
-build_otp_publisher: true      # local-only image; notifications profile
-                               # validates it even on boxes that had it cached
 db_fast_path: true
 ```
 

@@ -98,7 +98,7 @@ Everything below is new compared to v2.11 — it didn't exist in this project at
 | **Configurator** (Configurator, also called "Admin Console") | The web app a city admin uses to set up and configure a city — boundaries, complaint categories, staff, dashboards, notifications. Replaces manual/scripted city setup. |
 | **digit-ui-esbuild** | The rebuilt citizen and employee web app. |
 | **digit-mcp** | An automation toolkit that speeds up onboarding a new city. On by default. |
-| **Real OTP delivery** (otp-publisher) | Sends genuine one-time passwords for login, instead of the earlier test stub. Switched on with `enable_otp_services`. |
+| **Real OTP delivery** | Sends genuine one-time passwords for login, instead of the earlier test stub. egov-otp + user-otp generate and validate; novu-bridge delivers the SMS through the notification stack. Switched on with `enable_otp_services` (requires `enable_novu`). |
 | **Notification admin dashboard** (novu-dashboard) + **novu-bridge-endpoint** | Lets a city manage its own notification (SMS/WhatsApp/Email) templates. Switched on with `enable_novu`. |
 | **Location search** (turbopass) | Address/place auto-complete when setting up city boundaries. Off by default (`enable_turbopass`). |
 | **Host monitoring** (node-exporter) | Server CPU/memory/disk metrics for the monitoring dashboards. Always on. |

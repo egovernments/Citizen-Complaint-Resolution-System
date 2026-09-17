@@ -263,14 +263,6 @@ data:
         alerts:
           - type: slack
 
-      - name: Notification SMS Service
-        group: OTP
-        url: "http://egov-notification-sms.egov:8080/notification-sms/health"
-        interval: 30s
-        conditions:
-          - "[STATUS] == 200"
-        alerts:
-          - type: slack
 {{- end }}
 
 {{- if .Values.gatus.groups.search }}

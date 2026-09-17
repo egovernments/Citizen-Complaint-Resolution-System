@@ -51,7 +51,6 @@ public class PGRServiceCountScopingTest {
     @Mock private PGRConfiguration config;
     @Mock private PGRRepository repository;
     @Mock private MDMSUtils mdmsUtils;
-    @Mock private ComplaintDomainEventService complaintDomainEventService;
     @Mock private PGRUtils pgrUtils;
     @Mock private ExtendedAttributesValidationService extendedAttributesValidationService;
     @Mock private EncryptionDecryptionService encryptionDecryptionService;
@@ -66,7 +65,7 @@ public class PGRServiceCountScopingTest {
     void setup() {
         pgrService = new PGRService(enrichmentService, userService, workflowService,
                 validator, producer, config, repository, mdmsUtils,
-                complaintDomainEventService, pgrUtils, extendedAttributesValidationService,
+                pgrUtils, extendedAttributesValidationService,
                 encryptionDecryptionService, searchAccessPolicyService, fieldVisibilityService,
                 escalationService, escalationLockManager);
     }

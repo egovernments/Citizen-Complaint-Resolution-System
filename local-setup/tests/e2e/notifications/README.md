@@ -117,6 +117,17 @@ The 3 masters via mdms-v2 + the emitter's resolver. **Test file:** [`cases/area-
 
 ---
 
+## Area G — Login OTP through the bridge
+
+Login OTPs are DIGIT-core `SMSRequest`s on `egov.core.notification.sms`; novu-bridge translates them into the envelope and delivers them like any other SMS. **Test file:** [`cases/area-g-otp.js`](./cases/area-g-otp.js). Needs the `otp` profile (`enable_otp_services: true`, Kong mocks stripped); the cases SKIP when `/user-otp` is still the mock.
+
+| Case | What it verifies | Test | Exercises | Bomet |
+|---|---|---|---|---|
+| **G1** | `POST /user-otp/v1/_send` for a test number leaves a `CORE.SMS.OTP` dispatch-log row at the tenant — `SENT`, or `SKIPPED/NB_NO_PROVIDER` when SMS is off. Never no row. | `guard('G1'` | [`CoreSmsTranslator`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/core/CoreSmsTranslator.java) · [`CoreSmsConsumer`](/backend/novu-bridge/src/main/java/org/egov/novubridge/consumer/CoreSmsConsumer.java) | ⏭ otp profile off |
+| **G2** | The OTP row never stores the code: neither `provider_response_jsonb` nor `last_error_message` contains the 6-digit OTP. | `guard('G2'` | [`DispatchPipelineService`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) persist path | ⏭ otp profile off |
+
+---
+
 ## Related unit/component tests
 
 The SKIP-only behaviors (fault injection, locale/orphan fallback, config mutation) are pinned by these fast tests:

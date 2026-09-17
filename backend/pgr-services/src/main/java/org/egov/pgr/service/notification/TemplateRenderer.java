@@ -50,6 +50,29 @@ public class TemplateRenderer {
         return renderField("subject", tenantId, audience, action, toState, channel, locale, values);
     }
 
+    /**
+     * The MDMS NotificationTemplate uid the renderer would select for this key —
+     * {@code audience.action.toState.channel.<locale>} with the locale it ACTUALLY matched
+     * (the requested one, or the default after fallback) — or null when no template exists.
+     * Carried on the wire so the dispatch log records the template that was used.
+     */
+    public String resolveTemplateKey(String tenantId, String audience, String action, String toState,
+                                     String channel, String locale) {
+        if (findField("body", tenantId, audience, action, toState, channel, locale) != null) {
+            return templateUid(audience, action, toState, channel, locale);
+        }
+        String def = config.getNotificationDefaultLocale();
+        if (StringUtils.hasText(def) && !def.equalsIgnoreCase(locale)
+                && findField("body", tenantId, audience, action, toState, channel, def) != null) {
+            return templateUid(audience, action, toState, channel, def);
+        }
+        return null;
+    }
+
+    private static String templateUid(String audience, String action, String toState, String channel, String locale) {
+        return String.join(".", audience, action, toState, channel, locale);
+    }
+
     private String renderField(String field, String tenantId, String audience, String action,
                                String toState, String channel, String locale, Map<String, String> values) {
         String raw = findField(field, tenantId, audience, action, toState, channel, locale);

@@ -40,9 +40,8 @@ Per-channel settings live in each channel's section.
 | Setting | What it is | Example |
 |---|---|---|
 | `enable_novu` | Starts Novu and the notification stack. Nothing below works without it. | `true` |
-| `pgr_notification_config_driven` | Makes PGR read routing and templates from configuration instead of code. | `true` |
 | `seed_notifications` | Seeds the three PGR notification MDMS masters on deploy. Idempotent. | `true` |
-| `novu_bridge_channels_enabled` | **Required.** Channels to dispatch — `SMS`, `WHATSAPP`, `EMAIL`, comma-separated. There is no default: leave it unset and nothing is sent. Name only channels you have onboarded a provider for. | `"SMS,WHATSAPP"` |
+| `novu_bridge_channels_enabled` | **Bootstrap fallback only.** Channels are switched on per tenant in Configurator → Notifications → **Channels** (MDMS `RAINMAKER-PGR.NotificationChannel`); this env list applies only while a tenant has no channel rows. Leave it unset and nothing is sent until the operator enables channels in the configurator. | `"SMS"` |
 | `novu_bridge_proxy_allowed_roles` | Roles allowed to manage providers from Configurator. | `"SUPERUSER,MDMS_ADMIN"` |
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |
 | `novu_admin_password` | Novu admin password. Generate a unique, strong one. | |
@@ -364,3 +363,51 @@ operation.
 | Provider administration API | [`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java) |
 | PGR routing/rendering | [`backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java`](../../../backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java) |
 | Bridge dispatch | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) |
+
+## Channels, receipts and per-recipient language
+
+**Which channels deliver is decided per tenant, in the configurator.** Notifications →
+**Channels** edits the MDMS master `RAINMAKER-PGR.NotificationChannel` (one row per
+channel: `enabled`, `gateway` = `novu` | `smscountry`, `senderId`). novu-bridge reads it at the
+state tenant on every dispatch (cached 60 s). A tenant with no rows falls back to the
+`novu_bridge_channels_enabled` env list; a tenant *with* rows is governed by them alone — a
+channel with no row is off. The **Channels** card on the Providers screen shows the effective
+state per channel and why (row present? enabled? Novu integration? workflow? sender id?).
+"Validate" on the Configure screen warns about routing rows on a channel that is off.
+
+**`SENT` means the transport accepted the message.** To move rows to `DELIVERED` / `BOUNCED` /
+`FAILED`, point the provider's delivery report at the bridge:
+
+| Provider | URL | Auth |
+|---|---|---|
+| Novu (webhook) | `POST <public>/novu-bridge/novu-adapter/v1/receipts/novu` | header `X-Receipt-Secret: <novu_bridge_receipts_secret>` |
+| SMSCountry (DR callback) | `GET/POST <public>/novu-bridge/novu-adapter/v1/receipts/smscountry?secret=<…>` | query `secret` |
+
+Set `NOVU_BRIDGE_RECEIPTS_SECRET` in `/opt/digit/.env` (blank = endpoint off, 403). The bridge
+tolerates the common report shapes (it looks for a `transactionId` or job/message id and an
+outcome word anywhere in the payload); only `SENT` rows move, so late or duplicate reports never
+regress a row.
+
+**Test sends are real rows at your tenant**, flagged `is_test`, hidden on the Logs screen
+unless you pick "Show test sends". The "view in logs" button after a test opens the screen
+with that filter on.
+
+**Per-recipient language.** pgr-services renders each recipient in their `preferredLanguage`
+from digit-user-preferences-service (one cached lookup per tenant per minute) and falls back to
+`pgr.notification.default.locale` — and, per template, to the default-locale template when the
+recipient's language has none. Author templates in Notifications → Configure with the locale
+of your choice; `enable-notifications.sh` points PGR at the preference service
+(`EGOV_USER_PREFERENCE_HOST`). Leave that blank and everyone gets the default locale.
+
+**One envelope for everything, login OTPs included.** The bridge accepts `eventType`
+`COMPLAINTS_WORKFLOW_TRANSITIONED` (pgr-services, `complaints.domain.events`) and
+`CORE_SMS`: DIGIT core's `egov.core.notification.sms` topic (user-otp login OTPs, egov-user
+password resets), translated into the envelope by `CoreSmsTranslator`
+(`NOVU_BRIDGE_CORE_SMS_TOPIC` / `_DEFAULT_TENANT` / `_COUNTRY_CODE`). There is no separate
+SMS service for OTPs any more: `enable_otp_services: true` needs `enable_novu: true`, and the
+OTP SMS obeys the tenant's channel policy, provider and dispatch log like any other event
+(`eventName CORE.SMS.OTP`). SMS disabled for the tenant ⇒ login OTPs land as
+`SKIPPED / NB_NO_PROVIDER`, and the Channels card says so. Every event, including a rejected one, leaves a dispatch-log row
+(`REJECTED` with the reason), so a producer sending the wrong shape is visible on the Logs
+screen rather than only in the DLQ.
+

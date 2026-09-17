@@ -18,14 +18,21 @@ const CHANNEL_CHOICES = [
   { id: 'WHATSAPP', name: 'WhatsApp' },
 ];
 
-// Coarse delivery states persisted on the log row.
+// Terminal states novu-bridge writes. SENT = the transport accepted the message;
+// DELIVERED / BOUNCED arrive later via provider receipts (when wired); REJECTED = the
+// envelope failed validation and was DLQ'd.
 const STATUS_CHOICES = [
-  { id: 'SENT', name: 'Sent' },
+  { id: 'SENT', name: 'Sent (accepted by transport)' },
   { id: 'DELIVERED', name: 'Delivered' },
+  { id: 'BOUNCED', name: 'Bounced' },
   { id: 'FAILED', name: 'Failed' },
-  { id: 'PENDING', name: 'Pending' },
   { id: 'SKIPPED', name: 'Skipped' },
+  { id: 'REJECTED', name: 'Rejected (bad event)' },
+  { id: 'RECEIVED', name: 'Received (dry run)' },
 ];
+
+// Operator test-sends are real rows at this tenant, flagged is_test; hidden unless asked.
+const TEST_CHOICES = [{ id: 'true', name: 'Show test sends' }];
 
 const filters = [
   // referenceNumber is the real search — the data provider maps the explicit
@@ -35,6 +42,7 @@ const filters = [
   <TextFilterInput key="referenceNumber" source="referenceNumber" label="Complaint #" alwaysOn />,
   <SelectFilterInput key="channel" source="channel" label="Channel" choices={CHANNEL_CHOICES} alwaysOn />,
   <SelectFilterInput key="status" source="status" label="Status" choices={STATUS_CHOICES} alwaysOn />,
+  <SelectFilterInput key="includeTest" source="includeTest" label="Test sends" choices={TEST_CHOICES} alwaysOn />,
 ];
 
 /** Mask a recipient (phone/email) so the log never renders a full PII value:
@@ -102,6 +110,16 @@ const columns: DigitColumn[] = [
     },
   },
   {
+    source: 'providerRef',
+    label: 'Provider ref',
+    sortable: false,
+    render: (record) => {
+      const ref = String(record.providerRef ?? '');
+      const test = record.isTest ? ' · test' : '';
+      return ref || test ? <span className="font-mono text-xs">{ref}{test}</span> : <span className="text-muted-foreground">--</span>;
+    },
+  },
+  {
     source: 'attemptCount',
     label: 'Attempts',
     sortable: false,
@@ -129,14 +147,14 @@ const columns: DigitColumn[] = [
  * Read-only delivery-log viewer backed by the novu-bridge proxy
  * (`GET /novu-bridge/novu-adapter/v1/logs`). Lists every notification event
  * novu-bridge processed, newest first, with an explicit terminal status
- * (SENT / SKIPPED / FAILED); WHATSAPP has no enabled provider yet, so those
- * rows appear as SKIPPED/NB_NO_PROVIDER.
+ * (SENT / SKIPPED / FAILED / REJECTED, and DELIVERED / BOUNCED once provider receipts are
+ * wired). Test sends are flagged rows at this tenant, shown on request.
  */
 export function NotificationLogList() {
   return (
     <DigitList
       title="Notification Logs"
-      subtitle="SMS/Email delivered via Novu — WHATSAPP shows as SKIPPED (no provider yet)"
+      subtitle="One row per recipient × channel — SENT means the transport accepted it; DELIVERED needs provider receipts"
       sort={{ field: 'createdTime', order: 'DESC' }}
       filters={filters}
     >

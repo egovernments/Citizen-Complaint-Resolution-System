@@ -24,6 +24,8 @@ import {
   type Channel, type CredField, type TemplatesResponse,
 } from './providerApi';
 import { SyncTwilioTemplatesDialog } from './SyncTwilioTemplatesDialog';
+import { ChannelStatusCard } from './ChannelStatusCard';
+import { useApp } from '../../App';
 
 /** Render a boolean flag as a compact yes/no chip. */
 function flag(value: unknown) {
@@ -315,11 +317,14 @@ function TestSendDialog({
     (isWhatsApp ? !!contentSid.trim() : !!body.trim()) &&
     !sending;
 
+  const { state: appState } = useApp();
+  const sessionTenant = String(appState?.tenant ?? '');
   const submit = async () => {
     if (!canSend) return;
     setSending(true);
     try {
       const res = await testSend({
+        tenantId: sessionTenant || undefined,
         channel,
         to: isEmail ? { email: recipient.trim() } : { phone: recipient.trim() },
         body: isWhatsApp ? undefined : body.trim(),
@@ -331,7 +336,7 @@ function TestSendDialog({
       });
       const status = res.novuStatus ?? (res.ok ? 'accepted' : 'unknown');
       notify(
-        t('app.providers.msg_test_sent', { _: 'Test dispatched via Novu.' }),
+        res.ok ? t('app.providers.msg_test_sent', { _: 'Test dispatched.' }) : `${t('app.providers.msg_test_failed', { _: 'Test failed' })}: ${res.errorCode ?? ''} ${res.errorMessage ?? ''}`.trim(),
         `${t('app.providers.status', { _: 'Status' })}: ${status}${res.transactionId ? ` · txn ${res.transactionId}` : ''}`,
         res.ok ? 'default' : 'destructive',
       );
@@ -433,7 +438,7 @@ function TestSendDialog({
           <Button
             variant="link"
             className="px-0 gap-1.5"
-            onClick={() => { onOpenChange(false); navigate('/manage/notification-log'); }}
+            onClick={() => { onOpenChange(false); navigate(`/manage/notification-log?filter=${encodeURIComponent(JSON.stringify({ includeTest: 'true' }))}`); }}
           >
             {t('app.providers.view_logs', { _: 'View Notification Logs' })}
             <ExternalLink className="w-3.5 h-3.5" />
@@ -687,6 +692,7 @@ export function NotificationProviderList() {
         </div>
       }
     >
+      <ChannelStatusCard />
       <DigitDatagrid
         columns={columns}
         rowActions={(record) => <ProviderRowActions record={record as Record<string, unknown>} />}

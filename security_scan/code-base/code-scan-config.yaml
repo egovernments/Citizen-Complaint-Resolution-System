@@ -34,9 +34,6 @@ projects:
     ecosystem: gomod
 
   # ----- backend: Node sub-apps -----
-  - name: novu-bridge-endpoint
-    path: backend/novu-bridge-endpoint
-    ecosystem: npm
   - name: xstate-chatbot-nodejs
     path: backend/xstate-chatbot/nodejs
     ecosystem: npm

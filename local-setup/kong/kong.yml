@@ -214,6 +214,10 @@ plugins:
           ["/novu-bridge/novu-adapter/v1/providers"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
+          -- Delivery receipts: machine callbacks (Novu webhook, SMS gateway DR) authenticated
+          -- by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not by a user token.
+          ["/novu-bridge/novu-adapter/v1/receipts/novu"]=true,
+          ["/novu-bridge/novu-adapter/v1/receipts/smscountry"]=true,
           ["/novu-bridge/novu-adapter/v1/logs"]=true,
           ["/novu-bridge/novu-adapter/v1/integrations"]=true,
           ["/novu-bridge/novu-adapter/v1/preferences"]=true,
@@ -558,22 +562,15 @@ services:
     # MOCK (default): request-termination short-circuits every /user-otp/*
     # call with a canned success response, so login/register work using the
     # fixed OTP (123456, see CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE in
-    # docker-compose.egov-digit.yaml) without the real egov-otp/user-otp/
-    # egov-notification-sms stack running or any SMS gateway integrated.
+    # docker-compose.egov-digit.yaml) without the `otp` profile running.
     #
-    # TO ENABLE REAL OTP FOR PRODUCTION, before deploying:
-    #   1. Delete the `plugins:` block below (the request-termination mock).
-    #   2. Set enable_otp_services: true in the tenant's Ansible host_vars
-    #      (local-setup/ansible/inventory/host_vars/<tenant>.yml) so compose
-    #      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
-    #   3. Configure a real SMS gateway: egov-notification-sms defaults to
-    #      SMS_PROVIDER_CLASS: Console (logs OTP SMS to container stdout only)
-    #      in docker-compose.egov-digit.yaml — point it at a real provider
-    #      class + credentials before relying on SMS delivery.
-    # Without all three, the first OTP request has nothing to answer it
-    # (real stack down or SMS not actually sent), and only the fixed
-    # 123456 fallback keeps working.
-    plugins:
+    # REAL OTP: set enable_otp_services: true (and enable_novu: true) in the
+    # tenant's host_vars. The Ansible deploy strips this mock (the marker on the
+    # `plugins:` line below), starts egov-otp + user-otp, turns the fixed OTP
+    # off, and user-otp's SMS goes out through novu-bridge (topic
+    # egov.core.notification.sms) — same channel policy, provider and dispatch
+    # log as every other SMS. Hand-deploys: delete the `plugins:` block.
+    plugins: # kong-otp-mock-marker
     - name: request-termination
       config:
         status_code: 200
@@ -939,6 +936,28 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/providers/twilio-templates
     strip_path: false
+  # Delivery receipts from providers (Novu webhook, SMSCountry DR). Shared-secret
+  # authenticated inside novu-bridge; both verbs because DR pings are often GETs.
+  - name: novu-bridge-receipts-route
+    methods:
+    - POST
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/receipts/novu
+    - /novu-bridge/novu-adapter/v1/receipts/smscountry
+    strip_path: false
+# digit-user-preferences-service: per-user notification consent + preferredLanguage.
+# Read/written by the citizen profile screen; read in-cluster (not via Kong) by
+# pgr-services and novu-bridge. Only up under the `notifications` compose profile.
+- name: user-preference-service
+  url: http://digit-user-preferences-service:8080
+  routes:
+  - name: user-preference-route
+    methods:
+    - POST
+    paths:
+    - /user-preference
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:
@@ -1078,14 +1097,10 @@ services:
 # Mirrors /user-otp: the mock rubber-stamps every OTP validation as successful, so citizen
 # login works with the fixed OTP (123456) without the `otp` profile running.
 #
-# TO ENABLE REAL OTP VALIDATION FOR PRODUCTION, before deploying:
-#   1. Delete the `plugins:` block below (the request-termination mock).
-#   2. Set enable_otp_services: true in the tenant's Ansible host_vars so compose
-#      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
-#   3. Configure a real SMS gateway (see egov-notification-sms SMS_PROVIDER_CLASS).
-# With the mock removed and the otp profile running, /otp reaches egov-otp for real
-# validation (an incorrect OTP is rejected instead of rubber-stamped). The upstream was
-# previously a dead localhost:9999, so de-mocking alone returned HTTP 502 — now fixed.
+# REAL OTP: enable_otp_services: true — the Ansible deploy strips this mock (marker on
+# the `plugins:` line below) and starts egov-otp, so /otp reaches it for real validation
+# (an incorrect OTP is rejected instead of rubber-stamped). Hand-deploys: delete the
+# `plugins:` block. The upstream was previously a dead localhost:9999 — now fixed.
 - name: otp-validate-mock
   url: http://egov-otp:8089
   tags:
@@ -1097,7 +1112,7 @@ services:
     paths:
     - /otp
     strip_path: false
-  plugins:
+  plugins: # kong-otp-mock-marker
   - name: request-termination
     config:
       status_code: 200

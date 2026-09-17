@@ -7,9 +7,11 @@ Single source of truth: reads the SAME committed JSON that ships in the
 default-data-handler image —
   schema:  utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json
   data:    utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/
-            RAINMAKER-PGR.Notification{Routing,Template,ProviderTemplate}.json
+            RAINMAKER-PGR.Notification{Routing,Template,ProviderTemplate,Channel}.json
 
-Creates the 3 schemas then their rows at the state-root tenant via MDMS v2. Idempotent:
+Creates the 4 schemas then their rows at the state-root tenant via MDMS v2.
+NotificationChannel is seeded with every channel DISABLED — an operator switches channels on
+in the configurator (Notifications -> Channels) once a provider is onboarded. Idempotent:
 schemas are search-then-create; duplicate data rows are rejected by MDMS x-unique keys
 (phantom-200) and skipped. Safe to re-run — this is what makes both "fresh install" and
 "add-on to an existing deploy" work from the one task.
@@ -21,7 +23,7 @@ Env:
   DIGIT_PASSWORD     admin password         (default: eGov@123)
   DIGIT_LOGIN_TENANT tenant to auth against (default: $NOTIF_TENANT)
   SCHEMA_FILE        path to RAINMAKER-PGR.json schema list
-  DATA_DIR           dir holding the 3 RAINMAKER-PGR.Notification*.json data files
+  DATA_DIR           dir holding the 4 RAINMAKER-PGR.Notification*.json data files
 """
 import os, sys, json, time, urllib.request, urllib.parse, urllib.error
 
@@ -39,6 +41,7 @@ NOTIF_CODES = [
     "RAINMAKER-PGR.NotificationRouting",
     "RAINMAKER-PGR.NotificationTemplate",
     "RAINMAKER-PGR.NotificationProviderTemplate",
+    "RAINMAKER-PGR.NotificationChannel",
 ]
 
 

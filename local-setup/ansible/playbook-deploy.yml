@@ -51,6 +51,15 @@
       become: false
       when: host_vars_file.stat.exists
 
+    - name: "preflight — real OTP needs the notification stack (enable_otp_services ⇒ enable_novu)"
+      ansible.builtin.assert:
+        that: (not (enable_otp_services | default(false))) or (enable_novu | default(false))
+        fail_msg: |
+          enable_otp_services: true but enable_novu is false. Login OTP SMS are delivered by
+          novu-bridge (it consumes egov.core.notification.sms); without the notification stack
+          no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
+          Configurator -> Notifications -> Channels), or leave enable_otp_services false.
+
     - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
       ansible.builtin.assert:
         that: uppercase_host_vars_keys | length == 0
@@ -1410,6 +1419,17 @@
         replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}"
       register: kong_cors_pin
 
+    # Real OTP: the two request-termination mocks on /user-otp and /otp must go, or
+    # user-otp / egov-otp are never reached. Both mock `plugins:` lines carry a marker
+    # comment; drop the key, its list items (same indent, `- `) and everything deeper.
+    - name: "Kong — strip the OTP mocks when enable_otp_services (staging copy)"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: "(?m)^([ \\t]*)plugins:[ \\t]*# kong-otp-mock-marker[ \\t]*\\n(?:\\1(?:-[ \\t]|[ \\t]+).*\\n)+"
+        replace: ""
+      register: kong_otp_unmock
+      when: enable_otp_services | default(false)
+
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |
         set -euo pipefail
@@ -1474,20 +1494,6 @@
           {{ novu_dashboard_image
              | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
                        else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
-
-    # otp-publisher: same shape as MCP above. `build_otp_publisher: true` builds
-    # the vendored service on the box and tags it otp-publisher:local; otherwise
-    # pull the published image. The old default was the local-only tag in BOTH
-    # cases, so a tenant that enabled notifications without opting into the build
-    # selected an image that exists in no registry — `pull` skipped it
-    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy.
-    # Override with `otp_publisher_image:` in host_vars.
-    - name: "Resolve otp-publisher image tag"
-      ansible.builtin.set_fact:
-        otp_publisher_image: >-
-          {{ otp_publisher_image
-             | default('otp-publisher:local' if (build_otp_publisher | default(false))
-                       else 'egovio/otp-publisher:2.12-81fc6be') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -1861,24 +1867,6 @@
       when:
         - enable_novu | default(false)
         - build_novu_dashboard | default(false)
-
-    # ==================== Build otp-publisher image locally ===============
-    # When `build_otp_publisher: true`, build the vendored Node service at
-    # utilities/otp-publisher (its own Dockerfile, NOT the maven one) and tag
-    # it otp-publisher:local; compose picks it up via OTP_PUBLISHER_IMAGE.
-    # Only needed when the notifications profile (SMS-OTP path) is enabled.
-    - name: "Build otp-publisher image locally (when build_otp_publisher)"
-      ansible.builtin.command: >-
-        docker build
-        -t otp-publisher:local
-        -f utilities/otp-publisher/Dockerfile
-        utilities/otp-publisher
-      args:
-        chdir: "{{ playbook_dir }}/../.."
-      register: otp_publisher_build_run
-      changed_when: true
-      when:
-        - build_otp_publisher | default(false)
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
@@ -2302,7 +2290,6 @@
           NOVU_JWT_SECRET={{ bao_secrets.json.data.data.novu_jwt_secret | default('', true) }}
           NOVU_STORE_ENCRYPTION_KEY={{ bao_secrets.json.data.data.novu_store_encryption_key | default('', true) }}
           NOVU_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
-          NOVU_BRIDGE_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
           NOVU_MONGO_PASSWORD={{ bao_secrets.json.data.data.novu_mongo_password | default('', true) }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
@@ -2769,6 +2756,7 @@
         cmd: docker exec kong-gateway kong reload
       when: >-
         (kong_cors_pin.changed | default(false))
+        or (kong_otp_unmock.changed | default(false))
         or (config_sync.results | default([])
             | selectattr('item.key', 'equalto', 'kong')
             | selectattr('changed', 'defined') | selectattr('changed')
@@ -4973,7 +4961,7 @@
         cd {{ digit_dir }}
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} \
           exec -T redpanda rpk topic create \
-          complaints.domain.events novu-bridge.retry novu-bridge.dlq \
+          complaints.domain.events egov.core.notification.sms novu-bridge.dlq \
           -p 1 -r 1
       register: novu_topic_create
       changed_when: "'CREATED' in (novu_topic_create.stdout | default(''))"
@@ -5973,7 +5961,7 @@
     #     (state_root / digit_dir / upstream_kong_port are group/host vars, so
     #     they resolve even under --tags). Idempotent — MDMS dedupes on re-run.
     - name: "notif-seed — stage schema + data + seeder on target"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.copy:
         src: "{{ item }}"
@@ -5986,7 +5974,7 @@
         - "{{ playbook_dir }}/../scripts/seed-notifications.py"
 
     - name: "notif-seed — seed the 3 notification MDMS masters (idempotent)"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
         cd {{ digit_dir }}/notification-seed
@@ -6006,7 +5994,7 @@
       failed_when: "notif_seed.rc != 0 or 'DONE' not in (notif_seed.stdout | default(''))"
 
     - name: "notif-seed — result"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"

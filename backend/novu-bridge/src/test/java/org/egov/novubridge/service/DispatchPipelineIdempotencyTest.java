@@ -1,5 +1,10 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.web.models.ComplaintsDomainEvent;
@@ -39,7 +44,6 @@ class DispatchPipelineIdempotencyTest {
     private NovuClient novuClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
-    private MdmsServiceClient mdmsServiceClient;
 
     private DispatchPipelineService service;
 
@@ -50,18 +54,17 @@ class DispatchPipelineIdempotencyTest {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         config = new NovuBridgeConfiguration();
-        config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
         when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
-        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                null, dispatchLogRepository, config, mdmsServiceClient);
+        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
+                new ChannelPolicyClient(null, config), dispatchLogRepository, config);
     }
 
     private ComplaintsDomainEvent smsEvent() {
