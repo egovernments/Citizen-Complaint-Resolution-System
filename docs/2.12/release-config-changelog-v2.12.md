@@ -116,8 +116,8 @@ These must run in order — several rebuild the same reporting tables from scrat
 
 | Service | What it does | How it's turned on |
 |---|---|---|
-| Notifications stack (Novu: bridge, bridge-endpoint, dashboard) | Sends/tracks SMS, WhatsApp, Email | `enable_novu` |
-| OTP service (otp-publisher) | Real one-time passwords for login | `enable_otp_services` |
+| Notifications stack (Novu: bridge, dashboard) | Sends/tracks SMS, WhatsApp, Email — including login OTP SMS | `enable_novu` |
+| OTP services (egov-otp, user-otp) | Real one-time passwords for login; the SMS is delivered by novu-bridge | `enable_otp_services` (requires `enable_novu`) |
 | WhatsApp chatbot (xstate-chatbot) | Citizens file/track complaints on WhatsApp | Kubernetes only (pilot) |
 | Location search (turbopass) | Address/place auto-complete for boundary setup | `enable_turbopass` (off by default) |
 | Audit service | Tamper-evident complaint/workflow log | Always on |

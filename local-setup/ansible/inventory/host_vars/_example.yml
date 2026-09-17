@@ -310,15 +310,15 @@ enable_integration_tests_runner: false
 
 # ────────── Optional services (opt-in via flags) ──────────
 
-# Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
-# send/validate), egov-notification-sms (delivers via SMS gateway).
+# Start the real OTP stack: egov-otp (stores OTPs) + user-otp (orchestrates
+# send/validate). The OTP SMS itself goes out through novu-bridge like every
+# other SMS (it consumes DIGIT core's egov.core.notification.sms topic).
 # Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
 # 200 response so login/register work via the fixed OTP (123456, see
 # CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
-# Set true for production, AND follow the "TO ENABLE REAL OTP FOR PRODUCTION"
-# steps in local-setup/kong/kong.yml (remove the mock plugin there, and wire
-# up a real SMS_PROVIDER_CLASS in docker-compose.egov-digit.yaml — it
-# defaults to Console, which only logs OTP SMS instead of sending it).
+# Set true for production. The deploy then strips the two Kong OTP mocks and
+# turns the fixed OTP off. REQUIRES enable_novu: true (preflight asserts it)
+# and SMS enabled for the tenant (Configurator -> Notifications -> Channels).
 enable_otp_services: false
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
@@ -400,10 +400,9 @@ enable_overpass: false
 # overpass_planet_file: /opt/overpass/data/boundaries.osm.bz2  # prepared extract
 
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
-# Turn on the `notifications` compose profile — adds 9 containers:
+# Turn on the `notifications` compose profile — adds 8 containers:
 #   digit-config-service, digit-user-preferences-service, novu-bridge,
-#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo,
-#   otp-publisher (see build_otp_publisher below).
+#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo.
 # Roughly +1GB RAM + ~5min slower first boot.
 #
 # Workflow when enable_novu: true:
@@ -430,14 +429,6 @@ build_novu_dashboard: false
 # novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
 # novu_base_path: "/novu"           # subpath to bake into the rebased dist
 # novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
-
-# otp-publisher is the 9th container in the notifications profile: it replaces
-# Kong's mock /user-otp termination with a real OTP generator (Redis + Kafka ->
-# novu-bridge -> Twilio SMS). Leave false to pull the published multi-arch image
-# (egovio/otp-publisher:2.12-81fc6be); set true to build the vendored Node service
-# at utilities/otp-publisher on the box instead (tag otp-publisher:local).
-build_otp_publisher: false
-# otp_publisher_image: ""           # override to pin a different published tag
 
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
@@ -666,7 +657,6 @@ grafana_anonymous_enabled: false
 # build_configurator: false     # DIGIT Studio SPA — also needs nginx_features.configurator
 # build_digit_ui: false         # digit-ui-esbuild bundle, built into the container
 # build_mcp: false              # digit-mcp from the vendored in-tree source
-# build_otp_publisher: false    # the vendored otp-publisher image
 
 # Where the configurator source comes from when build_configurator is on.
 # Defaults: a sibling ../../configurator checkout, no clone, repo default branch.
@@ -681,7 +671,6 @@ grafana_anonymous_enabled: false
 # egov_user_image: ""
 # digit_ui_image: ""
 # configurator_image: ""
-# otp_publisher_image: ""
 # mcp_image: ""                 # ignored when build_mcp: true
 
 # ── Ports ──

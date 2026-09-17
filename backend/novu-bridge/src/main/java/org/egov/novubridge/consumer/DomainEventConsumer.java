@@ -41,7 +41,11 @@ public class DomainEventConsumer {
 
     @KafkaListener(topics = "#{'${novu.bridge.kafka.input.topics}'.split(',')}")
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        ComplaintsDomainEvent event = mapper.convertValue(record, ComplaintsDomainEvent.class);
+        handle(mapper.convertValue(record, ComplaintsDomainEvent.class), topic);
+    }
+
+    /** Run one envelope through the pipeline; any failure is logged and DLQ'd with its code. */
+    public void handle(ComplaintsDomainEvent event, String topic) {
         try {
             dispatchPipelineService.process(event, true, null);
         } catch (CustomException ce) {

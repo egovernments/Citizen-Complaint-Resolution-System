@@ -25,7 +25,7 @@ import java.util.Locale;
 public class EnvelopeValidator {
 
     public static final String SCHEMA_VERSION = "1";
-    public static final List<String> DEFAULT_EVENT_TYPES = List.of("COMPLAINTS_WORKFLOW_TRANSITIONED", "OTP");
+    public static final List<String> DEFAULT_EVENT_TYPES = List.of("COMPLAINTS_WORKFLOW_TRANSITIONED", "CORE_SMS");
 
     private final List<String> acceptedEventTypes;
 

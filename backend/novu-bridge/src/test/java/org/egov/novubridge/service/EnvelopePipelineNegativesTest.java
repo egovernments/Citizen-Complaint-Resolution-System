@@ -144,12 +144,12 @@ class EnvelopePipelineNegativesTest {
     }
 
     @Test
-    void otpEvent_withThePreRenderedShape_isAccepted() {
+    void coreSmsEvent_withThePreRenderedShape_isAccepted() {
         // A second producer registers a type; it does NOT get a special envelope.
         ComplaintsDomainEvent otp = validEvent();
-        otp.setEventType("OTP");
-        otp.setEventName("OTP.SEND");
-        otp.setModule("USER-OTP");
+        otp.setEventType("CORE_SMS");
+        otp.setEventName("CORE.SMS.OTP");
+        otp.setModule("CORE");
         otp.setContact(Contact.builder().type("CITIZEN").phone("+254712345678").build());
         otp.setSubscriberId("ke:+254712345678");
         otp.setRenderedBody("DIGIT: Your one-time login code is 123456.");

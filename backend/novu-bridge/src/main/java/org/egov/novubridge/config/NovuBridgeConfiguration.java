@@ -19,12 +19,28 @@ public class NovuBridgeConfiguration {
     private String timeZone;
 
     // One topic per producer; the envelope's eventType (not the topic) decides handling.
-    @Value("#{'${novu.bridge.kafka.input.topics:complaints.domain.events,otp.send.events}'.split(',')}")
+    @Value("#{'${novu.bridge.kafka.input.topics:complaints.domain.events}'.split(',')}")
     private java.util.List<String> inputTopics;
+
+    // ---- DIGIT core SMS topic (login OTPs from user-otp, password resets, ...) ----
+    // Consumed through CoreSmsTranslator → the same pipeline; replaces egov-notification-sms.
+    @Value("${novu.bridge.core.sms.enabled:true}")
+    private Boolean coreSmsEnabled;
+
+    @Value("${novu.bridge.kafka.core.sms.topic:egov.core.notification.sms}")
+    private String coreSmsTopic;
+
+    // Core SMSRequests may carry no tenantId; this is the tenant such sends are attributed to.
+    @Value("${novu.bridge.core.sms.default.tenant:}")
+    private String coreSmsDefaultTenant;
+
+    // E.164 prefix for national numbers on the core topic (e.g. +254). Blank = sent as given.
+    @Value("${novu.bridge.core.sms.country.code:}")
+    private String coreSmsCountryCode;
 
     // Producer types the bridge accepts (EnvelopeValidator). Add a producer here — never a
     // shape-sniffing branch in the consumer.
-    @Value("#{'${novu.bridge.event.types:COMPLAINTS_WORKFLOW_TRANSITIONED,OTP}'.split(',')}")
+    @Value("#{'${novu.bridge.event.types:COMPLAINTS_WORKFLOW_TRANSITIONED,CORE_SMS}'.split(',')}")
     private java.util.List<String> eventTypes;
 
     @Value("${novu.bridge.kafka.dlq.topic:novu-bridge.dlq}")

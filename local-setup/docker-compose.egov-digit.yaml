@@ -121,7 +121,7 @@ services:
     #
     # Written as deploy.resources.limits.memory rather than the legacy
     # top-level mem_limit key, because that is already the convention here:
-    # egov-otp, user-otp and egov-notification-sms use it in this file, and
+    # egov-otp and user-otp use it in this file, and
     # 28 of docker-compose.yml's services do. Compose V2 applies it outside
     # Swarm exactly as it applies mem_limit — egov-otp's cap was raised
     # 256M→512M precisely because it was taking effect — so this is one
@@ -1718,44 +1718,6 @@ services:
     networks:
       - egov-network
 
-  egov-notification-sms:
-    # Hardening: no capabilities, no privilege escalation (see file header).
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    image: egovio/egov-notification-sms:master-e22c7c5
-    container_name: egov-notification-sms
-    profiles: [otp]
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8005
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      SMS_ENABLED: "true"
-      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
-      EGOV_MDMS_HOST: http://egov-mdms-service:8094
-      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-      EGOV_STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: none
-      OTEL_METRICS_EXPORTER: none
-      OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
-      # Console only logs the OTP SMS to this container's stdout — no SMS is
-      # actually sent. For production, set enable_otp_services: true in the
-      # tenant's Ansible host_vars AND replace this with a real provider
-      # class + credentials (e.g. an SMSCountry/Twilio/MSG91 provider class
-      # supported by this image) before relying on real OTP delivery.
-      SMS_PROVIDER_CLASS: Console
-    deploy:
-      resources:
-        limits:
-          # Bumped 256M→512M with the other otp-profile services for headroom (Spring Boot 3.2 / Java 17).
-          memory: 512M
-          cpus: '0.1'
-    networks:
-      - egov-network
-
   # ===========================================================================
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
@@ -2077,7 +2039,6 @@ services:
       GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
       GATUS_AUDIT: "true"
       GATUS_PROXIES: "true"
-      GATUS_SMS_PORT: "8005"
       # Watch the monitoring itself (#1613). This is the only compose path that
       # deploys the full observability stack, so it is the only one where these
       # checks can pass. Ansible renders it true in .env; the default keeps a
@@ -2586,40 +2547,6 @@ services:
     networks:
       - egov-network
 
-  # Novu Framework "Bridge" endpoint. Novu v2 workflows are Code-First
-  # — the workflow definitions (SMS body templates, conditional steps,
-  # etc.) live in code, not in the Novu DB. At trigger time, Novu's API
-  # calls THIS service to render the step content. Without it every
-  # trigger fails with "Bridge execution failed".
-  #
-  # The workflows are defined in
-  # /backend/novu-bridge-endpoint/workflows.js — one per domain event
-  # (OTP send + 6 complaint lifecycle events).
-  novu-bridge-endpoint:
-    # Hardening: no capabilities, no privilege escalation (see file header).
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    image: egovio/novu-bridge-endpoint:latest@sha256:15ece70b86a7cdac29111d3a13c22e08f1337e985eb8417a06976baf98411b5d
-    container_name: novu-bridge-endpoint
-    restart: unless-stopped
-    profiles: ["notifications"]
-    environment:
-      PORT: '3000'
-      # MUST match the env API key Novu uses to sign bridge requests
-      # (set NOVU_SECRET_KEY in compose .env to whatever the per-env
-      # API key Novu generated is, OR leave STRICT_AUTH=false for the
-      # in-cluster case where we trust the network).
-      NOVU_SECRET_KEY: ${NOVU_BRIDGE_SECRET_KEY:-dev-novu-secret-key-change-in-production}
-      STRICT_AUTH: 'false'
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - egov-network
-
   # ==================== Notification stack (opt-in) ====================
   # `digit-config-service` + `digit-user-preferences-service` +
   # `novu-bridge` work together to deliver event-driven WhatsApp/SMS via
@@ -2780,7 +2707,12 @@ services:
       # Kafka topics (bridge auto-creates if redpanda's
       # auto.create.topics.enable=true; otherwise create them upfront).
       # One topic per producer; the envelope's eventType decides handling.
-      NOVU_BRIDGE_KAFKA_INPUT_TOPICS: ${NOVU_BRIDGE_KAFKA_INPUT_TOPICS:-complaints.domain.events,otp.send.events}
+      NOVU_BRIDGE_KAFKA_INPUT_TOPICS: ${NOVU_BRIDGE_KAFKA_INPUT_TOPICS:-complaints.domain.events}
+      # DIGIT core SMS topic (user-otp login OTPs, egov-user password resets): translated into
+      # the envelope and delivered through the same pipeline — this replaces egov-notification-sms.
+      NOVU_BRIDGE_CORE_SMS_TOPIC: egov.core.notification.sms
+      NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: ${DEFAULT_TENANT_ID:-pg}
+      NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
       # Consent gate. Off by default; when on, the bridge asks
@@ -3055,46 +2987,6 @@ services:
       start_period: 30s
     networks:
       - egov-network
-  # otp-publisher — replaces Kong's mock /user-otp termination with a real
-  # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish a rendered
-  # OTP.SEND event to kafka otp.send.events -> novu-bridge -> SMS provider. Part of the
-  # SMS-OTP path; gated behind the notifications profile (off by default).
-  # Node service vendored at utilities/otp-publisher; built locally via
-  # `build_otp_publisher: true` (tag otp-publisher:local) or override with
-  # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
-  # bare `docker compose --profile notifications up` works without a local build.
-  otp-publisher:
-    # Hardening: no capabilities, no privilege escalation (see file header).
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:2.12-81fc6be}
-    container_name: otp-publisher
-    restart: unless-stopped
-    profiles: ["notifications"]
-    depends_on:
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    environment:
-      PORT: '3030'
-      REDIS_URL: redis://redis:6379
-      KAFKA_BROKERS: redpanda:9092
-      EVENT_TOPIC: otp.send.events
-      OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
-      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-pg}
-      STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
-      # E.164 prefix for national numbers the SPA sends (e.g. +254). Unset = sent as given.
-      OTP_COUNTRY_CODE: ${OTP_COUNTRY_CODE:-}
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    networks:
-      - egov-network
-
 networks:
   egov-network:
     driver: bridge

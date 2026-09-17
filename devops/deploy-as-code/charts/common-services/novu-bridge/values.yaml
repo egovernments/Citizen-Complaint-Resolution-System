@@ -53,7 +53,15 @@ env: |
   - name: SERVER_SERVLET_CONTEXT_PATH
     value: "/novu-bridge"
   - name: NOVU_BRIDGE_KAFKA_INPUT_TOPICS
-    value: "complaints.domain.events,otp.send.events"
+    value: "complaints.domain.events"
+  # DIGIT-core SMS (login OTPs from user-otp, egov-user password resets) — the
+  # bridge translates SMSRequest into the envelope (eventType CORE_SMS).
+  - name: NOVU_BRIDGE_CORE_SMS_TOPIC
+    value: "egov.core.notification.sms"
+  - name: NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT
+    value: "pg"
+  - name: NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE
+    value: ""
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC
     value: "novu-bridge.dlq"
   - name: NOVU_BRIDGE_MAX_RETRIES

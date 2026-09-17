@@ -399,10 +399,15 @@ recipient's language has none. Author templates in Notifications → Configure w
 of your choice; `enable-notifications.sh` points PGR at the preference service
 (`EGOV_USER_PREFERENCE_HOST`). Leave that blank and everyone gets the default locale.
 
-**One producer, one topic, one envelope.** The bridge accepts `eventType`
-`COMPLAINTS_WORKFLOW_TRANSITIONED` (pgr-services, `complaints.domain.events`) and `OTP`
-(otp-publisher, `otp.send.events`) — `NOVU_BRIDGE_KAFKA_INPUT_TOPICS` /
-`NOVU_BRIDGE_EVENT_TYPES`. Every event, including a rejected one, leaves a dispatch-log row
+**One envelope for everything, login OTPs included.** The bridge accepts `eventType`
+`COMPLAINTS_WORKFLOW_TRANSITIONED` (pgr-services, `complaints.domain.events`) and
+`CORE_SMS`: DIGIT core's `egov.core.notification.sms` topic (user-otp login OTPs, egov-user
+password resets), translated into the envelope by `CoreSmsTranslator`
+(`NOVU_BRIDGE_CORE_SMS_TOPIC` / `_DEFAULT_TENANT` / `_COUNTRY_CODE`). There is no separate
+SMS service for OTPs any more: `enable_otp_services: true` needs `enable_novu: true`, and the
+OTP SMS obeys the tenant's channel policy, provider and dispatch log like any other event
+(`eventName CORE.SMS.OTP`). SMS disabled for the tenant ⇒ login OTPs land as
+`SKIPPED / NB_NO_PROVIDER`, and the Channels card says so. Every event, including a rejected one, leaves a dispatch-log row
 (`REJECTED` with the reason), so a producer sending the wrong shape is visible on the Logs
 screen rather than only in the DLQ.
 

@@ -86,6 +86,7 @@ export function ChannelStatusCard() {
           Effective delivery state per channel for <span className="font-mono">{stateTenant || '—'}</span>.
           Enabled here (MDMS <span className="font-mono">NotificationChannel</span>) <em>and</em> a working gateway
           = messages go out; otherwise every event on the channel is recorded SKIPPED / NB_NO_PROVIDER.
+          SMS also carries login OTPs (and other DIGIT-core SMS) — disabling it disables OTP login.
           {scopedToCity && (
             <span className="block mt-1 text-amber-700">
               You are scoped to <span className="font-mono">{sessionTenant}</span>; channel policy is read at{' '}
