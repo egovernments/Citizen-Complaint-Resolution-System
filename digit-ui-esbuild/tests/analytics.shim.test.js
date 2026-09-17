@@ -600,7 +600,10 @@ test("a pageview emitted before array.js lands is replayed, not dropped", () => 
   assert.equal(t.sandbox.__phInit.key, "phc_test", "init got the project key");
   assert.equal(captured.length, 1, "the queued pageview was replayed after init");
   assert.equal(captured[0].name, "$pageview");
-  assert.equal(captured[0].props.$current_url, "/employee/pgr/inbox");
+  // The real served path, not the context-stripped grouping key: $current_url
+  // is what PostHog links back to, and /employee/... 404s under a /digit-ui
+  // entrance. {{page}} keeps the stripped form for grouping.
+  assert.equal(captured[0].props.$current_url, "/digit-ui/employee/pgr/inbox");
 });
 
 test("PostHog init forces every restraint, and no record can loosen them", () => {
@@ -865,4 +868,49 @@ test("endpointUrl is host-allowlisted, not just scriptUrl (CWE-201)", () => {
   // PostHog with no endpointUrl falls back to the vendor default and is fine.
   v = i.validate({ code: "p", type: "POSTHOG", enabled: true, apiKey: "k" });
   assert.equal(v.ok, true);
+});
+
+/* ───────────────────── tracked URL must resolve ───────────────────── */
+
+test("the URL handed to a provider resolves to the real page, context path and all", () => {
+  // currentPage() strips the context prefix so a report row reads
+  // /employee/pgr/inbox-v2 regardless of which prefix served it. That is the
+  // right key to GROUP by, but Matomo resolves setCustomUrl relative to the
+  // origin, so handing it the stripped path records
+  // https://host/employee/pgr/inbox-v2 — a 404, because the app is served at
+  // /digit-ui/employee/... Every row in Page URLs was unclickable.
+  const t = loadShim({
+    pathname: "/digit-ui/employee/pgr/inbox-v2",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const urls = t.sandbox._paq.filter((c) => c[0] === "setCustomUrl").map((c) => c[1]);
+  assert.ok(urls.length > 0, "Matomo must be told which URL it is tracking");
+  for (const u of urls) {
+    assert.ok(
+      u.indexOf("/digit-ui/") === 0,
+      `tracked URL must keep the context path so it resolves, got ${u}`
+    );
+  }
+});
+
+test("the grouping key stays stripped even though the tracked URL is not", () => {
+  // {{page}} is what templates and derived titles key on, and it must stay
+  // prefix-free so one route is one row across entrances.
+  const t = loadShim({
+    config: { ANALYTICS_CUSTOM_ENABLED: true },
+    pathname: "/digit-ui/employee/pgr/inbox-v2",
+    respond: (tenant) =>
+      tenant === "mz"
+        ? [row("mz", {
+            code: "c", type: "CUSTOM", enabled: true,
+            adapter: {
+              scriptUrl: "https://matomo.mz.gov.mz/x.js", globalName: "_xq",
+              callTemplates: { pageView: [["p", "{{page}}"]] },
+            },
+          })]
+        : [],
+  });
+  const calls = (t.sandbox._xq || []).filter((c) => c[0] === "p").map((c) => c[1]);
+  assert.ok(calls.length > 0, "the custom provider should have been called");
+  assert.equal(calls[0], "/employee/pgr/inbox-v2", "{{page}} stays context-free");
 });
