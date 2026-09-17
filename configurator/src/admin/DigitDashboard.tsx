@@ -58,7 +58,7 @@ function ResourceCard({ resource }: { resource: string }) {
   return (
     <button
       onClick={() => navigate(`/manage/${resource}`)}
-      className="text-left w-full h-full focus:outline-none group"
+      className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 group"
     >
       <DigitCard className="h-full w-full mb-0 p-4 flex items-center min-h-[88px] border border-transparent transition-all duration-150 group-hover:shadow-md group-hover:border-primary/40 group-hover:bg-accent/5">
         <div className="flex items-center gap-3.5 w-full">
