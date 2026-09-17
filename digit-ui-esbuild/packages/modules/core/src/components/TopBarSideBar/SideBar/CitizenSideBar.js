@@ -3,7 +3,7 @@ import { Loader } from "@egovernments/digit-ui-components";
 import React, { useState, Fragment, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
-import ChangeCity from "../../ChangeCity";
+import ChangeCity, { showTenantSwitcher } from "../../ChangeCity";
 import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
@@ -398,14 +398,20 @@ export const CitizenSideBar = ({
             key: "home",
           },
         ]),
-    {
-      label: city,
-      value: city,
-      children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
-      type: "custom",
-      icon: "LocationCity",
-      key: "city",
-    },
+    // Same rule as the top bar's ChangeCity, via the shared helper, so the two
+    // surfaces cannot disagree about whether the tenant switcher is shown.
+    ...(showTenantSwitcher(selectCityData?.length)
+      ? [
+          {
+            label: city,
+            value: city,
+            children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
+            type: "custom",
+            icon: "LocationCity",
+            key: "city",
+          },
+        ]
+      : []),
     {
       label: t("Language"),
       children: transformedLanguageData?.length > 0 ? transformedLanguageData : undefined,
