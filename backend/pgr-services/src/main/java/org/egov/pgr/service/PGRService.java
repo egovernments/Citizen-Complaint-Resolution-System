@@ -55,7 +55,6 @@ public class PGRService {
 
     private MDMSUtils mdmsUtils;
 
-    private ComplaintDomainEventService complaintDomainEventService;
 
     private PGRUtils pgrUtils;
 
@@ -75,7 +74,7 @@ public class PGRService {
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator validator, Producer producer,
                       PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
-                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
+                      PGRUtils pgrUtils,
                       ExtendedAttributesValidationService extendedAttributesValidationService,
                       EncryptionDecryptionService encryptionDecryptionService,
                       SearchAccessPolicyService searchAccessPolicyService,
@@ -90,7 +89,6 @@ public class PGRService {
         this.config = config;
         this.repository = repository;
         this.mdmsUtils = mdmsUtils;
-        this.complaintDomainEventService = complaintDomainEventService;
         this.pgrUtils = pgrUtils;
         this.extendedAttributesValidationService = extendedAttributesValidationService;
         this.encryptionDecryptionService = encryptionDecryptionService;
@@ -108,7 +106,6 @@ public class PGRService {
      */
 	public ServiceRequest create(ServiceRequest request) {
 		String tenantId = request.getService().getTenantId();
-		String fromState = request.getService().getApplicationStatus();
 		Object mdmsData = mdmsUtils.mDMSCall(request);
 		validator.validateCreate(request, mdmsData);
 		enrichmentService.enrichCreateRequest(request);
@@ -145,7 +142,6 @@ public class PGRService {
 
 		workflowService.updateWorkflowStatus(request);
 
-		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
 
 		producer.push(tenantId, config.getCreateTopic(), request);
 		producer.push(tenantId, config.getInboxCreateTopic(), request);
@@ -252,10 +248,8 @@ public class PGRService {
 
     private ServiceRequest updateInternal(ServiceRequest request, boolean automaticEscalation) {
         String tenantId = request.getService().getTenantId();
-        String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         Service persistedService = validator.validateUpdate(request, mdmsData);
-        fromState = persistedService.getApplicationStatus();
         if (automaticEscalation) {
             escalationService.prepareUpdate(request, persistedService, true);
         } else {
@@ -301,7 +295,6 @@ public class PGRService {
 
         workflowService.updateWorkflowStatus(request);
 
-        complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId, config.getUpdateTopic(), request);
         producer.push(tenantId, config.getInboxUpdateTopic(), request);
         if (request.getWorkflow() != null

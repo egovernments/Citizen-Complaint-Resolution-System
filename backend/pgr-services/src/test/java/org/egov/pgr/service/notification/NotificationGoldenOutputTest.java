@@ -2,9 +2,9 @@ package org.egov.pgr.service.notification;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
-import org.egov.pgr.util.NotificationUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,12 +30,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
- * BACKWARD-COMPAT GATE (P1-9, §12.2). Proves the config-driven cutover is a behavioral no-op for SMS.
+ * GOLDEN-OUTPUT GATE (P1-9, §12.2). Pins the seeded SMS templates to the bodies the legacy
+ * hardcoded path was sending before the cutover — the legacy path is gone; its localization
+ * bodies survive here as the golden file.
  *
  * For every §11 workflow transition this asserts the SET of (audience, channel, renderedBody) that the
  * config-driven {@link TemplateRenderer} produces — fed the seeded RAINMAKER-PGR.NotificationTemplate
- * rows — equals what the legacy {@link NotificationUtil#getCustomizedMsg(String, String, String, String)}
- * produces from the same rainmaker-pgr.json bodies (keyed PGR_&lt;ROLE&gt;_&lt;ACTION&gt;_&lt;STATUS&gt;_SMS_MESSAGE).
+ * rows — equals what the legacy path produced from the rainmaker-pgr.json bodies (keyed
+ * PGR_&lt;ROLE&gt;_&lt;ACTION&gt;_&lt;STATUS&gt;_SMS_MESSAGE; lookup reproduced verbatim in {@link #legacyBody}).
  *
  * Scope (per the prompt's explicit fallback + R14): restricted to SMS-only, and to
  * TemplateRenderer-vs-legacy *body equivalence*. The full NotificationService graph (workflow / HRMS /
@@ -74,10 +76,7 @@ public class NotificationGoldenOutputTest {
     @InjectMocks
     private NotificationRouter router;
 
-    /** Legacy body source: getCustomizedMsg only parses the localization JSON string passed in. */
-    private final NotificationUtil legacyUtil = new NotificationUtil();
-
-    /** The serialized rainmaker-pgr.json (subset) fed to NotificationUtil.getCustomizedMsg. */
+    /** Golden body source: the serialized rainmaker-pgr.json (subset) the legacy path read its SMS bodies from. */
     private String legacyLocalizationJson;
 
     /**
@@ -222,9 +221,9 @@ public class NotificationGoldenOutputTest {
     }
 
     /**
-     * Legacy path: for the same routed audiences, fetch the body via NotificationUtil.getCustomizedMsg
+     * Golden set: for the same routed audiences, fetch the body from the legacy localization fixture
      * (code = PGR_&lt;ROLE&gt;_&lt;ACTION&gt;_&lt;STATUS&gt;_SMS_MESSAGE) and fill the SAME placeholder map.
-     * Driven off the routing seed so legacy and config-driven cover identical (audience) sets.
+     * Driven off the routing seed so golden and config-driven cover identical (audience) sets.
      */
     private Set<String> legacySet(String action, String toState) {
         Set<String> out = new LinkedHashSet<>();
@@ -232,7 +231,7 @@ public class NotificationGoldenOutputTest {
         for (RoutingMatch match : matches) {
             if (!CHANNEL_SMS.equals(match.getChannel())) continue;
             String role = match.getAudience();
-            String raw = legacyUtil.getCustomizedMsg(action, toState, role, legacyLocalizationJson);
+            String raw = legacyBody(action, toState, role);
             assertNotNull(raw, "legacy localization missing body for role=" + role
                     + " code=PGR_" + role + "_" + action + "_" + toState + "_SMS_MESSAGE");
             out.add(key(role, CHANNEL_SMS, substitute(raw, placeholderValues)));
@@ -241,6 +240,14 @@ public class NotificationGoldenOutputTest {
     }
 
     // ---- helpers ---------------------------------------------------------------------------------
+
+    /** The removed NotificationUtil.getCustomizedMsg lookup, verbatim: first message with the PGR_*_SMS_MESSAGE code. */
+    private String legacyBody(String action, String toState, String role) {
+        String code = "PGR_" + role.toUpperCase() + "_" + action.toUpperCase() + "_" + toState.toUpperCase() + "_SMS_MESSAGE";
+        List<String> found = JsonPath.parse(legacyLocalizationJson)
+                .read("$..messages[?(@.code==\"" + code + "\")].message");
+        return found == null || found.isEmpty() ? null : found.get(0);
+    }
 
     private static String key(String audience, String channel, String body) {
         return audience + "" + channel + "" + body;
