@@ -5,6 +5,7 @@ import {
   API_ORIGIN,
   type AvailabilityResult,
   type Operation,
+  type ProvisioningStep,
   type Signup,
   type SignupDraftInput,
   type TenantOption,
@@ -88,6 +89,19 @@ const selectClass =
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
+
+/**
+ * Founder-facing names for the backend's step codes. Lower-casing the codes
+ * themselves read as internal machinery on the one screen where somebody is
+ * watching every line, and turned the product name into "digit account".
+ */
+const STEP_LABELS: Record<ProvisioningStep, string> = {
+  TENANT_FOUNDATION: 'Creating your account',
+  ORGANIZATION: 'Setting up your organisation',
+  FOUNDER_MEMBERSHIP: 'Adding you to it',
+  FOUNDER_ROLES: 'Granting your permissions',
+  DIGIT_ACCOUNT: 'Creating your DIGIT login',
+};
 
 type Phase =
   | 'loading'
@@ -656,7 +670,7 @@ function SignupFlow() {
                   <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
                 )}
                 <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
-                  {name.replace(/_/g, ' ').toLowerCase()}
+                  {STEP_LABELS[name]}
                 </span>
               </li>
             );
