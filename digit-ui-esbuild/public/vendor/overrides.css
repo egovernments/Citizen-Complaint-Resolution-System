@@ -386,6 +386,29 @@ table.digit-table-main thead th {
   color: var(--color-tooltip-text, #FFFFFF) !important;
 }
 
+/* Leaflet's own tooltip ships white-on-#222 with a white callout arrow.
+ * The box itself is already recolored by the `[role="tooltip"]` rule above
+ * (react-leaflet sets that role), but the border and the arrow are drawn by
+ * leaflet's own rules and stayed white, leaving a white notch under a navy
+ * box. Route all three through the same tokens. */
+.leaflet-tooltip {
+  background-color: var(--color-tooltip-bg, #22394D) !important;
+  border-color: var(--color-tooltip-bg, #22394D) !important;
+  color: var(--color-tooltip-text, #FFFFFF) !important;
+}
+.leaflet-tooltip-top:before {
+  border-top-color: var(--color-tooltip-bg, #22394D) !important;
+}
+.leaflet-tooltip-bottom:before {
+  border-bottom-color: var(--color-tooltip-bg, #22394D) !important;
+}
+.leaflet-tooltip-left:before {
+  border-left-color: var(--color-tooltip-bg, #22394D) !important;
+}
+.leaflet-tooltip-right:before {
+  border-right-color: var(--color-tooltip-bg, #22394D) !important;
+}
+
 /* Dashboard Add-KPI hover card is not a DIGIT tooltip — keep surface styling. */
 .dashboard-add-kpi-preview,
 .dashboard-add-kpi-preview.dashboard-root {
@@ -3032,6 +3055,22 @@ button[class*="toast-close"] svg,
  * bottom as the filter column. */
 .v2-pgr-inbox .digit-sections-parent.inbox > * {
   align-self: stretch !important;
+}
+
+/* ...except the links panel, which is in the FIRST grid row, not the second.
+ * The rule above was written for the table/filter row and catching row 1 as
+ * well left the links card stretched to the height of the search form beside
+ * it: measured 210px of card around 99px of content, which is the
+ * "too much white space on the top left box" in the #2038 review.
+ *
+ * `align-self` alone is not enough — vendor also sets
+ * `.digit-section.links { height: 100% }` (resolved against the row) and a
+ * `.digit-section { min-height: 10rem }` floor. Clear all three so the panel
+ * is as tall as the one link it holds. Measured 210px -> 149px. */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.links {
+  align-self: start !important;
+  height: auto !important;
+  min-height: 0 !important;
 }
 .v2-pgr-inbox .digit-results-table-wrapper {
   display: flex;
@@ -7565,7 +7604,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 }
 
 /* ----------------------------------------------------------------------
- * 66. Employee route grounds (#2038 review round 2)
+ * 66. Route grounds (#2038 review round 2, extended for citizen)
  *
  *     `.v2-scope` carries `background: var(--v2-page-bg)`, and `--v2-page-bg`
  *     resolves to `--color-page-bg`, which this palette sets to #FFFFFF. The
@@ -7584,4 +7623,192 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 .employee .app-container.ground-container > .v2-scope,
 .employee .grounded-container > .v2-scope {
   background-color: transparent !important;
+}
+
+/*     Same defect on the citizen side, reported on #2038 as a downstream
+ *     deviation: `/citizen/all-services` paints a white `div.v2-scope`
+ *     route root over the grey `.body-container`, so the page reads as a
+ *     white slab with the ground surviving only below the fold and the
+ *     card invisible on it.
+ *
+ *     Guarded with the same `:has(> aside.v2-scope)` test the layout rules
+ *     above use, because the citizen login / OTP surfaces don't mount the
+ *     sidebar and do want their own white ground. `div.v2-scope` (not bare
+ *     `.v2-scope`) so the navy sidebar `aside` keeps its background. */
+.center-container.citizen-home-container:has(> aside.v2-scope) > div.v2-scope {
+  background-color: transparent !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 67. Detail-card label / value hierarchy (#2038 QA)
+ *
+ *     Reported as "everything (subheading and text) is in same font, hard to
+ *     differentiate at first glance" on the complaint details page. Measured:
+ *     the label is 13px/500 and the value 15px/400, in exactly the same
+ *     colour. The label being smaller but heavier cancels out against the
+ *     value being larger but lighter, so neither reads as subordinate.
+ *
+ *     Treat the label as what it is, a field caption: smaller, uppercase,
+ *     tracked out, in the muted tone. The value carries the weight instead.
+ *     That is the same caption treatment the v2 form fields already use, so
+ *     the read/write halves of the module now match.
+ *
+ *     Note this needs the theme's text ramp to actually be a ramp. The
+ *     bomet-county ThemeConfig currently sets text-primary, -secondary,
+ *     -muted and -heading all to #1D2433, which flattens every caption in
+ *     the app to body colour; that is fixed in the MDMS record, not here.
+ * ---------------------------------------------------------------------- */
+/*     The PGR details page already had a 13px label rule of its own from an
+ *     earlier round, written as
+ *     `.v2-pgr-details [class*="field-pair"] [class*="label"]`. That is
+ *     three compounds to this rule's two, so it won on size and weight and
+ *     only the uppercase landed. Matching its shape here keeps the caption
+ *     defined in one place instead of two rules disagreeing. */
+.employee .digit-viewcard-label,
+.employee [class*="field-pair-label"],
+.employee .digit-viewcard-field-pair [class*="label"] {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: var(--color-text-muted, #6B7280) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  margin-bottom: 2px !important;
+}
+.employee .digit-viewcard-value,
+.employee [class*="field-pair-value"] {
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
+  color: var(--color-text-primary, #1D2433) !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 68. Language selection buttons (#2038 QA)
+ *
+ *     "button sizes are different for each language button": the container
+ *     is `display: block` and each button shrink-wraps its own label, so the
+ *     row measured 76 / 84 / 94px for English / Francais / Portugues. A
+ *     language picker is a set of equal choices and should not rank them by
+ *     how long the word is.
+ *
+ *     Flex row with a shared floor instead. 7rem clears the longest of the
+ *     three at this type size and lands the row on the same left edge as the
+ *     Continue button beneath it. Wraps rather than overflowing when a tenant
+ *     ships more languages than fit.
+ * ---------------------------------------------------------------------- */
+.language-button-container {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  justify-content: center !important;
+}
+.language-button-container .customBtn,
+.language-button-container .customBtn-selected {
+  flex: 0 0 auto !important;
+  min-width: 7rem !important;
+  margin: 0 !important;
+  text-align: center !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 69. Employee form type scale (#2038 QA)
+ *
+ *     "Bigger and more legible font size and header vs content font size
+ *     hierarchy" on Create Complaint. Measured before: section header 16/600,
+ *     field label 14/500, input text 14/400, and the breadcrumb's current
+ *     crumb 16/400 — the same size as the section headers it sits above, so
+ *     the loudest thing on the page was the navigation.
+ *
+ *     After: breadcrumb 14, label 14, input 15, section header 18. The
+ *     section header now reads a step above its fields, the breadcrumb a step
+ *     below, and the text the operator actually types is the larger of the
+ *     two body sizes. Input size matches the detail card's value size from
+ *     section 67, so the read and write views of a complaint agree.
+ * ---------------------------------------------------------------------- */
+.employee .digit-card-section-header {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+}
+.employee .digit-bread-crumb,
+.employee .digit-bread-crumb-content {
+  font-size: 0.875rem !important;
+}
+.employee .v2-scope input,
+.employee .v2-scope textarea,
+.employee .v2-scope [role="combobox"],
+.employee .v2-scope [role="combobox"] span,
+.employee .v2-scope [role="option"] {
+  font-size: 0.9375rem !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 70. Submitted-complaint response screen on mobile (#2038 QA)
+ *
+ *     '"Create Another Complaint" clickable text is misaligned'. The panel's
+ *     footer row carries `margin-left: auto`, which right-aligns the action
+ *     buttons. That is the right call for a wide desktop panel, but on a
+ *     phone the single tertiary link gets pushed off the left edge that the
+ *     description paragraph directly above it sits on, so the two read as
+ *     misaligned rather than as a column.
+ *
+ *     Left-align the footer on mobile only, so the link lines up with the
+ *     copy it follows. Desktop keeps its right-aligned action row.
+ *
+ *     The Back bar below it is inline-styled `marginLeft: 6rem` and
+ *     `minWidth: 16rem` in the PGR Response component, tuned for a desktop
+ *     action bar. On a 414px viewport that is a 96px indent on a 256px
+ *     button, so it sits off-centre too. Released here rather than in the
+ *     component, which would have to branch on viewport to keep the desktop
+ *     placement.
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .employee .digit-panelcard-footer,
+  .employee .digit-panelcard-footer-buttons {
+    margin-left: 0 !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+  .employee .digit-action-bar-wrap.mc_back .digit-button,
+  .employee .mc_back .digit-button {
+    margin-left: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * 71. "Powered by DIGIT" below the fold on mobile (#2038 QA)
+ *
+ *     Reported as the footer not showing on a phone until you scroll, even
+ *     on the landing page where the content ends less than half way down.
+ *
+ *     Measured on a 800px viewport: the topbar is `position: fixed` so it
+ *     takes no flow, but the mobile working-context strip is `position:
+ *     sticky` and does, costing 41px. Under it `.main` asks for 100vh and
+ *     `.employee-app-wrapper` for `100vh - 160px`, neither of which knows
+ *     about that strip. So the column always came to viewport + 41px and the
+ *     footer, which is the last child of `.main`, started at y=801: one pixel
+ *     past the fold.
+ *
+ *     Rather than teach each of those calc()s about the strip, make the
+ *     column a flex column and let the two fillers flex. The footer then sits
+ *     at the bottom of the viewport when the page is short and flows normally
+ *     when it is long. Measured: footer bottom 841 -> exactly 800, page no
+ *     longer scrollable on the landing page.
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .body-container > .employee {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 100vh !important;
+  }
+  .body-container > .employee > .main {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .body-container > .employee > .main > .employee-app-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
 }
