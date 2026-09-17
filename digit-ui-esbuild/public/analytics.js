@@ -83,7 +83,7 @@
   /* The complete set of placeholders a CUSTOM template may use. Deliberately
    * no errorMessage, no href, no user, no token, no storage access. */
   var PLACEHOLDERS = [
-    "surface", "entrance", "stateTenant", "cityTenant", "page", "locale",
+    "surface", "entrance", "stateTenant", "cityTenant", "page", "url", "locale",
     "module", "contextPath", "referrerHost", "now", "eventName",
     "eventCategory", "eventAction", "eventLabel", "eventValue", "errorName"
   ];
@@ -393,7 +393,10 @@
    * than the grouping key does. */
   function currentUrl() {
     var path = "";
-    try { path = window.location.pathname || "/"; } catch (e) { return ""; }
+    /* "/" and not "": an empty custom URL makes Matomo and PostHog fall back to
+     * document.URL, which is the raw address with the complaint id and any
+     * query still on it — the one path that bypasses scrub() entirely. */
+    try { path = window.location.pathname || "/"; } catch (e) { return "/"; }
     var q = "";
     try { q = scrubQuery(window.location.search || ""); } catch (e) {}
     return scrub(path || "/") + q;
@@ -1107,6 +1110,10 @@
     m.stateTenant = ctx.stateTenant;
     m.cityTenant = ctx.cityTenant;
     m.page = ctx.page;
+    /* The path as served. `page` is the grouping key with the app prefix
+     * stripped, which is the shape that recorded 404s; a CUSTOM adapter
+     * pointing its own collector at a URL wants this one. */
+    m.url = ctx.url;
     m.locale = ctx.locale;
     m.module = ctx.module;
     m.contextPath = ctx.contextPath;
