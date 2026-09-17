@@ -95,6 +95,11 @@ const MobileSearchComponent = ({
   // being submitted instead.
   const isSupplied = (v) => {
     if (v === null || v === undefined || v === "") return false;
+    // An untouched workflowstatesfilter submits {ASSIGNED: false, ...}. Without
+    // this, `false` falls through to the final `return true` and an unchecked
+    // status group counts as a criterion. Numbers are left alone: 0 is a value
+    // an operator can legitimately have typed.
+    if (typeof v === "boolean") return v;
     if (Array.isArray(v)) return v.length > 0;
     // Dropdowns submit {code, name} and date ranges submit
     // {startDate, endDate}; an untouched range is an object of empty

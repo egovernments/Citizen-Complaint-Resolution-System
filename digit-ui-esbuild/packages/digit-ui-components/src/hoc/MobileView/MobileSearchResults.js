@@ -15,7 +15,12 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
     const resultsKey = config.resultsJsonPath
     let searchResult = _.get(data, resultsKey, [])
     searchResult = searchResult?.length > 0 ? searchResult : []
-    searchResult = searchResult.reverse();
+    // No reverse here. The server returns the page in the order the request
+    // asked for, so flipping it locally made the mobile list the opposite of
+    // the desktop table for the same setting, and put the rows out of step with
+    // the pager's own startRecord/endRecord labels. It also mutated the array in
+    // place, and that array is the react-query cached page, so the flip leaked
+    // to anything else reading the same query.
     const tenantId = Digit.ULBService.getCurrentTenantId();
     const headerLocale = Digit.Utils.locale.getTransformedLocale(tenantId);
 

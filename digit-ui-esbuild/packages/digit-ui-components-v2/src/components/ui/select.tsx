@@ -4,6 +4,11 @@ import * as React from "react";
 const MAX_LIST_HEIGHT = 256;
 /** Below this a list is more annoying than useful, so flip instead. */
 const MIN_LIST_HEIGHT = 120;
+/**
+ * The hard floor on the rendered height: one option row. Not a target, just
+ * the point below which the list stops being a control at all.
+ */
+const ONE_OPTION_HEIGHT = 36;
 /** Breathing room so the popover never sits flush against the edge. */
 const VIEWPORT_MARGIN = 12;
 import { cn } from "../../lib/cn";
@@ -128,10 +133,28 @@ export function Select<TValue extends string = string>({
         popover && list
           ? Math.max(0, popover.getBoundingClientRect().height - list.getBoundingClientRect().height)
           : 0;
-      setPlacement({
-        above: flip,
-        maxListHeight: Math.max(MIN_LIST_HEIGHT, Math.min(MAX_LIST_HEIGHT, room - chrome)),
-      });
+      // On a viewport where neither direction has 120px plus chrome (a landscape
+      // phone, a short embedded frame) the old Math.max floor pushed the popover
+      // past the edge again, and when flipped that overrun goes off the TOP,
+      // which cannot be scrolled to at all.
+      // MIN_LIST_HEIGHT stays the flip threshold above, but it must not be a
+      // floor on the height: clamping up to it is what let the popover back
+      // over the fold. Take what actually fits and let the list scroll inside.
+      //
+      // One row is still a floor, though. Removing the bound entirely let
+      // `available` reach 0 where neither direction clears the popover chrome,
+      // and the list rendered at `maxHeight: 0px`: a search box with no options
+      // under it and nothing to scroll. That state is stable, not transient,
+      // because the next measure sees the same chrome. Better to overflow by a
+      // row than to show a control that cannot be used.
+      const available = Math.max(ONE_OPTION_HEIGHT, room - chrome);
+      const next = Math.min(MAX_LIST_HEIGHT, available);
+      // Bail when nothing moved: this runs on capture-phase scroll, so it also
+      // fires while scrolling the list itself, and a fresh object every time
+      // re-rendered the Select on every scroll event.
+      setPlacement((prev) =>
+        prev.above === flip && prev.maxListHeight === next ? prev : { above: flip, maxListHeight: next }
+      );
     };
     measure();
     // Again on the next frame: the first pass runs before the popover has laid

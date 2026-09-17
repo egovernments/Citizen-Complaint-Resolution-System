@@ -185,6 +185,13 @@ footer_bw_logo_url: "/digit-ui/brand/digit-footer-bw.png"
 login_tenant_allowlist: []
 employee_module_denylist: []
 
+# Tenant switcher in the employee top bar and the mobile drawer.
+# null  - decided by the UI: shown only where the signed-in user holds roles
+#         in more than one tenant, which is the useful rule (CCRS#2038).
+# true  - always shown, even with a single tenant.
+# false - never shown, even where switching is possible.
+show_tenant_switcher: null
+
 # Client-side dashboard render-lag instrumentation (#1110): the supervisor
 # dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
 # ON by default (the emitter self-mutes when the route is absent). This is

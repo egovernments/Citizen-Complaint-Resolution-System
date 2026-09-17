@@ -232,7 +232,7 @@ The scrubber runs on every outgoing string, identically for every adapter:
 | digit runs of 8–15 (MZ mobiles are 9) | `:num` |
 | e-mail addresses | `:email` |
 | bare numeric path segments | `/:n` |
-| query string | **default-deny** — only `tenantId`, `module`, `moduleName`, `masterName`, `key`, `locale`, `preview`, `builderPreview` survive |
+| query string | **default-deny** — only `tenantId`, `module`, `moduleName`, `masterName`, `key`, `locale`, `preview`, `builderPreview`, `type` survive |
 
 Operator `scrubPatterns` are **appended**; they can tighten, never loosen.
 Do Not Track is honoured unconditionally and is not a field — no row can switch
