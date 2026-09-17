@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState } from "react";
 import { getProductLabel } from "../config/dashboardConfig";
-import { GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import useDashboardT from "../i18n/useDashboardT";
+import { toBcp47Locale } from "../i18n/localeRuntime";
+import { normalizeHierarchySelections } from "../utils/multiSelectFilters";
 import AddKpiDropdown from "./AddKpiDropdown";
 import LanguageMenu from "./LanguageMenu";
 
@@ -52,7 +53,7 @@ function formatDisplayDate(iso, language) {
   if (Number.isNaN(date.getTime())) return iso;
   const opts = { day: "2-digit", month: "2-digit", year: "numeric" };
   try {
-    return date.toLocaleDateString(language?.replace("_", "-"), opts);
+    return date.toLocaleDateString(toBcp47Locale(language), opts);
   } catch (e) {
     // Malformed stored locale tag — let the browser default decide.
     return date.toLocaleDateString(undefined, opts);
@@ -60,15 +61,13 @@ function formatDisplayDate(iso, language) {
 }
 
 function buildSubtitle(filters, filterOptions, t, language) {
-  const geoOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
-  const geoId = filters?.geography;
-  // The geography chip is a raw boundary code — route it through the
-  // dimension-label seam; the "all" sentinel renders its localized label.
+  const geographies = normalizeHierarchySelections(filters?.geographies);
   const geo =
-    geoId && geoId !== "all"
-      ? dimensionLabel(geoId, "boundary")
-      : geoOptions.find((o) => o.id === geoId)?.label ??
-        t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities");
+    geographies.length === 0
+      ? t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities")
+      : geographies.length === 1
+        ? dimensionLabel(geographies[0].code, "boundary")
+        : `${geographies.length} ${t("DASHBOARD_FILTERS_WARDS", "wards")}`;
 
   let period = t("DASHBOARD_HEADER_LAST_7_DAYS", "Last 7 days");
   if (filters?.dateFrom && filters?.dateTo) {
@@ -249,7 +248,7 @@ const DashboardHeader = ({
             type="button"
             onClick={onResetLayout}
             className="dashboard-header-btn dashboard-header-reset"
-            title={t("DASHBOARD_HEADER_RESET_LAYOUT", "Reset layout")}
+            title={t("DASHBOARD_HEADER_RESET", "Reset")}
           >
             {t("DASHBOARD_HEADER_RESET", "Reset")}
           </button>}

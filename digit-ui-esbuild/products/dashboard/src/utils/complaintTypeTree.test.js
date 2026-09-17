@@ -39,6 +39,8 @@ const {
   ALL,
   buildComplaintTree,
   pruneComplaintTree,
+  complaintCodesUnder,
+  complaintMultiSelectionFromCode,
   nodeOf,
   childrenOf,
   parentOf,
@@ -97,10 +99,7 @@ const tree = () => buildComplaintTree(RECORDS);
 test("buildComplaintTree: structure, derived paths, record path wins", () => {
   const t = tree();
   assert.equal(t.roots.length, 2);
-  assert.deepEqual(
-    t.roots.map((r) => r.code).sort(),
-    ["ROADS", "SANITATION"]
-  );
+  assert.deepEqual(t.roots.map((r) => r.code).sort(), ["ROADS", "SANITATION"]);
 
   const garbage = nodeOf(t, "GARBAGE");
   assert.equal(garbage.path, "SANITATION.GARBAGE"); // derived from parent chain
@@ -142,7 +141,10 @@ test("buildComplaintTree: empty/no records → null", () => {
 test("prune: branches with zero scoped leaves disappear (dept-scoped view)", () => {
   // Sanitation-dept supervisor: scoped distincts only cover garbage leaves.
   const pruned = pruneComplaintTree(tree(), ["GarbageFull", "GarbageMissed"]);
-  assert.deepEqual(pruned.roots.map((r) => r.code), ["SANITATION"]);
+  assert.deepEqual(
+    pruned.roots.map((r) => r.code),
+    ["SANITATION"]
+  );
   assert.equal(nodeOf(pruned, "SEWAGE"), null); // zero scoped leaves → gone
   assert.equal(nodeOf(pruned, "ROADS"), null); // whole other branch → gone
   assert.equal(nodeOf(pruned, "GARBAGE").isLeaf, false);
@@ -167,6 +169,24 @@ test("prune: never mutates the input tree; empty scope → null", () => {
   assert.equal(pruneComplaintTree(null, ["x"]), null);
 });
 
+test("multi-select hierarchy nodes expand only to ABAC-scoped service codes", () => {
+  const pruned = pruneComplaintTree(tree(), [
+    "GarbageFull",
+    "GarbageMissed",
+    "Pothole",
+  ]);
+  assert.deepEqual(complaintCodesUnder(pruned, "GARBAGE").sort(), [
+    "GarbageFull",
+    "GarbageMissed",
+  ]);
+  assert.deepEqual(complaintMultiSelectionFromCode(pruned, "GARBAGE"), {
+    code: "GARBAGE",
+    path: "SANITATION.GARBAGE",
+    leaf: false,
+    codes: ["GarbageFull", "GarbageMissed"],
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* Traversal: descend / ascend / apply / clear                          */
 /* ------------------------------------------------------------------ */
@@ -174,15 +194,23 @@ test("prune: never mutates the input tree; empty scope → null", () => {
 test("descend: root → children are the root categories; child applies", () => {
   const t = tree();
   assert.deepEqual(
-    childrenOf(t, ALL).map((n) => n.code).sort(),
+    childrenOf(t, ALL)
+      .map((n) => n.code)
+      .sort(),
     ["ROADS", "SANITATION"]
   );
   // Selecting an interior child applies a subtree selection…
   const sel = selectionFromCode(t, "SANITATION");
-  assert.deepEqual(sel, { code: "SANITATION", path: "SANITATION", leaf: false });
+  assert.deepEqual(sel, {
+    code: "SANITATION",
+    path: "SANITATION",
+    leaf: false,
+  });
   // …and the next level's dropdown lists ITS children (traversal continues).
   assert.deepEqual(
-    childrenOf(t, sel.code).map((n) => n.code).sort(),
+    childrenOf(t, sel.code)
+      .map((n) => n.code)
+      .sort(),
     ["GARBAGE", "SEWAGE"]
   );
 });
@@ -369,7 +397,10 @@ test("repair: nothing on the stored path survives → cleared", () => {
     }),
     clearedSelection()
   );
-  assert.deepEqual(repairSelection(null, { code: "X", path: "X" }), clearedSelection());
+  assert.deepEqual(
+    repairSelection(null, { code: "X", path: "X" }),
+    clearedSelection()
+  );
 });
 
 /* ------------------------------------------------------------------ */
@@ -378,7 +409,11 @@ test("repair: nothing on the stored path survives → cleared", () => {
 
 test("normalize: trio passes through, bare string means leaf, all clears", () => {
   assert.deepEqual(
-    normalizeComplaintTypeValue({ code: "GARBAGE", path: "SANITATION.GARBAGE", leaf: false }),
+    normalizeComplaintTypeValue({
+      code: "GARBAGE",
+      path: "SANITATION.GARBAGE",
+      leaf: false,
+    }),
     { code: "GARBAGE", path: "SANITATION.GARBAGE", leaf: false }
   );
   assert.deepEqual(normalizeComplaintTypeValue("GarbageFull"), {
@@ -388,7 +423,10 @@ test("normalize: trio passes through, bare string means leaf, all clears", () =>
   });
   assert.deepEqual(normalizeComplaintTypeValue("all"), clearedSelection());
   assert.deepEqual(normalizeComplaintTypeValue(null), clearedSelection());
-  assert.deepEqual(normalizeComplaintTypeValue({ code: "all" }), clearedSelection());
+  assert.deepEqual(
+    normalizeComplaintTypeValue({ code: "all" }),
+    clearedSelection()
+  );
 });
 
 /* ------------------------------------------------------------------ */
@@ -413,14 +451,17 @@ function stubBrowserGlobals() {
     removeItem: (k) => store.delete(k),
   };
   globalThis.window = { localStorage: globalThis.localStorage };
-  return () => {
-    delete globalThis.localStorage;
-    delete globalThis.window;
+  return {
+    store,
+    restore: () => {
+      delete globalThis.localStorage;
+      delete globalThis.window;
+    },
   };
 }
 
 test("tree-fetch failure: persisted interior selection survives a reload cycle, then repairs", () => {
-  const restore = stubBrowserGlobals();
+  const { restore } = stubBrowserGlobals();
   try {
     const full = tree();
     const pruned = pruneComplaintTree(full, [
@@ -445,35 +486,40 @@ test("tree-fetch failure: persisted interior selection survives a reload cycle, 
     persistDashboardFilters(
       {
         ...loadDashboardFilters(),
-        complaintType: "GARBAGE",
-        complaintTypePath: "SANITATION.GARBAGE",
-        complaintTypeLeaf: false,
+        complaintTypes: [
+          {
+            code: "GARBAGE",
+            path: "SANITATION.GARBAGE",
+            leaf: false,
+            codes: ["GarbageFull", "GarbageMissed"],
+          },
+        ],
       },
       { ...flatOnly, complaintTypeTree: pruned }
     );
 
     // Session 2 — transient MDMS hiccup: tree fetch failed, flat list loaded.
     const reloaded = loadDashboardFilters();
-    assert.equal(reloaded.complaintType, "GARBAGE"); // cold load trusts the trio
+    assert.deepEqual(reloaded.complaintTypes, [
+      {
+        code: "GARBAGE",
+        path: "SANITATION.GARBAGE",
+        leaf: false,
+        codes: ["GarbageFull", "GarbageMissed"],
+      },
+    ]); // cold load trusts the v5 self-describing selection
     // A filter change re-persists through the sanitizer's FLAT branch — the
     // held interior trio must be persisted as-is, not cleared (regression:
     // storage was wiped here while in-memory state kept the selection).
     persistDashboardFilters({ ...reloaded, dateFrom: "2026-01-01" }, flatOnly);
 
     const afterHiccup = loadDashboardFilters();
-    assert.deepEqual(
-      {
-        code: afterHiccup.complaintType,
-        path: afterHiccup.complaintTypePath,
-        leaf: afterHiccup.complaintTypeLeaf,
-      },
-      { code: "GARBAGE", path: "SANITATION.GARBAGE", leaf: false }
-    );
+    assert.deepEqual(afterHiccup.complaintTypes, reloaded.complaintTypes);
     // In-memory reconcile against the same flat-only options agrees with
     // storage (no memory/storage split-brain).
-    assert.equal(
-      reconcileFiltersWithOptions(afterHiccup, flatOnly).complaintType,
-      "GARBAGE"
+    assert.deepEqual(
+      reconcileFiltersWithOptions(afterHiccup, flatOnly).complaintTypes,
+      reloaded.complaintTypes
     );
 
     // Session 3 — tree is back: the held selection repairs through the tree
@@ -482,23 +528,23 @@ test("tree-fetch failure: persisted interior selection survives a reload cycle, 
       ...flatOnly,
       complaintTypeTree: pruned,
     });
-    assert.deepEqual(
+    assert.deepEqual(treeBack.complaintTypes, [
       {
-        code: treeBack.complaintType,
-        path: treeBack.complaintTypePath,
-        leaf: treeBack.complaintTypeLeaf,
+        code: "GARBAGE",
+        path: "SANITATION.GARBAGE",
+        leaf: false,
+        codes: ["GarbageFull", "GarbageMissed"],
       },
-      { code: "GARBAGE", path: "SANITATION.GARBAGE", leaf: false }
-    );
+    ]);
     // …and a re-scope that dropped the whole branch repairs to cleared, so
     // holding through the hiccup never pins a permanently-invalid selection.
     const rescoped = pruneComplaintTree(full, ["Pothole"]);
-    assert.equal(
+    assert.deepEqual(
       reconcileFiltersWithOptions(afterHiccup, {
         ...flatOnly,
         complaintTypeTree: rescoped,
-      }).complaintType,
-      ALL
+      }).complaintTypes,
+      []
     );
 
     // Unchanged flat-branch behavior: a persisted LEAF still validates against
@@ -506,13 +552,50 @@ test("tree-fetch failure: persisted interior selection survives a reload cycle, 
     persistDashboardFilters(
       {
         ...reloaded,
-        complaintType: "GhostLeaf",
-        complaintTypePath: null,
-        complaintTypeLeaf: true,
+        complaintTypes: [
+          { code: "GhostLeaf", path: null, leaf: true, codes: ["GhostLeaf"] },
+        ],
       },
       flatOnly
     );
-    assert.equal(loadDashboardFilters().complaintType, ALL);
+    assert.deepEqual(loadDashboardFilters().complaintTypes, []);
+  } finally {
+    restore();
+  }
+});
+
+test("v4 scalar filter storage migrates to v5 selection arrays", () => {
+  const { store, restore } = stubBrowserGlobals();
+  try {
+    store.set(
+      "default-supervisor-dashboard-filters-v4",
+      JSON.stringify({
+        complaintType: "GarbageFull",
+        complaintTypePath: "SANITATION.GARBAGE.GarbageFull",
+        complaintTypeLeaf: true,
+        geography: "WARD_1",
+        geographyPath: "PROVINCE|WARD_1",
+        geographyLeaf: true,
+        dateRangeActive: false,
+      })
+    );
+    const migrated = loadDashboardFilters();
+    assert.deepEqual(migrated.complaintTypes, [
+      {
+        code: "GarbageFull",
+        path: "SANITATION.GARBAGE.GarbageFull",
+        leaf: true,
+        codes: ["GarbageFull"],
+      },
+    ]);
+    assert.deepEqual(migrated.geographies, [
+      {
+        code: "WARD_1",
+        path: "PROVINCE|WARD_1",
+        leaf: true,
+        codes: ["WARD_1"],
+      },
+    ]);
   } finally {
     restore();
   }
@@ -590,9 +673,15 @@ test("TRAIL_ELLIPSIS can never collide with a real code", () => {
 /* ------------------------------------------------------------------ */
 
 test("humanizeTypeCode: never surfaces a raw dotted code", () => {
-  assert.equal(humanizeTypeCode("complaints.categories.sanitation"), "Sanitation");
+  assert.equal(
+    humanizeTypeCode("complaints.categories.sanitation"),
+    "Sanitation"
+  );
   assert.equal(humanizeTypeCode("MedicalServices"), "Medical Services");
-  assert.equal(humanizeTypeCode("GARBAGE_NEEDS_ATTENTION"), "GARBAGE NEEDS ATTENTION");
+  assert.equal(
+    humanizeTypeCode("GARBAGE_NEEDS_ATTENTION"),
+    "GARBAGE NEEDS ATTENTION"
+  );
   assert.equal(humanizeTypeCode("streetLight-broken"), "Street Light Broken");
   assert.equal(humanizeTypeCode(""), "");
 });
