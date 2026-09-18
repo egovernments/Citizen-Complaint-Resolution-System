@@ -122,9 +122,8 @@ test("no dashboard source carries a role allow-list", () => {
     "SUPERVISOR", "PGR_SUPERVISOR", "GRO", "DGRO", "PGR_LME", "PGR_ADMIN",
     "SUPERUSER", "PGR_VIEWER", "TICKET_REPORT_VIEWER", "MDMS_ADMIN", "LOC_ADMIN",
   ];
-  // Workflow STATUS keys are a different vocabulary that happens to share a word: a complaint
-  // sitting at PENDINGATSUPERVISOR is a state, not a permission. This file classifies those keys
-  // and grants nothing.
+  // Workflow status labels are a different vocabulary from role permissions;
+  // presentation config classifies statuses and grants nothing.
   const NOT_A_ROLE_GATE = new Set(["src/config/complaintsAtRiskPresentation.js"]);
   const offenders = [];
 

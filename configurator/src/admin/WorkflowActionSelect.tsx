@@ -39,7 +39,7 @@ export interface WorkflowActionSelectProps extends InputProps {
 /** Human-readable labels for PGR workflow actions. Superset of the actions
  *  observed in the live `egov-workflow-v2/businessservice` PGR config
  *  (probed 2026-04-23): APPLY, ASSIGN, REASSIGN, RESOLVE, REJECT, REOPEN,
- *  RATE, ESCALATE, COMMENT, SLA_ESCALATE. */
+ *  RATE, ESCALATE, COMMENT. */
 const ACTION_LABELS: Record<string, string> = {
   APPLY: 'Submit',
   ASSIGN: 'Assign to Employee',
@@ -50,17 +50,14 @@ const ACTION_LABELS: Record<string, string> = {
   RATE: 'Rate & Close',
   ESCALATE: 'Escalate',
   COMMENT: 'Add Comment',
-  SLA_ESCALATE: 'SLA Escalation (auto)',
 };
 
-/** Human-readable labels for PGR states — covers the full 11-state machine. */
+/** Human-readable labels for the active PGR states. */
 const STATE_LABELS: Record<string, string> = {
   PENDINGFORASSIGNMENT: 'Pending Assignment',
   PENDINGFORREASSIGNMENT: 'Pending Reassignment',
   PENDINGATLME: 'Pending at LME',
-  PENDINGATSUPERVISOR: 'Pending at Supervisor',
   RESOLVED: 'Resolved',
-  RESOLVEDBYSUPERVISOR: 'Resolved by Supervisor',
   REJECTED: 'Rejected',
   CLOSEDAFTERRESOLUTION: 'Closed (Resolved)',
   CLOSEDAFTERREJECTION: 'Closed (Rejected)',

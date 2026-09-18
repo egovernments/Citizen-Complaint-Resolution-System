@@ -1166,7 +1166,7 @@ services:
       egov-localization:
         condition: service_healthy
     environment:
-      EGOV_INTERNAL_MICROSERVICE_USER_UUID: ${EGOV_INTERNAL_MICROSERVICE_USER_UUID:-ef0947ca-a9ab-437d-af14-957c2e921c5b}
+      EGOV_INTERNAL_MICROSERVICE_USER_UUID: ${EGOV_INTERNAL_MICROSERVICE_USER_UUID:-f80147a7-9711-4a56-9bd3-da4733a59df4}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
@@ -1203,7 +1203,6 @@ services:
       NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
       EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'
       EGOV_USR_EVENTS_CREATE_TOPIC: persist-user-events-async
-      PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       JAVA_OPTS: '-Xmx192m -Xms192m'

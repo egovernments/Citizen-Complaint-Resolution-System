@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.annotations.ApiModel;
 import org.egov.pgr.annotation.CharacterConstraint;
 import org.egov.pgr.web.models.workflow.ProcessInstance;
-import org.hibernate.validator.constraints.SafeHtml;
+import org.egov.pgr.annotation.SafeHtml;
 import org.springframework.validation.annotation.Validated;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,9 +12,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.Builder;
 
-import javax.validation.Valid;
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
@@ -35,6 +35,7 @@ public class Service   {
         @JsonProperty("active")
         private boolean active = true;
 
+        @Valid
         @JsonProperty("citizen")
         private User citizen = null;
 
