@@ -32,8 +32,8 @@ export async function setup(_ctx: GlobalSetupContext) {
     "http://localhost:9999/realms/digit-sandbox/protocol/openid-connect/certs";
   process.env.KEYCLOAK_ISSUER = "http://localhost:9999/realms/digit-sandbox";
   process.env.DIGIT_USER_SERVICE_URL = `http://localhost:${egovPort}/user`;
-  process.env.REDIS_HOST = "localhost";
-  process.env.REDIS_PORT = "16379";
+  process.env.REDIS_HOST ||= "localhost";
+  process.env.REDIS_PORT ||= "16379";
   process.env.KEYCLOAK_ADMIN_URL = `http://localhost:${kcAdminPort}`;
 }
 
