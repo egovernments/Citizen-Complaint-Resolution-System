@@ -1851,6 +1851,13 @@ services:
       # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
       # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
+      # Tenant-admin onboarding (#1999) authenticates through the identity BFF's
+      # session-introspection endpoint. Reuse the BFF's introspection-only
+      # credential by default; either value can still be overridden explicitly.
+      PGR_ONBOARDING_IDENTITY_BFF_URL: ${PGR_ONBOARDING_IDENTITY_BFF_URL:-http://identity-bff:3000}
+      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}
+      # Provisioning-worker lease API credential (internal network only).
+      PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
