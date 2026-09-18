@@ -30,7 +30,7 @@ beforeAll(async () => {
     digitUserLeaseWaitMs: 5000,
     keycloakOrganizationRealm: "managed-unit",
   });
-  initCache(`redis://localhost:${process.env.REDIS_PORT || "16379"}`);
+  initCache(`redis://${process.env.REDIS_HOST || "localhost"}:${process.env.REDIS_PORT || "16379"}`);
   fake.addAccount({
     userName: "BFF-ADMIN", name: "BFF admin", mobileNumber: "0700000000", emailId: null,
     tenantId: "pg", type: "EMPLOYEE", active: true, identificationMark: null,
