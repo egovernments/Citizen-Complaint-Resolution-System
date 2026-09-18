@@ -6,12 +6,6 @@
         "locale": "en_IN"
     },
     {
-        "code": "chatbot.pgr.boundary.preamble",
-        "message": "Please type and send the number to select the {{level}} for your grievance 👇\n",
-        "module": "rainmaker-pgr",
-        "locale": "en_IN"
-    },
-    {
         "code": "chatbot.pgr.confidentiality.question",
         "message": "{{label}}\n\n{{hint}}\n\n👉 Type and send *1* to keep your details confidential.\n👉 Type and send *2* to continue without confidentiality.",
         "module": "rainmaker-pgr",
@@ -19,13 +13,13 @@
     },
     {
         "code": "chatbot.pgr.confirmation",
-        "message": "Your complaint has been registered successfully.\n\nCategory: {{1}}\nReference: {{2}}\nDate: {{3}}\n\nYour complaint will be reviewed by the responsible institution.\nYou can follow its progress using the reference above.\nThank you for helping improve public services.",
+        "message": "Your complaint has been registered successfully.\n\nCategory: {{1}}\nReference: {{2}}\nDate: {{3}}\n\nYour complaint will be reviewed by the responsible institution.\nYou can follow its progress on the citizen portal or in the mobile app.\nThank you for helping improve public services.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "chatbot.pgr.consent.declined",
-        "message": "Your grievance has not been filed, as consent is required to process it.\n\nType *voltar* whenever you would like to start again.",
+        "message": "Your grievance has not been filed, as consent is required to process it.\n\nType *reiniciar* whenever you would like to start again.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -60,12 +54,6 @@
         "locale": "en_IN"
     },
     {
-        "code": "chatbot.pgr.hierarchy.preamble",
-        "message": "Please type and send the number to select a {{level}} from the list below 👇\n",
-        "module": "rainmaker-pgr",
-        "locale": "en_IN"
-    },
-    {
         "code": "chatbot.pgr.institution.question",
         "message": "Which institution is your grievance about?\n\nPlease type and send its name.",
         "module": "rainmaker-pgr",
@@ -85,7 +73,7 @@
     },
     {
         "code": "chatbot.pgr.menu.question",
-        "message": "Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To go back to the main menu, type and send *voltar*.",
+        "message": "Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To start over, type and send *reiniciar*.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

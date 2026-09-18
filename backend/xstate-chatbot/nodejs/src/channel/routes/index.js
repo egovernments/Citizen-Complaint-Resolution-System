@@ -8,6 +8,7 @@ const express = require("express"),
   { resolveUploadTenantId } = require("../../session/upload-tenant"),
    { handleError } = require("../../session/error-handler"),
   rateLimit = require("express-rate-limit");
+const { summarizeInbound, maskMobile } = require("../../privacy");
 
   // Inbound webhooks are unauthenticated and exposed directly — the service is not
 // behind Kong, which rate-limits only its own routes. 300/min is well above real
@@ -21,9 +22,15 @@ const webhookLimiter = rateLimit({
 
 // Entry point for inbound messages from the channel provider
 router.post("/message", webhookLimiter, async (req, res) => {
-  console.log("Request URL: " + req.originalUrl);
-  console.log('Request Body Object: ' + JSON.stringify(req.body));
-  
+  console.log(`Inbound ${req.originalUrl}: ${summarizeInbound(req.body)}`);
+
+  // Verify the authenticity of the inbound request using the channel provider's signature verification mechanism.
+  if (typeof channelProvider.verifyRequest === "function" && !channelProvider.verifyRequest(req)) {
+    console.warn("Rejected inbound webhook: signature verification failed");
+    return res.sendStatus(403);
+  }
+
+
   try {
     
     const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
@@ -52,40 +59,41 @@ router.post("/message", webhookLimiter, async (req, res) => {
 
 // Handle WhatsApp delivery status webhooks (both GET and POST)
 router.all("/status", webhookLimiter, async (req, res) => {
+
+  if (typeof channelProvider.verifyRequest === "function" && !channelProvider.verifyRequest(req)) {
+    console.warn("Rejected status webhook: signature verification failed");
+    return res.sendStatus(403);
+  }
+
   try {
-    const isDeliveryStatusWebhook = req.method === 'GET' || 
-      req.query.MESSAGE_STATUS || 
+    const isDeliveryStatusWebhook = req.method === 'GET' ||
+      req.query.MESSAGE_STATUS ||
       req.body.MESSAGE_STATUS ||
       req.query.TO ||
       req.body.TO;
-    
+
     if (isDeliveryStatusWebhook) {
-      // This is a delivery status webhook from WhatsApp provider
       const statusData = req.method === 'GET' ? req.query : req.body;
-      
-      console.log("WhatsApp Delivery Status Webhook:");
-      console.log("Method:", req.method);
-      console.log("Status Data:", JSON.stringify(statusData, null, 2));
-      
-      // Log specific delivery status fields
-      const { TO, MESSAGE_STATUS, REASON_CODE, MESSAGE_ID, STATUS_ERROR, TIME, DELIVERED_DATE } = statusData;
-      console.log(`Delivery Status - TO: ${TO}, Status: ${MESSAGE_STATUS}, MessageID: ${MESSAGE_ID}`);
-      
-      // Don't process delivery status as user message
-      // Just acknowledge receipt to prevent retries
+      const { TO, MESSAGE_STATUS, MESSAGE_ID } = statusData;
+      console.log(`Delivery status (${req.method}) for ${maskMobile(TO)}: ${MESSAGE_STATUS ?? 'unknown'} (${MESSAGE_ID ?? 'no id'})`);
+
       res.status(200).json({ status: "received", messageId: MESSAGE_ID });
       return;
     }
     
-    // Handle actual user status messages (if any)
-    let reformattedMessage = await channelProvider.getFormattedMessageFromUser(req.body);
+    const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
 
-    if (reformattedMessage != null) {
-      sessionManager
-        .authenticateAndDispatch(reformattedMessage)
-        .catch((error) => handleError(error, reformattedMessage));
+    if (config.isSandboxMode) {
+      const tenantId = resolveUploadTenantId(req, config);
+      inboundRequestParser.setTenatId(tenantId);
     }
-    
+
+    if (await inboundRequestParser.hasValidMessage()) {
+      const inboundRequestModel = await inboundRequestParser.getRequestModel();
+      sessionManager
+        .authenticateAndDispatch(inboundRequestModel)
+        .catch((error) => handleError(error, inboundRequestModel));
+    }
     res.status(200).send("OK");
   } catch (e) {
     console.error("Status endpoint error:", e);

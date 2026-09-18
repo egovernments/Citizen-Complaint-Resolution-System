@@ -41,16 +41,30 @@ class QuestionState extends State {
     return options.map((option, i) => `*${i + 1}.* ${typeof option === 'object' ? option.label : option}`).join('\n');
   }
 
-  // matches the reply against the resolved options stored in context (by number
-  // or case-insensitive text), returning the plain value (unwrapped from
-  // {value, label} if needed) so context.intention is always a plain value
+    // strips case and accents so a reply typed without diacritics still matches —
+  // WhatsApp keyboards routinely drop them ("portugues" for "Português").
+  normalizeReply(text) {
+    return String(text ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '');
+  }
+
+  // matches the reply against the resolved options stored in context — by number,
+  // by value, or by the LABEL the citizen was actually shown — returning the plain
+  // value (unwrapped from {value, label} if needed) so context.intention is always
+  // a plain value
   matchReply(context, event) {
     const options = context[this.optionsSlot] || [];
-    const input = String(event.message.input).trim().toLowerCase();
+    const input = this.normalizeReply(event.message.input);
     const index = parseInt(input, 10);
     const match = options.find((option, i) => {
       const value = typeof option === 'object' ? option.value : option;
-      return i + 1 === index || String(value).toLowerCase() === input;
+      const label = typeof option === 'object' ? option.label : option;
+      return i + 1 === index
+        || this.normalizeReply(value) === input
+        || this.normalizeReply(label) === input;
     });
     if (!match) return null;
     return typeof match === 'object' ? match.value : match;

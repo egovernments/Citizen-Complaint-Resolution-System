@@ -1,6 +1,7 @@
 const fetch = require("node-fetch");
 require("url-search-params-polyfill");
 const config = require("../env-variables");
+const { toNationalNumber, toInternationalNumber } = require("../phone-numbers");
 var geturl = require("url");
 const fs = require("fs");
 const FormData = require("form-data");
@@ -29,7 +30,7 @@ class KaleyraWhatsAppProvider {
     try {
       let reformattedMessage = {};
       reformattedMessage.user = {
-        mobileNumber: String(rawMessage.from ?? '').slice(2),
+        mobileNumber: toNationalNumber(rawMessage.from),
       };
       reformattedMessage.extraInfo = {
         whatsAppBusinessNumber: rawMessage.wanumber,
@@ -78,7 +79,7 @@ class KaleyraWhatsAppProvider {
 
       form.append("channel", config.kaleyra.channel);
       form.append("from", extraInfo.whatsAppBusinessNumber);
-      form.append("to", "91" + phone);
+      form.append("to", toInternationalNumber(phone));
 
       if (typeof message == "string") {
         form.append("type", "text");

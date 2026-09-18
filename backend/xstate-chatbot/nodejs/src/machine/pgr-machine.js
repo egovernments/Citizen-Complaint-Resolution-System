@@ -31,7 +31,7 @@ const consentStatements = (context) =>
     .join('\n');
 
 const receiptCategory = (context) => {
-  const code = (context.slots.pgr.hierarchyPath || [])[0] || context.slots.pgr.complaint;
+  const code = (context[walkComplaintTypes.pathSlot] || [])[0] || context.slots.pgr.complaint;
   const bundle = code
     ? localisationService.getMessageBundleForCode('COMPLAINT_HIERARCHY.' + String(code).toUpperCase())
     : undefined;
@@ -112,6 +112,7 @@ walkComplaintTypes
   .setTrail(true)
   .setFetch((context, path) => pgrService.fetchComplaintHierarchyStep(context.extraInfo.tenantId, path))
   .setOnError(system_error)
+  .setOnEmpty(system_error)
   .setOnLeaf(locationGroup, { slot: 'complaint' });
 
 walkBoundaries

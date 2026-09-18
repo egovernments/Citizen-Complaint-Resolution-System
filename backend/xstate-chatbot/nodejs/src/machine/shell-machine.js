@@ -17,7 +17,7 @@ const { offeredLocales } = require('./flow/offered-locales');
 const userProfileService = require('./service/egov-user-profile');
 
 const isOnboarded = (context) => context.user.locale;
-const hasProfileName = (context) => context.user.name;
+const hasProfileName = (context) => context.user.name && context.user.name !== config.citizenPlaceholderName;
 const gaveName = (context) => context.onboarding.name;
 const commitName = (context) => { context.user.name = context.onboarding.name; };
 const isWhitelisted = (context) => {
@@ -74,10 +74,6 @@ startNode
 askLocale
   .setPrompt(messages.onboarding.localeMenu)
   .setOptions(() => offeredLocales())
-  .setOnUnknown(checkProfile, (context) => {
-    context.user.locale = config.defaultLocale;
-    context.onboarding.locale = config.defaultLocale;
-  })
   .setNext(checkProfile, (context) => {
     context.user.locale = context.intention;
     context.onboarding.locale = context.intention;
@@ -97,6 +93,7 @@ askForName
     { bundle: messages.onboarding.nameInformation, delay: 2000 },
     { bundle: messages.onboarding.onboardingName.question, delay: 3000 }
   ])
+  .setValidate((name) => name.length > 0) 
   .setOnValid((context, name) => { context.onboarding.name = name; })
   .setConditionalNext(askToConfirmName, gaveName)
   .setNext(updateUserProfile);
@@ -113,8 +110,11 @@ askToConfirmProfile
 
 askToChangeName
   .setPrompt(messages.onboarding.changeName.question)
+  .setValidate((name) => name.length > 0)
   .setOnValid((context, name) => { context.onboarding.name = name; })
-  .setConditionalNext(askToConfirmName, gaveName);
+  .setConditionalNext(askToConfirmName, gaveName)
+  .setNext(askToChangeName);
+
 
 askToConfirmName
   .setPrompt([{ bundle: messages.onboarding.onboardingNameConfirmation, delay: 1000 }])
@@ -163,6 +163,8 @@ const config_ = compile([startNode, onboardingGroup, welcomeGroup, endNode, syst
 module.exports = {
   config: config_,
   isWhitelisted,
+  isOnboarded,
+  hasProfileName,
   states: { start: startNode, onboardingGroup, welcomeGroup, endstate: endNode, system_error: systemErrorNode, pgr: pgrNode, notAuthorized,
     onboardingLocale: askLocale, onboardingWelcome: sayWelcome, checkProfile, onboardingName: askForName, onBoardingUserProfileConfirmation: askToConfirmProfile,
     changeName: askToChangeName, onboardingNameConfirmation: askToConfirmName, onboardingUpdateUserProfile: updateUserProfile, onboardingThankYou: sayThankYou,

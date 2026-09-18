@@ -25,7 +25,8 @@ const envVariables = {
         tenantId: process.env.USER_SERVICE_ACCOUNT_TENANT ||  process.env.ROOT_TENANTID || 'mz',
     },
 
-    citizenPlaceholderPassword: process.env.CITIZEN_PLACEHOLDER_PASSWORD || 'Chatbot@2026',
+    // Placeholder name for a citizen before they have provided a real name.
+    citizenPlaceholderName: process.env.CITIZEN_PLACEHOLDER_NAME || 'Cidadão',
 
     resetWords: (process.env.RESET_WORDS || 'hello,hi,ola').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
 
@@ -68,8 +69,11 @@ const envVariables = {
     avgSessionTime: process.env.AVG_SESSION_TIME || 10,
     replyCooldownMs: parseInt(process.env.REPLY_COOLDOWN_MS || '2000', 10),
     mediaProcessingTimeoutMs: parseInt(process.env.MEDIA_PROCESSING_TIMEOUT_MS || '13000', 10),
+    // Time to wait for all dispatches to settle before considering the operation complete.
+    dispatchSettleTimeoutMs: parseInt(process.env.DISPATCH_SETTLE_TIMEOUT_MS || '30000', 10),
     maxMediaSizeBytes: parseInt(process.env.MAX_MEDIA_SIZE_MB || '5', 10) * 1024 * 1024,
-
+    // Maximum number of messages that can be queued per user before older messages are dropped.
+    maxQueuedMessagesPerUser: parseInt(process.env.MAX_QUEUED_MESSAGES_PER_USER || '3', 10),
     paytmWnSLink: process.env.PAYTM_WNS_LINK || 'https://stvending.punjab.gov.in/wsbills/',
 
     postgresConfig: {
@@ -101,6 +105,11 @@ const envVariables = {
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
         whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '+919880900990',
         baseUrl: process.env.TWILIO_BASE_URL || '',
+        // Public base URL for Twilio webhooks. This should match the URL configured in the Twilio console.
+        webhookBaseUrl: process.env.TWILIO_WEBHOOK_BASE_URL || process.env.EXTERNAL_HOST || '',
+        // Whether to verify the Twilio webhook signature. Set to false only for local testing.
+        verifyWebhookSignature: (process.env.TWILIO_VERIFY_WEBHOOK_SIGNATURE || 'true') !== 'false',
+
     },
 
     valueFirstWhatsAppProvider: {

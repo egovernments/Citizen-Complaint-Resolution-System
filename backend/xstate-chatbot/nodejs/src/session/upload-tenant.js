@@ -1,6 +1,7 @@
 const sessionManager = require("./session-manager");
 const userService = require("./user-service");
 const { ValidationError } = require("./errors");
+const { maskMobile } = require("../privacy");
 
 
 /**
@@ -46,9 +47,9 @@ function extractAndValidateMobileNumber(body) {
 
 function logUploadTenantResolution(mobileNumber, tenantId) {
   if (!tenantId) {
-    console.warn(`No sandbox tenant found for mobile number ${mobileNumber}, defaulting to root tenant`);
+    console.warn(`No sandbox tenant found for mobile number ${maskMobile(mobileNumber)}, defaulting to root tenant`);
   }
-  console.log(`Image upload detected for ${mobileNumber}, using tenant: ${tenantId || 'default'}`);
+  console.log(`Image upload detected for ${maskMobile(mobileNumber)}, using tenant: ${tenantId || 'default'}`);
 }
 
 module.exports = { resolveUploadTenantId };

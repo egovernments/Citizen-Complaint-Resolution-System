@@ -55,7 +55,7 @@ Paths are relative to `backend/xstate-chatbot/nodejs/`.
 21. [Configuration](#part-21--configuration)
 22. [What fails at boot, and why that is good](#part-22--what-fails-at-boot-and-why-that-is-good)
 23. [Tests](#part-23--tests)
-24. [Retained dead code](#part-24--retained-dead-code)
+24. [Deleted dead code](#part-24--deleted-dead-code)
 
 **Working in it**
 
@@ -1018,7 +1018,7 @@ async dispatch(session, inboundRequestModel) {
 ```
 
 `chat-state.js` is a small value wrapper around the serialised blob. It names the
-parts the rest of the layer needs — `context`, `value`, `isDone()` — and offers
+parts the rest of the layer needs — `context`, `value` — and offers
 `toPersistableState()`, which deep-clones and then strips the user object down to
 locale, userId and mobile number. Callers that need the un-stripped state must clone
 first, which the method name says.
@@ -1187,10 +1187,9 @@ if (config.kafka.kafkaConsumerEnabled) {
 ```
 
 `egov-pgr.js` is the large one. Besides the two walk functions it holds
-`persistComplaint`, which assembles and posts the complaint; `fetchOpenComplaints`,
-which lists the citizen's existing ones; `fetchMdmsData`, the generic MDMS query
-everything else is built on; and the filestore upload and download helpers used by
-the attachment step. Most backend contact is here.
+`persistComplaint`, which assembles and posts the complaint; `fetchMdmsData`, the
+generic MDMS query everything else is built on; and the filestore upload and
+download helpers used by the attachment step. Most backend contact is here.
 
 `egov-user-profile.js` saves the citizen's name and language during onboarding.
 `user-service.js` in the session layer resolves a mobile number to a DIGIT user,
@@ -1323,37 +1322,42 @@ report. Prefer the loud early failure every time.
 
 
 
-Five files, each testing something different. `test/flow-generate.test.js` is the
-largest and verifies the generator itself against synthetic steps with fixture text.
-It contains no product copy at all, deliberately: rewording a prompt must never break
-it. If you change the generator, coverage belongs here, and it is the fastest file to
-run.
+Each file tests something different. `test/pgr-machine-flow.test.js` drives the live
+filing machine — `pgr-machine.js`, the one a citizen actually reaches — turn by turn:
+menu, the complaint-type walk, the boundary walk, institution, description,
+attachment, consent, confidentiality, confirm, persist. It asserts on what the
+citizen was sent and on the slots handed to `persistComplaint`, so a broken step
+shows up as the wrong prompt rather than a stack trace.
 
-`test/flow-join.test.js` covers the join in isolation: each exit form, that payload
-stays with the state while only the destination moves, that call outcomes pair by name
-rather than by position, and each of the four require-time checks. Because `join` is a
-pure function over synthetic tables, these tests need no machine, no stubs and no
-copy.
-
-`test/pgr-flow.test.js` drives the real filing machine and is table-driven. Each test
-is a list of turns, and each turn says what to send and what must then be true — the
-last message matches a pattern, the machine is in a given state, certain slots hold
-certain values, the conversation has finished. Adding coverage means adding rows.
+It replaces an older table-driven test that drove `machine/pgr.js`, the
+step-table generator. Nothing in the production require chain loaded that module, so
+the only turn-by-turn test in the repo was exercising code no citizen could reach —
+which is why the `receiptCategory` slot bug and the missing boundary `response.ok`
+checks went unnoticed. Both now have assertions here.
 
 ```js
-// test/pgr-flow.test.js - each test is a table; each row is one turn
-await runRows(createHarness({ serviceStub: createHappyPathServiceStub() }), [
-  { expect: /type and send the number for your option/ },
-  { send: '1', expect: /select a Category/ },
-  { send: '1', expect: /select a Sub-Type/, saw: /Street lights/ },
-  { send: '1', expect: /Which institution/, slots: { complaint: 'StreetLightNotWorking' } },
-  { send: '  Ministry of Water  ', slots: { instituteName: 'Ministry of Water' } },
-  // ...
-  { send: '1', expect: /registered successfully/, slots: { isConfidential: true }, done: true },
-]);
+// test/pgr-machine-flow.test.js - the live machine, one reply per turn
+const { outputs } = await runHappyPath({ service: happyPathService() });
+
+const receipt = outputs[outputs.length - 1];
+assert.match(receipt, /Categoria: Saúde/);        // top-level category, not the leaf
+assert.doesNotMatch(receipt, /FALTA_MEDICAMENTOS/);
 ```
 
-It works by replacing modules in Node's cache before requiring the machine, so no
+The rest of the suite covers one seam each: `twilio-signature.test.js` (webhook
+authenticity, including a tampered `From`), `telemetry-redaction.test.js` (no
+credential reaches the Kafka topic), `whitelist-gate.test.js` (a non-whitelisted
+number creates nothing), `invoke-state.test.js` (restoring an invoke-active state
+re-runs the service — the duplicate-complaint mechanism), `resume-pending-persistance.test.js`
+(the resume prompt survives a restart), `onboarding-gates.test.js` (a new citizen is
+not treated as onboarded), `question-match-reply.test.js` and
+`option-label-matching.test.js` (a reply matches the label the citizen was shown),
+`media-types.test.js` (the content types egov-filestore accepts),
+`localization-init.test.js` (startup fails rather than serving an empty locale),
+`seed-matches-messages.test.js` (the seeded copy says what the machine says),
+`session-resume.test.js` and `offered-locales.test.js`.
+
+Tests work by replacing modules in Node's cache before requiring the machine, so no
 network call happens and backend responses are whatever the test says. One trap: only
 the machine file is re-required per test, so any module that captures a service at
 load time will hold a stale stub. Inject dependencies instead of importing them.
@@ -1393,41 +1397,30 @@ gated on that diff being byte-identical across 1,359 lines.
 
 ---
 
-## Part 24 — Retained dead code
+## Part 24 — Deleted dead code
 
 
 
-Two subtrees are unreachable but present. The location flow that asked for a GPS pin
-and did fuzzy matching on city and locality names was replaced by the boundary walk.
-Onboarding by organisation code, for deployments where a citizen belongs to one of
-several organisations, was replaced by a simpler single-tenant flow.
+Two subtrees used to sit unreachable in `src/`: a location flow that asked for a GPS
+pin and fuzzy-matched city and locality names (replaced by the boundary walk), and
+onboarding by organisation code (replaced by a single-tenant flow). Alongside them
+sat the step-table authoring model — `flow/generate.js`, `join.js`, `layout.js`, the
+`*-states.js`/`*-transitions.js` tables and `machine/pgr.js` — superseded by the state
+classes in `pgr-machine.js` and `shell-machine.js`.
 
-They were kept rather than deleted because the behaviour may be wanted again and
-reconstructing it from a commit history is harder than reading it in place. They live
-in `flow/legacy-location.js` and `flow/legacy-organization.js`, moved with only their
-indentation changed. Neither is wired into the machine the service runs: nothing in
-the live path requires them, so they cost nothing at runtime and cannot be reached by
-a citizen.
+They were kept on the argument that reading a flow in place beats reconstructing it
+from history. That argument lost: a require-graph walk from `src/app.js` showed 14
+modules and 2,165 lines that nothing live imported, the repo's only turn-by-turn test
+was driving one of them, and two real defects survived review because the tests
+covering that area tested unreachable code.
 
-```text
-// nothing targets them, which you can confirm with:
-//   grep -rn "#geoLocation\|#nlpCitySearch\|#confirmLocation" src/
-```
+All 14 are deleted, with the three test files that only exercised them. History still
+reads them in full if the behaviour is ever wanted — `git log -- <path>` on any of
+them — and since they were written for the step-table model, reviving one means
+expressing it with the state classes anyway.
 
-If you are reading them as a reference for rebuilding the behaviour, treat them as a
-description of the old flow rather than as code to re-enable. They were written for
-the step-table authoring model, so restoring either one means expressing it with the
-state classes.
-
-Each also owns the message copy only it reads, so the dead flow is self-contained and
-deleting it later is a single-file change. That copy is the giveaway when you are
-reading: it carries `hi_IN` and `pa_IN` locales and no `code`, unlike the live
-bundles, which carry `en_IN`, `pt_PT` and a localisation code.
-
-Reviving either means restoring an entry point — a transition that targets its first
-state — and then testing it. Nothing currently routes in, which you can verify by
-searching for `#` references to their state ids. That search is also the quickest way
-to confirm whether a state you are reading is live at all.
+To check the same property yourself — that everything under `src/` is reachable from
+the entrypoint — walk `require` from `src/app.js` and diff against the file tree.
 
 ---
 
@@ -1585,14 +1578,13 @@ state machine.
 | `src/machine/flow/flow-state-compiler.js` | States to XState config |
 | `src/machine/flow/{shell,pgr}-messages.js` | Onboarding and filing copy |
 | `src/machine/flow/offered-locales.js` | Which languages the menu offers |
-| `src/machine/flow/legacy-*.js` | Unreachable, retained deliberately |
 | `src/machine/util/dialog.js` | Prompt, grammar and send primitives |
 | `src/machine/util/inbound-*.js` | Transport models for the payload |
 | `src/machine/util/localisation-service.js` | Live translations and locales |
 | `src/machine/service/egov-pgr.js` | MDMS, boundary, filestore, complaints |
-| `test/flow-generate.test.js` | The generator, no product copy |
-| `test/flow-join.test.js` | The join, and its four boot checks |
-| `test/pgr-flow.test.js` | The filing flow, table-driven |
+| `test/pgr-machine-flow.test.js` | The live filing flow, turn by turn |
+| `test/twilio-signature.test.js` | Inbound webhook authenticity |
+| `test/invoke-state.test.js` | Why an invoke-active state is never persisted |
 | `test/session-resume.test.js` | Save and resume, including the brick case |
 | `test/offered-locales.test.js` | Which languages are offered |
 

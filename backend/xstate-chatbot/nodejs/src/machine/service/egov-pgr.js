@@ -188,6 +188,11 @@ class PGRService {
         BoundaryTypeHierarchySearchCriteria: { tenantId },
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Boundary hierarchy fetch failed with status ${response.status}`);
+    }
+
     const data = await response.json();
     // a tenant can have several unrelated hierarchy types registered (other
     // modules, QA fixtures) - pick the one PGR is configured to use, not just
@@ -237,6 +242,11 @@ class PGRService {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ RequestInfo: {} }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Boundary relationships fetch failed with status ${response.status}`);
+    }
+
     const data = await response.json();
 
     let nodes = (data.TenantBoundary ?? []).flatMap((entry) => entry.boundary ?? []);
@@ -266,62 +276,7 @@ class PGRService {
     return messageBundle;
   }
 
-  async getCityAndLocalityForGeocode(geocode, tenantId) {
-    let latlng = geocode.substring(1, geocode.length - 1); // Remove braces
-    let cityAndLocality = await getCityAndLocality(latlng);
-    let { cities, messageBundle } = await this.fetchCities(tenantId);
-    if (cityAndLocality.city == "Sahibzada Ajit Singh Nagar") {
-      cityAndLocality.city = "Mohali";
-    }
-    let matchedCity = null;
-    let matchedCityMessageBundle = null;
-    for (let city of cities) {
-      let cityName = messageBundle[city]["en_IN"];
-      if (cityName.toLowerCase() == cityAndLocality.city.toLowerCase()) {
-        matchedCity = city;
-        matchedCityMessageBundle = messageBundle[city];
-        break;
-      }
-    }
-    if (matchedCity) {
-      let matchedLocality = null;
-      let matchedLocalityMessageBundle = null;
-      let { localities, messageBundle } = await this.fetchLocalities(
-        matchedCity
-      );
-      for (let locality of localities) {
-        let localityName = messageBundle[locality]["en_IN"];
-        if (
-          localityName.toLowerCase() == cityAndLocality.locality.toLowerCase()
-        ) {
-          matchedLocality = locality;
-          matchedLocalityMessageBundle = messageBundle[locality];
-          return {
-            city: matchedCity,
-            locality: matchedLocality,
-            matchedCityMessageBundle: matchedCityMessageBundle,
-            matchedLocalityMessageBundle: matchedLocalityMessageBundle,
-          };
-        }
-      }
-      // Matched City found but no matching locality found
-      return {
-        city: matchedCity,
-        matchedCityMessageBundle: matchedCityMessageBundle,
-      };
-    }
-    return undefined; // No matching city found
-  }
-
-  async fetchCitiesAndWebpageLink(tenantId, whatsAppBusinessNumber) {
-    let { cities, messageBundle } = await this.fetchCities(tenantId);
-    let link = await this.getCityExternalWebpageLink(
-      tenantId,
-      whatsAppBusinessNumber
-    );
-    return { cities, messageBundle, link };
-  }
-
+  
   async fetchCities(tenantId) {
     let cities = await this.fetchMdmsData(
       tenantId,
@@ -349,15 +304,7 @@ class PGRService {
     return shorturl;
   }
 
-  async fetchLocalitiesAndWebpageLink(tenantId, whatsAppBusinessNumber, user) {
-    let { localities, messageBundle } = await this.fetchLocalities(tenantId, user);
-    let link = await this.getLocalityExternalWebpageLink(
-      tenantId,
-      whatsAppBusinessNumber
-    );
-    return { localities, messageBundle, link };
-  }
-
+  
   async getLocalityExternalWebpageLink(tenantId, whatsAppBusinessNumber) {
     let url =
       config.egovServices.externalHost +
@@ -590,134 +537,7 @@ class PGRService {
     }
   }
 
-  async getCity(input, locale, tenantId) {
-
-    try {
-    var url =
-      config.egovServices.nlpEngineHost +
-      config.egovServices.cityFuzzySearch;
-
-    // Add tenant ID to bypass gateway
-    if (tenantId) {
-      url += `?tenantId=${tenantId}`;
-    }
-
-    // Fix locale format - NLP expects "en" not "en_IN"
-    const nlpLocale = locale === "en_IN" ? "en" : locale.split("_")[0];
-
-    var requestBody = {
-      input_city: input,
-      input_lang: nlpLocale,
-    };
-
-    var options = {
-      method: "POST",
-      body: JSON.stringify(requestBody),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-
-    let response = await fetch(url, options);
-
-    let predictedCity = null;
-    let predictedCityCode = null;
-    let isCityDataMatch = false;
-    if (response.status === 200) {
-      let responseBody = await response.json();
-      if (responseBody.match == 0) {
-        return { predictedCityCode, predictedCity, isCityDataMatch };
-      } else {
-        predictedCityCode = responseBody.city_detected[0];
-        let localisationMessages =
-          await localisationService.getMessageBundleForCode(predictedCityCode);
-        predictedCity = dialog.get_message(localisationMessages, locale);
-        if (locale === "en_IN") {
-          if (predictedCity.toLowerCase() === input.toLowerCase())
-            isCityDataMatch = true;
-        } else {
-          if (predictedCity === input) isCityDataMatch = true;
-        }
-        return { predictedCityCode, predictedCity, isCityDataMatch };
-      }
-    } else {
-      const errorText = await response.text();
-      return { predictedCityCode, predictedCity, isCityDataMatch };
-    }
-  } catch (error) {
-    return { predictedCityCode: null, predictedCity: null, isCityDataMatch: false };
-  }
-  }
-
-  async getLocality(input, city, locale, tenantId) {
-    var url =
-      config.egovServices.nlpEngineHost +
-      config.egovServices.localityFuzzySearch;
-
-    // Add tenant ID to bypass gateway
-    if (tenantId) {
-      url += `?tenantId=${tenantId}`;
-    }
-
-    var requestBody = {
-      city: city,
-      locality: input,
-    };
-
-    var options = {
-      method: "POST",
-      body: JSON.stringify(requestBody),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-    let response = await fetch(url, options);
-
-    let predictedLocality = null;
-    let predictedLocalityCode = null;
-    let isLocalityDataMatch = false;
-
-    if (response.status === 200) {
-      let responseBody = await response.json();
-      if (responseBody.predictions.length == 0)
-        return {
-          predictedLocalityCode,
-          predictedLocality,
-          isLocalityDataMatch,
-        };
-      else {
-        let localityList = responseBody.predictions;
-        for (let locality of localityList) {
-          if (locality.name.toLowerCase() === input.toLowerCase()) {
-            predictedLocalityCode = locality.code;
-            predictedLocality = locality.name;
-            isLocalityDataMatch = true;
-            return {
-              predictedLocalityCode,
-              predictedLocality,
-              isLocalityDataMatch,
-            };
-          }
-        }
-
-        predictedLocalityCode = localityList[0].code;
-        predictedLocality = localityList[0].name;
-        isLocalityDataMatch = false;
-        return {
-          predictedLocalityCode,
-          predictedLocality,
-          isLocalityDataMatch,
-        };
-      }
-    } else {
-      const errorText = await response.text();
-      return { predictedLocalityCode, predictedLocality, isLocalityDataMatch };
-    }
-  }
-
-
+  
   async preparePGRResult(responseBody, locale) {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
@@ -937,47 +757,7 @@ class PGRService {
     }
   }
 
-  async fetchOpenComplaints(user, extraInfo) {
-    let requestBody = {
-      RequestInfo: {
-        authToken: user.authToken,
-      },
-    };
-
-    // Use tenant from extraInfo in sandbox mode, otherwise use root tenant
-    let tenantId = (config.isSandboxMode && extraInfo && extraInfo.tenantId)
-      ? extraInfo.tenantId
-      : config.rootTenantId;
-
-    var url =
-      config.egovServices.egovServicesHost +
-      config.egovServices.pgrSearchEndpoint;
-    url = url + "?tenantId=" + tenantId;
-    url += "&";
-    url += "mobileNumber=" + user.mobileNumber;
-
-    let options = {
-      method: "POST",
-      origin: "*",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    };
-
-    let response = await fetch(url, options);
-    let results;
-    if (response.status === 200) {
-      let responseBody = await response.json();
-      results = await this.preparePGRResult(responseBody, user.locale);
-    } else {
-      return [];
-    }
-
-    return results;
-  }
-
-
+  
   async getShortenedURL(finalPath) {
     var url =
       config.egovServices.egovServicesHost +

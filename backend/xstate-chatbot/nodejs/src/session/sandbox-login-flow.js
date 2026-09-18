@@ -1,17 +1,22 @@
-const channelProvider = require("../channel");
 const chatStateRepository = require("./repo");
 const userService = require("./user-service");
 const emailTenantService = require("../machine/service/email-tenant-service");
 const config = require("../env-variables");
 const Session = require("./session");
+const { NotRegisteredError } = require("./errors");
+const { maskMobile } = require("../privacy");
 
 class SandboxLoginFlow {
-  constructor(inboundRequestModel, tracker, authenticateUser) {
+  // `send` is SessionManager.toUser, injected rather than imported: these prompts
+  // must go through the same per-user outbound queue as every other reply, or a
+  // later message's reply can overtake the prompt it was answering.
+  constructor(inboundRequestModel, tracker, authenticateUser, send) {
     this.inboundRequestModel = inboundRequestModel;
     this.inboundMessage = inboundRequestModel.getMessage();
     this.mobileNumber = inboundRequestModel.user.mobileNumber;
     this.tracker = tracker;
     this.authenticateUser = authenticateUser;
+    this.send = send;
   }
 
   async resolveSession() {
@@ -29,8 +34,8 @@ class SandboxLoginFlow {
     return this.resolveReturningUser();
   }
 
-  notifyAndStop(messages) {
-    channelProvider.sendMessageToUser(
+  async notifyAndStop(messages) {
+    await this.send(
       { mobileNumber: this.mobileNumber },
       messages,
       this.inboundRequestModel.extraInfo
@@ -149,16 +154,20 @@ class SandboxLoginFlow {
       });
 
       return this.createSession(user, orgDetails.code, { organizationName: orgDetails.name });
-    } catch (error) {
-      console.error(`${logContext}:`, error);
-      this.tracker.delete(this.mobileNumber);
+      } catch (error) {
+        console.error(`${logContext}:`, error);
 
-      const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
-      return this.notifyAndStop([
-        `Mobile ${this.mobileNumber} not registered with ${orgDetails.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`
-      ]);
+        // Only handle the case where the user is genuinely not registered. Any other error should be propagated.
+        if (!(error instanceof NotRegisteredError)) throw error;
+
+        this.tracker.delete(this.mobileNumber);
+
+        const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
+        return this.notifyAndStop([
+          `Mobile ${maskMobile(this.mobileNumber)} not registered with ${orgDetails.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`
+        ]);
+      }
     }
-  }
 }
 
 module.exports = SandboxLoginFlow;

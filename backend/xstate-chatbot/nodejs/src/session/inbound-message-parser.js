@@ -55,18 +55,7 @@ class InboundRequestParser {
     this.requestBody = this.provider.extractRawMessage(this.req) || {};
   }
 
-  getInboundMessage() {
-    return InboundMessage.create(this.inboundMessageModel.message);
-  }
-
-  getUser() {
-    return this.inboundMessageModel.user;
-  }
-
-  getExtraInfo() {
-    return this.inboundMessageModel.extraInfo;
-  }
-
+  
   setTenatId(tenantId) { 
     this.tenantId = tenantId;
   }

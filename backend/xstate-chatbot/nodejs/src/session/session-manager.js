@@ -8,6 +8,7 @@ const SandboxOrgTracker = require("./sandbox-org-tracker");
 const SandboxLoginFlow = require("./sandbox-login-flow");
 const StandardLoginFlow = require("./standard-login-flow");
 const ChatService = require("./chat-service");
+const { maskMobile } = require("../privacy");
 
 // Simple in-memory store for tracking email validation requests in sandbox mode
 // Format: { mobileNumber: { timestamp: Date, waitingForEmail: boolean } }
@@ -17,6 +18,7 @@ const sandboxOrgTracker = new SandboxOrgTracker(sandboxOrgCodeTracker);
 const sendQueues = new Map();
 // Per-user chain of pending inbound dispatches - see authenticateAndDispatch() below.
 const dispatchQueues = new Map();
+const dispatchDepth = new Map();   // mobileNumber -> messages queued or in flight
 
 
 
@@ -78,37 +80,54 @@ class SessionManager {
     });
   }
 
-  // Prevent concurrent requests for the same user from racing against
-  // persisted state by processing only the first message in a burst.
+  // Serialize a citizen's messages instead of dropping them: a second message
+  // sent while the first is still processing is answered after that turn settles,
+  // not discarded. Ordering is preserved, and different citizens stay concurrent.
+  //
+  // The queue is capped: beyond maxQueuedMessagesPerUser we go back to discarding,
+  // so a citizen tapping repeatedly cannot build a backlog that replies for the
+  // next minute. The webhook rate limiter is a per-instance ceiling, not per user.
   async authenticateAndDispatch(rawRequestModel) {
     const mobileNumber = rawRequestModel.user.mobileNumber;
-    if (dispatchQueues.has(mobileNumber)) {
-      console.log(`Discarding message from ${mobileNumber}: previous message still processing`);
+    const waiting = dispatchDepth.get(mobileNumber) || 0;
+
+    if (waiting >= config.maxQueuedMessagesPerUser) {
+      console.log(`Discarding message from ${maskMobile(mobileNumber)}: ${waiting} already queued`);
       return;
     }
-    
-    const current = this._authenticateAndDispatch(rawRequestModel)
+
+    const previous = dispatchQueues.get(mobileNumber) || Promise.resolve();
+    dispatchDepth.set(mobileNumber, waiting + 1);
+
+    const current = previous
+      .catch(() => {}) // a failed turn must not skip the message behind it
+      .then(() => this._authenticateAndDispatch(rawRequestModel))
       .then((userId) => sendQueues.get(userId))
       .then(() => new Promise((resolve) => setTimeout(resolve, config.replyCooldownMs)))
-      .finally(() => dispatchQueues.delete(mobileNumber));
+      .finally(() => {
+        const remaining = (dispatchDepth.get(mobileNumber) || 1) - 1;
+        if (remaining > 0) dispatchDepth.set(mobileNumber, remaining);
+        else dispatchDepth.delete(mobileNumber);
+        // identity-guarded: a message queued meanwhile is the tail now and must stay
+        if (dispatchQueues.get(mobileNumber) === current) dispatchQueues.delete(mobileNumber);
+      });
 
     dispatchQueues.set(mobileNumber, current);
     return current;
   }
 
 
+
   async _authenticateAndDispatch(rawRequestModel) {
     const inboundRequestModel = InboundRequestModel.create(rawRequestModel);
     const loginFlow = config.isSandboxMode
-      ? new SandboxLoginFlow(inboundRequestModel, sandboxOrgTracker, getAuthenticatedSandboxUser)
+      ? new SandboxLoginFlow(inboundRequestModel, sandboxOrgTracker, getAuthenticatedSandboxUser,
+          (user, messages, extraInfo) => this.toUser(user, messages, extraInfo))
       : new StandardLoginFlow(inboundRequestModel);
 
     const session = await loginFlow.resolveSession();
-    // TODO: SandboxLoginFlow.resolveSession() legitimately returns null after
-    // already notifying the citizen (asking for email/org selection, invalid
-    // selection, etc). dispatch() then throws on session.userId, and the
-    // generic error handler sends a second, confusing message. Restore an
-    // `if (!session) return;` guard here before relying on sandbox mode.
+    if (!session || !session.userId) return;
+
     await this.chatService.dispatch(session, inboundRequestModel);
     return session.userId;
   }
@@ -129,7 +148,11 @@ class SessionManager {
     const thisSend = previousSend
       .catch(() => {}) // a prior send's failure must not skip this one
       .then(() => channelProvider.sendMessageToUser(user, outputMessages, extraInfo))
-      .catch((error) => console.error(`Failed to send message to user ${userId}:`, error));
+      .catch((error) => console.error(`Failed to send message to user ${userId}:`, error))
+      .finally(() => {
+        if (sendQueues.get(userId) === thisSend) sendQueues.delete(userId);
+      });
+    
     sendQueues.set(userId, thisSend);
 
     for (let message of outputMessages) {
