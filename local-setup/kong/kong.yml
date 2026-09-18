@@ -244,11 +244,10 @@ plugins:
         local function is_public_infra(p)
           return p == "/digit-ui" or p:find("/digit-ui/", 1, true) == 1
               or p == "/auth" or p:find("/auth/", 1, true) == 1
-              -- /kc is keycloak-api-route -> token-exchange-svc: the UI hits it
-              -- BEFORE the caller holds a DIGIT token (KeycloakAuthAdapter), and
-              -- /kc/healthz is a plain liveness probe that ends in "z" (so the
-              -- /health$ match below does not catch it). Same bucket as /auth.
-              or p == "/kc" or p:find("/kc/", 1, true) == 1
+              -- Identity browser routes run before the caller holds a DIGIT
+              -- token. The BFF enforces its own opaque session and CSRF checks.
+              -- Internal control-plane routes are deliberately not published.
+              or p == "/identity/v1" or p:find("/identity/v1/", 1, true) == 1
               -- `/health$` (suffix) not `== "/health"`: the per-service liveness
               -- endpoints are `/mdms-v2/health`, `/user/health`, `/access/health`,
               -- `/egov-idgen/health`, `/egov-workflow-v2/health`, `/pgr-services/health`
@@ -1062,18 +1061,20 @@ services:
   - name: keycloak-route
     paths:
     - /auth
-    strip_path: false
-# Token exchange — Keycloak JWT-protected DIGIT API access
-- name: token-exchange-service
-  url: http://token-exchange-svc:3000
+    # Keycloak listens at / internally; KC_HOSTNAME carries the public /auth
+    # prefix used in discovery and redirects.
+    strip_path: true
+# Identity BFF — OIDC session, tenant choice and user-scoped DIGIT token
+- name: identity-bff-service
+  url: http://identity-bff:3000
   tags:
   - identity
   - keycloak
   routes:
-  - name: keycloak-api-route
+  - name: identity-bff-route
     paths:
-    - /kc
-    strip_path: true
+    - /identity/v1
+    strip_path: false
 # OTP validate — real upstream (egov-otp:8089) fronted by a default request-termination MOCK.
 # Mirrors /user-otp: the mock rubber-stamps every OTP validation as successful, so citizen
 # login works with the fixed OTP (123456) without the `otp` profile running.

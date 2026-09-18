@@ -188,10 +188,8 @@ nginx_features:
 
 # ── auth (Keycloak) ──
 enable_keycloak: false
-# Must stay '' while enable_keycloak is false — 'keycloak' flips the SPA's
-# auth adapter to OIDC and citizen/employee logins POST to /kc/realms/...,
-# which has no upstream when the keycloak profile is off (observed:
-# citizen OTP login failing on this box, 2026-06-11).
+# Must stay '' while enable_keycloak is false. The organization-aware frontend
+# uses /identity/v1, which has no upstream when the Keycloak profile is off.
 auth_provider: ""
 keycloak_client_id: digit-ui
 enable_digit_ui_v2: true
@@ -230,4 +228,4 @@ bootstrap_secrets:
   keycloak_admin_password: "CHANGE_ME"
   keycloak_db_password: "CHANGE_ME"
   keycloak_google_client_secret: ''
-  token_exchange_system_password: "CHANGE_ME"
+  identity_digit_admin_password: "CHANGE_ME"
