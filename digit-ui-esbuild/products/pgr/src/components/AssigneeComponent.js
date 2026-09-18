@@ -7,12 +7,19 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   const [assignees, setAssignees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const tenantId = Digit.ULBService.getCurrentTenantId();
+  const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
   const hrmsContext = window?.globalConfigs?.getConfig("HRMS_CONTEXT_PATH") || "egov-hrms";
 
   // Get roles from config populators. `allDepartments` is true only for a
   // CMS_SCREENING_OFFICER, who routes across EVERY department in the tenant;
   // everyone else stays scoped to the single primary `department`.
-  const { roles = [], department, allDepartments } = config?.populators || {};
+  const {
+    roles = [],
+    department,
+    allDepartments,
+    excludeCurrentUser = false,
+    excludeReportingTo = false,
+  } = config?.populators || {};
 
   // Fetch employee data based on roles
   const { 
@@ -30,12 +37,55 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
     },
   });
 
+  // GRO assignment must not double as escalation. Resolve the actor's
+  // reportingTo values independently of the candidate-role search so a manager
+  // who also holds PGR_LME cannot leak into ASSIGN.
+  const {
+    data: currentEmployeeData,
+    isLoading: isCurrentEmployeeDataLoading,
+    error: currentEmployeeError,
+  } = Digit.Hooks.useCustomAPIHook({
+    url: `/${hrmsContext}/employees/_search`,
+    params: {
+      tenantId,
+      uuids: currentUserUuid,
+      isActive: true,
+    },
+    config: {
+      enabled: !!currentUserUuid && excludeReportingTo,
+    },
+  });
+
+  const reportingToUuids = new Set(
+    (currentEmployeeData?.Employees || []).flatMap((employee) =>
+      (employee?.assignments || [])
+        .filter((assignment) => assignment?.isCurrentAssignment !== false && assignment?.isActive !== false)
+        .map((assignment) =>
+          typeof assignment?.reportingTo === "string" ? assignment.reportingTo : assignment?.reportingTo?.uuid
+        )
+        .filter(Boolean)
+    )
+  );
+
+  const getAssignment = (employee) => {
+    if (!excludeCurrentUser && !excludeReportingTo) {
+      return employee?.assignments?.[0];
+    }
+    const currentAssignments = (employee?.assignments || []).filter(
+      (assignment) => assignment?.isCurrentAssignment !== false && assignment?.isActive !== false && assignment?.department
+    );
+    return allDepartments
+      ? currentAssignments[0]
+      : currentAssignments.find((assignment) => assignment.department === department);
+  };
+
   // Transform employee data for dropdown
   function transformData(data) {
     return Object.values(
       data?.reduce((acc, employee) => {
-        const department = employee?.assignments?.[0]?.department;
-        const uuid = employee?.user?.uuid;
+        const assignment = getAssignment(employee);
+        const department = assignment?.department;
+        const uuid = employee?.user?.uuid || employee?.uuid;
         const userServiceUUID = employee?.user?.userServiceUuid;
         if (!department) return acc;
         // Department display name. Onboarding seeds COMMON_MASTERS_DEPARTMENT_<code>
@@ -74,13 +124,18 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
       // department's assignable employees (transformData groups them by
       // department). Every other actor stays scoped to the single primary dept.
       const filtered = employeeData.Employees.filter((e) => {
-        const d = e?.assignments?.[0]?.department;
-        if (!d || !e?.user?.uuid) return false;
+        const d = getAssignment(e)?.department;
+        const uuid = e?.user?.uuid || e?.uuid;
+        if (!d || !uuid) return false;
+        if (excludeCurrentUser && uuid === currentUserUuid) return false;
+        if (excludeReportingTo && reportingToUuids.has(uuid)) return false;
         return allDepartments ? true : d === department;
       });
       setAssignees(transformData(filtered));
+    } else {
+      setAssignees([]);
     }
-  }, [employeeData]);
+  }, [employeeData, currentEmployeeData, currentUserUuid, department, allDepartments, excludeCurrentUser, excludeReportingTo]);
 
   // Handle employee selection
   const handleEmployeeSelect = (employee) => {
@@ -91,8 +146,8 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   };
   
 
-  if (error) return <div>{t("CS_COMMON_EMPLOYEE_FETCH_ERROR")}</div>;
-  if (isEmployeeDataLoading) return <Loader />;
+  if (error || (excludeReportingTo && currentEmployeeError)) return <div>{t("CS_COMMON_EMPLOYEE_FETCH_ERROR")}</div>;
+  if (isEmployeeDataLoading || (excludeReportingTo && isCurrentEmployeeDataLoading)) return <Loader />;
 
   return (
     <div className="assignee-dropdown-container">

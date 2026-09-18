@@ -21,6 +21,11 @@ import { trackEvent } from "../../utils/analytics";
 const ACTION_CONFIGS = [
   {
     actionType: "ASSIGN",
+    // Workflow action roles describe who may perform ASSIGN; they do not
+    // describe who may receive the complaint. Keep that contract explicit.
+    assigneeRoles: ["PGR_LME"],
+    excludeCurrentUser: true,
+    excludeReportingTo: true,
     formConfig: {
       label: {
         heading: "CS_ACTION_ASSIGN",
@@ -501,11 +506,9 @@ const PGRDetails = () => {
     const def = serviceDefs?.find((d) => d.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode);
     const department = def?.department;
     if (!actionConfig) return null;
-    // The dropdown is the *assignee* picker, so we want the roles that can ACT on
-    // the next state — not the roles that can perform the current action. The
-    // latter (selectedAction.roles) was returning the GRO/PGR_VIEWER set, which
-    // matches almost every employee in HRMS and produced a 37-row mega-dropdown.
-    const roles = selectedAction?.assigneeRoles?.length ? selectedAction.assigneeRoles : (selectedAction?.roles || []);
+    const roles = actionConfig.assigneeRoles?.length
+      ? actionConfig.assigneeRoles
+      : (selectedAction?.assigneeRoles || selectedAction?.roles || []);
 
     // A CMS_SCREENING_OFFICER screens the complaint and routes it to the CORRECT
     // department — at its discretion across the WHOLE tenant, not just the
@@ -528,6 +531,8 @@ const PGRDetails = () => {
             roles,
             department,
             allDepartments,
+            excludeCurrentUser: actionConfig.excludeCurrentUser === true,
+            excludeReportingTo: actionConfig.excludeReportingTo === true,
             props: { ...bodyItem.populators.props, department, allDepartments },
           },
         })),
@@ -535,20 +540,15 @@ const PGRDetails = () => {
     };
   };
 
-  // Roles that should never appear in an assignee dropdown even if a workflow
-  // state lists them (system or non-employee actors).
+  // Preserve the existing destination-state inference for actions outside
+  // #1968. ASSIGN overrides this with its explicit PGR_LME target contract.
   const NON_ASSIGNEE_ROLES = new Set(["CITIZEN", "AUTO_ESCALATE", "ANONYMOUS"]);
 
-  // Compute the assignee role set for an action by looking at the *forward*
-  // (non-self-looping) actions defined on the next state and unioning their
-  // roles. Self-loops like ESCALATE / COMMENT add noise (e.g.
-  // GRO showing up in a PENDINGATLME assignment dropdown), so we exclude them.
-  // System roles (CITIZEN, AUTO_ESCALATE, ANONYMOUS) are filtered out too.
   const computeAssigneeRoles = (nextStateUuid, businessServiceResponse) => {
     const nextState = businessServiceResponse?.states?.find((s) => s.uuid === nextStateUuid);
     if (!nextState?.actions) return [];
     const forwardActions = nextState.actions.filter((act) => act.nextState && act.nextState !== nextStateUuid);
-    const source = forwardActions.length > 0 ? forwardActions : nextState.actions; // fall back if no forward actions
+    const source = forwardActions.length > 0 ? forwardActions : nextState.actions;
     const set = new Set();
     source.forEach((act) => (act.roles || []).forEach((r) => set.add(r)));
     return [...set].filter((r) => !NON_ASSIGNEE_ROLES.has(r));
