@@ -251,7 +251,7 @@ groups are listed here worst-first, not in dashboard order.
 | **Core Services** | 15 | The shared platform: MDMS and MDMS backend, user, workflow, HRMS, boundary and boundary-management, localization, ID generation, access control, encryption, filestore, URL shortening, the persister, and the audit service | A service many features depend on. Expect several unrelated-looking symptoms at once |
 | **Application** | 3 | PGR services, the DIGIT UI, and the configurator | The product people actually use |
 | **API Tests** | 3 | Real calls against live APIs — different from the rest, see below | Read the note below before acting on it |
-| **Keycloak** | 3 | Keycloak, its Postgres, and the Identity BFF. *Labelled `Keycloak` on the dashboard; this is the sign-in / identity group* | Organization-aware sign-in and tenant selection fail; OTP-only deployments are unaffected |
+| **Keycloak** | 3 | Keycloak, its Postgres, and the token exchange service. *Labelled `Keycloak` on the dashboard; this is the sign-in / identity group* | Signing in fails — but only on deployments that use Keycloak SSO rather than OTP login |
 | **Search** | 3 | Elasticsearch, the indexer, the inbox service | Inbox and search break. Filing complaints still works |
 | **OTP** | 3 | OTP service, user-OTP, notification-SMS — one-time-password delivery for sign-in | Users cannot receive the code they need to log in |
 | **Notifications** | 9 | Novu (API, websocket, dashboard, Mongo), the bridge and its endpoint, the config and user-preferences services, and the OTP publisher | SMS / email / WhatsApp stop going out. Everything else is unaffected |
