@@ -1,5 +1,6 @@
 const channelProvider = require("../channel");
 const { ChatbotError } = require("./errors");
+const { maskMobile } = require("../privacy");
 
 /**
  * Central handler for any failure while processing an inbound message.
@@ -20,10 +21,10 @@ async function handleError(error, inboundRequestModel) {
       inboundRequestModel?.extraInfo
     );
   } catch (sendError) {
-    console.error(`Failed to send error message to ${mobileNumber}:`, sendError);
+    console.error(`Failed to send error message to ${maskMobile(mobileNumber)}:`, sendError);
   }
 
-  console.error(`Error processing request for mobile number ${mobileNumber}:`, error);
+  console.error(`Error processing request for mobile number ${maskMobile(mobileNumber)}:`, error);
 }
 
 module.exports = { handleError };

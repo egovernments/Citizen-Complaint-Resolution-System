@@ -2,6 +2,7 @@ const config = require('../env-variables');
 const fetch = require('node-fetch');
 require('url-search-params-polyfill');
 const { ValidationError, AuthenticationError, ExternalServiceError } = require('./errors');
+const { maskMobile } = require('../privacy');
 const { StatusCodes } = require('http-status-codes');
 
 
@@ -32,15 +33,14 @@ class UserService {
       try {
         user = await this.createUser(mobileNumber, tenantId);
       } catch (error) {
-        // A create that races another message for the same number comes back
-        // as a duplicate; a second lookup resolves it.
-        user = await this.findCitizen(mobileNumber, tenantId);
+        console.error(`Failed to create user for ${maskMobile(mobileNumber)}: ${error.message}`);
+        user = await this.findCitizen(mobileNumber, tenantId).catch(() => undefined);
         if (user) return user;
 
         // If the citizen is not found in the active users, check if they exist as an inactive user.
-        const inactive = await this.findInactiveCitizen(mobileNumber, tenantId);
+        const inactive = await this.findInactiveCitizen(mobileNumber, tenantId).catch(() => undefined);
         if (inactive)
-          throw new AuthenticationError(`Citizen ${mobileNumber} exists but is deactivated (uuid ${inactive.uuid}) - creation is blocked by the taken username`);
+          throw new AuthenticationError(`Citizen ${maskMobile(mobileNumber)} exists but is deactivated (uuid ${inactive.uuid}) - creation is blocked by the taken username`);
 
         throw error;
       }
@@ -48,7 +48,7 @@ class UserService {
     }
 
     if (!user || !user.userInfo)
-      throw new AuthenticationError(`Unable to resolve citizen ${mobileNumber} for tenant ${tenantId}`);
+      throw new AuthenticationError(`Unable to resolve citizen ${maskMobile(mobileNumber)} for tenant ${tenantId}`);
 
     return user;
   }
@@ -59,34 +59,6 @@ class UserService {
       throw new ValidationError('Mobile number and tenant ID are required');
   }
 
-  async createNewUser(mobileNumber, tenantId) {
-    try {
-      const createResult = await this.createUser(mobileNumber, tenantId);
-      if (!createResult) 
-        throw new ExternalServiceError(`Failed to create user for ${mobileNumber}`);
-      
-      return createResult;
-       
-    } catch (createError) {
-      return this.handleCreationError(createError, mobileNumber, tenantId);
-    }
-  }
-
-  async authenticateCreatedUser(createResult, mobileNumber, tenantId) {
-    if (createResult.authToken) {
-      return createResult;
-    }
-
-    if (createResult.access_token && createResult.UserRequest) {
-      return {
-        authToken: createResult.access_token,
-        refreshToken: createResult.refresh_token,
-        userInfo: createResult.UserRequest
-      };
-    }
-
-    return await this.loginAfterCreation(mobileNumber, tenantId);
-  }
   
   // One service-account token serves every citizen. Cached until shortly
   async getServiceAccount() {
@@ -107,50 +79,81 @@ class UserService {
     throw lastError;
   }
 
+  /**
+   * Runs a privileged request with the service-account token, retrying ONCE with a
+   * freshly minted token if the first attempt comes back 401.
+   *
+   * The token is cached on expires_in alone, so an egov-user restart, a token-store
+   * flush or a password rotation invalidates it early. Without this retry the
+   * process never recovered: findCitizen read 401 as "citizen not found" — so every
+   * caller looked like a brand-new citizen — and createUser threw, until restart.
+   */
+  async withServiceAccount(perform) {
+    const account = await this.getServiceAccount();
+    const response = await perform(account);
+    if (response.status !== StatusCodes.UNAUTHORIZED) return { response, account };
+
+    console.warn('Service account token rejected (401); re-authenticating and retrying once');
+    this._serviceAccount = undefined;
+    this._serviceAccountExpiry = 0;
+
+    const freshAccount = await this.getServiceAccount();
+    return { response: await perform(freshAccount), account: freshAccount };
+  }
+
+
+
   // Finds a citizen by mobile number and tenant ID using the service account.
   // Returns the citizen's auth token and user info if found, otherwise undefined.
-  async findCitizen(mobileNumber, tenantId) {
-    const { authToken, userInfo } = await this.getServiceAccount();
+    async findCitizen(mobileNumber, tenantId) {
     const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber) || mobileNumber;
-
     const url = config.egovServices.userServiceHost + config.egovServices.userServiceSearchPath;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: this.serviceRequestInfo(authToken, userInfo),
-        tenantId: tenantId,
-        mobileNumber: cleanMobileNumber,
-        userType: 'CITIZEN'
-      })
-    });
 
-    if (response.status !== StatusCodes.OK) return undefined;
+    const { response, account } = await this.withServiceAccount(({ authToken, userInfo }) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: this.serviceRequestInfo(authToken, userInfo),
+          tenantId: tenantId,
+          mobileNumber: cleanMobileNumber,
+          userType: 'CITIZEN'
+        })
+      })
+    );
+
+    if (response.status !== StatusCodes.OK) {
+      throw new ExternalServiceError(`user/_search failed with status ${response.status}`);
+    }
 
     const body = await response.json();
     const found = (body.user || []).find((candidate) => candidate.active !== false);
-    return found ? { authToken, userInfo: found } : undefined;
+    return found ? { authToken: account.authToken, userInfo: found } : undefined;
   }
+
 
   
   async findInactiveCitizen(mobileNumber, tenantId) {
-    const { authToken, userInfo } = await this.getServiceAccount();
     const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber) || mobileNumber;
-
     const url = config.egovServices.userServiceHost + config.egovServices.userServiceSearchPath;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: this.serviceRequestInfo(authToken, userInfo),
-        tenantId: tenantId,
-        mobileNumber: cleanMobileNumber,
-        userType: 'CITIZEN',
-        active: false
-      })
-    });
 
-    if (response.status !== StatusCodes.OK) return undefined;
+    const { response } = await this.withServiceAccount(({ authToken, userInfo }) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: this.serviceRequestInfo(authToken, userInfo),
+          tenantId: tenantId,
+          mobileNumber: cleanMobileNumber,
+          userType: 'CITIZEN',
+          active: false
+        })
+      })
+    );
+
+    if (response.status !== StatusCodes.OK) 
+      throw new ExternalServiceError(`user/_search failed with status ${response.status}`);
+    
     const body = await response.json();
     return (body.user || [])[0];
   }
@@ -191,20 +194,7 @@ class UserService {
   }
 
 
-  async loginAfterCreation(mobileNumber, tenantId) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return await this.loginUser(mobileNumber, tenantId);
-  }
-
-  async handleCreationError(createError, mobileNumber, tenantId) {
-    if (createError.message && createError.message.includes('Duplicate')) {
-      console.log('User already exists, attempting login again...');
-      return await this.loginUser(mobileNumber, tenantId);
-    } else {
-      throw createError;
-    }
-  }
-
+  
   async enrichuserDetails(user) {
     // Skip enrichment if no auth token
     if (!user || !user.authToken) {
@@ -281,38 +271,36 @@ class UserService {
 
     const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber);
     if (!cleanMobileNumber)
-        throw new ValidationError(`Invalid mobile number format: ${mobileNumber}. Expected ${config.mobileNumberLength} digits, optionally prefixed with ${config.countryCode}.`);
-
-    const { authToken, userInfo } = await this.getServiceAccount();
-
-    const requestBody = {
-      requestInfo: this.serviceRequestInfo(authToken, userInfo),
-      user: {
-        userName: cleanMobileNumber,
-        mobileNumber: cleanMobileNumber,
-        name: "Citizen",
-        type: "CITIZEN",
-        active: true,
-        password: config.citizenPlaceholderPassword,
-        locale: config.defaultLocale,
-        permanentCity: tenantId,
-        tenantId: tenantId,
-        roles: [{ code: "CITIZEN", name: "Citizen", tenantId: tenantId }]
-      }
-    };
+        throw new ValidationError(`Invalid mobile number format: ${maskMobile(mobileNumber)}. Expected ${config.mobileNumberLength} digits, optionally prefixed with ${config.countryCode}.`);
 
     const url = config.egovServices.userServiceHost + config.egovServices.userServiceCreateNoValidatePath;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
+    const { response, account } = await this.withServiceAccount(({ authToken, userInfo }) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestInfo: this.serviceRequestInfo(authToken, userInfo),
+          user: {
+            userName: cleanMobileNumber,
+            mobileNumber: cleanMobileNumber,
+            name: config.citizenPlaceholderName,
+            type: "CITIZEN",
+            active: true,
+            permanentCity: tenantId,
+            tenantId: tenantId,
+            roles: [{ code: "CITIZEN", name: "Citizen", tenantId: tenantId }]
+          }
+        })
+      })
+    );
+
     const responseBody = await response.json();
 
     if (response.status === StatusCodes.OK) {
-      return { authToken, userInfo: (responseBody.user || [])[0] };
+      return { authToken: account.authToken, userInfo: (responseBody.user || [])[0] };
     }
+
 
     const errorCode = responseBody?.Errors?.[0]?.code
       || responseBody?.error?.fields?.[0]?.code

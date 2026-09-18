@@ -3,11 +3,14 @@ const fetch = require("node-fetch");
 const axios = require('axios');
 var FormData = require("form-data");
 const mediaTypes = require('../media-types');
+const { toNationalNumber, toInternationalNumber } = require('../phone-numbers');
+const { maskMobile, summarizeInbound } = require('../privacy');
+const { isValidTwilioSignature } = require('./twilio-signature');
 
 // The only host inbound media is fetched from, and the only path shape accepted
 // on it. See twilioMediaUrl below.
 const TWILIO_MEDIA_HOST = 'api.twilio.com';
-const TWILIO_MEDIA_PATH = /^\/2010-04-01\/Accounts\/AC[0-9a-f]{32}\/Messages\/MM[0-9a-f]{32}\/Media\/ME[0-9a-f]{32}$/i;
+const TWILIO_MEDIA_PATH = /^\/2010-04-01\/Accounts\/(AC[0-9a-f]{32})\/Messages\/(MM[0-9a-f]{32})\/Media\/(ME[0-9a-f]{32})$/i;
 const INPUT_TYPES = {
     LOCATION: 'location',
     BUTTON: 'button',
@@ -36,7 +39,7 @@ class TwilioWhatsAppProvider {
         return mediaTypes.extensionForMimeType(contentType);
     }
 
-    async fileStoreAPICall(fileName, fileData, contentType = null, tenantId = null) {
+    async fileStoreAPICall(fileName, fileData, contentType = null, tenantId = null, cancelToken) {
         var url = config.egovServices.egovServicesHost + config.egovServices.egovFilestoreServiceUploadEndpoint;
         url = url + '&tenantId=' + (tenantId || config.rootTenantId);
         var form = new FormData();
@@ -44,7 +47,9 @@ class TwilioWhatsAppProvider {
             filename: fileName,
             contentType: mediaTypes.filestoreContentType(fileName) || contentType || 'application/octet-stream'
         });
-        let response = await axios.post(url, form, {
+        
+        const response = await axios.post(url, form, {
+            cancelToken,
             headers: {
                 ...form.getHeaders()
             }
@@ -61,24 +66,6 @@ class TwilioWhatsAppProvider {
 
     stripBase64Prefix(fileInBase64String) {
         return fileInBase64String.replace(/^data:[^;]+;base64,/, '');
-    }
-
-    async fileStoreAPICall(fileName, fileData, contentType = 'application/octet-stream', tenantId = null) {
-        var url = config.egovServices.egovServicesHost + config.egovServices.egovFilestoreServiceUploadEndpoint;
-        url = url + '&tenantId=' + (tenantId || config.rootTenantId);
-        var form = new FormData();
-        form.append("file", fileData, {
-            filename: fileName,
-            contentType: contentType
-        });
-        let response = await axios.post(url, form, {
-            headers: {
-                ...form.getHeaders()
-            }
-        });
-
-        var filestore = response.data;
-        return filestore['files'][0]['fileStoreId'];
     }
 
     async convertFromBase64AndStore(fileInBase64String, tenantId = null) {
@@ -165,10 +152,10 @@ class TwilioWhatsAppProvider {
         let requestBody = req.body;
         if (Object.keys(requestBody).length === 0) {
             requestBody = req.query;
-            console.debug("Twilio - Extracted raw message from query:", JSON.stringify(requestBody, null, 2));
+            console.debug("Twilio - Extracted raw message from query:", summarizeInbound(requestBody));
         }
         
-        console.debug("Twilio - Extracted raw message:", JSON.stringify(requestBody, null, 2));
+        console.debug("Twilio - Extracted raw message:", summarizeInbound(requestBody));
         return requestBody;
     }
 
@@ -179,13 +166,45 @@ class TwilioWhatsAppProvider {
         return !countryCode || digits.startsWith(countryCode);
     }
 
+    /**
+     * Request authenticity — the gate that makes `From` trustworthy. Without it
+     * anyone reaching the webhook can impersonate a whitelisted citizen, be logged
+     * in by the service account and file complaints under that citizen's uuid.
+     *
+     * Returns false (reject) when signing is misconfigured rather than failing
+     * open: a missing authToken/webhookBaseUrl in a deployment is exactly the
+     * state an attacker benefits from.
+     */
+    verifyRequest(req) {
+        if (!config.twilio.verifyWebhookSignature) {
+            console.warn('Twilio - webhook signature verification is DISABLED (TWILIO_VERIFY_WEBHOOK_SIGNATURE=false)');
+            return true;
+        }
+
+        const base = String(config.twilio.webhookBaseUrl || '').replace(/\/+$/, '');
+        if (!base || !this.authToken) {
+            console.error('Twilio - cannot verify webhook: TWILIO_WEBHOOK_BASE_URL or TWILIO_AUTH_TOKEN is unset');
+            return false;
+        }
+
+        return isValidTwilioSignature({
+            authToken: this.authToken,
+            url: base + req.originalUrl,
+            // Twilio signs the POST form fields; a GET status callback signs the
+            // query string, which is already part of originalUrl.
+            params: req.method === 'POST' ? req.body : {},
+            signature: req.get('X-Twilio-Signature'),
+        });
+    }
+
+
     // Validates if the incoming request is a valid Twilio message (text, media, or location)
     async isValid(requestBody) {
         try {
 
             // Discard messages from numbers that do not belong to the served country.
             if (!this.isServedCountry(requestBody.From)) {
-                console.log(`Twilio - Discarding message from out-of-country number: ${requestBody.From}`);
+                console.log(`Twilio - Discarding message from out-of-country number: ${maskMobile(requestBody.From)}`);
                 return false;
             }
 
@@ -208,14 +227,12 @@ class TwilioWhatsAppProvider {
     }
 
     extractPhoneNumber(twilioNumber) {
-        // Twilio format: whatsapp:+258849904390 - strip to the bare national
+        // Twilio format: whatsapp:+258840000002 - strip to the bare national
         // number, mirroring toWhatsAppNumber's own use of config.countryCode
         // (this used to hardcode stripping '91' for India, which never matched
         // a +258 number, so context.user.mobileNumber kept its country code
         // and never matched entries in ALLOWED_MOBILE_NUMBERS).
-        const digits = String(twilioNumber).replace(/\D/g, '');
-        const countryCode = String(config.countryCode).replace(/\D/g, '');
-        return countryCode && digits.startsWith(countryCode) ? digits.slice(countryCode.length) : digits;
+        return toNationalNumber(twilioNumber);
     }
 
     getInputType(requestBody) {
@@ -278,17 +295,22 @@ class TwilioWhatsAppProvider {
         if (parsed.protocol !== 'https:' || parsed.hostname !== TWILIO_MEDIA_HOST) {
             throw new Error('refusing to download media from a non-Twilio host');
         }
-        if (!TWILIO_MEDIA_PATH.test(parsed.pathname)) {
+        const match = TWILIO_MEDIA_PATH.exec(parsed.pathname);
+        if (!match) {
             throw new Error('refusing to download media from an unexpected twilio path');
         }
-        return new URL(parsed.pathname, `https://${TWILIO_MEDIA_HOST}`).toString();
+        // Assembled from the three validated SIDs rather than from the inbound path,
+        // so nothing the webhook sent reaches the request url verbatim.
+        const [, accountSid, messageSid, mediaSid] = match;
+        return `https://${TWILIO_MEDIA_HOST}/2010-04-01/Accounts/${accountSid}/Messages/${messageSid}/Media/${mediaSid}`;
     }
 
-    async downloadMediaFromUrl(mediaUrl) {
+    async downloadMediaFromUrl(mediaUrl, cancelToken) {
         return await axios.get(
             this.twilioMediaUrl(mediaUrl),
             {
                 responseType: 'arraybuffer',
+                cancelToken,
                 auth: {
                     username: this.accountSid,
                     password: this.authToken
@@ -297,57 +319,67 @@ class TwilioWhatsAppProvider {
         );
     }
 
-    async uploadMediaToFileStore(fileName, fileBuffer, contentType, tenantId = null) {
+
+    async uploadMediaToFileStore(fileName, fileBuffer, contentType, tenantId = null, cancelToken) {
         return await this.fileStoreAPICall(
             fileName,
             fileBuffer,
             contentType,
-            tenantId
+            tenantId,
+            cancelToken
         );
     }
+
 
     getMediaContentType(requestBody) {
         return requestBody.MediaContentType0 || '';
     }
 
-    async processMediaInput(requestBody, tenantId = null) {
+        async processMediaInput(requestBody, tenantId = null) {
         const mediaUrl = requestBody.MediaUrl0;
         if (!mediaUrl)
             return ' ';
 
+        // Set up a cancellation mechanism for the media download to enforce the timeout.
+        const cancellation = axios.CancelToken.source();
+        const timer = setTimeout(
+            () => cancellation.cancel(`media processing timed out after ${config.mediaProcessingTimeoutMs}ms`),
+            config.mediaProcessingTimeoutMs
+        );
+
         try {
-            const download = async () => {
-                const response = await this.downloadMediaFromUrl(mediaUrl);
-                const contentType = this.getMediaContentType(requestBody) || response.headers['content-type'] || '';
-                const fileExtension = this.getExtensionForMimeType(contentType);
-                const fileBuffer = Buffer.from(response.data);
+            const response = await this.downloadMediaFromUrl(mediaUrl, cancellation.token);
+            const contentType = this.getMediaContentType(requestBody) || response.headers['content-type'] || '';
+            const fileExtension = this.getExtensionForMimeType(contentType);
+            const fileBuffer = Buffer.from(response.data);
 
-                if (fileBuffer.length > config.maxMediaSizeBytes) {
-                    return 'FILE_TOO_LARGE';
-                }
+            if (fileBuffer.length > config.maxMediaSizeBytes) {
+                return 'FILE_TOO_LARGE';
+            }
 
-                return await this.uploadMediaToFileStore(
-                    `pgr-whatsapp-${Date.now()}${fileExtension}`,
-                    fileBuffer,
-                    contentType,
-                    tenantId
-                );
-            };
-            const timeout = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('media processing timed out')), config.mediaProcessingTimeoutMs)
+            return await this.uploadMediaToFileStore(
+                `pgr-whatsapp-${Date.now()}${fileExtension}`,
+                fileBuffer,
+                contentType,
+                tenantId,
+                cancellation.token
             );
-
-            return await Promise.race([download(), timeout]);
-
         } catch (error) {
-            console.error('Error processing media input:', error);
+            if (axios.isCancel(error)) {
+                console.error(`Twilio - ${error.message}`);
+            } else {
+                console.error('Error processing media input:', error.message);
+            }
             return ' ';
+        } finally {
+            clearTimeout(timer);
         }
     }
 
 
+
     async getUserMessage(requestBody, tenantId = null) {
-        console.log("Twilio - Received requestBody:", JSON.stringify(requestBody, null, 2));
+        console.log("Twilio - inbound:", summarizeInbound(requestBody));
         const inputType = this.getInputType(requestBody);
         const inputFromType = await this.getInputFromType(requestBody, inputType, tenantId);
 
@@ -372,15 +404,10 @@ class TwilioWhatsAppProvider {
         return await this.getUserMessage(rawMessage, tenantId);
     }
 
-    // Twilio wants E.164. `to` may arrive national (849904390) or already
-    // prefixed (258849904390), so strip the country code before re-adding it.
+    // Twilio wants E.164. `to` may arrive national (840000002) or already
+    // prefixed (258840000002), so strip the country code before re-adding it.
     toWhatsAppNumber(to) {
-        const digits = String(to).replace(/\D/g, '');
-        const countryCode = String(config.countryCode).replace(/\D/g, '');
-        const national = countryCode && digits.startsWith(countryCode)
-            ? digits.slice(countryCode.length)
-            : digits;
-        return `whatsapp:+${countryCode}${national}`;
+        return `whatsapp:+${toInternationalNumber(to)}`;
     }
 
     async sendTextMessage(to, body) {

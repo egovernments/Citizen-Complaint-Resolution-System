@@ -1,10 +1,14 @@
 const express = require('express'),
   bodyParser = require('body-parser'),
   envVariables = require('./env-variables'),
-  port = envVariables.port;
-  const { createProxyMiddleware } = require('http-proxy-middleware');
+  port = envVariables.port,
+  { loadLocalisationOrExit } = require('./machine/util/localisation-service');
+
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
 const createAppServer = () => {
-const app = express();
+
+    const app = express();
     app.use((req, res, next) => {
         res.header('Access-Control-Allow-Origin', '*')
         res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,PATCH,DELETE,OPTIONS')
@@ -27,4 +31,7 @@ const app = express();
 
 const app = createAppServer();
 module.exports = app;
-app.listen(port, () => console.log(`XState-Chatbot-Server is running on port ${envVariables.port} with contextPath: ${envVariables.contextPath}`));
+loadLocalisationOrExit().then(() => {
+  app.listen(port, () => console.log(`XState-Chatbot-Server is running on port ${envVariables.port} with contextPath: ${envVariables.contextPath}`));
+});
+

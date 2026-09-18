@@ -63,6 +63,27 @@ class StateRepository {
         }
     }
 
+    // The resume-or-restart prompt is conversation state, so it lives on the row:
+    // a restart between asking and answering must not swallow the citizen's reply.
+    async setResumePending(userId, timeStamp) {
+        const query = 'UPDATE eg_chat_state_v2 SET resume_pending_at = $2 WHERE user_id = $1';
+        return await pool.query(query, [userId, timeStamp]);
+    }
+
+    async clearResumePending(userId) {
+        const query = 'UPDATE eg_chat_state_v2 SET resume_pending_at = NULL WHERE user_id = $1';
+        return await pool.query(query, [userId]);
+    }
+
+    async getResumePendingAt(userId) {
+        const query = 'SELECT resume_pending_at FROM eg_chat_state_v2 WHERE user_id = $1 AND active = true';
+        let result = await pool.query(query, [userId]);
+        if (result.rowCount >= 1 && result.rows[0].resume_pending_at != null) {
+            return Number(result.rows[0].resume_pending_at);
+        }
+    }
+
+
 
 }
 

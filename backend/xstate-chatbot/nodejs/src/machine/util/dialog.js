@@ -34,18 +34,33 @@ function get_message(bundle, locale = config.defaultLocale) {
 
 
 function get_intention(g, event, strict = false) {
-  let utterance = get_input(event);
+  const utterance = get_input(event);
+  const normalized = normalizeUtterance(utterance);
+
+  // Compare both sides raw and accent-stripped: recognize lists hold accented
+  // words ("começar") while displayed labels are matched accent-insensitively, so
+  // "SAÚDE" and "saude" must both hit the same option.
+  const variants = (entry) =>
+    entry.recognize.flatMap((r) => [String(r).trim().toLowerCase(), normalizeUtterance(r)]);
 
   function exact(e) {
-    return e.recognize.includes(utterance)
+    return variants(e).some((r) => r === utterance || r === normalized);
   }
 
   function contains(e) {
-    return e.recognize.find(r=>utterance.includes(r))
+    return variants(e).some((r) => r && (utterance.includes(r) || normalized.includes(r)));
   }
 
-  let index = strict? g.findIndex(exact) : g.findIndex(e=>contains(e));
+  let index = strict ? g.findIndex(exact) : g.findIndex((e) => contains(e));
   return (index == -1) ? INTENTION_UNKOWN : g[index].intention;
+}
+
+
+// Recognizes an option by its NUMBER or by the label the citizen was shown, so
+// "voltar" steps back a level exactly like picking the numbered Voltar entry.
+// Accents and case are stripped: WhatsApp keyboards routinely drop diacritics.
+function normalizeUtterance(text) {
+  return String(text ?? '').trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
 
 function constructListPromptAndGrammer(keys, message_bundle, locale, more = false, goback = false) {
@@ -59,7 +74,7 @@ function constructListPromptAndGrammer(keys, message_bundle, locale, more = fals
     keys = keys.concat([INTENTION_GOBACK])
     message_bundle = Object.assign({}, message_bundle, {[INTENTION_GOBACK]: global_messages.goback})
   }
-  
+
   keys.forEach((element, index) => {
     let value = undefined;
     if(message_bundle[element] !== undefined) {
@@ -74,25 +89,16 @@ function constructListPromptAndGrammer(keys, message_bundle, locale, more = fals
     else
       prompt+= `\n*${index+1}.* ` + value;
 
-    grammer.push({intention: element, recognize: [(index+1).toString()]});
+    const label = normalizeUtterance(value);
+    const recognize = [numberAsString];
+    // Only add the label when it cannot be confused with another option's number.
+    if (label && !/^\d+$/.test(label)) recognize.push(label);
+    grammer.push({intention: element, recognize});
   });
   return {prompt, grammer};
 }
 
-function constructLiteralGrammer(keys, message_bundle, locale) {
-  var grammer = [];
-  keys.forEach((element) => {
-    let value = undefined;
-    if (message_bundle[element] !== undefined) {
-      value = get_message(message_bundle[element], locale);
-    } 
-    if(value === undefined) {
-      value = element;
-    }
-    grammer.push({intention: element, recognize: [value.toLowerCase()]});
-  });
-  return grammer;
-}
+
 
 function validateInputType(event, type) {
   let inputType = event.message.type;
@@ -135,4 +141,4 @@ let global_messages = {
   },
 }
 
-module.exports = { get_input, get_message, get_intention, INTENTION_UNKOWN, INTENTION_MORE, INTENTION_GOBACK, global_messages, constructListPromptAndGrammer, constructLiteralGrammer, validateInputType, sendMessage };
+module.exports = { get_input, get_message, get_intention, INTENTION_UNKOWN, INTENTION_MORE, INTENTION_GOBACK, global_messages, constructListPromptAndGrammer, validateInputType, sendMessage };

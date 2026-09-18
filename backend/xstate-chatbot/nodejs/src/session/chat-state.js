@@ -25,10 +25,7 @@ class ChatState {
     return JSON.stringify(this.raw);
   }
 
-  isDone() {
-    return !!this.raw.done;
-  }
-
+  
   // Strips per-user identifiers down to the minimum needed to resume a
   // session, in place. Callers that also need the un-stripped state (e.g. to
   // start an xstate service from it) must clone first - see toPersistableState().

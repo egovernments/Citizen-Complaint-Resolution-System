@@ -18,7 +18,7 @@ cp .env.example .env
 npm start
 ```
 
-The service listens on `SERVICE_PORT` (8082 by default) under `CONTEXT_PATH` (`/xstate-chatbot`). `npm start` runs with `--inspect` for debugging.
+The service listens on `SERVICE_PORT` (8082 by default) under `CONTEXT_PATH` (`/xstate-chatbot`). `npm start` runs with `--inspect` for debugging and loads the CA bundle in `certs/`.
 
 `REPO_PROVIDER` chooses where conversation state lives: `InMemory` keeps sessions in process, so a local run needs no database but loses every conversation on restart; `Postgres` persists them using the `DB_*` settings.
 
@@ -48,7 +48,7 @@ npm test
 
 The chatbot is not yet part of the compose stack, Kong's route table or the k8s manifests, so a deployment does not start it and nothing routes to it. Until that lands, connect it by hand in two steps.
 
-**1. Run the container on the stack's network.** Build the image from `nodejs/Dockerfile`, then attach it to the network compose created — named `<project>_egov-network`, where `<project>` is the directory the stack was brought up from (`digit_egov-network` in the examples below):
+**1. Run the container on the stack's network.** Build the image from `nodejs/Dockerfile`, then attach it to the network compose created — named `<project>_egov-network`, so `digit_egov-network` for a stack brought up from `~/digit`:
 
 ```
 docker build -t xstate-chatbot:local .

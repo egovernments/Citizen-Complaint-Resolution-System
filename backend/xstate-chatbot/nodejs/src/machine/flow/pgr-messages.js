@@ -3,8 +3,8 @@ module.exports = {
     // used by the original pgr.js (still has both fileComplaint/trackComplaint)
     question: {
       code: 'chatbot.pgr.menu.question',
-      en_IN: 'Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To go back to the main menu, type and send *voltar*.',
-      pt_PT: 'Envie o número da sua opção: \n\n*1.* Apresentar uma nova manifestação\n*2.* Consultar reclamações existentes\n\n  Para voltar ao menu principal, escreva e envie *voltar*.'
+      en_IN: 'Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To start over, type and send *reiniciar*.',
+      pt_PT: 'Envie o número da sua opção: \n\n*1.* Apresentar uma nova manifestação\n*2.* Consultar reclamações existentes\n\n  Para começar de novo, escreva e envie *reiniciar*.'
     },
     // used by pgr-machine.js, which dropped trackComplaint - no `code`, since
     // the real localization service still has an old translation stored
@@ -94,8 +94,8 @@ module.exports = {
       },
       declined: {
         code: 'chatbot.pgr.consent.declined',
-        en_IN: 'Your grievance has not been filed, as consent is required to process it.\n\nType *voltar* whenever you would like to start again.',
-        pt_PT: 'A sua manifestação não foi registada, pois o consentimento é necessário para o seu tratamento.\n\nEscreva *voltar* quando quiser começar de novo.'
+        en_IN: 'Your grievance has not been filed, as consent is required to process it.\n\nType *reiniciar* whenever you would like to start again.',
+        pt_PT: 'A sua manifestação não foi registada, pois o consentimento é necessário para o seu tratamento.\n\nEscreva *reiniciar* quando quiser começar de novo.'
       }
     },
     confidentiality: {
@@ -171,8 +171,8 @@ module.exports = {
     },
     persistComplaint: {
       code: 'chatbot.pgr.confirmation',
-      en_IN: 'Your complaint has been registered successfully.\n\nCategory: {{1}}\nReference: {{2}}\nDate: {{3}}\n\nYour complaint will be reviewed by the responsible institution.\nYou can follow its progress using the reference above.\nThank you for helping improve public services.',
-      pt_PT: 'Manifestação registada com sucesso.\n\nCategoria: {{1}}\nReferência: {{2}}\nData: {{3}}\n\nA sua manifestação será analisada pela instituição responsável.\nPode acompanhar o estado através da referência acima.\nObrigado por contribuir para a melhoria dos serviços públicos.'
+      en_IN: 'Your complaint has been registered successfully.\n\nCategory: {{1}}\nReference: {{2}}\nDate: {{3}}\n\nYour complaint will be reviewed by the responsible institution.\nYou can follow its progress on the citizen portal or in the mobile app.\nThank you for helping improve public services.',
+      pt_PT: 'Manifestação registada com sucesso.\n\nCategoria: {{1}}\nReferência: {{2}}\nData: {{3}}\n\nA sua manifestação será analisada pela instituição responsável.\nPode acompanhar o estado no portal do cidadão ou na aplicação móvel.\nObrigado por contribuir para a melhoria dos serviços públicos.'
     },
     cityFuzzySearch: {
       question: {
@@ -218,13 +218,13 @@ module.exports = {
         hi_IN: '*{{complaintType}}*\n\nशिकायत संख्या: {{complaintNumber}}\nदायर तिथि: {{filedDate}}\nस्थिति: *{{complaintStatus}}*'
       },
       closingStatement: {
-        en_IN: '\n\n👉 To go back to the main menu, type and send *voltar*.',
-        hi_IN: '\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *voltar*।'
+        en_IN: '\n\n👉 To start over, type and send *reiniciar*.',
+        hi_IN: '\n\n👉 फिर से शुरू करने के लिए, टाइप करें और भेजें *reiniciar*।'
       }
     },
     noRecords: {
-      en_IN: 'No complaint records were found for your account.\n\n👉 To go back to the main menu, type and send *voltar*.',
-      hi_IN: 'आपके खाते के लिए कोई शिकायत रिकॉर्ड नहीं मिला।\n\n👉 मुख्य मेनू पर वापस जाने के लिए, टाइप करें और भेजें *voltar*।'
+      en_IN: 'No complaint records were found for your account.\n\n👉 To start over, type and send *reiniciar*.',
+      hi_IN: 'आपके खाते के लिए कोई शिकायत रिकॉर्ड नहीं मिला।\n\n👉 फिर से शुरू करने के लिए, टाइप करें और भेजें *reiniciar*।'
     }
   }
 };
