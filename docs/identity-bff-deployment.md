@@ -140,7 +140,20 @@ curl -fsS https://example.org/auth/realms/digit/.well-known/openid-configuration
 curl -fsS https://example.org/identity/v1/auth-methods
 docker exec identity-bff wget -qO- http://127.0.0.1:3000/readyz
 docker compose --profile keycloak ps keycloak identity-bff
+
+# Keycloak's privileged surface must NOT be reachable: both return 404.
+curl -s -o /dev/null -w '%{http_code}\n' https://example.org/auth/admin/
+curl -s -o /dev/null -w '%{http_code}\n' \
+  https://example.org/auth/realms/master/protocol/openid-connect/token
 ```
+
+Only the login surface is published through Kong: `/auth/realms/<realm>/...`
+and `/auth/resources/...`. `/auth/admin` (admin console and Admin REST API) and
+`/auth/realms/master` are terminated with 404 at the gateway — see the
+`keycloak-admin-denied` service in `local-setup/kong/kong.yml`. Operators who
+need the console reach Keycloak on its loopback-bound port (`18180`), typically
+over an SSH tunnel; the BFF and the Organizations configurator use the private
+`keycloak:8180` address and are unaffected.
 
 `/readyz` checks Redis, Keycloak JWKS, MDMS, and egov-user. PGR is deliberately
 not a readiness dependency.

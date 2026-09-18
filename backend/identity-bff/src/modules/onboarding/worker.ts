@@ -28,6 +28,11 @@ import { ensureTenantFoundation } from "./tenant-foundation.js";
  * Application schemas, masters, workflows, boundaries and localization are
  * deliberately not provisioned here. The new tenant is identity-ready but
  * otherwise empty until the management/configuration flow fills it.
+ *
+ * Idempotent means resumable, not adoptive: TENANT_FOUNDATION and ORGANIZATION
+ * accept an already-existing tenant or Organization only when the replayed
+ * operation reports that step as already completed. A signup that lands on
+ * somebody else's tenant fails terminally instead of taking it over.
  */
 
 interface ClaimedOperation {
@@ -100,12 +105,15 @@ async function settle(path: "_complete" | "_fail", body: Record<string, unknown>
   if (!response.ok) throw new Error(`PGR ${path} returned ${response.status}`);
 }
 
-async function createTenantFoundation(signup: ClaimedOperation["Signup"]): Promise<void> {
+async function createTenantFoundation(
+  signup: ClaimedOperation["Signup"],
+  adoptExisting: boolean,
+): Promise<void> {
   if (!digitProvisionerConfigured()) {
     throw new ProvisioningFailure("TENANT_FOUNDATION_UNAVAILABLE",
       "The tenant foundation provisioner is not configured", true);
   }
-  await ensureTenantFoundation(signup);
+  await ensureTenantFoundation(signup, { adoptExisting });
   clearTenantCaches();
 }
 
@@ -146,11 +154,21 @@ export async function processOnboardingOperation(claimed: ClaimedOperation): Pro
       throw new ProvisioningFailure("IDENTITY_ISSUER_MISMATCH", "Signup owner is from another issuer", false);
     }
     let organizationId = "";
-    await run("TENANT_FOUNDATION", () => createTenantFoundation(signup));
+    // A tenant or Organization that already exists is only ever legitimate on a
+    // resume: PGR replays the operation with the steps this signup already
+    // finished. Without that evidence, an existing tenant or Organization means
+    // the signup collided with someone else's, and provisioning it would grant
+    // the signer ONBOARDING_TENANT_ADMIN_ROLES (SUPERUSER, ACCOUNT_ADMIN,
+    // MDMS_ADMIN) over their workspace. Fail terminally instead. PGR's
+    // pre-flight identifier check stays the first line of defence; this is the
+    // one that runs at the moment of writing. (Dhruv review, #2088.)
+    await run("TENANT_FOUNDATION",
+      () => createTenantFoundation(signup, completed.has("TENANT_FOUNDATION")));
     await run("ORGANIZATION", async () => {
       organizationId = (await ensureOrganization({
         tenantId: signup.requestedTenantId, alias: signup.organizationAlias, name: signup.accountName,
         accountCode: signup.accountCode, urlSlug: signup.organizationAlias,
+        adoptExisting: completed.has("ORGANIZATION"),
       })).id;
       clearTenantCaches();
     });

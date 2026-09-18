@@ -1051,7 +1051,52 @@ services:
       minute: 60
       policy: local
       limit_by: ip
-# Keycloak identity provider (login, registration, admin console)
+# Keycloak privileged surface — DENIED at the edge (Dhruv review, #2088).
+#
+# `keycloak-route` below fronts a Keycloak that listens at `/`, and `/auth/` is
+# token-exempt in `is_public_infra`, so without these two routes every Keycloak
+# path is public: `/auth/admin/` served the admin console AND the Admin REST
+# API, and `/auth/realms/master/...` served the master realm's token endpoint —
+# on a box where `KC_BOOTSTRAP_ADMIN_PASSWORD` falls back to `admin`, that is a
+# full takeover from the internet. Host nginx forwards `location /` to Kong, so
+# this is the single enforcement point for both the Kong and nginx front doors.
+#
+# Only the login surface stays public: `/auth/realms/<tenant realm>/...` (OIDC
+# discovery, authorize, token, certs, login/registration forms, account console)
+# and `/auth/resources/...` (login theme assets).
+#
+# Nothing in this repository reaches the admin surface through Kong: the BFF,
+# the Organizations configurator, Gatus and the integration tests all address
+# Keycloak directly on `keycloak:8180` / `localhost:18180` over the private
+# network. Operators who need the console tunnel to that published port.
+#
+# MUST stay ABOVE `keycloak-service`: these are longer path prefixes than
+# `/auth`, and Kong's router matches the longest prefix first, so they win.
+- name: keycloak-admin-denied
+  url: http://localhost:9999
+  tags:
+  - identity
+  - keycloak
+  routes:
+  - name: keycloak-admin-deny-route
+    paths:
+    # Admin console UI and the Admin REST API (`/admin/realms/...`).
+    - /auth/admin
+    strip_path: false
+  - name: keycloak-master-realm-deny-route
+    paths:
+    # The master realm: its token endpoint mints admin tokens.
+    - /auth/realms/master
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      # 404, not 403: do not confirm to an unauthenticated caller that a
+      # Keycloak admin surface exists behind this gateway.
+      status_code: 404
+      content_type: application/json
+      body: '{"error":"not_found"}'
+# Keycloak identity provider (login and registration only — see the deny routes above)
 - name: keycloak-service
   url: http://keycloak:8180
   tags:

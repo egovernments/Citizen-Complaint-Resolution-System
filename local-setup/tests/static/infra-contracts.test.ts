@@ -109,6 +109,62 @@ describe('Kong declarative route syntax', () => {
   });
 });
 
+describe("Keycloak's privileged surface is not published", () => {
+  /**
+   * Incident: #2088 review (Dhruv). `keycloak-route` fronts a Keycloak that
+   * listens at `/` with `strip_path: true`, and `/auth/` is token-exempt in the
+   * global `is_public_infra` gate — so `https://<domain>/auth/admin/` served the
+   * admin console AND the Admin REST API, and `/auth/realms/master/...` served
+   * the master realm's token endpoint. With `KC_BOOTSTRAP_ADMIN_PASSWORD`
+   * falling back to `admin`, that is a full Keycloak takeover from the internet.
+   * Host nginx forwards `location /` to Kong, so kong.yml is the single
+   * enforcement point for both front doors.
+   */
+  // Kong services start at column 0 with `- name:`; slice the file into them.
+  const serviceBlocks = (() => {
+    const headers = [...KONG.matchAll(/^- name: (\S+)$/gm)];
+    return headers.map((header, index) => ({
+      name: header[1],
+      start: header.index as number,
+      body: KONG.slice(header.index, headers[index + 1]?.index ?? KONG.length),
+    }));
+  })();
+  const service = (name: string) => {
+    const found = serviceBlocks.find((block) => block.name === name);
+    if (!found) throw new Error(`kong.yml has no service named ${name}`);
+    return found;
+  };
+  const routePaths = (body: string) =>
+    [...body.matchAll(/^\s{4}- (\S+)$/gm)].map((match) => match[1]);
+
+  test('the admin console and the master realm are terminated at the gateway', () => {
+    const denied = service('keycloak-admin-denied');
+    expect(routePaths(denied.body).sort()).toEqual(['/auth/admin', '/auth/realms/master']);
+    expect(denied.body).toMatch(/- name: request-termination/);
+    expect(denied.body).toMatch(/status_code: 404/);
+  });
+
+  test('the deny routes outrank the /auth catch-all', () => {
+    // Kong matches the LONGEST prefix first, and a deny route declared after
+    // the service it guards is easy to lose in a later edit. Both hold here.
+    const denied = service('keycloak-admin-denied');
+    expect(denied.start).toBeLessThan(service('keycloak-service').start);
+    for (const denyPath of routePaths(denied.body)) {
+      expect(denyPath.length).toBeGreaterThan('/auth'.length);
+      expect(denyPath.startsWith('/auth/')).toBe(true);
+    }
+  });
+
+  test('no other route republishes anything under /auth', () => {
+    const otherAuthPaths = serviceBlocks
+      .filter((block) => block.name !== 'keycloak-admin-denied')
+      .flatMap((block) => routePaths(block.body))
+      .filter((routePath) => routePath === '/auth' || routePath.startsWith('/auth/'));
+    // Exactly one: the login/registration proxy the deny routes sit in front of.
+    expect(otherAuthPaths).toEqual(['/auth']);
+  });
+});
+
 describe('compose invocation discipline', () => {
   /**
    * Incident: bomet egov-user rollback (2026-06-09). A container was

@@ -53,9 +53,16 @@ async function kcUser(username: string): Promise<string> {
   return response.headers.get("location")!.split("/").pop()!;
 }
 
-function operation(id: string, subject: string, slug: string, mobileNumber?: string, countryCode?: string) {
+function operation(
+  id: string,
+  subject: string,
+  slug: string,
+  mobileNumber?: string,
+  countryCode?: string,
+  completedSteps: string[] = [],
+) {
   return {
-    Operation: { id, status: "RUNNING", completedSteps: [] },
+    Operation: { id, status: "RUNNING", completedSteps },
     leaseToken: `lease-${id}`,
     Signup: {
       id: `signup-${id}`, ownerIssuer: getIssuer(), ownerSubject: subject,
@@ -151,11 +158,47 @@ describe("onboarding worker", () => {
     ]);
     expect(digit.workflows.has("riverside")).toBe(false);
 
-    // Replaying the same operation (e.g. after a lost lease) is idempotent.
-    pgr.queue.push(operation("op-1b", tenantAdmin, "riverside", "9812345678"));
+    // Resuming the SAME operation (e.g. after a lost lease) is idempotent: PGR
+    // replays it carrying the steps it already finished, which is the only
+    // evidence that lets the worker adopt the tenant and Organization it finds.
+    pgr.queue.push(operation("op-1b", tenantAdmin, "riverside", "9812345678", undefined,
+      ["TENANT_FOUNDATION", "ORGANIZATION"]));
     await runOnboardingWorkerOnce();
     expect(pgr.settled["op-1b"].outcome).toBe("_complete");
     expect([...digit.accounts.values()].filter((candidate) => candidate.name === "Tenant Admin")).toHaveLength(1);
+  });
+
+  // Dhruv review, #2088: a fresh signup that lands on an existing tenant or
+  // Organization must not be provisioned — completing it would grant the signer
+  // SUPERUSER/ACCOUNT_ADMIN/MDMS_ADMIN over somebody else's workspace.
+  it("refuses a fresh signup for a tenant that already exists", async () => {
+    const intruder = await kcUser("tenant-admin-intruder");
+    pgr.queue.push(operation("op-4", intruder, "riverside", "9812345670"));
+
+    await runOnboardingWorkerOnce();
+
+    expect(pgr.settled["op-4"]).toMatchObject({
+      outcome: "_fail", retryable: false, errorCode: "DIGIT_VALIDATION_FAILED",
+      currentStep: "TENANT_FOUNDATION", completedSteps: [],
+    });
+    // No Organization membership, no roles, no DIGIT account for the intruder.
+    expect([...digit.accounts.values()].filter((candidate) => candidate.tenantId === "riverside"))
+      .toHaveLength(1);
+  });
+
+  it("refuses a fresh signup whose Organization already maps to the tenant", async () => {
+    const intruder = await kcUser("tenant-admin-squatter");
+    // TENANT_FOUNDATION is recorded as done, so only the Organization guard is
+    // exercised: the Organization from op-1 still maps to `riverside`.
+    pgr.queue.push(operation("op-5", intruder, "riverside", "9812345671", undefined,
+      ["TENANT_FOUNDATION"]));
+
+    await runOnboardingWorkerOnce();
+
+    expect(pgr.settled["op-5"]).toMatchObject({
+      outcome: "_fail", retryable: false, errorCode: "ORGANIZATION_CONFLICT",
+      currentStep: "ORGANIZATION", completedSteps: ["TENANT_FOUNDATION"],
+    });
   });
 
   it("reports a terminal failure when the tenant-admin account cannot be created", async () => {

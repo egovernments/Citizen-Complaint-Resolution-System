@@ -192,8 +192,24 @@ async function ensureTenantAdminRoles(token: string, target: string): Promise<vo
   throw new DigitUnavailableError("DIGIT accepted tenant roles but they are not visible yet");
 }
 
-async function ensureTenantRecord(token: string, signup: TenantFoundationSignup): Promise<void> {
-  if (await isActiveDigitTenant(signup.requestedTenantId)) return;
+async function ensureTenantRecord(
+  token: string,
+  signup: TenantFoundationSignup,
+  adoptExisting: boolean,
+): Promise<void> {
+  if (await isActiveDigitTenant(signup.requestedTenantId)) {
+    // Only a resume of THIS operation may find the tenant already there — it
+    // created it on an earlier attempt. Any other signup that lands on an
+    // existing tenant is a collision the caller's uniqueness check missed, and
+    // completing it would hand the signer tenant-admin roles on somebody
+    // else's tenant. Terminal, never retryable. (Dhruv review, #2088.)
+    if (!adoptExisting) {
+      throw new DigitUnavailableError(
+        `DIGIT tenant ${signup.requestedTenantId} already exists`, 409,
+      );
+    }
+    return;
+  }
   const tenantId = signup.requestedTenantId;
   try {
     await post(`${config.digitMdmsCreateUrl.replace(/\/$/, "")}/tenant.tenants`, {
@@ -236,11 +252,17 @@ async function ensureEncryptionKey(signup: TenantFoundationSignup): Promise<void
 /**
  * Creates only what is required for an independent root tenant to appear in
  * identity and own an egov-user account. Application configuration is deferred.
+ *
+ * `adoptExisting` must be true ONLY when the caller already knows this same
+ * operation created the tenant (its TENANT_FOUNDATION step is complete).
  */
-export async function ensureTenantFoundation(signup: TenantFoundationSignup): Promise<void> {
+export async function ensureTenantFoundation(
+  signup: TenantFoundationSignup,
+  options: { adoptExisting: boolean },
+): Promise<void> {
   await withDigitProvisioner(async (token) => {
     await ensureTenantSchema(token, signup.requestedTenantId);
-    await ensureTenantRecord(token, signup);
+    await ensureTenantRecord(token, signup, options.adoptExisting);
     await ensureTenantAdminRoles(token, signup.requestedTenantId);
   });
   await ensureEncryptionKey(signup);

@@ -264,19 +264,32 @@ export async function listOrganizationMappings(): Promise<OrganizationMapping[]>
   });
 }
 
+/**
+ * `adoptExisting` decides what happens when an Organization is already mapped
+ * to the tenant. The control plane's idempotent `_ensure` passes true. Signup
+ * provisioning passes true only when it already created this Organization on
+ * an earlier attempt; otherwise an existing Organization is a collision, and
+ * adopting it would grant the signer tenant-admin roles over somebody else's
+ * Organization. (Dhruv review, #2088.)
+ */
 export async function ensureOrganization(input: {
   tenantId: string;
   alias: string;
   name: string;
   accountCode?: string;
   urlSlug?: string;
+  adoptExisting: boolean;
 }): Promise<{ id: string; tenantId: string; alias: string; name: string }> {
   let matches = await organizationsForTenant(input.tenantId);
   if (matches.length > 1) {
     throw new IdentityAdminError("Multiple Organizations map to this tenant", 409);
   }
+  if (matches[0] && !input.adoptExisting) {
+    throw new IdentityAdminError("An Organization already maps to this tenant", 409);
+  }
 
   let organization = matches[0];
+  const adopted = Boolean(organization);
   if (!organization) {
     const response = await request("/organizations", {
       method: "POST",
@@ -310,8 +323,14 @@ export async function ensureOrganization(input: {
       409,
     );
   }
+  // A disabled Organization was taken out of service deliberately. Silently
+  // re-enabling it here would let an ensure call resurrect a revoked tenant's
+  // identity; an operator re-enables it in Keycloak. (Dhruv review, #2088.)
+  if (adopted && organization.enabled === false) {
+    throw new IdentityAdminError("The Organization mapped to this tenant is disabled", 409);
+  }
 
-  if (organization.name !== input.name || organization.enabled === false ||
+  if (organization.name !== input.name ||
       (input.accountCode && attribute(organization, "digit.accountCode") !== input.accountCode) ||
       (input.urlSlug && attribute(organization, "digit.urlSlug") !== input.urlSlug)) {
     await request(`/organizations/${encodeURIComponent(organization.id)}`, {
@@ -320,7 +339,9 @@ export async function ensureOrganization(input: {
         ...organization,
         name: input.name,
         alias: input.alias,
-        enabled: true,
+        // Never a re-enable: the guard above rejects a disabled Organization,
+        // and a just-created one carries no `enabled` field yet.
+        enabled: organization.enabled !== false,
         attributes: {
           ...organization.attributes,
           "digit.rootTenantId": [input.tenantId],

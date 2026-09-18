@@ -83,7 +83,9 @@ export function registerControlPlaneRoutes(app: express.Application): void {
       if (!await isActiveDigitTenant(tenantId)) {
         throw new IdentityAdminError("The DIGIT tenant foundation does not exist yet", 409);
       }
-      const organization = await ensureOrganization({ tenantId, alias, name });
+      // Control-plane _ensure is an operator-driven idempotent upsert: an
+      // Organization that already maps to the tenant is the expected steady state.
+      const organization = await ensureOrganization({ tenantId, alias, name, adoptExisting: true });
       clearTenantCaches();
       return res.json({ organization });
     } catch (error) {
