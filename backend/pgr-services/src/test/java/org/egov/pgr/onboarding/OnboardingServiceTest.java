@@ -20,6 +20,7 @@ import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,8 +40,7 @@ public class OnboardingServiceTest {
     @Test
     public void createDerivesServerOwnedIdentifiersAndKeepsMetadataInDraft() {
         when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
-        when(repository.insertSignup(any(OnboardingSignup.class), eq("create-1")))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.insertSignup(any(OnboardingSignup.class), eq("create-1"))).thenReturn(true);
         Map<String, Object> metadata = tenantAdminMetadata("+254 712 345 678");
         Map<String, Object> request = completeRequest(metadata);
         request.put("organizationAlias", "client-must-not-own-this");
@@ -125,6 +125,146 @@ public class OnboardingServiceTest {
 
         assertThrows(CustomException.class, () -> service.submit(
                 principal, Collections.singletonMap("id", signupId.toString()), "submit-2"));
+    }
+
+    // --- review #2024: findings 1-5 ------------------------------------------
+
+    @Test
+    public void concurrentCreateReturnsTheWinningDraftInsteadOfFailing() {
+        UUID winnerId = UUID.randomUUID();
+        when(repository.findSignupByOwner("https://issuer", "subject-1"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(signup(winnerId)));
+        when(repository.insertSignup(any(OnboardingSignup.class), eq("create-6"))).thenReturn(false);
+
+        OnboardingSignup signup = service.create(
+                principal, completeRequest(tenantAdminMetadata("712345678")), "create-6");
+
+        assertEquals(winnerId, signup.getId());
+    }
+
+    @Test
+    public void replayedSubmitReturnsItsOperationBeforeAnyAvailabilityCheck() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        signup.setStatus("PROVISIONING");
+        OnboardingOperation operation = OnboardingOperation.builder()
+                .id(UUID.randomUUID()).signupId(signupId).status("RUNNING").attempt(1).build();
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1")).thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(operation));
+
+        assertEquals(Optional.of(operation), service.replayOperation(
+                principal, Collections.singletonMap("id", signupId.toString())));
+    }
+
+    @Test
+    public void aReopenedDraftIsNotAReplaySoItsIdentifiersAreCheckedAgain() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingOperation failed = OnboardingOperation.builder()
+                .id(UUID.randomUUID()).signupId(signupId).status("TERMINAL_FAILED").attempt(1).build();
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1"))
+                .thenReturn(Optional.of(signup(signupId)));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(failed));
+
+        assertEquals(Optional.empty(), service.replayOperation(
+                principal, Collections.singletonMap("id", signupId.toString())));
+    }
+
+    @Test
+    public void submittingAReopenedDraftReusesItsOperationRatherThanLockingOut() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        OnboardingOperation failed = OnboardingOperation.builder()
+                .id(UUID.randomUUID()).signupId(signupId).status("TERMINAL_FAILED").attempt(1).build();
+        when(repository.findOwnedSignupForUpdate(signupId, "https://issuer", "subject-1"))
+                .thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(failed));
+        when(repository.resubmit(eq(failed), eq("submit-3"), anyLong())).thenReturn(failed);
+
+        assertEquals(failed, service.submit(
+                principal, Collections.singletonMap("id", signupId.toString()), "submit-3"));
+
+        verify(repository).resubmit(eq(failed), eq("submit-3"), anyLong());
+        verify(repository, never()).submit(any(), any(), anyLong());
+    }
+
+    @Test
+    public void aReopenedDraftCannotMoveIdentifiersAlreadyMaterializedByTheWorker() {
+        UUID signupId = UUID.randomUUID();
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1"))
+                .thenReturn(Optional.of(signup(signupId)));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(
+                OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signupId)
+                        .status("TERMINAL_FAILED").attempt(1).build()));
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("id", signupId.toString());
+        values.put("urlSlug", "somewhere-else");
+
+        CustomException exception = assertThrows(CustomException.class,
+                () -> service.update(principal, values));
+        assertEquals("ONBOARDING_PROVISIONED_FIELD_LOCKED", exception.getCode());
+    }
+
+    @Test
+    public void aReopenedDraftStillTakesTheCorrectionItWasHandedBackFor() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1")).thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.of(
+                OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signupId)
+                        .status("TERMINAL_FAILED").attempt(1).build()));
+        when(repository.updateSignup(signup)).thenReturn(signup);
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("id", signupId.toString());
+        values.put("tenantMetadata", tenantAdminMetadata("722000111"));
+
+        assertEquals("722000111", tenantAdmin(service.update(principal, values)).get("mobileNumber"));
+    }
+
+    @Test
+    public void rejectsAFixedLineOfferedAsTheTenantAdminMobile() {
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+
+        // A valid Nairobi landline: isValidNumberForRegion passes it, egov-user does not.
+        assertThrows(CustomException.class, () -> service.create(
+                principal, completeRequest(tenantAdminMetadata("020 2223333")), "create-7"));
+    }
+
+    @Test
+    public void aFreeSlugWhoseDerivedTenantIdIsTakenIsNotAvailable() {
+        when(repository.identifierAvailable("URL_SLUG", "bomet-2", null)).thenReturn(true);
+        when(repository.identifierAvailable("TENANT_ID", "bomet", null)).thenReturn(false);
+
+        Map<String, Object> result = service.checkIdentifier(principal, identifierRequest("URL_SLUG", "bomet-2"));
+
+        assertEquals(false, result.get("available"));
+        assertEquals("TENANT_ID", result.get("conflictingType"));
+        assertEquals("bomet", result.get("derivedTenantId"));
+    }
+
+    @Test
+    public void aFreeSlugWithAFreeDerivedTenantIdStaysAvailable() {
+        when(repository.identifierAvailable("URL_SLUG", "bomet-county", null)).thenReturn(true);
+        when(repository.identifierAvailable("TENANT_ID", "bometcounty", null)).thenReturn(true);
+
+        Map<String, Object> result = service.checkIdentifier(
+                principal, identifierRequest("URL_SLUG", "bomet-county"));
+
+        assertEquals(true, result.get("available"));
+        assertEquals("bometcounty", result.get("derivedTenantId"));
+    }
+
+    @Test
+    public void aSlugThatCannotDeriveATenantIdIsRejectedByCheckNotBySubmit() {
+        assertThrows(CustomException.class, () -> service.checkIdentifier(
+                principal, identifierRequest("URL_SLUG", "a-123")));
+    }
+
+    private Map<String, Object> identifierRequest(String type, String value) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("type", type);
+        request.put("value", value);
+        return request;
     }
 
     private Map<String, Object> completeRequest(Map<String, Object> metadata) {

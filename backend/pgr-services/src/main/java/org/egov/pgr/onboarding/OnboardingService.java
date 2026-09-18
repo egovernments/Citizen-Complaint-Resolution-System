@@ -2,6 +2,7 @@ package org.egov.pgr.onboarding;
 
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
+import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType;
 import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -30,6 +33,12 @@ public class OnboardingService {
     // Normal onboarding creates an independent root. Dotted ids are reserved
     // for a separate, explicit subtenant operation and are never derived here.
     private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,63}$");
+    // Both are the same user-typed value, and both derive the same tenant id.
+    private static final Set<String> DERIVES_TENANT_ID = Set.of("URL_SLUG", "ORGANIZATION_ALIAS");
+    // Mobile lines only. Fixed-line, toll-free and VoIP numbers are valid for a
+    // region but egov-user rejects them at DIGIT_ACCOUNT, well after submit.
+    private static final Set<PhoneNumberType> MOBILE_TYPES =
+            Set.of(PhoneNumberType.MOBILE, PhoneNumberType.FIXED_LINE_OR_MOBILE);
 
     private final OnboardingRepository repository;
 
@@ -50,7 +59,12 @@ public class OnboardingService {
                 .id(UUID.randomUUID()).ownerIssuer(principal.getIssuer()).ownerSubject(principal.getSubject())
                 .status("DRAFT").version(1).createdAt(now).updatedAt(now).build();
         apply(signup, values);
-        return repository.insertSignup(signup, idempotencyKey.trim());
+        // A double-click races the read above. The insert yields to the winner
+        // instead of raising, so the loser returns the same draft rather than a 500.
+        if (repository.insertSignup(signup, idempotencyKey.trim())) return signup;
+        return repository.findSignupByOwner(principal.getIssuer(), principal.getSubject())
+                .orElseThrow(() -> new CustomException(
+                        "ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found"));
     }
 
     @Transactional
@@ -60,7 +74,14 @@ public class OnboardingService {
         if (!"DRAFT".equals(signup.getStatus())) {
             throw new CustomException("ONBOARDING_DRAFT_LOCKED", "Only a draft signup can be edited");
         }
-        apply(signup, values);
+        if (repository.findOperationBySignup(id).isPresent()) {
+            // A reopened draft (see OnboardingWorkerService) already has a tenant and
+            // organization materialized under these names. Only the field the worker
+            // rejected may change; anything else would orphan that provisioned state.
+            applyKeepingProvisionedIdentifiers(signup, values);
+        } else {
+            apply(signup, values);
+        }
         signup.setUpdatedAt(System.currentTimeMillis());
         return repository.updateSignup(signup);
     }
@@ -83,7 +104,20 @@ public class OnboardingService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", type);
         result.put("value", value);
-        result.put("available", repository.identifierAvailable(type, value, signupId));
+        boolean available = repository.identifierAvailable(type, value, signupId);
+        result.put("available", available);
+        if (!available) result.put("conflictingType", type);
+        // "bomet-county" and "bometcounty" derive the same tenant id, and so do
+        // "bomet-2" and "bomet-3". Answer for the derived id here, or submit fails
+        // on TENANT_ID: a field the tenant admin never typed.
+        if (DERIVES_TENANT_ID.contains(type)) {
+            String derived = tenantSegment(value);
+            result.put("derivedTenantId", derived);
+            if (available && !repository.identifierAvailable("TENANT_ID", derived, signupId)) {
+                result.put("available", false);
+                result.put("conflictingType", "TENANT_ID");
+            }
+        }
         return result;
     }
 
@@ -97,7 +131,9 @@ public class OnboardingService {
                 .orElseThrow(() -> new CustomException(
                         "ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found"));
         OnboardingOperation existing = repository.findOperationBySignup(signup.getId()).orElse(null);
-        if (existing != null) return existing;
+        // The replay still comes back before the DRAFT guard: a resumed signup keeps
+        // its retry action (#2078). Only a reopened draft falls through to re-submit.
+        if (existing != null && !isReopened(signup, existing)) return existing;
         if (!"DRAFT".equals(signup.getStatus())) {
             throw new CustomException("ONBOARDING_DRAFT_LOCKED", "Signup cannot be submitted in its current state");
         }
@@ -108,7 +144,25 @@ public class OnboardingService {
         repository.reserveIdentifier("TENANT_ID", signup.getRequestedTenantId(), signup.getId(), now);
         repository.reserveIdentifier("ORGANIZATION_ALIAS", signup.getOrganizationAlias(), signup.getId(), now);
         repository.reserveIdentifier("URL_SLUG", signup.getUrlSlug(), signup.getId(), now);
-        return repository.submit(signup, idempotencyKey.trim(), now);
+        return existing == null
+                ? repository.submit(signup, idempotencyKey.trim(), now)
+                : repository.resubmit(existing, idempotencyKey.trim(), now);
+    }
+
+    /**
+     * The operation a replayed {@code _submit} returns unchanged. The controller asks
+     * first so a retry after a timeout answers 202 with its operation instead of
+     * failing the availability loop on identifiers the worker has already materialized.
+     */
+    public Optional<OnboardingOperation> replayOperation(OnboardingPrincipal principal, Map<String, Object> values) {
+        OnboardingSignup signup = ownedSignup(requiredUuid(values.get("id"), "Signup.id"), principal);
+        return repository.findOperationBySignup(signup.getId())
+                .filter(operation -> !isReopened(signup, operation));
+    }
+
+    /** A draft handed back to the tenant admin to correct after a user-correctable failure. */
+    private boolean isReopened(OnboardingSignup signup, OnboardingOperation operation) {
+        return "DRAFT".equals(signup.getStatus()) && "TERMINAL_FAILED".equals(operation.getStatus());
     }
 
     public List<OnboardingOperation> searchOperations(OnboardingPrincipal principal, Map<String, Object> values) {
@@ -191,6 +245,21 @@ public class OnboardingService {
                 : tenantSegment(signup.getUrlSlug()));
     }
 
+    private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values) {
+        String accountName = signup.getAccountName();
+        String accountCode = signup.getAccountCode();
+        String urlSlug = signup.getUrlSlug();
+        String countryCode = signup.getCountryCode();
+        apply(signup, values);
+        if (!Objects.equals(accountName, signup.getAccountName())
+                || !Objects.equals(accountCode, signup.getAccountCode())
+                || !Objects.equals(urlSlug, signup.getUrlSlug())
+                || !Objects.equals(countryCode, signup.getCountryCode())) {
+            throw new CustomException("ONBOARDING_PROVISIONED_FIELD_LOCKED",
+                    "Provisioned identifiers cannot change after a failed submission");
+        }
+    }
+
     /** The slug's letters only: DIGIT tenant codes cannot carry digits or hyphens. */
     private static String tenantSegment(String slug) {
         return slug.replaceAll("[^a-z]", "");
@@ -248,7 +317,8 @@ public class OnboardingService {
         String region = requiredString(countryCode, "Signup.countryCode").toUpperCase(Locale.ROOT);
         try {
             PhoneNumber number = PHONE_NUMBERS.parse(mobile, region);
-            if (!PHONE_NUMBERS.isValidNumberForRegion(number, region)) {
+            if (!PHONE_NUMBERS.isValidNumberForRegion(number, region)
+                    || !MOBILE_TYPES.contains(PHONE_NUMBERS.getNumberType(number))) {
                 invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
             }
             String dialCode = "+" + number.getCountryCode();
@@ -284,7 +354,11 @@ public class OnboardingService {
             case "ORGANIZATION_ALIAS":
             case "URL_SLUG":
                 value = value.toLowerCase(Locale.ROOT);
-                if (!SLUG.matcher(value).matches()) invalid("Identifier.value");
+                // Same bar as apply(): a slug that cannot derive a tenant id is not a
+                // free slug, it is an unusable one. Say so here rather than at submit.
+                if (!SLUG.matcher(value).matches() || tenantSegment(value).length() < 2) {
+                    invalid("Identifier.value");
+                }
                 return value;
             default:
                 throw new CustomException("ONBOARDING_IDENTIFIER_TYPE_INVALID", "Unsupported identifier type");

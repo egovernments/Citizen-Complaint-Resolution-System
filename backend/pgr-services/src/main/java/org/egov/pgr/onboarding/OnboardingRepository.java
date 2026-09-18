@@ -54,19 +54,24 @@ public class OnboardingRepository {
                 signupMapper(), id, issuer, subject));
     }
 
-    public OnboardingSignup insertSignup(OnboardingSignup signup, String idempotencyKey) {
-        jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_signup " +
+    /**
+     * Inserts the draft, or reports false when a concurrent create by the same owner
+     * won. DO NOTHING yields to that winner rather than aborting the transaction, so
+     * the caller can still read the surviving row back.
+     */
+    public boolean insertSignup(OnboardingSignup signup, String idempotencyKey) {
+        return jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_signup " +
                         "(id, owner_issuer, owner_subject, status, account_name, account_code, organization_alias, " +
                         "requested_tenant_id, url_slug, country_code, languages, time_zone, financial_year_policy, " +
                         "accepted_terms_version, tenant_metadata, idempotency_key, version, created_at, updated_at) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)",
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?, ?, ?, ?) " +
+                        "ON CONFLICT DO NOTHING",
                 signup.getId(), signup.getOwnerIssuer(), signup.getOwnerSubject(), signup.getStatus(),
                 signup.getAccountName(), signup.getAccountCode(), signup.getOrganizationAlias(),
                 signup.getRequestedTenantId(), signup.getUrlSlug(), signup.getCountryCode(),
                 json(signup.getLanguages()), signup.getTimeZone(), signup.getFinancialYearPolicy(),
                 signup.getAcceptedTermsVersion(), json(signup.getTenantMetadata()), idempotencyKey, signup.getVersion(),
-                signup.getCreatedAt(), signup.getUpdatedAt());
-        return signup;
+                signup.getCreatedAt(), signup.getUpdatedAt()) == 1;
     }
 
     public OnboardingSignup updateSignup(OnboardingSignup signup) {
@@ -122,6 +127,29 @@ public class OnboardingRepository {
                         "VALUES (?, ?, ?, ?, '[]'::jsonb, ?, ?, ?, ?)",
                 operation.getId(), operation.getSignupId(), operation.getStatus(), operation.getCurrentStep(),
                 operation.getAttempt(), idempotencyKey, now, now);
+        return operation;
+    }
+
+    /**
+     * Re-runs the one operation a signup is allowed (uq_pgr_onboarding_operation_signup)
+     * after a user-correctable terminal failure. completed_steps and current_step stay
+     * put so the worker resumes rather than redoing materialized steps.
+     */
+    public OnboardingOperation resubmit(OnboardingOperation operation, String idempotencyKey, long now) {
+        jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET status = 'PROVISIONING', version = version + 1, " +
+                "updated_at = ? WHERE id = ? AND status = 'DRAFT'", now, operation.getSignupId());
+        int changed = jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET status = 'PENDING', " +
+                        "error_code = NULL, error_message = NULL, attempt = attempt + 1, " +
+                        "idempotency_key = ?, updated_at = ? WHERE id = ? AND status = 'TERMINAL_FAILED'",
+                idempotencyKey, now, operation.getId());
+        if (changed != 1) {
+            throw new CustomException("ONBOARDING_OPERATION_NOT_RETRYABLE", "The operation is not retryable");
+        }
+        operation.setStatus("PENDING");
+        operation.setErrorCode(null);
+        operation.setErrorMessage(null);
+        operation.setAttempt(operation.getAttempt() + 1);
+        operation.setUpdatedAt(now);
         return operation;
     }
 
@@ -188,6 +216,15 @@ public class OnboardingRepository {
                         "WHERE id = ? AND status = 'RUNNING' AND lease_token = ?",
                 status, json(completedSteps), currentStep, errorCode, errorMessage, now, operationId, leaseToken);
         return changed == 1;
+    }
+
+    /**
+     * Hands a signup back to its owner as a draft. Identifiers stay RESERVED: the
+     * worker may already have materialized a tenant or organization under them.
+     */
+    public void reopenSignup(UUID signupId, long now) {
+        jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET status = 'DRAFT', version = version + 1, " +
+                "updated_at = ? WHERE id = ? AND status = 'PROVISIONING'", now, signupId);
     }
 
     public void settleSignup(UUID signupId, String signupStatus, String identifierStatus, long now) {

@@ -16,10 +16,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -111,6 +114,48 @@ public class OnboardingApiControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.Operations[0].status").value("PENDING"));
         request("/v2/onboarding/operations/_retry", "{\"Operation\":{\"id\":\"" + operationId + "\"}}")
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.Operation.attempt").value(2));
+    }
+
+    // --- review #2024 ---------------------------------------------------------
+
+    @Test
+    public void aReplayedSubmitAnswersWithItsOperationInsteadOfIdentifierTaken() throws Exception {
+        UUID signupId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        OnboardingOperation operation = OnboardingOperation.builder()
+                .id(operationId).signupId(signupId).status("RUNNING").attempt(1).build();
+        OnboardingSignup signup = OnboardingSignup.builder()
+                .id(signupId).accountName("Bomet County").accountCode("BOMET")
+                .requestedTenantId("bometcounty").organizationAlias("bomet-county")
+                .urlSlug("bomet-county").status("PROVISIONING").build();
+        when(service.search(eq(principal), any())).thenReturn(Collections.singletonList(signup));
+        when(service.replayOperation(eq(principal), any())).thenReturn(Optional.of(operation));
+
+        mockMvc.perform(post("/v2/onboarding/signups/_submit")
+                        .header("Cookie", "digit_identity_session=session-1")
+                        .header("Idempotency-Key", "submit-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"Signup\":{\"id\":\"" + signupId + "\"}}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.Operation.id").value(operationId.toString()));
+
+        // The worker may already own this signup's tenant; asking the BFF would
+        // report the signup's own identifiers as taken and turn a replay into a 400.
+        verify(identitySessionClient, never()).identifierAvailable(any(), any());
+        verify(service, never()).submit(any(), any(), any());
+    }
+
+    @Test
+    public void aSlugIsUnavailableWhenTheBffAlreadyHasItsDerivedTenantId() throws Exception {
+        when(service.checkIdentifier(eq(principal), any())).thenReturn(Map.of(
+                "type", "URL_SLUG", "value", "bomet-2", "available", true, "derivedTenantId", "bomet"));
+        when(identitySessionClient.identifierAvailable("URL_SLUG", "bomet-2")).thenReturn(true);
+        when(identitySessionClient.identifierAvailable("TENANT_ID", "bomet")).thenReturn(false);
+
+        request("/v2/onboarding/identifiers/_check", "{\"Identifier\":{\"type\":\"URL_SLUG\",\"value\":\"bomet-2\"}}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.Identifier.available").value(false))
+                .andExpect(jsonPath("$.Identifier.conflictingType").value("TENANT_ID"));
     }
 
     private org.springframework.test.web.servlet.ResultActions request(String path, String body) throws Exception {

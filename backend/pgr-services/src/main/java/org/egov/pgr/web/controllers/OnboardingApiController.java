@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/v2/onboarding")
@@ -62,9 +63,18 @@ public class OnboardingApiController {
             @RequestBody Map<String, Object> request) {
         Map<String, Object> identifier = new LinkedHashMap<>(service.checkIdentifier(
                 principal(httpRequest), nested(request, "Identifier")));
-        if (Boolean.TRUE.equals(identifier.get("available"))) {
-            identifier.put("available", identitySessionClient.identifierAvailable(
-                    identifier.get("type").toString(), identifier.get("value").toString()));
+        String type = identifier.get("type").toString();
+        Object derivedTenantId = identifier.get("derivedTenantId");
+        if (Boolean.TRUE.equals(identifier.get("available"))
+                && !identitySessionClient.identifierAvailable(type, identifier.get("value").toString())) {
+            identifier.put("available", false);
+            identifier.put("conflictingType", type);
+        }
+        // A free slug whose derived tenant id is taken is not a free slug.
+        if (Boolean.TRUE.equals(identifier.get("available")) && derivedTenantId != null
+                && !identitySessionClient.identifierAvailable("TENANT_ID", derivedTenantId.toString())) {
+            identifier.put("available", false);
+            identifier.put("conflictingType", "TENANT_ID");
         }
         return ResponseEntity.ok(single("Identifier", identifier));
     }
@@ -81,6 +91,13 @@ public class OnboardingApiController {
             throw new CustomException("ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found");
         }
         OnboardingSignup signup = owned.get(0);
+        // A replayed submit must answer with its operation. By now the worker may have
+        // materialized the signup's own tenant or organization, and the loop below
+        // would report the signup's identifiers as taken by itself.
+        Optional<OnboardingOperation> replay = service.replayOperation(principal, signupRequest);
+        if (replay.isPresent()) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(single("Operation", replay.get()));
+        }
         Map<String, String> identifiers = new LinkedHashMap<>();
         identifiers.put("ORGANIZATION_NAME", OnboardingService.normalizeOrganizationName(
                 requiredIdentifier(signup.getAccountName(), "Signup.accountName")));

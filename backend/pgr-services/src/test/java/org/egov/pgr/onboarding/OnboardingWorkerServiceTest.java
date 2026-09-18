@@ -35,7 +35,7 @@ public class OnboardingWorkerServiceTest {
 
     @Before
     public void setUp() {
-        service = new OnboardingWorkerService(repository);
+        service = new OnboardingWorkerService(repository, "TENANT_ADMIN_ACCOUNT_REJECTED");
     }
 
     @Test
@@ -109,5 +109,38 @@ public class OnboardingWorkerServiceTest {
                 () -> service.complete(operationId, leaseToken, Collections.emptyList()));
         assertEquals("ONBOARDING_LEASE_LOST", error.getCode());
         verify(repository, never()).settleSignup(any(), any(), any(), anyLong());
+    }
+
+    // --- review #2024: finding 2 ---------------------------------------------
+
+    @Test
+    public void aUserCorrectableTerminalFailureHandsTheDraftBackInsteadOfLockingOut() {
+        OnboardingOperation operation = OnboardingOperation.builder()
+                .id(operationId).signupId(signupId).status("RUNNING").build();
+        when(repository.findOperation(operationId)).thenReturn(Optional.of(operation));
+        when(repository.finishOperation(eq(operationId), eq(leaseToken), eq("TERMINAL_FAILED"),
+                any(), any(), any(), any(), anyLong())).thenReturn(true);
+
+        service.fail(operationId, leaseToken, false, "TENANT_ADMIN_ACCOUNT_REJECTED",
+                "egov-user rejected the mobile number", "DIGIT_ACCOUNT",
+                Collections.singletonList("TENANT_FOUNDATION"));
+
+        verify(repository).reopenSignup(eq(signupId), anyLong());
+        verify(repository, never()).settleSignup(any(), any(), any(), anyLong());
+    }
+
+    @Test
+    public void anUnclassifiedTerminalFailureStillQuarantinesTheSignup() {
+        OnboardingOperation operation = OnboardingOperation.builder()
+                .id(operationId).signupId(signupId).status("RUNNING").build();
+        when(repository.findOperation(operationId)).thenReturn(Optional.of(operation));
+        when(repository.finishOperation(eq(operationId), eq(leaseToken), eq("TERMINAL_FAILED"),
+                any(), any(), any(), any(), anyLong())).thenReturn(true);
+
+        service.fail(operationId, leaseToken, false, "TENANT_FOUNDATION_CONFLICT",
+                "root tenant already exists", "TENANT_FOUNDATION", Collections.emptyList());
+
+        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), anyLong());
+        verify(repository, never()).reopenSignup(any(), anyLong());
     }
 }

@@ -1,6 +1,7 @@
 package org.egov.pgr.onboarding;
 
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -8,8 +9,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Lease contract for the external provisioning worker. PGR records progress and
@@ -21,9 +26,16 @@ public class OnboardingWorkerService {
     static final long MAX_LEASE_SECONDS = 900;
 
     private final OnboardingRepository repository;
+    private final Set<String> userCorrectableErrors;
 
-    public OnboardingWorkerService(OnboardingRepository repository) {
+    public OnboardingWorkerService(OnboardingRepository repository,
+                                   @Value("${pgr.onboarding.user-correctable-error-codes:TENANT_ADMIN_ACCOUNT_REJECTED}")
+                                   String userCorrectableErrors) {
         this.repository = repository;
+        this.userCorrectableErrors = Arrays.stream(userCorrectableErrors.split(","))
+                .map(code -> code.trim().toUpperCase(Locale.ROOT))
+                .filter(code -> !code.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Transactional
@@ -64,9 +76,18 @@ public class OnboardingWorkerService {
         OnboardingOperation operation = requireLease(operationId, leaseToken,
                 retryable ? "RETRYABLE_FAILED" : "TERMINAL_FAILED", completedSteps,
                 currentStep, code.length() > 128 ? code.substring(0, 128) : code, message, now);
+        if (retryable) return;
+        if (userCorrectableErrors.contains(code.toUpperCase(Locale.ROOT))) {
+            // The worker rejected the tenant admin's own input (a mobile number
+            // egov-user refuses, say). FAILED would be a dead end: update, submit and
+            // retry all refuse it and uq_pgr_onboarding_owner blocks a second signup.
+            // Hand the draft back instead so the owner can correct and re-submit.
+            repository.reopenSignup(operation.getSignupId(), now);
+            return;
+        }
         // Partial root/KC objects are deliberately quarantined. Releasing their
         // identifiers would let another signup collide with materialized state.
-        if (!retryable) repository.settleSignup(operation.getSignupId(), "FAILED", "RESERVED", now);
+        repository.settleSignup(operation.getSignupId(), "FAILED", "RESERVED", now);
     }
 
     private OnboardingOperation requireLease(UUID operationId, UUID leaseToken, String status, List<String> steps,
