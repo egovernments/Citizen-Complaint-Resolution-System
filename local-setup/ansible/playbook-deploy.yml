@@ -333,6 +333,43 @@
         - core_mobile_configs | default({}, true) | length > 0
         - _mobile_missing_keys | length > 0
 
+    # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
+    # route in front of token-exchange-svc, the per-tenant realm template and
+    # its `digit-ui` public client were all removed in favour of the Identity
+    # BFF at `/identity/v1`. Both frontends still resolve `auth_provider:
+    # keycloak` to that old path — digit-ui-esbuild through
+    # globalConfigs.tokenExchangeUrl (`/kc`) and digit-ui-v2 through its
+    # baked VITE_TOKEN_EXCHANGE_URL (`/token-exchange`) plus a realm named
+    # after state_tenant_id — so a tenant that sets it now gets 404s at login
+    # instead of SSO. The frontend cutover is a separate change; until it
+    # lands, refuse the combination rather than ship a login that cannot work.
+    # (Dhruv review, #2088.)
+    - name: "preflight — Keycloak UI login is unavailable until the frontend cutover"
+      vars:
+        _keycloak_login_surfaces: >-
+          {{ {'auth_provider': auth_provider | default(''),
+              'citizen_auth_provider': citizen_auth_provider | default(auth_provider | default('')),
+              'employee_auth_provider': employee_auth_provider | default('digit')}
+             | dict2items | selectattr('value', 'eq', 'keycloak')
+             | map(attribute='key') | list }}
+      ansible.builtin.fail:
+        msg: |
+          host_vars for {{ inventory_hostname }} selects Keycloak login on:
+          {{ _keycloak_login_surfaces | join(', ') }}
+
+          That path no longer exists. #2088 replaced it with the Identity BFF
+          (`/identity/v1`) and removed what the old auth-adapter called:
+            - the `/kc` Kong route in front of token-exchange-svc,
+            - the per-tenant Keycloak realm named after state_tenant_id,
+            - the `digit-ui` public client in that realm.
+          Deploying this would give every user a 404 at login.
+
+          Leave these keys unset (or 'digit') until the frontend cutover lands.
+          `enable_keycloak: true` on its own is fine and is what stands up
+          Keycloak, the Identity BFF and `/identity/v1` — it does not require
+          flipping auth_provider.
+      when: _keycloak_login_surfaces | length > 0
+
     # ==================== WSL2 resource config (.wslconfig) ====================
     # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
     # thrashes the VM into a freeze (deploy hangs, new WSL sessions won't
@@ -2518,28 +2555,123 @@
       when: enable_matomo | default(false)
       no_log: true
 
+    # ── Identity-tier secrets (#2088) ───────────────────────────────────
+    #
+    # These used to be sha256(keycloak_admin_password ~ ':<label>'), with
+    # `default('')`. That made every one of them a function of a single
+    # credential: on a box where the admin password was unset, all six became
+    # sha256(':<label>') — constants anybody can compute from this public
+    # repo — and one leaked derived value allowed an offline brute-force of
+    # the admin password itself. They are now independent random values,
+    # generated once and persisted, exactly like the Grafana and Matomo
+    # passwords above. configure-keycloak.sh rewrites each client's secret on
+    # every deploy, so adopting new values on an existing box is safe.
+    #
+    # Re-READ rather than reusing `bao_secrets`: the Grafana and Matomo tasks
+    # above may have written, and the persist below is cas-guarded against the
+    # CURRENT version. See the same note on the Matomo read.
+    - name: "OpenBao — re-read tenant secrets for the identity tier"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        status_code: [200]
+      register: bao_secrets_identity
+      when: enable_keycloak | default(false)
+      no_log: true
+
+    # The one identity credential that CANNOT be generated here: Keycloak bakes
+    # its bootstrap admin in at first start, so a value invented now would not
+    # be the real one. An empty value is not harmless — .env then carries
+    # `KC_ADMIN_PASSWORD=` and compose falls back to the literal `admin` in
+    # docker-compose.egov-digit.yaml. Fail closed on every box, upgrade
+    # included: unlike the opt-in warn above, there is nothing to brick here
+    # that an unset admin password has not already broken.
+    - name: "Keycloak — refuse to deploy without an admin password"
+      ansible.builtin.assert:
+        that:
+          - (bao_secrets_identity.json.data.data.keycloak_admin_password | default('', true)) | length > 0
+        fail_msg: >-
+          enable_keycloak is on but `keycloak_admin_password` is empty in
+          OpenBao, so .env would hand compose an empty KC_ADMIN_PASSWORD and
+          Keycloak would fall back to the published default `admin`. Set it
+          with `bao kv put {{ secrets_path }} keycloak_admin_password=<value>`
+          (and, on a box where Keycloak already bootstrapped, change the
+          admin user's password in Keycloak to match).
+      when: enable_keycloak | default(false)
+
+    # `or`, not `ternary`: Jinja evaluates every filter argument up front, so a
+    # ternary would run the generator on every deploy and discard it whenever
+    # OpenBao already holds a value. `or` short-circuits. See the longer note
+    # on the Grafana password above.
+    - name: "OpenBao — resolve identity secrets (generate any that are absent)"
+      vars:
+        _identity_stored: "{{ bao_secrets_identity.json.data.data }}"
+      ansible.builtin.set_fact:
+        identity_secrets:
+          keycloak_bff_client_secret: >-
+            {{ _identity_stored.keycloak_bff_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_magic_link_client_secret: >-
+            {{ _identity_stored.keycloak_magic_link_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_admin_client_secret: >-
+            {{ _identity_stored.keycloak_admin_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          identity_control_plane_token: >-
+            {{ _identity_stored.identity_control_plane_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          identity_session_introspection_token: >-
+            {{ _identity_stored.identity_session_introspection_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          pgr_onboarding_worker_token: >-
+            {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+      when: enable_keycloak | default(false)
+      no_log: true
+
+    # One merged, cas-guarded write — same shape and same reasoning as the
+    # Grafana persist above: `data` merges onto the snapshot we read, so no
+    # other key in this tenant's secret is dropped, and a racing write makes
+    # OpenBao reject ours instead of clobbering it.
+    - name: "OpenBao — persist any generated identity secrets"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body: >-
+          {{ {'options': {'cas': bao_secrets_identity.json.data.metadata.version | int},
+              'data': bao_secrets_identity.json.data.data | combine(identity_secrets)} }}
+        status_code: [200]
+      when:
+        - enable_keycloak | default(false)
+        # Exactly "the merge would change something", i.e. at least one of the
+        # six was absent or empty and has just been generated.
+        - (bao_secrets_identity.json.data.data | combine(identity_secrets))
+          != bao_secrets_identity.json.data.data
+      no_log: true
+
     # Identity-tier secrets — appended as a separate marked block so the
     # main TENANT SECRETS block stays untouched on Keycloak-free tenants.
-    # Default-empty strings so a missing key in OpenBao (e.g. first deploy
-    # before the operator filled them in) doesn't fail template rendering;
-    # the keycloak containers fail their healthcheck loudly enough the
-    # operator notices. Without this block the overlay's KC_ADMIN_PASSWORD
-    # defaults to "admin" in compose, which mismatches KC's actual admin
-    # password and breaks user provisioning silently.
+    # KC_ADMIN_PASSWORD is asserted non-empty above; the rest come from the
+    # resolved dict, so an operator can rotate any of them independently with
+    # `bao kv put` without touching the others.
     - name: "OpenBao — write Keycloak and Identity BFF secrets into compose .env"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
         block: |
-          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
-          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
-          KEYCLOAK_BFF_CLIENT_SECRET={{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-bff') | hash('sha256') }}
-          KEYCLOAK_MAGIC_LINK_CLIENT_SECRET={{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-magic-link') | hash('sha256') }}
-          KEYCLOAK_ADMIN_CLIENT_SECRET={{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-admin') | hash('sha256') }}
-          IDENTITY_CONTROL_PLANE_TOKEN={{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-control-plane') | hash('sha256') }}
-          IDENTITY_SESSION_INTROSPECTION_TOKEN={{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-session-introspection') | hash('sha256') }}
-          PGR_ONBOARDING_WORKER_TOKEN={{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-onboarding-worker') | hash('sha256') }}
-          IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets.json.data.data.identity_digit_admin_password | default(bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123')) }}
-          IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets.json.data.data.identity_digit_provisioner_password | default('') }}
+          KC_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.keycloak_admin_password }}
+          KC_DB_PASSWORD={{ bao_secrets_identity.json.data.data.keycloak_db_password | default('') }}
+          KEYCLOAK_BFF_CLIENT_SECRET={{ identity_secrets.keycloak_bff_client_secret }}
+          KEYCLOAK_MAGIC_LINK_CLIENT_SECRET={{ identity_secrets.keycloak_magic_link_client_secret }}
+          KEYCLOAK_ADMIN_CLIENT_SECRET={{ identity_secrets.keycloak_admin_client_secret }}
+          IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
+          IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
+          PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
+          IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
+          IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
         create: false
         mode: '0600'
@@ -5157,14 +5289,16 @@
         IDENTITY_ENV_DIR: "{{ digit_dir }}/identity"
         KEYCLOAK_ORGANIZATION_REALM: "{{ keycloak_organization_realm | default('digit') }}"
         KEYCLOAK_SSL_REQUIRED: "{{ 'external' if (tls_enabled | default(true)) else 'none' }}"
-        KEYCLOAK_BFF_CLIENT_SECRET: "{{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-bff') | hash('sha256') }}"
+        # The same resolved values that went into .env, so Keycloak's clients
+        # and the BFF never disagree about a secret. (Dhruv review, #2088.)
+        KEYCLOAK_BFF_CLIENT_SECRET: "{{ identity_secrets.keycloak_bff_client_secret }}"
         KEYCLOAK_MAGIC_LINK_ENABLED: "{{ identity_magic_link_enabled | default(false) | lower }}"
-        KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-magic-link') | hash('sha256') }}"
-        KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ ((bao_secrets.json.data.data.keycloak_admin_password | default('')) ~ ':identity-admin') | hash('sha256') }}"
+        KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ identity_secrets.keycloak_magic_link_client_secret }}"
+        KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ identity_secrets.keycloak_admin_client_secret }}"
         IDENTITY_REDIRECT_URI: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/identity/v1/callback' }}"
         IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain) }}"
         KC_BOOTSTRAP_ADMIN_USERNAME: admin
-        KC_BOOTSTRAP_ADMIN_PASSWORD: "{{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}"
+        KC_BOOTSTRAP_ADMIN_PASSWORD: "{{ bao_secrets_identity.json.data.data.keycloak_admin_password }}"
         KEYCLOAK_SMTP_HOST: "{{ identity_smtp_host | default('') }}"
         KEYCLOAK_SMTP_PORT: "{{ identity_smtp_port | default(587) | string }}"
         KEYCLOAK_SMTP_FROM: "{{ identity_smtp_from | default('') }}"

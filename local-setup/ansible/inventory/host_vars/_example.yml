@@ -566,6 +566,16 @@ novu_bridge_channel: "sms"
 #      Organizations enabled and configures confidential BFF/admin clients.
 #   2. Each DIGIT tenant maps to a Keycloak Organization in that realm.
 #   3. The frontend uses /identity/v1; it never receives a Keycloak token.
+#
+# Secrets: `keycloak_admin_password` must be set in OpenBao (the deploy fails
+# closed without it — an empty value makes compose fall back to the literal
+# `admin`). The six identity secrets — keycloak_bff_client_secret,
+# keycloak_magic_link_client_secret, keycloak_admin_client_secret,
+# identity_control_plane_token, identity_session_introspection_token and
+# pgr_onboarding_worker_token — are generated independently on first deploy
+# and stored in OpenBao, so none of them is derivable from another. Read one
+# back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
+# `bao kv put`, and the next deploy pushes it into Keycloak.
 enable_keycloak: false
 keycloak_organization_realm: "digit"
 identity_bff_image: ""
@@ -591,9 +601,17 @@ identity_smtp_user: ""
 identity_smtp_ssl: false
 identity_smtp_starttls: true
 
-# 'keycloak' = SSO via the auth-adapter. '' (default) keeps OTP login.
-# Don't flip this until the realm is imported and the operator has
-# verified a successful test login via /auth/realms/<realm>/account.
+# MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak' on any
+# of the three keys below.
+#
+# 'keycloak' used to mean "SSO via the digit-ui auth-adapter", which called the
+# `/kc` token-exchange route against a per-tenant realm's `digit-ui` client.
+# #2088 removed all three in favour of the Identity BFF at /identity/v1, and
+# the frontend cutover onto that BFF is a separate change. Until it lands,
+# 'keycloak' here means a 404 at login, so the preflight fails instead.
+#
+# `enable_keycloak: true` is independent of this and is what actually stands
+# up Keycloak, the Identity BFF and /identity/v1.
 auth_provider: ""
 
 # Per-surface override (digit-ui-esbuild resolves these post-#793):
@@ -606,9 +624,10 @@ auth_provider: ""
 # citizen_auth_provider: ""
 # employee_auth_provider: ""
 
-# OIDC public client id in the per-tenant realm. The realm template
-# ships `digit-ui`; only change this if you've forked the template
-# and added a different client.
+# OIDC public client id the frontends bake in. Inert while auth_provider is
+# '' — the per-tenant realm and its `digit-ui` client were removed with the
+# legacy login path (see auth_provider above); this key is kept so the
+# frontend cutover has somewhere to point.
 keycloak_client_id: "digit-ui"
 
 # Federated Google login (optional). Leave blank to skip Google IdP
