@@ -114,8 +114,8 @@ Its pattern is `develop-` + **8 or more** hex chars, which deliberately:
 **In scope — everything in `build-config.yml`** (CCRS-owned): `pgr-services`,
 `novu-bridge`, `digit-config-service`, `digit-user-preferences-service`,
 `xstate-chatbot`, `default-data-handler`, `digit-mcp`, `otp-publisher`,
-`digit-ui` (legacy micro-ui), `digit-ui-esbuild`, `configurator`, `digit-ui-v2`,
-and the `*-db` flyway images.
+`identity-bff`, `identity-keycloak`, `digit-ui` (legacy micro-ui),
+`digit-ui-esbuild`, `configurator`, `digit-ui-v2`, and the `*-db` flyway images.
 
 **Out of scope — DIGIT core platform services** (`egov-*`, `kong`,
 `boundary-service`, mdms-v2, etc.). These do **not** live in this repo, so this
@@ -187,6 +187,8 @@ nightly — **both**, or the box silently keeps running something else:
    digit_ui_image:      "host:5000/egovio/digit-ui:nightly-develop"
    otp_publisher_image: "host:5000/egovio/otp-publisher:nightly-develop"
    mcp_image:           "host:5000/egovio/digit-mcp:nightly-develop"
+   identity_bff_image:  "host:5000/egovio/identity-bff:nightly-develop"
+   identity_keycloak_image: "host:5000/egovio/identity-keycloak:nightly-develop"
    ddh_image:           "host:5000/egovio/default-data-handler:nightly-develop"
    ```
 

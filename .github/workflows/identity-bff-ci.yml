@@ -1,0 +1,44 @@
+name: Identity BFF CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/identity-bff/**"
+      - ".github/workflows/identity-bff-ci.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "backend/identity-bff/**"
+      - ".github/workflows/identity-bff-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/identity-bff
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/identity-bff/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev
+      - name: Build BFF image
+        run: docker build -t identity-bff:test .
+      - name: Build Keycloak 26.7.3 image
+        run: docker build -f keycloak/Dockerfile.magic-link -t identity-keycloak:test .
