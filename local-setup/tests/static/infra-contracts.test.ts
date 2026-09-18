@@ -41,7 +41,8 @@ describe('JVM OOM dashboard service scope', () => {
   const baseJvmServices = serviceBlocks(BASE_COMPOSE)
     .filter(
       ({ body }) =>
-        jvmEnvironment.test(body) || /^\s*image:\s*quay\.io\/keycloak\/keycloak:/m.test(body),
+        jvmEnvironment.test(body) ||
+        /^\s*image:\s*(?:quay\.io\/keycloak\/keycloak:|\$\{IDENTITY_KEYCLOAK_IMAGE)/m.test(body),
     )
     .map(({ name }) => name);
   // `-migration` is the per-service Flyway container; `-migrations` (plural) is
