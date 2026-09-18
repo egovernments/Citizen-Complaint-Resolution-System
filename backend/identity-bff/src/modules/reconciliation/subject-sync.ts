@@ -1,6 +1,6 @@
 import { config } from "../../infrastructure/config.js";
 import { readIdentityUserProfile } from "../organizations/organization-service.js";
-import { desiredRolesBySubject } from "./reconciliation-service.js";
+import { desiredRolesBySubject, desiredRolesForSubjectTenant } from "./reconciliation-service.js";
 import {
   ensureManagedAccount,
   type EnsureResult,
@@ -52,14 +52,17 @@ export async function syncSubject(
   return results;
 }
 
-/** Reconciles one explicitly selected tenant from live Keycloak state. */
+/**
+ * Reconciles one explicitly selected tenant from live Keycloak state, reading
+ * only that tenant's Organization and only this subject's membership in it.
+ */
 export async function syncSubjectTenant(
   userId: string,
   tenantId: string,
   mobileNumber?: string,
   countryCode?: string,
 ): Promise<EnsureResult> {
-  const desired = (await desiredRolesBySubject()).bySubject.get(userId)?.get(tenantId) ?? null;
+  const desired = await desiredRolesForSubjectTenant(userId, tenantId);
   if (desired === null) {
     return ensureManagedAccount(managedIdentity(config.keycloakIssuer, userId, tenantId), null);
   }

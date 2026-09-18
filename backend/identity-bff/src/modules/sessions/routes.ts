@@ -45,7 +45,7 @@ export function registerSessionRoutes(app: express.Application): void {
       const session = await getIdentitySession(sessionId);
       await deleteIdentitySession(sessionId);
       if (session) {
-        await revokeManagedUserLogins(config.keycloakIssuer, session.claims.sub)
+        await revokeManagedUserLogins(config.keycloakIssuer, session.claims.sub, sessionId)
           .catch((error: Error) => {
             console.warn("DIGIT token revocation failed:", error.message);
           });

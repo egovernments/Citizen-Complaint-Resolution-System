@@ -539,6 +539,72 @@ describe("identity BFF", () => {
     expect(afterLogout.status).toBe(401);
   });
 
+  it("selects a tenant without reading other Organizations or other members", async () => {
+    const control = (path: string, body: unknown) => fetch(
+      `http://localhost:${getAppPort()}/internal/identity/v1${path}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-control-plane",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+    // A crowd in the same Organization: each member carries its own assignment
+    // group, which is what used to make one login cost admin calls in
+    // proportion to the realm's size. (Dhruv review, #2088.)
+    const crowd: string[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      const created = await kcAdmin("/users", {
+        username: `crowd-${index}@example.org`, email: `crowd-${index}@example.org`,
+        firstName: "Crowd", lastName: `${index}`, emailVerified: true,
+      });
+      const userId = created.headers.get("location")!.split("/").pop()!;
+      crowd.push(userId);
+      expect((await control("/memberships/_ensure", {
+        organizationId: "org-bomet-id", userId, mobileNumber: "0712345678",
+      })).status).toBe(200);
+      expect((await control("/role-assignments/_ensure", {
+        organizationId: "org-bomet-id", userId, groupName: "bomet-officers",
+        clientId: "digit-ui", roles: ["GRO"],
+      })).status).toBe(200);
+    }
+
+    const { sessionId } = await createIdentitySession({
+      accessToken: "server-side-test-token", accessExpiresIn: 3600,
+    }, { sub: "identity-user-1", email: "person@example.com", name: "Demo Person" },
+    "digit-identity-bff");
+
+    await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
+    const selected = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/contexts/_select`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: `${config.identityCookieName}=${sessionId}`,
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tenantId: "ke.bomet" }),
+      },
+    );
+    expect(selected.status).toBe(200);
+
+    const log = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json() as string[];
+    // The Organization mapped to another tenant is never opened.
+    expect(log.filter((entry) => entry.includes("org-kisumu-id"))).toEqual([]);
+    // Nor is any other member's assignment group, or the Organization's full
+    // member roster.
+    for (const userId of crowd) {
+      expect(log.filter((entry) => entry.includes(userId))).toEqual([]);
+    }
+    expect(log.filter((entry) => /\/organizations\/[^/]+\/members$/.test(entry))).toEqual([]);
+    expect(log.some((entry) =>
+      entry === "GET /admin/realms/digit-sandbox/organizations/org-bomet-id/members/identity-user-1",
+    )).toBe(true);
+  });
+
   it("lets a live Organization admin invite and provision an employee", async () => {
     const { sessionId } = await createIdentitySession({
       accessToken: "server-side-test-token",

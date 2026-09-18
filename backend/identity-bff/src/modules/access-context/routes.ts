@@ -8,12 +8,11 @@ import {
   managedUserLogin,
 } from "../managed-accounts/managed-account-service.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { isOrganizationMember } from "../organizations/organization-service.js";
 import { syncSubjectTenant } from "../reconciliation/subject-sync.js";
 import { currentSession } from "../sessions/current-session.js";
 import { saveSelectedIdentityContext } from "../sessions/session-store.js";
 import type { TenantOption } from "./tenant-directory.js";
-import { resolveTenantOptions } from "./tenant-options.js";
+import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
 
 function publicTenant({ organizationId: _organizationId, ...tenant }: TenantOption) {
   return tenant;
@@ -62,13 +61,11 @@ export function registerAccessContextRoutes(app: express.Application): void {
     if (!tenantId) return response.status(400).json({ error: "tenantId is required" });
 
     try {
-      const tenants = await resolveTenantOptions(current.session.claims, true);
-      const selected = tenants.find((tenant) => tenant.tenantId === tenantId);
-      if (!selected) {
-        return response.status(403).json({ error: "Tenant context is not available" });
-      }
       const subject = current.session.claims.sub;
-      if (!await isOrganizationMember(selected.organizationId, subject)) {
+      // Only the requested tenant is resolved, and its live Organization
+      // membership is what authorizes the switch.
+      const selected = await resolveTenantOption(subject, tenantId);
+      if (!selected) {
         return response.status(403).json({ error: "Tenant context is not available" });
       }
       const outcome = await syncSubjectTenant(
@@ -80,7 +77,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         return response.status(403).json({ error: "Tenant context is not available" });
       }
       const identity = managedIdentity(config.keycloakIssuer, subject, selected.tenantId);
-      const login = await managedUserLogin(identity);
+      const login = await managedUserLogin(identity, current.sessionId);
       const saved = await saveSelectedIdentityContext(current.sessionId, {
         organizationId: selected.organizationId,
         organizationAlias: selected.organizationAlias,

@@ -90,8 +90,29 @@ export function oneTimePassword(length = config.digitPasswordLength): string {
   return chars.join("");
 }
 
+/**
+ * A DIGIT token cannot be made per-session: egov-user's token store returns
+ * the SAME access token for repeated password grants of one account while that
+ * token is still live, so two BFF sessions of the same person necessarily
+ * share one token. Logout therefore revokes at egov-user only once the last
+ * session holding that token has gone; until then it just forgets its own
+ * claim. Otherwise signing out on a phone turned every DIGIT call on the
+ * laptop into a 401. (Dhruv review, #2088.)
+ *
+ * Account-level changes (roles rewritten, account deactivated) still revoke
+ * unconditionally — those must take effect on every device at once.
+ *
+ * The session id itself never becomes a Redis key: it is the bearer of the
+ * browser session, so it is hashed the same way an opaque credential would be.
+ */
+export const sessionTokenRef = (sessionId: string) =>
+  createHash("sha256").update(sessionId).digest("hex").slice(0, 32);
+
 const tokenKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-user-token:${identity.key}`;
+/** Session refs still relying on this identity's cached token. */
+const tokenHoldersKey = (identity: ManagedIdentity) =>
+  `${config.cachePrefix}:digit-user-token-holders:${identity.key}`;
 const leaseKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-user-lease:${identity.key}`;
 /** Hash of `${subject}|${tenantId}` -> issuer for every account this BFF provisioned. */
@@ -174,20 +195,48 @@ async function cachedLogin(identity: ManagedIdentity): Promise<DigitLogin | null
   }
 }
 
-async function cacheLogin(identity: ManagedIdentity, login: DigitLogin): Promise<void> {
-  const ttl = Math.floor((login.expiresAt - Date.now()) / 1000) - config.digitTokenRefreshSkewSeconds;
-  if (ttl > 0) await getRedis().set(tokenKey(identity), JSON.stringify(login), "EX", ttl);
+/** Records that `ref` is now relying on the cached token. */
+async function holdCachedLogin(identity: ManagedIdentity, ref: string): Promise<void> {
+  await getRedis().sadd(tokenHoldersKey(identity), ref);
+  await getRedis().expire(tokenHoldersKey(identity), config.identitySessionTtlSeconds);
 }
 
+async function cacheLogin(
+  identity: ManagedIdentity,
+  ref: string,
+  login: DigitLogin,
+): Promise<void> {
+  const ttl = Math.floor((login.expiresAt - Date.now()) / 1000) - config.digitTokenRefreshSkewSeconds;
+  if (ttl <= 0) return;
+  await getRedis().set(tokenKey(identity), JSON.stringify(login), "EX", ttl);
+  // A new token starts a new holder set: whoever was holding the previous one
+  // re-registers the next time they read the cache.
+  await getRedis().del(tokenHoldersKey(identity));
+  await holdCachedLogin(identity, ref);
+}
+
+/** Revokes and forgets the cached token of this identity, for every session. */
 async function dropCachedLogin(identity: ManagedIdentity): Promise<void> {
-  const raw = await getRedis().get(tokenKey(identity));
-  await getRedis().del(tokenKey(identity));
+  const raw = await getRedis().getdel(tokenKey(identity));
+  await getRedis().del(tokenHoldersKey(identity));
   if (!raw) return;
   try {
     await revokeToken((JSON.parse(raw) as DigitLogin).accessToken);
   } catch (error) {
     console.warn("DIGIT token revocation failed:", (error as Error).message);
   }
+}
+
+/**
+ * Releases one session's claim on the cached token and revokes it only when
+ * that was the last claim. A session that never reached this tenant releases
+ * nothing, so it cannot cut another session off.
+ */
+async function releaseCachedLogin(identity: ManagedIdentity, ref: string): Promise<void> {
+  const removed = await getRedis().srem(tokenHoldersKey(identity), ref);
+  if (removed === 0) return;
+  if (await getRedis().scard(tokenHoldersKey(identity)) > 0) return;
+  await dropCachedLogin(identity);
 }
 
 export interface EnsureResult {
@@ -234,10 +283,10 @@ export async function ensureManagedAccount(
         roles,
         password,
       });
-      const login = await passwordLogin({
-        username: identity.username, password, tenantId: identity.tenantId, userType: MANAGED_USER_TYPE,
-      });
-      await cacheLogin(identity, login);
+      // No login here. Cached DIGIT tokens belong to a BFF session and
+      // provisioning has none to attribute one to, so logging in now would
+      // mint a token no logout could ever revoke. The first
+      // /contexts/_select rotates the password and logs in for its session.
       await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
       await recordManagedTenant(identity.subject, identity.tenantId);
       return { account: created, created: true, changed: true };
@@ -261,17 +310,27 @@ export async function ensureManagedAccount(
 }
 
 /**
- * Returns a normal user-scoped DIGIT token for an active managed account.
- * A valid cached token is reused. Otherwise, under the per-user lease, the
- * account's password is rotated to a new one-time value and the BFF logs in
- * once as that user.
+ * Returns a normal user-scoped DIGIT token for an active managed account,
+ * cached for `sessionId` alone. A valid cached token is reused. Otherwise,
+ * under the per-user lease, the account's password is rotated to a new
+ * one-time value and the BFF logs in once as that user.
  */
-export async function managedUserLogin(identity: ManagedIdentity): Promise<DigitLogin> {
+export async function managedUserLogin(
+  identity: ManagedIdentity,
+  sessionId: string,
+): Promise<DigitLogin> {
+  const ref = sessionTokenRef(sessionId);
   const cached = await cachedLogin(identity);
-  if (cached) return cached;
+  if (cached) {
+    await holdCachedLogin(identity, ref);
+    return cached;
+  }
   return withUserLease(identity, async () => {
     const again = await cachedLogin(identity);
-    if (again) return again;
+    if (again) {
+      await holdCachedLogin(identity, ref);
+      return again;
+    }
     return withDigitAdmin(async (adminToken) => {
       const account = await findAccount(adminToken, identity);
       if (!account || !account.active) {
@@ -282,17 +341,26 @@ export async function managedUserLogin(identity: ManagedIdentity): Promise<Digit
       const login = await passwordLogin({
         username: identity.username, password, tenantId: account.tenantId, userType: MANAGED_USER_TYPE,
       });
-      await cacheLogin(identity, login);
+      await cacheLogin(identity, ref, login);
       return login;
     });
   });
 }
 
-/** Revokes and forgets the cached DIGIT tokens of every managed account of a subject (logout). */
-export async function revokeManagedUserLogins(issuer: string, subject: string): Promise<void> {
+/**
+ * Logout: releases this BFF session's claim on the subject's cached DIGIT
+ * tokens at every tenant it touched, revoking each one at egov-user only when
+ * no other live session still holds it.
+ */
+export async function revokeManagedUserLogins(
+  issuer: string,
+  subject: string,
+  sessionId: string,
+): Promise<void> {
+  const ref = sessionTokenRef(sessionId);
   for (const tenantId of await managedTenantsOf(issuer, subject)) {
     const identity = managedIdentity(issuer, subject, tenantId);
-    await withUserLease(identity, () => dropCachedLogin(identity));
+    await withUserLease(identity, () => releaseCachedLogin(identity, ref));
   }
 }
 

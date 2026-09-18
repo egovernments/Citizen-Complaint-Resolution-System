@@ -59,6 +59,11 @@ beforeEach(async () => {
 });
 
 const subject = () => `subject-${run}`;
+const session = (suffix = "a") => `session-${run}-${suffix}`;
+const tokenKey = (identity: { key: string }) =>
+  `${config.cachePrefix}:digit-user-token:${identity.key}`;
+const holdersKey = (identity: { key: string }) =>
+  `${config.cachePrefix}:digit-user-token-holders:${identity.key}`;
 const profile = {
   name: "Tenant Admin", emailId: "tenant-admin@example.org",
   mobileNumber: "712345678", countryCode: "+254",
@@ -85,14 +90,20 @@ describe("managed DIGIT accounts", () => {
     expect(result.account!.roles.map((role) => `${role.tenantId}:${role.code}`).sort())
       .toEqual(["pg:EMPLOYEE", "pg:GRO"]);
 
-    const login = await managedUserLogin(identity);
+    const login = await managedUserLogin(identity, session());
     expect(fake.tokens.get(login.accessToken)?.uuid).toBe(result.account!.uuid);
     expect(fake.accounts.get(result.account!.uuid)!.roles.some((role) => role.code === "ACCOUNT_ADMIN")).toBe(false);
-    expect(fake.stats.passwordUpdates).toBe(0);
+    // Provisioning mints no token of its own, so the session's first login is
+    // what rotates the one-time password.
+    expect(fake.stats.passwordUpdates).toBe(1);
 
     const stored = await Promise.all((await getRedis().keys(`${config.cachePrefix}:*`))
-      .map(async (key) => `${key}=${await getRedis().type(key) === "hash"
-        ? JSON.stringify(await getRedis().hgetall(key)) : await getRedis().get(key)}`));
+      .map(async (key) => {
+        const type = await getRedis().type(key);
+        if (type === "hash") return `${key}=${JSON.stringify(await getRedis().hgetall(key))}`;
+        if (type === "set") return `${key}=${(await getRedis().smembers(key)).join(",")}`;
+        return `${key}=${await getRedis().get(key)}`;
+      }));
     for (const password of fake.receivedPasswords) {
       expect(stored.join("\n")).not.toContain(password);
     }
@@ -106,14 +117,14 @@ describe("managed DIGIT accounts", () => {
     const identity = managedIdentity(ISSUER, subject(), "pg");
     fake.setTokenTtlSeconds(3600);
     await ensureManagedAccount(identity, [], profile);
-    const first = await managedUserLogin(identity);
-    const second = await managedUserLogin(identity);
+    const first = await managedUserLogin(identity, session());
+    const second = await managedUserLogin(identity, session());
     expect(second.accessToken).toBe(first.accessToken);
     const passwordsBefore = fake.receivedPasswords.length;
 
     fake.expireAllTokens();
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
-    const rotated = await managedUserLogin(identity);
+    await getRedis().del(tokenKey(identity));
+    const rotated = await managedUserLogin(identity, session());
     expect(rotated.accessToken).not.toBe(first.accessToken);
     expect(fake.receivedPasswords.length).toBe(passwordsBefore + 1);
     expect(new Set(fake.receivedPasswords).size).toBe(fake.receivedPasswords.length);
@@ -123,9 +134,10 @@ describe("managed DIGIT accounts", () => {
     const identity = managedIdentity(ISSUER, subject(), "pg");
     await ensureManagedAccount(identity, [], profile);
     fake.expireAllTokens();
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await getRedis().del(tokenKey(identity));
     const rotations = fake.stats.passwordUpdates;
-    const logins = await Promise.all(Array.from({ length: 6 }, () => managedUserLogin(identity)));
+    const logins = await Promise.all(Array.from({ length: 6 },
+      () => managedUserLogin(identity, session())));
     expect(new Set(logins.map((login) => login.accessToken)).size).toBe(1);
     expect(fake.stats.passwordUpdates - rotations).toBe(1);
   });
@@ -140,7 +152,7 @@ describe("managed DIGIT accounts", () => {
     const updates = fake.stats.updates;
     await expect(ensureManagedAccount(identity, ["GRO"], profile))
       .rejects.toBeInstanceOf(ManagedAccountError);
-    await expect(managedUserLogin(identity)).rejects.toBeInstanceOf(ManagedAccountError);
+    await expect(managedUserLogin(identity, session())).rejects.toBeInstanceOf(ManagedAccountError);
     expect(fake.stats.updates).toBe(updates);
   });
 
@@ -148,7 +160,7 @@ describe("managed DIGIT accounts", () => {
     const identity = managedIdentity(ISSUER, subject(), "pg.citya");
     const created = await ensureManagedAccount(identity, [], profile);
     expect(created.account).toMatchObject({ tenantId: "pg.citya", userName: identity.username });
-    const before = await managedUserLogin(identity);
+    const before = await managedUserLogin(identity, session());
 
     const changed = await ensureManagedAccount(identity, ["GRO", "PGR_VIEWER"]);
     expect(changed.changed).toBe(true);
@@ -158,11 +170,11 @@ describe("managed DIGIT accounts", () => {
     ]);
     expect((await ensureManagedAccount(identity, ["PGR_VIEWER", "GRO", "NOT_ALLOWED"])).changed).toBe(false);
 
-    const renewed = await managedUserLogin(identity);
+    const renewed = await managedUserLogin(identity, session());
     const removed = await ensureManagedAccount(identity, null);
     expect(removed.account!.active).toBe(false);
     expect(fake.tokens.has(renewed.accessToken)).toBe(false);
-    await expect(managedUserLogin(identity)).rejects.toMatchObject({ status: 403 });
+    await expect(managedUserLogin(identity, session())).rejects.toMatchObject({ status: 403 });
   });
 
   it("keeps one account per tenant, each marked with subject and tenant", async () => {
@@ -207,11 +219,44 @@ describe("managed DIGIT accounts", () => {
     resetDigitAdminToken();
   });
 
-  it("logout revokes the user's DIGIT token", async () => {
+  it("logout keeps the DIGIT token alive while another session still holds it", async () => {
     const identity = managedIdentity(ISSUER, subject(), "pg");
     await ensureManagedAccount(identity, [], profile);
-    const login = await managedUserLogin(identity);
-    await revokeManagedUserLogins(ISSUER, identity.subject);
-    expect(fake.tokens.has(login.accessToken)).toBe(false);
+    const phone = await managedUserLogin(identity, session("phone"));
+    const laptop = await managedUserLogin(identity, session("laptop"));
+    // egov-user hands both sessions the same live token; isolation has to come
+    // from WHEN it is revoked, not from minting two. (Dhruv review, #2088.)
+    expect(laptop.accessToken).toBe(phone.accessToken);
+    expect(await getRedis().scard(holdersKey(identity))).toBe(2);
+
+    await revokeManagedUserLogins(ISSUER, identity.subject, session("phone"));
+    expect(fake.tokens.has(laptop.accessToken)).toBe(true);
+    expect((await managedUserLogin(identity, session("laptop"))).accessToken)
+      .toBe(laptop.accessToken);
+
+    await revokeManagedUserLogins(ISSUER, identity.subject, session("laptop"));
+    expect(fake.tokens.has(laptop.accessToken)).toBe(false);
+    expect(await getRedis().get(tokenKey(identity))).toBeNull();
+  });
+
+  it("a signed-out session cannot revoke a token it never held", async () => {
+    const identity = managedIdentity(ISSUER, subject(), "pg");
+    await ensureManagedAccount(identity, [], profile);
+    const laptop = await managedUserLogin(identity, session("laptop"));
+    await revokeManagedUserLogins(ISSUER, identity.subject, session("never-selected"));
+    expect(fake.tokens.has(laptop.accessToken)).toBe(true);
+    expect(await getRedis().scard(holdersKey(identity))).toBe(1);
+  });
+
+  it("a role change revokes the cached DIGIT token for every session at once", async () => {
+    const identity = managedIdentity(ISSUER, subject(), "pg");
+    await ensureManagedAccount(identity, [], profile);
+    const phone = await managedUserLogin(identity, session("phone"));
+    await managedUserLogin(identity, session("laptop"));
+
+    expect((await ensureManagedAccount(identity, ["GRO"])).changed).toBe(true);
+    expect(fake.tokens.has(phone.accessToken)).toBe(false);
+    expect(await getRedis().get(tokenKey(identity))).toBeNull();
+    expect(await getRedis().scard(holdersKey(identity))).toBe(0);
   });
 });

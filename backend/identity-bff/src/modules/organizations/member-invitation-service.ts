@@ -37,9 +37,13 @@ export interface OrganizationMemberInvitation {
 }
 
 async function canManageOrganization(organizationId: string, subject: string): Promise<boolean> {
+  // Subject-scoped: only the caller's own membership and groups decide this,
+  // so an invite must not page every member of the Organization.
+  // (Dhruv review, #2088.)
   const state = await readOrganizationReconciliation(
     organizationId,
     config.digitRoleClientId,
+    subject,
   );
   if (!state?.enabled) return false;
   const roles = state.memberRoles.get(subject);

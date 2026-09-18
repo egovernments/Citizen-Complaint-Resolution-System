@@ -41,14 +41,25 @@ interface RealmState {
 
 let realms: Map<string, RealmState>;
 let lastAdminGrantType: string | undefined;
+/** "METHOD /path" of every Admin API call, so tests can assert read scope. */
+let adminRequests: string[];
 
 function initState() {
   realms = new Map();
   lastAdminGrantType = undefined;
+  adminRequests = [];
 }
 
 export function getLastAdminGrantType(): string | undefined {
   return lastAdminGrantType;
+}
+
+export function adminRequestLog(): string[] {
+  return [...adminRequests];
+}
+
+export function resetAdminRequestLog(): void {
+  adminRequests = [];
 }
 
 export function resetState() {
@@ -99,6 +110,17 @@ export function createKcAdminMock() {
   initState();
 
   const app = express();
+  // The mock runs in vitest's globalSetup process, so tests read the log over
+  // HTTP rather than through the exports above.
+  app.use((req, _res, next) => {
+    if (!req.path.startsWith("/__test")) adminRequests.push(`${req.method} ${req.path}`);
+    next();
+  });
+  app.get("/__test/admin-log", (_req, res) => res.json(adminRequestLog()));
+  app.delete("/__test/admin-log", (_req, res) => {
+    resetAdminRequestLog();
+    res.status(204).end();
+  });
   app.use(express.json({ limit: "10mb", strict: false }));
 
   // POST /realms/master/protocol/openid-connect/token — admin auth

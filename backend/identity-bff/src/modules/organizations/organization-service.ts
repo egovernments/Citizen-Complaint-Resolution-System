@@ -254,6 +254,20 @@ export async function readOrganizationMapping(
   }
 }
 
+/**
+ * The single enabled Organization mapped to `tenantId`, without listing the
+ * realm. Backs the subject-scoped login path. (Dhruv review, #2088.)
+ */
+export async function readOrganizationMappingForTenant(
+  tenantId: string,
+): Promise<OrganizationMapping | null> {
+  const matches = await organizationsForTenant(tenantId);
+  if (matches.length > 1) {
+    throw new IdentityAdminError("Multiple Organizations map to this tenant", 409);
+  }
+  return matches[0] ? asMapping(matches[0]) : null;
+}
+
 export async function listOrganizationMappings(): Promise<OrganizationMapping[]> {
   const organizations = await paged<OrganizationRepresentation>(
     "/organizations?briefRepresentation=false",
@@ -574,9 +588,34 @@ export async function ensureOrganizationRoleAssignment(input: {
   return { groupId: group.id, roles: desired.map((role) => role.name).sort() };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The subject an assignment group belongs to, or null for a shared group.
+ * `ensureOrganizationRoleAssignment` names every group it creates
+ * `<groupName>--<userId>`, so a group whose name ends in a UUID other than the
+ * subject we are reading cannot contribute roles to that subject and its role
+ * mappings and member list never need to be fetched. Groups an operator made
+ * by hand carry no such suffix and keep the full membership check.
+ */
+function assignmentOwner(groupName: string): string | null {
+  const suffix = groupName.slice(groupName.lastIndexOf("--") + 2);
+  return groupName.includes("--") && UUID.test(suffix) ? suffix : null;
+}
+
+/**
+ * Organization membership and allowlisted client roles.
+ *
+ * `subject` restricts the read to one user: without it every login paged the
+ * members of every group in the Organization, so the admin-call count grew
+ * with the realm's user count rather than with the caller. (Dhruv review,
+ * #2088.) The realm-wide form is still used by the reconciliation sweep,
+ * which genuinely needs every member.
+ */
 export async function readOrganizationReconciliation(
   organizationId: string,
   roleClientId: string,
+  subject?: string,
 ): Promise<OrganizationReconciliationState | null> {
   if (!config.keycloakAllowedOrganizationRoleClients.includes(roleClientId)) {
     throw new IdentityAdminError("Keycloak client is not allowed for Organization roles", 400);
@@ -590,15 +629,21 @@ export async function readOrganizationReconciliation(
     throw error;
   }
 
-  const members = await paged<UserRepresentation>(
-    `/organizations/${encodeURIComponent(organizationId)}/members`,
-  );
   const memberRoles = new Map<string, Set<string>>();
-  for (const member of members) {
-    if (member.id) memberRoles.set(member.id, new Set());
+  if (subject === undefined) {
+    for (const member of await paged<UserRepresentation>(
+      `/organizations/${encodeURIComponent(organizationId)}/members`,
+    )) {
+      if (member.id) memberRoles.set(member.id, new Set());
+    }
+  } else if (await isOrganizationMember(organizationId, subject)) {
+    memberRoles.set(subject, new Set());
   }
   if (organization.enabled === false) {
     return { organizationId, enabled: false, memberRoles: new Map() };
+  }
+  if (subject !== undefined && memberRoles.size === 0) {
+    return { organizationId, enabled: true, memberRoles: new Map() };
   }
 
   const uuid = await clientUuid(roleClientId);
@@ -606,6 +651,8 @@ export async function readOrganizationReconciliation(
     `/organizations/${encodeURIComponent(organizationId)}/groups`,
   );
   for (const group of groups) {
+    const owner = assignmentOwner(group.name);
+    if (subject !== undefined && owner !== null && owner !== subject) continue;
     const mappingPath =
       `/organizations/${encodeURIComponent(organizationId)}` +
       `/groups/${encodeURIComponent(group.id)}/role-mappings/clients/${encodeURIComponent(uuid)}`;
@@ -625,8 +672,8 @@ export async function readOrganizationReconciliation(
   return {
     organizationId,
     enabled: true,
-    memberRoles: new Map([...memberRoles].map(([subject, roles]) => [
-      subject,
+    memberRoles: new Map([...memberRoles].map(([member, roles]) => [
+      member,
       [...roles].sort(),
     ])),
   };

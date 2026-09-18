@@ -4,6 +4,7 @@ import { config } from "../../infrastructure/config.js";
 import {
   listManagedIdentityAccounts,
   listOrganizationMappings,
+  readOrganizationMappingForTenant,
   readOrganizationReconciliation,
 } from "../organizations/organization-service.js";
 import { isActiveDigitTenant } from "../access-context/tenant-directory.js";
@@ -52,6 +53,31 @@ export async function desiredRolesBySubject(): Promise<{
     }
   }
   return { organizations, bySubject };
+}
+
+/**
+ * The allowlisted DIGIT roles one subject should hold at one tenant, or null
+ * when it is not an active member there.
+ *
+ * This is the login and invite path, and it reads only the Organization mapped
+ * to `tenantId` and only that subject's membership within it.
+ * `desiredRolesBySubject` above answers the same question by walking the whole
+ * realm, which made one `/contexts/_select` cost admin calls proportional to
+ * the total number of users. (Dhruv review, #2088.)
+ */
+export async function desiredRolesForSubjectTenant(
+  subject: string,
+  tenantId: string,
+): Promise<string[] | null> {
+  if (!await isActiveDigitTenant(tenantId)) return null;
+  const mapping = await readOrganizationMappingForTenant(tenantId);
+  if (!mapping) return null;
+  const state = await readOrganizationReconciliation(
+    mapping.organizationId, config.digitRoleClientId, subject,
+  );
+  if (!state?.enabled) return null;
+  const roles = state.memberRoles.get(subject);
+  return roles === undefined ? null : allowlisted(roles);
 }
 
 async function releaseLease(value: string): Promise<void> {

@@ -239,12 +239,13 @@ username, are never updated, rotated or deactivated.
 | First user token | `POST /user/oauth/token` as that user, once | one-time password |
 | Regenerate after expiry | `POST /user/users/_updatenovalidate` with a new random password, then one login | admin token, then new one-time password |
 | Role/membership change | `_updatenovalidate` roles or `active=false`, then `POST /user/_logout` on the cached token | admin token |
-| Logout | `POST /user/_logout` on the cached user token | user token |
+| Logout | `POST /user/_logout` on the cached user token, once the last BFF session holding it has signed out | user token |
 
 Every create/rotate/role change for one subject runs under a Redis lease
 (`DIGIT_USER_LEASE_SECONDS`), so concurrent requests produce one rotation and
 share the resulting token. The user token is cached in Redis until shortly
-before egov-user's `expires_in`.
+before egov-user's `expires_in`, alongside the set of BFF sessions currently
+relying on it.
 
 The admin token is used only for these account operations, never for business
 calls.
@@ -271,11 +272,22 @@ calls.
 - **Token lifetime is DIGIT's:** tokens follow `access.token.validity.in.minutes`
   (7 days by default). Rotation does not revoke the previous token; the BFF
   revokes explicitly on logout, role change and deactivation.
-- **One token per account:** logout from one browser revokes the DIGIT tokens
-  shared with that person's other BFF sessions. Their next selection mints new
-  ones. Revocation calls egov-user `/user/_logout` directly
+- **One token per account:** egov-user's token store returns the same access
+  token for repeated password grants while that token is live, so one person's
+  BFF sessions necessarily share it and it cannot be made per-session. Logout
+  therefore releases only that session's claim and revokes at egov-user once
+  the last claim is gone, so signing out on a phone does not 401 the same
+  person's laptop. A role change or deactivation still revokes immediately for
+  every session. Revocation calls egov-user `/user/_logout` directly
   (`DIGIT_USER_LOGOUT_URL`), because Kong would evaluate RBAC at the account's
   home tenant.
+- **Read scope of a sign-in:** `contexts/_select` and `organization-members/_invite`
+  read only the Organization mapped to the tenant in question and only the
+  caller's own membership and assignment groups within it. Tenant *discovery*
+  (`GET /identity/v1/tenants`) still lists the realm's Organizations and probes
+  membership in each, because Keycloak exposes no reverse "Organizations of this
+  user" read that also covers an Organization created mid-session by onboarding.
+  That cost grows with the number of Organizations, not with the number of users.
 - **Reconciliation inventory:** every managed tenant is recorded on the
   Keycloak user as `digit.managedTenants`. Redis keeps a faster
   `digit-managed-accounts` index, but a full reconciliation rebuilds from the
