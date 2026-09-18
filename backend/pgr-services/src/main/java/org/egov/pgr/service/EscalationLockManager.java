@@ -71,12 +71,21 @@ public class EscalationLockManager {
 
             try {
                 T result = operation.get();
-                connection.commit();
+                try {
+                    connection.commit();
+                } catch (SQLException e) {
+                    // The lock transaction contains no business writes. Once the
+                    // escalation operation has returned, reporting a lock failure
+                    // would invite a retry and could consume the next hierarchy rung.
+                    // Evicting/closing the connection ends this transaction and
+                    // releases the transaction-scoped advisory lock.
+                    lockDataSource.evictConnection(connection);
+                    log.error("Could not commit the escalation lock transaction for complaint {}; "
+                                    + "the escalation already completed, so the connection was evicted",
+                            complaintId, e);
+                }
                 return result;
             } catch (RuntimeException | Error e) {
-                rollback(connection, complaintId);
-                throw e;
-            } catch (SQLException e) {
                 rollback(connection, complaintId);
                 throw e;
             }
