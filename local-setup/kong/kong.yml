@@ -181,7 +181,7 @@ plugins:
           -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
           -- appropriate because HRMS employee creation does not guarantee a shared base role.
           ["/pgr-services/v2/employee/_context"]=true,
-          -- The new account-onboarding endpoints authenticate the founder from the
+          -- The new account-onboarding endpoints authenticate the tenant admin from the
           -- identity BFF's HttpOnly session cookie inside pgr-services. They do not
           -- accept DIGIT RequestInfo auth tokens because a tenant/user mapping does
           -- not exist yet at this point in the journey.
