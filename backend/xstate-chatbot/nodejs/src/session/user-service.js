@@ -195,78 +195,7 @@ class UserService {
 
 
   
-  async enrichuserDetails(user) {
-    // Skip enrichment if no auth token
-    if (!user || !user.authToken) {
-      return user;
-    }
-
-    let url = `${config.egovServices.userServiceHost}${config.egovServices.userServiceCitizenDetailsPath}?access_token=${user.authToken}`;
-
-    let options = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    };
-
-    try {
-      let response = await fetch(url, options);
-      if (response.status === StatusCodes.OK) {
-        let body = await response.json();
-        user.userInfo.name = body.name;
-        user.userInfo.locale = body.locale;
-      }
-      return user;
-    } catch (error) {
-      return user; // Return original user even if enrichment fails
-    }
-  }
-
-  async loginUser(mobileNumber, tenantId) {
-
-    // Sanitize mobile number for login too
-    const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber) || mobileNumber;
-
-    let data = new URLSearchParams();
-    data.append('grant_type', 'password');
-    data.append('scope', 'read');
-    data.append('password', config.userService.userServiceHardCodedPassword);
-    data.append('userType', 'CITIZEN');
-    data.append('tenantId', tenantId);
-    data.append('username', cleanMobileNumber);
-
-    let headers = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': config.userService.userLoginAuthorizationHeader
-    };
-
-    let url = config.egovServices.userServiceHost + config.egovServices.userServiceOAuthPath;
-    
-    let options = {
-      method: 'POST',
-      headers: headers,
-      body: data
-    };
-
-    try {
-      let response = await fetch(url, options);
-
-      if (response.status === StatusCodes.OK) {
-        let body = await response.json();
-        return {
-          authToken: body.access_token,
-          refreshToken: body.refresh_token,
-          userInfo: body.UserRequest
-        };
-      } else {
-        return undefined;
-      }
-    } catch (error) {
-      return undefined;
-    }
-  }
-
+  
   async createUser(mobileNumber, tenantId) {
 
     const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber);
