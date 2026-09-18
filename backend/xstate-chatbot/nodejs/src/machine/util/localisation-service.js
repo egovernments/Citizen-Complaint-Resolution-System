@@ -4,27 +4,81 @@ const config = require('../../env-variables'),
 class LocalisationService {
 
     async init() {
-        this.messages = {}
-        this.supportedLocales = config.supportedLocales.split(',');
-        for(let i = 0; i < this.supportedLocales.length; i++) {
-            this.supportedLocales[i] = this.supportedLocales[i].trim();
+        this.messages = {};
+        this.localeLabels = {};
+
+        const declared = await this.fetchDeclaredLocales();
+        const candidates = declared.length
+            ? declared
+            : config.supportedLocales.split(',').map((l) => ({ value: l.trim(), label: l.trim() }));
+
+        // Localisation never merges tenants: a search returns rows from the first tenant
+        // in the chain that matches, then stops. Fetch each tenant separately and merge,
+        // city last so it overrides the state root.
+        const stateTenantId = String(config.rootTenantId).split('.')[0];
+        const tenants = stateTenantId === config.rootTenantId
+            ? [config.rootTenantId]
+            : [stateTenantId, config.rootTenantId];
+
+        const covered = [];
+        for (const { value, label } of candidates) {
+            const codeToMessages = {};
+            for (const tenantId of tenants) {
+                const messages = await this.fetchMessagesForLocale(value, tenantId).catch(() => []);
+                (messages || []).forEach((record) => { codeToMessages[record.code] = record.message; });
+            }
+            if (Object.keys(codeToMessages).length === 0) continue;
+
+            this.messages[value] = codeToMessages;
+            this.localeLabels[value] = label;
+            covered.push(value);
         }
-        
-        this.supportedLocales.forEach(async (locale, index) => {
-            let codeToMessages = {};
-            let messages = await this.fetchMessagesForLocale(locale, config.rootTenantId);
-            
-            messages.forEach((record, index) => {
-                const code =  record['code'];
-                const message = record['message'];
-                codeToMessages[code] = message;
-            });
-            this.messages[locale] = codeToMessages;
-        });
+
+        // Ensure that at least one locale has messages; otherwise, throw an error.
+        if (covered.length === 0) {
+            throw new Error(
+                `Localisation returned no messages for any configured locale [${candidates.map((c) => c.value).join(', ')}]`
+            );
+        }
+
+        this.supportedLocales = covered;
+
     }
 
+    async fetchDeclaredLocales() {
+        const url = config.egovServices.egovServicesHost + config.egovServices.mdmsSearchPath + '?tenantId=' + config.rootTenantId;
+        const body = {
+            RequestInfo: {},
+            MdmsCriteria: {
+                tenantId: config.rootTenantId,
+                moduleDetails: [{ moduleName: 'common-masters', masterDetails: [{ name: 'StateInfo' }] }]
+            }
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await response.json();
+            const languages = data?.MdmsRes?.['common-masters']?.StateInfo?.[0]?.languages ?? [];
+            return languages.filter((language) => language?.value);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    getLocales() {
+        return (this.supportedLocales || ['en_IN']).map((value) => ({
+            value,
+            label: (this.localeLabels || {})[value] || value
+        }));
+    }
+
+    
     getMessageForCode(code, locale) {
-        return this.messages[locale][code];
+        return (this.messages || {})[locale]?.[code];
     }
 
     getMessageBundleForCode(code) {
@@ -59,8 +113,14 @@ class LocalisationService {
         return messageBundle;
     }
 
-    async fetchMessagesForLocale(locale, tenantId) {
+    // Without codes, localisation returns only the most specific tenant that has
+    // messages for the locale; ancestor tenants are not merged. Passing codes makes
+    // it resolve up the chain, which is the only way to reach keys held on the state root.
+    async fetchMessagesForLocale(locale, tenantId, codes) {
         var url = config.egovServices.egovlocalizationhost + config.egovServices.localisationServiceSearchPath + '?tenantId=' + tenantId + '&locale=' + locale;
+        if (codes && codes.length) {
+            url = url + '&codes=' + encodeURIComponent(codes.join(','));
+        }
         
         var options = {
             method: 'POST',
@@ -120,6 +180,31 @@ class LocalisationService {
 }
 
 const localisationService = new LocalisationService();
-localisationService.init();
+
+/**
+ * Boot-time load with backoff, called once from app.js.
+ *
+ * Not done at require time any more: init() is async, so a failure there was
+ * unobservable and left the service running with empty message tables until
+ * someone restarted it by hand. Exiting on exhaustion restores the base's
+ * self-healing — the orchestrator restarts the container.
+ */
+async function loadLocalisationOrExit(maxAttempts = 5) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await localisationService.init();
+      console.log(`Localisation loaded for [${localisationService.supportedLocales.join(', ')}]`);
+      return;
+    } catch (error) {
+      console.error(`Localisation init attempt ${attempt}/${maxAttempts} failed: ${error.message}`);
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(attempt * 2000, 10000)));
+      }
+    }
+  }
+  console.error('Localisation could not be loaded; exiting so the orchestrator restarts the service');
+  process.exit(1);
+}
 
 module.exports = localisationService;
+module.exports.loadLocalisationOrExit = loadLocalisationOrExit;

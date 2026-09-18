@@ -1,3 +1,4 @@
+require('dotenv').config();
 const os = require('os');
 
 const envVariables = {
@@ -5,6 +6,7 @@ const envVariables = {
     ver: process.env.VERSION || '0.0.1',
 
     port: process.env.SERVICE_PORT || 8082,
+
     contextPath: process.env.CONTEXT_PATH || '/xstate-chatbot',
 
     whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'Twilio',
@@ -15,12 +17,45 @@ const envVariables = {
 
     whatsAppBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER || '919880900990',
 
+    allowedMobileNumbers: process.env.ALLOWED_MOBILE_NUMBERS || '',
+
+    serviceAccount: {
+        username: process.env.USER_SERVICE_ACCOUNT_USERNAME || '',
+        password: process.env.USER_SERVICE_ACCOUNT_PASSWORD || '',
+        tenantId: process.env.USER_SERVICE_ACCOUNT_TENANT ||  process.env.ROOT_TENANTID || 'mz',
+    },
+
+    // Placeholder name for a citizen before they have provided a real name.
+    citizenPlaceholderName: process.env.CITIZEN_PLACEHOLDER_NAME || 'Cidadão',
+
+    resetWords: (process.env.RESET_WORDS || 'hello,hi,ola').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
+
+    cancelWords: (process.env.CANCEL_WORDS || 'cancelar,cancele,cancel').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
+
     rootTenantId: process.env.ROOT_TENANTID || 'pg',
 
     supportedLocales: process.env.SUPPORTED_LOCALES || 'en_IN',
+    
+    defaultLocale: (process.env.SUPPORTED_LOCALES || 'en_IN').split(',')[0].trim(),
+
+
+    // Phone identity is per-country CONFIG, not code. countryCode is the dialling
+    // prefix without '+'; mobileNumberLength is the national number length.
+    // MZ: 258 / 9 (^8[0-9]{8}$).   IN: 91 / 10.
+    countryCode: process.env.COUNTRY_CODE || '91',
+    mobileNumberLength: parseInt(process.env.MOBILE_NUMBER_LENGTH || '10', 10),
+
+    descriptionMinLength: parseInt(process.env.DESCRIPTION_MIN_LENGTH || '20', 10),
+
+    caseRelatedTo: process.env.CASE_RELATED_TO || 'IGE',
+    instituteNameMaxLength: parseInt(process.env.INSTITUTE_NAME_MAX_LENGTH || '300', 10),
+
+    // boundary-service registers many unrelated hierarchy types per tenant
+    // (other modules, QA fixtures); this picks out the one PGR actually uses.
+    boundaryHierarchyType: process.env.BOUNDARY_HIERARCHY_TYPE || 'divisao_administrativa',
 
     // Sandbox mode configuration
-    enableSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
+    isSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
     tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'https://sandbox.digit.org',
     sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox.digit.org',
 
@@ -31,8 +66,14 @@ const envVariables = {
     dateFormat: process.env.DATEFORMAT || 'DD/MM/YYYY',
     timeZone: process.env.TIMEZONE || 'Asia/Kolkata',
     msgId: process.env.MSG_ID || '20170310130900',
-    avgSessionTime: process.env.AVG_SESSION_TIME || 30,
-
+    avgSessionTime: process.env.AVG_SESSION_TIME || 10,
+    replyCooldownMs: parseInt(process.env.REPLY_COOLDOWN_MS || '2000', 10),
+    mediaProcessingTimeoutMs: parseInt(process.env.MEDIA_PROCESSING_TIMEOUT_MS || '13000', 10),
+    // Time to wait for all dispatches to settle before considering the operation complete.
+    dispatchSettleTimeoutMs: parseInt(process.env.DISPATCH_SETTLE_TIMEOUT_MS || '30000', 10),
+    maxMediaSizeBytes: parseInt(process.env.MAX_MEDIA_SIZE_MB || '5', 10) * 1024 * 1024,
+    // Maximum number of messages that can be queued per user before older messages are dropped.
+    maxQueuedMessagesPerUser: parseInt(process.env.MAX_QUEUED_MESSAGES_PER_USER || '3', 10),
     paytmWnSLink: process.env.PAYTM_WNS_LINK || 'https://stvending.punjab.gov.in/wsbills/',
 
     postgresConfig: {
@@ -64,6 +105,11 @@ const envVariables = {
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
         whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '+919880900990',
         baseUrl: process.env.TWILIO_BASE_URL || '',
+        // Public base URL for Twilio webhooks. This should match the URL configured in the Twilio console.
+        webhookBaseUrl: process.env.TWILIO_WEBHOOK_BASE_URL || process.env.EXTERNAL_HOST || '',
+        // Whether to verify the Twilio webhook signature. Set to false only for local testing.
+        verifyWebhookSignature: (process.env.TWILIO_VERIFY_WEBHOOK_SIGNATURE || 'true') !== 'false',
+
     },
 
     valueFirstWhatsAppProvider: {
@@ -87,6 +133,9 @@ const envVariables = {
         valuefirstNotificationTrackCompliantTemplateid: process.env.VALUEFIRST_NOTIFICATION_TRACK_COMPLAINT_TEMPLATEID || '4052381,4156335',
         valuefirstNotificationLodgeCompliantTemplateid: process.env.VALUEFIRST_NOTIFICATION_LODGE_COMPLAINT_TEMPLATEID || '4052379,4156333',
         valuefirstLoginAuthorizationHeader: process.env.VALUEFIRST_LOGIN_AUTHORIZATION_HEADER || '',
+        userServiceCreateNoValidatePath: process.env.USER_SERVICE_CREATE_NOVALIDATE_PATH || 'user/users/_createnovalidate',
+        userServiceUpdateNoValidatePath: process.env.USER_SERVICE_UPDATE_NOVALIDATE_PATH || 'user/users/_updatenovalidate',
+        userServiceSearchPath: process.env.USER_SERVICE_SEARCH_PATH || 'user/_search',
     },
 
     egovServices: {
@@ -98,6 +147,9 @@ const envVariables = {
         userServiceCreateCitizenPath: process.env.USER_SERVICE_CREATE_CITIZEN_PATH || 'user/citizen/_create',
         userServiceUpdateProfilePath: process.env.USER_SERVICE_UPDATE_PROFILE_PATH || 'user/profile/_update',
         userServiceCitizenDetailsPath: process.env.USER_SERVICE_CITIZEN_DETAILS_PATH || 'user/_details',
+        userServiceCreateNoValidatePath: process.env.USER_SERVICE_CREATE_NOVALIDATE_PATH || 'user/users/_createnovalidate',
+        userServiceUpdateNoValidatePath: process.env.USER_SERVICE_UPDATE_NOVALIDATE_PATH || 'user/users/_updatenovalidate',
+        userServiceSearchPath: process.env.USER_SERVICE_SEARCH_PATH || 'user/_search',
 
         egovlocalizationhost: process.env.LOCALIZATION_SERVICE_HOST || 'https://sandbox.digit.org/',
         mdmsSearchPath: process.env.MDMS_SEARCH_PATH || 'egov-mdms-service/v1/_search',
@@ -129,7 +181,6 @@ const envVariables = {
     },
 
     userService: {
-        userServiceHardCodedPassword: process.env.USER_SERVICE_HARDCODED_PASSWORD || '123456',
         userLoginAuthorizationHeader: process.env.USER_LOGIN_AUTHORIZATION_HEADER || 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
         systemUserMobile: process.env.SYSTEM_USER_MOBILE || '9999999999',
     },
