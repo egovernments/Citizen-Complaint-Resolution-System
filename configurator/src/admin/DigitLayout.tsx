@@ -78,6 +78,7 @@ const navGroups = [
       { id: 'complaint-hierarchies', nameKey: 'app.nav.complaint_hierarchies', path: '/manage/complaint-hierarchies', icon: GitBranch },
       { id: 'complaint-hierarchy', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-hierarchy', icon: AlertTriangle },
       { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
+      { id: 'escalation-policy', nameKey: 'app.nav.escalation_policy', path: '/manage/escalation-policy', icon: SlidersHorizontal },
       { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
     ],
   },

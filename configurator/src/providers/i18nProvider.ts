@@ -59,6 +59,7 @@ const customEnglishMessages: TranslationMessages = {
       complaint_hierarchies: 'Complaint Hierarchies',
       complaint_types: 'Complaint Types',
       complaints: 'Complaints',
+      escalation_policy: 'PGR Escalation Policy',
       localization: 'Localization',
       people: 'People',
       employees: 'Employees',

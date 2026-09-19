@@ -483,3 +483,25 @@ export interface SetupProgress {
   totalComplaintTypes?: number;
   totalEmployees?: number;
 }
+
+// ============================================
+// Escalation Policy Types (RAINMAKER-PGR.EscalationConfig)
+// ============================================
+
+export interface EscalationLevelOverride {
+  slaPercentageByLevel: number[];
+  slaByLevel?: number[];
+  enabledByLevel: boolean[];
+}
+
+export interface EscalationConfigData {
+  code: string;
+  maxDepth: number;
+  eligibleStatuses: string[];
+  defaultSlaPercentageByLevel: number[];
+  defaultSlaByLevel: number[];
+  enabledByLevel: boolean[];
+  overrides: Record<string, EscalationLevelOverride>;
+  [key: string]: unknown;
+}
+
