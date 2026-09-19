@@ -125,6 +125,14 @@ digit-config-service:
   data_tables: [eg_config_data]
   baseline_fresh: true
 
+digit-user-preferences-service:
+  canonical: digit_user_preferences_service_schema
+  aliases: []                # no history at all before the Java rewrite: the Go
+                             # implementation created its table with GORM
+                             # AutoMigrate and never wrote a Flyway history
+  data_tables: [user_preference]
+  baseline_fresh: true
+
 audit-service:
   canonical: audit_service_schema
   aliases: []

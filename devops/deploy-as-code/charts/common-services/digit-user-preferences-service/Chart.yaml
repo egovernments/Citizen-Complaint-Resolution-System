@@ -2,8 +2,8 @@ apiVersion: v2
 name: digit-user-preferences-service
 description: User preferences service for storing notification consent and language settings
 type: application
-version: 0.1.0
-appVersion: "1.0.0"
+version: 0.2.0
+appVersion: "2.0.0"
 
 dependencies:
 - name: common
