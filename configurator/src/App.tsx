@@ -39,6 +39,7 @@ import { NotificationProviderList } from '@/resources/notification-providers/Not
 import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
+import { EscalationPolicyEditor } from '@/admin/escalation';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
@@ -181,6 +182,7 @@ function ManagementAdminResources() {
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
+          <Route path="/escalation-policy" element={<EscalationPolicyEditor />} />
           {/* Analytics destinations. A CustomRoute rather than a <Resource>: the
               screen deliberately does not use react-admin's list/edit/delete
               machinery, because the generic MDMS mutation path is not scoped to
