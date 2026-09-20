@@ -86,8 +86,8 @@ sudo apt update && sudo apt install -y git ansible python3 python3-pip rsync cur
 sudo apt install -y ansible-lint yamllint   # optional; deploy.sh WARNs without them
 ```
 
-Ubuntu 24.04's apt ships ansible-core 2.16.3, which is the recommended and
-best-tested version. Newer cores work too.
+Ubuntu 24.04's apt ships ansible-core 2.16.3 — the recommended, best-tested
+version for this playbook.
 
 ## 3. Clone INSIDE the WSL filesystem
 
