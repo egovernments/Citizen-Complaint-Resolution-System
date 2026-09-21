@@ -285,33 +285,11 @@ public class PGRConfiguration {
     @Value("${pgr.visibility.team.fanout.max:25}")
     private Integer visibilityTeamFanoutMax;
 
-    // MDMS-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate / NotificationProviderTemplate)
-    @Value("${pgr.notification.default.locale:en_IN}")
-    private String notificationDefaultLocale;
-
-    @Value("${pgr.notification.rolepool.page.size:100}")
-    private Integer notificationRolePoolPageSize;
-
-    @Value("${pgr.notification.rolepool.max.pages:10}")
-    private Integer notificationRolePoolMaxPages;
-
+    // Shared MDMS cache window. Named for the notification masters it was introduced for; those
+    // moved to novu-bridge with the routing/rendering half, and the knob now paces the MDMS caches
+    // that are left here (per-complaint-type SLA, the reopen window, department code->name).
     @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
     private Long notificationMdmsCacheTtlMs;
-
-    // Per-recipient locale: render each recipient in their preferredLanguage from
-    // digit-user-preferences-service (falling back to pgr.notification.default.locale).
-    // Blank host = feature off (everyone gets the default locale).
-    @Value("${pgr.notification.locale.per.recipient:true}")
-    private Boolean notificationLocalePerRecipient;
-
-    @Value("${egov.user.preference.host:}")
-    private String userPreferenceHost;
-
-    @Value("${egov.user.preference.search.path:/user-preference/v1/_search}")
-    private String userPreferenceSearchPath;
-
-    @Value("${pgr.notification.preference.code:USER_NOTIFICATION_PREFERENCES}")
-    private String notificationPreferenceCode;
 
     // Escalation
     @Value("${pgr.escalation.enabled}")

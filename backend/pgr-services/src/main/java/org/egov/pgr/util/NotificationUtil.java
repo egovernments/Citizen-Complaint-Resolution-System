@@ -1,28 +1,28 @@
 package org.egov.pgr.util;
 
-import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.repository.ServiceRequestRepository;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
-import static org.egov.pgr.util.PGRConstants.*;
+import java.util.HashMap;
 
+/**
+ * What the notification producer still fetches from outside: the shortened download link.
+ *
+ * <p>The localization client that used to live here (getLocalizationMessages / getUri /
+ * getCustomizedMsgForPlaceholder) went with the rest of the rendering half into novu-bridge. A thin
+ * event carries localization CODES, not localized text, and the bridge resolves them once per
+ * recipient locale — which is the lookup pgr-services could never do correctly, because it builds
+ * its placeholder values once per event. The locale rule that used to be buried in {@code getUri}
+ * (the part of {@code RequestInfo.msgId} after the {@code |}) now travels on the event itself as
+ * {@code localizationLocale}; see {@code ThinEventBuilder.localeFromMsgId}.
+ */
 @Component
 @Slf4j
 public class NotificationUtil {
-
-    @Autowired
-    private ServiceRequestRepository serviceRequestRepository;
 
     @Autowired
     private PGRConfiguration config;
@@ -30,53 +30,7 @@ public class NotificationUtil {
     @Autowired
     private RestTemplate restTemplate;
 
-    @Autowired
-    private MultiStateInstanceUtil centralInstanceUtil;
-
-
     /**
-     *
-     * @param tenantId Tenant ID
-     * @param requestInfo Request Info object
-     * @param module Module name
-     * @return Return Localisation Message
-     */
-    public String getLocalizationMessages(String tenantId, RequestInfo requestInfo,String module) {
-        @SuppressWarnings("rawtypes")
-        LinkedHashMap responseMap = (LinkedHashMap) serviceRequestRepository.fetchResult(getUri(tenantId, requestInfo, module),
-                requestInfo);
-        return new JSONObject(responseMap).toString();
-    }
-
-    /**
-     *
-     * @param tenantId Tenant ID
-     * @param requestInfo Request Info object
-     * @param module Module name
-     * @return Return uri
-     */
-    public StringBuilder getUri(String tenantId, RequestInfo requestInfo, String module) {
-
-        /*if (config.getIsLocalizationStateLevel())
-            tenantId= centralInstanceUtil.getStateLevelTenant(tenantId);*/
-        tenantId= centralInstanceUtil.getStateLevelTenant(tenantId);
-        log.info("tenantId after calling central instance method :"+ tenantId);
-        String locale = NOTIFICATION_LOCALE;
-        if (!StringUtils.isEmpty(requestInfo.getMsgId())) {
-            String[] parts = requestInfo.getMsgId().split("\\|");
-            if (parts.length >= 2 && !StringUtils.isEmpty(parts[1])) locale = parts[1];
-        }
-        StringBuilder uri = new StringBuilder();
-        uri.append(config.getLocalizationHost()).append(config.getLocalizationContextPath())
-                .append(config.getLocalizationSearchEndpoint()).append("?").append("locale=").append(locale)
-                .append("&tenantId=").append(tenantId).append("&module=").append(module);
-
-        return uri;
-    }
-
-
-    /**
-     *
      * @param actualURL Actual URL
      * @return Shortened URL
      */
@@ -92,27 +46,6 @@ public class NotificationUtil {
             return actualURL;
         }
         else return res;
-    }
-
-    /**
-     *
-     * @param localizationMessage Localisation Code
-     * @param notificationCode Notification Code
-     * @return Return Customized Message
-     */
-    public String    getCustomizedMsgForPlaceholder(String localizationMessage,String notificationCode) {
-        String path = "$..messages[?(@.code==\"{}\")].message";
-        path = path.replace("{}", notificationCode);
-        String message = null;
-        try {
-            ArrayList<String> messageObj = (ArrayList<String>) JsonPath.parse(localizationMessage).read(path);
-            if(messageObj != null && messageObj.size() > 0) {
-                message = messageObj.get(0);
-            }
-        } catch (Exception e) {
-            log.warn("Fetching from localization for placeholder failed", e);
-        }
-        return message;
     }
 
 }

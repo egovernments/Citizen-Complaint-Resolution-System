@@ -67,14 +67,18 @@ erDiagram
 
 ### Service Dependencies
 - egov-user
-- egov-localization
 - egov-idgen
 - mdms-v2
 - egov-persister
-- egov-notification-mail
 - egov-hrms
 - egov-workflow-v2
 - egov-url-shortening
+- novu-bridge (asynchronous, over Kafka — see **Notification** below)
+
+Two dependencies the service no longer has: **egov-localization** and
+**digit-user-preferences-service**. Both went to `novu-bridge` with the notification rendering half;
+pgr-services publishes localization *codes* and never resolves a message or a recipient's preferred
+language itself.
 
 
 ### Swagger API Contract
@@ -97,7 +101,41 @@ erDiagram
 
 
 **Notification:**
-- Notification is sent to the phone number of the citizen who has been created in the system. This is an SMS notification.
+
+pgr-services is a notification **producer** and nothing more. On every workflow transition it
+publishes exactly **one thin domain event** to `complaints.domain.events`, and `novu-bridge` decides
+the rest: who to tell, on which channels, in which language, what the words are, and how to deliver
+them. There is no flag — the routing, recipient-resolution and rendering code was deleted, not
+disabled, so which path a deployment is on is a property of the image it runs. Rolling back means
+redeploying the previous image; the bridge accepts both kinds forever.
+
+What the producer puts on the event:
+
+| Block | What it carries |
+|---|---|
+| `eventName` / `ledgerEventName` | `COMPLAINTS.WORKFLOW.<ACTION>.<TOSTATE>` is the config key routing and templates are chosen by; `COMPLAINTS.WORKFLOW.<ACTION>` is the operator-facing label written to every ledger row |
+| `transactionSeed` | `<complaintNo>:<action>:<toState>`, which the bridge completes into `…:<subscriberId>:<channel>` — byte-identical to the transaction ids this service used to mint, so a redeploy mid-flight cannot double-send |
+| `actors` | the citizen (inline, because the complaint holds the contact it was filed with) and the assignee (uuid only, so the bridge hydrates and no employee phone number reaches Kafka) |
+| `data` | the placeholder values that need PGR context: complaint number, date, raw service code and status, comments, rating, citizen name, the shortened download link, the assignee's name |
+| `localized` | localization **codes** for the tokens whose words depend on the reader's language — `complaint_type`, `status`, `ulb`, `ao_designation`, and the HRMS × MDMS department/designation pair — resolved by the bridge once per recipient locale |
+
+Two rules in that table are load-bearing and easy to lose: a token the producer cannot fill is
+**omitted** rather than blanked (an empty variable is what a provider rejects), and
+`download_link` is the one exception — blanked to `""` on a shortener outage, because a message
+containing the literal text `{download_link}` must never ship.
+
+The wire format is a published contract:
+[`docs/2.12/notifications/contract/thin-event-v1.schema.json`](../../docs/2.12/notifications/contract/thin-event-v1.schema.json)
+with worked examples under
+[`contract/examples/thin/`](../../docs/2.12/notifications/contract/examples/thin/). For how the whole
+subsystem fits together, and for adding a *second* producer module (which needs no notification code
+at all), see the
+[notifications developer guide](../../docs/2.12/notifications/developer-guide.md).
+
+The producer is pinned from the test side by
+`src/test/resources/golden/golden-thin-events.json` — 26 scenarios, one event each, checked both
+against the real service and against a mirror of novu-bridge's own executable spec. See that
+folder's `README.md` before touching anything in the notification path.
 
 
 ### Configurable properties
@@ -110,6 +148,14 @@ erDiagram
 | `pgr.search.max.limit`                    | The maximum number of record returned in any search call                                                                                                  | 200                                               |
 | `notification.sms.enabled`                | Switch to enable/disable sms notification                                                                                                                 | true                                              |
 | `egov.user.event.notification.enabled`    | Switch to enable/disable event notification                                                                                                               | true                                              |
+| `kafka.topics.complaints.domain.events`   | Topic the thin notification event is published to; `novu-bridge` consumes it and dispatches on the event's `kind`                                          | complaints.domain.events                          |
+| `pgr.notification.mdms.cache.ttl.ms`      | Shared MDMS cache window (SLA map, reopen window, department code→name). Named for the notification masters it was introduced for; those are novu-bridge's now | 60000                                          |
+
+Dropped at the thin-event cutover, and safe to remove from any deployment file that still sets them:
+`pgr.notification.default.locale`, `pgr.notification.rolepool.page.size`,
+`pgr.notification.rolepool.max.pages`, `pgr.notification.locale.per.recipient`,
+`pgr.notification.preference.code`, `egov.user.preference.host`,
+`egov.user.preference.search.path`.
 ### API Details
 
 `BasePath` /pgr-services/v2/[API endpoint]
@@ -125,13 +171,17 @@ erDiagram
 
 ### Kafka Consumers
 
-- NA
+- **save-pgr-request / update-pgr-request** (pattern `pgr.kafka.notification.topic.pattern`) :-
+  `NotificationConsumer` reads every complaint transition back off its own topics and publishes the
+  thin notification event for it.
 
 ### Kafka Producers
 
 - Following are the Producer topic.
     - **save-pgr-request** :- This topic is used to create new complaint in the system.
     - **update-pgr-request** :- This topic is used to update the existing complaint in the systen.
+    - **complaints.domain.events** :- One thin notification event per workflow transition, consumed
+      by `novu-bridge`.
 
 ### note
 all master data, localisation data, boundary data, users, employees, workflow config will be update by a service in utilities/default-data-handler which update all these data which is maintained in resource folder.

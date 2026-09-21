@@ -19,14 +19,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  * <p>The copies exist because the Docker test runner mounts only {@code backend/pgr-services}; the
  * authoritative files are reachable only in a monorepo checkout, so outside one these tests SKIP
- * rather than fail — the same convention as {@code SeedFixtureDriftTest}.
+ * rather than fail.
+ *
+ * <p>pgr-services stopped READING these masters at the thin-event cutover — routing, templates and
+ * provider templates are novu-bridge's now. The copies stay because they are still the input matrix:
+ * novu-bridge holds byte-identical copies of this whole folder ({@code GoldenFixtureSyncTest}) and
+ * runs its legacy read-adapter over them, so a seed edited here without the golden master being
+ * regenerated would quietly change what the bridge is held to.
  */
 class GoldenInputSeedDriftTest {
 
     private static final Path SEED_DIR = Paths.get("..", "..", "utilities", "default-data-handler",
             "src", "main", "resources", "mdmsData-dev", "RAINMAKER-PGR");
 
-    private final ObjectMapper mapper = GoldenEnvelopeFixtureGenerator.newMapper();
+    private final ObjectMapper mapper = GoldenThinEventFixtureGenerator.newMapper();
 
     @Test
     void goldenInputMastersAreTheShippedSeeds() throws Exception {
@@ -37,8 +43,8 @@ class GoldenInputSeedDriftTest {
                 "RAINMAKER-PGR.NotificationTemplate.json",
                 "RAINMAKER-PGR.NotificationProviderTemplate.json",
                 "RAINMAKER-PGR.NotificationChannel.json")) {
-            JsonNode copy = GoldenEnvelopeFixtureGenerator.readJson(
-                    mapper, GoldenEnvelopeFixtureGenerator.MASTERS_PREFIX + file);
+            JsonNode copy = GoldenThinEventFixtureGenerator.readJson(
+                    mapper, GoldenThinEventFixtureGenerator.MASTERS_PREFIX + file);
             JsonNode seed = mapper.readTree(SEED_DIR.resolve(file).toFile());
             assertEquals(seed, copy, "golden/inputs/masters/" + file + " has drifted from the "
                     + "authoritative default-data-handler seed — re-copy it, then decide whether the "

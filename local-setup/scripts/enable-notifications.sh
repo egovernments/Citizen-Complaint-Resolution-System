@@ -371,8 +371,8 @@ do_step1() {
     note "WHATSAPP not in CHANNELS_ENABLED — keeping current pgr image (SMS/email path)"
   fi
 
-  # Per-recipient language: point PGR at the preference service the notifications profile brings up.
-  set_env EGOV_USER_PREFERENCE_HOST http://digit-user-preferences-service:8080
+  # Per-recipient language is resolved by novu-bridge now (NOVU_BRIDGE_PREFERENCE_HOST in the
+  # compose file); pgr-services only emits the thin event, so it needs no preference host.
   log "Recreating pgr-services…"
   compose up -d pgr-services
 

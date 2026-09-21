@@ -5,14 +5,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.service.NotificationService;
 import org.egov.pgr.service.WorkflowService;
-import org.egov.pgr.service.notification.NotificationRouter;
-import org.egov.pgr.service.notification.TemplateRenderer;
+import org.egov.pgr.service.notification.ThinEventBuilder;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.NotificationUtil;
@@ -25,7 +23,6 @@ import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,33 +37,39 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Characterisation-fixture generator for the PGR notification path (task T9).
+ * Runs the REAL {@link NotificationService} over the whole golden input matrix and captures the
+ * thin events it publishes.
  *
  * <p>For every scenario in {@code golden/inputs/scenarios.json} it builds a fresh object graph
- * around the REAL {@link NotificationService}, {@link NotificationRouter}, {@link TemplateRenderer},
- * {@link NotificationUtil} and {@link HRMSUtil}, stubs only the outside world (MDMS masters, the
- * single HTTP funnel {@link ServiceRequestRepository}, the URL shortener and the Kafka producer),
- * drives {@code process()} and captures every envelope handed to the producer.
+ * around the real {@link NotificationService}, {@link ThinEventBuilder}, {@link NotificationUtil}
+ * and {@link HRMSUtil}, stubs only the outside world (the single HTTP funnel
+ * {@link ServiceRequestRepository}, the MDMS {@code ComplaintHierarchy} read, the URL shortener and
+ * the Kafka producer), drives {@code process()} and records what reached the producer.
  *
- * <p>The object graph is rebuilt per scenario on purpose: {@code NotificationService} keeps an
- * instance-level {@code preferredLocaleCache} with a 60 s TTL, and {@link MDMSUtils} caches master
- * rows per state tenant — a shared instance would leak one scenario's world into the next.
+ * <p><b>Two stubs are deliberately booby-trapped.</b> egov-localization and
+ * digit-user-preferences-service now throw if they are called at all: after the cutover the producer
+ * ships localization CODES and names no recipient locale, so a call to either service is a
+ * regression, not a detail — and a silent one, because the outage paths used to be handled. That
+ * makes "the rendering half really is gone" a runtime assertion rather than a claim.
+ *
+ * <p>The object graph is rebuilt per scenario because {@link MDMSUtils} caches master rows per state
+ * tenant; a shared instance would leak one scenario's world into the next.
  *
  * <p><b>Determinism.</b> The JVM default time zone is forced to UTC for the whole run, exactly as
  * {@code MainConfiguration.initialize()} does in production ({@code app.timezone=UTC}); without it
- * {@code NotificationService.formatCreatedDate} would render {@code {date}} in the builder's local
- * zone. Two fields cannot be frozen without changing main code and are normalised instead:
- * {@code eventId} (a fresh {@code UUID.randomUUID()}) and {@code eventTime} ({@code Instant.now()}).
- * Both are validated for SHAPE before being replaced, so a change of format still fails the test.
+ * {@code {date}} would render in the builder's local zone. Two fields cannot be frozen without a
+ * clock/id seam in main code and are normalised instead — {@code eventId} (a fresh
+ * {@code UUID.randomUUID()}) and {@code eventTime} ({@code Instant.now()}) — after their SHAPE is
+ * checked, so a change of format still fails the test.
  *
- * <p>Nothing here writes to {@code src/main}. See {@code src/test/resources/golden/README.md}.
+ * <p>See {@code src/test/resources/golden/README.md}.
  */
-public final class GoldenEnvelopeFixtureGenerator {
+public final class GoldenThinEventFixtureGenerator {
 
     public static final String SCENARIOS_RESOURCE = "golden/inputs/scenarios.json";
     public static final String MASTERS_PREFIX = "golden/inputs/masters/";
-    public static final String GOLDEN_RESOURCE = "golden/golden-envelopes.json";
-    public static final String GOLDEN_SOURCE_PATH = "src/test/resources/golden/golden-envelopes.json";
+    public static final String GOLDEN_RESOURCE = "golden/golden-thin-events.json";
+    public static final String GOLDEN_SOURCE_PATH = "src/test/resources/golden/golden-thin-events.json";
 
     /** Placeholders substituted for the two fields that cannot be frozen from the test side. */
     public static final String UUID_PLACEHOLDER = "<uuid>";
@@ -79,7 +82,7 @@ public final class GoldenEnvelopeFixtureGenerator {
     private static final String TENANT_FIELD = "producerTenantId";
     private static final String EVENT_FIELD = "event";
 
-    private GoldenEnvelopeFixtureGenerator() {
+    private GoldenThinEventFixtureGenerator() {
     }
 
     /** A mapper configured exactly like the application's ({@code MainConfiguration.objectMapper}). */
@@ -98,14 +101,12 @@ public final class GoldenEnvelopeFixtureGenerator {
         ObjectNode out = mapper.createObjectNode();
         out.put("$comment", "GENERATED - do not hand-edit. See src/test/resources/golden/README.md. "
                 + "Regenerate with -Dgolden.regenerate=true ONLY for an intended behaviour change.");
-        out.put("generator", GoldenEnvelopeFixtureGenerator.class.getName());
+        out.put("generator", GoldenThinEventFixtureGenerator.class.getName());
         out.put("inputs", SCENARIOS_RESOURCE);
+        out.put("contract", "docs/2.12/notifications/contract/thin-event-v1.schema.json");
         ObjectNode normalised = out.putObject("normalisedFields");
         normalised.put("event.eventId", UUID_PLACEHOLDER);
         normalised.put("event.eventTime", TIMESTAMP_PLACEHOLDER);
-        out.put("envelopeOrdering",
-                "envelopes[] sorted by (event.transactionId, event.templateKey, event.renderedBody); "
-                        + "emissionOrder[] preserves the order the producer was actually called in");
 
         ArrayNode scenarios = out.putArray("scenarios");
         TimeZone previous = TimeZone.getDefault();
@@ -125,23 +126,12 @@ public final class GoldenEnvelopeFixtureGenerator {
     // ------------------------------------------------------------------------------------------
 
     private static ObjectNode runScenario(ObjectMapper mapper, JsonNode defaults, JsonNode scenario) {
-        String id = scenario.path("id").asText();
         ObjectNode cfg = merge(mapper, defaults.path("config"), scenario.path("config"));
         ObjectNode world = merge(mapper, defaults.path("world"), scenario.path("world"));
-        JsonNode masters = scenario.path("masters");
 
         PGRConfiguration config = stubConfig(cfg);
-        MultiStateInstanceUtil centralInstanceUtil = mock(MultiStateInstanceUtil.class);
-        when(centralInstanceUtil.getStateLevelTenant(anyString())).thenReturn(text(cfg, "stateLevelTenant"));
 
         MDMSUtils mdmsUtils = mock(MDMSUtils.class);
-        when(mdmsUtils.getNotificationRouting(anyString()))
-                .thenReturn(masterRows(mapper, masters, "routing", "RAINMAKER-PGR.NotificationRouting.json"));
-        when(mdmsUtils.getNotificationTemplates(anyString()))
-                .thenReturn(masterRows(mapper, masters, "templates", "RAINMAKER-PGR.NotificationTemplate.json"));
-        when(mdmsUtils.getNotificationProviderTemplates(anyString()))
-                .thenReturn(masterRows(mapper, masters, "providerTemplates",
-                        "RAINMAKER-PGR.NotificationProviderTemplate.json"));
         when(mdmsUtils.mDMSCall(any(ServiceRequest.class))).thenReturn(asMapOrNull(mapper, world.get("mdms")));
 
         RestTemplate restTemplate = mock(RestTemplate.class);
@@ -162,14 +152,10 @@ public final class GoldenEnvelopeFixtureGenerator {
         ServiceRequestRepository repository = stubHttpFunnel(mapper, cfg, world);
 
         NotificationUtil notificationUtil = new NotificationUtil();
-        set(notificationUtil, "serviceRequestRepository", repository);
         set(notificationUtil, "config", config);
         set(notificationUtil, "restTemplate", restTemplate);
-        set(notificationUtil, "centralInstanceUtil", centralInstanceUtil);
 
         HRMSUtil hrmsUtil = new HRMSUtil(repository, config);
-        NotificationRouter router = new NotificationRouter(mdmsUtils);
-        TemplateRenderer renderer = new TemplateRenderer(mdmsUtils, config);
         Producer producer = mock(Producer.class);
 
         List<ObjectNode> captured = new ArrayList<>();
@@ -190,34 +176,20 @@ public final class GoldenEnvelopeFixtureGenerator {
         set(service, "mdmsUtils", mdmsUtils);
         set(service, "hrmsUtils", hrmsUtil);
         set(service, "mapper", newMapper());
-        set(service, "centralInstanceUtil", centralInstanceUtil);
-        set(service, "notificationRouter", router);
-        set(service, "templateRenderer", renderer);
+        set(service, "thinEventBuilder", new ThinEventBuilder());
         set(service, "producer", producer);
 
         ServiceRequest request = mapper.convertValue(scenario.get("request"), ServiceRequest.class);
         service.process(request, "update-pgr-request");
 
         ObjectNode out = mapper.createObjectNode();
-        out.put("id", id);
+        out.put("id", scenario.path("id").asText());
         out.put("description", scenario.path("description").asText());
-        out.put("envelopeCount", captured.size());
-        ArrayNode emission = out.putArray("emissionOrder");
-        for (ObjectNode row : captured) {
-            emission.add(row.path(EVENT_FIELD).path("transactionId").asText(null));
-        }
-        List<ObjectNode> sorted = new ArrayList<>(captured);
-        sorted.sort(ENVELOPE_ORDER);
-        ArrayNode envelopes = out.putArray("envelopes");
-        sorted.forEach(envelopes::add);
+        out.put("eventCount", captured.size());
+        ArrayNode events = out.putArray("events");
+        captured.forEach(events::add);
         return out;
     }
-
-    /** Stable, documented ordering so the committed file does not churn on a rerun. */
-    private static final Comparator<ObjectNode> ENVELOPE_ORDER = Comparator
-            .comparing((ObjectNode n) -> n.path(EVENT_FIELD).path("transactionId").asText(""))
-            .thenComparing(n -> n.path(EVENT_FIELD).path("templateKey").asText(""))
-            .thenComparing(n -> n.path(EVENT_FIELD).path("renderedBody").asText(""));
 
     // ------------------------------------------------------------------------------------------
     // the outside world
@@ -225,7 +197,8 @@ public final class GoldenEnvelopeFixtureGenerator {
 
     /**
      * The one HTTP funnel every collaborator goes through. Routed by URI prefix, so a scenario's
-     * {@code world} block is the whole of the outside world this run can see.
+     * {@code world} block is the whole of the outside world this run can see — and anything the
+     * producer should no longer reach for is an explicit failure rather than a missing branch.
      */
     @SuppressWarnings("unchecked")
     private static ServiceRequestRepository stubHttpFunnel(ObjectMapper mapper, ObjectNode cfg, ObjectNode world) {
@@ -240,29 +213,14 @@ public final class GoldenEnvelopeFixtureGenerator {
             Object body = inv.getArgument(1);
 
             if (uri.startsWith(localizationHost)) {
-                if (world.path("localizationFails").asBoolean(false)) {
-                    throw new IllegalStateException("egov-localization unavailable");
-                }
-                String module = queryParam(uri, "module");
-                JsonNode messages = world.path("localization").path(module);
-                return messages.isMissingNode() || messages.isNull()
-                        ? emptyMessages() : asMap(mapper, messages);
+                // The thin event carries localization CODES; resolving them is novu-bridge's job,
+                // once per recipient locale. A call from here means the rendering half came back.
+                throw new AssertionError("pgr-services called egov-localization (" + uri + "). The thin "
+                        + "event carries codes in `localized`; the bridge resolves them per locale.");
             }
             if (uri.startsWith(prefsHost)) {
-                LinkedHashMap<String, Object> res = new LinkedHashMap<>();
-                List<Object> rows = new ArrayList<>();
-                JsonNode prefs = world.path("preferences");
-                prefs.fieldNames().forEachRemaining(uuid -> {
-                    LinkedHashMap<String, Object> row = new LinkedHashMap<>();
-                    row.put("userId", uuid);
-                    row.put("tenantId", text(cfg, "stateLevelTenant"));
-                    LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
-                    payload.put("preferredLanguage", prefs.path(uuid).asText());
-                    row.put("payload", payload);
-                    rows.add(row);
-                });
-                res.put("preferences", rows);
-                return res;
+                throw new AssertionError("pgr-services called digit-user-preferences-service (" + uri
+                        + "). Per-recipient locale is the bridge's decision now.");
             }
             if (uri.startsWith(userHost)) {
                 Map<String, Object> search = (Map<String, Object>) body;
@@ -275,12 +233,8 @@ public final class GoldenEnvelopeFixtureGenerator {
                             ? new ArrayList<>() : List.of(asMap(mapper, row)));
                     return res;
                 }
-                String roleCode = ((List<String>) search.get("roleCodes")).get(0);
-                int page = ((Number) search.get("pageNumber")).intValue();
-                JsonNode pages = world.path("rolePools").path(roleCode);
-                res.put("user", page < pages.size()
-                        ? mapper.convertValue(pages.get(page), List.class) : new ArrayList<>());
-                return res;
+                throw new AssertionError("pgr-services searched egov-user by something other than a uuid ("
+                        + search.keySet() + "). Role pools are resolved inside the bridge now.");
             }
             if (uri.startsWith(hrmsHost)) {
                 return asMapOrNull(mapper, world.get("hrms"));
@@ -299,38 +253,13 @@ public final class GoldenEnvelopeFixtureGenerator {
         return repository;
     }
 
-    private static LinkedHashMap<String, Object> emptyMessages() {
-        LinkedHashMap<String, Object> empty = new LinkedHashMap<>();
-        empty.put("messages", new ArrayList<>());
-        return empty;
-    }
-
-    private static String queryParam(String uri, String name) {
-        for (String part : uri.substring(uri.indexOf('?') + 1).split("&")) {
-            int eq = part.indexOf('=');
-            if (eq > 0 && part.substring(0, eq).equals(name)) return part.substring(eq + 1);
-        }
-        return null;
-    }
-
     private static PGRConfiguration stubConfig(ObjectNode cfg) {
         PGRConfiguration config = mock(PGRConfiguration.class, Mockito.RETURNS_DEFAULTS);
-        when(config.getNotificationDefaultLocale()).thenReturn(text(cfg, "notificationDefaultLocale"));
-        when(config.getNotificationLocalePerRecipient()).thenReturn(cfg.path("notificationLocalePerRecipient").asBoolean());
-        when(config.getNotificationPreferenceCode()).thenReturn(text(cfg, "notificationPreferenceCode"));
-        when(config.getNotificationRolePoolPageSize()).thenReturn(cfg.path("notificationRolePoolPageSize").asInt());
-        when(config.getNotificationRolePoolMaxPages()).thenReturn(cfg.path("notificationRolePoolMaxPages").asInt());
-        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(cfg.path("notificationMdmsCacheTtlMs").asLong());
         when(config.getComplaintsDomainEventsTopic()).thenReturn(text(cfg, "complaintsDomainEventsTopic"));
         when(config.getMobileDownloadLink()).thenReturn(text(cfg, "mobileDownloadLink"));
         when(config.getUserHost()).thenReturn(text(cfg, "userHost"));
         when(config.getUserSearchEndpoint()).thenReturn(text(cfg, "userSearchEndpoint"));
         when(config.getEgovInternalMicroserviceUserUuid()).thenReturn(text(cfg, "egovInternalMicroserviceUserUuid"));
-        when(config.getUserPreferenceHost()).thenReturn(text(cfg, "userPreferenceHost"));
-        when(config.getUserPreferenceSearchPath()).thenReturn(text(cfg, "userPreferenceSearchPath"));
-        when(config.getLocalizationHost()).thenReturn(text(cfg, "localizationHost"));
-        when(config.getLocalizationContextPath()).thenReturn(text(cfg, "localizationContextPath"));
-        when(config.getLocalizationSearchEndpoint()).thenReturn(text(cfg, "localizationSearchEndpoint"));
         when(config.getUrlShortnerHost()).thenReturn(text(cfg, "urlShortnerHost"));
         when(config.getUrlShortnerEndpoint()).thenReturn(text(cfg, "urlShortnerEndpoint"));
         when(config.getHrmsHost()).thenReturn(text(cfg, "hrmsHost"));
@@ -339,31 +268,11 @@ public final class GoldenEnvelopeFixtureGenerator {
     }
 
     // ------------------------------------------------------------------------------------------
-    // masters, merging, normalisation, reflection
+    // merging, normalisation, reflection
     // ------------------------------------------------------------------------------------------
 
-    /**
-     * Resolves one master for a scenario: {@code "seed"} (the committed copy of the shipped
-     * default-data-handler file) or an inline array that REPLACES it, then anything under
-     * {@code <name>Append} is appended in order.
-     */
-    static List<Object> masterRows(ObjectMapper mapper, JsonNode masters, String name, String seedFile) {
-        JsonNode spec = masters.path(name);
-        List<Object> rows = new ArrayList<>();
-        if (spec.isArray()) {
-            rows.addAll(mapper.convertValue(spec, List.class));
-        } else {
-            rows.addAll(mapper.convertValue(readJson(mapper, MASTERS_PREFIX + seedFile), List.class));
-        }
-        JsonNode append = masters.path(name + "Append");
-        if (append.isArray()) {
-            rows.addAll(mapper.convertValue(append, List.class));
-        }
-        return rows;
-    }
-
     /** Shallow (top-level key) override of the defaults block by the scenario's block. */
-    private static ObjectNode merge(ObjectMapper mapper, JsonNode base, JsonNode override) {
+    static ObjectNode merge(ObjectMapper mapper, JsonNode base, JsonNode override) {
         ObjectNode out = base.isObject() ? base.deepCopy() : mapper.createObjectNode();
         if (override.isObject()) {
             override.fields().forEachRemaining(e -> out.set(e.getKey(), e.getValue()));
@@ -393,7 +302,7 @@ public final class GoldenEnvelopeFixtureGenerator {
     }
 
     static JsonNode readJson(ObjectMapper mapper, String resource) {
-        try (InputStream in = GoldenEnvelopeFixtureGenerator.class.getClassLoader()
+        try (InputStream in = GoldenThinEventFixtureGenerator.class.getClassLoader()
                 .getResourceAsStream(resource)) {
             if (in == null) throw new IllegalStateException("Missing test resource: " + resource);
             return mapper.readTree(in);

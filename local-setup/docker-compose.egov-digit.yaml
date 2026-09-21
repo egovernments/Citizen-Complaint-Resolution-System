@@ -1804,13 +1804,9 @@ services:
       # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
       # is one of novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPICS.
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
-      # Locale pgr-services renders notifications in (NotificationTemplate.locale). Per-recipient
-      # resolution from user preferences falls back to this.
-      PGR_NOTIFICATION_DEFAULT_LOCALE: ${PGR_NOTIFICATION_DEFAULT_LOCALE:-en_IN}
-      # Per-recipient language: pgr-services reads preferredLanguage from
-      # digit-user-preferences-service (notifications profile). Blank = everyone gets the
-      # default locale. enable-notifications.sh sets it to http://digit-user-preferences-service:8080.
-      EGOV_USER_PREFERENCE_HOST: ${EGOV_USER_PREFERENCE_HOST:-}
+      # pgr-services only EMITS a thin event per transition; routing, recipients, language and
+      # rendering are novu-bridge's job now, so the locale / user-preference settings that used
+      # to live here moved to the bridge (NOVU_BRIDGE_DEFAULT_LOCALE, NOVU_BRIDGE_PREFERENCE_HOST).
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'

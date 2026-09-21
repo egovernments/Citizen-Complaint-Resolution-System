@@ -1,0 +1,1907 @@
+{
+  "$comment": "GENERATED - do not hand-edit. See src/test/resources/golden/README.md. Regenerate with -Dgolden.regenerate=true ONLY for an intended behaviour change.",
+  "generator": "org.egov.pgr.service.notification.golden.GoldenThinEventFixtureGenerator",
+  "inputs": "golden/inputs/scenarios.json",
+  "contract": "docs/2.12/notifications/contract/thin-event-v1.schema.json",
+  "normalisedFields": {
+    "event.eventId": "<uuid>",
+    "event.eventTime": "<timestamp>"
+  },
+  "scenarios": [
+    {
+      "id": "S01-apply-citizen-all-channels",
+      "description": "APPLY -> PENDINGFORASSIGNMENT. Citizen with phone AND email; default locale. Three seeded CITIZEN rows (SMS/WHATSAPP/EMAIL); WHATSAPP has an approved Twilio provider template so templateId + positional contentVariables ride along.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORASSIGNMENT",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S02-apply-citizen-phone-only",
+      "description": "Same transition, citizen has NO email: the EMAIL row is contact-gated away (no phantom send), SMS + WHATSAPP still emit.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORASSIGNMENT",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S03-apply-citizen-uuid-falls-back-to-accountId",
+      "description": "Citizen carries no uuid: the subscriber key falls back to service.accountId. The mobile already starts with '+', so the countryCode is NOT prefixed again.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "account-uuid-9",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORASSIGNMENT",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S04-assign-citizen-and-assignee",
+      "description": "ASSIGN -> PENDINGATLME with a named assignee (workflow.assignes[0]) resolved through egov-user, plus HRMS + MDMS ComplaintHierarchy so {emp_name}/{emp_department}/{emp_designation} resolve. Six envelopes: CITIZEN x3 and EMPLOYEE x3. The EMPLOYEE WHATSAPP row has NO provider template in the seed (they are all CITIZEN) so it emits with no templateId for an auditable bridge-side SKIP.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S05-reassign-citizen",
+      "description": "REASSIGN -> PENDINGFORREASSIGNMENT. The seeded rows author fromState=PENDINGATLME, which the Kafka path never supplies, so they match anyway (documentation-only).",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.REASSIGN.PENDINGFORREASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.REASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORREASSIGNMENT",
+              "additional_comments": "Wrong department",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORREASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORREASSIGNMENT",
+              "action": "REASSIGN",
+              "toState": "PENDINGFORREASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S06-resolve-citizen",
+      "description": "RESOLVE -> RESOLVED, citizen only.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.RESOLVE.RESOLVED",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:RESOLVE:RESOLVED",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "RESOLVED",
+              "additional_comments": "Cleared the dump site",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_RESOLVED"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "RESOLVED",
+              "action": "RESOLVE",
+              "toState": "RESOLVED"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S07-reject-citizen-with-comments",
+      "description": "REJECT -> REJECTED; workflow.comments becomes {additional_comments}.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.REJECT.REJECTED",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.REJECT",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:REJECT:REJECTED",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "REJECTED",
+              "additional_comments": "Duplicate of PGR-2026-000101",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_REJECTED"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "REJECTED",
+              "action": "REJECT",
+              "toState": "REJECTED"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S08-reopen-citizen",
+      "description": "REOPEN -> PENDINGFORASSIGNMENT, citizen only.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.REOPEN.PENDINGFORASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.REOPEN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORASSIGNMENT",
+              "additional_comments": "Garbage is back",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "REOPEN",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S09-rate-closedafterresolution-assignee-from-history",
+      "description": "RATE -> CLOSEDAFTERRESOLUTION. workflow.assignes is empty, so the assignee comes from the LAST ASSIGN in workflow history (egov-workflow-v2 ?history=true) and is then hydrated from egov-user. EMPLOYEE-only routing; {rating} is filled.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.RATE.CLOSEDAFTERRESOLUTION",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.RATE",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "CLOSEDAFTERRESOLUTION",
+              "rating": "5",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_CLOSEDAFTERRESOLUTION"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "CLOSEDAFTERRESOLUTION",
+              "action": "RATE",
+              "toState": "CLOSEDAFTERRESOLUTION"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S10-rate-closedafterrejection-no-routing",
+      "description": "RATE -> CLOSEDAFTERREJECTION has NO routing row in the seed: zero envelopes. This is the transition the design calls out as invisible today (no ledger row at all).",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.RATE.CLOSEDAFTERREJECTION",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.RATE",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:RATE:CLOSEDAFTERREJECTION",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "CLOSEDAFTERREJECTION",
+              "rating": "2",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_CLOSEDAFTERREJECTION"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "CLOSEDAFTERREJECTION",
+              "action": "RATE",
+              "toState": "CLOSEDAFTERREJECTION"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S11-assign-citizen-prefers-hi",
+      "description": "The citizen's user-preference is hi_IN: body, subject and Twilio provider template all come from the hi_IN rows and contact.locale is hi_IN. NOTE the placeholder VALUES are still English - they are localized once per event from RequestInfo.msgId, not per recipient. No assignee, so the EMPLOYEE rows resolve to nobody and the CITIZEN body keeps its literal {emp_name}/{emp_designation}/{emp_department} braces.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S12-assign-citizen-prefers-unseeded-locale",
+      "description": "Preference fr_FR has no template: body/subject/templateKey fall back to the default locale (en_IN) and so does the WhatsApp provider template - but contact.locale still carries the recipient's fr_FR.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S13-assign-msgid-drives-placeholder-localization",
+      "description": "RequestInfo.msgId carries hi_IN while the recipient has no preference: the TEMPLATE is en_IN but {complaint_type}/{status} are localized in hi_IN. Pins the split between placeholder localization (msgId, per event) and template locale (per recipient).",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "hi_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S14-assign-role-pool-dedupe-paging",
+      "description": "Seeded ASSIGN rows PLUS an extra PGR_LME SMS row. The pool has three holders paged two at a time: emp-jane (also the assignee - deduped on (channel, subscriberKey), audience deliberately not in the key), a holder with neither phone nor email (dropped at pool resolution) and lme-brian (emitted). Seven envelopes.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S15-assigneeOnly-collapses-role-to-assignee",
+      "description": "A single PGR_LME SMS row with assigneeOnly=true and a named assignee: the pool is not searched at all and the row collapses to the assignee. NOTE contact.type is EMPLOYEE (from assignee resolution) while the TEMPLATE is still looked up under PGR_LME.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S16-assigneeOnly-without-assignee-falls-back-to-pool",
+      "description": "Same row, but nothing names an assignee (no workflow.assignes, no history): rather than notifying no one, the row falls through to the full role pool.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S17-router-drops-inactive-unknown-channel-and-pseudo-audience",
+      "description": "Four rows the router must drop and two it must keep: active=false, an unknown channel (PUSH), the non-notifiable AUTO_ESCALATE pseudo-audience, a blank audience, and a row for another businessService. Only the WHATSAPP and EMAIL CITIZEN rows emit.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORASSIGNMENT",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S18-whatsapp-provider-template-not-approved",
+      "description": "The only Twilio row for this key is approvalStatus=pending: PGR still EMITS the WHATSAPP envelope with no templateId/contentVariables so the bridge can write an auditable SKIPPED / NB_TEMPLATE_NOT_APPROVED row instead of dropping it silently.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGFORASSIGNMENT",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGFORASSIGNMENT"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S19-email-escapes-values-subject-does-not",
+      "description": "EMAIL bodies HTML-escape substituted values (they are delivered as raw HTML); the subject is plain text and is NOT escaped. The localized complaint type carries &, \" and < so both sides of the rule are visible in one envelope.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.REJECT.REJECTED",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.REJECT",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:REJECT:REJECTED",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "REJECTED",
+              "additional_comments": "Duplicate of <b>PGR-2026-000101</b> & closed",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_REJECTED"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "REJECTED",
+              "action": "REJECT",
+              "toState": "REJECTED"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S20-email-subject-falls-back-to-complaint-id",
+      "description": "An EMAIL template with a null subject: Novu rejects a blank subject, so the service substitutes 'Complaint <serviceRequestId>'.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S21-routed-channel-without-template-emits-nothing",
+      "description": "A routed (audience, channel) with a resolvable recipient but NO template in the recipient's locale nor the default: the recipient is skipped and nothing is emitted - today this is invisible downstream (no ledger row).",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S22-pool-member-without-uuid-keys-on-phone",
+      "description": "A pool holder with no uuid keys the subscriber on the phone number instead: subscriberId and transactionId carry the raw MSISDN (PII on the wire, masked only in the logs).",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S23-all-thirteen-placeholders",
+      "description": "One template using all 13 placeholders with every source healthy (localization, the URL shortener, egov-user, HRMS and MDMS ComplaintHierarchy). Pins exactly what each token resolves to for a role-pool recipient.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "additional_comments": "Please clear the dump site",
+              "rating": "4",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S24-url-shortener-down-blanks-download-link",
+      "description": "Same template with egov-url-shortening throwing: {download_link} is BLANKED (never left as a literal brace) and every other placeholder survives - the defensive try/catch structure the design says must be preserved.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "additional_comments": "Please clear the dump site",
+              "rating": "4",
+              "citizen_name": "Amina Chebet",
+              "download_link": "",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S25-localization-down-falls-back-to-raw-values",
+      "description": "Same template with egov-localization throwing: {complaint_type} falls back to the raw service code, {status} to the raw applicationStatus, {ulb}/{ao_designation}/{emp_department}/{emp_designation} are left as literal braces, and id/date/rating/citizen_name/download_link/emp_name still resolve. This is the Twilio-21656 regression the base-placeholders-first ordering exists to prevent.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "additional_comments": "Please clear the dump site",
+              "rating": "4",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S26-escalate-has-no-routing-today",
+      "description": "PGR's supervisor escalation (PGRConstants.ESCALATE, PENDINGATLME --ESCALATE--> PENDINGATLME) reaches this code through the same Kafka path as every other transition, but the shipped seed has NO routing row for it: the new supervisor is never told. Recorded as current behaviour, not endorsed - the escalation notification gap is real.",
+      "eventCount": 1,
+      "events": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "kind": "THIN",
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "eventName": "COMPLAINTS.WORKFLOW.ESCALATE.PENDINGATLME",
+            "ledgerEventName": "COMPLAINTS.WORKFLOW.ESCALATE",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "transactionSeed": "PGR-2026-000123:ESCALATE:PENDINGATLME",
+            "actors": {
+              "citizen": {
+                "userId": "citizen-uuid-1",
+                "type": "CITIZEN",
+                "name": "Amina Chebet",
+                "phone": "+254712345678",
+                "email": "amina@example.com"
+              },
+              "assignee": {
+                "userId": "emp-jane",
+                "type": "EMPLOYEE"
+              }
+            },
+            "data": {
+              "id": "PGR-2026-000123",
+              "date": "29/06/2026",
+              "complaint_type": "GarbageNeedsTobeCleared",
+              "status": "PENDINGATLME",
+              "additional_comments": "Escalated to the reporting officer",
+              "citizen_name": "Amina Chebet",
+              "download_link": "https://sho.rt/dl1",
+              "emp_name": "Jane Mwangi"
+            },
+            "localized": {
+              "complaint_type": [
+                "COMPLAINT_HIERARCHY.GarbageNeedsTobeCleared",
+                "pgr.complaint.category.GarbageNeedsTobeCleared"
+              ],
+              "status": [
+                "CS_COMMON_PENDINGATLME"
+              ],
+              "ulb": [
+                "KE_BOMET"
+              ],
+              "ao_designation": [
+                "COMMON_MASTERS_DESIGNATION_AO"
+              ],
+              "emp_department": [
+                "COMMON_MASTERS_DEPARTMENT_DEPT_3"
+              ],
+              "emp_designation": [
+                "COMMON_MASTERS_DESIGNATION_DESIG_5"
+              ]
+            },
+            "localizationModules": [
+              "rainmaker-pgr",
+              "rainmaker-common"
+            ],
+            "localizationLocale": "en_IN",
+            "payload": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ESCALATE",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

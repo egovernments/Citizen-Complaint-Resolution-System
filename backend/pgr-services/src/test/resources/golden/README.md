@@ -1,34 +1,62 @@
-# Notification golden master (characterisation fixture)
+# Notification golden master (characterisation fixtures)
 
-This folder pins **what `pgr-services` publishes today**, envelope by envelope, so that when the
-routing / recipient-resolution / rendering / envelope-minting code moves into `novu-bridge` the new
-path can be proved equal to the old one. It is a *characterisation* fixture: it records behaviour,
-not intent. Some of what it records is arguably wrong — that is the point.
+This folder holds the shared input matrix for the notification cutover and **two** generated
+fixtures — one for each side of it. It is a *characterisation* record: it pins behaviour, not
+intent. Some of what it pins is arguably wrong; that is the point.
 
 | File | What it is |
 |---|---|
 | `inputs/masters/RAINMAKER-PGR.Notification*.json` | Verbatim copies of the four shipped MDMS seeds from `utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/`. Copies exist because the Docker test runner mounts only `backend/pgr-services`. `GoldenInputSeedDriftTest` fails if a copy drifts (and skips outside a monorepo checkout). |
 | `inputs/scenarios.json` | The input matrix: 26 scenarios of (transition × audience × channel × locale × recipient world). |
-| `golden-envelopes.json` | **Generated.** Every envelope the real `NotificationService` handed to the Kafka producer for those inputs — 57 envelopes. |
+| `golden-envelopes.json` | **Generated, and now FROZEN here.** The 57 pre-rendered envelopes `pgr-services` published *before* task T8. |
+| `golden-thin-events.json` | **Generated.** The 26 thin events the real `NotificationService` publishes *after* task T8 — one per scenario. |
 
-Driven by `src/test/java/org/egov/pgr/service/notification/golden/`:
-`GoldenEnvelopeFixtureGenerator` (builds the object graph and captures), and
-`GoldenEnvelopeCharacterisationTest` (compares, proves determinism, guards matrix coverage).
+## Which fixture is whose
+
+After the T8 cutover `pgr-services` no longer routes, resolves recipients, renders or mints
+envelopes. It publishes ONE thin domain event per workflow transition
+(`docs/2.12/notifications/contract/thin-event-v1.schema.json`) and `novu-bridge` does the rest. So
+the two files have different owners:
+
+* **`golden-thin-events.json` pins `pgr-services`.** `GoldenThinEventCharacterisationTest` drives the
+  real `NotificationService` over the matrix and compares. Nothing in this module reads
+  `golden-envelopes.json` any more.
+* **`golden-envelopes.json` is now `novu-bridge`'s acceptance criterion.** Its `ThinEventParityTest`
+  feeds these same scenarios through the resolution stage and must mint exactly these envelopes
+  (modulo the four intended differences in design §8.3). It keeps a byte-identical copy of this
+  whole folder and `GoldenFixtureSyncTest` fails if the copies drift — which is why
+  `golden-envelopes.json` and `inputs/` **must not change** in this module.
+
+## How the thin-event fixture is kept honest
+
+Generated once from the real producer, then held to an independent expectation forever after:
+
+1. `GoldenThinEventFixtureGenerator` runs the real `NotificationService` and captures what reaches
+   the Kafka producer → that is what the committed file records.
+2. `BridgeThinEventSpec` — a **line-by-line mirror** of
+   `backend/novu-bridge/src/test/java/org/egov/novubridge/service/resolution/golden/ScenarioThinEventBuilder.java`
+   at commit `350f4c38` (blob `4c4eafb1`) — derives the expected event from `inputs/scenarios.json`
+   alone, touching no main code of this module.
+3. `GoldenThinEventCharacterisationTest` asserts (1) == the file **and** the file == (2).
+
+A fixture regenerated to launder a producer bug would immediately go red on (2). If the bridge's
+`ScenarioThinEventBuilder` changes, update `BridgeThinEventSpec` with it, re-read the diff, and only
+then regenerate.
+
+The generator also **booby-traps two stubs**: a call to egov-localization or to
+digit-user-preferences-service fails the run outright. The thin event ships localization *codes* and
+names no per-recipient locale, so either call means the rendering half came back.
 
 ---
 
 ## The rule
 
-**Never regenerate to make a red test green.** A failure here means the observable notification
-contract changed: a different body, a different `transactionId`, a recipient gained or lost, an
-envelope that used to be published and no longer is. Fix the code.
+**Never regenerate to make a red test green.** A failure means the observable notification contract
+changed: a placeholder gained or lost, an actor changed shape, a `transactionSeed` moved (which
+moves every `transactionId` the bridge completes, and a mid-flight redeploy then double-sends
+instead of upserting one ledger row). Fix the code.
 
-Regenerate only when the change is *intended*, and say so in the commit message. The four
-differences the thin-event design deliberately introduces (`eventName` gaining the target state, the
-new `templateKey` form, new `SKIPPED` ledger rows, the `source_path` column — design §8.3) are
-bridge-side and must **not** change this file: `pgr-services` keeps publishing what it publishes
-until task T8 replaces the producer, and at that point the parity test compares against *this*
-recorded behaviour with the §8.3 differences applied explicitly.
+Regenerate only when the change is *intended*, and say so in the commit message.
 
 ## Regenerating
 
@@ -37,7 +65,7 @@ The normal test runner mounts the module read-only, so regeneration needs its ow
 ```bash
 docker run --rm -v "$PWD/backend/pgr-services":/w -v "$HOME/.m2-docker":/root/.m2 \
   -w /w maven:3.9-eclipse-temurin-17 \
-  mvn -B -Dtest=GoldenEnvelopeCharacterisationTest -Dgolden.regenerate=true test
+  mvn -B -Dtest=GoldenThinEventCharacterisationTest -Dgolden.regenerate=true test
 
 # the container writes as root — hand the files back and drop its target/
 docker run --rm -v "$PWD/backend/pgr-services":/w maven:3.9-eclipse-temurin-17 \
@@ -45,7 +73,12 @@ docker run --rm -v "$PWD/backend/pgr-services":/w maven:3.9-eclipse-temurin-17 \
 ```
 
 With `-Dgolden.regenerate=true` the comparison is skipped and the file is rewritten from the live
-code. Without it (the normal run) the file is read from the classpath and compared.
+code. Without it (the normal run) the file is read from the classpath and compared. On the very
+first regeneration the fixture is not yet on the classpath, so the second assertion errors — rerun
+without the flag once the file is in place.
+
+`golden-envelopes.json` has **no** regeneration path left in this module: the code that produced it
+is gone. Recovering it means checking out a pre-T8 revision.
 
 ---
 
@@ -57,36 +90,43 @@ to something else, or from an ISO-8601 instant to something else, still fails th
 
 | Field | Replaced with | Why it cannot be frozen |
 |---|---|---|
-| `event.eventId` | `"<uuid>"` | `UUID.randomUUID()` inline in `NotificationService.publishRenderedEvent` (l.810). No clock/id seam exists and this task may not touch `src/main`. |
-| `event.eventTime` | `"<timestamp>"` | `Instant.now()` inline at l.813. Same reason. |
+| `event.eventId` | `"<uuid>"` | `UUID.randomUUID()` inline in `ThinEventBuilder.build` (and, in the frozen envelope fixture, in the deleted `publishRenderedEvent`). No clock/id seam exists. |
+| `event.eventTime` | `"<timestamp>"` | `Instant.now()`, same line, same reason. |
 
-Everything else is verbatim and is the contract being preserved: `transactionId`, `subscriberId`,
-`channel`, `renderedBody`, `subject`, `templateKey`, `templateId`, `contentVariables`, the whole
-`contact` block (userId / type / name / phone / email / locale), `tenantId`, `eventName`,
-`eventType`, `schemaVersion`, `producer`, `module`, `entityType`, `entityId` and the `data` block —
-plus the Kafka `topic` and the tenant id passed to `Producer.push`.
+Everything else is verbatim and is the contract being preserved. For `golden-thin-events.json`:
+`kind`, `eventName`, `ledgerEventName`, `transactionSeed`, `entityType`, `entityId`, `tenantId`, the
+whole `actors` map, `data`, `localized`, `localizationModules`, `localizationLocale` and `payload` —
+plus the Kafka `topic` and the tenant id passed to `Producer.push`. For the frozen
+`golden-envelopes.json` it is additionally `transactionId`, `subscriberId`, `channel`,
+`renderedBody`, `subject`, `templateKey`, `templateId`, `contentVariables` and the `contact` block.
+
+A null value is **omitted** from the thin event rather than written as `null`: the bridge binds the
+wire form to its `ThinEvent` POJO, where absent and null are the same thing, and omitting keeps
+contact detail the producer does not hold off the broker entirely.
 
 Two further sources of run-to-run variance are removed at the source rather than normalised:
 
 * **Time zone.** The generator forces `TimeZone.setDefault("UTC")` for the run, exactly as
   `MainConfiguration.initialize()` does in production (`app.timezone=UTC`). `{date}` is formatted
   with `ZoneId.systemDefault()`, so without this the fixture would depend on the machine.
-* **Per-scenario object graph.** `NotificationService` holds an instance-level `preferredLocaleCache`
-  (60 s TTL) and `MDMSUtils` caches master rows; every scenario gets a fresh graph so no scenario
-  can see the previous one's world.
+* **Per-scenario object graph.** `MDMSUtils` caches master rows per state tenant; every scenario gets
+  a fresh graph so no scenario can see the previous one's world.
 
 ## Ordering
 
-`envelopes[]` is sorted by `(event.transactionId, event.templateKey, event.renderedBody)` so the
-file never churns. The order the producer was *actually* called in is preserved separately in
-`emissionOrder[]` (an array of `transactionId`s) — it is a real observable (routing-row file order ×
-recipient order) and a later port should not reorder it silently.
+`golden-thin-events.json` needs no ordering rule: a transition publishes exactly one event, so
+`events[]` has one element.
+
+In the frozen `golden-envelopes.json`, `envelopes[]` is sorted by
+`(event.transactionId, event.templateKey, event.renderedBody)` so the file never churns, and
+`emissionOrder[]` preserves the order the producer was *actually* called in — a real observable
+(routing-row file order × recipient order) that the bridge-side port must not reorder silently.
 
 ---
 
 ## JSON shapes (for the bridge-side parity test)
 
-Both files are plain JSON. Nothing in them requires a `pgr-services` class to read.
+All three files are plain JSON. Nothing in them requires a `pgr-services` class to read.
 
 ### `inputs/scenarios.json`
 
@@ -120,17 +160,21 @@ Both files are plain JSON. Nothing in them requires a `pgr-services` class to re
 * an inline array → **replaces** the seed entirely;
 * `"<name>Append": [ … ]` → rows appended after whichever base was chosen.
 
+Since the T8 cutover `pgr-services` reads none of `masters`, and never calls egov-localization or
+the preference service. Those blocks stay because they are the **bridge's** inputs: its parity test
+runs the same scenarios through the resolution stage with the same world.
+
 **`world`** — everything outside the service:
 
 | Key | Shape | Feeds |
 |---|---|---|
-| `localization` | `{ "rainmaker-pgr": {"messages":[{code,message,…}]}, "rainmaker-common": {…} }` | egov-localization |
-| `localizationFails` | `true` → every localization call throws | the outage path |
+| `localization` | `{ "rainmaker-pgr": {"messages":[{code,message,…}]}, "rainmaker-common": {…} }` | egov-localization (bridge-side only) |
+| `localizationFails` | `true` → every localization call throws | the outage path (bridge-side only) |
 | `shortUrl` | string | egov-url-shortening result |
 | `shortUrlFails` | `true` → the shortener throws | the outage path |
 | `usersByUuid` | `{ "<uuid>": {uuid,name,mobileNumber,countryCode,emailId,createdDate,…} }` | egov-user `_search` by uuid (assignee hydration) |
-| `rolePools` | `{ "<ROLE>": [ [page 0 rows], [page 1 rows], … ] }` | egov-user `_search` by `roleCodes`, one array per page |
-| `preferences` | `{ "<uuid>": "hi_IN" }` | digit-user-preferences-service |
+| `rolePools` | `{ "<ROLE>": [ [page 0 rows], [page 1 rows], … ] }` | egov-user `_search` by `roleCodes`, one array per page (bridge-side only) |
+| `preferences` | `{ "<uuid>": "hi_IN" }` | digit-user-preferences-service (bridge-side only) |
 | `workflowHistory` | `{ "ProcessInstances": [ {action, assignes:[{uuid,name,mobileNumber}]} ] }` | egov-workflow-v2 `?history=true` |
 | `hrms` | `{ "Employees": [ {user:{name}, assignments:[{department,designation,isCurrentAssignment}]} ] }` | egov-hrms |
 | `mdms` | `{ "MdmsRes": { "RAINMAKER-PGR": { "ComplaintHierarchy": [ {code, department} ] } } }` | `MDMSUtils.mDMSCall` |
@@ -139,7 +183,26 @@ Both files are plain JSON. Nothing in them requires a `pgr-services` class to re
 runs every egov-user response through `parseResponse`, and a null `createdDate` NPEs inside a
 `catch (Exception)` that silently yields "no assignee".
 
-### `golden-envelopes.json`
+### `golden-thin-events.json`
+
+```jsonc
+{
+  "normalisedFields": { "event.eventId": "<uuid>", "event.eventTime": "<timestamp>" },
+  "contract": "docs/2.12/notifications/contract/thin-event-v1.schema.json",
+  "scenarios": [
+    {
+      "id": "S04-…", "description": "…", "eventCount": 1,
+      "events": [
+        { "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": { /* the thin event, verbatim, in the order ThinEventBuilder builds it */ } }
+      ]
+    }
+  ]
+}
+```
+
+### `golden-envelopes.json` (frozen)
 
 ```jsonc
 {
@@ -161,7 +224,12 @@ runs every egov-user response through `parseResponse`, and a null `createdDate` 
 
 ---
 
-## The matrix — 26 scenarios, 57 envelopes
+## The matrix — 26 scenarios: 26 thin events, and the 57 envelopes they must become
+
+The **Envelopes** column below is what the pre-cutover producer published and what `novu-bridge` must
+now mint from the one thin event each scenario produces. Three rows read `0`: under the thin path
+those transitions still publish an event and the bridge records a visible
+`SKIPPED / NB_NO_ROUTING` row instead of dropping them silently (design errata 10).
 
 | Scenario | Envelopes | What it pins |
 |---|---|---|
@@ -192,7 +260,7 @@ runs every egov-user response through `parseResponse`, and a null `createdDate` 
 | `S25-localization-down-falls-back-to-raw-values` | 1 | localization outage ⇒ raw service code / raw status, `{ulb}`, `{ao_designation}`, `{emp_department}`, `{emp_designation}` left as literal braces |
 | `S26-escalate-has-no-routing-today` | 0 | PGR's supervisor escalation (`PENDINGATLME --ESCALATE--> PENDINGATLME`) reaches this code but has no seeded routing row: nobody is told |
 
-`GoldenEnvelopeCharacterisationTest.everySeededActiveTransitionIsInTheMatrix` fails if a new active
+`GoldenThinEventCharacterisationTest.everySeededActiveTransitionIsInTheMatrix` fails if a new active
 routing row introduces an `(action, toState)` no scenario covers.
 
 Workflow actions deliberately left out of the matrix: `COMMENT` (three self-transitions, no seeded
@@ -202,7 +270,11 @@ because `fromState` never reaches the router — its envelopes would be byte-ide
 
 ---
 
-## Behaviour recorded here that is easy to lose in a port
+## Behaviour recorded in `golden-envelopes.json` that is easy to lose in a port
+
+These describe the **pre-cutover** envelope path; they are now `novu-bridge`'s to preserve. Items 1
+and 6 are the two the producer still has a hand in: `transactionSeed` supplies the first three
+segments of the transaction id, and `download_link` is the one token the producer blanks.
 
 1. **`transactionId` = `serviceRequestId : ACTION : TOSTATE : tenantId : subscriberKey : CHANNEL`** —
    note the tenant id is *inside* it, because `subscriberId` (`tenantId:subKey`) is interpolated

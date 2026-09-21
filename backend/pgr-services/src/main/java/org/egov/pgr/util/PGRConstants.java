@@ -122,30 +122,17 @@ public class PGRConstants {
     public static final String MDMS_UI_CONSTANTS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.UIConstants";
     public static final String MDMS_REOPEN_SLA_KEYWORD = "REOPENSLA";
 
-    // --- Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate) ---
-    public static final String MDMS_NOTIFICATION_ROUTING_MASTER = "NotificationRouting";
-    public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
-    public static final String MDMS_NOTIFICATION_ROUTING_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationRouting";
-    public static final String MDMS_NOTIFICATION_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationTemplate";
-    // Provider→template mapping (Twilio WhatsApp Content SIDs + ordered variables). Resolved for
-    // the WHATSAPP channel only; business-initiated WhatsApp must reference an approved template.
-    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER = "NotificationProviderTemplate";
-    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationProviderTemplate";
+    // --- Thin notification events (docs/2.12/notifications/contract/thin-event-v1.schema.json) ---
+    // The four RAINMAKER-PGR.Notification* masters are novu-bridge's now, not this service's: the
+    // producer names no audience, picks no channel and reads no routing row. What is left is the
+    // vocabulary that goes ON the event.
 
-    // Channels — must match the MDMS schema enum.
-    public static final String CHANNEL_SMS = "SMS";
-    public static final String CHANNEL_WHATSAPP = "WHATSAPP";
-    public static final String CHANNEL_EMAIL = "EMAIL";
-
-    // Audience normalization (template lookup): any employee-type subscriber -> EMPLOYEE.
+    // ActorRef.type on the two actors a complaint has.
     public static final String AUDIENCE_CITIZEN = "CITIZEN";
     public static final String AUDIENCE_EMPLOYEE = "EMPLOYEE";
 
-    // Non-notifiable pseudo-audiences: workflow-internal, resolve to no recipients.
-    public static final String AUDIENCE_AUTO_ESCALATE = "AUTO_ESCALATE";
-    public static final String AUDIENCE_SYSTEM = "SYSTEM";
-
-    // Per-recipient event name prefix consumed by novu-bridge.
+    // Event-name prefix: <prefix><ACTION>.<TOSTATE> is the config key, <prefix><ACTION> the ledger
+    // label the Logs screen has been filtering on for releases.
     public static final String EVENT_NAME_PREFIX = "COMPLAINTS.WORKFLOW.";
 
     public static final String COMPLAINTS_RESOLVED = "complaintsResolved";
