@@ -1,16 +1,23 @@
-# Enabling Notifications
+# Notifications: the deployment runbook
 
-> **Looking for something else?**
+> **Start here instead, unless you are the deployer:**
 >
 > | You want to | Read |
 > |---|---|
-> | Turn notifications on, per channel | **this page** — [prerequisites](#prerequisites) · [shared variables](#configure-notification-variables) · [deploy](#start-deployment) · [WhatsApp](#enable-whatsapp) · [SMS](#enable-sms) · [Email](#enable-email) · [supported providers](#supported-providers-out-of-the-box) · [what Configurator can and cannot do](#what-configurator-can-and-cannot-do) · [upgrading](#upgrading-an-existing-deployment) |
-> | Run it day to day — channels, providers, routing, logs, who can do what | [operator-guide.md](./operator-guide.md) |
-> | Write the message text | [message-templates.md](./message-templates.md) |
-> | Add a provider, or get your module's events delivered | [developer-guide.md](./developer-guide.md) |
-> | Integrate against the published interface | [contract/](./contract/README.md) — [envelope schema](./contract/envelope-v1.schema.json) · [OpenAPI](./contract/openapi.yaml) · [error codes](./contract/error-codes.md) · [outputs](./contract/outputs.md) |
+> | **Set notifications up for the first time**, start to finish | **[setup-guide.md](./setup-guide.md)** — the ordered path from nothing to a delivered message |
+> | Run it day to day — channels, providers, events, routing, logs, who can do what | [operator-guide.md](./operator-guide.md) |
+> | Write the message text, and look up a validation rule | [message-templates.md](./message-templates.md) |
+> | Connect another module, add a provider, or supply your own recipient resolution | [developer-guide.md](./developer-guide.md) |
+> | Integrate against the published interface | [contract/](./contract/README.md) — [thin event](./contract/thin-event-v1.schema.json) · [envelope](./contract/envelope-v1.schema.json) · [OpenAPI](./contract/openapi.yaml) · [error codes](./contract/error-codes.md) · [outputs](./contract/outputs.md) |
+> | **Upgrade an existing deployment** | [Upgrading an existing deployment](#upgrading-an-existing-deployment) on this page — read it before you deploy |
 >
-> This page is the deployment runbook: one-time, shell-based, done by a deployer.
+> **This page** is the deployment runbook: one-time, shell-based, done by a
+> deployer, with the per-channel detail an operator does not need —
+> [prerequisites](#prerequisites) · [shared variables](#configure-notification-variables) ·
+> [deploy](#start-deployment) · [WhatsApp](#enable-whatsapp) · [SMS](#enable-sms) ·
+> [Email](#enable-email) · [supported providers](#supported-providers-out-of-the-box) ·
+> [what Configurator can and cannot do](#what-configurator-can-and-cannot-do) ·
+> [upgrading](#upgrading-an-existing-deployment)
 
 This enables SMS, WhatsApp and email notifications on a deployment created with
 [the deployment guide](../deployment/README.md). Run the repository commands below from the
@@ -52,8 +59,8 @@ Per-channel settings live in each channel's section.
 | Setting | What it is | Example |
 |---|---|---|
 | `enable_novu` | Starts Novu and the notification stack. Nothing below works without it. | `true` |
-| `seed_notifications` | Seeds the four PGR notification MDMS masters (Routing, Template, ProviderTemplate, Channel) and their access-control rows on deploy. Idempotent. | `true` |
-| `novu_bridge_channels_enabled` | **Bootstrap fallback only.** Channels are switched on per tenant in Configurator → Notifications → **Channels** (MDMS `RAINMAKER-PGR.NotificationChannel`); this env list applies only while a tenant has no channel rows. Leave it unset and nothing is sent until the operator enables channels in the configurator. | `"SMS"` |
+| `seed_notifications` | Seeds the notification MDMS masters and their access-control rows on deploy, and copies an existing tenant's rows into the shared `NOTIFICATIONS.*` namespace. Idempotent. Defaults to `enable_novu`. | `true` |
+| `novu_bridge_channels_enabled` | **Bootstrap fallback only.** Channels are switched on per tenant in Configurator → Notifications → **Channels** (MDMS `NOTIFICATIONS.Channel`); this env list applies only while a tenant has no channel rows. Leave it unset and nothing is sent until the operator enables channels in the configurator. | `"SMS"` |
 | `novu_bridge_proxy_allowed_roles` | Roles allowed to **use** the Configurator's notification screens (logs, integrations, preferences, the provider catalog, verify and test-send). Default `EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN`. | `"SUPERUSER,MDMS_ADMIN"` |
 | `novu_bridge_proxy_admin_roles` | Roles allowed to **manage** providers — create one, rotate its credentials, delete it. Default `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN`. A caller without one of these gets `403 NB_ADMIN_ROLE_REQUIRED` on those three calls even if it is on the list above; a role on this list also satisfies that list. | `"SUPERUSER,MDMS_ADMIN"` |
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |
@@ -191,6 +198,7 @@ export DIGIT_LOGIN_TENANT="$NOTIF_TENANT"
 
 cd /opt/digit/notification-seed
 SCHEMA_FILE=/opt/digit/notification-seed/RAINMAKER-PGR.json \
+NOTIF_SCHEMA_FILE=/opt/digit/notification-seed/NOTIFICATIONS.json \
 DATA_DIR=/opt/digit/notification-seed \
 python3 seed-notifications.py
 
@@ -199,9 +207,15 @@ unset DIGIT_PASSWORD
 
 Wait for `DONE`, then log in to Configurator at the same `NOTIF_TENANT`.
 Configurator writes notification configuration at the tenant used for the session.
-If it writes to the deployment root instead, PGR finds no routing for the complaint
-tenant and emits no notification events. The automatic fix is tracked in
+If it writes to the deployment root instead, the notification service finds no
+routing for the complaint tenant and records `SKIPPED / NB_NO_ROUTING`. The
+automatic fix is tracked in
 [issue #1943](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1943).
+
+`NOTIF_SCHEMA_FILE` is what stages the shared `NOTIFICATIONS.*` schemas and the
+copy step. Omit it and only the legacy masters are seeded, which leaves the tenant
+on the read adapter — check with
+`GET /novu-bridge/novu-adapter/v1/config/source?tenantId=…`.
 
 Sync matches approved templates to PGR transitions by template name and saves that
 Twilio account's Content SID. Each account needs its own approved templates with the
@@ -400,11 +414,14 @@ is deliberately **not reachable from outside**: Kong terminates
 action for it. Nothing you do in the configurator should ever need that URL.
 
 **One active provider per channel, per state tenant.** The choice is a field on the
-MDMS master `RAINMAKER-PGR.NotificationChannel` (`provider`, the Novu integration
-identifier) alongside `enabled`, `gateway` and `senderId`. Selecting a provider on
-the Channels screen writes that field; `novu-bridge` reads it at the state tenant on
-every dispatch. Picking a second provider for the same channel replaces the first —
-there is no fan-out and no fallback chain. Two cases are worth knowing exactly:
+MDMS master `NOTIFICATIONS.Channel` (`provider`, the Novu integration identifier)
+alongside `enabled`, `gateway` and `senderId`. Selecting a provider on the Channels
+screen writes that field; `novu-bridge` reads it at the state tenant on every
+dispatch. A tenant with no rows there falls back to the legacy
+`RAINMAKER-PGR.NotificationChannel` automatically, per tenant. Picking a second
+provider for the same channel replaces the first — there is no fan-out and no
+fallback chain, and no way to give one city a different provider from another in
+the same state. Two cases are worth knowing exactly:
 
 - **No provider selected** — the pre-catalog behaviour applies verbatim: the row's
   `gateway` decides the transport, then the deployment's env fallbacks
@@ -426,38 +443,98 @@ there is no fan-out and no fallback chain. Two cases are worth knowing exactly:
 
 | Configurator can | Configurator cannot |
 |---|---|
-| Create, edit, rotate credentials on, and delete provider integrations | Mint or wire the Novu API key |
+| Create, rename, rotate credentials on, enable/disable and delete provider integrations | Mint or wire the Novu API key |
 | Enable/disable a channel and select its active provider | Start Novu, enable the Compose profile, or set service environment flags |
-| Manage notification configuration | Create workflows |
-| Sync WhatsApp templates | |
-| Validate provider credentials, and validate the configuration | |
-| Display bridge dispatch logs | |
+| Edit routing, templates and WhatsApp provider templates in the shared `NOTIFICATIONS.*` masters | Install those masters, or copy a tenant's legacy rows into them (`--tags notifications`) |
+| Sync approved WhatsApp templates from Twilio | Create the Novu delivery workflows |
+| Verify a provider, and validate the whole configuration | Add a producing module's `eventType` to the allowlist |
+| Display the dispatch log | Set the delivery-receipts secret, or the providers' callback URLs |
+| Read each user's language and per-channel consent | Change the consent gate or its outage policy |
+| Show which MDMS namespace is serving a tenant (the Configure banner) | Choose that namespace — the data chooses, per tenant |
+| — | **Author events.** The Events screen is read-only: a module declares its own events, and PGR's are generated from its workflow at seed time |
 
-Everything in the right-hand column is a deployment operation. **Operators do not
-need the Novu dashboard** — provider management is entirely in the configurator, and
-`/novu` is left for debugging.
+Everything in the right-hand column is a deployment or producer operation.
+**Operators do not need the Novu dashboard** — provider management is entirely in
+the configurator, and `/novu` is left for debugging.
 
-### Upgrading an existing deployment
+## Upgrading an existing deployment
 
-Provider management, the `provider` field and the access-control rows that let the
-gateway through arrive as **seed data**, and MDMS seed migrations do not run on a
-deployed box. A stock re-deploy is enough — the notification seed step is part of it
-— but if you would rather not run the whole playbook, run just that step:
+Read this before you deploy. There is one hard operational constraint and one
+required step.
+
+### 1. Run the notification seed step
+
+Everything new arrives as **seed data** — the shared `NOTIFICATIONS.*` schemas, the
+event catalogue, the copy of your tenant's own rows, and the access-control rows
+that let the screens through the gateway. MDMS seed migrations do not run on a
+deployed box, so a data file alone never reaches one. A stock re-deploy is enough —
+the notification seed step is part of it — but if you would rather not run the
+whole playbook, run just that step:
 
 ```bash
 cd local-setup/ansible
 ./deploy.sh mycity --tags notifications
 ```
 
-It is idempotent. It adds the `provider` property to the existing
-`RAINMAKER-PGR.NotificationChannel` schema, seeds the channel rows if the tenant has
-none, adds the access-control actions and role-actions for the Channels screen and
-the provider endpoints, and restarts `egov-accesscontrol` when it created any —
-that last part matters, because `egov-accesscontrol` caches role-actions in memory
-and would keep 403ing the endpoints it was just granted.
+It is idempotent and safe to re-run. It:
 
-Without this step the symptom is a Channels screen that saves nothing and a
+- creates the five `NOTIFICATIONS.*` schemas and, where a schema already exists but
+  the committed definition has gained a property, upgrades it in place — without
+  which every Configurator write carrying the new field is rejected, which is
+  exactly how a seed-only change silently fails to reach an existing deployment;
+- **copies the tenant's own rows** into the new namespace. It reads what the server
+  actually has over `/mdms-v2/v2/_search` rather than staging the repository's
+  defaults, because a deployed city has drifted from them through years of operator
+  edits;
+- seeds the generated event catalogue, which has no legacy counterpart;
+- adds the access-control actions and role-actions for the new screens and the
+  provider endpoints, and restarts `egov-accesscontrol` when it created any — that
+  last part matters, because it caches role-actions in memory and would keep 403ing
+  the endpoints it was just granted.
+
+**Existing rows are copied, never deleted.** The `RAINMAKER-PGR.Notification*` rows
+are left exactly as they are. Nothing is modified and nothing is removed, which is
+what makes the release rollback-able: deploy the previous images and the old rows
+are still the live configuration.
+
+Until the copy runs, a tenant is served its legacy rows through a read adapter, so
+**notifications keep working on an image upgraded before the playbook ran**. In the
+Configurator that tenant's notification screens are read-only with a banner saying
+so. Confirm which state a tenant is in with
+`GET /novu-bridge/novu-adapter/v1/config/source?tenantId=mycity`, or by the absence
+of that banner.
+
+If the copy could not finish, the deploy prints a task named
+`notif-seed — WARNING: the NOTIFICATIONS.* copy did not complete`. Your legacy rows
+are untouched and delivery is unaffected; re-run the step once MDMS is healthy.
+
+Without this step at all, the symptom is a Channels screen that saves nothing and a
 Providers screen whose edit and delete buttons return 403.
+
+### 2. Never run the old and the new `pgr-services` at the same time
+
+This release moves complaint notifications from *pre-rendered messages published by
+`pgr-services`* to *thin events resolved inside `novu-bridge`*. The bridge accepts
+both kinds, forever and simultaneously — which is what makes the rollback above
+work. It deliberately does **not** suppress a replay: an event that arrives twice
+with the same idempotency key is dispatched twice.
+
+So if an old replica and a new replica are both running, the same complaint
+transition produces a message from each and **the citizen gets two**.
+
+- **Docker Compose**: `docker compose up` recreates a service by stopping the old
+  container before starting the new one. Nothing to do.
+- **Kubernetes**: the chart sets `strategy.type: Recreate` for `pgr-services`
+  (`devops/deploy-as-code/charts/urban/pgr-services/values.yaml`) precisely for
+  this reason. A rolling update would run both versions side by side during the
+  rollout. Do not change it to `RollingUpdate` for this release. Note that
+  `type: Recreate` must not also carry a `rollingUpdate` block — the API rejects
+  that combination.
+
+There is no flag for any of this. Which path a deployment is on is decided by which
+image it runs, and every dispatch-log row records it in `source_path`
+(`PRERENDERED` or `RESOLVED`) so you can answer the question per message, in
+production.
 
 ## Code References
 
@@ -467,17 +544,25 @@ Providers screen whose edit and delete buttons return 403.
 | Workflow/provider bootstrap | [`backend/novu-bridge/config/bootstrap-novu-whatsapp.sh`](../../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh) |
 | Notification seed | [`local-setup/scripts/seed-notifications.py`](../../../local-setup/scripts/seed-notifications.py) |
 | Tenant-master repair | [`local-setup/scripts/repair-tenant-masters.py`](../../../local-setup/scripts/repair-tenant-masters.py) |
+| Legacy-to-new master conversion | [`local-setup/scripts/notifications_convert.py`](../../../local-setup/scripts/notifications_convert.py) |
+| Event-catalogue generator | [`local-setup/scripts/generate_event_catalogue.py`](../../../local-setup/scripts/generate_event_catalogue.py) |
 | Configurator provider UI | [`configurator/src/resources/notification-providers/NotificationProviderList.tsx`](../../../configurator/src/resources/notification-providers/NotificationProviderList.tsx) |
 | Provider administration API | [`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java) |
-| PGR routing/rendering | [`backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java`](../../../backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java) |
+| Routing, recipients, language and rendering | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/NotificationResolver.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/NotificationResolver.java) |
+| Where the masters come from, and the legacy fallback | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/MdmsNotificationConfigRepository.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/MdmsNotificationConfigRepository.java) |
 | Bridge dispatch | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) |
+| What PGR sends, as an executable spec | [`backend/novu-bridge/src/test/java/org/egov/novubridge/service/resolution/golden/ScenarioThinEventBuilder.java`](../../../backend/novu-bridge/src/test/java/org/egov/novubridge/service/resolution/golden/ScenarioThinEventBuilder.java) |
 
 ## Channels, receipts and per-recipient language
 
 **Which channels deliver is decided per tenant, in the configurator.** Notifications →
-**Channels** edits the MDMS master `RAINMAKER-PGR.NotificationChannel` (one row per
+**Channels** edits the MDMS master `NOTIFICATIONS.Channel` (one row per
 channel: `enabled`, `gateway` = `novu` | `smscountry`, `senderId`, `provider`). novu-bridge reads it at the
-state tenant on every dispatch (cached 60 s). A tenant with no rows falls back to the
+state tenant on every dispatch (cached 60 s), falling back per tenant to the legacy
+`RAINMAKER-PGR.NotificationChannel` when the new one has no rows
+(`NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` / `_LEGACY_SCHEMA` — leave both unset; they are
+defaults precisely so a dropped overlay cannot flip them). A tenant with no rows in
+either falls back to the
 `novu_bridge_channels_enabled` env list; a tenant *with* rows is governed by them alone — a
 channel with no row is off. The **Channels** card on the Providers screen shows the effective
 state per channel and why (row present? enabled? Novu integration? workflow? sender id?).
@@ -500,15 +585,21 @@ regress a row.
 unless you pick "Show test sends". The "view in logs" button after a test opens the screen
 with that filter on.
 
-**Per-recipient language.** pgr-services renders each recipient in their `preferredLanguage`
-from digit-user-preferences-service (one cached lookup per tenant per minute) and falls back to
-`pgr.notification.default.locale` — and, per template, to the default-locale template when the
-recipient's language has none. Author templates in Notifications → Configure with the locale
-of your choice; `enable-notifications.sh` points PGR at the preference service
-(`EGOV_USER_PREFERENCE_HOST`). Leave that blank and everyone gets the default locale.
+**Per-recipient language.** On the resolved path the bridge renders each recipient in their
+`preferredLanguage` from digit-user-preferences-service (`NOVU_BRIDGE_PREFERENCE_HOST`, one
+cached lookup per state tenant per TTL) and falls back to `NOVU_BRIDGE_DEFAULT_LOCALE`
+(`en_IN`) — and, per template and per field, to the default-locale row when the recipient's
+language has none. Leave the preference host blank and everyone gets the default locale.
+Author templates in Notifications → Configure with the locale of your choice. Note that the
+*placeholder values* are resolved once per event in a single locale, while the *template text*
+is chosen per recipient; that is unchanged from the pre-rendered path and is deliberate.
 
-**One envelope for everything, login OTPs included.** The bridge accepts `eventType`
-`COMPLAINTS_WORKFLOW_TRANSITIONED` (pgr-services, `complaints.domain.events`) and
+**Two inbound kinds, one ledger, login OTPs included.** The bridge accepts a thin domain event
+(`kind: "THIN"` — the box routes, resolves and renders it) and the pre-rendered envelope
+(`kind` absent or `"RENDERED"`), on the same topics
+(`NOVU_BRIDGE_KAFKA_INPUT_TOPICS`, default `complaints.domain.events,notifications.events`).
+Both produce the same ledger rows and obey the same gates. It accepts `eventType`
+`COMPLAINTS_WORKFLOW_TRANSITIONED` (pgr-services) and
 `CORE_SMS`: DIGIT core's `egov.core.notification.sms` topic (user-otp login OTPs, egov-user
 password resets), translated into the envelope by `CoreSmsTranslator`
 (`NOVU_BRIDGE_CORE_SMS_TOPIC` / `_DEFAULT_TENANT` / `_COUNTRY_CODE`). There is no separate
