@@ -102,7 +102,7 @@ class SessionManager {
     const current = previous
       .catch(() => {}) // a failed turn must not skip the message behind it
       .then(() => this._authenticateAndDispatch(rawRequestModel))
-      .then((userId) => sendQueues.get(userId))
+      .then((userId) => sendQueues.get(userId ?? mobileNumber))
       .then(() => new Promise((resolve) => setTimeout(resolve, config.replyCooldownMs)))
       .finally(() => {
         const remaining = (dispatchDepth.get(mobileNumber) || 1) - 1;
@@ -132,35 +132,34 @@ class SessionManager {
     return session.userId;
   }
 
-
-
-
-  // toUser can fire multiple times per dispatch (e.g. a welcome message
-  // cascading straight into a menu prompt), each an independent, unawaited
-  // send - two concurrent Twilio requests race with no ordering guarantee,
-  // so the menu can land before the welcome it followed. Chaining each send
-  // onto the previous one per user forces them out in the order queued,
-  // regardless of how the underlying network calls actually complete.
+  // Chain sends per conversation: two unawaited Twilio calls race, so the menu
+  // can land before the welcome it followed.
   async toUser(user, outputMessages, extraInfo) {
-    const userId = user.userId;
-    const previousSend = sendQueues.get(userId) || Promise.resolve();
-    
+    // Pre-auth prompts have no userId; keyed on undefined they all shared one
+    // chain, so each citizen waited behind a stranger's send.
+    const queueKey = user.userId ?? user.mobileNumber;
+    const previousSend = sendQueues.get(queueKey) || Promise.resolve();
+
     const thisSend = previousSend
       .catch(() => {}) // a prior send's failure must not skip this one
       .then(() => channelProvider.sendMessageToUser(user, outputMessages, extraInfo))
-      .catch((error) => console.error(`Failed to send message to user ${userId}:`, error))
+      .catch((error) =>
+        console.error(`Failed to send message to ${user.userId ?? maskMobile(user.mobileNumber)}:`, error))
       .finally(() => {
-        if (sendQueues.get(userId) === thisSend) sendQueues.delete(userId);
+        if (sendQueues.get(queueKey) === thisSend) sendQueues.delete(queueKey);
       });
-    
-    sendQueues.set(userId, thisSend);
 
+    sendQueues.set(queueKey, thisSend);
+
+    // Published to Kafka: mask the fallback rather than emit the number.
+    const telemetryId = user.userId ?? maskMobile(user.mobileNumber);
     for (let message of outputMessages) {
-      telemetry.log(user.userId, "to_user", {
+      telemetry.log(telemetryId, "to_user", {
         message: { type: "text", output: message, locale: user.locale },
       });
     }
   }
+
 
 
   // Method to get tenant ID for a mobile number from tracker (for image uploads)
