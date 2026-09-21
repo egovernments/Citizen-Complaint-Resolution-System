@@ -55,6 +55,38 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
+  it('keeps every alternative method separately clickable', async () => {
+    // With two methods `rest` held one item and nothing was visibly wrong.
+    // A third made them touch: they rendered inline with no separator, so
+    // "Continue with GitHub" and "Email me a sign-in link" ran together as one
+    // string and aiming for one hit the other.
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [
+        { id: 'password', label: 'Email and password', type: 'password' },
+        { id: 'github', label: 'Continue with GitHub', type: 'oauth' },
+        { id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' },
+      ],
+    });
+
+    render(<SignupPage />);
+
+    const magic = await screen.findByRole('button', { name: 'Email me a sign-in link' });
+    const github = screen.getByRole('button', { name: 'Continue with GitHub' });
+
+    // Worth being explicit: the defect was visual, and the DOM alone cannot see
+    // it. Both buttons resolved by accessible name before this fix too, which
+    // is exactly why it survived to production. So assert the layout that
+    // separates them, since that is the actual fix.
+    const row = magic.parentElement as HTMLElement;
+    expect(row).toBe(github.parentElement);
+    expect(row.className).toMatch(/flex-col/);
+    expect(row.className).toMatch(/gap-/);
+
+    fireEvent.click(magic);
+    expect(api.startSignIn).toHaveBeenCalledWith('magic-link');
+  });
+
   it('hands sign-in to the backend rather than collecting a credential', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
