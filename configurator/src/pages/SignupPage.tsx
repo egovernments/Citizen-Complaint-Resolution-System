@@ -480,16 +480,7 @@ function SignupFlow() {
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
     if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
-      // countryCode travels with the number so the worker's strip branch is
-      // live. Without it that guard never fires, and a founder who pasted a
-      // full international number earns a terminal rejection.
-      next.tenantMetadata = {
-        schemaVersion: 1,
-        tenantAdmin: {
-          mobileNumber: tenantAdminMobile.trim(),
-          ...(selectedCountry ? { countryCode: selectedCountry.dialCode } : {}),
-        },
-      };
+      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: tenantAdminMobile.trim() } };
     }
     return next;
   }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile]);

@@ -381,31 +381,6 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
   });
 
-  it('sends the dial code with the number so the backend can strip it', async () => {
-    // Without countryCode the worker's strip branch is dead code, the whole
-    // international string reaches egov-user, and its 400 is terminal.
-    vi.mocked(api.createSignup).mockResolvedValue({ id: 's1', version: 1 } as never);
-    vi.mocked(api.updateSignup).mockResolvedValue({ id: 's1', version: 2 } as never);
-
-    render(<SignupPage />);
-    await reachPreferences();
-    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
-    fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: '712345678' } });
-    fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: 'JAN_DEC' } });
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
-
-    await waitFor(() => {
-      const draft = vi.mocked(api.createSignup).mock.calls[0]?.[0]
-        ?? vi.mocked(api.updateSignup).mock.calls[0]?.[1];
-      expect(draft?.tenantMetadata?.tenantAdmin).toMatchObject({
-        mobileNumber: '712345678',
-        countryCode: '+254',
-      });
-    });
-  });
-
   it('offers no invented example for a country we have no format for', async () => {
     // Only KE, IN and ET have authoritative MobileNumberValidation records in
     // this repo. A made-up example would be the same defect as the hardcoded
