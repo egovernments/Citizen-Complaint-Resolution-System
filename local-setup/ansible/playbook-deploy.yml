@@ -73,6 +73,107 @@
       delegate_to: localhost
       become: false
 
+    # ── db_fast_path data-wipe guard (issue #2082) ─────────────────────────
+    # `db_fast_path_ack_data_wipe` is an operator ASSERTION, and preflight.py
+    # can only read host_vars — it never touches the box. So the ack alone
+    # cannot tell a fresh machine from one carrying a live database.
+    #
+    # This asks the target itself. The base compose mounts postgres_data at
+    # /var/lib/docker-postgresql/data, a path Postgres never uses (issue
+    # #2085), so on every existing box the real cluster sits in an ANONYMOUS
+    # volume. The fast-path overlay corrects that mount, which recreates the
+    # container onto the empty named volume, fires initdb, and loads
+    # db/full-dump.sql over the tenant — the stack comes back up on the demo
+    # snapshot. Catch it here, in seconds, before anything is touched.
+    #
+    # Runs BEFORE force-clean on purpose: that teardown must not run either.
+    - name: "preflight — look for an existing postgres cluster on the target"
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -o pipefail
+          command -v docker >/dev/null 2>&1 || { echo "SKIP no-docker"; exit 0; }
+          docker info >/dev/null 2>&1      || { echo "SKIP no-daemon"; exit 0; }
+
+          # Preferred check: the stack's own postgres container. An anonymous
+          # volume still shows up in .Mounts, carrying its 64-hex id as .Name,
+          # so the named/anonymous distinction is readable straight off it.
+          mount_name=$(docker inspect docker-postgres \
+            --format '{% raw %}{{ range .Mounts }}{{ if eq .Destination "/var/lib/postgresql/data" }}{{ .Name }}{{ end }}{{ end }}{% endraw %}' \
+            2>/dev/null || true)
+          if [ -n "$mount_name" ]; then
+            case "$mount_name" in
+              *postgres_data) echo "SAFE named-volume:$mount_name" ;;
+              *)              echo "ANON container-volume:$mount_name" ;;
+            esac
+            exit 0
+          fi
+
+          # No container (removed by a previous force-clean, or never created).
+          # Fall back to the volumes themselves: a PG_VERSION file at a volume
+          # root is the definitive marker of a Postgres data directory.
+          probed=0
+          for v in $(docker volume ls -q 2>/dev/null); do
+            mp=$(docker volume inspect -f '{% raw %}{{ .Mountpoint }}{% endraw %}' "$v" 2>/dev/null) || continue
+            [ -n "$mp" ] && [ -d "$mp" ] || continue
+            probed=1
+            if [ -f "$mp/PG_VERSION" ]; then
+              case "$v" in
+                *postgres_data) ;;
+                *) echo "ANON dangling-volume:$v"; exit 0 ;;
+              esac
+            fi
+          done
+
+          # Docker Desktop and remote daemons keep volume data off the host
+          # filesystem, so an unreadable Mountpoint means "could not tell",
+          # NOT "nothing there". Say so rather than reporting a clean box.
+          if [ "$probed" -eq 0 ] && [ -n "$(docker volume ls -q 2>/dev/null)" ]; then
+            echo "UNKNOWN mountpoints-not-readable"
+          else
+            echo "SAFE no-cluster"
+          fi
+      register: pg_cluster_probe
+      changed_when: false
+      failed_when: false
+      when: db_fast_path | default(false)
+
+    - name: "preflight — refuse db_fast_path on a box that already has a database"
+      ansible.builtin.assert:
+        that: not (pg_cluster_probe.stdout | default('') is search('^ANON'))
+        fail_msg: |
+          db_fast_path is true, but this box already holds a PostgreSQL cluster
+          outside the named postgres_data volume:
+
+            {{ pg_cluster_probe.stdout | default('') | trim }}
+
+          Deploying would recreate postgres-db onto the empty named volume, run
+          initdb, and load db/full-dump.sql — the stack would come back up on the
+          shipped demo snapshot instead of this tenant's data.
+
+          Nothing has been changed. The existing data is NOT deleted; it stays in
+          that volume. Do NOT run `docker compose down -v`, `docker volume rm` or
+          `docker system prune` on this box — that is what would destroy it.
+
+          Either:
+            - migrate the data into the named volume first, then re-run:
+              docs/2.12/operations/postgres-volume-migration.md
+            - or set db_fast_path: false to deploy against the existing database.
+        success_msg: "no pre-existing postgres cluster in the way ({{ pg_cluster_probe.stdout | default('') | trim }})"
+      when: db_fast_path | default(false)
+
+    - name: "preflight — warn when the postgres probe was inconclusive"
+      ansible.builtin.debug:
+        msg: |
+          Could not read volume mountpoints on this target, so the db_fast_path
+          data-wipe check could not run (Docker Desktop or a remote daemon does
+          not expose them on the host). Confirm by hand that this box has no
+          postgres data worth keeping before continuing:
+            docker inspect docker-postgres -f '{% raw %}{{ json .Mounts }}{% endraw %}'
+      when:
+        - db_fast_path | default(false)
+        - pg_cluster_probe.stdout | default('') is search('^UNKNOWN')
+
     # ── Force-clean teardown ───────────────────────────────────────────────
     # Opt-in via `force_clean: true` in host_vars. Tears down all running
     # containers and removes orphaned networks before re-deploying, so a

@@ -651,10 +651,12 @@ requires_nairobi_mdms: false
 # volume — the overlay also corrects the named-volume mount path,
 # which forces container recreation and wipes the existing data.
 db_fast_path: true
-# scripts/preflight.py refuses db_fast_path without this explicit ack —
-# it encodes the data-wipe trap above. Set it only after confirming the
-# target box has no anonymous-volume postgres data worth keeping.
-db_fast_path_ack_data_wipe: true
+# Ships as `false` on purpose (issue #2082). preflight.py refuses
+# db_fast_path without this ack, so every install is stopped once and must
+# confirm the wipe deliberately before it proceeds. Flip to true only after
+# confirming this box has NO postgres data in an anonymous volume. If it does,
+# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+db_fast_path_ack_data_wipe: false
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.

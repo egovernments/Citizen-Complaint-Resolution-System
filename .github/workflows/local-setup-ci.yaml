@@ -78,8 +78,25 @@ jobs:
       - name: preflight — fixtures (valid must pass, invalid must trip)
         run: python3 local-setup/scripts/preflight.py --fixtures local-setup/tests/fixtures/host_vars/
 
-      - name: preflight — tracked example must pass
-        run: python3 local-setup/scripts/preflight.py local-setup/ansible/inventory/host_vars/_example.yml
+      # _example.yml deliberately ships db_fast_path: true with the ack set to
+      # false (issue #2082), so that copying it and deploying is stopped once and
+      # the operator has to confirm the wipe. CI therefore asserts the file FAILS,
+      # and fails for EXACTLY that one reason — anything else is a regression.
+      - name: preflight — tracked example must trip only the fast-path ack gate
+        run: |
+          set -o pipefail
+          out=$(python3 local-setup/scripts/preflight.py \
+                  local-setup/ansible/inventory/host_vars/_example.yml 2>&1) && rc=0 || rc=$?
+          echo "$out"
+          if [ "${rc:-0}" -eq 0 ]; then
+            echo "::error::_example.yml passed preflight; it must trip fastpath-data-wipe-ack (#2082)"
+            exit 1
+          fi
+          fails=$(printf '%s\n' "$out" | grep -c '^\[FAIL\]' || true)
+          if [ "$fails" -ne 1 ] || ! printf '%s\n' "$out" | grep -q '^\[FAIL\] fastpath-data-wipe-ack:'; then
+            echo "::error::_example.yml must trip exactly one rule (fastpath-data-wipe-ack); got $fails"
+            exit 1
+          fi
 
       # Renders the daemon.json the deploy would write across a matrix of
       # docker_log_* combinations and asserts three things per case: it parses

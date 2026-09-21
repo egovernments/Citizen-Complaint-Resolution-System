@@ -122,6 +122,44 @@ describe('host_vars _example.yml', () => {
   });
 });
 
+// issue #2082. The fast-path overlay corrects the postgres mount path, which
+// recreates the container onto the empty named volume, fires initdb and loads
+// db/full-dump.sql over whatever the tenant had. preflight.py refuses
+// db_fast_path without an explicit ack — but every template used to SHIP that
+// ack pre-set to true, so the gate never fired for the one path that actually
+// causes this: copy a template, point it at an existing box, deploy.
+describe('host_vars templates — db_fast_path ack (#2082)', () => {
+  const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
+  // Tracked templates only. Operator host_vars (<tenant>.yml) are gitignored
+  // and SHOULD carry ack: true once that box has been checked — asserting on
+  // them would fail on the deploying engineer's own machine.
+  const templates = fs
+    .readdirSync(path.join(REPO_ROOT, HOST_VARS))
+    .filter((f) => f.endsWith('.yml.example') || f === '_example.yml');
+
+  test.each(templates)('%s never ships a pre-set data-wipe ack', (file) => {
+    const body = read(path.join(HOST_VARS, file));
+    if (!/^db_fast_path:\s*true/m.test(body)) return; // flag off: ack is moot
+    expect(body).toMatch(/^db_fast_path_ack_data_wipe:\s*false\s*$/m);
+    expect(body).not.toMatch(/^db_fast_path_ack_data_wipe:\s*true/m);
+  });
+
+  test('preflight still fails _example.yml for exactly that reason', () => {
+    let out = '';
+    try {
+      out = execFileSync('python3',
+        ['local-setup/scripts/preflight.py', `${HOST_VARS}/_example.yml`],
+        { cwd: REPO_ROOT, encoding: 'utf8' });
+      throw new Error('preflight passed _example.yml; it must trip the ack gate');
+    } catch (e: any) {
+      out = e.stdout ?? out;
+    }
+    const fails = out.split('\n').filter((l) => l.startsWith('[FAIL]'));
+    expect(fails).toHaveLength(1);
+    expect(fails[0]).toContain('fastpath-data-wipe-ack');
+  });
+});
+
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
 
