@@ -52,6 +52,16 @@ class StateRepository {
         return (this.resumePendingAt || {})[userId];
     }
 
+    async getUserId(active) {
+        return Object.keys(this.states).filter((userId) => {
+            try {
+                return Boolean(active) !== Boolean(JSON.parse(this.states[userId]).done);
+            } catch {
+                return false;
+            }
+        });
+    }
+
 
 }
 

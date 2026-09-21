@@ -101,9 +101,17 @@ router.all("/status", verifySignature, webhookLimiter, async (req, res) => {
   }
 });
 
-router.post("/reminder", webhookLimiter, async (req, res) => {
-  await remindersService.triggerReminders();
-  res.end();
+// Operational trigger, not a citizen path: verified like the webhooks, and the
+// sweep is awaited inside a try/catch — an unhandled rejection here exits the
+// process on Node 23 and takes every in-memory session with it.
+router.post("/reminder", verifySignature, webhookLimiter, async (req, res) => {
+  try {
+    await remindersService.triggerReminders();
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("Reminder sweep failed:", error);
+    res.sendStatus(500);
+  }
 });
 
 router.get("/health", (req, res) => res.sendStatus(200));

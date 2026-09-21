@@ -85,10 +85,11 @@ async function run(chain, req) {
   return { reached, res: last.res };
 }
 
-test("verification is the first middleware on both webhook routes", () => {
+test("verification is the first middleware on every inbound route", () => {
   // Order is the whole fix: keyed on req.ip and running second, the limiter was
-  // a denial-of-service lever rather than a defence.
-  for (const route of ["/message", "/status"]) {
+  // a denial-of-service lever rather than a defence. /reminder had no
+  // verification at all — anyone could trigger the sweep.
+  for (const route of ["/message", "/status", "/reminder"]) {
     assert.equal(chainFor(route)[0].name, "verifySignature", `${route} verifies first`);
   }
 });
