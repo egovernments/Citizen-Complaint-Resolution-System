@@ -8,7 +8,7 @@ import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
@@ -79,14 +79,14 @@ class DispatchPipelineFailureRowTest {
                 new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent smsEvent() {
+    private NotificationEvent smsEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
                 .build();
         Map<String, Object> data = new HashMap<>();
         data.put("complaintNo", "PGR-001");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")

@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.DispatchPipelineService;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -41,11 +41,11 @@ public class DomainEventConsumer {
 
     @KafkaListener(topics = "#{'${novu.bridge.kafka.input.topics}'.split(',')}")
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        handle(mapper.convertValue(record, ComplaintsDomainEvent.class), topic);
+        handle(mapper.convertValue(record, NotificationEvent.class), topic);
     }
 
     /** Run one envelope through the pipeline; any failure is logged and DLQ'd with its code. */
-    public void handle(ComplaintsDomainEvent event, String topic) {
+    public void handle(NotificationEvent event, String topic) {
         try {
             dispatchPipelineService.process(event, true, null);
         } catch (CustomException ce) {
@@ -57,7 +57,7 @@ public class DomainEventConsumer {
         }
     }
 
-    private void publishDlq(ComplaintsDomainEvent event, String sourceTopic, String errorCode, String errorMessage) {
+    private void publishDlq(NotificationEvent event, String sourceTopic, String errorCode, String errorMessage) {
         Map<String, Object> dlq = new HashMap<>();
         dlq.put("event", event);
         dlq.put("sourceTopic", sourceTopic);

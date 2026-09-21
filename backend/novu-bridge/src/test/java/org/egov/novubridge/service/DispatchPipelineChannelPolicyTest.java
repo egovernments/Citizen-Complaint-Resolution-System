@@ -7,7 +7,7 @@ import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.service.delivery.SmsCountryDeliveryProvider;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
 import org.egov.novubridge.service.provider.ProviderAvailability;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,8 +72,8 @@ class DispatchPipelineChannelPolicyTest {
                 new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent event(String channel, String templateId) {
-        return ComplaintsDomainEvent.builder()
+    private NotificationEvent event(String channel, String templateId) {
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")

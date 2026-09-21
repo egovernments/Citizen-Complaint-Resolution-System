@@ -6,9 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Per-recipient contact profile carried verbatim from PGR's pre-rendered
- * domain event. PGR already resolved who the recipient is and how to reach
- * them; novu-bridge only upserts this into Novu (identify) and delivers.
+ * Per-recipient contact profile carried verbatim from the producer's pre-rendered event.
+ * The producing module already resolved who the recipient is and how to reach them;
+ * novu-bridge only upserts this into Novu (identify) and delivers.
  */
 @Data
 @Builder

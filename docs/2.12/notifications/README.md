@@ -1,5 +1,17 @@
 # Enabling Notifications
 
+> **Looking for something else?**
+>
+> | You want to | Read |
+> |---|---|
+> | Turn notifications on, per channel | **this page** — [prerequisites](#prerequisites) · [shared variables](#configure-notification-variables) · [deploy](#start-deployment) · [WhatsApp](#enable-whatsapp) · [SMS](#enable-sms) · [Email](#enable-email) · [supported providers](#supported-providers-out-of-the-box) · [what Configurator can and cannot do](#what-configurator-can-and-cannot-do) · [upgrading](#upgrading-an-existing-deployment) |
+> | Run it day to day — channels, providers, routing, logs, who can do what | [operator-guide.md](./operator-guide.md) |
+> | Write the message text | [message-templates.md](./message-templates.md) |
+> | Add a provider, or get your module's events delivered | [developer-guide.md](./developer-guide.md) |
+> | Integrate against the published interface | [contract/](./contract/README.md) — [envelope schema](./contract/envelope-v1.schema.json) · [OpenAPI](./contract/openapi.yaml) · [error codes](./contract/error-codes.md) · [outputs](./contract/outputs.md) |
+>
+> This page is the deployment runbook: one-time, shell-based, done by a deployer.
+
 This enables SMS, WhatsApp and email notifications on a deployment created with
 [the deployment guide](../deployment/README.md). Run the repository commands below from the
 root of the cloned `Citizen-Complaint-Resolution-System` repository.

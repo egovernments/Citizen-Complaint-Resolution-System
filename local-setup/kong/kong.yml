@@ -234,6 +234,16 @@ plugins:
           ["/novu-bridge/novu-adapter/v1/preferences"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/templates"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/twilio-templates"]=true,
+          -- The published contract (Phase 3a): the inbound envelope's JSON Schema and the
+          -- OpenAPI description of these very endpoints, served read-only from the bridge's
+          -- own jar. They describe an INTERFACE, not a deployment — no tenant data, no
+          -- recipient, no credential — so they are anonymous the way the docs that carry the
+          -- same bytes already are, and novu-bridge deliberately does not gate them either
+          -- (ProxyAuthFilter excludes /novu-adapter/v1/contract explicitly). A consumer
+          -- integrating with the notification subsystem can therefore fetch the contract the
+          -- running build actually enforces.
+          ["/novu-bridge/novu-adapter/v1/contract/envelope"]=true,
+          ["/novu-bridge/novu-adapter/v1/contract/openapi"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -977,6 +987,16 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/receipts/novu
     - /novu-bridge/novu-adapter/v1/receipts/smscountry
+    strip_path: false
+  # The published contract, GET only. Read-only documents packaged in the bridge's jar (the
+  # envelope JSON Schema and this API's OpenAPI), so a consumer can fetch what THIS build
+  # enforces instead of trusting a wiki. Anonymous on purpose — see the AUTH_OPTIONAL note.
+  - name: novu-bridge-contract-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/contract/envelope
+    - /novu-bridge/novu-adapter/v1/contract/openapi
     strip_path: false
 # ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/gateways/** ──────────────────
 # The SMSCountry send adapter (POST .../gateways/smscountry/send) exists so Novu's

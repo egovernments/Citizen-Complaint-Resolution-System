@@ -10,7 +10,7 @@ import org.mockito.ArgumentCaptor;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,14 +64,14 @@ class EnvelopePipelineNegativesTest {
                 new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent validEvent() {
+    private NotificationEvent validEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
                 .build();
         Map<String, Object> data = new HashMap<>();
         data.put("complaintNo", "PGR-001");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -82,7 +82,7 @@ class EnvelopePipelineNegativesTest {
                 .build();
     }
 
-    private void assertRejected(ComplaintsDomainEvent event, String expectedCode) {
+    private void assertRejected(NotificationEvent event, String expectedCode) {
         CustomException ex = assertThrows(CustomException.class, () -> service.process(event, true, null));
         assertEquals(expectedCode, ex.getCode());
         // Validation must fail before delivery — but the rejection itself is written down.
@@ -97,49 +97,49 @@ class EnvelopePipelineNegativesTest {
 
     @Test
     void blankRenderedBody_withContactPresent_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setRenderedBody("   ");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void blankSubscriberId_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setSubscriberId("  ");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void blankChannel_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setChannel("");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void blankTenantId_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setTenantId("");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void unknownEventType_isRejectedAsUnsupported_notGuessed() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setEventType("SOMETHING_NEW");
         assertRejected(event, "NB_UNSUPPORTED_EVENT_TYPE");
     }
 
     @Test
     void futureSchemaVersion_isRejected() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setSchemaVersion("2");
         assertRejected(event, "NB_UNSUPPORTED_SCHEMA_VERSION");
     }
 
     @Test
     void schemaVersionOne_orAbsent_isAccepted() {
-        ComplaintsDomainEvent versioned = validEvent();
+        NotificationEvent versioned = validEvent();
         versioned.setSchemaVersion("1");
         assertDoesNotThrow(() -> envelopeValidator.validate(versioned));
         assertDoesNotThrow(() -> envelopeValidator.validate(validEvent()));
@@ -148,7 +148,7 @@ class EnvelopePipelineNegativesTest {
     @Test
     void coreSmsEvent_withThePreRenderedShape_isAccepted() {
         // A second producer registers a type; it does NOT get a special envelope.
-        ComplaintsDomainEvent otp = validEvent();
+        NotificationEvent otp = validEvent();
         otp.setEventType("CORE_SMS");
         otp.setEventName("CORE.SMS.OTP");
         otp.setModule("CORE");
@@ -160,7 +160,7 @@ class EnvelopePipelineNegativesTest {
 
     @Test
     void contactMayBeAbsent_butSubscriberAndBodyMayNot() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setContact(null);
         assertDoesNotThrow(() -> envelopeValidator.validate(event));
         event.setRenderedBody(null);

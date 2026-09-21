@@ -3,7 +3,7 @@ package org.egov.novubridge.consumer;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.core.CoreSmsTranslator;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -27,7 +27,7 @@ class CoreSmsConsumerTest {
         HashMap<String, Object> sms = new HashMap<>(Map.of("mobileNumber", "+254712345678", "message", "OTP 1234", "category", "OTP"));
         consumer.listen(sms, "egov.core.notification.sms");
 
-        ArgumentCaptor<ComplaintsDomainEvent> ev = ArgumentCaptor.forClass(ComplaintsDomainEvent.class);
+        ArgumentCaptor<NotificationEvent> ev = ArgumentCaptor.forClass(NotificationEvent.class);
         verify(shared).handle(ev.capture(), eq("egov.core.notification.sms"));
         assertEquals("CORE.SMS.OTP", ev.getValue().getEventName());
         verifyNoInteractions(producer);

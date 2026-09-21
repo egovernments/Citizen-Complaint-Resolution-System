@@ -1,0 +1,968 @@
+openapi: 3.0.3
+info:
+  title: novu-bridge — notification delivery adapter
+  version: "1"
+  description: |
+    Every HTTP endpoint novu-bridge exposes, as implemented. Written from the controllers in
+    `backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/`; `OpenApiContractTest`
+    fails the build if a path here has no matching controller mapping, or a controller mapping
+    is missing here.
+
+    The bridge's PRIMARY interface is not HTTP at all — it is the Kafka envelope described by
+    `envelope-v1.schema.json`. These endpoints are the management and observability surface the
+    Configurator drives, plus machine callbacks.
+
+    ## Tiers
+
+    | Tier | Endpoints | Who may call |
+    |---|---|---|
+    | Operator (read + exercise) | `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `/providers/test-send` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent) |
+    | Admin (credentials) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete` | the above **and** a role from `novu.bridge.proxy.admin.roles`; otherwise `403 NB_ADMIN_ROLE_REQUIRED` |
+    | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
+    | Internal only (never routed by the gateway) | `/gateways/smscountry/send` | the provider credential headers Novu's worker sends; Kong terminates this prefix with 404 |
+    | Unauthenticated | `/contract/envelope`, `/contract/openapi`, `/dispatch/*` (see below) | anyone who can reach the service |
+
+    `ProxyAuthFilter` is registered on `/novu-adapter/v1/*` but gates only the namespaces
+    `logs`, `integrations`, `preferences`, `providers` and `dispatch`. Anything else — the
+    contract documents, the machine callbacks, the actuator endpoints — passes through
+    unauthenticated by design.
+
+    ## Auth, honestly
+
+    The operator endpoints take an `Authorization: Bearer <DIGIT access token>` HEADER, not a
+    `RequestInfo.authToken` in the body. The bridge introspects that token itself against
+    egov-user `POST /user/_details` (60 s cache, keyed by the token's SHA-256, never the raw
+    token). Through Kong these paths are in the auth-optional whitelist for exactly that
+    reason: the gateway's body-token enrichment cannot authenticate a Bearer-only request, so
+    the bridge is the real auth boundary.
+
+    ## Error envelope
+
+    Most failures are thrown as DIGIT `CustomException`s and rendered by the shared tracer
+    error handler as `{"ResponseInfo": …, "Errors": [{"code": "NB_…", "message": …}]}`.
+    `ProxyAuthFilter` and the SMSCountry adapter write their own bodies — see each response
+    schema below. Every `NB_*` code is catalogued in `error-codes.md`.
+
+servers:
+  - url: https://<gateway-host>
+    description: Through Kong. Paths are context-prefixed (`/novu-bridge/...`) and `strip_path` is false.
+  - url: http://novu-bridge:8080
+    description: In-cluster, direct. Same context prefix.
+
+tags:
+  - name: contract
+    description: The published interface, served by the service that implements it.
+  - name: logs
+    description: The delivery ledger.
+  - name: providers
+    description: Provider management — the Configurator's Providers screen.
+  - name: preferences
+    description: Per-user consent, read-only.
+  - name: dispatch
+    description: Diagnostics. Not routed publicly.
+  - name: receipts
+    description: Provider delivery reports.
+  - name: gateways
+    description: Internal adapters for gateways Novu cannot drive directly.
+
+security:
+  - digitBearer: []
+
+paths:
+
+  /novu-bridge/novu-adapter/v1/contract/envelope:
+    get:
+      tags: [contract]
+      summary: JSON Schema of the inbound Kafka envelope (version 1)
+      description: |
+        The byte-identical copy packaged in this build's jar, so what you fetch is what this
+        build enforces. Unauthenticated: a description of an interface, not of a deployment.
+      security: []
+      responses:
+        "200":
+          description: JSON Schema 2020-12 document
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: The jar was built without `contract/envelope-v1.schema.json`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /novu-bridge/novu-adapter/v1/contract/openapi:
+    get:
+      tags: [contract]
+      summary: This document
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.0 document
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "404":
+          description: The jar was built without `contract/openapi.yaml`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /novu-bridge/novu-adapter/v1/logs:
+    get:
+      tags: [logs]
+      summary: List dispatch-log rows for a tenant, newest first
+      description: |
+        Read-only projection of `nb_dispatch_log`. Recipient PII is masked SERVER-SIDE before
+        the response is built — `recipientValue`, the embedded subscriber inside
+        `transactionId`, and the whole `providerResponse` tree. Stored rows are untouched.
+
+        Statuses and their transitions are described in `outputs.md`.
+      parameters:
+        - { name: tenantId, in: query, required: true, schema: { type: string },
+            description: "Required. A blank or missing value answers 400 with an empty body." }
+        - { name: referenceNumber, in: query, schema: { type: string },
+            description: "Exact match, or prefix when `referenceNumberPrefix=true`." }
+        - { name: referenceNumberPrefix, in: query, schema: { type: boolean, default: false } }
+        - { name: transactionId, in: query, schema: { type: string } }
+        - { name: channel, in: query, schema: { type: string, enum: [SMS, WHATSAPP, EMAIL] } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/DispatchStatus" } }
+        - { name: includeTest, in: query, schema: { type: boolean, default: false },
+            description: "Operator test-sends are hidden unless asked for." }
+        - { name: limit, in: query, schema: { type: integer, default: 50, minimum: 1, maximum: 500 },
+            description: "Clamped to 1..500 server-side." }
+        - { name: offset, in: query, schema: { type: integer, default: 0, minimum: 0 } }
+      responses:
+        "200":
+          description: A page of rows plus the unpaged total for the same filters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/DispatchLogEntry" }
+                  total: { type: integer, format: int64 }
+        "400": { description: "`tenantId` missing. Empty body." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/integrations:
+    get:
+      tags: [providers]
+      summary: List the configured Novu provider integrations
+      description: |
+        An ALLOWLIST projection: only `_id`, `providerId`, `channel`, `name`, `identifier`,
+        `active`, `primary`, `environmentId` are copied out, plus a derived `type`. No
+        `credentials` key in any shape ever leaves this service. There is deliberately no
+        endpoint that returns a provider secret or the Novu API key.
+      responses:
+        "200":
+          description: The projected integration list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Integration" }
+                  total: { type: integer, format: int64 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502":
+          description: Novu answered non-2xx. Empty body — an upstream failure is not an empty list.
+
+  /novu-bridge/novu-adapter/v1/preferences:
+    get:
+      tags: [preferences]
+      summary: List stored per-user notification preferences
+      description: |
+        Allowlist projection of `userId`, `tenantId` and, lifted out of the record's payload,
+        `preferredLanguage` and `consent`. Resolves no phone number, email or other identity.
+      parameters:
+        - { name: tenantId, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, minimum: 1, maximum: 500 },
+            description: "Clamped to 1..500 server-side." }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: The projected preference list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Preference" }
+                  total: { type: integer, format: int64 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers/catalog:
+    get:
+      tags: [providers]
+      summary: The out-of-the-box provider types and their credential forms
+      description: |
+        The Configurator renders its Add-provider form straight from this, so a provider gained
+        or a field renamed needs no SPA change. Describes what to ASK for; contains no stored
+        credential.
+      responses:
+        "200":
+          description: The catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProviderType" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers/templates:
+    get:
+      tags: [providers]
+      summary: Discover Novu workflows (delivery shells)
+      description: |
+        Lists `{workflowId, name, channels}` from Novu. Does NOT call any gateway: SMS/EMAIL
+        message text lives in MDMS `NotificationTemplate`, approved WhatsApp Content SIDs in
+        `NotificationProviderTemplate`.
+      parameters:
+        - { name: channel, in: query, schema: { type: string, enum: [SMS, WHATSAPP, EMAIL] },
+            description: "Filters by Novu step type: SMS/WHATSAPP → `sms` steps, EMAIL → `email`. A workflow that declares no steps is never filtered out." }
+        - { name: providerId, in: query, schema: { type: string },
+            description: "Accepted and ignored — Novu workflows are channel-scoped, not provider-scoped." }
+      responses:
+        "200":
+          description: Matching workflows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        workflowId: { type: string }
+                        name: { type: string }
+                        channels: { type: array, items: { type: string } }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers/twilio-templates:
+    get:
+      tags: [providers]
+      summary: Pull the linked Twilio account's approved WhatsApp Content templates
+      description: |
+        Auto-matches them to routing keys. The Configurator persists the matched rows to MDMS
+        `NotificationProviderTemplate`. Never returns credentials.
+      responses:
+        "200":
+          description: Proposed rows plus diagnostics for the ones that did not match
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matched: { type: array, items: { type: object } }
+                  unmatched: { type: array, items: { type: object } }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers:
+    post:
+      tags: [providers]
+      summary: Create a provider integration from operator-entered credentials
+      description: |
+        **Admin role required** (`novu.bridge.proxy.admin.roles`), because the body carries
+        live credentials.
+
+        Two request forms. The CATALOG form `{type, name?, credentials, active?, identifier?}`
+        is the one the Configurator uses: the bridge resolves the Novu provider id, the Novu
+        channel, the credential mapping and a round-trippable `<type>-<sha256(name)[0:16]>`
+        identifier, and validates the type's required credentials BEFORE anything reaches Novu.
+        `active` absent means true. The LEGACY form `{channel, providerId, name, identifier,
+        credentials}` remains the escape hatch for a Novu provider the catalog does not cover.
+
+        Credentials POST straight through to Novu over TLS. They are never persisted here,
+        never logged (only key NAMES are) and never echoed back.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/ProviderCreateFromCatalog"
+                - $ref: "#/components/schemas/ProviderCreateLegacy"
+      responses:
+        "200":
+          description: The created integration, allowlist-projected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Integration" }
+        "400":
+          description: "`NB_UNKNOWN_PROVIDER_TYPE`, `NB_INVALID_PROVIDER`, `NB_INVALID_CHANNEL`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers/_update:
+    post:
+      tags: [providers]
+      summary: Rename a provider, toggle it, or rotate its credentials
+      description: |
+        **Admin role required.** The id is in the BODY, not the path: the gateway matches exact
+        URLs, so every management call is a POST to a fixed path.
+
+        `credentials` present means ROTATION. Novu REPLACES a credential set wholesale rather
+        than merging, so a partial map would silently blank the keys it omits — hence full
+        required-field validation first, against the type derived from the integration's own
+        identifier. An integration whose type cannot be derived cannot be rotated
+        (`NB_UNKNOWN_PROVIDER_TYPE`): re-create it from the catalog.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string, description: "Novu `_id` or `identifier`." }
+                name: { type: string }
+                active: { type: boolean }
+                credentials:
+                  type: object
+                  additionalProperties: true
+                  description: "Complete credential set for the type. Partial maps blank the rest."
+      responses:
+        "200":
+          description: The updated integration, allowlist-projected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Integration" }
+        "400":
+          description: "`NB_INVALID_PROVIDER` (no id, or an empty change set), `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers/_delete:
+    post:
+      tags: [providers]
+      summary: Delete a provider and the credentials Novu holds for it
+      description: |
+        **Admin role required.** Refuses with 409 while a tenant is still routing through the
+        provider: Novu would delete it happily and every notification on that channel would
+        start failing with no active integration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string, description: "Novu `_id` or `identifier`." }
+                tenantId: { type: string, description: "Scopes the in-use check to one tenant." }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      deleted: { type: boolean }
+        "400":
+          description: "`NB_INVALID_PROVIDER`, `NB_PROVIDER_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "409":
+          description: "`NB_PROVIDER_IN_USE` — a NotificationChannel row still selects it"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /novu-bridge/novu-adapter/v1/providers/verify:
+    post:
+      tags: [providers]
+      summary: Check that a configured integration exists and is active
+      description: |
+        Matches by `integrationId` (Novu `_id` or `identifier`; `id` is an accepted alias), or
+        by catalog `type`, or by `channel` + `providerId`. This confirms CONFIGURATION, not
+        reachability — nothing is sent. Types whose gateway has no credential-check call
+        (`smscountry`, `ozeki`) advertise `supportsVerify: false` in the catalog for exactly
+        that reason.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                integrationId: { type: string }
+                id: { type: string, description: "Alias of `integrationId`." }
+                type: { type: string, description: "Catalog type, e.g. `smtp`." }
+                channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
+                providerId: { type: string, description: "Novu provider id, e.g. `twilio`." }
+      responses:
+        "200":
+          description: Always 200 — `ok:false` is a verdict, not a transport failure
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  active: { type: boolean }
+                  detail: { type: string }
+        "400":
+          description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/providers/test-send:
+    post:
+      tags: [providers]
+      summary: Send one live test message
+      description: |
+        A REAL send down the same provider seam the live pipeline uses. Writes exactly one
+        `nb_dispatch_log` row flagged `isTest` at `tenantId` (the operator's own tenant; the
+        synthetic `TEST` tenant is only the fallback for callers that omit it), with
+        `eventName`/`templateKey` = `TEST` and a masked recipient — auditable, visible on the
+        Logs screen on request, never counted as real traffic.
+
+        The derived `subscriberId` is `nb-test-<sha256(seed)[0:16]>` with no clock and no
+        random, so repeating a test is idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
+                type: { type: string, description: "Catalog type; fills in `channel` when omitted." }
+                integrationId: { type: string, description: "Pin the test to one integration (`_id` or `identifier`)." }
+                id: { type: string, description: "Alias of `integrationId`." }
+                tenantId: { type: string, description: "Whose Logs screen the row lands on. Defaults to `TEST`." }
+                to:
+                  type: object
+                  properties:
+                    phone: { type: string, description: "E.164." }
+                    email: { type: string }
+                body: { type: string }
+                subject: { type: string, description: "EMAIL only." }
+                workflowId: { type: string, description: "Override the per-channel default workflow." }
+                contentSid: { type: string, description: "WHATSAPP provider template id." }
+                variables: { type: array, items: {}, description: "Turned into 1-based positional contentVariables." }
+                transactionId: { type: string, description: "Seeds the stable subscriberId; supply it to repeat a test exactly." }
+      responses:
+        "200":
+          description: Always 200 — a rejected send reports `ok:false` with the provider's code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  novuStatus: { type: integer }
+                  transactionId: { type: string }
+                  errorCode: { type: string, description: "Only when `ok` is false." }
+                  errorMessage: { type: string, description: "Only when `ok` is false." }
+        "400":
+          description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_NOT_FOUND`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/dispatch/_validate:
+    post:
+      tags: [dispatch]
+      summary: Run one envelope through the pipeline WITHOUT sending
+      description: |
+        Diagnostic. Validates the envelope, derives the context and persists a `RECEIVED` row.
+        Nothing is handed to a provider.
+
+        **Not routed publicly by Kong.** Reachable in-cluster; inside the service it is gated
+        by `ProxyAuthFilter` like the other `/dispatch` paths.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DispatchDryRunRequest" }
+      responses:
+        "200":
+          description: The pipeline's verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DispatchDryRunResponse" }
+        "400":
+          description: "Envelope rejection — `NB_INVALID_EVENT`, `NB_UNSUPPORTED_SCHEMA_VERSION`, `NB_UNSUPPORTED_EVENT_TYPE`. A `REJECTED` row is written before the error is returned."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/dispatch/_dry-run:
+    post:
+      tags: [dispatch]
+      summary: "Same as _validate, but `send: true` actually delivers"
+      description: |
+        Diagnostic. With `send` absent or false this behaves exactly like `_validate`. With
+        `send: true` the envelope goes down the full live path, gates and all, and a real
+        message is delivered. **Not routed publicly by Kong.**
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DispatchDryRunRequest" }
+      responses:
+        "200":
+          description: The pipeline's verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DispatchDryRunResponse" }
+        "400":
+          description: "Envelope rejection. A `REJECTED` row is written before the error is returned."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/receipts/{provider}:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema: { type: string, enum: [novu, smscountry] }
+        description: |
+          Which provider's report shape this is. The parser is tolerant — it looks for a
+          correlation id and an outcome word anywhere in the payload — so an unlisted value is
+          accepted and parsed on the same rules; only these two are routed by the gateway.
+    post:
+      tags: [receipts]
+      summary: Accept a delivery report and move the matching row past SENT
+      description: |
+        Authenticated by the shared secret `novu.bridge.receipts.secret`, presented as header
+        `X-Receipt-Secret` or query `secret`. Blank secret = the endpoint is OFF (403). Outside
+        `ProxyAuthFilter`: the caller is a machine, not an operator.
+
+        Only `SENT` rows move, so a late or duplicate report cannot regress a row. Non-terminal
+        words (queued, sent, accepted, read) are acknowledged and ignored. Always 200 once
+        authenticated — `matched: 0` says the report addressed nothing.
+
+        The per-provider payload shapes are in `outputs.md`.
+      security:
+        - receiptSecret: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200": { $ref: "#/components/responses/Receipt" }
+        "401":
+          description: Wrong or missing secret
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { error: { type: string } }
+        "403":
+          description: "`novu.bridge.receipts.secret` is blank — receipts are disabled"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { error: { type: string } }
+    get:
+      tags: [receipts]
+      summary: Same, for gateways whose delivery-report pings are GETs
+      description: |
+        Identical semantics; the report travels as query parameters instead of a body (`secret`
+        is stripped before parsing). SMSCountry's bulk API reports this way.
+      security:
+        - receiptSecret: []
+      responses:
+        "200": { $ref: "#/components/responses/Receipt" }
+        "401":
+          description: Wrong or missing secret
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { error: { type: string } }
+        "403":
+          description: Receipts are disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { error: { type: string } }
+
+  /novu-bridge/novu-adapter/v1/gateways/smscountry/send:
+    post:
+      tags: [gateways]
+      summary: "INTERNAL: the JSON face this service wears for SMSCountry"
+      description: |
+        **Never reachable from outside.** Kong terminates `/novu-adapter/v1/gateways/**` with
+        404 and the upstream is a dead address; the Novu WORKER calls this directly on the
+        container network.
+
+        SMSCountry's legacy bulk API takes form-encoded parameters and answers in plain text
+        (`OK:<jobid>`), always with HTTP 200 — no Novu provider can express that. So an
+        `smscountry` provider is really a Novu `generic-sms` integration pointed here, and this
+        endpoint does the translating.
+
+        The credential HEADERS are the authentication: without both, nothing is sent anywhere.
+        A success MUST answer with a non-empty `id`, because Novu's worker marks the step
+        failed unless `result.id` is truthy. A gateway rejection answers non-2xx on purpose, so
+        the worker records PROVIDER_ERROR instead of a phantom send.
+      security:
+        - smsCountryUser: []
+          smsCountryPassword: []
+      parameters:
+        - name: apiUrl
+          in: query
+          schema: { type: string, format: uri }
+          description: |
+            Per-integration upstream gateway URL, carried on the integration's `baseUrl` query
+            string. Only an absolute http(s) URL is honoured; anything else falls back to
+            `novu.bridge.smscountry.url`.
+      requestBody:
+        required: false
+        description: "Novu's `generic-sms` body."
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                to: { type: string, description: "Recipient. `recipient`/`phone`/`mobilenumber` also accepted." }
+                content: { type: string, description: "Message text. `text`/`message`/`body` also accepted." }
+                from: { type: string, description: "Sender id. `sender`/`senderId` also accepted; falls back to `novu.bridge.sms.sender.id`." }
+                sender: { type: string }
+                id: { type: string, description: "Novu's message `_id` — the only correlator the gateway call carries into the ledger." }
+      responses:
+        "200":
+          description: Queued by the gateway. NOT delivered — the DR callback is the only proof of delivery.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, description: "The gateway job id. Non-empty, or Novu marks the step failed." }
+                  date: { type: string, format: date-time }
+        "400":
+          description: "`NB_ADAPTER_BAD_REQUEST` — no recipient or no message"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdapterError" }
+        "401":
+          description: "`NB_ADAPTER_UNAUTHENTICATED` — a credential header is missing"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdapterError" }
+        "502":
+          description: "The gateway rejected the message (`NB_SMSCOUNTRY_REJECTED`, `NB_SMSCOUNTRY_UNREACHABLE`, or the gateway's own code). Non-2xx on purpose."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdapterError" }
+
+components:
+
+  securitySchemes:
+    digitBearer:
+      type: http
+      scheme: bearer
+      description: |
+        A DIGIT access token, introspected by the bridge against egov-user
+        `POST /user/_details`. The caller must be `type == EMPLOYEE` and hold a role from
+        `novu.bridge.proxy.allowed.roles`; the three credential-bearing provider calls need a
+        role from `novu.bridge.proxy.admin.roles` as well.
+    receiptSecret:
+      type: apiKey
+      in: header
+      name: X-Receipt-Secret
+      description: "`novu.bridge.receipts.secret`. May also be sent as the `secret` query parameter."
+    smsCountryUser:
+      type: apiKey
+      in: header
+      name: X-SMSCountry-User
+    smsCountryPassword:
+      type: apiKey
+      in: header
+      name: X-SMSCountry-Password
+
+  responses:
+    Unauthorized:
+      description: No bearer token, or the token does not introspect
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { error: { type: string } }
+    Forbidden:
+      description: The caller is not an EMPLOYEE, or holds no allowlisted role
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { error: { type: string } }
+    AdminForbidden:
+      description: |
+        `NB_ADMIN_ROLE_REQUIRED` — the caller passed the broad gate but holds no role from
+        `novu.bridge.proxy.admin.roles`. The body carries BOTH the flat `error` key the
+        read-only paths have always written and the `Errors` envelope the controllers use.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+              code: { type: string, example: NB_ADMIN_ROLE_REQUIRED }
+              Errors:
+                type: array
+                items: { $ref: "#/components/schemas/Error" }
+    Receipt:
+      description: The report as the bridge understood it
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              provider: { type: string }
+              providerStatus: { type: string, description: "The provider's own word, verbatim." }
+              status:
+                type: string
+                nullable: true
+                enum: [DELIVERED, BOUNCED, FAILED, null]
+                description: "null when the report carries no terminal outcome."
+              matched: { type: integer, description: "Rows moved. 0 is normal for a duplicate, late or non-terminal report." }
+              note: { type: string, description: "Why nothing matched, when nothing did." }
+
+  schemas:
+
+    Error:
+      type: object
+      properties:
+        code: { type: string, example: NB_NO_PROVIDER }
+        message: { type: string }
+        description: { type: string }
+
+    ErrorEnvelope:
+      type: object
+      description: The shared DIGIT error shape rendered by the tracer handler.
+      properties:
+        ResponseInfo: { type: object, nullable: true }
+        Errors:
+          type: array
+          items: { $ref: "#/components/schemas/Error" }
+
+    AdapterError:
+      type: object
+      description: The internal gateway adapter's own flat error body.
+      properties:
+        error: { type: string, description: "The `NB_*` code." }
+        message: { type: string }
+
+    DispatchStatus:
+      type: string
+      enum: [RECEIVED, SENT, DELIVERED, BOUNCED, FAILED, SKIPPED, REJECTED]
+      description: See `outputs.md` for the meaning of each and the legal transitions.
+
+    DispatchLogEntry:
+      type: object
+      description: One row of the delivery ledger, PII masked at read time.
+      properties:
+        id: { type: string, format: uuid }
+        eventId: { type: string }
+        transactionId: { type: string, description: "Masked: the embedded subscriber is hidden." }
+        referenceNumber: { type: string, nullable: true, description: "The producing module's own handle." }
+        module: { type: string }
+        eventName: { type: string }
+        tenantId: { type: string }
+        channel: { type: string }
+        recipientValue: { type: string, description: "Masked." }
+        templateKey: { type: string, nullable: true }
+        templateVersion: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/DispatchStatus" }
+        attemptCount: { type: integer }
+        lastErrorCode: { type: string, nullable: true }
+        lastErrorMessage: { type: string, nullable: true }
+        providerResponse:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "The provider's raw acceptance/receipt, deep-masked at read time."
+        isTest: { type: boolean, nullable: true }
+        providerRef: { type: string, nullable: true, description: "Provider-side correlation id — how a receipt finds the row." }
+        deliveredTime: { type: integer, format: int64, nullable: true }
+        createdTime: { type: integer, format: int64 }
+        lastModifiedTime: { type: integer, format: int64 }
+
+    Integration:
+      type: object
+      description: Allowlist projection of a Novu integration. No credentials, ever.
+      properties:
+        _id: { type: string }
+        providerId: { type: string, description: "Novu's provider id, e.g. `twilio`, `nodemailer`, `generic-sms`." }
+        channel: { type: string, description: "Novu's channel — `sms` or `email`. WhatsApp rides `sms`." }
+        name: { type: string }
+        identifier: { type: string, description: "`<catalog type>-<sha256(name)[0:16]>`; this is what makes the type round-trippable." }
+        active: { type: boolean }
+        primary: { type: boolean }
+        environmentId: { type: string }
+        type:
+          type: string
+          nullable: true
+          description: "Catalog type derived from the identifier, or null when it cannot be established."
+
+    ProviderType:
+      type: object
+      description: One out-of-the-box provider the operator can configure without an env edit.
+      properties:
+        type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki] }
+        label: { type: string }
+        channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
+        transport:
+          type: string
+          enum: [novu, novu-generic-sms, bridge-adapter]
+          description: |
+            How the message reaches the gateway. `novu` — a first-class Novu provider.
+            `novu-generic-sms` — Novu's generic-sms posting straight at the gateway's own JSON
+            API. `bridge-adapter` — Novu's generic-sms posting at this service's adapter, which
+            translates to a non-JSON API.
+        novuProviderId: { type: string }
+        credentialFields:
+          type: array
+          items: { $ref: "#/components/schemas/CredentialField" }
+        supportsVerify: { type: boolean }
+        supportsTestSend: { type: boolean }
+
+    CredentialField:
+      type: object
+      description: One field of the operator's credential form. Describes what to ASK for.
+      properties:
+        name: { type: string }
+        label: { type: string }
+        type: { type: string, description: "text | password | checkbox" }
+        required: { type: boolean }
+        placeholder: { type: string, nullable: true }
+        help: { type: string, nullable: true }
+
+    Preference:
+      type: object
+      description: Allowlist projection of one stored preference record. No PII.
+      properties:
+        userId: { type: string, description: "Opaque uuid." }
+        tenantId: { type: string }
+        preferredLanguage: { type: string }
+        consent:
+          type: object
+          additionalProperties: true
+          description: "Per channel, `{status, scope}`."
+
+    ProviderCreateFromCatalog:
+      type: object
+      required: [type, credentials]
+      properties:
+        type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki] }
+        name: { type: string, description: "Defaults to the type's label. Also seeds the identifier." }
+        identifier: { type: string, description: "Overrides the derived `<type>-<hash>` identifier." }
+        active: { type: boolean, default: true, description: "Absent means true." }
+        credentials:
+          type: object
+          additionalProperties: true
+          description: "Exactly the fields `GET /providers/catalog` lists for the type. Validated before anything reaches Novu."
+
+    ProviderCreateLegacy:
+      type: object
+      required: [providerId]
+      properties:
+        providerId: { type: string, description: "A Novu provider id the catalog does not cover." }
+        channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
+        name: { type: string }
+        identifier: { type: string, description: "A WHATSAPP integration without one gets `whatsapp-<hash>` so the channel survives Novu's `sms` storage." }
+        credentials:
+          type: object
+          additionalProperties: true
+
+    NotificationEvent:
+      type: object
+      description: |
+        The inbound Kafka envelope. Authoritatively defined by `envelope-v1.schema.json` —
+        this entry exists only so the `/dispatch` diagnostics can reference it.
+      externalDocs:
+        description: envelope-v1.schema.json
+        url: ./envelope-v1.schema.json
+      additionalProperties: true
+
+    DispatchDryRunRequest:
+      type: object
+      required: [RequestInfo, event]
+      properties:
+        RequestInfo:
+          type: object
+          description: The standard DIGIT RequestInfo.
+        send:
+          type: boolean
+          default: false
+          description: "`_dry-run` only. True delivers for real."
+        event: { $ref: "#/components/schemas/NotificationEvent" }
+
+    DispatchDryRunResponse:
+      type: object
+      properties:
+        responseInfo: { type: object }
+        result:
+          type: object
+          properties:
+            valid: { type: boolean }
+            preferenceAllowed: { type: boolean }
+            derivedContext:
+              type: object
+              description: What the bridge read out of the envelope — channel, audience, locale, recipient, subscriberId, body, subject, transactionId.
+            novuTriggered: { type: boolean }
+            novuStatusCode: { type: integer, nullable: true }
+            novuResponse: { type: object, nullable: true, additionalProperties: true }
+            diagnostics:
+              type: array
+              items: { type: string }
+              description: One line saying what happened, e.g. "Preference denied".

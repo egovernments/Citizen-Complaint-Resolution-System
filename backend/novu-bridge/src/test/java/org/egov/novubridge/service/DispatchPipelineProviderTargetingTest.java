@@ -7,7 +7,7 @@ import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.service.delivery.SmsCountryDeliveryProvider;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
 import org.egov.novubridge.service.provider.ProviderAvailability;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.junit.jupiter.api.Test;
@@ -112,8 +112,8 @@ class DispatchPipelineProviderTargetingTest {
         return Map.of("uniqueIdentifier", code, "isActive", true, "data", data);
     }
 
-    private static ComplaintsDomainEvent event(String channel) {
-        return ComplaintsDomainEvent.builder()
+    private static NotificationEvent event(String channel) {
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")

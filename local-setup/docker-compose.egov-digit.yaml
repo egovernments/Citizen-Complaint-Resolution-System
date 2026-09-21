@@ -2706,8 +2706,11 @@ services:
       SERVER_SERVLET_CONTEXT_PATH: /novu-bridge
       # Kafka topics (bridge auto-creates if redpanda's
       # auto.create.topics.enable=true; otherwise create them upfront).
-      # One topic per producer; the envelope's eventType decides handling.
-      NOVU_BRIDGE_KAFKA_INPUT_TOPICS: ${NOVU_BRIDGE_KAFKA_INPUT_TOPICS:-complaints.domain.events}
+      # The envelope's eventType — never the topic — decides handling, so a producer may
+      # publish to the shared neutral topic or get its own. `notifications.events` is the
+      # module-neutral topic any new producer should use; `complaints.domain.events` is PGR's
+      # original topic, still consumed so existing deployments are unaffected.
+      NOVU_BRIDGE_KAFKA_INPUT_TOPICS: ${NOVU_BRIDGE_KAFKA_INPUT_TOPICS:-complaints.domain.events,notifications.events}
       # DIGIT core SMS topic (user-otp login OTPs, egov-user password resets): translated into
       # the envelope and delivered through the same pipeline — this replaces egov-notification-sms.
       NOVU_BRIDGE_CORE_SMS_TOPIC: egov.core.notification.sms

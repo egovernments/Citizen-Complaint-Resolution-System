@@ -108,6 +108,15 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (path.startsWith("/novu-adapter/v1/gateways")) {
             return true;
         }
+        // The published contract (envelope JSON Schema, OpenAPI). Read-only descriptions of
+        // the interface itself — no tenant data, no recipient, no credential, nothing about
+        // this deployment — so they are served to anyone who can reach the service, the way
+        // the docs that describe them already are. Stated explicitly rather than left to the
+        // fall-through below, so adding a namespace to that list can never gate them by
+        // accident (see ContractController).
+        if (path.startsWith("/novu-adapter/v1/contract")) {
+            return true;
+        }
         return !(path.startsWith("/novu-adapter/v1/logs")
                 || path.startsWith("/novu-adapter/v1/integrations")
                 || path.startsWith("/novu-adapter/v1/preferences")

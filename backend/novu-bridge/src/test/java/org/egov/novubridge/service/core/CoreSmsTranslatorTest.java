@@ -1,7 +1,7 @@
 package org.egov.novubridge.service.core;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ class CoreSmsTranslatorTest {
         sms.put("message", "Your OTP is 481516. Valid for 5 minutes.");
         sms.put("category", "OTP");
         sms.put("expiryTime", 300000L);
-        ComplaintsDomainEvent e = translator.translate(sms);
+        NotificationEvent e = translator.translate(sms);
         assertEquals("CORE_SMS", e.getEventType());
         assertEquals("CORE.SMS.OTP", e.getEventName());
         assertEquals("CORE", e.getModule());
@@ -48,7 +48,7 @@ class CoreSmsTranslatorTest {
 
     @Test
     void tenantOnTheRequestWins_andCategoryDefaultsToGeneric() {
-        ComplaintsDomainEvent e = translator.translate(Map.of("mobileNumber", "+919415787824", "message", "hi", "tenantId", "pg"));
+        NotificationEvent e = translator.translate(Map.of("mobileNumber", "+919415787824", "message", "hi", "tenantId", "pg"));
         assertEquals("pg", e.getTenantId());
         assertEquals("CORE.SMS.GENERIC", e.getEventName());
         assertEquals("+919415787824", e.getContact().getPhone(), "a '+' number is not re-prefixed");

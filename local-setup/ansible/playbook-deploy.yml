@@ -4956,12 +4956,12 @@
     # the bridge consumer + retry/DLQ exist before the first event and so
     # the dependency order is explicit. failed_when:false → re-runs are
     # no-ops ("TOPIC_ALREADY_EXISTS").
-    - name: "novu — ensure complaints.domain.events + retry + dlq topics exist"
+    - name: "novu — ensure notification input + core-sms + dlq topics exist"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} \
           exec -T redpanda rpk topic create \
-          complaints.domain.events egov.core.notification.sms novu-bridge.dlq \
+          complaints.domain.events notifications.events egov.core.notification.sms novu-bridge.dlq \
           -p 1 -r 1
       register: novu_topic_create
       changed_when: "'CREATED' in (novu_topic_create.stdout | default(''))"

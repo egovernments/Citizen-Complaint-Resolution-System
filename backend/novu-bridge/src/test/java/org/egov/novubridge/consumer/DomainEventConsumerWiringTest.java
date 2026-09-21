@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.DispatchPipelineService;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * NB-8: the Kafka glue in {@link DomainEventConsumer#listen}. Unit-tested without
- * embedded Kafka — the actual risk is the {@code Map -> ComplaintsDomainEvent}
+ * embedded Kafka — the actual risk is the {@code Map -> NotificationEvent}
  * deserialization and the DLQ-on-failure routing, both covered here directly.
  */
 class DomainEventConsumerWiringTest {
@@ -79,10 +79,10 @@ class DomainEventConsumerWiringTest {
     void mapPayload_deserializesToEvent_withAllFieldsSurviving() {
         consumer.listen(payload(), "complaints.domain.events");
 
-        ArgumentCaptor<ComplaintsDomainEvent> captor = ArgumentCaptor.forClass(ComplaintsDomainEvent.class);
+        ArgumentCaptor<NotificationEvent> captor = ArgumentCaptor.forClass(NotificationEvent.class);
         verify(pipeline).process(captor.capture(), eq(true), isNull());
 
-        ComplaintsDomainEvent event = captor.getValue();
+        NotificationEvent event = captor.getValue();
         assertEquals("evt-1", event.getEventId());
         assertEquals("COMPLAINTS_WORKFLOW_TRANSITIONED", event.getEventType());
         assertEquals("COMPLAINTS.WORKFLOW.ASSIGN", event.getEventName());

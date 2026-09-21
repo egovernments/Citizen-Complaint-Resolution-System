@@ -18,8 +18,10 @@ public class NovuBridgeConfiguration {
     @Value("${app.timezone:UTC}")
     private String timeZone;
 
-    // One topic per producer; the envelope's eventType (not the topic) decides handling.
-    @Value("#{'${novu.bridge.kafka.input.topics:complaints.domain.events}'.split(',')}")
+    // Inbound envelope topics; the envelope's eventType (not the topic) decides handling.
+    // Default consumes BOTH the module-neutral `notifications.events` and the original
+    // PGR `complaints.domain.events`, so neither new nor existing producers need a config edit.
+    @Value("#{'${novu.bridge.kafka.input.topics:complaints.domain.events,notifications.events}'.split(',')}")
     private java.util.List<String> inputTopics;
 
     // ---- DIGIT core SMS topic (login OTPs from user-otp, password resets, ...) ----

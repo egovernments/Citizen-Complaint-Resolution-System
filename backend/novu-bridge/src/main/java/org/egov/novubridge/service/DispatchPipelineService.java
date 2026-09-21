@@ -20,14 +20,15 @@ import org.springframework.util.StringUtils;
 import java.util.*;
 
 /**
- * Pass-through delivery + tracking pipeline.
+ * Pass-through delivery + tracking pipeline. Module-neutral: nothing below knows what a
+ * complaint is.
  *
- * <p>PGR pre-renders ONE event per (recipient x channel): it has already resolved the recipient,
- * picked + filled + localized the template, and put the final text in {@code renderedBody}.
- * This pipeline does NO resolution. It validates the envelope, applies the delivery gates in a
- * fixed order, hands a {@link Dispatch} to the {@link DeliveryProvider} the registry selects,
- * and records exactly one {@code nb_dispatch_log} row for EVERY terminal outcome — including
- * envelope rejections, which used to go to the DLQ without a trace.
+ * <p>The PRODUCER pre-renders ONE event per (recipient x channel): it has already resolved the
+ * recipient, picked + filled + localized the template, and put the final text in
+ * {@code renderedBody}. This pipeline does NO resolution. It validates the envelope, applies
+ * the delivery gates in a fixed order, hands a {@link Dispatch} to the {@link DeliveryProvider}
+ * the registry selects, and records exactly one {@code nb_dispatch_log} row for EVERY terminal
+ * outcome — including envelope rejections, which used to go to the DLQ without a trace.
  *
  * <p>Vendor specifics (Novu workflow ids, Twilio WhatsApp envelopes, SMSCountry form posts)
  * live behind the provider seam; nothing here names a transport.
@@ -62,7 +63,7 @@ public class DispatchPipelineService {
         this.providerAvailability = providerAvailability;
     }
 
-    public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
+    public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo) {
         log.info("Processing pre-rendered domain event: eventId={}, eventName={}, tenant={}, channel={}, send={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
@@ -85,7 +86,7 @@ public class DispatchPipelineService {
                 event.getEventId(), context.getChannel(), PiiMask.mask(subscriberId),
                 PiiMask.mask(context.getRecipientMobile()), PiiMask.mask(context.getEmail()), context.getLocale());
 
-        // Optional channel-preference gate (PGR owns locale; preferences only gate delivery).
+        // Optional channel-preference gate (the producer owns locale; preferences only gate delivery).
         String recipientUuid = context.getRecipientUserId();
         boolean preferenceAllowed = preferenceServiceClient.isChannelAllowed(
                 event.getTenantId(), recipientUuid, context.getRecipientMobile(), context.getChannel());
@@ -138,9 +139,9 @@ public class DispatchPipelineService {
         Contact contact = buildContact(event, context);
 
         // Contact gate (bridge-side defense): an EMAIL event needs an email; SMS/WHATSAPP
-        // need a phone. The bridge consumes a shared topic and must defend independently of
-        // PGR's emission-side filter — a phone-only recipient on an EMAIL row would otherwise
-        // trigger the email workflow and phantom-SENT with no address.
+        // need a phone. The bridge consumes shared topics and must defend independently of any
+        // producer's emission-side filter — a phone-only recipient on an EMAIL row would
+        // otherwise trigger the email workflow and phantom-SENT with no address.
         boolean hasRequiredContact = "EMAIL".equalsIgnoreCase(channel)
                 ? StringUtils.hasText(contact.getEmail())
                 : StringUtils.hasText(contact.getPhone());
@@ -156,10 +157,10 @@ public class DispatchPipelineService {
         }
 
         // WhatsApp template gate: a business-initiated WhatsApp message MUST reference an approved
-        // provider template. PGR emits WHATSAPP events with a null templateId when no approved
-        // NotificationProviderTemplate matched — persist an auditable SKIP here rather than fall
-        // through to a free-form send, which the provider rejects. Bridge-side defense: hold
-        // regardless of the producer.
+        // provider template. A producer emits WHATSAPP events with a null templateId when it found
+        // no approved provider template (in PGR: no matching NotificationProviderTemplate row) —
+        // persist an auditable SKIP here rather than fall through to a free-form send, which the
+        // provider rejects. Bridge-side defense: hold regardless of the producer.
         if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(event.getTemplateId())) {
             persist(event, context, "SKIPPED", "NB_TEMPLATE_NOT_APPROVED",
                     "No approved provider template for this WhatsApp event; free-form WhatsApp is "
@@ -250,7 +251,7 @@ public class DispatchPipelineService {
         return channel != null && KNOWN_CHANNELS.contains(channel.toUpperCase());
     }
 
-    private Contact buildContact(ComplaintsDomainEvent event, DerivedContext context) {
+    private Contact buildContact(NotificationEvent event, DerivedContext context) {
         Contact contact = event.getContact();
         if (contact != null) {
             return contact;
@@ -266,7 +267,7 @@ public class DispatchPipelineService {
                 .build();
     }
 
-    private DerivedContext deriveContext(ComplaintsDomainEvent event) {
+    private DerivedContext deriveContext(NotificationEvent event) {
         Contact c = event.getContact();
         return DerivedContext.builder()
                 .channel(event.getChannel())
@@ -285,13 +286,13 @@ public class DispatchPipelineService {
                 .build();
     }
 
-    private void persist(ComplaintsDomainEvent event, DerivedContext context,
+    private void persist(NotificationEvent event, DerivedContext context,
                          String status, String errorCode, String errorMessage,
                          Map<String, Object> providerResponse, Integer attemptCount) {
         persist(event, context, status, errorCode, errorMessage, providerResponse, attemptCount, null);
     }
 
-    private void persist(ComplaintsDomainEvent event, DerivedContext context,
+    private void persist(NotificationEvent event, DerivedContext context,
                          String status, String errorCode, String errorMessage,
                          Map<String, Object> providerResponse, Integer attemptCount, String providerRef) {
         dispatchLogRepository.upsert(DispatchLogEntry.builder()
@@ -299,7 +300,7 @@ public class DispatchPipelineService {
                 .isTest(false)
                 .eventId(event.getEventId())
                 .transactionId(context.getTransactionId())
-                .referenceNumber(event.getEntityId())
+                .referenceNumber(resolveReferenceNumber(event))
                 .module(event.getModule())
                 .eventName(event.getEventName())
                 .tenantId(event.getTenantId())
@@ -322,7 +323,7 @@ public class DispatchPipelineService {
      * recipient. Every NOT NULL column gets an honest fallback so a malformed event can still
      * be written down; nothing is invented beyond the literal {@code unknown} markers.
      */
-    private void persistRejected(ComplaintsDomainEvent event, DerivedContext context,
+    private void persistRejected(NotificationEvent event, DerivedContext context,
                                  String errorCode, String errorMessage) {
         String channel = firstNonBlank(context != null ? context.getChannel() : null, event.getChannel(), "UNKNOWN");
         String eventId = firstNonBlank(event.getEventId(), "unknown");
@@ -336,7 +337,7 @@ public class DispatchPipelineService {
         dispatchLogRepository.upsert(DispatchLogEntry.builder()
                 .eventId(eventId)
                 .transactionId(transactionId)
-                .referenceNumber(event.getEntityId())
+                .referenceNumber(resolveReferenceNumber(event))
                 .module(firstNonBlank(event.getModule(), "unknown"))
                 .eventName(firstNonBlank(event.getEventName(), "unknown"))
                 .tenantId(firstNonBlank(event.getTenantId(), "unknown"))
@@ -360,13 +361,47 @@ public class DispatchPipelineService {
     }
 
     /**
-     * Best-available template identity for the dispatch-log row: the explicit wire value
-     * ({@code templateKey}, the MDMS NotificationTemplate uid PGR rendered with) when the
-     * producer sends it; otherwise reconstructed from segments the event already carries
-     * verbatim — audience (contact.type), action/toState (data block), channel and locale.
-     * Events without an action/toState (e.g. OTP) fall back to the eventName.
+     * The ledger's {@code reference_number}: the producing module's own handle for whatever this
+     * message is about, so an operator can find every notification for one case on the Logs
+     * screen. Module-neutral, in this order:
+     *
+     * <ol>
+     *   <li>{@code entityId} — the envelope's own reference field. BOTH shipped producers always
+     *       set it (PGR the serviceRequestId, {@code CoreSmsTranslator} the generated id), so
+     *       for them this method returns exactly what the previous {@code event.getEntityId()}
+     *       returned and existing rows are byte-for-byte unchanged.</li>
+     *   <li>{@code data.referenceNumber} — the neutral escape hatch for a producer that carries
+     *       its reference in the data block rather than as an entity.</li>
+     *   <li>{@code data.complaintNo} — PGR's legacy key, kept as a fallback so an older or
+     *       partial complaint event (entityId omitted) still lands under its complaint number
+     *       instead of nothing.</li>
+     *   <li>{@code eventId} — last resort. Never null, so a row is always addressable; nothing
+     *       is invented, the event id is a real handle the producer holds.</li>
+     * </ol>
      */
-    private String resolveTemplateKey(ComplaintsDomainEvent event, DerivedContext context) {
+    private static String resolveReferenceNumber(NotificationEvent event) {
+        Map<String, Object> data = event.getData();
+        return firstNonBlank(event.getEntityId(),
+                text(data, "referenceNumber"),
+                text(data, "complaintNo"),
+                event.getEventId());
+    }
+
+    private static String text(Map<String, Object> data, String key) {
+        Object value = data == null ? null : data.get(key);
+        return value == null ? null : value.toString();
+    }
+
+    /**
+     * Best-available template identity for the dispatch-log row: the explicit wire value
+     * ({@code templateKey} — whatever template identity the producer rendered with; PGR sends
+     * the MDMS NotificationTemplate uid) when the producer sends it; otherwise reconstructed
+     * from segments the event already carries verbatim — audience (contact.type),
+     * action/toState (data block), channel and locale. Events without an action/toState
+     * (e.g. OTP, and any producer that does not use that vocabulary) fall back to the
+     * eventName, which every envelope is required to carry.
+     */
+    private String resolveTemplateKey(NotificationEvent event, DerivedContext context) {
         if (StringUtils.hasText(event.getTemplateKey())) {
             return event.getTemplateKey();
         }

@@ -8,7 +8,7 @@ import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
@@ -71,7 +71,7 @@ class DispatchPipelinePassThroughTest {
                 new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent smsEvent() {
+    private NotificationEvent smsEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
@@ -81,7 +81,7 @@ class DispatchPipelinePassThroughTest {
         data.put("status", "PENDINGATLME");
         data.put("action", "ASSIGN");
         data.put("toState", "PENDINGATLME");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -135,7 +135,7 @@ class DispatchPipelinePassThroughTest {
     void explicitTemplateKeyOnTheWire_winsOverDerivedRoutingKey() {
         // Forward-compat: once pgr-services publishes the actual MDMS
         // NotificationTemplate uid on the event, it is persisted verbatim.
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setTemplateKey("CITIZEN.ASSIGN.PENDINGATLME.SMS.sw_KE");
 
         service.process(event, true, null);
@@ -147,7 +147,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void whatsappEvent_noEnabledProvider_persistsSkippedNoProvider_neverFallsBackToSms() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("WHATSAPP");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP");
 
@@ -166,7 +166,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void unknownChannel_isSkippedWithUnsupportedChannel_notDefaultedToSms() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("PIGEON");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:PIGEON");
 
@@ -182,7 +182,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void emailEvent_isDispatchedViaNovu_withRenderedBodyAndSubject() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("EMAIL");
         event.setSubject("Your complaint PGR-001");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL");
@@ -212,7 +212,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void emailEvent_withoutEmail_skippedContactMissing() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("EMAIL");
         // Contact carries a phone but no email — an EMAIL row must not phantom-SEND.
         event.setContact(Contact.builder()

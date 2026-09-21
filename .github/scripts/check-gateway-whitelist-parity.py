@@ -64,6 +64,15 @@ KONG_ONLY_AUTH_OPTIONAL = {
     # does not route novu-bridge at all.
     "/novu-bridge/novu-adapter/v1/receipts/novu",
     "/novu-bridge/novu-adapter/v1/receipts/smscountry",
+    # The published contract (Phase 3a): the inbound envelope's JSON Schema and the OpenAPI
+    # description of the bridge's own endpoints, served read-only from its jar. Descriptions of
+    # an interface — no tenant data, no recipient, no credential — and the same bytes are
+    # published in docs/2.12/notifications/contract/. Anonymous on Kong, and novu-bridge does
+    # not gate them either (ProxyAuthFilter excludes /novu-adapter/v1/contract explicitly).
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier does not
+    # route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/contract/envelope",
+    "/novu-bridge/novu-adapter/v1/contract/openapi",
 }
 # NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
 # (the internal SMSCountry send adapter Novu's worker calls over the container

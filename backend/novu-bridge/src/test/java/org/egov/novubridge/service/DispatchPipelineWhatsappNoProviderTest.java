@@ -8,7 +8,7 @@ import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
@@ -78,14 +78,14 @@ class DispatchPipelineWhatsappNoProviderTest {
                 new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent whatsappEvent() {
+    private NotificationEvent whatsappEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
                 .build();
         Map<String, Object> data = new HashMap<>();
         data.put("complaintNo", "PGR-001");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-wa").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -133,7 +133,7 @@ class DispatchPipelineWhatsappNoProviderTest {
     @Test
     void whatsappEvent_gateEnabled_noApprovedTemplate_skipsTemplateNotApproved_neverTriggersNovu() {
         config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
-        ComplaintsDomainEvent event = whatsappEvent();
+        NotificationEvent event = whatsappEvent();
         event.setTemplateId(null);   // PGR found no approved NotificationProviderTemplate for this leg
 
         DispatchResult result = assertDoesNotThrow(() -> service.process(event, true, null));
@@ -155,7 +155,7 @@ class DispatchPipelineWhatsappNoProviderTest {
         // NB_UNSUPPORTED_CHANNEL row BEFORE NovuClient/getNovuWorkflowId is ever consulted.
         // getNovuWorkflowId("PIGEON") throws NB_UNSUPPORTED_CHANNEL (see the config unit test),
         // but the pipeline never reaches it — so process() itself does NOT throw and does NOT DLQ.
-        ComplaintsDomainEvent event = whatsappEvent();
+        NotificationEvent event = whatsappEvent();
         event.setChannel("PIGEON");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:PIGEON");
 

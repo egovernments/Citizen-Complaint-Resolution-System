@@ -52,8 +52,11 @@ env: |
     value: "8080"
   - name: SERVER_SERVLET_CONTEXT_PATH
     value: "/novu-bridge"
+  # The envelope's eventType — never the topic — decides handling. `notifications.events`
+  # is the module-neutral topic any new producer should use; `complaints.domain.events` is
+  # PGR's original topic, still consumed so existing deployments are unaffected.
   - name: NOVU_BRIDGE_KAFKA_INPUT_TOPICS
-    value: "complaints.domain.events"
+    value: "complaints.domain.events,notifications.events"
   # DIGIT-core SMS (login OTPs from user-otp, egov-user password resets) — the
   # bridge translates SMSRequest into the envelope (eventType CORE_SMS).
   - name: NOVU_BRIDGE_CORE_SMS_TOPIC

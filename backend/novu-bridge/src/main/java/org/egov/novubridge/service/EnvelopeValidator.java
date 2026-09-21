@@ -1,7 +1,7 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -40,7 +40,7 @@ public class EnvelopeValidator {
         this.acceptedEventTypes = configured == null || configured.isEmpty() ? DEFAULT_EVENT_TYPES : configured;
     }
 
-    public void validate(ComplaintsDomainEvent event) {
+    public void validate(NotificationEvent event) {
         if (event == null) {
             throw new CustomException("NB_INVALID_EVENT", "Event payload is required");
         }

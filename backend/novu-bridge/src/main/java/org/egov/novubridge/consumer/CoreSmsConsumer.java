@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.core.CoreSmsTranslator;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -40,7 +40,7 @@ public class CoreSmsConsumer {
 
     @KafkaListener(topics = "${novu.bridge.kafka.core.sms.topic}")
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        ComplaintsDomainEvent event;
+        NotificationEvent event;
         try {
             event = translator.translate(record);
         } catch (CustomException ce) {

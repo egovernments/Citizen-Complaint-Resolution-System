@@ -1,7 +1,7 @@
 package org.egov.novubridge.service.core;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Component;
@@ -37,7 +37,7 @@ public class CoreSmsTranslator {
         this.config = config;
     }
 
-    public ComplaintsDomainEvent translate(Map<String, Object> sms) {
+    public NotificationEvent translate(Map<String, Object> sms) {
         if (sms == null) throw new CustomException("NB_INVALID_CORE_SMS", "empty SMSRequest");
         String mobile = first(sms, PHONE_KEYS);
         String message = first(sms, MESSAGE_KEYS);
@@ -56,7 +56,7 @@ public class CoreSmsTranslator {
         Map<String, Object> data = new LinkedHashMap<>();
         if (StringUtils.hasText(category)) data.put("category", category);
         if (sms.get("expiryTime") != null) data.put("expiryTime", sms.get("expiryTime"));
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .schemaVersion("1")
                 .eventId(id)
                 .eventType(EVENT_TYPE)
