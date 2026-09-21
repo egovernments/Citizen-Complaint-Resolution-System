@@ -347,7 +347,7 @@ public class MdmsNotificationConfigRepository implements NotificationConfigRepos
         int maxPages = config.getNotificationConfigMaxPages() != null
                 ? config.getNotificationConfigMaxPages() : 50;
         try {
-            String url = config.getMdmsHost() + config.getMdmsSearchPath();
+            String url = ServiceUrl.join(config.getMdmsHost(), config.getMdmsSearchPath());
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             for (int page = 0; page < maxPages; page++) {

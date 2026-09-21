@@ -336,6 +336,16 @@ class CommittedDefaultsTest(unittest.TestCase):
         missing = sorted({(r["eventName"], r["audience"], r["channel"]) for r in rt} - keys)
         self.assertEqual(missing, [], "routing rows with no template would misfire live")
 
+    def test_schema_descriptions_fit_the_mdms_column(self):
+        """eg_mdms_schema_definition.description is varchar(512). mdms-v2 answers 202 to a
+        schema create and the persister then fails the INSERT, so an over-long description
+        means the schema silently never exists and every data create against it is a 400
+        (found on a real deploy: the EventCatalogue schema, 541 characters)."""
+        schema_path = os.path.join(RES, "schema", "NOTIFICATIONS.json")
+        for s in _read_json(schema_path):
+            self.assertLessEqual(len(s.get("description") or ""), 512,
+                                 "%s: description would not persist" % s["code"])
+
     def test_every_generated_row_fits_its_schema(self):
         """additionalProperties:false means an unknown column is a 400 on create, and
         a missing `required` column is a 400 too. Checked without jsonschema so this

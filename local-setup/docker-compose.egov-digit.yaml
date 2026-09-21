@@ -2899,6 +2899,10 @@ services:
       NOVU_BRIDGE_PROXY_ADMIN_ROLES: ${NOVU_BRIDGE_PROXY_ADMIN_ROLES:-SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
+      # Thin events: the bridge resolves placeholder labels (complaint type, status, department)
+      # through egov-localization. Without this the property default names a host that does not
+      # exist on Compose, and messages degrade to raw codes ("NoStreetlight" for "No streetlight").
+      NOVU_BRIDGE_LOCALIZATION_HOST: http://egov-localization:8096
       # Novu API endpoints are populated in iteration 3 once novu-api
       # is in the stack; bridge starts up but won't dispatch until
       # NOVU_BASE_URL + NOVU_API_KEY resolve to a reachable Novu.

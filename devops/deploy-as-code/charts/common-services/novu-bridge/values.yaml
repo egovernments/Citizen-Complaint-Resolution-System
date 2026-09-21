@@ -106,6 +106,12 @@ env: |
         key: egov-user
   - name: NOVU_BRIDGE_USER_SEARCH_PATH
     value: "/user/_search"
+  # Thin events: placeholder labels are resolved through egov-localization.
+  - name: NOVU_BRIDGE_LOCALIZATION_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-localization
   - name: NOVU_BRIDGE_MDMS_HOST
     valueFrom:
       configMapKeyRef:

@@ -92,7 +92,7 @@ public class DigitLocalizationProvider implements LocalizationProvider {
         }
         Map<String, String> out = new LinkedHashMap<>();
         try {
-            String url = config.getLocalizationHost() + config.getLocalizationSearchPath()
+            String url = ServiceUrl.join(config.getLocalizationHost(), config.getLocalizationSearchPath())
                     + "?locale=" + locale + "&tenantId=" + tenant + "&module=" + module;
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

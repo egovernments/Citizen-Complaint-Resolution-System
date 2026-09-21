@@ -2,7 +2,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "NOTIFICATIONS.EventCatalogue",
-    "description": "Module-neutral catalogue of the domain events the notification box can route. One row per event: the module that owns it, the actors a producer will send with it, the placeholder vocabulary its templates may use, and the channels it may be routed to. The Configurator reads it to drive the event picker, the audience picker's Actor list and template validation BEFORE any event of that type has ever been seen. PGR's rows are GENERATED from the workflow definition by local-setup/scripts/generate_event_catalogue.py -- do not hand-edit them.",
+    "description": "Module-neutral catalogue of the domain events the notification box accepts. One row per event: the module, a label, the actors the producer names (who can be notified by ACTOR:x), the placeholders it fills, and optionally the channels it allows. Routing and template rows reference eventName; an event that is not catalogued is rejected. The PGR rows are generated from the workflow definition (local-setup/scripts/generate_event_catalogue.py).",
     "isActive": true,
     "definition": {
       "type": "object",

@@ -6285,6 +6285,9 @@
       when:
         - seed_notifications | default(enable_novu | default(false))
         - "'NOTIFICATIONS-COPY-FAILED' in (notif_seed.stdout | default(''))"
+        # When the first pass also created access-control rows, a second pass follows the
+        # accesscontrol restart below and reports the final state instead.
+        - "'ACL-CHANGED' not in (notif_seed.stdout | default(''))"
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: >-
@@ -6323,6 +6326,53 @@
       until: accesscontrol_ready.rc == 0
       changed_when: false
       failed_when: false
+
+    # First run on a box that has never seen the NOTIFICATIONS.* masters: the seeder
+    # creates the permissions for them in the SAME run that tries to write them, and
+    # egov-accesscontrol only sees new role-actions after a restart — so the gateway
+    # refuses every copy on that first pass (found on a real upgrade: 132 rows refused).
+    # Now that accesscontrol is back with the new rows loaded, run the idempotent seeder
+    # once more so an upgrade needs no manual re-run.
+    - name: "notif-seed — second pass with the new permissions loaded"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'ACL-CHANGED' in (notif_seed.stdout | default(''))"
+        - "'NOTIFICATIONS-COPY-FAILED' in (notif_seed.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        sleep 10
+        cd {{ digit_dir }}/notification-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
+        NOTIF_SCHEMA_FILE={{ digit_dir }}/notification-seed/NOTIFICATIONS.json \
+        DATA_DIR={{ digit_dir }}/notification-seed \
+        python3 seed-notifications.py
+      register: notif_seed_second
+      changed_when: "'created' in (notif_seed_second.stdout | default(''))"
+      failed_when: "notif_seed_second.rc != 0 or 'DONE' not in (notif_seed_second.stdout | default(''))"
+
+    - name: "notif-seed — second pass result"
+      when: notif_seed_second is defined and notif_seed_second.stdout is defined
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: "{{ notif_seed_second.stdout_lines | default([]) | select('search', 'copy |access-control|DONE|NOTIFICATIONS-') | list }}"
+
+    - name: "notif-seed — WARNING: the NOTIFICATIONS.* copy still did not complete"
+      when:
+        - notif_seed_second is defined and notif_seed_second.stdout is defined
+        - "'NOTIFICATIONS-COPY-FAILED' in (notif_seed_second.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: >-
+          The legacy RAINMAKER-PGR.Notification* rows are UNTOUCHED and notifications keep
+          working through them. Check that the seeding user holds MDMS_ADMIN (a user
+          provisioned by tenant bootstrap holds SUPERUSER only, which cannot create MDMS
+          schemas or write these masters), then re-run
+          `./deploy.sh {{ state_root | default('<tenant>') }} --tags notifications`.
 
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated

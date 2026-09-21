@@ -402,7 +402,7 @@ async function ensureComplaint(ctx) {
   if (ctx._complaint) return ctx._complaint;
   if (ctx._complaintErr) throw ctx._complaintErr;
   try {
-    const regPhone = '7' + String(Date.now()).slice(-8);
+    const regPhone = (process.env.E2E_PHONE_PREFIX || '7') + String(Date.now()).slice(-8); // prefix must satisfy the tenant's mobile-number rule
     const citizen = await citizenLogin(regPhone, 'zz-e2e Notif Citizen');
     const cUi = citizen.UserRequest, cTok = citizen.access_token;
     const contact = { name: 'zz-e2e Notif Citizen', mobileNumber: regPhone, countryCode: null, emailId: TEST_EMAIL };

@@ -66,7 +66,7 @@ public class DigitUserSearch {
         body.put("tenantId", tenantId);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        String url = config.getUserHost() + config.getUserSearchPath();
+        String url = ServiceUrl.join(config.getUserHost(), config.getUserSearchPath());
         ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST,
                 new HttpEntity<>(body, headers), Map.class);
         Object users = response.getBody() == null ? null : response.getBody().get("user");

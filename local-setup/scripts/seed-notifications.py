@@ -274,14 +274,6 @@ def missing_properties(live, committed):
     return sorted(set(cp) - set(lp))
 
 
-def update_schema(tok, live, committed):
-    """Push the committed definition onto the EXISTING schema row, keeping its id."""
-    sdef = dict(live)
-    sdef["definition"] = (committed.get("definition") or {})
-    sdef["tenantId"] = TENANT
-    body = ri(tok); body["SchemaDefinition"] = _strip_empty_ref(sdef)
-    _post("/mdms-v2/schema/v1/_update", body, tok).read()
-
 
 def create_row(tok, code, row, is_active=None):
     body = ri(tok)
@@ -574,14 +566,18 @@ def ensure_schemas(tok, schema_file, codes):
         if not added:
             print("  schema EXISTS  %s" % code)
             continue
-        try:
-            update_schema(tok, live, schemas[code])
-            print("  schema UPDATED %s (+%s)" % (code, ", ".join(added)))
-        except urllib.error.HTTPError as e:
-            # Non-fatal: the existing rows keep working, only writes carrying the
-            # new field are rejected. Say so loudly instead of exiting DONE.
-            print("  ! schema UPDATE FAILED %s (+%s): HTTP %s %s"
-                  % (code, ", ".join(added), e.code, e.read().decode()[:160]))
+        # mdms-v2 cannot change a stored schema: POST /mdms-v2/schema/v1/_update answers
+        # 501 Not Implemented (verified against the deployed image), and the gateway has
+        # no access-control action for it either. So do not try. It is harmless for the
+        # legacy RAINMAKER-PGR masters, which are read-only now — configuration is written
+        # to NOTIFICATIONS.*, whose schemas are created fresh from the committed file. For
+        # any other schema it means rows carrying the new field will be rejected until the
+        # definition is replaced in the database by hand, so say so plainly.
+        legacy = code.startswith("RAINMAKER-PGR.")
+        print("  schema STALE   %s lacks %s — mdms-v2 cannot update schemas in place%s"
+              % (code, ", ".join(added),
+                 " (harmless: this legacy master is read-only now)" if legacy
+                 else " — writes carrying these fields will be REJECTED"))
 
 
 def main():
