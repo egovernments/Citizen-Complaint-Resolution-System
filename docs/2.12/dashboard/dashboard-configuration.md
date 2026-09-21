@@ -52,9 +52,41 @@ or redeploy. Shapes (every field, with a real example) are in
 | Add a new capability tier | New `ACCESSCONTROL-ACTIONS-TEST.actions-test` action (`/pgr-services/v2/analytics/capabilities/<name>`), grant it via roleactions, point the KPI/pack's `requiredActionUrl` at it | [§ ACTIONS-TEST](../../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-actions-testactions-test) |
 | Change labels | `_upsert` the message key, then `POST /localization/messages/cache-bust` | — |
 
+### Updating department and jurisdiction visibility
+
+The dashboard has no separate JBAC record. It deliberately reuses the complaint row-scope policy
+so that its aggregates cannot expose complaints that the same user cannot see in search. In
+`ACCESSCONTROL-ACTIONS-TEST.actions-test`, find the tenant's action with `data.id: 2008` and
+`data.url: "/pgr-services/v2/request/_search"`, then update
+`data.resource.complaint.scope.roleScopes` with the standard MDMS v2 `_update` API. Preserve the
+rest of the action record, including its MDMS `uniqueIdentifier` and any `attributes` rules.
+
+For each role, set `department` and `jurisdiction` independently to `OWN` or `ALL`. If none of a
+user's roles has an explicit value for an axis, the policy uses `default`. For example, this limits
+an LME to their active HRMS department and jurisdiction while allowing a supervisor to see every
+jurisdiction in their own department:
+
+```json
+"scope": {
+  "axes": ["department", "jurisdiction"],
+  "roleScopes": {
+    "PGR_LME": { "department": "OWN", "jurisdiction": "OWN" },
+    "SUPERVISOR": { "department": "OWN", "jurisdiction": "ALL" }
+  },
+  "default": { "department": "OWN", "jurisdiction": "OWN" }
+}
+```
+
+`OWN` requires a current assignment for that axis in HRMS; a missing assignment returns no rows.
+This shared policy also changes complaint search and inbox visibility. Policy reads are cached for
+up to 15 minutes in `pgr-services`; restart the service only if the change must take effect
+immediately. See [Jurisdiction-Based Access Control](../jurisdiction-access-control.md) for the full
+behaviour and rollout details.
+
 Gotcha: editing the ansible-seed JSON files (not a live tenant) also needs regenerating
 `digit-mcp/src/tools/dashboard-catalog-seed.ts` via `digit-mcp/scripts/gen-dashboard-catalog.mjs` —
 CI fails on drift between the two.
 
 That's it — this is the entire configuration surface. Anything not listed above (query planning,
-row-scope/ABAC enforcement, the frontend module itself) is application code, not configuration.
+row-scope/ABAC enforcement, the frontend module itself) is application code; the row-scope policy
+described above is configuration.

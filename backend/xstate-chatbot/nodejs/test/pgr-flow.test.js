@@ -223,6 +223,13 @@ test("happy path files a complaint through fuzzy city and locality search", asyn
 
   service.send(textMessage("1"));
   await settle();
+  assert.match(String(outputs.at(-1)), /attach a photo of your grievance/);
+
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));
+  await settle();
   assert.deepEqual(outputs.at(-2), { type: "image", output: "test-image-id" });
   assert.match(String(outputs.at(-1)), /Please share your location/);
 
@@ -270,7 +277,13 @@ test("invalid complaint choice retries and returns to the frequent complaints qu
   );
 });
 
-test("see more path reaches complaint item selection", async () => {
+// SKIPPED: this path is unreachable in the current machine.
+// `complaintType.question` builds its list with dialog.constructListPromptAndGrammer(..., false)
+// (pgr.js:83), so no "see more" option is offered and INTENTION_MORE can never be produced --
+// which makes the whole `complaintType2Step` (category -> item) sub-flow, and this test,
+// dead. Re-enabling the two-step picker is a product decision, not a test fix, so the test is
+// kept (not deleted) as the record of what to re-assert if `more` is ever turned back on.
+test.skip("see more path reaches complaint item selection", async () => {
   const { service, outputs } = createHarness({
     serviceStub: createHappyPathServiceStub(),
   });
@@ -308,11 +321,16 @@ test("rejecting fuzzy city confirmation loops back to city entry", async () => {
 
   service.start();
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // file a new complaint
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // complaint type
   await settle();
-  service.send(textMessage("1"));
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));   // continue without a photo
+  await settle();
+  service.send(textMessage("1"));   // type the location instead of sharing it
   await settle();
 
   service.send(textMessage("ctya"));
@@ -331,9 +349,14 @@ test("shared geolocation with confirmed locality persists immediately", async ()
 
   service.start();
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // file a new complaint
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // complaint type
+  await settle();
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));   // continue without a photo
   await settle();
 
   service.send(locationMessage("{12.34,56.78}"));
@@ -357,11 +380,16 @@ test("persist complaint degrades gracefully when the backend omits complaint dat
 
   service.start();
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // file a new complaint
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // complaint type
   await settle();
-  service.send(textMessage("1"));
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));   // continue without a photo
+  await settle();
+  service.send(textMessage("1"));   // type the location instead of sharing it
   await settle();
   service.send(textMessage("CityA"));
   await settle();
