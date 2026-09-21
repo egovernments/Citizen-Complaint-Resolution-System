@@ -127,8 +127,15 @@ const FINANCIAL_YEARS = [
 
 const TERMS_VERSION = '2026-09';
 
+/**
+ * 44px tall, to the reference's `authInputStyle`. The shadcn default is 36px,
+ * which reads cramped beside a 28px step heading and sits under the comfortable
+ * touch target on the phone layout.
+ */
+const CONTROL_HEIGHT = 'h-11';
+
 const selectClass =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ' +
+  `flex ${CONTROL_HEIGHT} w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm ` +
   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
@@ -187,7 +194,7 @@ function Field({
     <div>
       <label
         htmlFor={id}
-        className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
       >
         {label}
       </label>
@@ -291,7 +298,10 @@ function SignupShell({ children }: { children: React.ReactNode }) {
 
         {/* Card column */}
         <div className="flex flex-col items-center justify-center bg-background px-5 py-10 sm:p-10">
-          <div className="w-full max-w-[400px] rounded-lg border bg-card p-8 shadow-sm">
+          <div
+            className="w-full max-w-[460px] border bg-card/95 p-8"
+            style={{ borderRadius: 16, boxShadow: '0 12px 36px rgba(32,55,140,0.08)' }}
+          >
             <div className="space-y-6">{children}</div>
           </div>
         </div>
@@ -736,7 +746,7 @@ function SignupFlow() {
         {banner}
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Verify your email to begin</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Verify your email to begin</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Confirm who you are first. Once your email is verified, you can name your account and
               continue the setup.
@@ -834,7 +844,7 @@ function SignupFlow() {
     const provisioned = signup?.status === 'ACTIVE';
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">
+        <h1 className="text-[28px] font-semibold leading-[1.15]">
           {provisioned ? 'Opening your workspace' : `Setting up ${accountName || 'your account'}`}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -875,7 +885,7 @@ function SignupFlow() {
     const { title, body } = copy[gated.readiness as Exclude<TenantReadiness, 'READY'>];
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">{title}</h1>
+        <h1 className="text-[28px] font-semibold leading-[1.15]">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{body}</p>
         <div className="mt-6 rounded border px-4 py-3 text-sm">
           <div className="font-medium">{gated.option.name}</div>
@@ -1032,7 +1042,7 @@ function SignupFlow() {
       {step === 'account' ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Set up your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Set up your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Create the account details that will identify your account in DIGIT Complaint
               Management.
@@ -1093,7 +1103,7 @@ function SignupFlow() {
       ) : step === 'preferences' ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Personalise your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Personalise your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Set the defaults your account will use across the product.
             </p>
@@ -1130,7 +1140,7 @@ function SignupFlow() {
           </Field>
 
           <div>
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Languages
             </span>
             {/* Pills, not checkboxes: a short multi-select reads better as
@@ -1264,7 +1274,7 @@ function SignupFlow() {
       ) : (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Review and create your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Review and create your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               These will be the main entry points for your account once your workspace has been set
               up.
