@@ -8,7 +8,11 @@
 //   Enable / Disable     — flips the integration's `active` flag.
 //   Delete               — confirmed, and refuses with a plain-English message while
 //                          a channel still selects this provider (NB_PROVIDER_IN_USE).
-//   Templates            — read-only Novu workflow discovery (legacy, unchanged).
+//   Delivery workflows   — read-only Novu workflow discovery: the plumbing Novu
+//                          triggers, NOT message templates. Named that way on
+//                          purpose — "Templates" here collided with the message
+//                          Templates screen and with Provider Templates
+//                          (WhatsApp), three different things under one word.
 import { useState } from 'react';
 import { useRefresh, useTranslate } from 'ra-core';
 import {
@@ -403,10 +407,10 @@ export function ProviderRowActions({
         size="sm"
         className="h-7 gap-1 text-xs"
         onClick={() => setTemplatesOpen(true)}
-        title={t('app.providers.templates', { _: 'Templates' })}
+        title={t('app.providers.delivery_workflows', { _: 'Delivery workflows' })}
       >
         <ListChecks className="w-3.5 h-3.5" />
-        {t('app.providers.templates', { _: 'Templates' })}
+        {t('app.providers.delivery_workflows', { _: 'Delivery workflows' })}
       </Button>
 
       <TestSendDialog

@@ -3,7 +3,9 @@
 // open them without a circular import:
 //
 //   TestSendDialog     — one live message through a chosen provider.
-//   PullTemplatesDialog — read-only Novu workflow discovery (copy a workflowId).
+//   PullTemplatesDialog — read-only Novu DELIVERY WORKFLOW discovery (copy a
+//                         workflowId). Shown to operators as "Delivery workflows",
+//                         never "Templates": message wording is a different screen.
 //
 // Recipients are operator-entered and only leave the browser on an explicit submit.
 import { useEffect, useState } from 'react';
@@ -261,12 +263,14 @@ export function PullTemplatesDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('app.providers.templates_title', { _: 'Novu Workflows' })}</DialogTitle>
+          <DialogTitle>
+            {t('app.providers.delivery_workflows_title', { _: 'Delivery workflows (Novu)' })}
+          </DialogTitle>
           <DialogDescription>
-            {t('app.providers.templates_hint', {
-              _: 'Delivery workflows configured in Novu for this channel — not provider templates '
-                + '(Twilio has no SMS template registry). SMS/Email message text is managed under '
-                + 'Notification Templates. Copy a workflow ID to reference it.',
+            {t('app.providers.delivery_workflows_hint', {
+              _: 'The delivery plumbing configured in Novu for this channel. These are NOT message '
+                + 'templates: your message text lives on Notifications → Templates, and approved '
+                + 'WhatsApp templates on Provider Templates (WhatsApp). Copy a workflow ID to reference it.',
             })}
           </DialogDescription>
         </DialogHeader>

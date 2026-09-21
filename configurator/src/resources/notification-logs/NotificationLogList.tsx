@@ -7,37 +7,31 @@ import {
 import type { DigitColumn } from '@/admin';
 import { StatusChip, DateField } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
+import {
+  CHANNEL_CHOICES,
+  SOURCE_PATH_CHOICES,
+  SOURCE_PATH_HELP,
+  STATUS_CHOICES,
+  TEST_CHOICES,
+  channelDisplay,
+  recipientDisplay,
+  sourcePathDisplay,
+} from './notificationLogDisplay';
 
-// Delivery channels novu-bridge writes to nb_dispatch_log. Every event lands
-// here with an explicit terminal status; WHATSAPP has no enabled provider yet,
-// so those rows show up as SKIPPED/NB_NO_PROVIDER rather than being invisible
-// (see the backend DispatchLogController javadoc). A channel whose SELECTED
-// provider has been deleted, disabled or points at another Novu channel is
+// Every choice list, label and row→cell rule lives in notificationLogDisplay.ts
+// (pure, unit-tested). This file is wiring only.
+//
+// Delivery outcomes novu-bridge writes to nb_dispatch_log. Every event lands
+// here with an explicit terminal status; a channel with no enabled provider
+// shows up as SKIPPED/NB_NO_PROVIDER rather than being invisible (see the
+// backend DispatchLogController javadoc). A channel whose SELECTED provider has
+// been deleted, disabled or points at another Novu channel is
 // SKIPPED/NB_PROVIDER_UNAVAILABLE instead — the bridge refuses to trigger it
-// rather than reporting SENT for a message Novu would silently drop.
+// rather than reporting SENT for a message Novu would silently drop. Some
+// outcomes have no channel at all (nobody routed, nobody found): those rows
+// carry channel NONE and are reachable from the Channel filter.
 // Error codes are rendered verbatim in the Error column (there is no code->label
 // map): the bridge's message already names the provider and the reason.
-const CHANNEL_CHOICES = [
-  { id: 'SMS', name: 'SMS' },
-  { id: 'EMAIL', name: 'Email' },
-  { id: 'WHATSAPP', name: 'WhatsApp' },
-];
-
-// Terminal states novu-bridge writes. SENT = the transport accepted the message;
-// DELIVERED / BOUNCED arrive later via provider receipts (when wired); REJECTED = the
-// envelope failed validation and was DLQ'd.
-const STATUS_CHOICES = [
-  { id: 'SENT', name: 'Sent (accepted by transport)' },
-  { id: 'DELIVERED', name: 'Delivered' },
-  { id: 'BOUNCED', name: 'Bounced' },
-  { id: 'FAILED', name: 'Failed' },
-  { id: 'SKIPPED', name: 'Skipped' },
-  { id: 'REJECTED', name: 'Rejected (bad event)' },
-  { id: 'RECEIVED', name: 'Received (dry run)' },
-];
-
-// Operator test-sends are real rows at this tenant, flagged is_test; hidden unless asked.
-const TEST_CHOICES = [{ id: 'true', name: 'Show test sends' }];
 
 const filters = [
   // referenceNumber is the real search — the data provider maps the explicit
@@ -47,23 +41,17 @@ const filters = [
   <TextFilterInput key="referenceNumber" source="referenceNumber" label="Complaint #" alwaysOn />,
   <SelectFilterInput key="channel" source="channel" label="Channel" choices={CHANNEL_CHOICES} alwaysOn />,
   <SelectFilterInput key="status" source="status" label="Status" choices={STATUS_CHOICES} alwaysOn />,
+  <SelectFilterInput key="sourcePath" source="sourcePath" label="Produced by" choices={SOURCE_PATH_CHOICES} alwaysOn />,
   <SelectFilterInput key="includeTest" source="includeTest" label="Test sends" choices={TEST_CHOICES} alwaysOn />,
 ];
 
-/** Mask a recipient (phone/email) so the log never renders a full PII value:
- *  keep the domain for emails, the last 3 digits for phones.
- *  Server also masks recipient_value/transaction_id (novu-bridge PiiMask) — this
- *  is defense-in-depth for older bridges. */
-function maskRecipient(value: unknown): string {
-  const s = String(value ?? '');
-  if (!s) return '--';
-  if (s.includes('@')) {
-    const [local, domain] = s.split('@');
-    const head = local.slice(0, 1);
-    return `${head}***@${domain}`;
-  }
-  if (s.length <= 3) return '***';
-  return `***${s.slice(-3)}`;
+/** Muted text is a non-value ("--", "none", "No channel") — never a badge, so a
+ *  channel-less row does not paint an empty chip. */
+function Cell({ text, muted, mono }: { text: string; muted: boolean; mono?: boolean }) {
+  const cls = [mono ? 'font-mono text-xs' : '', muted ? 'text-muted-foreground' : '']
+    .filter(Boolean)
+    .join(' ');
+  return <span className={cls || undefined}>{text}</span>;
 }
 
 const columns: DigitColumn[] = [
@@ -85,7 +73,12 @@ const columns: DigitColumn[] = [
       );
     },
   },
-  { source: 'channel', label: 'Channel', sortable: false },
+  {
+    source: 'channel',
+    label: 'Channel',
+    sortable: false,
+    render: (record) => <Cell {...channelDisplay(record.channel)} />,
+  },
   {
     source: 'status',
     label: 'app.fields.status',
@@ -93,12 +86,16 @@ const columns: DigitColumn[] = [
     render: (record) => <StatusChip value={record.status} />,
   },
   {
+    source: 'sourcePath',
+    label: 'Produced by',
+    sortable: false,
+    render: (record) => <Cell {...sourcePathDisplay(record.sourcePath)} />,
+  },
+  {
     source: 'recipientValue',
     label: 'Recipient',
     sortable: false,
-    render: (record) => (
-      <span className="font-mono text-xs">{maskRecipient(record.recipientValue)}</span>
-    ),
+    render: (record) => <Cell {...recipientDisplay(record)} mono />,
   },
   {
     source: 'templateKey',
@@ -153,7 +150,8 @@ const columns: DigitColumn[] = [
  * (`GET /novu-bridge/novu-adapter/v1/logs`). Lists every notification event
  * novu-bridge processed, newest first, with an explicit terminal status
  * (SENT / SKIPPED / FAILED / REJECTED, and DELIVERED / BOUNCED once provider receipts are
- * wired). Test sends are flagged rows at this tenant, shown on request.
+ * wired), and which half produced it (`sourcePath`). Test sends are flagged rows
+ * at this tenant, shown on request.
  */
 export function NotificationLogList() {
   return (
@@ -163,6 +161,7 @@ export function NotificationLogList() {
       sort={{ field: 'createdTime', order: 'DESC' }}
       filters={filters}
     >
+      <p className="mb-3 text-xs text-muted-foreground">{SOURCE_PATH_HELP}</p>
       <DigitDatagrid columns={columns} />
     </DigitList>
   );

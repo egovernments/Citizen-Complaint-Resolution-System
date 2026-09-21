@@ -12,6 +12,10 @@ import type { SchemaDescriptor } from './types';
  */
 export const notificationsProviderTemplateDescriptor: SchemaDescriptor = {
   schema: 'NOTIFICATIONS.ProviderTemplate',
+  notice:
+    'Fill this screen from Providers → Sync WhatsApp templates: it pulls the SIDs Twilio has '
+    + 'approved and matches them to your routing rows. Hand-editing is for bulk or unusual work — '
+    + 'the event, audience and locale must match the message row exactly, or WhatsApp sends nothing.',
   groups: [
     { title: 'Routing key', fields: ['provider', 'channel', 'eventName', 'audience', 'locale'] },
     { title: 'Provider template', fields: ['templateId', 'templateName', 'variables', 'approvalStatus', 'active'] },
@@ -19,7 +23,15 @@ export const notificationsProviderTemplateDescriptor: SchemaDescriptor = {
   fields: [
     { path: 'provider', required: true, label: 'Provider', help: 'twilio' },
     { path: 'channel', required: true, label: 'Channel', help: 'WHATSAPP (SMS/EMAIL bodies live in Notification Templates).' },
-    { path: 'eventName', required: true, label: 'Event', help: 'The event key from the event catalogue — must match the template row it pairs with.' },
+    // Picked from the catalogue, not typed — see notifications-routing.ts.
+    {
+      path: 'eventName', required: true, label: 'Event',
+      widget: 'reference-select',
+      reference: 'notifications-event-catalogue',
+      optionValue: 'eventName',
+      optionText: 'label',
+      help: 'The event key from the event catalogue — must match the template row it pairs with.',
+    },
     { path: 'audience', required: true, label: 'Audience', help: 'Must match the template row it pairs with.' },
     { path: 'locale', required: true, label: 'Locale', help: 'e.g. en_IN, hi_IN — must match the template row it pairs with.' },
     { path: 'templateId', required: true, label: 'Template ID', help: 'Twilio Content SID (HX…). Use Providers → Sync WhatsApp templates to pull these.' },

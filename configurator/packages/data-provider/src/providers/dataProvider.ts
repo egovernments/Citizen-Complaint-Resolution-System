@@ -3,6 +3,7 @@ import type { DigitApiClient } from '../client/DigitApiClient.js';
 import type { MdmsRecord } from '../client/types.js';
 import { getResourceConfig, type ResourceConfig } from './resourceRegistry.js';
 import { migrateThemeConfigToV3 } from './themeConfigMigration.js';
+import { buildNotificationLogQuery } from './notificationLogQuery.js';
 
 /** Extended data provider type with DIGIT-specific custom methods */
 export type DigitDataProvider = DataProvider & {
@@ -1215,16 +1216,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       if (config.type === 'custom') {
         const filter = filterValues;
         if (resource === 'notification-log') {
-          const { records, total } = await customFetchList(client, config, tenantId, {
-            referenceNumber: typeof filter.referenceNumber === 'string' ? filter.referenceNumber : undefined,
-            // Substring-style search on the complaint number → prefix match server-side.
-            referenceNumberPrefix: typeof filter.referenceNumber === 'string' && filter.referenceNumber ? true : undefined,
-            transactionId: typeof filter.transactionId === 'string' ? filter.transactionId : undefined,
-            channel: typeof filter.channel === 'string' ? filter.channel : undefined,
-            status: typeof filter.status === 'string' ? filter.status : undefined,
-            limit: perPage,
-            offset: (page - 1) * perPage,
-          });
+          // Filter → query-param mapping lives in notificationLogQuery.ts, which
+          // is unit-tested: it is the only place the /logs parameter names
+          // (channel incl. NONE, sourcePath, includeTest, …) are written down.
+          const { records, total } = await customFetchList(
+            client,
+            config,
+            tenantId,
+            buildNotificationLogQuery(filter, page, perPage),
+          );
           return { data: records, total };
         }
         // Generic custom list (e.g. notification-provider): fetch-all then

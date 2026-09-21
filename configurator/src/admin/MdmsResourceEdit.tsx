@@ -6,6 +6,7 @@ import { useEditContext, useResourceContext } from 'ra-core';
 import { useParams } from 'react-router-dom';
 import { getResourceConfig, getResourceLabel } from '@/providers/bridge';
 import { getDescriptor } from './schemaDescriptors';
+import { DescriptorNotice } from './DescriptorNotice';
 import { customEditors } from './themeEditor';
 import { useNotificationFormGuard } from '@/resources/notification-configure/useNotificationGuard';
 import { GuardBanner } from '@/resources/notification-configure/NotificationFindings';
@@ -33,6 +34,9 @@ function MdmsEditFields() {
 
   return (
     <>
+      {/* "Prefer the guided screen" and similar, when the descriptor carries one. */}
+      <DescriptorNotice descriptor={descriptor} />
+
       {descriptorFields.map((path) => {
         const spec = descriptor?.fields.find((f) => f.path === path);
         if (!spec || spec.hidden === 'edit' || spec.hidden === 'always') return null;

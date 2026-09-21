@@ -183,7 +183,7 @@ build can legitimately differ, and this is how you see which is which.
 
 A *provider* is a gateway account — the thing that actually sends the message.
 
-Open **Configurator → Notifications → Notification Providers** and select
+Open **Configurator → Notifications → Providers** and select
 **Add Provider**. The dialog asks for three things:
 
 - **Provider type** — pick one of the five below.
@@ -280,7 +280,7 @@ For a gateway you run yourself.
 
 The dialog offers **Verify** and **Test** as soon as the provider is created, and
 each row on the list offers them again, alongside **Rename**, **Rotate
-credentials**, **Disable** / **Enable**, **Delete** and **Templates**.
+credentials**, **Disable** / **Enable**, **Delete** and **Delivery workflows**.
 
 - **Verify** confirms the account exists and is switched on. It does **not** prove
   the password is right. SMSCountry and Ozeki have no way to check a password
@@ -294,8 +294,8 @@ credentials**, **Disable** / **Enable**, **Delete** and **Templates**.
   (`NB_PROVIDER_IN_USE`). Point that channel somewhere else first. The refusal is
   the point — the delete would otherwise succeed and every message on that channel
   would start failing.
-- **Templates** lists the Novu delivery workflows for the channel. It is a
-  plumbing view, not your message text; your wording lives on **Notification
+- **Delivery workflows** lists the Novu workflows for the channel. It is a
+  plumbing view, not your message text; your wording lives on **Notifications →
   Templates**.
 
 ---
@@ -305,7 +305,7 @@ credentials**, **Disable** / **Enable**, **Delete** and **Templates**.
 A provider on its own sends nothing. The channel has to be switched on and pointed
 at it.
 
-On **Notifications → Notification Providers**, the **Channels** card shows each
+On **Notifications → Providers**, the **Channels** card shows each
 channel's real state and lets you select its provider and switch the channel on
 with **Enable** / **Disable**. **Notifications → Channels** is the same setting on
 its own screen.
@@ -377,7 +377,7 @@ one here.
 
 ### Routing: who is told, on which channel
 
-**Notifications → Notification Routing** holds one row per
+**Notifications → Routing** holds one row per
 *(event, audience, channel)*. Read a row as a sentence:
 
 > when **COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME** happens,
@@ -415,7 +415,7 @@ citizen rates it.
 
 ### Templates: what the message says
 
-**Notifications → Notification Templates** holds the wording: one row per
+**Notifications → Templates** holds the wording: one row per
 *(event, audience, channel, language)*.
 
 A routing row and a template row are a pair. Routing says "tell the citizen by
@@ -457,7 +457,7 @@ So for WhatsApp there is one more screen: **Notifications → Provider Templates
 (WhatsApp)**, which records which approved template corresponds to which of your
 messages.
 
-To fill it, open **Notifications → Notification Providers** and select
+To fill it, open **Notifications → Providers** and select
 **Sync WhatsApp templates**. It pulls your Twilio account's approved templates,
 matches them to your routing rows, shows you what it matched and what it skipped,
 and saves only the rows you select.
@@ -493,15 +493,14 @@ city can be repaired one row at a time.
 
 ### Send one message
 
-On **Notifications → Notification Providers**, use **Test** on the provider's row.
+On **Notifications → Providers**, use **Test** on the provider's row.
 Fill in a recipient you are authorised to message and select **Send Test**.
 
 A test is a real message and a real log row at your own city, flagged as a test.
 Tests are auditable and are never counted as ordinary traffic.
 
-Then select **View Notification Logs**, or open **Notifications → Notification
-Logs** and set the **Test sends** filter to *Show test sends* — test rows are
-hidden otherwise.
+Then select **View Notification Logs**, or open **Notifications → Logs** and set
+the **Test sends** filter to *Show test sends* — test rows are hidden otherwise.
 
 A test exercises the provider and its credentials. It does **not** exercise your
 routing, your templates or the channel switch. To test those, make a real
@@ -512,7 +511,8 @@ complaint move.
 Every attempt lands here with an explicit outcome. There is no silent path: if
 nothing arrived, there is a row saying why.
 
-Filter by **Complaint #**, **Channel**, **Status** and **Test sends**.
+Filter by **Complaint #**, **Channel**, **Status**, **Produced by** and
+**Test sends**.
 
 | Status | What it means |
 |---|---|
@@ -529,9 +529,14 @@ browser.
 
 **Some rows have no channel.** When the decision was taken before any channel came
 into it — nobody is configured to be told, nobody could be found, the audience was
-unreadable — the row's Channel reads `NONE`. The **Channel** filter only offers
-SMS, Email and WhatsApp, so **clear that filter** to see them. They are the rows
-that explain "nothing happened at all".
+unreadable — the row's Channel reads *No channel*. Pick **No channel (nothing
+sent)** in the **Channel** filter to see only those. They are the rows that
+explain "nothing happened at all".
+
+**The Produced by column** says which half made the row: *Sent as finished
+message* (the module that raised the event also wrote the words) or *Routed by
+notifications* (the notification service chose who to tell and filled your
+template). Filter by it when you want to see only one of the two.
 
 **There are no automatic retries.** A failed message is one row. Fixing the cause
 does not resend it, and switching a channel back on does not resend what was

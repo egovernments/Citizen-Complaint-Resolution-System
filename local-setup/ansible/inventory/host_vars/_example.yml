@@ -474,14 +474,36 @@ novu_bridge_sms_sender_id: ""
 novu_bridge_smscountry_user: ""
 novu_bridge_smscountry_password: ""
 
-# ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
-# The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
-# (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
-# recipient, and publishes ONE pre-rendered event per (recipient × channel) to
-# complaints.domain.events. novu-bridge becomes a thin pass-through that
-# identifies the Novu subscriber and delivers renderedBody. Requires
-# enable_novu: true + the seeded MDMS masters + the pass-through
-# novu_bridge_image (below).
+# ────────── How a notification gets sent ──────────
+# pgr-services announces WHAT HAPPENED and nothing else: one event per workflow
+# transition ("complaint 123 was assigned"), published to
+# complaints.domain.events. It does not decide who to tell, does not pick a
+# channel or a language, and does not write any words.
+#
+# novu-bridge does all of that. For each event it looks up who should be told,
+# on which channel, in which language, fills the message from your templates and
+# hands it to the provider. Every attempt — and every deliberate decision NOT to
+# send — is one row on Configurator → Notifications → Logs.
+#
+# So almost nothing about notification CONTENT is configured in this file. The
+# people, the channels, the wording and the gateway accounts all live in the
+# Configurator, under Notifications, and can be changed without a deploy:
+#   Providers  — the gateway accounts (Twilio and friends) and their credentials
+#   Channels   — which channels are on for this tenant, and which provider serves each
+#   Configure  — who is told about which event, and what the message says
+# What IS here: whether the notification stack runs at all (enable_novu, above),
+# the Novu-side plumbing below, and who is allowed near those screens.
+
+# Who may open the notification screens, and who may touch credentials.
+# Two tiers, both read by novu-bridge's proxy filter (comma-separated, no spaces):
+#   allowed — read Logs / Providers / Preferences, verify a provider, send a test
+#   admin   — additionally create a provider, rotate its credentials, delete it.
+#             An allowed-only role gets 403 NB_ADMIN_ROLE_REQUIRED on those, by
+#             design: rotating an SMS gateway password is a config-admin act.
+# An admin role also satisfies the allowed tier. The defaults below are what you
+# get when these are unset; set them only to widen or narrow that.
+# novu_bridge_proxy_allowed_roles: "EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN"
+# novu_bridge_proxy_admin_roles:   "SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN"
 
 # Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
 # Leave unset to keep the published preview / local-build defaults.
@@ -493,13 +515,14 @@ novu_bridge_smscountry_password: ""
 # `novu_bridge_image` / `pgr_services_image` above — so they have been
 # removed rather than left as knobs that quietly do nothing.
 
-# Channels the bridge actually delivers (comma-separated). WHATSAPP is
-# intentionally omitted until a legitimate provider is onboarded as a Novu
-# integration; then add it here. Default SMS,EMAIL.
+# Last-resort channel allowlist (comma-separated), for a tenant that has no
+# Channels rows yet. Once Notifications → Channels has rows, THAT is the switch
+# that decides whether a channel delivers, and this is ignored — so prefer the
+# screen and leave this unset.
 # novu_bridge_channels_enabled: "SMS,EMAIL"
 
-# Per-channel Novu workflow ids the bridge triggers (rendered body travels in
-# payload.body — the workflow is just the delivery shell). Defaults match the
+# Per-channel Novu workflow ids the bridge triggers (the rendered message travels
+# in payload.body — the workflow is just the delivery shell). Defaults match the
 # CI bootstrap-created workflows.
 # novu_bridge_workflow_id_sms:      "complaints-sms"
 # novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
@@ -715,7 +738,12 @@ grafana_anonymous_enabled: false
 
 # ── Deploy behaviour ──
 # run_playwright_tests: false           # browser E2E; ANDed with run_ci_tests
-# seed_notifications: false             # defaults to enable_novu
+# seed_notifications: false             # OVERRIDE. Unset, it follows enable_novu:
+#                                       # the notification masters are seeded
+#                                       # whenever the notification stack runs.
+#                                       # Set false to keep a deploy from
+#                                       # (re)seeding them — e.g. a tenant whose
+#                                       # notification config was loaded by hand.
 # tolerate_bootstrap_failures: false    # true = keep going past a failed tenant bootstrap.
 #                                       # Leaves a half-seeded tenant; use only to get
 #                                       # past a known-benign failure you have diagnosed.

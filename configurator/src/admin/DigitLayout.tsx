@@ -54,20 +54,34 @@ import { DigitFooter } from '@/components/DigitFooter';
 const navGroups = [
   {
     labelKey: 'app.nav.notifications',
+    // Ordered the way a first-time operator needs them, not alphabetically and
+    // not by storage: a gateway account must exist (Providers) before a channel
+    // can be switched on (Channels), before anything can be configured
+    // (Configure), which is read against the vocabulary (Events). The raw
+    // Templates/Routing masters come after the guided screen because they are
+    // the bulk-edit path, WhatsApp's extra step after them, and Logs last —
+    // that is where you go once something has been sent. User Preferences is
+    // per-citizen data, not setup, so it sits at the end.
+    //
+    // Labels drop the "Notification" prefix: inside a menu already titled
+    // Notifications it read as "Notifications → Notification Routing". The page
+    // TITLES keep the long form so a screen is unambiguous out of context.
+    //
+    // The masters below are the shared NOTIFICATIONS.* ones. The legacy
+    // RAINMAKER-PGR.Notification* four are deliberately NOT in the sidebar any
+    // more: they are read-only history, still reachable at
+    // /manage/notification-<x> and from the Advanced section, so an operator on
+    // an un-migrated tenant can still see their data without the sidebar
+    // offering two of everything.
     items: [
-      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
-      // The shared NOTIFICATIONS.* masters. The legacy RAINMAKER-PGR.Notification*
-      // four are deliberately NOT in the sidebar any more: they are read-only
-      // history, still reachable at /manage/notification-<x> and from the Advanced
-      // section, so an operator on an un-migrated tenant can still see their data
-      // without the sidebar offering two of everything.
+      { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
       { id: 'notifications-channel', nameKey: 'app.nav.notification_channels', path: '/manage/notifications-channel', icon: ToggleRight },
+      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
       { id: 'notifications-event-catalogue', nameKey: 'app.nav.notification_events', path: '/manage/notifications-event-catalogue', icon: CalendarClock },
-      { id: 'notifications-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notifications-routing', icon: Bell },
       { id: 'notifications-template', nameKey: 'app.nav.notification_templates', path: '/manage/notifications-template', icon: Mail },
+      { id: 'notifications-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notifications-routing', icon: Bell },
       { id: 'notifications-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notifications-provider-template', icon: MessageCircle },
       { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
-      { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
       { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
     ],
   },

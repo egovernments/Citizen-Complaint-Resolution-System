@@ -9,6 +9,7 @@ import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { orderFields, formatFieldLabel } from './schemaUtils';
 import { Label } from '@/components/ui/label';
 import { getDescriptor } from './schemaDescriptors';
+import { DescriptorNotice } from './DescriptorNotice';
 import type { SchemaDescriptor } from './schemaDescriptors/types';
 import type { SchemaDefinition, SchemaProperty } from './schemaUtils';
 import { useNotificationFormGuard } from '@/resources/notification-configure/useNotificationGuard';
@@ -73,6 +74,9 @@ function MdmsCreateFields({
 
   return (
     <>
+      {/* "Prefer the guided screen" and similar, when the descriptor carries one. */}
+      <DescriptorNotice descriptor={descriptor} />
+
       {/* descriptor-defined widgets */}
       {descriptorFields.map((path) => {
         const spec = descriptor?.fields.find((f) => f.path === path);

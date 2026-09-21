@@ -16,13 +16,26 @@ import type { SchemaDescriptor } from './types';
  */
 export const notificationsTemplateDescriptor: SchemaDescriptor = {
   schema: 'NOTIFICATIONS.Template',
+  notice:
+    'Prefer Notifications → Configure. It picks the event and audience for you, lists the '
+    + 'placeholders the event actually fills, and writes the message together with its routing row. '
+    + 'This raw form is for bulk or unusual edits — a message whose event, audience, channel and '
+    + 'locale do not match a routing row is never sent.',
   groups: [
     { title: 'Key', fields: ['module', 'eventName', 'audience', 'channel', 'locale'] },
     { title: 'Content', fields: ['subject', 'body', 'placeholders', 'active'] },
   ],
   fields: [
     { path: 'module', required: true, label: 'Module', help: 'The module that produces this event, e.g. Complaints.' },
-    { path: 'eventName', required: true, label: 'Event', help: 'The event key from the event catalogue, e.g. COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME.' },
+    // Picked from the catalogue, not typed — see notifications-routing.ts.
+    {
+      path: 'eventName', required: true, label: 'Event',
+      widget: 'reference-select',
+      reference: 'notifications-event-catalogue',
+      optionValue: 'eventName',
+      optionText: 'label',
+      help: 'The event key from the event catalogue, e.g. COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME.',
+    },
     { path: 'audience', required: true, label: 'Audience', help: 'Must match the routing row exactly: ACTOR:<name>, ROLE:<code>, EVENT_RECIPIENTS, or a | chain.' },
     { path: 'channel', required: true, label: 'Channel', help: 'SMS, WHATSAPP, EMAIL.' },
     { path: 'locale', required: true, label: 'Locale', help: 'e.g. en_IN, sw_KE. A recipient whose locale has no row falls back to en_IN.' },

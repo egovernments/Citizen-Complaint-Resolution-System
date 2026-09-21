@@ -9,6 +9,7 @@
  */
 
 export type WidgetKind =
+  | 'reference-select' // dropdown fed from another resource (see FieldSpec.reference)
   | 'text'        // default; plain string input
   | 'textarea'    // multi-line string
   | 'integer'     // number input, step 1
@@ -35,6 +36,13 @@ export interface FieldSpec {
   max?: number;
   /** For text/regex widgets — a static pattern to also enforce client-side. */
   pattern?: string;
+  /** For `reference-select`: the resource whose records become the choices
+   *  (e.g. 'notifications-event-catalogue'). */
+  reference?: string;
+  /** For `reference-select`: the referenced record's field to submit (default 'code'). */
+  optionValue?: string;
+  /** For `reference-select`: the referenced record's field to show (default 'name'). */
+  optionText?: string;
 }
 
 /** A grouping of fields shown as a titled section in the form. */
@@ -47,6 +55,11 @@ export interface FieldGroup {
 
 export interface SchemaDescriptor {
   schema: string;
+  /** A short note rendered at the TOP of this schema's create and edit forms.
+   *  For the raw notification masters it is the pointer to the guided screen —
+   *  written here so it is actually on the page, not only in a code comment
+   *  above the descriptor where no operator will ever meet it. */
+  notice?: string;
   groups?: FieldGroup[];
   fields: FieldSpec[];
   /** Opt into a dedicated custom editor (registered in src/admin/themeEditor/

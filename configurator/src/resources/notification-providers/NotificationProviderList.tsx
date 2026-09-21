@@ -132,9 +132,12 @@ export function NotificationProviderList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [catalog, selected, t]);
 
+  // Title spelled out rather than taken from app.nav.notification_providers:
+  // that key is the SIDEBAR label, which is just "Providers" inside a menu
+  // already titled Notifications. A page title has to stand on its own.
   return (
     <DigitList
-      title="app.nav.notification_providers"
+      title="Notification Providers"
       subtitle={t('app.providers.subtitle', {
         _: 'Configure delivery providers. Credentials are stored by the notification service and never shown again.',
       })}

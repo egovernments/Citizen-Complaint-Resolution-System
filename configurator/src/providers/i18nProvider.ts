@@ -41,14 +41,17 @@ const customEnglishMessages: TranslationMessages = {
     nav: {
       dashboard: 'Dashboard',
       notifications: 'Notifications',
+      // Menu entries INSIDE the Notifications group: no "Notification" prefix —
+      // the group already says it. Page titles (app.resources.*) keep the long
+      // form so a screen read out of context is still unambiguous.
       notification_configure: 'Configure',
       notification_channels: 'Channels',
       notification_events: 'Events',
-      notification_routing: 'Notification Routing',
-      notification_templates: 'Notification Templates',
+      notification_routing: 'Routing',
+      notification_templates: 'Templates',
       notification_provider_templates: 'Provider Templates (WhatsApp)',
-      notification_logs: 'Notification Logs',
-      notification_providers: 'Notification Providers',
+      notification_logs: 'Logs',
+      notification_providers: 'Providers',
       notification_preferences: 'User Preferences',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
@@ -209,7 +212,11 @@ const customEnglishMessages: TranslationMessages = {
       // Row actions.
       verify: 'Verify',
       test: 'Test',
-      templates: 'Templates',
+      // The row action that lists Novu's delivery workflows. NOT "Templates":
+      // message text lives on Notifications → Templates and approved WhatsApp
+      // templates on Provider Templates (WhatsApp); three different things
+      // under one word is how an operator edits the wrong screen.
+      delivery_workflows: 'Delivery workflows',
       verified: 'Verified',
       failed: 'Failed',
       status: 'Status',
@@ -219,9 +226,9 @@ const customEnglishMessages: TranslationMessages = {
       send_test: 'Send Test',
       view_logs: 'View Notification Logs',
       whatsapp_sid_hint: 'Approved WhatsApp ContentSids are listed on the Provider Templates screen.',
-      // Templates dialog.
-      templates_title: 'Novu Workflows',
-      templates_hint: 'Delivery workflows configured in Novu for this channel — not provider templates (Twilio has no SMS template registry). SMS/Email message text is managed under Notification Templates. Copy a workflow ID to reference it.',
+      // Delivery-workflows dialog (Novu plumbing, not message templates).
+      delivery_workflows_title: 'Delivery workflows (Novu)',
+      delivery_workflows_hint: 'The delivery plumbing configured in Novu for this channel. These are NOT message templates: your message text lives on Notifications → Templates, and approved WhatsApp templates on Provider Templates (WhatsApp). Copy a workflow ID to reference it.',
       templates_empty: 'No Novu workflows found for this channel.',
       whatsapp_sid_note: 'WhatsApp ContentSids are managed on the Provider Templates screen, not here.',
       copy: 'Copy',

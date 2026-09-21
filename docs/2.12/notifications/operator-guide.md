@@ -30,17 +30,24 @@ you there.
 
 Configurator → **Notifications**:
 
+They are listed here in the order the menu shows them, which is the order a new
+city needs them: an account to send with, a channel to send on, then what to say.
+
 | Screen | What it holds | Stored in |
 |---|---|---|
-| **Configure** | The guided setup: pick a module, see its events, add and edit notifications inline, and validate the lot | — |
+| **Providers** | The gateway accounts and their credentials | Novu |
 | **Channels** | One row per channel: on/off, and which provider serves it | MDMS `NOTIFICATIONS.Channel` |
+| **Configure** | The guided setup: pick a module, see its events, add and edit notifications inline, and validate the lot | — |
 | **Events** | What each module can notify about, the people each event carries, and the placeholders it fills. **Read-only** | MDMS `NOTIFICATIONS.EventCatalogue` |
-| **Notification Routing** | Who is notified about which event, on which channel | MDMS `NOTIFICATIONS.Routing` |
-| **Notification Templates** | The message text, per event, audience, channel and language | MDMS `NOTIFICATIONS.Template` |
+| **Templates** | The message text, per event, audience, channel and language | MDMS `NOTIFICATIONS.Template` |
+| **Routing** | Who is notified about which event, on which channel | MDMS `NOTIFICATIONS.Routing` |
 | **Provider Templates (WhatsApp)** | Approved WhatsApp templates mapped to your routing keys | MDMS `NOTIFICATIONS.ProviderTemplate` |
-| **Notification Logs** | Every message the system tried to send | `nb_dispatch_log` in Postgres |
-| **Notification Providers** | The gateway accounts and their credentials | Novu |
+| **Logs** | Every message the system tried to send | `nb_dispatch_log` in Postgres |
 | **User Preferences** | Each user's language and per-channel consent | `digit-user-preferences-service` |
+
+The menu entries drop the word "Notification" — the menu already says it. Each
+screen's own title spells it out in full, so a page read on its own is still
+unambiguous.
 
 A message is delivered only when **all four** of channel, routing, template and
 provider line up. Anything missing shows on the Logs screen as a `SKIPPED` row
@@ -289,13 +296,17 @@ one message, not two.
 
 Two different things, easy to confuse:
 
-- **Notification Templates** — your message text, one per event × audience ×
+- **Templates** — your message text, one per event × audience ×
   channel × language, with `{placeholders}`. This is what citizens read. See
   [message-templates.md](./message-templates.md) for the placeholder vocabulary,
   the per-language rules and the SMS length arithmetic.
 - **Provider Templates (WhatsApp)** — the WhatsApp templates the provider has
   **approved**, mapped to your routing keys. You do not write the text here; you
   record which approved template id corresponds to which of your messages.
+
+A third thing used to be called Templates too and is not one: **Delivery
+workflows**, a row action on the Providers screen, lists the delivery plumbing
+configured in Novu. Nothing you read there is a message.
 
 Every routing row needs a template in `en_IN`, because that is the fallback every
 recipient lands on when their own language has none. A template only in another
@@ -366,11 +377,12 @@ happened" is now something you can read rather than something you have to deduce
 ### Rows with no channel
 
 Some of those decisions are taken **before** a channel comes into it — nobody to
-tell, nobody found, an unreadable audience. Those rows have a Channel of `NONE`
-and a masked recipient of `none`.
+tell, nobody found, an unreadable audience. Those rows show a Channel of *No
+channel* and a recipient of *none*: there was no one to send to, so nothing was
+sent.
 
-The **Channel** filter only offers SMS, Email and WhatsApp, so **clear it** to see
-them.
+The **Channel** filter offers **No channel (nothing sent)** as a choice, so you
+can list exactly those rows.
 
 ### Other things to know
 
@@ -383,9 +395,11 @@ the dead-letter queue. Fixing the cause does not resend it; nor does re-enabling
 channel resend what was skipped while it was off. Those messages were never queued
 anywhere.
 
-**Every row records which half produced it** — `PRERENDERED` when the producing
-module sent a finished message, `RESOLVED` when the notification service routed
-and rendered it. The screen does not show or filter that column yet; the API does
+**Every row records which half produced it**, in the **Produced by** column:
+*Sent as finished message* when the producing module sent finished words,
+*Routed by notifications* when the notification service chose the recipients and
+filled your template. The filter of the same name narrows the list to one of
+them; the API parameter behind it is `sourcePath`
 (`GET /novu-adapter/v1/logs?...&sourcePath=RESOLVED`).
 
 ---
