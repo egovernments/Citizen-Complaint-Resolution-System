@@ -1,4 +1,7 @@
 const channelProvider = require("../channel");
+const config = require("../env-variables");
+const dialog = require("../machine/util/dialog");
+const messages = require("../machine/flow/shell-messages");
 const { ChatbotError } = require("./errors");
 const { maskMobile } = require("../privacy");
 
@@ -10,9 +13,10 @@ const { maskMobile } = require("../privacy");
  */
 async function handleError(error, inboundRequestModel) {
   const mobileNumber = inboundRequestModel?.user?.mobileNumber;
-  const userMessage = error instanceof ChatbotError
-    ? error.userMessage
-    : 'Sorry, there was an error processing your request. Please try again.';
+  const locale = inboundRequestModel?.user?.locale || config.defaultLocale;
+  const bundle = error instanceof ChatbotError ? error.bundle : messages.errors.generic;
+  const userMessage = String(dialog.get_message(bundle, locale) ?? '')
+    .split('{{digits}}').join(String(config.mobileNumberLength));
 
   try {
     await channelProvider.sendMessageToUser(

@@ -94,6 +94,30 @@ module.exports = {
     en_IN: "Sorry, this number is not yet authorized to use this service.",
     pt_PT: "Lamentamos, este número ainda não está autorizado a utilizar este serviço.",
   },
+  // Sent by error-handler.js when a turn fails. {{digits}} is filled from
+  // config.mobileNumberLength; it used to read "10 digits" on every deployment.
+  errors: {
+    generic: {
+      code: 'chatbot.pgr.error.generic',
+      en_IN: 'Sorry, there was an error processing your request. Please try again.',
+      pt_PT: 'Lamentamos, ocorreu um erro ao processar o seu pedido. Tente novamente.',
+    },
+    validation: {
+      code: 'chatbot.pgr.error.validation',
+      en_IN: 'Sorry, we could not process your request. Please check your mobile number ({{digits}} digits) and try again.',
+      pt_PT: 'Lamentamos, não foi possível processar o seu pedido. Verifique o seu número de telemóvel ({{digits}} dígitos) e tente novamente.',
+    },
+    authentication: {
+      code: 'chatbot.pgr.error.authentication',
+      en_IN: 'Sorry, we could not verify your account. Please try again in a moment.',
+      pt_PT: 'Lamentamos, não foi possível verificar a sua conta. Tente novamente dentro de momentos.',
+    },
+    externalService: {
+      code: 'chatbot.pgr.error.externalService',
+      en_IN: 'Sorry, our service is temporarily unavailable. Please try again shortly.',
+      pt_PT: 'Lamentamos, o serviço está temporariamente indisponível. Tente novamente em breve.',
+    },
+  },
   submissionStalled: {
     code: 'chatbot.pgr.submissionStalled',
     en_IN: 'Sorry, we could not complete your request. The session has been closed — send a message to start again.',

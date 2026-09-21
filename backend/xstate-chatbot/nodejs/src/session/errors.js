@@ -1,31 +1,35 @@
+const messages = require('../machine/flow/shell-messages');
+
 /**
  * Base class for expected, operational errors — thrown deliberately to
  * signal a specific failure mode, as opposed to a programmer bug. Carries
  * a citizen-safe message separate from the technical one logged internally.
  */
 class ChatbotError extends Error {
-  constructor(message, userMessage) {
+  constructor(message, bundle) {
     super(message);
     this.name = this.constructor.name;
-    this.userMessage = userMessage || 'Sorry, there was an error processing your request. Please try again.';
+    // A locale bundle, not a string: error-handler.js resolves it against the
+    // citizen's locale. These were English on every deployment.
+    this.bundle = bundle || messages.errors.generic;
   }
 }
 
 class ValidationError extends ChatbotError {
   constructor(message) {
-    super(message, 'Sorry, we could not process your request. Please check your mobile number format (should be 10 digits) and try again.');
+    super(message, messages.errors.validation);
   }
 }
 
 class AuthenticationError extends ChatbotError {
   constructor(message) {
-    super(message, 'Sorry, we could not verify your account. Please try again in a moment.');
+    super(message, messages.errors.authentication);
   }
 }
 
 class ExternalServiceError extends ChatbotError {
   constructor(message) {
-    super(message, 'Sorry, our service is temporarily unavailable. Please try again shortly.');
+    super(message, messages.errors.externalService);
   }
 }
 
