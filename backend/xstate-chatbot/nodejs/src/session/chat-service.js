@@ -133,7 +133,7 @@ class ChatService {
   
   // Handles the citizen's reply to the resume-or-restart prompt: "1" resumes
   // the expired state as-is (their next message continues it normally), "2"
-  // discards it and restarts via the same USER_RESET path "voltar" uses.
+  // discards it and restarts via the same USER_RESET path "reiniciar" uses.
   async resolveResumeChoice(session, inboundRequestModel) {
     const sessionUserId = session.userId;
     const answer = inboundRequestModel.getMessage().getInputMessage();

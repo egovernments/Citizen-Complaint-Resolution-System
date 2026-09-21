@@ -28,9 +28,9 @@ const envVariables = {
     // Placeholder name for a citizen before they have provided a real name.
     citizenPlaceholderName: process.env.CITIZEN_PLACEHOLDER_NAME || 'Cidadão',
 
-    resetWords: (process.env.RESET_WORDS || 'hello,hi,ola').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
+    resetWords: (process.env.RESET_WORDS || 'reiniciar,reinicie,restart,reset,ola,oi,hello,hi').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
 
-    cancelWords: (process.env.CANCEL_WORDS || 'cancelar,cancele,cancel').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
+    cancelWords: (process.env.CANCEL_WORDS || 'cancelar,cancele,cancel,parar,pare,stop').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
 
     rootTenantId: process.env.ROOT_TENANTID || 'pg',
 
