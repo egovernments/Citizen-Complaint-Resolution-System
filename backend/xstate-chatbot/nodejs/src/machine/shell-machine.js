@@ -15,6 +15,8 @@ const config = require('../env-variables');
 const messages = require('./flow/shell-messages');
 const { offeredLocales } = require('./flow/offered-locales');
 const userProfileService = require('./service/egov-user-profile');
+const { yesNoOptions } = require('./flow/yes-no-options');
+
 
 const isOnboarded = (context) => context.user.locale;
 const hasProfileName = (context) => context.user.name && context.user.name !== config.citizenPlaceholderName;
@@ -105,7 +107,7 @@ askToConfirmProfile
     { bundle: messages.onboarding.onBoardingUserProfileConfirmation.question, delay: 2000 }
   ])
   .setFill({ name: (context) => context.user.name })
-  .setOptions(['Yes', 'No'])
+  .setOptions(yesNoOptions(messages.choices.confirm, messages.choices.change))
   .setConditionalNext(updateUserProfile, (context) => context.intention === 'Yes')
   .setNext(askToChangeName);
 
@@ -120,7 +122,7 @@ askToChangeName
 askToConfirmName
   .setPrompt([{ bundle: messages.onboarding.onboardingNameConfirmation, delay: 1000 }])
   .setFill({ name: (context) => context.onboarding.name })
-  .setOptions(['Yes', 'No'])
+  .setOptions(yesNoOptions(messages.choices.confirm, messages.choices.change))
   .setConditionalNext(updateUserProfile, (context) => context.intention === 'Yes', commitName)
   .setNext(askToChangeName);
 

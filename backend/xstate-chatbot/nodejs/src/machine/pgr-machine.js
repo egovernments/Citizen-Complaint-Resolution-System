@@ -20,6 +20,8 @@ const compile = require('./flow/flow-state-compiler');
 
 const config = require('../env-variables');
 const messages = require('./flow/pgr-messages');
+const { choices } = require('./flow/shell-messages');
+const { yesNoOptions } = require('./flow/yes-no-options');
 const localisationService = require('./util/localisation-service');
 const { pgrService } = require('./service/service-loader');
 
@@ -162,7 +164,7 @@ askForAttachments
 askConsent
   .setPrompt(messages.fileComplaint.consent.question)
   .setFill({ statements: consentStatements })
-  .setOptions(['Yes', 'No'])
+  .setOptions(yesNoOptions(choices.accept, choices.decline))
   .setConditionalNext(askConfidentiality, (context) => context.intention === 'Yes')
   .setNext(consentDeclined);
 
@@ -177,14 +179,14 @@ cancelSession
 askConfidentiality
   .setPrompt(messages.fileComplaint.confidentiality.question)
   .setFill({ label: messages.fileComplaint.confidentiality.label, hint: messages.fileComplaint.confidentiality.hint })
-  .setOptions(['Yes', 'No'])
+  .setOptions(yesNoOptions(choices.confidential, choices.notConfidential))
   .setConditionalNext(confirmSubmission, (context) => context.intention === 'Yes', (context) => { context.slots.pgr.isConfidential = true; })
   .setNext(confirmSubmission, (context) => { context.slots.pgr.isConfidential = false; });
 
 confirmSubmission
   .setPrompt(messages.fileComplaint.confirmSubmission.question)
   .setFill({ summary: confirmationSummary })
-  .setOptions(['Yes', 'No'])
+  .setOptions(yesNoOptions(choices.submit, choices.cancel))
   .setConditionalNext(persistComplaint, (context) => context.intention === 'Yes')
   .setNext(cancelSession);
 

@@ -62,13 +62,18 @@ class QuestionState extends State {
     const match = options.find((option, i) => {
       const value = typeof option === 'object' ? option.value : option;
       const label = typeof option === 'object' ? option.label : option;
+      // Some prompts spell their choice as a sentence ("Manter os meus dados
+      // confidenciais"), which nobody types — aliases are the short forms.
+      const aliases = (typeof option === 'object' && option.aliases) || [];
       return i + 1 === index
         || this.normalizeReply(value) === input
-        || this.normalizeReply(label) === input;
+        || this.normalizeReply(label) === input
+        || aliases.some((alias) => this.normalizeReply(alias) === input);
     });
     if (!match) return null;
     return typeof match === 'object' ? match.value : match;
   }
+
 
   compileNode() {
     return {

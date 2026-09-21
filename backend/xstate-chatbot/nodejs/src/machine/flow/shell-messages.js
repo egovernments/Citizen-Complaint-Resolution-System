@@ -94,6 +94,18 @@ module.exports = {
     en_IN: "Sorry, this number is not yet authorized to use this service.",
     pt_PT: "Lamentamos, este número ainda não está autorizado a utilizar este serviço.",
   },
+  // The words Yes/No prompts actually print. Each QuestionState pairs two of
+  // these so matchReply recognises the choice the citizen was shown.
+  choices: {
+    accept: { en_IN: 'Accept', pt_PT: 'Aceitar' },
+    decline: { en_IN: 'Decline', pt_PT: 'Rejeitar' },
+    submit: { en_IN: 'Submit', pt_PT: 'Submeter' },
+    cancel: { en_IN: 'Cancel', pt_PT: 'Cancelar' },
+    confirm: { en_IN: 'Confirm', pt_PT: 'Confirmar' },
+    change: { en_IN: 'Change', pt_PT: 'Alterar' },
+    confidential: { en_IN: 'Confidential', pt_PT: 'Confidencial' },
+    notConfidential: { en_IN: 'Not confidential', pt_PT: 'Sem confidencialidade' },
+  },
   // Sent by error-handler.js when a turn fails. {{digits}} is filled from
   // config.mobileNumberLength; it used to read "10 digits" on every deployment.
   errors: {
