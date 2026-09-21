@@ -95,6 +95,7 @@ export const MDMS_SCHEMAS = {
   TENANT: 'tenant.tenants',
   MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
   DASHBOARD_CONFIG: 'dss.DashboardConfig',
+  ESCALATION_CONFIG: 'RAINMAKER-PGR.EscalationConfig',
 };
 
 // OAuth credentials

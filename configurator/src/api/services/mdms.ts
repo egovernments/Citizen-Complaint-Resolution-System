@@ -7,6 +7,7 @@ import type {
   ComplaintType,
   MdmsRecord,
   Tenant,
+  EscalationConfigData,
 } from '../types';
 import {
   selectOwnedDashboardConfig,
@@ -203,6 +204,34 @@ export const mdmsService = {
       tenantId,
     });
     return response.publicDashboardEnabled === true;
+  },
+
+  /**
+   * Load the singleton EscalationConfig record (raw, with metadata).
+   * Searches RAINMAKER-PGR.EscalationConfig at tenantId, returning the
+   * active 'DEFAULT' record (or first active record).
+   */
+  async getEscalationConfig(tenantId: string): Promise<MdmsRecord | null> {
+    const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.ESCALATION_CONFIG);
+    const active = records.filter(
+      (r) => r.isActive !== false && r.tenantId === tenantId
+    );
+    return active.find((r) => r.uniqueIdentifier === 'DEFAULT') ?? active[0] ?? null;
+  },
+
+  /**
+   * Save the edited EscalationConfig, preserving unknown top-level fields.
+   */
+  async saveEscalationConfig(
+    record: MdmsRecord,
+    data: EscalationConfigData
+  ): Promise<MdmsRecord> {
+    const mergedData = {
+      ...(record.data as Record<string, unknown>),
+      ...data,
+      code: 'DEFAULT',
+    };
+    return this.update(record, mergedData);
   },
 
   // ============================================
