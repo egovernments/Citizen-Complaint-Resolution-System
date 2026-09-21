@@ -681,9 +681,15 @@ function SignupFlow() {
           )}
 
           {/* Anything beyond the first sits under it as a quiet alternative
-              rather than a second wall of buttons. */}
+              rather than a second wall of buttons.
+
+              One per row. They were laid out inline with no separator, which
+              read as a single run-on link the moment a deployment enabled a
+              third method: "Continue with GitHubEmail me a sign-in link". It
+              was not only ugly, the two targets touched, so aiming for one
+              reliably hit the other. */}
           {rest.length > 0 && (
-            <p className="text-center text-sm text-muted-foreground">
+            <div className="flex flex-col items-center gap-2 text-sm">
               {rest.map((method) => (
                 <button
                   key={method.id}
@@ -694,7 +700,7 @@ function SignupFlow() {
                   {method.label}
                 </button>
               ))}
-            </p>
+            </div>
           )}
 
           <p className="text-sm text-muted-foreground">
