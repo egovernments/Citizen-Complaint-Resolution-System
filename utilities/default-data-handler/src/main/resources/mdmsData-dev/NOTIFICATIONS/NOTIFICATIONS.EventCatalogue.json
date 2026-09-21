@@ -1,0 +1,1271 @@
+[
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+    "entityType": "COMPLAINT",
+    "label": "Complaint filed (PENDINGFORASSIGNMENT)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+    "entityType": "COMPLAINT",
+    "label": "Complaint assigned (PENDINGATLME)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": true
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.COMMENT.PENDINGATLME",
+    "entityType": "COMPLAINT",
+    "label": "Comment added (PENDINGATLME)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.COMMENT.PENDINGFORASSIGNMENT",
+    "entityType": "COMPLAINT",
+    "label": "Comment added (PENDINGFORASSIGNMENT)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.COMMENT.PENDINGFORREASSIGNMENT",
+    "entityType": "COMPLAINT",
+    "label": "Comment added (PENDINGFORREASSIGNMENT)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.COMMENT.REJECTED",
+    "entityType": "COMPLAINT",
+    "label": "Comment added (REJECTED)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.COMMENT.RESOLVED",
+    "entityType": "COMPLAINT",
+    "label": "Comment added (RESOLVED)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.ESCALATE.PENDINGATLME",
+    "entityType": "COMPLAINT",
+    "label": "Complaint escalated (PENDINGATLME)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.RATE.CLOSEDAFTERREJECTION",
+    "entityType": "COMPLAINT",
+    "label": "Complaint rated and closed (CLOSEDAFTERREJECTION)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.RATE.CLOSEDAFTERRESOLUTION",
+    "entityType": "COMPLAINT",
+    "label": "Complaint rated and closed (CLOSEDAFTERRESOLUTION)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.REASSIGN.PENDINGFORREASSIGNMENT",
+    "entityType": "COMPLAINT",
+    "label": "Complaint sent back for reassignment (PENDINGFORREASSIGNMENT)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.REJECT.REJECTED",
+    "entityType": "COMPLAINT",
+    "label": "Complaint rejected (REJECTED)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.REOPEN.PENDINGFORASSIGNMENT",
+    "entityType": "COMPLAINT",
+    "label": "Complaint reopened (PENDINGFORASSIGNMENT)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  },
+  {
+    "module": "Complaints",
+    "eventName": "COMPLAINTS.WORKFLOW.RESOLVE.RESOLVED",
+    "entityType": "COMPLAINT",
+    "label": "Complaint resolved (RESOLVED)",
+    "actors": [
+      {
+        "name": "citizen",
+        "label": "The citizen who filed the complaint",
+        "required": true
+      },
+      {
+        "name": "assignee",
+        "label": "The employee the complaint is assigned to",
+        "required": false
+      }
+    ],
+    "placeholders": [
+      {
+        "name": "id",
+        "label": "Complaint number",
+        "blankWhen": "never - the complaint always has a service request id"
+      },
+      {
+        "name": "date",
+        "label": "Date of the transition",
+        "blankWhen": "never"
+      },
+      {
+        "name": "status",
+        "label": "Complaint status",
+        "blankWhen": "never - falls back to the raw status when CS_COMMON_<STATUS> has no message"
+      },
+      {
+        "name": "complaint_type",
+        "label": "Complaint type",
+        "blankWhen": "never - falls back to the raw service code when neither COMPLAINT_HIERARCHY.<code> nor pgr.complaint.category.<code> resolves"
+      },
+      {
+        "name": "additional_comments",
+        "label": "Comment on the transition",
+        "blankWhen": "the transition carried no comment"
+      },
+      {
+        "name": "rating",
+        "label": "Citizen rating",
+        "blankWhen": "the complaint has not been rated yet"
+      },
+      {
+        "name": "citizen_name",
+        "label": "Name of the citizen who filed",
+        "blankWhen": "the complaint was filed without a name"
+      },
+      {
+        "name": "download_link",
+        "label": "Short link to the complaint",
+        "blankWhen": "egov-url-shortening is unavailable - blanked, never left literal, because Twilio rejects an empty contentVariable with 21656"
+      },
+      {
+        "name": "ulb",
+        "label": "City / ULB name",
+        "blankWhen": "rainmaker-common has no message for the district code"
+      },
+      {
+        "name": "ao_designation",
+        "label": "Assistant officer designation",
+        "blankWhen": "rainmaker-common has no COMMON_MASTERS_DESIGNATION_AO message"
+      },
+      {
+        "name": "emp_name",
+        "label": "Name of the assigned employee",
+        "blankWhen": "no assignee has been resolved for the complaint yet"
+      },
+      {
+        "name": "emp_department",
+        "label": "Department of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      },
+      {
+        "name": "emp_designation",
+        "label": "Designation of the assigned employee",
+        "blankWhen": "no assignee, or HRMS has no record for them"
+      }
+    ],
+    "channels": [
+      "SMS",
+      "WHATSAPP",
+      "EMAIL"
+    ],
+    "active": true
+  }
+]

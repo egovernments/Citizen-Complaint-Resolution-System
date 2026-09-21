@@ -244,6 +244,19 @@ plugins:
           -- running build actually enforces.
           ["/novu-bridge/novu-adapter/v1/contract/envelope"]=true,
           ["/novu-bridge/novu-adapter/v1/contract/openapi"]=true,
+          -- The thin domain event's JSON Schema, served the same way and for the same
+          -- reason: it describes the interface a producing module writes against. It is
+          -- deliberately NOT action-RBAC'd -- there is no accesscontrol action for it,
+          -- exactly like the two above.
+          ["/novu-bridge/novu-adapter/v1/contract/thin-event"]=true,
+          -- Thin-event design §5.2 / §7.2 P1. Both authenticate INSIDE novu-bridge
+          -- (ProxyAuthFilter, Bearer header, no body token) like the rest of the proxy
+          -- set, so Kong must let them past the body-token enrichment. /config/source
+          -- reports which config namespace served each master for a tenant;
+          -- /dispatch/_resolve turns a thin event into the envelope list WITHOUT
+          -- dispatching or writing a ledger row, and is admin-gated by the bridge.
+          ["/novu-bridge/novu-adapter/v1/config/source"]=true,
+          ["/novu-bridge/novu-adapter/v1/dispatch/_resolve"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -997,6 +1010,26 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/contract/envelope
     - /novu-bridge/novu-adapter/v1/contract/openapi
+    - /novu-bridge/novu-adapter/v1/contract/thin-event
+    strip_path: false
+  # Thin-event design §5.2: which config namespace (NOTIFICATIONS.* or the legacy
+  # RAINMAKER-PGR.* adapter) served each master for a tenant, and how many rows it
+  # found. An observability READ with no setting behind it -- the data chooses, and
+  # this makes the choice readable. GET only.
+  - name: novu-bridge-config-source-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/config/source
+    strip_path: false
+  # Thin-event design §7.2 P1: POST a thin event, get back the envelope list it would
+  # produce, WITHOUT dispatching or writing a ledger row. The dry-run the golden-master
+  # harness diffs against. Admin-gated inside novu-bridge; action 4639 mirrors that.
+  - name: novu-bridge-dispatch-resolve-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/dispatch/_resolve
     strip_path: false
 # ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/gateways/** ──────────────────
 # The SMSCountry send adapter (POST .../gateways/smscountry/send) exists so Novu's

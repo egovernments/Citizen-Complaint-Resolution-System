@@ -3,6 +3,24 @@ labels:
   app: "pgr-services"
   group: "rainmaker"
 
+# Deployment strategy — Recreate, NOT a rolling update.
+#
+# The notification box has no dedupe suppression (thin-event design decision D4): a
+# replayed event with the same idempotency key is dispatched again and upserts the same
+# ledger row. During the thin-event cutover an OLD pgr-services replica renders and
+# publishes N pre-rendered envelopes while a NEW one publishes one thin event the bridge
+# resolves into the same N. Run both for even a few seconds and one workflow transition
+# sends two real SMS — and because transactionId is chosen to be byte-identical across
+# the two paths, both outcomes upsert the SAME nb_dispatch_log row. The ledger would show
+# one row, one send. A double-send that leaves no trace is the worst failure shape there
+# is, so the release must stop the old pod before starting the new one.
+#
+# docker compose already recreates; Kubernetes does not unless told. Consumed by
+# charts/common/templates/_deployment.yaml. Do not add a rollingUpdate block here — the
+# API rejects rollingUpdate together with type: Recreate.
+deploymentStrategy:
+  type: Recreate
+
 
 # Ingress Configs
 ingress:

@@ -17,11 +17,25 @@ spec:
       {{- include "common.labels" . | nindent 6 }}  
 {{- end }}
 {{- $persistence := .Values.persistence | default dict -}}
-{{- if and (not (hasKey $persistence "enabled")) (eq (.Values.replicas | int) 1) }}
+{{- if .Values.deploymentStrategy }}
+  {{- /*
+    An explicit strategy from a chart's values.yaml. Added for pgr-services, which must
+    deploy with `type: Recreate` for the thin-event cutover: the bridge deliberately has
+    NO dedupe suppression, and an old replica (which renders and publishes N envelopes)
+    running alongside a new one (which publishes one thin event) makes one transition
+    send two real messages. The two outcomes upsert the SAME ledger row, so the ledger
+    shows nothing wrong -- the worst property a failure can have. Compose already
+    recreates; Kubernetes needs this.
+    Whatever a chart puts here replaces the default below wholesale, so a chart setting
+    `type: Recreate` must NOT also carry a rollingUpdate block (the API rejects it).
+  */}}
+  strategy:
+{{ toYaml .Values.deploymentStrategy | indent 4 }}
+{{- else if and (not (hasKey $persistence "enabled")) (eq (.Values.replicas | int) 1) }}
   strategy:
     rollingUpdate:
       maxUnavailable: 0
-{{- end }}     
+{{- end }}
   replicas: {{ .Values.replicas }}
   template:
     metadata:  

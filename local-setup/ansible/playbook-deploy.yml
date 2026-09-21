@@ -6155,6 +6155,11 @@
           `tolerate_bootstrap_failures: true` to continue past this.
 
     # ─────────── Config-driven notification MDMS seed ───────────
+    # Also seeds the module-neutral NOTIFICATIONS.* namespace and COPIES a tenant's
+    # existing RAINMAKER-PGR.Notification* rows into it (thin-event design §5.2). The
+    # copy is additive and never deletes or modifies a legacy row, so this task stays
+    # safe to run on a box that is still on the old pgr-services image. It prints
+    # NOTIFICATIONS-COPIED when it actually created rows in the new namespace.
     # Seeds the 4 PGR notification masters (schema + data) at the state root plus
     # the access-control rows the Channels screen and the novu-bridge provider
     # endpoints need — scoped to JUST notifications, the standalone equivalent of
@@ -6183,9 +6188,24 @@
         # staged, so every deploy logged a missing-file skip and the Channels screen
         # opened empty — the master that decides whether ANY channel delivers.
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationChannel.json"
+        # The module-neutral NOTIFICATIONS.* namespace (thin-event design §5). The five
+        # schemas, the generated EventCatalogue, and the converted defaults — the last
+        # are only used for a tenant that has NO legacy rows to copy; a tenant that has
+        # them gets its OWN rows converted, read live over _search, because a deployed
+        # box has drifted from these defaults and a staged file would overwrite that.
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Template.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.ProviderTemplate.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Channel.json"
         - "{{ playbook_dir }}/../scripts/seed-notifications.py"
+        # The conversion itself. seed-notifications.py imports it from its own
+        # directory: without it staged, the copy step reports NOT STAGED and the new
+        # namespace stays empty rather than being filled with guesses.
+        - "{{ playbook_dir }}/../scripts/notifications_convert.py"
 
-    - name: "notif-seed — seed the 4 notification MDMS masters + access control (idempotent)"
+    - name: "notif-seed — seed the notification MDMS masters (both namespaces) + access control (idempotent)"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
@@ -6196,6 +6216,7 @@
         DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
         DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
         SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
+        NOTIF_SCHEMA_FILE={{ digit_dir }}/notification-seed/NOTIFICATIONS.json \
         DATA_DIR={{ digit_dir }}/notification-seed \
         python3 seed-notifications.py
       register: notif_seed
@@ -6210,6 +6231,23 @@
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
+
+    # The copy into the NOTIFICATIONS.* namespace is LOUD but not fatal: nothing reads
+    # those rows yet, and a tenant with none of them falls back to reading the legacy
+    # namespace. But a warning buried in 40 lines of seeder output is a warning nobody
+    # reads, so surface it as its own task.
+    - name: "notif-seed — WARNING: the NOTIFICATIONS.* copy did not complete"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'NOTIFICATIONS-COPY-FAILED' in (notif_seed.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: >-
+          The legacy RAINMAKER-PGR.Notification* rows are UNTOUCHED and notifications
+          keep working. Re-run just this step with
+          `./deploy.sh {{ state_root | default('<tenant>') }} --tags notifications`
+          once MDMS is healthy. Lines:
+          {{ notif_seed.stdout_lines | default([]) | select('search', 'NOTIFICATIONS') | list }}
 
     # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
     # startup. Rows created just now are invisible to the running process, so Kong's

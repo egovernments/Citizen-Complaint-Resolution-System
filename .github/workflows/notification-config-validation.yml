@@ -40,6 +40,11 @@ on:
       - 'configurator/tsconfig*.json'
       - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.Notification*.json'
       - 'utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json'
+      # The module-neutral namespace, added with the masters themselves: the generated
+      # seed is what the configurator will validate once its resources are re-pointed,
+      # and omitting the paths here would silently skip that from the first day.
+      - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
+      - 'utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json'
       - 'local-setup/dataloader/templates/PgrWorkflowConfig.json'
       - 'backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java'
       - '.github/workflows/notification-config-validation.yml'
@@ -57,6 +62,8 @@ on:
       - 'configurator/tsconfig*.json'
       - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.Notification*.json'
       - 'utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
+      - 'utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json'
       - 'local-setup/dataloader/templates/PgrWorkflowConfig.json'
       - 'backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java'
       - '.github/workflows/notification-config-validation.yml'

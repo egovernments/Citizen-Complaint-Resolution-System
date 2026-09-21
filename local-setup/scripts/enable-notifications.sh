@@ -284,10 +284,23 @@ _read_novu_key() { sudo grep -E '^NOVU_API_KEY=' "$DIGIT_HOME/.env" 2>/dev/null 
 
 # mdms_count <schemaCode> <token> — how many rows exist at NOTIF_TENANT.
 mdms_count() {
-  local code="$1" tok="$2"
+  local code="$1" tok="$2" n
+  # Prefer mdms-v2 _count: the _search fallback below is ONE page, and a page is not a
+  # count — a live tenant's templates have already drifted past the shipped 42 and a
+  # bigger master would silently report its page size. _count returns totalCount for
+  # the same MdmsCriteria; builds without it fall through to the page.
+  n="$(curl -s -X POST "$PUBLIC_URL/mdms-v2/v2/_count" \
+    -H "Content-Type: application/json" \
+    -d "{\"RequestInfo\":{\"apiId\":\"enable-notif\",\"authToken\":\"$tok\"},\"MdmsCriteria\":{\"tenantId\":\"$NOTIF_TENANT\",\"schemaCode\":\"$code\"}}" 2>/dev/null \
+  | python3 -c 'import sys,json
+try:
+  t = json.load(sys.stdin).get("totalCount")
+  print(t if isinstance(t, int) else -1)
+except Exception: print(-1)' 2>/dev/null)"
+  if [[ "${n:--1}" -ge 0 ]]; then printf '%s\n' "$n"; return 0; fi
   curl -s -X POST "$PUBLIC_URL/mdms-v2/v2/_search" \
     -H "Content-Type: application/json" \
-    -d "{\"RequestInfo\":{\"apiId\":\"enable-notif\",\"authToken\":\"$tok\"},\"MdmsCriteria\":{\"tenantId\":\"$NOTIF_TENANT\",\"schemaCode\":\"$code\",\"limit\":200}}" 2>/dev/null \
+    -d "{\"RequestInfo\":{\"apiId\":\"enable-notif\",\"authToken\":\"$tok\"},\"MdmsCriteria\":{\"tenantId\":\"$NOTIF_TENANT\",\"schemaCode\":\"$code\",\"limit\":500}}" 2>/dev/null \
   | python3 -c 'import sys,json
 try: print(len(json.load(sys.stdin).get("mdms",[])))
 except Exception: print(-1)' 2>/dev/null
@@ -525,12 +538,17 @@ EOF
 # =============================================================================
 # STEP 6 — Seed the notification MDMS masters.
 #   pre : MDMS reachable + we can mint an admin token
-#   act : copy the schema + the 4 RAINMAKER-PGR.Notification* data files (Routing,
-#         Template, ProviderTemplate, Channel) into a notification-seed/ dir, then
-#         run seed-notifications.py (its env interface). The glob already picks up
-#         Channel; the seeder also upserts the notification access-control rows.
+#   act : copy the schemas + the 4 RAINMAKER-PGR.Notification* data files (Routing,
+#         Template, ProviderTemplate, Channel) AND the module-neutral NOTIFICATIONS.*
+#         schema + data files into a notification-seed/ dir, then run
+#         seed-notifications.py (its env interface). The glob already picks up
+#         Channel; the seeder also upserts the notification access-control rows and
+#         copies the legacy rows into the NOTIFICATIONS.* namespace.
 #   post: MDMS _search shows Routing/Template/ProviderTemplate rows (expect
-#         24/42/14; assert each >= 1 and log the actual counts)
+#         24/42/14; assert each >= 1 and log the actual counts) AND the new namespace
+#         has at least as many Routing/Template rows as the legacy one, because the
+#         copy is a superset of it — that is the assertion that catches a copy which
+#         silently converted nothing.
 # =============================================================================
 do_step6() {
   step step6 "$(step_title step6)"
@@ -541,24 +559,28 @@ do_step6() {
   require "MDMS reachable at ${PUBLIC_URL}" "http_reachable '$PUBLIC_URL/mdms-v2/v2/_search' || http_reachable '$PUBLIC_URL'"
   require "admin token can be minted (user=${ADMIN_USER}, tenant=${NOTIF_TENANT})" "_have_token"
   require "seed script exists" "test -f '$scripts/seed-notifications.py'"
+  require "converter module exists" "test -f '$scripts/notifications_convert.py'"
   require "DDH source JSON present (schema + data)" "test -f '$ddh/schema/RAINMAKER-PGR.json'"
+  require "DDH NOTIFICATIONS schema present" "test -f '$ddh/schema/NOTIFICATIONS.json'"
 
   # Single source of truth: the SAME JSON that ships in the default-data-handler
   # image. Copy it into a scoped dir the seeder reads from.
-  log "Staging schema + Notification* data into notification-seed/…"
+  log "Staging schemas + Notification* data into notification-seed/…"
   run "mkdir + copy seed JSON" \
-    "mkdir -p '$seeddir' && cp '$ddh/schema/RAINMAKER-PGR.json' '$ddh/mdmsData-dev/RAINMAKER-PGR/'RAINMAKER-PGR.Notification*.json '$seeddir/'"
+    "mkdir -p '$seeddir' && cp '$ddh/schema/RAINMAKER-PGR.json' '$ddh/schema/NOTIFICATIONS.json' '$ddh/mdmsData-dev/RAINMAKER-PGR/'RAINMAKER-PGR.Notification*.json '$ddh/mdmsData-dev/NOTIFICATIONS/'NOTIFICATIONS.*.json '$seeddir/'"
 
   log "Seeding masters…"
   # seed-notifications.py env interface: DIGIT_URL/NOTIF_TENANT/DIGIT_USERNAME/
-  # DIGIT_PASSWORD/SCHEMA_FILE/DATA_DIR. It auths with Basic egov-user-client: at
-  # /user/oauth/token. Idempotent — re-runs skip already-present rows.
+  # DIGIT_PASSWORD/SCHEMA_FILE/NOTIF_SCHEMA_FILE/DATA_DIR. It auths with Basic
+  # egov-user-client: at /user/oauth/token, and imports notifications_convert from its
+  # own directory. Idempotent — re-runs skip already-present rows.
   run "run seed-notifications.py" \
-    "cd '$scripts' && DIGIT_URL='$PUBLIC_URL' NOTIF_TENANT='$NOTIF_TENANT' DIGIT_USERNAME='$ADMIN_USER' DIGIT_PASSWORD='$ADMIN_PASS' SCHEMA_FILE='$seeddir/RAINMAKER-PGR.json' DATA_DIR='$seeddir' python3 seed-notifications.py"
+    "cd '$scripts' && DIGIT_URL='$PUBLIC_URL' NOTIF_TENANT='$NOTIF_TENANT' DIGIT_USERNAME='$ADMIN_USER' DIGIT_PASSWORD='$ADMIN_PASS' SCHEMA_FILE='$seeddir/RAINMAKER-PGR.json' NOTIF_SCHEMA_FILE='$seeddir/NOTIFICATIONS.json' DATA_DIR='$seeddir' python3 seed-notifications.py"
 
   # Independent postcondition: count the rows ourselves and assert each >= 1.
   if [[ "$DRY_RUN" == true ]]; then
     verify "Routing/Template/ProviderTemplate rows >= 1 each" "true"
+    verify "NOTIFICATIONS.* rows >= the legacy rows" "true"
     return 0
   fi
   local tok; tok="$(mint_token)"
@@ -576,6 +598,30 @@ do_step6() {
     verify "WHATSAPP enabled → NotificationProviderTemplate has >= 1 row (got ${np})" "[[ '${np:-0}' -ge 1 ]]"
   else
     note "WHATSAPP not enabled — NotificationProviderTemplate rows are informational (got ${np})"
+  fi
+
+  # The module-neutral namespace. The copy is a SUPERSET of the legacy rows minus the
+  # non-notifiable audiences (AUTO_ESCALATE/SYSTEM), which the shipped seed does not
+  # use — so ">= legacy" is the right assertion, not "== legacy": a tenant may already
+  # have new-namespace rows for events no legacy row covers. A zero here is the
+  # failure this step exists to catch: the seeder printed DONE but the copy converted
+  # nothing, and the Configurator would open on an empty Notifications screen.
+  local xe xr xt xp xc
+  xe="$(mdms_count NOTIFICATIONS.EventCatalogue "$tok")"
+  xr="$(mdms_count NOTIFICATIONS.Routing "$tok")"
+  xt="$(mdms_count NOTIFICATIONS.Template "$tok")"
+  xp="$(mdms_count NOTIFICATIONS.ProviderTemplate "$tok")"
+  xc="$(mdms_count NOTIFICATIONS.Channel "$tok")"
+  log "NOTIFICATIONS.* row counts — EventCatalogue=${xe} (expect 14), Routing=${xr}, Template=${xt}, ProviderTemplate=${xp}, Channel=${xc}"
+  verify "NOTIFICATIONS.EventCatalogue has >= 1 row (got ${xe})"  "[[ '${xe:-0}' -ge 1 ]]"
+  verify "NOTIFICATIONS.Routing covers the legacy rows (${xr} >= ${nr})"   "[[ '${xr:-0}' -ge '${nr:-0}' ]]"
+  verify "NOTIFICATIONS.Template covers the legacy rows (${xt} >= ${nt})"  "[[ '${xt:-0}' -ge '${nt:-0}' ]]"
+  verify "NOTIFICATIONS.Channel has >= 1 row (got ${xc})"        "[[ '${xc:-0}' -ge 1 ]]"
+  if _wa_enabled; then
+    verify "WHATSAPP enabled → NOTIFICATIONS.ProviderTemplate covers the legacy rows (${xp} >= ${np})" \
+      "[[ '${xp:-0}' -ge '${np:-0}' ]]"
+  else
+    note "WHATSAPP not enabled — NOTIFICATIONS.ProviderTemplate rows are informational (got ${xp})"
   fi
 }
 

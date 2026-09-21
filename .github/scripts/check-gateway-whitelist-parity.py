@@ -73,6 +73,17 @@ KONG_ONLY_AUTH_OPTIONAL = {
     # route novu-bridge at all.
     "/novu-bridge/novu-adapter/v1/contract/envelope",
     "/novu-bridge/novu-adapter/v1/contract/openapi",
+    # The thin domain event's schema, published for the same reason and served the same
+    # way (GET-only route, no accesscontrol action, ProxyAuthFilter excludes /contract).
+    "/novu-bridge/novu-adapter/v1/contract/thin-event",
+    # Thin-event design 5.2 / 7.2 P1. /config/source reports which config namespace
+    # served each master for a tenant; /dispatch/_resolve returns the envelope list a
+    # thin event would produce without dispatching it. Both authenticate inside
+    # novu-bridge (ProxyAuthFilter; _resolve on the admin role set), and both are
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier
+    # does not route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/config/source",
+    "/novu-bridge/novu-adapter/v1/dispatch/_resolve",
 }
 # NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
 # (the internal SMSCountry send adapter Novu's worker calls over the container
