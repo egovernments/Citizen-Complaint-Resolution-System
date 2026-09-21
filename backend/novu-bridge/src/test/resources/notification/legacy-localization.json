@@ -1,0 +1,70 @@
+{
+  "messages": [
+    {
+      "code": "PGR_CITIZEN_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+      "message": "Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_CITIZEN_ASSIGN_PENDINGATLME_SMS_MESSAGE",
+      "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_EMPLOYEE_ASSIGN_PENDINGATLME_SMS_MESSAGE",
+      "message": "Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_CITIZEN_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE",
+      "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_EMPLOYEE_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE",
+      "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_CITIZEN_REJECT_REJECTED_SMS_MESSAGE",
+      "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_CITIZEN_RESOLVE_RESOLVED_SMS_MESSAGE",
+      "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_CITIZEN_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+      "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_EMPLOYEE_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE",
+      "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_EMPLOYEE_RATE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE",
+      "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    },
+    {
+      "code": "PGR_EMPLOYEE_RATE_CLOSEDAFTERREJECTION_SMS_MESSAGE",
+      "message": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+      "module": "rainmaker-pgr",
+      "locale": "en_IN"
+    }
+  ]
+}
