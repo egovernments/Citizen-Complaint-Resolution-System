@@ -20,12 +20,16 @@ class StandardLoginFlow {
   async resolveSession() {
     if (!this.isWhitelisted()) {
       console.log(`Rejecting message from non-whitelisted number: ${maskMobile(this.mobileNumber)}`);
+      
       // Reply from the raw number, not a user record — nothing has been created.
-      channelProvider.sendMessageToUser(
+      // Awaited: unawaited, a ValueFirst transport error here is an unhandled
+      // rejection, and the caller returns null before the reply is even sent.
+      await channelProvider.sendMessageToUser(
         { mobileNumber: this.mobileNumber, locale: config.defaultLocale },
         [dialog.get_message(messages.notAuthorized, config.defaultLocale)],
         this.inboundRequestModel.extraInfo
       );
+
       return null;
     }
 

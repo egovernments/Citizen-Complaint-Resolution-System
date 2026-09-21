@@ -13,6 +13,16 @@ const exifr = require("exifr");
 const { verifySharedSecret } = require("./shared-secret");
 require("url-search-params-polyfill");
 
+// ValueFirst answers with an HTML error page on some failures and an empty
+// body on others; response.json() throws on both.
+async function parseJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 let valueFirstRequestBody =
   '{"@VER":"1.2","USER":{"@USERNAME":"","@PASSWORD":"","@UNIXTIMESTAMP":"","@CH_TYPE":"4"},"DLR":{"@URL":""},"SMS":[]}';
 
@@ -378,7 +388,6 @@ class ValueFirstWhatsAppProvider {
   async sendMessage(requestBody) {
     let url = config.valueFirstWhatsAppProvider.valueFirstURL;
     let token = await this.generateBearerToken();
-    console.log("token:" + token);
 
     if (token) {
       token = "Bearer " + token;
@@ -398,24 +407,23 @@ class ValueFirstWhatsAppProvider {
       origin: "*",
       body: JSON.stringify(requestBody),
     };
-    console.log(url);
-    console.log(JSON.stringify(request));
-    let response = await fetch(url, request);
-    console.log(response);
-    if (response.status === 200) {
-      let messageBack = await response.json();
-      if (messageBack.MESSAGEACK.Err) {
-        console.error(messageBack.MESSAGEACK.Err.Desc);
-        return messageBack;
-      }
 
-      return messageBack;
-    } else {
-      console.error("Error in sending message");
-      console.error(response);
+    let response = await fetch(url, request);
+
+    if (response.status !== 200) {
+      console.error(`ValueFirst send failed with status ${response.status}`);
       return undefined;
     }
+
+    let messageBack = await parseJson(response);
+    if (!messageBack) {
+      console.error("ValueFirst returned 200 with an unreadable body");
+      return undefined;
+    }
+    if (messageBack.MESSAGEACK?.Err) console.error(messageBack.MESSAGEACK.Err.Desc);
+    return messageBack;
   }
+
 
   extractRawMessage(req) {
     let requestBody = req.query;
@@ -435,8 +443,9 @@ class ValueFirstWhatsAppProvider {
   async sendMessageToUser(user, messages, extraInfo) {
     let requestBody = {};
     requestBody = await this.getTransformedResponse(user, messages, extraInfo);
-    this.sendMessage(requestBody);
+    await this.sendMessage(requestBody);
   }
+
   async generateBearerToken() {
     let url = config.valueFirstWhatsAppProvider.valueFirstTokenURL;
 
@@ -451,18 +460,20 @@ class ValueFirstWhatsAppProvider {
     };
     url = url + "?action=generate";
 
-    console.log("URL: " + url + JSON.stringify(requestOptions));
+    // Logged the Authorization header, then the whole response object.
     let response = await fetch(url, requestOptions);
-    console.log(response);
-    if (response.status === 200) {
-      console.log("Token generated successfully");
-      let messageBack = await response.json();
-      return messageBack.token;
-    } else {
-      console.error("Error while generating token");
-      console.error(response);
+
+    if (response.status !== 200) {
+      console.error(`ValueFirst token request failed with status ${response.status}`);
       return undefined;
     }
+
+    const messageBack = await parseJson(response);
+    if (!messageBack?.token) {
+      console.error("ValueFirst token response carried no token");
+      return undefined;
+    }
+    return messageBack.token;
   }
 
   async getTransformMessageForTemplate(reformattedMessages) {
@@ -490,7 +501,7 @@ class ValueFirstWhatsAppProvider {
 
         requestBody["SMS"].push(messageBody);
       }
-      this.sendMessage(requestBody);
+      await this.sendMessage(requestBody);
     }
   }
 
