@@ -17,6 +17,8 @@ import org.egov.novubridge.web.models.Contact;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -53,6 +55,24 @@ public class NovuClient {
                                             String renderedBody, String renderedSubject,
                                             String transactionId, Map<String, Object> data,
                                             String templateId, Map<String, Object> contentVariables) {
+        return identifyThenTrigger(subscriberId, contact, channel, renderedBody, renderedSubject,
+                transactionId, data, templateId, contentVariables, null, null);
+    }
+
+    /**
+     * As above, but targeting ONE explicitly chosen Novu integration — the provider the tenant
+     * picked for this channel in the configurator ({@code NotificationChannel.provider}).
+     *
+     * @param integrationIdentifier Novu integration identifier to pin; blank = today's
+     *                              behaviour (Novu picks the channel's primary integration)
+     * @param providerType          the catalog type of that integration when known, so a
+     *                              gateway that needs its own request body (Ozeki) gets it
+     */
+    public NovuResponse identifyThenTrigger(String subscriberId, Contact contact, String channel,
+                                            String renderedBody, String renderedSubject,
+                                            String transactionId, Map<String, Object> data,
+                                            String templateId, Map<String, Object> contentVariables,
+                                            String integrationIdentifier, String providerType) {
         // Channel-scope the Novu subscriber. The SMS and WHATSAPP legs of one complaint arrive with
         // the SAME base subscriberId (tenantId:userUuid) but need DIFFERENT recipient formats — SMS
         // the bare "+E164", WhatsApp "whatsapp:+E164". A single Novu subscriber's phone field can
@@ -88,11 +108,71 @@ public class NovuClient {
         // rely on. Without this, a future WHATSAPP caller that skips the template path would silently
         // fall through to the primary-SMS-integration bug this override exists to prevent.
         overrides = applyWhatsappIntegrationOverride(overrides, channel);
+        // The tenant's chosen provider wins over the deployment-wide WhatsApp pin above: it is
+        // the more specific statement of intent, and it is the only one an operator can set
+        // without a redeploy.
+        overrides = applyIntegrationOverride(overrides, channel, integrationIdentifier);
+        overrides = applyGatewayBody(overrides, providerType, transactionId, phone, renderedBody);
         if (overrides != null && !overrides.isEmpty()) {
             return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
         }
 
         return trigger(workflowId, scopedSubscriberId, phone, email, payload, transactionId);
+    }
+
+    /**
+     * Pin a trigger to one named integration. Novu keys trigger overrides by its own channel
+     * name, so WhatsApp — which rides Novu's {@code sms} channel — pins under {@code sms} too.
+     * A blank identifier is a no-op, which is what keeps every deployment without a configured
+     * {@code provider} on exactly the path it ran before.
+     */
+    public static Map<String, Object> applyIntegrationOverride(Map<String, Object> overrides,
+                                                               String channel, String integrationIdentifier) {
+        if (!StringUtils.hasText(integrationIdentifier)) {
+            return overrides;
+        }
+        String key = "EMAIL".equalsIgnoreCase(channel) ? "email" : "sms";
+        Map<String, Object> merged = overrides == null ? new HashMap<>() : overrides;
+        Map<String, Object> channelOverride = new HashMap<>();
+        channelOverride.put("integrationIdentifier", integrationIdentifier);
+        merged.put(key, channelOverride);
+        return merged;
+    }
+
+    /**
+     * Attach the gateway-shaped request body for provider types whose API Novu's
+     * {@code generic-sms} provider cannot express on its own.
+     *
+     * <p>Only Ozeki needs this: {@code generic-sms} posts its own JSON, and Ozeki's HTTP API
+     * wants {@code {messages:[{message_id, to_address, text}]}}. Novu deep-merges
+     * {@code _passthrough.body} into the outgoing request with the highest priority and
+     * without its key-casing transform, so Ozeki's snake_case survives verbatim. The
+     * provider-overrides key must be the Novu <em>provider id</em> ({@code generic-sms}) —
+     * Novu looks up {@code overrides.providers[integration.providerId]}, so a key like
+     * {@code ozeki} would be silently dropped. Overrides are never templated by Novu, so
+     * {@code text} has to be the already-rendered body, which the pass-through pipeline has.
+     *
+     * <p>SMSCountry needs nothing here: Novu posts plain generic-sms JSON at this service's
+     * adapter, and the adapter does the translating.
+     */
+    public static Map<String, Object> applyGatewayBody(Map<String, Object> overrides, String providerType,
+                                                       String transactionId, String toAddress, String text) {
+        if (!"ozeki".equalsIgnoreCase(providerType == null ? "" : providerType.trim())) {
+            return overrides;
+        }
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("message_id", transactionId);
+        message.put("to_address", toAddress);
+        message.put("text", text);
+
+        Map<String, Object> merged = overrides == null ? new HashMap<>() : overrides;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> providers = merged.get("providers") instanceof Map
+                ? (Map<String, Object>) merged.get("providers") : new HashMap<>();
+        providers.put("generic-sms", Map.of("_passthrough", Map.of("body",
+                Map.of("messages", List.of(message)))));
+        merged.put("providers", providers);
+        return merged;
     }
 
     private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
@@ -384,6 +464,16 @@ public class NovuClient {
      */
     public NovuResponse createIntegration(String name, String identifier, String providerId,
                                           String channel, Map<String, Object> credentials) {
+        return createIntegration(name, identifier, providerId, channel, credentials, true);
+    }
+
+    /**
+     * As above, with the operator's {@code active} choice. An inactive integration is stored
+     * with its credentials but never selected by Novu, which is how the configurator lets an
+     * operator stage a replacement provider before switching a channel over to it.
+     */
+    public NovuResponse createIntegration(String name, String identifier, String providerId,
+                                          String channel, Map<String, Object> credentials, boolean active) {
         try {
             Map<String, Object> body = new HashMap<>();
             body.put("name", name);
@@ -392,7 +482,7 @@ public class NovuClient {
             }
             body.put("providerId", providerId);
             body.put("channel", channel);
-            body.put("active", true);
+            body.put("active", active);
             body.put("check", false);
             body.put("credentials", credentials != null ? credentials : new HashMap<>());
 
@@ -417,6 +507,83 @@ public class NovuClient {
             log.error("Novu create integration failed for providerId={} channel={}", providerId, channel, e);
             throw new CustomException("NB_NOVU_INTEGRATION_CREATE_FAILED",
                     "Failed creating Novu integration: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update an existing Novu provider integration ({@code PUT /v1/integrations/{integrationId}}).
+     * A partial update: only the fields the operator actually changed are sent, so renaming a
+     * provider cannot blank its credentials and toggling it off cannot lose its name. Passing
+     * {@code credentials} REPLACES the stored credential set — that is the rotation path.
+     *
+     * <p><b>Secrets never logged</b>, same rule as {@link #createIntegration}: key names only,
+     * never values, never the body.
+     *
+     * @param integrationId Novu's {@code _id} of the integration (not the identifier)
+     * @param name          new display name, or {@code null} to leave it
+     * @param credentials   full replacement credential set, or {@code null} to leave it
+     * @param active        new active flag, or {@code null} to leave it
+     */
+    public NovuResponse updateIntegration(String integrationId, String name,
+                                          Map<String, Object> credentials, Boolean active) {
+        try {
+            Map<String, Object> body = new HashMap<>();
+            if (StringUtils.hasText(name)) {
+                body.put("name", name);
+            }
+            if (credentials != null) {
+                body.put("credentials", credentials);
+            }
+            if (active != null) {
+                body.put("active", active);
+            }
+            body.put("check", false);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            String url = config.getNovuBaseUrl() + "/v1/integrations/" + integrationId;
+            log.info("Novu update integration id={} name={} active={} credentialKeys={} url={}",
+                    integrationId, name, active,
+                    credentials != null ? credentials.keySet() : "unchanged", url);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.PUT,
+                    new HttpEntity<>(body, headers), Map.class);
+            return NovuResponse.builder()
+                    .statusCode(response.getStatusCodeValue())
+                    .response(response.getBody())
+                    .build();
+        } catch (Exception e) {
+            log.error("Novu update integration failed for id={}", integrationId, e);
+            throw new CustomException("NB_NOVU_INTEGRATION_UPDATE_FAILED",
+                    "Failed updating Novu integration: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Delete a Novu provider integration ({@code DELETE /v1/integrations/{integrationId}}),
+     * which also destroys the credentials it held. Callers must first establish that no tenant
+     * still routes a channel through it — Novu will not.
+     */
+    public NovuResponse deleteIntegration(String integrationId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            String url = config.getNovuBaseUrl() + "/v1/integrations/" + integrationId;
+            log.info("Novu delete integration id={} url={}", integrationId, url);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.DELETE,
+                    new HttpEntity<>(headers), Map.class);
+            return NovuResponse.builder()
+                    .statusCode(response.getStatusCodeValue())
+                    .response(response.getBody())
+                    .build();
+        } catch (Exception e) {
+            log.error("Novu delete integration failed for id={}", integrationId, e);
+            throw new CustomException("NB_NOVU_INTEGRATION_DELETE_FAILED",
+                    "Failed deleting Novu integration: " + e.getMessage());
         }
     }
 

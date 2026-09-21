@@ -17,9 +17,12 @@ import {
   validateNotifications,
   type RoutingRow,
   type TemplateRow,
+  type ChannelRow,
+  type IntegrationRow,
   type BusinessServiceRecord,
   type ValidationFinding,
 } from './validateNotifications';
+import { useChannelRows } from '../notification-providers/useChannelRows';
 
 /** Case-insensitive, trimmed comparison helper (mirrors the checker). */
 function eq(a: unknown, b: unknown): boolean {
@@ -63,6 +66,17 @@ function ValidationPanel({ businessService }: { businessService: BusinessService
     pagination: { page: 1, perPage: 500 },
     sort: { field: 'name', order: 'ASC' },
   });
+  // The channel policy + the Novu integrations behind it, read exactly as the Notifications
+  // → Configure screen reads them. Without these the provider rules (channel-needs-provider,
+  // channel-provider-missing, channel-provider-inactive) silently never run here, so this
+  // button used to report a clean bill of health for a tenant whose SMS channel pointed at a
+  // deleted provider. useChannelRows scopes the read to the STATE tenant, which is where
+  // novu-bridge itself reads the policy.
+  const { rows: channelPolicyRows } = useChannelRows();
+  const { data: integrationData } = useGetList('notification-provider', {
+    pagination: { page: 1, perPage: 100 },
+    sort: { field: 'channel', order: 'ASC' },
+  });
 
   const bsId = String(businessService.businessService ?? '');
 
@@ -80,9 +94,20 @@ function ValidationPanel({ businessService }: { businessService: BusinessService
     );
   }, [roleData]);
 
+  // Undefined, not [], when a master has not been read: the checker treats an empty array as
+  // "this tenant has no rows" and an absent one as "do not run these rules at all".
+  const channelRows = channelPolicyRows.length > 0
+    ? (channelPolicyRows as unknown as ChannelRow[])
+    : undefined;
+  const integrationRows = integrationData
+    ? (integrationData as unknown as IntegrationRow[])
+    : undefined;
+
   const run = () => {
     setFindings(
-      validateNotifications({ businessService, routingRows, templateRows, roleCodes }),
+      validateNotifications({
+        businessService, routingRows, templateRows, roleCodes, channelRows, integrationRows,
+      }),
     );
     setExpanded(true);
   };

@@ -19,11 +19,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Server-side authentication for the configurator proxy endpoints
@@ -36,9 +36,18 @@ import java.util.stream.Collectors;
  * introspects the incoming {@code Authorization: Bearer <token>} against egov-user
  * {@code POST /user/_details?access_token=<token>} and allows the request only when
  * the resolved user is an {@code EMPLOYEE} carrying at least one role code from the
- * configured allowlist ({@code novu.bridge.proxy.allowed.roles}). A valid token is
- * cached (by SHA-256 hash, never raw) for 60s so the Logs screen's polling does not
- * hammer egov-user.
+ * configured allowlist ({@code novu.bridge.proxy.allowed.roles}). A valid token's
+ * resolved role codes are cached (keyed by SHA-256 hash, never the raw token) for 60s
+ * so the Logs screen's polling does not hammer egov-user.
+ *
+ * <p><b>Two tiers.</b> Reading the screens (logs, integrations, preferences, the provider
+ * catalog and templates) and exercising them (verify, test-send) needs a role from that broad
+ * allowlist. The three calls that push credentials into Novu or destroy them — {@code POST
+ * /providers}, {@code POST /providers/_update}, {@code POST /providers/_delete} — additionally
+ * require a role from the narrower {@code novu.bridge.proxy.admin.roles}, and answer
+ * {@code 403 NB_ADMIN_ROLE_REQUIRED} without it. Rotating an SMS gateway's password is a
+ * config-admin act; a GRO holding a Logs-screen role must not be able to do it, whatever the
+ * gateway's own access-control rows say.
  *
  * <p>The POST diagnostic endpoints under the same {@code /novu-adapter/v1} namespace
  * ({@code _validate}, {@code _dry-run}, {@code _test-trigger}) are gated by the same
@@ -49,11 +58,33 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
 
     private static final long CACHE_TTL_MS = 60_000L;
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String NAMESPACE = "/novu-adapter/v1";
+
+    /**
+     * The credential-bearing and destructive provider calls. Exact paths, not a prefix: every
+     * other {@code /providers/*} path (catalog, templates, twilio-templates, verify, test-send)
+     * stays on the broad allowlist. They are POSTs by design — the gateway matches exact URLs,
+     * so management calls cannot use PUT/DELETE with an id in the path.
+     */
+    private static final Set<String> ADMIN_ONLY_PATHS = Set.of(
+            NAMESPACE + "/providers",
+            NAMESPACE + "/providers/_update",
+            NAMESPACE + "/providers/_delete");
+
+    /** A resolved token: when it expires, and the role codes egov-user reported for it. */
+    private static final class CachedUser {
+        final long expiresAt;
+        final Set<String> roles;
+        CachedUser(long expiresAt, Set<String> roles) {
+            this.expiresAt = expiresAt;
+            this.roles = roles;
+        }
+    }
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
-    // tokenHash -> expiry epoch millis. Never stores the raw token.
-    private final ConcurrentHashMap<String, Long> validTokenCache = new ConcurrentHashMap<>();
+    // tokenHash -> resolved user. Never stores the raw token.
+    private final ConcurrentHashMap<String, CachedUser> validTokenCache = new ConcurrentHashMap<>();
 
     public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -66,12 +97,15 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
             return true;
         }
-        String path = request.getServletPath();
-        if (!StringUtils.hasText(path)) {
-            path = request.getRequestURI();
-        }
+        String path = pathOf(request);
         // Delivery receipts are machine callbacks with their own shared-secret check.
         if (path.startsWith("/novu-adapter/v1/receipts")) {
+            return true;
+        }
+        // Gateway adapters are called by the Novu worker, which holds no DIGIT token. They
+        // authenticate on the provider credential headers Novu sends (see
+        // SmsCountryAdapterController) and refuse without them.
+        if (path.startsWith("/novu-adapter/v1/gateways")) {
             return true;
         }
         return !(path.startsWith("/novu-adapter/v1/logs")
@@ -103,13 +137,16 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
 
         long now = System.currentTimeMillis();
         String tokenHash = sha256(token);
-        Long expiry = validTokenCache.get(tokenHash);
-        if (expiry != null && expiry > now) {
+        CachedUser cached = validTokenCache.get(tokenHash);
+        if (cached != null && cached.expiresAt > now) {
+            if (!adminCheckPasses(request, response, cached.roles)) {
+                return;
+            }
             chain.doFilter(request, response);
             return;
         }
         // Opportunistic sweep of expired entries.
-        validTokenCache.entrySet().removeIf(e -> e.getValue() <= now);
+        validTokenCache.entrySet().removeIf(e -> e.getValue().expiresAt <= now);
 
         Map<String, Object> user;
         try {
@@ -123,13 +160,94 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
             writeError(response, HttpStatus.UNAUTHORIZED, "invalid token");
             return;
         }
-        if (!isAuthorized(user)) {
+        Set<String> roles = employeeRoles(user);
+        if (roles == null || !isAuthorized(roles)) {
             writeError(response, HttpStatus.FORBIDDEN, "insufficient role");
             return;
         }
 
-        validTokenCache.put(tokenHash, now + CACHE_TTL_MS);
+        // Cached on the broad grant, BEFORE the admin decision: an operator who is refused a
+        // rotation must not then make the Logs screen re-introspect on every poll.
+        validTokenCache.put(tokenHash, new CachedUser(now + CACHE_TTL_MS, roles));
+        if (!adminCheckPasses(request, response, roles)) {
+            return;
+        }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * The second tier: on {@link #ADMIN_ONLY_PATHS} the caller additionally needs a role from
+     * {@code novu.bridge.proxy.admin.roles}. Writes the 403 itself and returns false when it
+     * refuses, so the caller can simply stop.
+     */
+    private boolean adminCheckPasses(HttpServletRequest request, HttpServletResponse response,
+                                     Set<String> roles) throws IOException {
+        if (!requiresAdmin(request)) {
+            return true;
+        }
+        if (containsAny(roles, config.getProxyAdminRoles())) {
+            return true;
+        }
+        log.warn("Proxy auth: refusing {} {} — caller holds none of the admin roles {}",
+                request.getMethod(), pathOf(request), config.getProxyAdminRoles());
+        writeError(response, HttpStatus.FORBIDDEN, "NB_ADMIN_ROLE_REQUIRED",
+                "Managing notification providers requires one of these roles: "
+                        + String.join(", ", config.getProxyAdminRoles()));
+        return false;
+    }
+
+    /**
+     * The broad gate: a role from {@code proxy.allowed.roles} — or from
+     * {@code proxy.admin.roles}, which is a superset by intent. The two lists are configured
+     * separately and their defaults do not overlap completely (ACCOUNT_ADMIN is an admin but
+     * not on the read allowlist); without this union an admin could rotate a credential and
+     * still be refused the Logs screen, which is nonsense.
+     */
+    private boolean isAuthorized(Set<String> roles) {
+        return containsAny(roles, config.getProxyAllowedRoles())
+                || containsAny(roles, config.getProxyAdminRoles());
+    }
+
+    /** POST to one of the three credential-bearing/destructive provider paths. */
+    private static boolean requiresAdmin(HttpServletRequest request) {
+        if (!HttpMethod.POST.matches(request.getMethod())) {
+            return false;
+        }
+        return ADMIN_ONLY_PATHS.contains(normalize(pathOf(request)));
+    }
+
+    /**
+     * The request path as {@code /novu-adapter/v1/...}, whether the container reports it with
+     * the {@code /novu-bridge} context prefix or without.
+     */
+    private static String pathOf(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (!StringUtils.hasText(path)) {
+            path = request.getRequestURI();
+        }
+        return path == null ? "" : path;
+    }
+
+    /** Anchor at the namespace and drop a trailing slash so path matching is exact. */
+    private static String normalize(String path) {
+        int at = path.indexOf(NAMESPACE);
+        String p = at < 0 ? path : path.substring(at);
+        while (p.length() > 1 && p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
+        return p;
+    }
+
+    private static boolean containsAny(Set<String> roles, List<String> allowed) {
+        if (roles == null || allowed == null) {
+            return false;
+        }
+        for (String candidate : allowed) {
+            if (candidate != null && roles.contains(candidate.trim().toUpperCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** POST /user/_details?access_token=... — returns the flat user object or null on non-2xx. */
@@ -146,35 +264,52 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         return null;
     }
 
-    /** Allow EMPLOYEE users carrying at least one allowlisted role code. */
+    /**
+     * The user's role codes, upper-cased — or {@code null} when the introspected user is not an
+     * {@code EMPLOYEE} (citizens never reach these endpoints, whatever roles they carry).
+     * Returning the set rather than a boolean is what lets the admin tier reuse this one
+     * introspection instead of asking egov-user again.
+     */
     @SuppressWarnings("unchecked")
-    private boolean isAuthorized(Map<String, Object> user) {
+    private static Set<String> employeeRoles(Map<String, Object> user) {
         Object type = user.get("type");
         if (type == null || !"EMPLOYEE".equalsIgnoreCase(type.toString())) {
-            return false;
+            return null;
         }
         Object rolesObj = user.get("roles");
         if (!(rolesObj instanceof List)) {
-            return false;
+            return null;
         }
-        Set<String> allowed = config.getProxyAllowedRoles().stream()
-                .map(r -> r.trim().toUpperCase())
-                .collect(Collectors.toSet());
+        Set<String> codes = new HashSet<>();
         for (Object roleObj : (List<Object>) rolesObj) {
             if (roleObj instanceof Map) {
                 Object code = ((Map<String, Object>) roleObj).get("code");
-                if (code != null && allowed.contains(code.toString().toUpperCase())) {
-                    return true;
+                if (code != null && StringUtils.hasText(code.toString())) {
+                    codes.add(code.toString().trim().toUpperCase());
                 }
             }
         }
-        return false;
+        return codes;
     }
 
     private void writeError(HttpServletResponse response, HttpStatus status, String message) throws IOException {
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write("{\"error\":\"" + message + "\"}");
+    }
+
+    /**
+     * The same refusal with a machine-readable {@code NB_*} code, in the shape the controllers'
+     * errors already take ({@code Errors:[{code,message}]}) — plus the flat {@code error} key
+     * the read-only paths have always written, so an existing client parsing that keeps working.
+     */
+    private void writeError(HttpServletResponse response, HttpStatus status, String code, String message)
+            throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"error\":\"" + message + "\","
+                + "\"code\":\"" + code + "\","
+                + "\"Errors\":[{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}]}");
     }
 
     private static String sha256(String value) {

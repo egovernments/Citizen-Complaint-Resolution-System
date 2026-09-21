@@ -46,10 +46,16 @@ class ChannelPolicyClientTest {
     }
 
     private static Map<String, Object> row(String code, boolean enabled, String gateway, String senderId) {
+        return row(code, enabled, gateway, senderId, null);
+    }
+
+    private static Map<String, Object> row(String code, boolean enabled, String gateway, String senderId,
+                                           String provider) {
         Map<String, Object> data = new java.util.HashMap<>();
         data.put("code", code); data.put("enabled", enabled); data.put("active", true);
         if (gateway != null) data.put("gateway", gateway);
         if (senderId != null) data.put("senderId", senderId);
+        if (provider != null) data.put("provider", provider);
         return Map.of("uniqueIdentifier", code, "isActive", true, "data", data);
     }
 
@@ -101,6 +107,56 @@ class ChannelPolicyClientTest {
                 .thenThrow(new ResourceAccessException("down"));
         assertTrue(client.isEnabled("ke", "SMS"), "stale rows beat dropping notifications");
         assertTrue(client.isEnabled("mz", "EMAIL"), "never-fetched tenant uses env during the outage");
+    }
+
+    // ---- provider: the ONE integration active for a channel ---------------
+
+    @Test
+    void providerIsReadFromTheRow_andTrimmed() {
+        stubRows(row("SMS", true, null, null, "  smscountry-abcdef01  "),
+                row("EMAIL", true, null, null, "smtp-deadbeef"));
+        assertEquals("smscountry-abcdef01", client.provider("ke.bomet", "SMS"));
+        assertEquals("smtp-deadbeef", client.provider("ke.bomet", "EMAIL"));
+    }
+
+    @Test
+    void aRowWithoutAProviderYieldsNull_soTheGatewayAndEnvFallbacksStillDecide() {
+        // Deployed tenants (bomet) have no `provider` field at all; they must keep the
+        // gateway-based routing they run today.
+        stubRows(row("SMS", true, "smscountry", "KE-GOV"));
+        assertNull(client.provider("ke.bomet", "SMS"));
+        assertEquals("smscountry", client.gateway("ke.bomet", "SMS"));
+        assertNull(client.provider("ke.bomet", "WHATSAPP"), "a channel with no row has no provider");
+    }
+
+    @Test
+    void noRowsAtAll_meansNoProvider_neverAnEnvDerivedOne() {
+        stubRows();
+        assertNull(client.provider("mz", "SMS"));
+    }
+
+    @Test
+    void blankProviderIsTreatedAsUnset() {
+        stubRows(row("SMS", true, null, null, "   "));
+        assertNull(client.provider("ke", "SMS"));
+    }
+
+    @Test
+    void providerInUseIsDetectedAcrossEveryChannelOfTheTenant() {
+        stubRows(row("SMS", true, null, null, "smscountry-abcdef01"),
+                row("EMAIL", true, null, null, "smtp-deadbeef"));
+        assertTrue(client.isProviderInUse("ke.bomet", "smscountry-abcdef01"));
+        assertTrue(client.isProviderInUse("ke.bomet", "smtp-deadbeef"));
+        assertFalse(client.isProviderInUse("ke.bomet", "ozeki-nobody-uses-this"));
+        assertFalse(client.isProviderInUse("ke.bomet", null));
+    }
+
+    @Test
+    void inUseWithoutATenantScansTheTenantsAlreadySeen() {
+        stubRows(row("SMS", true, null, null, "ozeki-0011aabb"));
+        assertFalse(client.isProviderInUse(null, "ozeki-0011aabb"), "nothing cached yet, so nothing to find");
+        client.provider("ke.bomet", "SMS");   // warm the cache as a live dispatch would
+        assertTrue(client.isProviderInUse(null, "ozeki-0011aabb"));
     }
 
     @Test

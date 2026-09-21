@@ -58,7 +58,7 @@ public class IntegrationController {
         List<Map<String, Object>> integrations = IntegrationProjection.extractList(novuResponse.getResponse());
         List<Map<String, Object>> projected = new ArrayList<>(integrations.size());
         for (Map<String, Object> integration : integrations) {
-            projected.add(IntegrationProjection.project(integration));
+            projected.add(IntegrationProjection.projectListItem(integration));
         }
         IntegrationListResponse response = IntegrationListResponse.builder()
                 .data(projected)

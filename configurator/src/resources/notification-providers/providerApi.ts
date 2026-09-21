@@ -9,10 +9,47 @@
 // auth plumbing, and — importantly — credentials are only ever sent on an
 // explicit submit and are never persisted anywhere on the client.
 import { digitClient } from '@/providers/bridge';
+import {
+  credLabelKey,
+  FALLBACK_CATALOG,
+  normalizeCatalog,
+  type Channel,
+  type CreateProviderLegacyBody,
+  type CreateProviderTypedBody,
+  type ProviderType,
+} from './providerCatalog';
 
 const BASE = '/novu-bridge/novu-adapter/v1/providers';
 
-export type Channel = 'SMS' | 'EMAIL' | 'WHATSAPP';
+export type { Channel };
+// The catalog types + the pure helpers that drive the forms live in
+// providerCatalog.ts (no app imports, so they stay unit-testable).
+export type {
+  ProviderType,
+  ProviderTransport,
+  CatalogCredentialField,
+  IntegrationRow,
+  CreateProviderTypedBody,
+  CreateProviderLegacyBody,
+} from './providerCatalog';
+export {
+  FALLBACK_CATALOG,
+  normalizeCatalog,
+  groupCatalogByChannel,
+  findProviderType,
+  integrationChannel,
+  integrationKey,
+  integrationLabel,
+  providerChoicesForChannel,
+  findSelectedIntegration,
+  matchesProviderSelection,
+  credLabelKey,
+  providerTypeLabelKey,
+  missingRequiredFields,
+  buildCredentials,
+  createProviderBody,
+  rowChannel,
+} from './providerCatalog';
 
 /** Novu integration projection returned by the bridge (never carries secrets). */
 export interface Integration {
@@ -21,6 +58,8 @@ export interface Integration {
   providerId?: string;
   name?: string;
   identifier?: string;
+  /** Catalog provider type, or null on integrations created before the catalog existed. */
+  type?: string | null;
   active?: boolean;
   primary?: boolean;
 }
@@ -31,6 +70,24 @@ export interface CreateProviderInput {
   name: string;
   identifier?: string;
   credentials: Record<string, unknown>;
+}
+
+export interface UpdateProviderInput {
+  id: string;
+  name?: string;
+  /** A FULL replacement credential set — rotation, not a patch. Omit to leave credentials alone. */
+  credentials?: Record<string, unknown>;
+  active?: boolean;
+}
+
+export interface DeleteProviderInput {
+  id: string;
+  tenantId?: string;
+}
+
+export interface DeleteProviderResponse {
+  id: string;
+  deleted: boolean;
 }
 
 export interface TemplatesResponse {
@@ -47,6 +104,10 @@ export interface VerifyResponse {
 export interface TestSendPayload {
   /** Operator's tenant: the test row is written here (flagged is_test) so it shows on their Logs screen. */
   tenantId?: string;
+  /** Integration to send through; omit to let the bridge pick the channel's provider. */
+  id?: string;
+  /** Catalog provider type of that integration, when known. */
+  type?: string;
   channel: Channel;
   to: { phone?: string; email?: string };
   workflowId?: string;
@@ -88,6 +149,27 @@ function origin(): string {
   return typeof window !== 'undefined' && window.location ? window.location.origin : '';
 }
 
+/**
+ * A bridge failure that keeps its machine-readable `NB_*` code and HTTP status,
+ * so callers can react to a specific one (e.g. NB_PROVIDER_IN_USE on delete)
+ * instead of string-matching the message.
+ */
+export class BridgeError extends Error {
+  readonly code: string;
+  readonly status: number;
+  constructor(message: string, code: string, status: number) {
+    super(message);
+    this.name = 'BridgeError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** The bridge's `NB_*` code for an error, or '' when it was not one of ours. */
+export function bridgeErrorCode(err: unknown): string {
+  return err instanceof BridgeError ? err.code : '';
+}
+
 async function call<T>(path: string, method: 'GET' | 'POST', body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = digitClient.getAuthInfo().token;
@@ -115,16 +197,60 @@ async function call<T>(path: string, method: 'GET' | 'POST', body?: unknown): Pr
       (data.detail as string) ||
       (data.error as string) ||
       `Request failed (${response.status})`;
-    throw new Error(msg);
+    // `Errors[].code` is the documented shape; `error`/`code` are the flatter
+    // variants some bridge handlers emit — accept all three so NB_* codes survive.
+    const code =
+      errors?.map((e) => e.code).find(Boolean) ||
+      (typeof data.code === 'string' ? data.code : '') ||
+      (typeof data.error === 'string' && /^NB_[A-Z0-9_]+$/.test(data.error) ? data.error : '') ||
+      '';
+    throw new BridgeError(msg, code, response.status);
   }
   return data as T;
 }
 
-/** POST /providers — create a Novu integration. Credentials go straight through
- *  to Novu over TLS; the response never echoes them back. */
-export function createProvider(input: CreateProviderInput): Promise<Integration> {
-  return call<Integration>(BASE, 'POST', input);
+/** Unwrap the `{data: T}` envelope the newer provider endpoints use. */
+function unwrap<T>(payload: unknown): T {
+  const envelope = payload as { data?: unknown } | null;
+  return (envelope && typeof envelope === 'object' && 'data' in envelope
+    ? (envelope.data as T)
+    : (payload as T));
 }
+
+/** GET /providers/catalog — the out-of-the-box provider types this bridge can create,
+ *  with the credential fields each one needs. The SOURCE OF TRUTH for the Add /
+ *  Rotate forms; callers fall back to FALLBACK_CATALOG when this rejects (an older
+ *  bridge that predates the endpoint). */
+export async function fetchProviderCatalog(): Promise<ProviderType[]> {
+  const payload = await call<unknown>(`${BASE}/catalog`, 'GET');
+  return normalizeCatalog(payload);
+}
+
+/** POST /providers — create a Novu integration. Credentials go straight through
+ *  to Novu over TLS; the response never echoes them back. Accepts either the
+ *  catalog body `{type, name, credentials, active?}` or the legacy
+ *  `{channel, providerId, name, identifier, credentials}` one. */
+export async function createProvider(
+  input: CreateProviderInput | CreateProviderTypedBody | CreateProviderLegacyBody,
+): Promise<Integration> {
+  return unwrap<Integration>(await call<unknown>(BASE, 'POST', input));
+}
+
+/** POST /providers/_update — rename, rotate credentials, or flip the active flag.
+ *  Rotation replaces the whole credential set; the bridge never returns stored
+ *  credentials, so there is nothing to merge client-side. */
+export async function updateProvider(input: UpdateProviderInput): Promise<Integration> {
+  return unwrap<Integration>(await call<unknown>(`${BASE}/_update`, 'POST', input));
+}
+
+/** POST /providers/_delete — remove an integration. Rejects with HTTP 409 /
+ *  NB_PROVIDER_IN_USE while a NotificationChannel row still selects it. */
+export async function deleteProvider(input: DeleteProviderInput): Promise<DeleteProviderResponse> {
+  return unwrap<DeleteProviderResponse>(await call<unknown>(`${BASE}/_delete`, 'POST', input));
+}
+
+/** The bridge's error code for "this provider is still selected on a channel". */
+export const PROVIDER_IN_USE = 'NB_PROVIDER_IN_USE';
 
 /** GET /providers/templates — read-only discovery of Novu delivery workflows.
  *  `channel` filters server-side by the workflow's Novu step types; these are
@@ -139,9 +265,15 @@ export function pullTemplates(channel: string, providerId: string): Promise<Temp
   return call<TemplatesResponse>(`${BASE}/templates${q ? `?${q}` : ''}`, 'GET');
 }
 
-/** POST /providers/verify — connectivity/active check for one integration. */
-export function verifyProvider(integrationId: string): Promise<VerifyResponse> {
-  return call<VerifyResponse>(`${BASE}/verify`, 'POST', { integrationId });
+/** POST /providers/verify — connectivity/active check for one integration. The
+ *  catalog `type` is sent alongside when known: newer bridges use it to pick the
+ *  right probe, older ones ignore the extra field. */
+export function verifyProvider(integrationId: string, type?: string): Promise<VerifyResponse> {
+  return call<VerifyResponse>(`${BASE}/verify`, 'POST', {
+    integrationId,
+    id: integrationId,
+    ...(type ? { type } : {}),
+  });
 }
 
 /** GET /providers/twilio-templates — pull the operator's OWN Twilio WhatsApp Content
@@ -159,7 +291,13 @@ export function testSend(payload: TestSendPayload): Promise<TestSendResponse> {
 }
 
 // ---------------------------------------------------------------------------
-// Per-channel provider + credential-field metadata (drives the Add dialog).
+// OFFLINE FALLBACK ONLY.
+//
+// `GET /providers/catalog` is the source of truth for provider types and their
+// credential fields. The two helpers below survive for the case where that call
+// fails (a bridge older than the catalog endpoint) and for callers written
+// before it existed; both are thin projections of FALLBACK_CATALOG so there is
+// exactly one definition of the legacy credential shapes.
 // ---------------------------------------------------------------------------
 
 export interface CredField {
@@ -175,48 +313,27 @@ export interface CredField {
 
 export const CHANNELS: Channel[] = ['SMS', 'EMAIL', 'WHATSAPP'];
 
-/** Default providerId per channel (SMS/WhatsApp → twilio, Email → nodemailer). */
-export const DEFAULT_PROVIDER: Record<Channel, string> = {
-  SMS: 'twilio',
-  WHATSAPP: 'twilio',
-  EMAIL: 'nodemailer',
-};
+/** Default Novu providerId per channel (SMS/WhatsApp -> twilio, Email -> nodemailer). */
+export const DEFAULT_PROVIDER: Record<Channel, string> = FALLBACK_CATALOG.reduce(
+  (acc, pt) => {
+    if (!acc[pt.channel]) acc[pt.channel] = pt.novuProviderId;
+    return acc;
+  },
+  {} as Record<Channel, string>,
+);
 
-/** Credential fields the operator must fill for a given channel + providerId. */
+/** Credential fields for a legacy channel + providerId pair, from the fallback catalog. */
 export function credFields(channel: Channel, providerId: string): CredField[] {
-  if (providerId === 'nodemailer' || channel === 'EMAIL') {
-    return [
-      { key: 'host', labelKey: 'app.providers.cred.host', labelDefault: 'SMTP Host', type: 'text', placeholder: 'smtp.example.com', required: true },
-      // Novu validates nodemailer `port` as a STRING — keep this a text input so it
-      // serializes as "587" not 587 (a numeric port → 422 from Novu).
-      { key: 'port', labelKey: 'app.providers.cred.port', labelDefault: 'SMTP Port', type: 'text', placeholder: '587', required: true },
-      { key: 'user', labelKey: 'app.providers.cred.user', labelDefault: 'SMTP User', type: 'text', placeholder: 'apikey / username', required: true },
-      { key: 'password', labelKey: 'app.providers.cred.password', labelDefault: 'SMTP Password', type: 'password', required: true },
-      { key: 'from', labelKey: 'app.providers.cred.from', labelDefault: 'From', type: 'text', placeholder: 'noreply@example.com', required: true },
-      { key: 'secure', labelKey: 'app.providers.cred.secure', labelDefault: 'Use TLS (secure)', type: 'checkbox' },
-    ];
-  }
-  // Twilio (SMS + WhatsApp share the same integration).
-  const fromPlaceholder = channel === 'WHATSAPP' ? 'whatsapp:+15551234567' : '+15551234567';
-  return [
-    { key: 'accountSid', labelKey: 'app.providers.cred.account_sid', labelDefault: 'Account SID', type: 'text', placeholder: 'ACxxxxxxxx', required: true },
-    { key: 'token', labelKey: 'app.providers.cred.token', labelDefault: 'Auth Token', type: 'password', required: true },
-    { key: 'from', labelKey: 'app.providers.cred.from', labelDefault: 'From', type: 'text', placeholder: fromPlaceholder, required: true },
-  ];
-}
-
-/** Coarse channel for a row served by the integrations projection. WhatsApp is
- *  stored as a Twilio `sms` integration (Novu has no whatsapp channel here), so
- *  the create path marks WhatsApp integrations in the identifier/name — the only
- *  round-trippable fields (credentials are never echoed back). Derive WHATSAPP
- *  from that marker so the row keeps its designation across refetches; the Test
- *  dialog still lets the operator pick SMS vs WhatsApp explicitly. */
-export function rowChannel(record: {
-  channel?: unknown;
-  identifier?: unknown;
-  name?: unknown;
-}): Channel {
-  if (String(record.channel ?? '').toUpperCase() === 'EMAIL') return 'EMAIL';
-  const marker = `${record.identifier ?? ''} ${record.name ?? ''}`;
-  return /(^|[\s\-_])whatsapp/i.test(marker) ? 'WHATSAPP' : 'SMS';
+  const entry =
+    FALLBACK_CATALOG.find((pt) => pt.channel === channel && pt.novuProviderId === providerId) ??
+    FALLBACK_CATALOG.find((pt) => pt.channel === channel) ??
+    FALLBACK_CATALOG[0];
+  return entry.credentialFields.map((f) => ({
+    key: f.key,
+    labelKey: credLabelKey(f.key),
+    labelDefault: f.label,
+    type: f.type,
+    placeholder: f.placeholder,
+    required: f.required,
+  }));
 }

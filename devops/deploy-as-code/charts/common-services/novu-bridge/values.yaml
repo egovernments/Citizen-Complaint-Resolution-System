@@ -58,8 +58,16 @@ env: |
   # bridge translates SMSRequest into the envelope (eventType CORE_SMS).
   - name: NOVU_BRIDGE_CORE_SMS_TOPIC
     value: "egov.core.notification.sms"
+  # Tenant a core SMS (login OTP, password reset) is attributed to when the
+  # producer does not carry one. Hardcoding "pg" sent every OTP on a non-pg
+  # deployment to a tenant that does not exist, so the channel policy lookup
+  # found nothing and the OTP was dropped. Read the deployment's real state root,
+  # the same value compose now takes from ${STATE_LEVEL_TENANT_ID:-pg}.
   - name: NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT
-    value: "pg"
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: state-level-tenant-id
   - name: NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE
     value: ""
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC

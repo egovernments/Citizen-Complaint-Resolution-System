@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
 
 import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
@@ -174,7 +175,8 @@ class PreferenceGateMatrixTest {
 
         DispatchPipelineService service = new DispatchPipelineService(new EnvelopeValidator(), denying,
                 new DeliveryProviderRegistry(pipelineConfig, new ChannelPolicyClient(null, pipelineConfig), new NovuDeliveryProvider(novuClient, pipelineConfig), null),
-                new ChannelPolicyClient(null, pipelineConfig), dispatchLogRepository, pipelineConfig);
+                new ChannelPolicyClient(null, pipelineConfig), dispatchLogRepository, pipelineConfig,
+                new ProviderAvailability(novuClient, pipelineConfig));
 
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")

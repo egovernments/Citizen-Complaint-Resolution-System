@@ -52,7 +52,23 @@ KONG_ONLY_AUTH_OPTIONAL = {
     "/novu-bridge/novu-adapter/v1/preferences",
     "/novu-bridge/novu-adapter/v1/providers/templates",
     "/novu-bridge/novu-adapter/v1/providers/twilio-templates",
+    # Provider catalog (Phase 1): the configurator is the only provider console, so
+    # the catalog read and the edit/rotate/delete writes are in the same bucket.
+    "/novu-bridge/novu-adapter/v1/providers/catalog",
+    "/novu-bridge/novu-adapter/v1/providers/_update",
+    "/novu-bridge/novu-adapter/v1/providers/_delete",
+    # Delivery receipts: machine callbacks (Novu webhook, SMSCountry DR) authenticated
+    # by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not a user
+    # token — so no body authToken exists to enrich and Kong must let them through.
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier
+    # does not route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/receipts/novu",
+    "/novu-bridge/novu-adapter/v1/receipts/smscountry",
 }
+# NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
+# (the internal SMSCountry send adapter Novu's worker calls over the container
+# network, carrying provider credentials in headers). Kong terminates it — see
+# novu-bridge-internal-gateways-deny in kong.yml.
 
 
 def _find_value(node, key):

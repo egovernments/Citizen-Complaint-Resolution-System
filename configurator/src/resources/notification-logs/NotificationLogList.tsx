@@ -11,7 +11,12 @@ import { EntityLink } from '@/components/ui/EntityLink';
 // Delivery channels novu-bridge writes to nb_dispatch_log. Every event lands
 // here with an explicit terminal status; WHATSAPP has no enabled provider yet,
 // so those rows show up as SKIPPED/NB_NO_PROVIDER rather than being invisible
-// (see the backend DispatchLogController javadoc).
+// (see the backend DispatchLogController javadoc). A channel whose SELECTED
+// provider has been deleted, disabled or points at another Novu channel is
+// SKIPPED/NB_PROVIDER_UNAVAILABLE instead — the bridge refuses to trigger it
+// rather than reporting SENT for a message Novu would silently drop.
+// Error codes are rendered verbatim in the Error column (there is no code->label
+// map): the bridge's message already names the provider and the reason.
 const CHANNEL_CHOICES = [
   { id: 'SMS', name: 'SMS' },
   { id: 'EMAIL', name: 'Email' },

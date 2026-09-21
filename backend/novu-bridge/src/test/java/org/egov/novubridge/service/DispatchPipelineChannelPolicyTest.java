@@ -6,6 +6,7 @@ import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.service.delivery.SmsCountryDeliveryProvider;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
 import org.egov.novubridge.web.models.ComplaintsDomainEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
@@ -67,7 +68,8 @@ class DispatchPipelineChannelPolicyTest {
         ChannelPolicyClient policy = new ChannelPolicyClient(mdms, config);
         DeliveryProviderRegistry registry = new DeliveryProviderRegistry(config, policy,
                 new NovuDeliveryProvider(novuClient, config), new SmsCountryDeliveryProvider(smsCountryClient, policy));
-        service = new DispatchPipelineService(new EnvelopeValidator(), preferences, registry, policy, dispatchLogRepository, config);
+        service = new DispatchPipelineService(new EnvelopeValidator(), preferences, registry, policy, dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
     private ComplaintsDomainEvent event(String channel, String templateId) {

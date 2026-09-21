@@ -1,6 +1,8 @@
 package org.egov.novubridge.web.controllers;
 
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+import org.egov.novubridge.service.provider.ProviderCatalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.repository.DispatchLogRepository;
@@ -51,9 +53,13 @@ class ProviderControllerTest {
         dispatchLogRepository = mock(DispatchLogRepository.class);
         TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
         NovuBridgeConfiguration config = new NovuBridgeConfiguration();
+        config.setSmsCountryUrl("http://api.smscountry.com/SMSCwebservice_bulk.aspx");
+        config.setSmsCountryAdapterUrl("http://novu-bridge:8080/novu-bridge/novu-adapter/v1/gateways/smscountry/send");
         controller = new ProviderController(novuClient,
                 new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
-                dispatchLogRepository, twilioTemplateSyncService);
+                dispatchLogRepository, twilioTemplateSyncService,
+                new ProviderCatalog(config), new ChannelPolicyClient(null, config),
+                new ProviderAvailability(novuClient, config));
         // Default: pass overrides through unchanged, as if no dedicated WhatsApp
         // integration were configured (NovuClient's own no-op default).
         when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))

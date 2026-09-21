@@ -50,6 +50,10 @@ public class ConfigurationSanityCheck {
         if (config.isChannelEnabled("WHATSAPP") && !StringUtils.hasText(config.getWhatsappIntegrationId())) {
             warn.add("WHATSAPP is enabled without novu.bridge.integration.id.whatsapp — triggers will use Novu's PRIMARY sms integration, which is usually the plain-SMS sender");
         }
+        if (!StringUtils.hasText(config.getSmsCountryAdapterUrl())) {
+            warn.add("novu.bridge.smscountry.adapter.url is blank — an SMSCountry provider added from the "
+                    + "configurator would be created with no baseUrl and every send through it would fail");
+        }
         if (config.getNovuApiKey() == null || PLACEHOLDER_KEYS.contains(config.getNovuApiKey().trim())) {
             warn.add("novu.api.key is a placeholder — Novu deliveries will be rejected until a real key is set");
         }

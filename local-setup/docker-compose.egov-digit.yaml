@@ -2711,7 +2711,7 @@ services:
       # DIGIT core SMS topic (user-otp login OTPs, egov-user password resets): translated into
       # the envelope and delivered through the same pipeline — this replaces egov-notification-sms.
       NOVU_BRIDGE_CORE_SMS_TOPIC: egov.core.notification.sms
-      NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: ${DEFAULT_TENANT_ID:-pg}
+      NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: ${STATE_LEVEL_TENANT_ID:-pg}
       NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
@@ -2769,6 +2769,10 @@ services:
       # plumbed from .env — the installer sets it. MDMS_ADMIN (the config-admin) is in
       # the default so the configurator's own provider/template screens work out of the box.
       NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}
+      # The narrower tier for the calls that carry provider credentials or destroy them
+      # (POST /providers, /providers/_update, /providers/_delete). A caller without one
+      # of these roles gets 403 NB_ADMIN_ROLE_REQUIRED even if it is on the list above.
+      NOVU_BRIDGE_PROXY_ADMIN_ROLES: ${NOVU_BRIDGE_PROXY_ADMIN_ROLES:-SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # Novu API endpoints are populated in iteration 3 once novu-api

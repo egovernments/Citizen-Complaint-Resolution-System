@@ -40,9 +40,10 @@ Per-channel settings live in each channel's section.
 | Setting | What it is | Example |
 |---|---|---|
 | `enable_novu` | Starts Novu and the notification stack. Nothing below works without it. | `true` |
-| `seed_notifications` | Seeds the three PGR notification MDMS masters on deploy. Idempotent. | `true` |
+| `seed_notifications` | Seeds the four PGR notification MDMS masters (Routing, Template, ProviderTemplate, Channel) and their access-control rows on deploy. Idempotent. | `true` |
 | `novu_bridge_channels_enabled` | **Bootstrap fallback only.** Channels are switched on per tenant in Configurator → Notifications → **Channels** (MDMS `RAINMAKER-PGR.NotificationChannel`); this env list applies only while a tenant has no channel rows. Leave it unset and nothing is sent until the operator enables channels in the configurator. | `"SMS"` |
-| `novu_bridge_proxy_allowed_roles` | Roles allowed to manage providers from Configurator. | `"SUPERUSER,MDMS_ADMIN"` |
+| `novu_bridge_proxy_allowed_roles` | Roles allowed to **use** the Configurator's notification screens (logs, integrations, preferences, the provider catalog, verify and test-send). Default `EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN`. | `"SUPERUSER,MDMS_ADMIN"` |
+| `novu_bridge_proxy_admin_roles` | Roles allowed to **manage** providers — create one, rotate its credentials, delete it. Default `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN`. A caller without one of these gets `403 NB_ADMIN_ROLE_REQUIRED` on those three calls even if it is on the list above; a role on this list also satisfies that list. | `"SUPERUSER,MDMS_ADMIN"` |
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |
 | `novu_admin_password` | Novu admin password. Generate a unique, strong one. | |
 | `novu_api_key` | Leave unset. Ansible mints a key and wires it into `/opt/digit/.env`. Set it only if the deployment has a pinned key. | |
@@ -151,8 +152,10 @@ curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
 Confirm that `twilio-whatsapp` is `active` and that `complaints-whatsapp` exists.
 
 `twilio-whatsapp` being `primary` is expected and fine — it is the only Twilio
-integration this guide creates. SMS does not add another: SMSCountry is called
-directly and registers nothing in Novu.
+integration this guide creates. The direct-gateway SMS route below does not add
+another: SMSCountry is called by the bridge itself and registers nothing in Novu.
+(An SMSCountry provider added from the configurator does register an integration —
+see [Supported providers out of the box](#supported-providers-out-of-the-box).)
 
 ### Send a real WhatsApp message
 
@@ -213,7 +216,19 @@ and no Novu workflow.
 If your SMSCountry panel shows an AuthKey/AuthToken pair you are on their newer
 REST v0.1 API, which is not supported.
 
-Set these and re-run `./deploy.sh mycity`:
+There are two ways to reach that API, and they are alternatives — do not configure
+both for the same channel:
+
+- **As a provider (preferred).** Add SMSCountry in **Configurator -> Notifications
+  -> Providers** and select it as the SMS channel's active provider. The credentials
+  are stored in Novu, and Novu's worker calls the bridge's internal SMSCountry
+  adapter. Nothing below is needed.
+- **As a direct gateway (the settings below).** Set the channel's `gateway` to
+  `smscountry` and put the panel login in the deployment variables; `novu-bridge`
+  posts to SMSCountry itself, with no Novu integration and no Novu workflow. This is
+  the older path and stays supported.
+
+For the direct-gateway route, set these and re-run `./deploy.sh mycity`:
 
 | Setting | What it is | Example |
 |---|---|---|
@@ -339,18 +354,98 @@ unset NOVU_ENV_FILE NOVU_INTEGRATION_NAME NOVU_INTEGRATION_ID
 unset NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME
 ```
 
+## Supported providers out of the box
+
+Five provider types ship configured-ready. You add them in **Configurator ->
+Notifications -> Providers**; nothing here needs the Novu dashboard.
+
+**Creating, rotating and deleting a provider needs an admin role.** Those three calls
+carry or destroy credentials, so `novu-bridge` requires a role from
+`novu_bridge_proxy_admin_roles` (default `SUPERUSER`, `MDMS_ADMIN`, `ACCOUNT_ADMIN`)
+and answers `403 NB_ADMIN_ROLE_REQUIRED` without one. Everything else on these screens
+— reading the catalog and the integration list, verifying a provider, sending a test —
+stays open to the wider `novu_bridge_proxy_allowed_roles`.
+
+| Provider | Channel | How it sends | Credentials stored in |
+|---|---|---|---|
+| Twilio SMS | SMS | Novu integration | Novu |
+| Twilio WhatsApp | WHATSAPP | Novu integration | Novu |
+| SMTP (`nodemailer`) | EMAIL | Novu integration | Novu |
+| SMSCountry | SMS | Novu integration calling the bridge's internal adapter | Novu |
+| Ozeki | SMS | Novu integration | Novu |
+
+**Credentials only ever live in Novu.** The configurator posts them to
+`novu-bridge`, which stores them as a Novu integration. They are not written to
+MDMS, not written to `/opt/digit/.env`, and are never returned by a read — an edit
+shows the non-secret fields and lets you re-enter a secret to rotate it.
+
+**SMSCountry goes through an internal adapter.** Novu has no SMSCountry provider,
+so the integration is pointed at
+`POST /novu-bridge/novu-adapter/v1/gateways/smscountry/send`, which Novu's worker
+calls over the container network with the panel credentials in headers. That path
+is deliberately **not reachable from outside**: Kong terminates
+`/novu-bridge/novu-adapter/v1/gateways` with a 404, and there is no accesscontrol
+action for it. Nothing you do in the configurator should ever need that URL.
+
+**One active provider per channel, per state tenant.** The choice is a field on the
+MDMS master `RAINMAKER-PGR.NotificationChannel` (`provider`, the Novu integration
+identifier) alongside `enabled`, `gateway` and `senderId`. Selecting a provider on
+the Channels screen writes that field; `novu-bridge` reads it at the state tenant on
+every dispatch. Picking a second provider for the same channel replaces the first —
+there is no fan-out and no fallback chain. Two cases are worth knowing exactly:
+
+- **No provider selected** — the pre-catalog behaviour applies verbatim: the row's
+  `gateway` decides the transport, then the deployment's env fallbacks
+  (`novu_bridge_sms_provider`, `novu_bridge_channels_enabled`, …). Existing
+  deployments are therefore unaffected by the catalog. The configurator's
+  "Validate notifications" check flags it (`channel-needs-provider`) so the tenant's
+  delivery becomes an explicit choice rather than an inherited default.
+- **A selection pointing at a provider that is missing, disabled, or on another Novu
+  channel** — nothing is delivered and nothing is retried. The bridge checks the
+  selection against Novu's integration list before it triggers and records the event
+  `SKIPPED / NB_PROVIDER_UNAVAILABLE` on the Logs screen, with the identifier and the
+  reason in the message. It does **not** report `SENT`: Novu accepts a trigger naming an
+  unusable integration and fails the step internally, which is exactly the phantom-`SENT`
+  this check exists to prevent. If Novu cannot be reached to check at all, the bridge
+  fails open and delivers as it otherwise would. Fix it by re-enabling that provider or
+  selecting another one on the Channels screen; the change takes effect on the next event.
+
 ## What Configurator Can and Cannot Do
 
 | Configurator can | Configurator cannot |
 |---|---|
-| Create provider integrations | Edit, rotate, or delete integrations |
-| Manage notification configuration | Select the primary SMS integration |
-| Sync WhatsApp templates | Validate provider credentials |
-| Validate the configuration | Mint or wire the Novu API key |
-| Display bridge dispatch logs | Start Novu, enable the Compose profile, set service environment flags, or create workflows |
+| Create, edit, rotate credentials on, and delete provider integrations | Mint or wire the Novu API key |
+| Enable/disable a channel and select its active provider | Start Novu, enable the Compose profile, or set service environment flags |
+| Manage notification configuration | Create workflows |
+| Sync WhatsApp templates | |
+| Validate provider credentials, and validate the configuration | |
+| Display bridge dispatch logs | |
 
-Everything in the right-hand column is a deployment or Novu administration
-operation.
+Everything in the right-hand column is a deployment operation. **Operators do not
+need the Novu dashboard** — provider management is entirely in the configurator, and
+`/novu` is left for debugging.
+
+### Upgrading an existing deployment
+
+Provider management, the `provider` field and the access-control rows that let the
+gateway through arrive as **seed data**, and MDMS seed migrations do not run on a
+deployed box. A stock re-deploy is enough — the notification seed step is part of it
+— but if you would rather not run the whole playbook, run just that step:
+
+```bash
+cd local-setup/ansible
+./deploy.sh mycity --tags notifications
+```
+
+It is idempotent. It adds the `provider` property to the existing
+`RAINMAKER-PGR.NotificationChannel` schema, seeds the channel rows if the tenant has
+none, adds the access-control actions and role-actions for the Channels screen and
+the provider endpoints, and restarts `egov-accesscontrol` when it created any —
+that last part matters, because `egov-accesscontrol` caches role-actions in memory
+and would keep 403ing the endpoints it was just granted.
+
+Without this step the symptom is a Channels screen that saves nothing and a
+Providers screen whose edit and delete buttons return 403.
 
 ## Code References
 
@@ -359,6 +454,7 @@ operation.
 | Ansible deployment | [`local-setup/ansible/playbook-deploy.yml`](../../../local-setup/ansible/playbook-deploy.yml) |
 | Workflow/provider bootstrap | [`backend/novu-bridge/config/bootstrap-novu-whatsapp.sh`](../../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh) |
 | Notification seed | [`local-setup/scripts/seed-notifications.py`](../../../local-setup/scripts/seed-notifications.py) |
+| Tenant-master repair | [`local-setup/scripts/repair-tenant-masters.py`](../../../local-setup/scripts/repair-tenant-masters.py) |
 | Configurator provider UI | [`configurator/src/resources/notification-providers/NotificationProviderList.tsx`](../../../configurator/src/resources/notification-providers/NotificationProviderList.tsx) |
 | Provider administration API | [`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java) |
 | PGR routing/rendering | [`backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java`](../../../backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java) |
@@ -368,7 +464,7 @@ operation.
 
 **Which channels deliver is decided per tenant, in the configurator.** Notifications →
 **Channels** edits the MDMS master `RAINMAKER-PGR.NotificationChannel` (one row per
-channel: `enabled`, `gateway` = `novu` | `smscountry`, `senderId`). novu-bridge reads it at the
+channel: `enabled`, `gateway` = `novu` | `smscountry`, `senderId`, `provider`). novu-bridge reads it at the
 state tenant on every dispatch (cached 60 s). A tenant with no rows falls back to the
 `novu_bridge_channels_enabled` env list; a tenant *with* rows is governed by them alone — a
 channel with no row is off. The **Channels** card on the Providers screen shows the effective

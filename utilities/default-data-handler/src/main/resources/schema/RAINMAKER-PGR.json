@@ -706,6 +706,7 @@
         "enabled": { "type": "boolean", "description": "false = every event on this channel is recorded SKIPPED/NB_NO_PROVIDER, never delivered." },
         "gateway": { "type": "string", "enum": ["novu", "smscountry"], "description": "Transport. novu (default) delivers through the Novu integration for the channel; smscountry (SMS only) posts straight to SMSCountry's bulk API." },
         "senderId": { "type": ["string", "null"], "description": "Registered sender id / DLT header for a direct SMS gateway. Ignored for novu." },
+        "provider": { "type": ["string", "null"], "description": "Novu integration identifier of the ACTIVE provider for this channel at this state tenant (one per channel). Set/cleared from the configurator (Notifications -> Providers); credentials live in Novu, never here. Empty/absent = no provider selected: the pre-catalog behaviour applies unchanged (the row's gateway field, then the deployment's env fallbacks, decide the transport). Nullable like senderId so clearing the selection is a valid write." },
         "active": { "type": "boolean" }
       },
       "x-ref-schema": [],

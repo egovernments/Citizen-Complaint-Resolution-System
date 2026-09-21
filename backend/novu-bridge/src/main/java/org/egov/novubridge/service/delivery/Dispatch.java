@@ -39,4 +39,14 @@ public class Dispatch {
     boolean test;
     /** Test-send only: the Novu workflow to trigger instead of the per-channel default. */
     String workflowOverride;
+    /**
+     * Novu integration identifier the tenant chose for this channel
+     * ({@code NotificationChannel.provider}). Blank = let the transport pick as it always has.
+     */
+    String integrationIdentifier;
+    /**
+     * Catalog type of {@link #integrationIdentifier} ({@code ozeki}, {@code smscountry}, …)
+     * when it can be derived, so a transport can attach the gateway's own request body.
+     */
+    String providerType;
 }

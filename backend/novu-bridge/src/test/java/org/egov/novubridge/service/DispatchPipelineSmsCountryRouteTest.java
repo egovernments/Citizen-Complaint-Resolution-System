@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
@@ -50,7 +51,8 @@ class DispatchPipelineSmsCountryRouteTest {
 
         DeliveryProviderRegistry registry = new DeliveryProviderRegistry(config, policy,
                 new NovuDeliveryProvider(novuClient, config), new SmsCountryDeliveryProvider(smsCountryClient, policy));
-        service = new DispatchPipelineService(new EnvelopeValidator(), preferences, registry, policy, dispatchLogRepository, config);
+        service = new DispatchPipelineService(new EnvelopeValidator(), preferences, registry, policy, dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
     private ComplaintsDomainEvent smsEvent() {

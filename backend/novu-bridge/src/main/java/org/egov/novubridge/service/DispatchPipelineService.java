@@ -9,6 +9,8 @@ import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.DeliveryResult;
 import org.egov.novubridge.service.delivery.Dispatch;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+import org.egov.novubridge.service.provider.ProviderCatalog;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.*;
 import org.egov.tracer.model.CustomException;
@@ -42,19 +44,22 @@ public class DispatchPipelineService {
     private final ChannelPolicyClient channelPolicy;
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
+    private final ProviderAvailability providerAvailability;
 
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
                                    DeliveryProviderRegistry providers,
                                    ChannelPolicyClient channelPolicy,
                                    DispatchLogRepository dispatchLogRepository,
-                                   NovuBridgeConfiguration config) {
+                                   NovuBridgeConfiguration config,
+                                   ProviderAvailability providerAvailability) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.providers = providers;
         this.channelPolicy = channelPolicy;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
+        this.providerAvailability = providerAvailability;
     }
 
     public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
@@ -166,6 +171,27 @@ public class DispatchPipelineService {
                     .build();
         }
 
+        // The provider the tenant picked for this channel, if any. Its catalog type comes from
+        // the identifier itself (ProviderCatalog mints them with a type prefix), so knowing
+        // that an Ozeki integration needs its own request body costs no extra Novu call.
+        String integrationIdentifier = channelPolicy.provider(event.getTenantId(), channel);
+
+        // Gate 3: the chosen provider must actually be usable. Novu ACCEPTS a trigger naming a
+        // deleted, disabled or wrong-channel integration and only fails the step internally, so
+        // without this the row would read SENT for a message that never left. Blank provider =
+        // nothing to check and the pre-catalog path is untouched; a Novu that cannot be asked
+        // fails OPEN (see ProviderAvailability) — the gate never becomes an outage of its own.
+        ProviderAvailability.Result availability =
+                providerAvailability.check(integrationIdentifier, channel);
+        if (!availability.usable()) {
+            persist(event, context, "SKIPPED", "NB_PROVIDER_UNAVAILABLE", availability.getMessage(), null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList(availability.getMessage()))
+                    .build();
+        }
+
         Dispatch dispatch = Dispatch.builder()
                 .tenantId(event.getTenantId())
                 .channel(channel.toUpperCase(Locale.ROOT))
@@ -177,6 +203,8 @@ public class DispatchPipelineService {
                 .data(event.getData())
                 .templateId(event.getTemplateId())
                 .contentVariables(event.getContentVariables())
+                .integrationIdentifier(integrationIdentifier)
+                .providerType(ProviderCatalog.typeFromIdentifier(integrationIdentifier))
                 .build();
         DeliveryProvider provider = providers.select(event.getTenantId(), channel);
 

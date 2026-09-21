@@ -334,3 +334,77 @@ describe('R8-R10 template content + WhatsApp provider template', () => {
     expect(validateNotifications({ ...base, routingRows: routing, templateRows: template, providerTemplateRows: [{ provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', active: true }] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
   });
 });
+
+describe('R7b channel provider selection', () => {
+  const bs = { businessService: 'PGR', states: [{ state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] }, { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] }] };
+  const smsRouting = [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true }];
+  const smsTemplate = [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'x', active: true }];
+  const base = { businessService: bs, roleCodes: ['GRO'], routingRows: smsRouting, templateRows: smsTemplate };
+  const twilio = { _id: 'i1', identifier: 'twilio-sms-1', name: 'Twilio prod', active: true };
+  const providerRules = ['channel-needs-provider', 'channel-provider-missing', 'channel-provider-inactive'];
+  const providerFindings = (f: ReturnType<typeof validateNotifications>) => f.filter((x) => providerRules.includes(x.rule));
+
+  it('errors when an enabled channel carrying routing rows has no provider selected', () => {
+    const f = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, active: true }] }));
+    expect(f.map((x) => [x.rule, x.level])).toEqual([['channel-needs-provider', 'error']]);
+    // An absent selection still delivers through the deployment-wide fallback, so the
+    // message must not claim the channel is dead: a BROKEN selection is the one the
+    // bridge refuses (SKIPPED / NB_PROVIDER_UNAVAILABLE), not an absent one.
+    expect(f[0].message).not.toMatch(/NB_NO_PROVIDER|NB_PROVIDER_UNAVAILABLE/);
+    expect(f[0].message).toMatch(/environment settings/);
+  });
+
+  it('only warns when nothing routes on the channel yet', () => {
+    const f = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'EMAIL', enabled: true, active: true }] }));
+    expect(f.map((x) => [x.rule, x.level])).toEqual([['channel-needs-provider', 'warn']]);
+  });
+
+  it('is silent for a correctly selected, active provider', () => {
+    const f = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, provider: 'twilio-sms-1', active: true }], integrationRows: [twilio] }));
+    expect(f).toEqual([]);
+  });
+
+  it('reports a selection that no integration answers to', () => {
+    const f = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, provider: 'deleted-one', active: true }], integrationRows: [twilio] }));
+    expect(f.map((x) => [x.rule, x.level])).toEqual([['channel-provider-missing', 'error']]);
+    expect(f[0].message).toMatch(/no longer exists/);
+    // The code the operator will actually see on the Logs screen for those rows: the bridge
+    // refuses to trigger a pinned integration Novu cannot deliver through.
+    expect(f[0].message).toMatch(/SKIPPED \/ NB_PROVIDER_UNAVAILABLE/);
+  });
+
+  it('reports a selected provider that has been disabled, naming it', () => {
+    const f = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, provider: 'twilio-sms-1', active: true }], integrationRows: [{ ...twilio, active: false }] }));
+    expect(f.map((x) => [x.rule, x.level])).toEqual([['channel-provider-inactive', 'error']]);
+    expect(f[0].message).toMatch(/Twilio prod/);
+    expect(f[0].message).toMatch(/SKIPPED \/ NB_PROVIDER_UNAVAILABLE/);
+  });
+
+  it('matches a selection stored as the integration id', () => {
+    const f = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, provider: 'i1', active: true }], integrationRows: [twilio] }));
+    expect(f).toEqual([]);
+  });
+
+  it('cannot check missing/inactive without the integrations, but still asks for a selection', () => {
+    const noIntegrations = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, provider: 'whatever', active: true }] }));
+    expect(noIntegrations).toEqual([]);
+    const unselected = providerFindings(validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, active: true }] }));
+    expect(unselected).toHaveLength(1);
+  });
+
+  it('exempts disabled channels, inactive rows, unknown codes and legacy direct gateways', () => {
+    const cases = [
+      { code: 'SMS', enabled: false, active: true },
+      { code: 'SMS', enabled: true, active: false },
+      { code: 'PIGEON', enabled: true, active: true },
+      { code: 'SMS', enabled: true, gateway: 'smscountry', active: true },
+    ];
+    for (const row of cases) {
+      expect(providerFindings(validateNotifications({ ...base, channelRows: [row], integrationRows: [twilio] }))).toEqual([]);
+    }
+  });
+
+  it('is silent altogether when the channel master is not supplied', () => {
+    expect(providerFindings(validateNotifications({ ...base, integrationRows: [twilio] }))).toEqual([]);
+  });
+});

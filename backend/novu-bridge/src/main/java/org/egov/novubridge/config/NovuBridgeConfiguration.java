@@ -96,6 +96,13 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.channel.policy.cache.ttl.ms:60000}")
     private Long channelPolicyCacheTtlMs;
 
+    // How long the bridge's view of Novu's integration list stays fresh when it checks that a
+    // channel's chosen provider actually exists and is active. Same shape and default as the
+    // channel-policy cache above; the bridge's own create/_update/_delete invalidate it, so
+    // this TTL only bounds changes made straight in Novu.
+    @Value("${novu.bridge.provider.availability.cache.ttl.ms:60000}")
+    private Long providerAvailabilityCacheTtlMs;
+
     @Value("${novu.bridge.mdms.host:http://egov-mdms-service:8094}")
     private String mdmsHost;
 
@@ -110,6 +117,14 @@ public class NovuBridgeConfiguration {
 
     @Value("#{'${novu.bridge.proxy.allowed.roles:EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}'.split(',')}")
     private java.util.List<String> proxyAllowedRoles;
+
+    // The narrower allowlist for the provider-management calls that carry credentials or
+    // destroy them: POST /providers, /providers/_update, /providers/_delete. The broad list
+    // above stays what it is — a front-line employee may read the Logs screen and send a test
+    // — but rotating an SMS gateway's password is a config-admin act, so it is gated here and
+    // not by whichever roles a deployment happened to put in the read allowlist.
+    @Value("#{'${novu.bridge.proxy.admin.roles:SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN}'.split(',')}")
+    private java.util.List<String> proxyAdminRoles;
 
     @Value("${novu.base.url:http://localhost:3000}")
     private String novuBaseUrl;
@@ -189,6 +204,15 @@ public class NovuBridgeConfiguration {
 
     @Value("${novu.bridge.smscountry.password:}")
     private String smsCountryPassword;
+
+    // The URL Novu's generic-sms provider POSTs at for an SMSCountry integration created from
+    // the provider catalog: this service's own adapter endpoint, which turns Novu's JSON into
+    // SMSCountry's form post. It must be reachable FROM the Novu worker, so it is an
+    // in-cluster address, not the public gateway — and it is never called by a browser.
+    // Only used when an operator configures an `smscountry` provider in the configurator;
+    // the direct novu.bridge.sms.provider=smscountry route above does not go near it.
+    @Value("${novu.bridge.smscountry.adapter.url:http://novu-bridge:8080/novu-bridge/novu-adapter/v1/gateways/smscountry/send}")
+    private String smsCountryAdapterUrl;
 
     /** True when the SMS leg should bypass Novu and go straight to SMSCountry. */
     public boolean isSmsCountryDirect() {

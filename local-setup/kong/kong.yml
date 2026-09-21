@@ -214,6 +214,17 @@ plugins:
           ["/novu-bridge/novu-adapter/v1/providers"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
+          -- Provider catalog (Phase 1): the configurator is now the ONLY place an
+          -- operator manages providers, so the catalog read and the edit/rotate and
+          -- delete writes join the same bucket. Same auth boundary as the rest of the
+          -- proxy set — ProxyAuthFilter inside novu-bridge, Bearer header, no body token.
+          -- NOTE: /novu-bridge/novu-adapter/v1/gateways/** is deliberately NOT here and
+          -- NOT routed: it is the internal SMSCountry adapter Novu's worker calls over
+          -- the container network, and it carries provider credentials in headers. Kong
+          -- terminates it (see novu-bridge-internal-gateways-deny below).
+          ["/novu-bridge/novu-adapter/v1/providers/catalog"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/_update"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/_delete"]=true,
           -- Delivery receipts: machine callbacks (Novu webhook, SMS gateway DR) authenticated
           -- by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not by a user token.
           ["/novu-bridge/novu-adapter/v1/receipts/novu"]=true,
@@ -936,6 +947,27 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/providers/twilio-templates
     strip_path: false
+  # Provider catalog (Phase 1): the five supported provider types and their
+  # credential field descriptors, read by the configurator's Add/Edit Provider form.
+  - name: novu-bridge-providers-catalog-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/catalog
+    strip_path: false
+  # Edit / rotate credentials, and delete. Same auth boundary as create.
+  - name: novu-bridge-providers-update-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/_update
+    strip_path: false
+  - name: novu-bridge-providers-delete-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/_delete
+    strip_path: false
   # Delivery receipts from providers (Novu webhook, SMSCountry DR). Shared-secret
   # authenticated inside novu-bridge; both verbs because DR pings are often GETs.
   - name: novu-bridge-receipts-route
@@ -946,6 +978,36 @@ services:
     - /novu-bridge/novu-adapter/v1/receipts/novu
     - /novu-bridge/novu-adapter/v1/receipts/smscountry
     strip_path: false
+# ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/gateways/** ──────────────────
+# The SMSCountry send adapter (POST .../gateways/smscountry/send) exists so Novu's
+# WORKER can hand an SMS to SMSCountry's bulk API. The worker calls novu-bridge
+# DIRECTLY on the compose network (http://novu-bridge:8080/...), never through Kong,
+# and the request carries the provider's panel username/password in headers.
+#
+# So this prefix must never be reachable from the internet. It is blocked THREE ways,
+# deliberately redundant because each one alone is a single point of failure:
+#   1. it is absent from AUTH_OPTIONAL above, so the global auth pre-function demands
+#      a token and then action-RBAC (no action is seeded for it → fail-closed 403);
+#   2. this route terminates every method with 404 before anything is proxied;
+#   3. the upstream is a dead address, so even a mis-edit that drops the plugin
+#      cannot forward the request to the bridge.
+# 404 rather than 403: an outside caller learns nothing about the path existing.
+# Container-network traffic does not traverse Kong, so the worker is unaffected.
+- name: novu-bridge-internal-gateways-deny
+  url: http://localhost:9999
+  tags:
+  - internal
+  routes:
+  - name: novu-bridge-internal-gateways-deny-route
+    paths:
+    - /novu-bridge/novu-adapter/v1/gateways
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 404
+      content_type: application/json
+      body: '{"ResponseInfo":null,"Errors":[{"code":"NotFound","message":"NotFound","description":"No Route matched with those values"}]}'
 # digit-user-preferences-service: per-user notification consent + preferredLanguage.
 # Read/written by the citizen profile screen; read in-cluster (not via Kong) by
 # pgr-services and novu-bridge. Only up under the `notifications` compose profile.

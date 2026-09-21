@@ -1,5 +1,7 @@
 package org.egov.novubridge.web.controllers;
 
+import org.egov.novubridge.service.provider.ProviderCatalog;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +46,29 @@ final class IntegrationProjection {
                 projected.put(field, integration.get(field));
             }
         }
+        return projected;
+    }
+
+    /**
+     * The projection the configurator's provider list consumes: the allowlist above plus the
+     * three fields the Providers screen needs on every row regardless of what Novu sent.
+     *
+     * <ul>
+     *   <li>{@code type} — the catalog type, derived from the identifier marker (or from an
+     *       unambiguous providerId+channel pair), {@code null} when it cannot be established.
+     *       Novu has no field for it and credentials are never read back, so this is the only
+     *       way the UI can tell an SMSCountry integration from a Twilio one.</li>
+     *   <li>{@code active} / {@code primary} — always real booleans. Novu omits them on some
+     *       shapes and the screen renders a toggle per row; "absent" and "false" mean the same
+     *       thing to Novu's own integration selection, so they are normalized here rather than
+     *       leaving each caller to guess.</li>
+     * </ul>
+     */
+    static Map<String, Object> projectListItem(Map<String, Object> integration) {
+        Map<String, Object> projected = project(integration);
+        projected.put("active", integration != null && Boolean.TRUE.equals(integration.get("active")));
+        projected.put("primary", integration != null && Boolean.TRUE.equals(integration.get("primary")));
+        projected.put("type", ProviderCatalog.deriveType(integration));
         return projected;
     }
 

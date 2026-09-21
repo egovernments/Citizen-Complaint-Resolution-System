@@ -4997,7 +4997,11 @@
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
 
-    - name: "novu-bootstrap — mint Development API key programmatically when unset"
+    # Attempt 1 — no registration window. On a box that has already been
+    # bootstrapped the admin user exists, so the script's login fallback returns
+    # the key and we never touch DISABLE_USER_REGISTRATION at all. That keeps the
+    # steady state of every existing deployment byte-identical to before.
+    - name: "novu-bootstrap — mint Development API key (attempt 1: existing account)"
       ansible.builtin.shell: |
         NOVU_API_URL=http://127.0.0.1:14002 \
         NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
@@ -5007,16 +5011,131 @@
       args:
         chdir: "{{ digit_dir }}"
       register: novu_mint
-      changed_when: true
+      changed_when: false
+      failed_when: false
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
 
-    - name: "novu-bootstrap — resolve effective Novu key (pinned or minted)"
-      ansible.builtin.set_fact:
-        effective_novu_key: "{{ (novu_api_key | default('')) if ((novu_api_key | default('')) | length > 0) else (novu_mint.stdout | default('') | trim) }}"
+    # Attempt 2 — the FRESH-Mongo case. novu-api ships with
+    # DISABLE_USER_REGISTRATION=true (docker-compose.egov-digit.yaml, and now
+    # explicitly in .env), so on an empty Mongo `POST /v1/auth/register` answers
+    # 400 "Account creation is disabled" and the login fallback has no user to log
+    # in as — attempt 1 exits 1 with an empty key. That is why a from-scratch
+    # deploy has never been able to mint; only deployments that PIN novu_api_key
+    # got past it.
+    #
+    # Public signup is opened for exactly one call and closed again:
+    #   .env flip -> recreate novu-api -> wait healthy -> mint -> ALWAYS flip back,
+    #   recreate, wait healthy.
+    # The close runs in `always:`, so a mint that fails, times out, or aborts the
+    # play still leaves registration disabled. The window is one container lifetime
+    # on a box whose Novu has no data yet, and the very first account created in it
+    # is ours (Novu's first signup also creates the organization, so a later signup
+    # would not become an admin of it). The next deploy re-renders .env from
+    # digit.env.j2, which pins the secure value again regardless.
+    - name: "novu-bootstrap — fresh Novu: mint inside a closed registration window"
       when:
         - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+        - (novu_mint.rc | default(1)) != 0 or ((novu_mint.stdout | default('') | trim) | length) == 0
+      block:
+        - name: "novu-bootstrap — open Novu registration for the mint window"
+          ansible.builtin.lineinfile:
+            path: "{{ digit_dir }}/.env"
+            regexp: '^NOVU_DISABLE_USER_REGISTRATION='
+            line: "NOVU_DISABLE_USER_REGISTRATION=false"
+          changed_when: true
+
+        - name: "novu-bootstrap — recreate novu-api with registration open"
+          ansible.builtin.shell: >-
+            docker compose {{ compose_files }} up -d --force-recreate novu-api
+          args:
+            chdir: "{{ digit_dir }}"
+          environment:
+            COMPOSE_PROFILES: "{{ compose_profiles }}"
+          changed_when: true
+
+        - name: "novu-bootstrap — wait for novu-api health (registration open)"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:14002/v1/health-check
+            status_code: [200]
+            timeout: 10
+          register: novu_api_health_open
+          retries: 18
+          delay: 10
+          until: novu_api_health_open.status == 200
+
+        - name: "novu-bootstrap — mint Development API key (attempt 2: fresh signup)"
+          ansible.builtin.shell: |
+            NOVU_API_URL=http://127.0.0.1:14002 \
+            NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
+            NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
+            NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
+            bash {{ digit_dir }}/novu-mint-key.sh
+          args:
+            chdir: "{{ digit_dir }}"
+          register: novu_mint_fresh
+          changed_when: true
+          failed_when: false
+
+      always:
+        # Restore the secure default no matter how the block ended. Both tasks run
+        # even on failure, which is the whole point of putting them here.
+        - name: "novu-bootstrap — close the Novu registration window"
+          ansible.builtin.lineinfile:
+            path: "{{ digit_dir }}/.env"
+            regexp: '^NOVU_DISABLE_USER_REGISTRATION='
+            line: "NOVU_DISABLE_USER_REGISTRATION=true"
+          changed_when: true
+
+        - name: "novu-bootstrap — recreate novu-api with registration disabled"
+          ansible.builtin.shell: >-
+            docker compose {{ compose_files }} up -d --force-recreate novu-api
+          args:
+            chdir: "{{ digit_dir }}"
+          environment:
+            COMPOSE_PROFILES: "{{ compose_profiles }}"
+          changed_when: true
+
+        - name: "novu-bootstrap — wait for novu-api health (registration closed)"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:14002/v1/health-check
+            status_code: [200]
+            timeout: 10
+          register: novu_api_health_closed
+          retries: 18
+          delay: 10
+          until: novu_api_health_closed.status == 200
+
+        # Fail loudly rather than silently continuing with an empty key: an empty
+        # key means the whole notification stack is inert, and the old code path
+        # hid that behind a green recap.
+        - name: "novu-bootstrap — assert registration is disabled again"
+          ansible.builtin.shell: >-
+            grep -q '^NOVU_DISABLE_USER_REGISTRATION=true$' {{ digit_dir }}/.env
+          changed_when: false
+
+    - name: "novu-bootstrap — resolve effective Novu key (pinned or minted)"
+      ansible.builtin.set_fact:
+        effective_novu_key: >-
+          {{ (novu_api_key | default(''))
+             if ((novu_api_key | default('')) | length > 0)
+             else ((novu_mint_fresh.stdout | default('') | trim)
+                   if ((novu_mint_fresh.stdout | default('') | trim) | length > 0)
+                   else (novu_mint.stdout | default('') | trim)) }}
+      when:
+        - enable_novu | default(false)
+
+    - name: "novu-bootstrap — warn when no Novu key could be minted"
+      ansible.builtin.debug:
+        msg: >-
+          Novu API key is EMPTY after bootstrap. novu-bridge will run unauthenticated
+          against Novu and nothing will be delivered. Check `docker logs novu-api`,
+          then re-run the deploy; or mint by hand and pin `novu_api_key` in host_vars.
+      when:
+        - enable_novu | default(false)
+        - (effective_novu_key | default('')) | length == 0
 
     # BOTH files: the script sources ${SCRIPT_DIR}/load-dotenv.sh, so shipping it
     # alone makes the bootstrap exit 1 on line 62 of a fresh box — silently, since
@@ -5950,11 +6069,100 @@
       register: newman_install
       changed_when: "'added' in newman_install.stdout"
 
+    # ─────────── Tenant-master bootstrap verification / repair ───────────
+    # Creating a tenant copies the state-level masters from `pg`. That copy comes up
+    # SHORT on a fresh box: the new tenant gets exactly 500
+    # ACCESSCONTROL-ROLEACTIONS.roleactions rows against 945 at `pg` — a round number,
+    # i.e. a pagination limit, not a data difference. SUPERUSER/MDMS_ADMIN lose their
+    # /mdms-v2/v2/_create/* role-actions and Kong's fail-closed RBAC then 403s every
+    # MDMS write the configurator makes, on a tenant that otherwise looks deployed.
+    #
+    # The truncation is NOT in this repository: the copy is done by
+    # POST /mdms-v2/defaultdata/_create inside the prebuilt mdms-v2 image (there is
+    # no mdms-v2 source under backend/). See the header of repair-tenant-masters.py
+    # for the full trace. So this step verifies the outcome and copies whatever is
+    # missing back through the ordinary MDMS API. Idempotent: a complete bootstrap
+    # reports "0 row(s) missing" and writes nothing.
+    #
+    # Runs BEFORE notif-seed on purpose — notif-seed writes access-control rows of
+    # its own and would 403 on a truncated tenant.
+    - name: "master-repair — stage tenant-master repair script"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+      tags: ['master-repair']
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../scripts/repair-tenant-masters.py"
+        dest: "{{ digit_dir }}/repair-tenant-masters.py"
+        mode: '0755'
+
+    - name: "master-repair — compare {{ state_root }} against pg and copy missing rows"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+      tags: ['master-repair']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        SOURCE_TENANT=pg \
+        TARGET_TENANT={{ state_root }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ state_root }} \
+        APPLY={{ '1' if (repair_tenant_masters | default(true)) else '0' }} \
+        python3 repair-tenant-masters.py
+      register: master_repair
+      changed_when: "'ACL-CHANGED' in (master_repair.stdout | default(''))"
+      failed_when: false
+
+    - name: "master-repair — result"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+      tags: ['master-repair']
+      ansible.builtin.debug:
+        msg: "{{ master_repair.stdout_lines | default(['(no output)']) }}"
+
+    - name: "master-repair — restart egov-accesscontrol after restoring role-actions"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+        - "'ACL-CHANGED' in (master_repair.stdout | default(''))"
+      tags: ['master-repair']
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }} restart egov-accesscontrol
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+
+    # RBAC_BLOCKED means the repair could not run because the permission needed to
+    # restore the permissions was itself among the rows dropped. Nothing downstream
+    # will work, so say so instead of letting the deploy finish green.
+    - name: "master-repair — fail when the tenant cannot be repaired through the API"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+        - not (tolerate_bootstrap_failures | default(false))
+        - "'RBAC_BLOCKED' in (master_repair.stdout | default(''))"
+      tags: ['master-repair']
+      ansible.builtin.fail:
+        msg: >-
+          Tenant {{ state_root }} bootstrapped with truncated ACCESSCONTROL role-actions
+          and cannot repair itself through the gateway (the admin role lost the very
+          /mdms-v2/v2/_create role-action the repair needs). The configurator's MDMS
+          writes will 403. Fix the mdms-v2 /mdms-v2/defaultdata/_create pagination or
+          restore the rows directly, then re-run with --tags master-repair. Set
+          `tolerate_bootstrap_failures: true` to continue past this.
+
     # ─────────── Config-driven notification MDMS seed ───────────
-    # Seeds the 3 PGR notification masters (schema + data) at the state root,
-    # scoped to JUST notifications — the standalone equivalent of DDH's file
-    # loader (which the deploy does NOT invoke; the fast-path dump carries no
-    # notification rows). Two run modes:
+    # Seeds the 4 PGR notification masters (schema + data) at the state root plus
+    # the access-control rows the Channels screen and the novu-bridge provider
+    # endpoints need — scoped to JUST notifications, the standalone equivalent of
+    # DDH's file loader (which the deploy does NOT invoke; the fast-path dump
+    # carries no notification rows). Because MDMS SQL migrations never run on a
+    # deployed box, this task is the ONLY way a seed change reaches an existing
+    # install: it also upgrades an existing NotificationChannel schema in place
+    # when the committed definition has gained a property. Two run modes:
     #   • Fresh install: runs automatically when `seed_notifications` (or the
     #     config-driven flag) is on.
     #   • Add-on to an existing deploy:  ./deploy.sh <tenant> --tags notifications
@@ -5971,9 +6179,13 @@
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
+        # NotificationChannel was listed in the script's NOTIF_CODES but never
+        # staged, so every deploy logged a missing-file skip and the Channels screen
+        # opened empty — the master that decides whether ANY channel delivers.
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationChannel.json"
         - "{{ playbook_dir }}/../scripts/seed-notifications.py"
 
-    - name: "notif-seed — seed the 3 notification MDMS masters (idempotent)"
+    - name: "notif-seed — seed the 4 notification MDMS masters + access control (idempotent)"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
@@ -5998,6 +6210,36 @@
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
+
+    # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
+    # startup. Rows created just now are invisible to the running process, so Kong's
+    # enforce_rbac keeps 403ing the very endpoints we just authorized until it is
+    # restarted. The seeder prints ACL-CHANGED only when it actually created rows, so
+    # a re-run on an already-seeded box restarts nothing.
+    - name: "notif-seed — restart egov-accesscontrol after new role-actions"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'ACL-CHANGED' in (notif_seed.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }} restart egov-accesscontrol
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+
+    - name: "notif-seed — wait for egov-accesscontrol to come back"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'ACL-CHANGED' in (notif_seed.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: >-
+        curl -sf -o /dev/null http://127.0.0.1:{{ upstream_kong_port }}/access/health
+      register: accesscontrol_ready
+      retries: 30
+      delay: 5
+      until: accesscontrol_ready.rc == 0
+      changed_when: false
+      failed_when: false
 
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated

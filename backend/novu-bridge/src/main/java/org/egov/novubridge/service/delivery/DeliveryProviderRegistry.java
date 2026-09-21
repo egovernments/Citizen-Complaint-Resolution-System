@@ -31,7 +31,24 @@ public class DeliveryProviderRegistry {
         this.smsCountry = smsCountry;
     }
 
+    /**
+     * The Novu transport, bypassing policy selection. For callers that have already named one
+     * Novu integration explicitly (the configurator's test-send): a direct gateway would
+     * ignore that choice and quietly test something else.
+     */
+    public DeliveryProvider novu() {
+        return novu;
+    }
+
     public DeliveryProvider select(@Nullable String tenantId, String channel) {
+        // A provider chosen in the configurator is a Novu integration by construction — even
+        // the SMSCountry one, which is a generic-sms integration pointing back at this
+        // service's adapter. It therefore outranks `gateway`, which only ever named a
+        // bridge-internal transport. No provider chosen → the original gateway logic, verbatim.
+        String provider = policy.provider(tenantId, channel);
+        if (provider != null) {
+            return novu;
+        }
         String gateway = policy.gateway(tenantId, channel);
         if (SmsCountryDeliveryProvider.ID.equals(gateway)) {
             if (smsCountry != null && smsCountry.supports(channel)) {

@@ -57,7 +57,18 @@ export interface ChannelRow {
   code?: string;
   enabled?: boolean | string;
   gateway?: string;
+  /** Identifier of the Novu integration selected for this channel (one per channel). */
+  provider?: string | null;
   active?: boolean | string;
+}
+
+/** A Novu integration as the Providers screen lists it (never carries secrets). */
+export interface IntegrationRow {
+  _id?: string;
+  id?: string;
+  identifier?: string;
+  name?: string;
+  active?: boolean;
 }
 
 /** A RAINMAKER-PGR.NotificationProviderTemplate row (approved provider template per routing key). */
@@ -86,10 +97,12 @@ export interface ValidateNotificationsInput {
   templateRows: TemplateRow[];
   /** Role codes from the access-roles resource. */
   roleCodes: string[];
-  /** Channel policy rows; omit to skip the channel-enabled rule (e.g. master not seeded). */
+  /** Channel policy rows; omit to skip the channel-enabled family (e.g. master not seeded). */
   channelRows?: ChannelRow[];
   /** Provider-template rows; omit to skip the whatsapp-needs-template rule. */
   providerTemplateRows?: ProviderTemplateRow[];
+  /** Novu integrations; omit to skip the channel-provider-missing / -inactive rules. */
+  integrationRows?: IntegrationRow[];
 }
 
 export interface ValidationFinding {
@@ -142,6 +155,7 @@ export function validateNotifications({
   roleCodes,
   channelRows,
   providerTemplateRows,
+  integrationRows,
 }: ValidateNotificationsInput): ValidationFinding[] {
   const findings: ValidationFinding[] = [];
 
@@ -170,6 +184,74 @@ export function validateNotifications({
           level: 'warn',
           rule: 'channel-enabled',
           message: `Channel ${channel} is disabled in NotificationChannel; every routing row on it will be SKIPPED / NB_NO_PROVIDER.`,
+          ref: channel,
+        });
+      }
+    }
+  }
+
+  // R7b: the provider-selection half of the channel-enabled family. Exactly ONE provider
+  // is active per channel per tenant, named by NotificationChannel.provider (the Novu
+  // integration's identifier). An enabled channel with no selection, or one pointing at a
+  // provider that has been deleted or disabled, cannot deliver. Severity follows blast
+  // radius: an ERROR when routing rows actually use the channel, a WARNING otherwise.
+  //
+  // Rows on a legacy direct gateway (e.g. smscountry) bypass Novu entirely and take no
+  // provider, so they are exempt.
+  if (channelRows) {
+    const usedChannels = new Set<string>();
+    for (const r of routingRows ?? []) {
+      if (!isActive(r.active)) continue;
+      const channel = norm(r.channel);
+      if (ALLOWED_CHANNELS.includes(channel)) usedChannels.add(channel);
+    }
+    const integrationsKnown = Array.isArray(integrationRows);
+    for (const c of channelRows) {
+      const channel = norm(c.code);
+      if (!ALLOWED_CHANNELS.includes(channel)) continue;
+      if (!isActive(c.active) || !isActive(c.enabled)) continue;
+      const gateway = norm(c.gateway) || 'NOVU';
+      if (gateway !== 'NOVU') continue;
+      const level: ValidationFinding['level'] = usedChannels.has(channel) ? 'error' : 'warn';
+      const provider = String(c.provider ?? '').trim();
+      // A BROKEN selection is fatal: novu-bridge targets exactly that integration.
+      // An ABSENT selection is not fatal today — the bridge falls back to the
+      // deployment-wide env settings — but the tenant's delivery is then not
+      // actually configured here, which is what this rule is for.
+      // A broken SELECTION is recorded NB_PROVIDER_UNAVAILABLE by the bridge (it refuses to
+      // trigger an integration Novu cannot deliver through), not NB_NO_PROVIDER, which is
+      // what a disabled channel gets.
+      const suffix = usedChannels.has(channel)
+        ? `every routing row on ${channel} will be SKIPPED / NB_PROVIDER_UNAVAILABLE`
+        : `nothing routes on ${channel} yet, but it will not deliver once something does`;
+
+      if (!provider) {
+        findings.push({
+          level,
+          rule: 'channel-needs-provider',
+          message: `Channel ${channel} is enabled but no provider is selected for it, so delivery falls back to the deployment's environment settings instead of this tenant's own configuration. Pick a provider under Notifications → Channels.`,
+          ref: channel,
+        });
+        continue;
+      }
+      if (!integrationsKnown) continue;
+      const match = (integrationRows ?? []).find((i) =>
+        [i.identifier, i._id, i.id]
+          .map((v) => String(v ?? '').trim().toLowerCase())
+          .some((v) => !!v && v === provider.toLowerCase()),
+      );
+      if (!match) {
+        findings.push({
+          level,
+          rule: 'channel-provider-missing',
+          message: `Channel ${channel} selects provider "${provider}", which no longer exists; ${suffix}. Select another provider for this channel.`,
+          ref: channel,
+        });
+      } else if (match.active === false) {
+        findings.push({
+          level,
+          rule: 'channel-provider-inactive',
+          message: `Channel ${channel} selects provider "${match.name || provider}", which is disabled; ${suffix}. Enable that provider or select another.`,
           ref: channel,
         });
       }

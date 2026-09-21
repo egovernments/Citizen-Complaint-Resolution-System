@@ -3,9 +3,14 @@ package org.egov.novubridge.web.controllers;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.delivery.DeliveryProvider;
 import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.DeliveryResult;
 import org.egov.novubridge.service.delivery.Dispatch;
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+import org.egov.novubridge.service.provider.ProviderCatalog;
+import org.egov.novubridge.service.provider.ProviderType;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.DispatchLogEntry;
@@ -34,7 +39,15 @@ import java.util.UUID;
  * Self-service provider management for the configurator's Notification Providers
  * screen. Sits alongside {@link IntegrationController} and {@code DispatchController}
  * under the same {@code /novu-adapter/v1} namespace, behind the same
- * {@link org.egov.novubridge.web.filters.ProxyAuthFilter} EMPLOYEE+role gate.
+ * {@link org.egov.novubridge.web.filters.ProxyAuthFilter} EMPLOYEE+role gate. The three
+ * management calls here that carry credentials or destroy them ({@code POST /providers},
+ * {@code /providers/_update}, {@code /providers/_delete}) additionally require a role from
+ * {@code novu.bridge.proxy.admin.roles}; the filter refuses the rest with 403
+ * {@code NB_ADMIN_ROLE_REQUIRED} before this class is reached.
+ *
+ * <p>Each of those three also invalidates {@link ProviderAvailability}, so the dispatch
+ * pipeline's "is the chosen provider usable" check sees an operator's change on the very next
+ * event instead of up to a cache TTL later.
  *
  * <p><b>Secrets stay server-side.</b> Novu is the provider/credential store; this
  * service holds only the Novu ApiKey (never exposed to the keyless SPA). Operator
@@ -64,15 +77,39 @@ public class ProviderController {
     private final DeliveryProviderRegistry providers;
     private final DispatchLogRepository dispatchLogRepository;
     private final org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService;
+    private final ProviderCatalog catalog;
+    private final ChannelPolicyClient channelPolicy;
+    private final ProviderAvailability providerAvailability;
 
     public ProviderController(NovuClient novuClient,
                               DeliveryProviderRegistry providers,
                               DispatchLogRepository dispatchLogRepository,
-                              org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService) {
+                              org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService,
+                              ProviderCatalog catalog,
+                              ChannelPolicyClient channelPolicy,
+                              ProviderAvailability providerAvailability) {
         this.novuClient = novuClient;
         this.providers = providers;
         this.dispatchLogRepository = dispatchLogRepository;
         this.twilioTemplateSyncService = twilioTemplateSyncService;
+        this.catalog = catalog;
+        this.channelPolicy = channelPolicy;
+        this.providerAvailability = providerAvailability;
+    }
+
+    // ---- GET /providers/catalog -----------------------------------------
+
+    /**
+     * The out-of-the-box provider types and their credential forms. The configurator renders
+     * the "Add provider" form straight from this, so a provider gained or a field renamed in
+     * {@link ProviderCatalog} needs no SPA change. Contains no credentials — it is a
+     * description of what to ASK for, never of what is stored.
+     */
+    @GetMapping("/providers/catalog")
+    public ResponseEntity<Map<String, Object>> catalog() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("data", catalog.types());
+        return ResponseEntity.ok(out);
     }
 
     // ---- GET /providers/twilio-templates ---------------------------------
@@ -99,6 +136,14 @@ public class ProviderController {
      */
     @PostMapping("/providers")
     public ResponseEntity<ProviderCreateResponse> createProvider(@RequestBody Map<String, Object> body) {
+        // Catalog form: {type, name, credentials, active?}. Everything Novu needs beyond the
+        // operator's credentials is resolved here, which is what makes these providers
+        // configurable without an env edit or a redeploy.
+        if (StringUtils.hasText(str(body.get("type")))) {
+            return createFromCatalog(body);
+        }
+        // Legacy form: {channel, providerId, name, identifier, credentials}. Still the escape
+        // hatch for a Novu provider the catalog does not cover; unchanged in every detail.
         String channel = str(body.get("channel"));
         String providerId = str(body.get("providerId"));
         String name = str(body.get("name"));
@@ -121,11 +166,158 @@ public class ProviderController {
 
         NovuClient.NovuResponse novuResponse =
                 novuClient.createIntegration(name, identifier, providerId, novuChannel, credentials);
+        providerAvailability.invalidate();
         Map<String, Object> created = extractCreatedIntegration(novuResponse.getResponse());
-        Map<String, Object> projected = IntegrationProjection.project(created);
+        Map<String, Object> projected = IntegrationProjection.projectListItem(created);
 
         return new ResponseEntity<>(
                 ProviderCreateResponse.builder().data(projected).build(), HttpStatus.OK);
+    }
+
+    /**
+     * Create from a catalog {@code type}: the bridge resolves the Novu provider id, the Novu
+     * channel, the credential mapping and a round-trippable identifier, so the operator only
+     * ever fills in credentials.
+     *
+     * <p>The identifier is {@code <type>-<sha256(name)[0:16]>} — deterministic and prefixed, so
+     * {@code GET /integrations} can say what each integration is and the dispatch path can tell
+     * an Ozeki integration (which needs its own request body) from an SMSCountry one without
+     * asking Novu. Required credentials are validated BEFORE anything reaches Novu: Novu
+     * happily stores a half-filled integration and then fails every send.
+     */
+    private ResponseEntity<ProviderCreateResponse> createFromCatalog(Map<String, Object> body) {
+        ProviderType type = catalog.require(str(body.get("type")));
+        Map<String, Object> credentials = asMap(body.get("credentials"));
+        catalog.validateRequired(type, credentials);
+
+        String name = StringUtils.hasText(str(body.get("name"))) ? str(body.get("name")) : type.getLabel();
+        String identifier = StringUtils.hasText(str(body.get("identifier")))
+                ? str(body.get("identifier"))
+                : ProviderCatalog.identifierFor(type.getType(), name);
+        // Absent means yes: an operator adding a provider means to use it, and Novu's own
+        // default (inactive) would make it invisible to every trigger.
+        boolean active = !body.containsKey("active") || truthy(body.get("active"));
+
+        NovuClient.NovuResponse novuResponse = novuClient.createIntegration(
+                name, identifier, type.getNovuProviderId(), type.novuChannel(),
+                catalog.toNovuCredentials(type, credentials), active);
+        providerAvailability.invalidate();
+        Map<String, Object> created = extractCreatedIntegration(novuResponse.getResponse());
+        return new ResponseEntity<>(
+                ProviderCreateResponse.builder().data(IntegrationProjection.projectListItem(created)).build(),
+                HttpStatus.OK);
+    }
+
+    // ---- POST /providers/_update ----------------------------------------
+
+    /**
+     * Rename a provider, toggle it, or rotate its credentials. Id in the BODY, not the path:
+     * the gateway's access control matches exact URLs, so every management call has to be a
+     * POST to a fixed path.
+     *
+     * <p>{@code credentials} present means rotation. Novu REPLACES a credential set wholesale
+     * on {@code PUT} rather than merging, so a partial credential map would silently blank the
+     * keys it omits — hence the full required-field validation before the call, against the
+     * type derived from the integration's own identifier. Nothing is echoed back but the
+     * allowlist projection.
+     */
+    @PostMapping("/providers/_update")
+    public ResponseEntity<ProviderCreateResponse> updateProvider(@RequestBody Map<String, Object> body) {
+        String id = str(body.get("id"));
+        if (!StringUtils.hasText(id)) {
+            throw new CustomException("NB_INVALID_PROVIDER", "id is required");
+        }
+        Map<String, Object> existing = findIntegration(id);
+
+        String name = str(body.get("name"));
+        Boolean active = body.containsKey("active") ? truthy(body.get("active")) : null;
+        Map<String, Object> credentials = asMap(body.get("credentials"));
+        Map<String, Object> novuCredentials = null;
+        if (credentials != null) {
+            String derived = ProviderCatalog.deriveType(existing);
+            if (derived == null) {
+                throw new CustomException("NB_UNKNOWN_PROVIDER_TYPE",
+                        "Cannot rotate credentials for integration " + id
+                                + ": its provider type cannot be derived. Re-create it from the catalog.");
+            }
+            ProviderType type = catalog.require(derived);
+            catalog.validateRequired(type, credentials);
+            novuCredentials = catalog.toNovuCredentials(type, credentials);
+        }
+        // Novu answers 400 "No properties found for update" on an empty change set; say so here
+        // instead, where the message can name the fields this endpoint accepts.
+        if (!StringUtils.hasText(name) && novuCredentials == null && active == null) {
+            throw new CustomException("NB_INVALID_PROVIDER",
+                    "Nothing to update: supply at least one of name, credentials, active");
+        }
+
+        NovuClient.NovuResponse novuResponse =
+                novuClient.updateIntegration(str(existing.get("_id")), name, novuCredentials, active);
+        providerAvailability.invalidate();
+        Map<String, Object> updated = extractCreatedIntegration(novuResponse.getResponse());
+        if (updated.isEmpty()) {
+            updated = existing;   // Novu answered without a body; project what we know.
+        }
+        return new ResponseEntity<>(
+                ProviderCreateResponse.builder().data(IntegrationProjection.projectListItem(updated)).build(),
+                HttpStatus.OK);
+    }
+
+    // ---- POST /providers/_delete ----------------------------------------
+
+    /**
+     * Delete a provider and the credentials Novu holds for it — but never one a tenant is
+     * still routing through. Novu would delete it happily and every notification on that
+     * channel would start failing with no active integration; the refusal is the whole point
+     * of the endpoint.
+     *
+     * @return {@code {data:{id, deleted:true}}}, or HTTP 409 {@code NB_PROVIDER_IN_USE}
+     */
+    @PostMapping("/providers/_delete")
+    public ResponseEntity<Map<String, Object>> deleteProvider(@RequestBody Map<String, Object> body) {
+        String id = str(body.get("id"));
+        if (!StringUtils.hasText(id)) {
+            throw new CustomException("NB_INVALID_PROVIDER", "id is required");
+        }
+        Map<String, Object> existing = findIntegration(id);
+        String identifier = str(existing.get("identifier"));
+        String tenantId = str(body.get("tenantId"));
+
+        if (channelPolicy.isProviderInUse(tenantId, identifier)) {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("code", "NB_PROVIDER_IN_USE");
+            error.put("message", "Provider " + identifier + " is still selected on a NotificationChannel row"
+                    + (StringUtils.hasText(tenantId) ? " for tenant " + tenantId : "")
+                    + ". Point that channel at another provider first.");
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("Errors", List.of(error));
+            return new ResponseEntity<>(out, HttpStatus.CONFLICT);
+        }
+
+        novuClient.deleteIntegration(str(existing.get("_id")));
+        providerAvailability.invalidate();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", id);
+        data.put("deleted", true);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("data", data);
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Resolve an integration by Novu {@code _id} OR by {@code identifier} — the configurator
+     * holds whichever the list gave it. Novu v2.3.0 has no {@code GET /v1/integrations/{id}},
+     * so this lists and filters. Throws {@code NB_PROVIDER_NOT_FOUND} rather than returning
+     * null: every caller here treats "not found" the same way.
+     */
+    private Map<String, Object> findIntegration(String id) {
+        NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
+        for (Map<String, Object> i : IntegrationProjection.extractList(novuResponse.getResponse())) {
+            if (id.equals(str(i.get("_id"))) || id.equals(str(i.get("identifier")))) {
+                return i;
+            }
+        }
+        throw new CustomException("NB_PROVIDER_NOT_FOUND", "No provider integration with id " + id);
     }
 
     // ---- GET /providers/templates ---------------------------------------
@@ -217,7 +409,11 @@ public class ProviderController {
      */
     @PostMapping("/providers/verify")
     public ResponseEntity<Map<String, Object>> verify(@RequestBody Map<String, Object> body) {
-        String integrationId = str(body.get("integrationId"));
+        // `id` is the catalog-era alias of `integrationId`; `type` lets the UI verify "the
+        // SMTP provider" without first knowing its id. Both are additive — a caller sending
+        // only channel+providerId behaves exactly as before.
+        String integrationId = firstText(str(body.get("integrationId")), str(body.get("id")));
+        String type = str(body.get("type"));
         String channel = str(body.get("channel"));
         String providerId = str(body.get("providerId"));
 
@@ -229,6 +425,11 @@ public class ProviderController {
         for (Map<String, Object> i : integrations) {
             if (StringUtils.hasText(integrationId)) {
                 if (integrationId.equals(str(i.get("_id"))) || integrationId.equals(str(i.get("identifier")))) {
+                    match = i;
+                    break;
+                }
+            } else if (StringUtils.hasText(type)) {
+                if (catalog.require(type).getType().equals(ProviderCatalog.deriveType(i))) {
                     match = i;
                     break;
                 }
@@ -282,6 +483,26 @@ public class ProviderController {
         // synthetic "TEST" tenant is only the fallback for callers that omit it.
         String tenantId = StringUtils.hasText(str(body.get("tenantId"))) ? str(body.get("tenantId")) : "TEST";
 
+        // Test ONE configured provider: `id` resolves to its Novu identifier so the trigger is
+        // pinned to it, and to its catalog type so a gateway needing its own request body
+        // (Ozeki) gets the same envelope the live path builds. `type` alone is enough to fill
+        // in the channel, so the UI can offer "send a test" straight from a catalog card.
+        String integrationId = firstText(str(body.get("integrationId")), str(body.get("id")));
+        String integrationIdentifier = null;
+        String providerType = null;
+        if (StringUtils.hasText(integrationId)) {
+            Map<String, Object> integration = findIntegration(integrationId);
+            integrationIdentifier = str(integration.get("identifier"));
+            providerType = ProviderCatalog.deriveType(integration);
+        }
+        if (StringUtils.hasText(str(body.get("type")))) {
+            ProviderType type = catalog.require(str(body.get("type")));
+            providerType = type.getType();
+            if (!StringUtils.hasText(channel)) {
+                channel = type.getChannel();
+            }
+        }
+
         String upperChannel = channel == null ? "" : channel.toUpperCase();
         String recipient = StringUtils.hasText(phone) ? phone : email;
 
@@ -309,8 +530,15 @@ public class ProviderController {
                 .templateId(contentSid)
                 .contentVariables(contentVariables)
                 .workflowOverride(workflow)
+                .integrationIdentifier(integrationIdentifier)
+                .providerType(providerType)
                 .build();
-        DeliveryResult result = providers.select(null, upperChannel).send(dispatch);
+        // An explicitly named integration is a Novu integration by construction (even the
+        // SMSCountry one, which is generic-sms pointed at this service's adapter), so the
+        // direct-gateway route must not swallow it. With no id named, selection is unchanged.
+        DeliveryProvider transport = StringUtils.hasText(integrationIdentifier)
+                ? providers.novu() : providers.select(null, upperChannel);
+        DeliveryResult result = transport.send(dispatch);
 
         int novuStatus = result.getStatusCode() != null ? result.getStatusCode() : 0;
         boolean ok = result.isAccepted();
@@ -416,8 +644,19 @@ public class ProviderController {
         }
     }
 
-    private static String digitsOnly(String value) {
-        return value == null ? "" : value.replaceAll("\\D", "");
+    private static String firstText(String... values) {
+        for (String v : values) {
+            if (StringUtils.hasText(v)) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    /** JSON booleans arrive as Boolean; forms sometimes send the string. Accept both. */
+    private static boolean truthy(Object value) {
+        return value instanceof Boolean ? (Boolean) value
+                : Boolean.parseBoolean(String.valueOf(value).trim());
     }
 
     private static String str(Object value) {

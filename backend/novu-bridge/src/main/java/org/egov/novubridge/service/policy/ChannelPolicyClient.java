@@ -19,7 +19,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * Per-tenant channel policy, read from the MDMS master
  * {@code RAINMAKER-PGR.NotificationChannel} at the tenant's STATE root
  * ({@code ke.bomet} → {@code ke}), cached with a short TTL. One row per channel:
- * {@code {code, enabled, gateway, senderId, active}}.
+ * {@code {code, enabled, gateway, senderId, provider, active}}.
+ *
+ * <p>{@code provider} (optional) is the Novu integration <em>identifier</em> of the ONE
+ * configured provider that is active for this channel — written by the configurator's
+ * Notification Providers screen. Exactly one provider per channel per state tenant; there is
+ * no automatic failover. When it is blank the pre-catalog behaviour applies verbatim:
+ * {@code gateway} + the env fallbacks decide the transport.
  *
  * <p>This is the single authority on "is channel X on for tenant T, and through which
  * gateway". The deployment-wide env vars ({@code novu.bridge.channels.enabled},
@@ -39,12 +45,19 @@ public class ChannelPolicyClient {
         public final boolean enabled;
         public final String gateway;
         public final String senderId;
+        /** Novu integration identifier of the active provider for this channel; blank = none. */
+        public final String provider;
 
         public ChannelSetting(String code, boolean enabled, String gateway, String senderId) {
+            this(code, enabled, gateway, senderId, null);
+        }
+
+        public ChannelSetting(String code, boolean enabled, String gateway, String senderId, String provider) {
             this.code = code;
             this.enabled = enabled;
             this.gateway = gateway;
             this.senderId = senderId;
+            this.provider = provider;
         }
     }
 
@@ -87,6 +100,51 @@ public class ChannelPolicyClient {
             return s.get().gateway.trim().toLowerCase(Locale.ROOT);
         }
         return "SMS".equalsIgnoreCase(channel) && config.isSmsCountryDirect() ? "smscountry" : "novu";
+    }
+
+    /**
+     * Novu integration identifier explicitly selected for the (tenant, channel), or {@code null}
+     * when the tenant has not picked one. A non-null value means "deliver through Novu, targeting
+     * exactly this integration"; it takes precedence over {@code gateway} and over every env
+     * fallback. Null restores the pre-catalog routing entirely.
+     */
+    public String provider(String tenantId, String channel) {
+        Optional<ChannelSetting> s = setting(tenantId, channel);
+        if (s.isPresent() && StringUtils.hasText(s.get().provider)) {
+            return s.get().provider.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Whether any channel row of the tenant still points at this integration identifier.
+     * {@code tenantId == null} widens the check to every state tenant whose rows are already
+     * cached — deleting a provider must not silently break a tenant this process has served.
+     * It does NOT fetch tenants never seen: MDMS has no "search all tenants" call here, so a
+     * delete is only ever refused on evidence, never on a guess.
+     */
+    public boolean isProviderInUse(String tenantId, String identifier) {
+        if (!StringUtils.hasText(identifier)) {
+            return false;
+        }
+        if (StringUtils.hasText(tenantId)) {
+            return usesProvider(rowsFor(stateTenant(tenantId)), identifier);
+        }
+        for (Timed cached : cache.values()) {
+            if (usesProvider(cached.rows, identifier)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesProvider(Map<String, ChannelSetting> rows, String identifier) {
+        for (ChannelSetting s : rows.values()) {
+            if (s.provider != null && identifier.equals(s.provider.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Sender id for a direct SMS gateway: the tenant's row, else the env default. */
@@ -171,7 +229,8 @@ public class ChannelPolicyClient {
                             code.toString().trim().toUpperCase(Locale.ROOT),
                             Boolean.TRUE.equals(data.get("enabled")),
                             data.get("gateway") != null ? data.get("gateway").toString() : null,
-                            data.get("senderId") != null ? data.get("senderId").toString() : null));
+                            data.get("senderId") != null ? data.get("senderId").toString() : null,
+                            data.get("provider") != null ? data.get("provider").toString() : null));
                 }
             }
             return out;

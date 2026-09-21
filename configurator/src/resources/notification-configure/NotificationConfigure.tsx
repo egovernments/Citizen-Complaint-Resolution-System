@@ -67,6 +67,7 @@ import {
   type ValidationFinding,
   type ChannelRow,
   type ProviderTemplateRow,
+  type IntegrationRow,
   PLACEHOLDER_VOCABULARY,
 } from '../workflow-services/validateNotifications';
 import { saveNotificationPair, type Mutate, type WritePathDeps } from './notificationWritePath';
@@ -530,6 +531,7 @@ function ValidatePanel({
   roleCodes,
   channelRows,
   providerTemplateRows,
+  integrationRows,
 }: {
   businessService: BusinessServiceRecord;
   routingRows: RoutingRow[];
@@ -537,12 +539,13 @@ function ValidatePanel({
   roleCodes: string[];
   channelRows?: ChannelRow[];
   providerTemplateRows?: ProviderTemplateRow[];
+  integrationRows?: IntegrationRow[];
 }) {
   const [findings, setFindings] = useState<ValidationFinding[] | null>(null);
   const [expanded, setExpanded] = useState(true);
 
   const run = () => {
-    setFindings(validateNotifications({ businessService, routingRows, templateRows, roleCodes, channelRows, providerTemplateRows }));
+    setFindings(validateNotifications({ businessService, routingRows, templateRows, roleCodes, channelRows, providerTemplateRows, integrationRows }));
     setExpanded(true);
   };
 
@@ -660,6 +663,12 @@ export function NotificationConfigure() {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'action', order: 'ASC' },
   });
+  // Novu integrations, so the validator can tell "no provider selected" from
+  // "the selected provider was deleted / disabled".
+  const { data: integrationData } = useGetList('notification-provider', {
+    pagination: { page: 1, perPage: 100 },
+    sort: { field: 'channel', order: 'ASC' },
+  });
   const { data: roleData } = useGetList('access-roles', {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'name', order: 'ASC' },
@@ -736,6 +745,7 @@ export function NotificationConfigure() {
               roleCodes={roleCodes}
               channelRows={channelData && channelData.length > 0 ? (channelData as ChannelRow[]) : undefined}
               providerTemplateRows={providerTemplateData ? (providerTemplateData as ProviderTemplateRow[]) : undefined}
+              integrationRows={integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined}
             />
           )}
           {record && (

@@ -525,8 +525,10 @@ EOF
 # =============================================================================
 # STEP 6 — Seed the notification MDMS masters.
 #   pre : MDMS reachable + we can mint an admin token
-#   act : copy the schema + the 3 RAINMAKER-PGR.Notification* data files into a
-#         notification-seed/ dir, then run seed-notifications.py (its env interface)
+#   act : copy the schema + the 4 RAINMAKER-PGR.Notification* data files (Routing,
+#         Template, ProviderTemplate, Channel) into a notification-seed/ dir, then
+#         run seed-notifications.py (its env interface). The glob already picks up
+#         Channel; the seeder also upserts the notification access-control rows.
 #   post: MDMS _search shows Routing/Template/ProviderTemplate rows (expect
 #         24/42/14; assert each >= 1 and log the actual counts)
 # =============================================================================

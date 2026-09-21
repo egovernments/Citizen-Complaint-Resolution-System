@@ -64,9 +64,25 @@ public class SmsCountryClient {
 
     /** @param senderId registered sender id for THIS send (per-tenant policy may override the env default) */
     public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId) {
+        return send(phone, text, transactionId, senderId,
+                config.getSmsCountryUser(), config.getSmsCountryPassword(), config.getSmsCountryUrl());
+    }
+
+    /**
+     * Send with credentials supplied per call rather than from the deployment env. The provider
+     * catalog stores an operator's SMSCountry login in Novu, not here, so the adapter endpoint
+     * ({@code POST /novu-adapter/v1/gateways/smscountry/send}) receives them on the request and
+     * passes them straight through — one code path, one response parser, for both routes.
+     *
+     * @param user     SMSCountry panel username for THIS send
+     * @param password SMSCountry panel password for THIS send
+     * @param apiUrl   gateway endpoint for THIS send; blank falls back to the configured one
+     */
+    public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId,
+                                        String user, String password, String apiUrl) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("User", config.getSmsCountryUser());
-        form.add("passwd", config.getSmsCountryPassword());
+        form.add("User", user);
+        form.add("passwd", password);
         form.add("mobilenumber", toNationalDigits(phone));
         form.add("message", text);
         form.add("sid", senderId);
@@ -76,10 +92,11 @@ public class SmsCountryClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
+        String url = (apiUrl == null || apiUrl.isBlank()) ? config.getSmsCountryUrl() : apiUrl.trim();
         String body;
         try {
             ResponseEntity<String> response = restTemplate.exchange(
-                    config.getSmsCountryUrl(), HttpMethod.POST,
+                    url, HttpMethod.POST,
                     new HttpEntity<>(form, headers), String.class);
             body = response.getBody();
         } catch (Exception e) {

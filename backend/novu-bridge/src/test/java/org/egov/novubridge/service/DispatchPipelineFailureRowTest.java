@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
 
 import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
@@ -74,7 +75,8 @@ class DispatchPipelineFailureRowTest {
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
                 new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
-                new ChannelPolicyClient(null, config), dispatchLogRepository, config);
+                new ChannelPolicyClient(null, config), dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
     private ComplaintsDomainEvent smsEvent() {
