@@ -29,16 +29,5 @@ class ExternalServiceError extends ChatbotError {
   }
 }
 
-// The citizen's number is genuinely not registered for the requested organisation.
-// Distinct from AuthenticationError, which also covers a deactivated citizen, an
-// incomplete record and a failed service-account login — treating those as
-// "not registered" tells the citizen to re-register when the real problem is ours.
-class NotRegisteredError extends ChatbotError {
-  constructor(message) {
-    super(message);
-  }
-}
-
-
-module.exports = { ChatbotError, ValidationError, AuthenticationError, ExternalServiceError, NotRegisteredError };
+module.exports = { ChatbotError, ValidationError, AuthenticationError, ExternalServiceError };
 

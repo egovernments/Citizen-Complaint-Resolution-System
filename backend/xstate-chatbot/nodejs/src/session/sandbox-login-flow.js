@@ -3,7 +3,6 @@ const userService = require("./user-service");
 const emailTenantService = require("../machine/service/email-tenant-service");
 const config = require("../env-variables");
 const Session = require("./session");
-const { NotRegisteredError } = require("./errors");
 const { maskMobile } = require("../privacy");
 
 class SandboxLoginFlow {
@@ -156,18 +155,10 @@ class SandboxLoginFlow {
       return this.createSession(user, orgDetails.code, { organizationName: orgDetails.name });
       } catch (error) {
         console.error(`${logContext}:`, error);
-
-        // Only handle the case where the user is genuinely not registered. Any other error should be propagated.
-        if (!(error instanceof NotRegisteredError)) throw error;
-
-        this.tracker.delete(this.mobileNumber);
-
-        const registrationUrl = emailTenantService.getSandboxRegistrationUrl(email);
-        return this.notifyAndStop([
-          `Mobile ${maskMobile(this.mobileNumber)} not registered with ${orgDetails.name}.\n\nComplete registration at:\n${registrationUrl}\n\nUse email: ${email}`
-        ]);
+        throw error;
       }
     }
+
 }
 
 module.exports = SandboxLoginFlow;

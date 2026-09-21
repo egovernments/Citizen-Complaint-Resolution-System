@@ -14,12 +14,10 @@ function stub(request, from, exports) {
 stub("../env-variables", sessionDir, { rootTenantId: "mz", countryCode: "258", defaultLocale: "pt_PT", supportedLocales: "pt_PT" });
 stub("./repo", sessionDir, {});
 stub("./user-service", sessionDir, {});
-stub("../machine/service/email-tenant-service", sessionDir, {
-  getSandboxRegistrationUrl: (email) => `https://sandbox.example/register?email=${email}`,
-});
+stub("../machine/service/email-tenant-service", sessionDir, {});
 
 const SandboxLoginFlow = require(path.join(sessionDir, "sandbox-login-flow.js"));
-const { NotRegisteredError, ExternalServiceError } = require(path.join(sessionDir, "errors.js"));
+const { ExternalServiceError } = require(path.join(sessionDir, "errors.js"));
 
 function harness({ authenticateUser } = {}) {
   const sent = [];
@@ -73,31 +71,24 @@ test("notifyAndStop resolves only after the send completes", async () => {
   assert.equal(delivered, true, "a later reply cannot overtake this prompt");
 });
 
-test("an infrastructure failure keeps the citizen's progress", async () => {
-  // Previously ANY error deleted the tracker and told the citizen to re-register.
-  const { flow, sent, deleted } = harness({
-    authenticateUser: async () => { throw new ExternalServiceError("user/_search failed with status 503"); },
-  });
+test("every authentication failure surfaces, none is read as not-registered", async () => {
+  // Two earlier shapes, both wrong: ANY error deleted the tracker and told the
+  // citizen to re-register, then only a NotRegisteredError did. Nothing could
+  // reach the second — getAuthenticatedSandboxUser goes through
+  // loginOrCreateUser, which CREATES the citizen when absent, so "not
+  // registered" is not a state this flow can produce.
+  for (const error of [
+    new ExternalServiceError("user/_search failed with status 503"),
+    new Error("Failed to authenticate or create user in tenant mz.ige"),
+  ]) {
+    const { flow, sent, deleted } = harness({ authenticateUser: async () => { throw error; } });
 
-  await assert.rejects(
-    () => flow.authenticateForOrg({ code: "mz.ige", name: "IGE" }, "citizen@example.mz"),
-    /503/,
-    "the real error surfaces"
-  );
-  assert.deepEqual(deleted, [], "the tracker is preserved");
-  assert.deepEqual(sent, [], "no misleading registration prompt");
-});
-
-test("a genuine not-registered result does send them to register", async () => {
-  const { flow, sent, deleted } = harness({
-    authenticateUser: async () => { throw new NotRegisteredError("no membership for mz.ige"); },
-  });
-
-  const result = await flow.authenticateForOrg({ code: "mz.ige", name: "IGE" }, "citizen@example.mz");
-
-  assert.equal(result, null);
-  assert.deepEqual(deleted, ["840000000"], "the stale tracker entry is cleared");
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].messages[0], /not registered with IGE/);
-  assert.match(sent[0].messages[0], /84\*\*\*\*\*00/, "the number is masked");
+    await assert.rejects(
+      () => flow.authenticateForOrg({ code: "mz.ige", name: "IGE" }, "citizen@example.mz"),
+      (thrown) => thrown === error,
+      "the real error surfaces unchanged"
+    );
+    assert.deepEqual(deleted, [], "the tracker is preserved");
+    assert.deepEqual(sent, [], "and nothing tells the citizen to re-register");
+  }
 });
