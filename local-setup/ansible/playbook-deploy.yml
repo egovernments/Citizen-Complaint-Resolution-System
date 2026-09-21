@@ -3931,12 +3931,35 @@
     #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
     #     so `-b` defeats no_log for the lifetime of the exec — the same reason
     #     the Grafana reset uses --password-from-stdin).
+    # The htpasswd files are root-owned 0640, and nginx reads them from a WORKER, which
+    # runs as the `user` of nginx.conf (www-data on Debian, nginx on RHEL) — not as root.
+    # Without that group on the file every authenticated request answers 500
+    # ("open() .htpasswd-status failed (13: Permission denied)"), and the validate step
+    # below aborts a fresh deploy. Found on a from-scratch box, 2026-09-22.
+    - name: "nginx — resolve the worker user that must read the htpasswd files"
+      ansible.builtin.shell:
+        cmd: awk '$1 == "user" { gsub(";", "", $2); print $2; exit }' /etc/nginx/nginx.conf
+        executable: /bin/bash
+      register: _nginx_worker_user
+      changed_when: false
+      failed_when: false
+      when: ansible_system != "Darwin"
+
+    - name: "nginx — htpasswd group = the worker user's group"
+      ansible.builtin.set_fact:
+        _nginx_htpasswd_group: >-
+          {{ (_nginx_worker_user.stdout | default('') | trim)
+             or ('www-data' if ansible_os_family == 'Debian' else 'nginx') }}
+      when: ansible_system != "Darwin"
+
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
       community.general.htpasswd:
         path: /etc/nginx/.htpasswd-status
         name: "{{ status_basic_auth_user | default('digit-status') }}"
         password: "{{ status_basic_auth_password }}"
         crypt_scheme: bcrypt
+        owner: root
+        group: "{{ _nginx_htpasswd_group }}"
         mode: '0640'
       no_log: true
       when:
@@ -3969,6 +3992,8 @@
         name: "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
         password: "{{ integration_tests_basic_auth_password }}"
         crypt_scheme: bcrypt
+        owner: root
+        group: "{{ _nginx_htpasswd_group }}"
         mode: '0640'
       no_log: true
       when:
