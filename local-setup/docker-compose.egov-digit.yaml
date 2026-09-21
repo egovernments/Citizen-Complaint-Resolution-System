@@ -1807,6 +1807,13 @@ services:
       # pgr-services only EMITS a thin event per transition; routing, recipients, language and
       # rendering are novu-bridge's job now, so the locale / user-preference settings that used
       # to live here moved to the bridge (NOVU_BRIDGE_DEFAULT_LOCALE, NOVU_BRIDGE_PREFERENCE_HOST).
+      # Tenant-admin onboarding (#1999) authenticates through the identity BFF's
+      # session-introspection endpoint. Reuse the BFF's introspection-only
+      # credential by default; either value can still be overridden explicitly.
+      PGR_ONBOARDING_IDENTITY_BFF_URL: ${PGR_ONBOARDING_IDENTITY_BFF_URL:-http://identity-bff:3000}
+      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}
+      # Provisioning-worker lease API credential (internal network only).
+      PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
@@ -1839,6 +1846,123 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Inbound WhatsApp (xstate-chatbot) -- opt-in via the `chatbot` profile
+  # ===========================================================================
+  # The OTHER half of bidirectional WhatsApp. Novu/novu-bridge is outbound only:
+  # it has no webhook receiver, so a citizen's reply reaches nothing. This service
+  # is what Twilio calls directly when someone messages the business number, and it
+  # drives an XState dialog that files and tracks complaints against pgr-services
+  # (source: "whatsapp").
+  #
+  # Off by default. Ansible turns the profile on when `enable_chatbot: true`.
+  # Read docs/2.12/notifications/inbound-whatsapp.md before enabling: the webhook is
+  # necessarily public and unauthenticated at the network layer, so it relies on
+  # Twilio signature validation (TWILIO_VALIDATE_SIGNATURE, on by default).
+  xstate-chatbot-db:
+    image: ${XSTATE_CHATBOT_DB_IMAGE:-egovio/xstate-chatbot-db:nightly-develop}
+    container_name: xstate-chatbot-db
+    profiles: ["chatbot"]
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      # Flyway talks to postgres directly, not through pgbouncer (same convention
+      # as the other *-db migration containers in this file).
+      DB_URL: jdbc:postgresql://postgres:5432/egov
+      SCHEMA_TABLE: xstate_chatbot_schema
+      FLYWAY_USER: ${POSTGRES_USER:-egov}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # /flyway/sql, NOT /flyway/sql/main: the db Dockerfile does
+      # `COPY ./migration/main /flyway/sql`, so the migrations land at the root. Flyway's
+      # failOnMissingLocations defaults to false, so a wrong path applies ZERO migrations
+      # and still exits 0 -- service_completed_successfully is satisfied, the chatbot boots
+      # with REPO_PROVIDER=Postgres against a missing eg_chat_state_v2, and every
+      # conversation fails on its first state write. All 18 other migration containers in
+      # this repo use filesystem:/flyway/sql.
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    networks:
+      - egov-network
+
+  xstate-chatbot:
+    image: ${XSTATE_CHATBOT_IMAGE:-egovio/xstate-chatbot:nightly-develop}
+    container_name: xstate-chatbot
+    restart: unless-stopped
+    profiles: ["chatbot"]
+    depends_on:
+      xstate-chatbot-db:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      pgr-services:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-localization:
+        condition: service_healthy
+    environment:
+      SERVICE_PORT: '8080'
+      CONTEXT_PATH: /xstate-chatbot
+      WHATSAPP_PROVIDER: ${CHATBOT_WHATSAPP_PROVIDER:-Twilio}
+      # Sessions MUST be in Postgres. The code default is InMemory, which loses every
+      # in-flight conversation on restart and breaks outright with >1 replica -- while
+      # still running the migration above and leaving the table unused.
+      REPO_PROVIDER: Postgres
+      # The chatbot ships a SECOND, independent outbound notifier that consumes
+      # update-pgr-request and sends its own templates through ValueFirst. Leaving it on
+      # double-sends every status update (once via Novu, once here) over a provider this
+      # stack does not have. Novu owns outbound; this stays off.
+      KAFKA_CONSUMER_ENABLED: 'false'
+      # Sandbox mode resolves the tenant by emailing tenant-management, which does not
+      # exist in CCRS. Non-sandbox uses ROOT_TENANTID below.
+      ENABLE_SANDBOX_MODE: 'false'
+      ROOT_TENANTID: ${CHATBOT_ROOT_TENANT:-pg}
+      SUPPORTED_LOCALES: ${CHATBOT_SUPPORTED_LOCALES:-en_IN}
+      WHATSAPP_BUSINESS_NUMBER: ${CHATBOT_WHATSAPP_BUSINESS_NUMBER:-}
+      # false keeps location on the MDMS/boundary city -> locality pick-lists. true needs
+      # nlp-engine (NOT deployed in this stack) and a Google Maps key.
+      GEO_SEARCH: ${CHATBOT_GEO_SEARCH:-false}
+      BOUNDARY_HIERARCHY_TYPE: ${CHATBOT_BOUNDARY_HIERARCHY_TYPE:-ADMIN}
+      # Twilio inbound webhook authentication. The endpoint is public by necessity;
+      # the signature is the only thing distinguishing a real citizen from anyone who
+      # guessed the URL. TWILIO_WEBHOOK_BASE_URL pins the origin so a forged
+      # Host/X-Forwarded-Host cannot steer the check.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_FROM:-}
+      TWILIO_VALIDATE_SIGNATURE: ${CHATBOT_VALIDATE_SIGNATURE:-true}
+      TWILIO_WEBHOOK_BASE_URL: ${CHATBOT_WEBHOOK_BASE_URL:-}
+      # Shared secret for POST /reminder (fans out to every active session). Unset
+      # disables the route rather than leaving it open.
+      REMINDER_AUTH_TOKEN: ${CHATBOT_REMINDER_TOKEN:-}
+      # Catch-all dev proxy stays OFF: with it on, every unmatched path is forwarded to
+      # the DIGIT services host, making this publicly-reachable container an open proxy.
+      DEV_PROXY_ENABLED: 'false'
+      EGOV_SERVICES_HOST: http://kong:8000/
+      EXTERNAL_HOST: ${CHATBOT_EXTERNAL_HOST:-http://kong:8000/}
+      USER_SERVICE_HOST: http://kong:8000/
+      LOCALIZATION_SERVICE_HOST: http://kong:8000/
+      MDMS_V2_SEARCH_PATH: mdms-v2/v2/_search
+      # Must equal egov-user's CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE or every citizen
+      # login fails; both default to 123456 on this stack.
+      USER_SERVICE_HARDCODED_PASSWORD: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      DB_HOST: pgbouncer
+      DB_PORT: '5432'
+      DB_NAME: ${POSTGRES_DB:-egov}
+      DB_USER: ${POSTGRES_USER:-egov}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      KAFKA_BOOTSTRAP_SERVER: redpanda:9092
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/xstate-chatbot/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     networks:
       - egov-network
 
@@ -2033,6 +2157,7 @@ services:
       GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}
       GATUS_PROFILE_KEYCLOAK: ${GATUS_PROFILE_KEYCLOAK:-false}
       GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
+      GATUS_PROFILE_CHATBOT: ${GATUS_PROFILE_CHATBOT:-false}
       GATUS_AUDIT: "true"
       GATUS_PROXIES: "true"
       # Watch the monitoring itself (#1613). This is the only compose path that
@@ -2798,18 +2923,16 @@ services:
     networks:
       - egov-network
 
-  # ==================== Keycloak SSO stack (opt-in) ====================
-  # `keycloak` + `token-exchange-svc` add OIDC-based SSO on top of DIGIT
-  # without touching egov-user's OTP flow. Architecture (Option 4 in the
-  # keycloak overlay design doc — no Kong OIDC plugin):
+  # ==================== Organization-aware identity stack (opt-in) ====================
+  # Keycloak authenticates people and owns Organization membership. The BFF
+  # keeps Keycloak tokens server-side, presents an opaque browser session,
+  # projects the selected Organization into a BFF-managed egov-user account,
+  # and returns that person's ordinary tenant-scoped DIGIT token.
   #
-  #   Browser → (OIDC PKCE) → Keycloak → access_token (RS256)
-  #   Browser → /token-exchange/exchange (POSTs the access_token)
-  #   token-exchange-svc → validates JWT against Keycloak JWKS
-  #                      → looks up / creates the matching eg_user via
-  #                        egov-user (using DIGIT_SYSTEM_USERNAME)
-  #                      → mints a DIGIT access_token and returns it
-  #   Browser → uses DIGIT access_token for all downstream API calls
+  #   Browser -> /identity/v1/authorize -> Keycloak -> BFF callback
+  #   Browser -> /identity/v1/tenants -> /contexts/_select
+  #   BFF     -> egov-user create/update/login for the selected tenant
+  #   Browser -> existing DIGIT APIs with the returned DIGIT token
   #
   # Both services are profile-gated — they don't start on a default
   # `docker compose up`. Opt in with `COMPOSE_PROFILES=keycloak`. The
@@ -2824,9 +2947,8 @@ services:
   #      first boot of an empty data dir. Tenants with live DIGIT data
   #      (Bomet/Nairobi) wouldn't get the `keycloak` DB auto-created.
   #      Dedicated container sidesteps the whole problem.
-  # The realm is still rendered per-tenant by the playbook and imported
-  # via kcadm.sh (the `--import-realm` start flag only handles the
-  # static template that ships in the image).
+  # The shared Organizations realm is reconciled after startup by the
+  # repository-owned configure-identity-keycloak.sh script.
   keycloak-postgres:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
@@ -2854,11 +2976,14 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: quay.io/keycloak/keycloak:24.0
+    # Built from backend/identity-bff/keycloak/Dockerfile.magic-link. It pins
+    # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
+    # upstream image only when magic-link authentication is disabled.
+    image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
     container_name: keycloak
     restart: unless-stopped
     profiles: ["keycloak"]
-    command: ["start-dev", "--import-realm"]
+    command: ["start", "--optimized"]
     depends_on:
       keycloak-postgres:
         condition: service_healthy
@@ -2867,61 +2992,35 @@ services:
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KC_DB_PASSWORD:-keycloak}
-      KC_HOSTNAME_STRICT: 'false'
-      KC_HOSTNAME_STRICT_HTTPS: 'false'
       KC_HTTP_ENABLED: 'true'
       KC_HTTP_PORT: '8180'
       KC_PROXY_HEADERS: xforwarded
-      KEYCLOAK_ADMIN: admin
-      # Default-fallback (`admin`) lets the first `docker compose up`
-      # succeed before Ansible has written the OpenBao-sourced strong
-      # password into .env. The Recreate-with-new-env task later in the
-      # playbook then re-applies the real KC_ADMIN_PASSWORD value.
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:18180/auth}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: 'true'
+      KC_HEALTH_ENABLED: 'true'
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      # Ansible writes the OpenBao value before Keycloak's first start. The
+      # fallback is local-development only; bootstrap credentials do not rotate
+      # an admin that already exists in the persisted Keycloak database.
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
     ports:
       - "${BIND_IP:-127.0.0.1}:18180:8180"
-    volumes:
-      # Per-tenant rendered realm goes in here too (written by the
-      # keycloak-bootstrap Ansible block). The shipped template stays
-      # for reference; it's NOT imported automatically because realm
-      # names are tenant-specific.
-      - ./keycloak/realm-template.json:/opt/keycloak/data/import/realm-template.json:ro
     healthcheck:
-      # KC 24 image is UBI minimal — no curl/wget. Use the bash /dev/tcp
-      # trick (KC's start-dev base image has bash + the kc.sh wrapper).
-      # We just check the realm endpoint returns "HTTP/1.1 200" / "HTTP/1.0 200".
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8180 && printf 'GET /realms/master HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200' || exit 1"]
+      # Keycloak's management listener exposes health separately from login.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
-      # `start-dev --import-realm` re-runs the Quarkus augmentation + realm
-      # import on EVERY container start, so cold-start to "Listening on 8180"
-      # is ~120s (measured ~118s on bomet under a full-stack converge). At the
-      # old 60s the container flipped to `unhealthy` mid-startup, and the
-      # converge's `up -d` (services depend_on keycloak: service_healthy) aborted
-      # "dependency failed to start" — which on Linux ends the whole playbook,
-      # silently skipping every later task (configurator build, bootstrap, …).
-      # Keep start_period comfortably above real startup so the container stays
-      # `starting` (not `unhealthy`) until it's actually up. retries×interval
-      # (150s) still catches a genuinely dead keycloak after the grace window.
-      start_period: 180s
+      start_period: 120s
     networks:
       - egov-network
 
-  # token-exchange-svc — bridges a Keycloak access_token to a DIGIT
-  # access_token (and resolves / provisions the matching eg_user).
-  # Source: /root/DIGIT-keycloak-overlay (Dockerfile, TypeScript).
-  # The image is pre-built and pushed to the egovio Docker Hub org; if you
-  # need to rebuild locally, switch from `image:` to a `build:` block
-  # pointing at the overlay repo path.
-  token-exchange-svc:
+  identity-bff:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Pinned to the keycloak-deploy tag on egovio; bump when a versioned
-    # tag is published.
-    image: egovio/token-exchange-svc:keycloak-deploy
-    container_name: token-exchange-svc
+    image: ${IDENTITY_BFF_IMAGE:-egovio/identity-bff:nightly-develop}
+    container_name: identity-bff
     restart: unless-stopped
     profiles: ["keycloak"]
     depends_on:
@@ -2933,55 +3032,61 @@ services:
         condition: service_healthy
     environment:
       PORT: '3000'
-      KEYCLOAK_ISSUER: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}
-      KEYCLOAK_JWKS_URI: http://keycloak:8180/realms/${TOKEN_EXCHANGE_SYSTEM_TENANT}/protocol/openid-connect/certs
-      # KEYCLOAK_ADMIN_URL: base used by the overlay both for admin REST
-      # (/admin/realms/*) AND for the password-grant token endpoint it
-      # forwards to. Defaults to localhost:8180 which breaks inside the
-      # compose network — pin to the in-network service name.
+      KEYCLOAK_ORGANIZATION_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:18180/auth/realms/digit}
+      KEYCLOAK_OIDC_BACKCHANNEL_URL: http://keycloak:8180/realms/${KEYCLOAK_ORGANIZATION_REALM:-digit}
+      KEYCLOAK_JWKS_URI: http://keycloak:8180/realms/${KEYCLOAK_ORGANIZATION_REALM:-digit}/protocol/openid-connect/certs
+      KEYCLOAK_BFF_CLIENT_ID: digit-identity-bff
+      KEYCLOAK_BFF_AUDIENCE: digit-identity-bff
+      KEYCLOAK_BFF_CLIENT_SECRET: ${KEYCLOAK_BFF_CLIENT_SECRET:-dev-only-change-me}
+      KEYCLOAK_MAGIC_LINK_CLIENT_ID: digit-identity-bff-magic-link
+      KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: ${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:-}
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
-      KEYCLOAK_USER_REALM: ${TOKEN_EXCHANGE_SYSTEM_TENANT}
-      # Overlay's KC admin creds default to admin/admin. The real KC
-      # admin password is the strong value from OpenBao (which is also
-      # what the keycloak container itself was created with). Reuse the
-      # same .env variable so the overlay's admin client stays in sync.
-      KEYCLOAK_ADMIN_USERNAME: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
-      # Route through egov-user-proxy on port 8107 (where every other
-      # DIGIT service reaches egov-user from — see kong.yml). The proxy
-      # is on the egov-network too, listens on 8107, and forwards to
-      # the real egov-user container.
-      DIGIT_USER_HOST: http://egov-user-proxy:8107
-      # The DIGIT API gateway that token-exchange-svc forwards authenticated
-      # /kc/* calls to. The keycloak-deploy image defaults DIGIT_GATEWAY_HOST
-      # to the legacy zuul address http://gateway:8080, which does not exist
-      # on a kong-based stack — kong's proxy listens on :8000 and the service
-      # is named `kong`. Without this every /kc/* request 502s with
-      # "getaddrinfo EAI_AGAIN gateway". (CCRS#771-adjacent; the block sets
-      # DIGIT_USER_HOST but historically omitted the gateway host.)
-      DIGIT_GATEWAY_HOST: ${DIGIT_GATEWAY_HOST:-http://kong:8000}
-      # Defaults to ADMIN (which user-seed.sh always creates on a
-      # fresh DIGIT install). On environments where you have a
-      # dedicated INTERNAL_MICROSERVICE_ROLE seeded, override via
-      # host_vars + ansible env. Note: matching DIGIT_SYSTEM_USER_TYPE
-      # below — ADMIN is EMPLOYEE, INTERNAL_MICROSERVICE_ROLE is SYSTEM.
-      DIGIT_SYSTEM_USERNAME: ${TOKEN_EXCHANGE_SYSTEM_USERNAME:-ADMIN}
-      DIGIT_SYSTEM_USER_TYPE: ${TOKEN_EXCHANGE_SYSTEM_USER_TYPE:-EMPLOYEE}
-      # Same first-boot pattern as KEYCLOAK_ADMIN_PASSWORD above —
-      # default lets compose up succeed; Ansible re-applies the real
-      # value from OpenBao after the secrets-to-.env task runs.
-      DIGIT_SYSTEM_PASSWORD: ${TOKEN_EXCHANGE_SYSTEM_PASSWORD:-eGov@123}
-      DIGIT_SYSTEM_TENANT: ${TOKEN_EXCHANGE_SYSTEM_TENANT}
+      KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
+      KEYCLOAK_ADMIN_CLIENT_ID: digit-identity-admin
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-dev-only-change-me}
+      KEYCLOAK_ALLOWED_ORG_ROLE_CLIENTS: digit-ui
+      IDENTITY_REDIRECT_URI: ${IDENTITY_REDIRECT_URI:-http://localhost:5173/identity/v1/callback}
+      IDENTITY_POST_LOGIN_REDIRECT: ${IDENTITY_POST_LOGIN_REDIRECT:-http://localhost:5173/}
+      IDENTITY_ALLOWED_ORIGINS: ${IDENTITY_ALLOWED_ORIGINS:-http://localhost:5173}
+      IDENTITY_AUTH_METHODS: ${IDENTITY_AUTH_METHODS:-[{"id":"password","label":"Email and password","type":"password"}]}
+      IDENTITY_COOKIE_SECURE: ${IDENTITY_COOKIE_SECURE:-false}
+      IDENTITY_COOKIE_SAME_SITE: ${IDENTITY_COOKIE_SAME_SITE:-Lax}
+      IDENTITY_CONTROL_PLANE_TOKEN: ${IDENTITY_CONTROL_PLANE_TOKEN:-dev-only-change-me}
+      IDENTITY_SESSION_INTROSPECTION_TOKEN: ${IDENTITY_SESSION_INTROSPECTION_TOKEN:-dev-only-change-me}
+      IDENTITY_RECONCILE_ON_STARTUP: ${IDENTITY_RECONCILE_ON_STARTUP:-true}
+      IDENTITY_RECONCILIATION_INTERVAL_SECONDS: ${IDENTITY_RECONCILIATION_INTERVAL_SECONDS:-900}
+      IDENTITY_ORGANIZATION_ADMIN_ROLES: TENANT_ADMIN
+      IDENTITY_ORGANIZATION_MEMBER_GROUP: employees
+      DIGIT_USER_SERVICE_URL: http://kong:8000/user
+      DIGIT_USER_LOGOUT_URL: http://egov-user-proxy:8107/user/_logout
+      DIGIT_MDMS_SEARCH_URL: http://kong:8000/mdms-v2/v1/_search
+      DIGIT_ADMIN_USERNAME: ${IDENTITY_DIGIT_ADMIN_USERNAME:-ADMIN}
+      DIGIT_ADMIN_PASSWORD: ${IDENTITY_DIGIT_ADMIN_PASSWORD:-eGov@123}
+      DIGIT_ADMIN_TENANT_ID: ${IDENTITY_DIGIT_ADMIN_TENANT_ID:-pg}
+      DIGIT_ADMIN_USER_TYPE: EMPLOYEE
+      DIGIT_MANAGED_BASE_ROLES: EMPLOYEE
+      DIGIT_MANAGED_ROLE_ALLOWLIST: EMPLOYEE,GRO,PGR_LME,DGRO,CSR,SUPERVISOR,AUTO_ESCALATE,PGR_VIEWER,TICKET_REPORT_VIEWER,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER
+      DIGIT_ROLE_CLIENT_ID: digit-ui
       REDIS_HOST: redis
       REDIS_PORT: '6379'
-      CACHE_PREFIX: keycloak
-      CACHE_TTL_SECONDS: '604800'
+      CACHE_PREFIX: digit-identity
+      ONBOARDING_WORKER_ENABLED: ${IDENTITY_ONBOARDING_WORKER_ENABLED:-false}
+      PGR_ONBOARDING_WORKER_URL: http://pgr-services:8080/pgr-services
+      PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
+      ONBOARDING_TENANT_ADMIN_GROUP: tenant-admins
+      ONBOARDING_TENANT_ADMIN_ROLES: TENANT_ADMIN,GRO,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER
+      DIGIT_PROVISIONER_USERNAME: ${IDENTITY_DIGIT_PROVISIONER_USERNAME:-}
+      DIGIT_PROVISIONER_PASSWORD: ${IDENTITY_DIGIT_PROVISIONER_PASSWORD:-}
+      DIGIT_PROVISIONER_TENANT_ID: ${IDENTITY_DIGIT_PROVISIONER_TENANT_ID:-}
+      DIGIT_MDMS_CREATE_URL: http://kong:8000/mdms-v2/v2/_create
+      DIGIT_MDMS_V2_SEARCH_URL: http://kong:8000/mdms-v2/v2/_search
+      DIGIT_MDMS_SCHEMA_SEARCH_URL: http://kong:8000/mdms-v2/schema/v1/_search
+      DIGIT_MDMS_SCHEMA_CREATE_URL: http://kong:8000/mdms-v2/schema/v1/_create
+      DIGIT_FOUNDATION_SOURCE_TENANT: ${IDENTITY_FOUNDATION_SOURCE_TENANT:-pg}
+      DIGIT_ENC_GENERATE_KEY_URL: http://egov-enc-service:1234/egov-enc-service/crypto/v1/_generatekey
     ports:
-      # Host port 18200 is already taken by OpenBao on the existing
-      # bomet/nairobi deployments — use 18300 instead. The nginx
-      # /token-exchange/ location proxies to this port; if you change
-      # it here, update the ansible nginx template too.
-      - "${BIND_IP:-127.0.0.1}:18300:3000"
+      - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s

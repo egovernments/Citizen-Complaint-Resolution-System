@@ -84,6 +84,11 @@ KONG_ONLY_AUTH_OPTIONAL = {
     # does not route novu-bridge at all.
     "/novu-bridge/novu-adapter/v1/config/source",
     "/novu-bridge/novu-adapter/v1/dispatch/_resolve",
+    # Inbound WhatsApp webhooks (#1992). Compose-only: the Spring gateway has no
+    # xstate-chatbot route, so there is nothing to mirror into env.yaml. Twilio cannot
+    # present a DIGIT token; these are authenticated by X-Twilio-Signature in-service.
+    "/xstate-chatbot/message",
+    "/xstate-chatbot/status",
 }
 # NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
 # (the internal SMSCountry send adapter Novu's worker calls over the container

@@ -38,11 +38,11 @@ import {
   Map,
   Globe2,
   CalendarClock,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import DocsPane from '@/components/layout/DocsPane';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -216,9 +216,8 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     <div className="h-screen overflow-hidden bg-background flex">
       {/* Sidebar */}
       <aside
-        className={`${
-          sidebarCollapsed ? 'w-16' : 'w-64'
-        } bg-card border-r border-border flex flex-col transition-all duration-200 h-full`}
+        className={`${sidebarCollapsed ? 'w-16' : 'w-64'
+          } bg-card border-r border-border flex flex-col transition-all duration-200 h-full`}
       >
         {/* Sidebar Header — DIGIT Admin Console branding */}
         <div className="h-16 border-b border-border flex items-center px-4 gap-2">
@@ -358,10 +357,9 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               }}
               className={`
                 w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                ${
-                  location.pathname === '/manage/advanced'
-                    ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                ${location.pathname === '/manage/advanced'
+                  ? 'bg-primary/10 text-primary border-l-2 border-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }
               `}
               title={sidebarCollapsed ? translate('app.nav.advanced') : undefined}
@@ -387,10 +385,9 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                       onClick={() => navigate(item.path)}
                       className={`
                         w-full flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-left
-                        ${
-                          isActive
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        ${isActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         }
                       `}
                     >
@@ -493,14 +490,25 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           {children}
         </main>
 
-        {/* Powered by DIGIT (CCRS#1841) */}
-        <footer className="flex-shrink-0 flex items-center justify-center border-t border-border bg-card py-2">
+        {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
+        <footer className="flex-shrink-0 flex items-center justify-between border-t border-border bg-card px-6 py-2">
+          <div className="flex-1" />
           <DigitFooter />
+          <div className="flex-1 flex justify-end">
+            <a
+              href="https://docs.digit.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              {translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })}
+            </a>
+          </div>
         </footer>
+
       </div>
 
-      {/* Documentation Pane */}
-      <DocsPane />
     </div>
   );
 }

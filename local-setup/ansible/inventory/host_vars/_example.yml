@@ -419,6 +419,69 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# ────────── Inbound WhatsApp — xstate-chatbot (#1992) ──────────
+#
+# The OTHER half of bidirectional WhatsApp. enable_novu above gives you OUTBOUND
+# (complaint updates pushed to the citizen, via Novu -> Twilio). Novu has no webhook
+# receiver, so a citizen's reply reaches nothing. This flag adds INBOUND: Twilio calls
+# the chatbot directly and the citizen can FILE and TRACK complaints by messaging the
+# business number. The two are independent — you can run either alone.
+#
+# Adds 2 containers (xstate-chatbot + a one-shot Flyway migration).
+#
+# BEFORE ENABLING, read docs/2.12/notifications/inbound-whatsapp.md. In particular the
+# webhook is public by necessity (Twilio cannot present a DIGIT token), so it is
+# authenticated by Twilio signature validation — keep chatbot_validate_signature on and
+# set twilio_auth_token, or every inbound message is rejected.
+#
+# Workflow:
+#   1. Set twilio_account_sid / twilio_auth_token / twilio_whatsapp_from (shared with
+#      the Novu outbound bootstrap — same Twilio account serves both directions).
+#   2. enable_chatbot: true, then ./deploy.sh <tenant>.
+#   3. In the Twilio Console set the sender's inbound webhook to
+#         https://<domain>/xstate-chatbot/message        (HTTP POST)
+#      and the status callback to
+#         https://<domain>/xstate-chatbot/status         (HTTP POST)
+enable_chatbot: false
+
+# Tenant complaints filed over WhatsApp are recorded against. Must be a tenant whose
+# ComplaintHierarchy and boundaries are seeded. Defaults to the deployment's state_root.
+# chatbot_root_tenant: "pg"
+
+# Your WhatsApp sender in national form, digits only, no '+'. Used to build the
+# city/locality deep links. Blank omits them -- there is deliberately no built-in
+# default, because the old one was an eGov demo number that would otherwise appear in
+# citizen-facing links.
+#
+# This is SEPARATE from twilio_whatsapp_from, which is the Twilio sender address and
+# keeps its repo-wide `whatsapp:+<E164>` form (the Novu outbound bootstrap consumes the
+# same variable). The chatbot normalises that prefix itself, so either form works there.
+# chatbot_whatsapp_business_number: ""
+
+# false (recommended) uses the MDMS/boundary city -> locality pick-lists.
+# true needs nlp-engine — NOT deployed in this stack — plus a Google Maps key.
+# chatbot_geo_search: false
+
+# Boundary hierarchy complaints are filed against. Named per deployment; not always ADMIN.
+# chatbot_boundary_hierarchy_type: "ADMIN"
+
+# Public origin Twilio was pointed at, used to verify the request signature. Defaults to
+# this tenant's own https://<domain>. Override only when TLS terminates on a different
+# hostname than `domain`.
+# chatbot_webhook_base_url: ""
+
+# Leave true. false disables Twilio signature validation, which makes the public webhook
+# forgeable by anyone who learns the URL — local console testing only.
+# chatbot_validate_signature: true
+
+# Shared secret for POST /xstate-chatbot/reminder, which fans a message out to EVERY
+# active session. Blank disables the route entirely (the safe default).
+# chatbot_reminder_token: ""
+
+# Image pins. Default to the nightly-develop builds published by CI.
+# chatbot_image: "egovio/xstate-chatbot:nightly-develop"
+# chatbot_db_image: "egovio/xstate-chatbot-db:nightly-develop"
+
 # Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
 # under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
 # Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
@@ -561,28 +624,60 @@ novu_bridge_smscountry_password: ""
 # novu_node_env: "production"
 
 # ────────── Keycloak SSO (opt-in) ──────────
-# Adds 2 containers (keycloak + token-exchange-svc) plus the host
-# nginx /auth/ and /token-exchange/ location blocks. Inert in the
-# rest of the stack — DIGIT keeps booting fine with OTP login. The UI
-# only switches to the Keycloak code path when auth_provider:
-# 'keycloak'; the cutover is intentionally a separate PR.
+# Adds Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
+# and /identity/v1/; internal provisioning routes stay on the Docker network.
 #
 # Workflow when enable_keycloak: true:
-#   1. First deploy creates the `keycloak` Postgres DB (via the
-#      first-boot init script), starts the keycloak + token-exchange
-#      containers, and the playbook's keycloak-bootstrap block
-#      imports a per-tenant realm rendered from
-#      local-setup/keycloak/realm-template.json. Realm name =
-#      state_tenant_id.
-#   2. (Optional) set keycloak_google_client_id +
-#      keycloak_google_client_secret to add Google as a federated IdP.
-#   3. Flip auth_provider: 'keycloak' (in a follow-up PR) to switch
-#      the SPA's auth-adapter to OIDC PKCE.
+#   1. The deploy creates one shared realm (`digit` by default) with
+#      Organizations enabled and configures confidential BFF/admin clients.
+#   2. Each DIGIT tenant maps to a Keycloak Organization in that realm.
+#   3. The frontend uses /identity/v1; it never receives a Keycloak token.
+#
+# Secrets: `keycloak_admin_password` must be set in OpenBao (the deploy fails
+# closed without it — an empty value makes compose fall back to the literal
+# `admin`). The six identity secrets — keycloak_bff_client_secret,
+# keycloak_magic_link_client_secret, keycloak_admin_client_secret,
+# identity_control_plane_token, identity_session_introspection_token and
+# pgr_onboarding_worker_token — are generated independently on first deploy
+# and stored in OpenBao, so none of them is derivable from another. Read one
+# back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
+# `bao kv put`, and the next deploy pushes it into Keycloak.
 enable_keycloak: false
+keycloak_organization_realm: "digit"
+identity_bff_image: ""
+identity_keycloak_image: ""
+identity_post_login_redirect: ""       # default: this deployment's origin + /
+identity_allowed_origins: ""           # comma-separated; default: this origin
+identity_auth_methods: '[{"id":"password","label":"Email and password","type":"password"}]'
+identity_magic_link_enabled: false
+identity_reconcile_on_startup: true
+identity_reconciliation_interval_seconds: 900
+identity_onboarding_worker_enabled: false # requires the PGR workload routes
+identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
+identity_digit_admin_tenant_id: "pg"
+identity_digit_provisioner_username: "" # optional MDMS_ADMIN for tenant foundation
+identity_digit_provisioner_tenant_id: ""
+identity_foundation_source_tenant: "pg"
+identity_smtp_host: ""
+identity_smtp_port: 587
+identity_smtp_from: ""
+identity_smtp_from_display_name: "DIGIT Identity"
+identity_smtp_auth: true
+identity_smtp_user: ""
+identity_smtp_ssl: false
+identity_smtp_starttls: true
 
-# 'keycloak' = SSO via the auth-adapter. '' (default) keeps OTP login.
-# Don't flip this until the realm is imported and the operator has
-# verified a successful test login via /auth/realms/<realm>/account.
+# MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak' on any
+# of the three keys below.
+#
+# 'keycloak' used to mean "SSO via the digit-ui auth-adapter", which called the
+# `/kc` token-exchange route against a per-tenant realm's `digit-ui` client.
+# #2088 removed all three in favour of the Identity BFF at /identity/v1, and
+# the frontend cutover onto that BFF is a separate change. Until it lands,
+# 'keycloak' here means a 404 at login, so the preflight fails instead.
+#
+# `enable_keycloak: true` is independent of this and is what actually stands
+# up Keycloak, the Identity BFF and /identity/v1.
 auth_provider: ""
 
 # Per-surface override (digit-ui-esbuild resolves these post-#793):
@@ -595,15 +690,17 @@ auth_provider: ""
 # citizen_auth_provider: ""
 # employee_auth_provider: ""
 
-# OIDC public client id in the per-tenant realm. The realm template
-# ships `digit-ui`; only change this if you've forked the template
-# and added a different client.
+# OIDC public client id the frontends bake in. Inert while auth_provider is
+# '' — the per-tenant realm and its `digit-ui` client were removed with the
+# legacy login path (see auth_provider above); this key is kept so the
+# frontend cutover has somewhere to point.
 keycloak_client_id: "digit-ui"
 
 # Federated Google login (optional). Leave blank to skip Google IdP
 # wiring entirely. When set, the bootstrap will register a Google
 # identity-provider in the realm during deploy.
 keycloak_google_client_id: ""
+keycloak_github_client_id: ""
 
 # Init the nairobi-mdms git submodule on the controller. The submodule
 # lives in a separate repo and isn't auto-fetched on clone — turn this
@@ -724,9 +821,8 @@ grafana_anonymous_enabled: false
 # bootstrap_tenant: "pg"                # tenant those calls authenticate against
 # notif_seed_user: "ADMIN"              # notification seeder, same defaults
 # notif_seed_pass: "eGov@123"
-# token_exchange_system_username: "ADMIN"    # account the Keycloak token exchange impersonates
-# token_exchange_system_user_type: "EMPLOYEE"
-#   (its password is bootstrap_secrets.token_exchange_system_password, below)
+# The BFF's DIGIT admin username/tenant are configured in the identity block
+# above; its password belongs in bootstrap_secrets.identity_digit_admin_password.
 # novu_admin_email: "admin@digit.local"      # Novu's own first-run account
 # novu_admin_password: "Digit@12345"
 # novu_org_name: "DIGIT"
@@ -945,7 +1041,7 @@ nginx_features:
                              # status_basic_auth_password (the deploy asserts).
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
-  keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
+  keycloak: false            # /auth/ + /identity/v1/ — requires enable_keycloak: true
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
@@ -1043,4 +1139,9 @@ bootstrap_secrets:
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
-  token_exchange_system_password: "CHANGE_ME"  # DIGIT system user the exchange impersonates
+  keycloak_github_client_secret: ""         # only if keycloak_github_client_id is set
+  # BFF account-management credential. The legacy key remains a migration
+  # fallback; new environments should set identity_digit_admin_password.
+  identity_digit_admin_password: "CHANGE_ME"
+  identity_digit_provisioner_password: ""
+  identity_smtp_password: ""

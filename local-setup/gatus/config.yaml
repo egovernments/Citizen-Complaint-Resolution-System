@@ -357,10 +357,10 @@ endpoints:
     alerts:
       - type: slack
 
-  - name: Token Exchange Service
+  - name: Identity BFF
     group: Keycloak
     enabled: ${GATUS_PROFILE_KEYCLOAK}
-    url: "http://token-exchange-svc:3000/healthz"
+    url: "http://identity-bff:3000/readyz"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -418,6 +418,14 @@ endpoints:
       - "[STATUS] == 200"
     alerts:
       - type: slack
+
+  - name: XState Chatbot (inbound WhatsApp)
+    group: Notifications
+    enabled: ${GATUS_PROFILE_CHATBOT}
+    url: "http://xstate-chatbot:8080/xstate-chatbot/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
 
   - name: Config Service
     group: Notifications
