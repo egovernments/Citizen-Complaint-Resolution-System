@@ -23,9 +23,11 @@ import java.util.List;
 final class ContractResources {
 
     static final String SCHEMA = "contract/envelope-v1.schema.json";
+    static final String THIN_SCHEMA = "contract/thin-event-v1.schema.json";
     static final String OPENAPI = "contract/openapi.yaml";
     static final String ERROR_CODES = "contract/error-codes.txt";
     static final String EXAMPLES_DIR = "contract/examples";
+    static final String THIN_EXAMPLES_DIR = "contract/examples/thin";
 
     /** Relative to the module root, which is the working directory when Maven runs the tests. */
     private static final Path PACKAGED_ROOT = Paths.get("src", "main", "resources", "contract");
@@ -49,9 +51,23 @@ final class ContractResources {
         }
     }
 
-    /** The five example payloads, by file name, read from the packaged copy. */
+    /**
+     * The envelope example payloads, by file name, read from the packaged copy.
+     *
+     * <p>Non-recursive on purpose: the thin-event examples live in the {@code thin/}
+     * subdirectory precisely so that a listing of envelope examples cannot pick one up and
+     * validate it against the wrong schema. Two kinds, two folders, one listing each.
+     */
     static List<String> exampleNames() {
-        Path dir = PACKAGED_ROOT.resolve("examples");
+        return jsonFileNames(PACKAGED_ROOT.resolve("examples"));
+    }
+
+    /** The thin-event example payloads, by file name, read from the packaged copy. */
+    static List<String> thinExampleNames() {
+        return jsonFileNames(PACKAGED_ROOT.resolve("examples").resolve("thin"));
+    }
+
+    private static List<String> jsonFileNames(Path dir) {
         if (!Files.isDirectory(dir)) {
             throw new IllegalStateException(dir.toAbsolutePath() + " is missing");
         }

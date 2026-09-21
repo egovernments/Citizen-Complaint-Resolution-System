@@ -64,6 +64,24 @@ public class DispatchPipelineService {
     }
 
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo) {
+        return process(event, send, requestInfo, null);
+    }
+
+    /**
+     * The same pipeline, told which inbound kind produced this envelope.
+     *
+     * <p>The three-argument method above is the pre-rendered path and is unchanged in every
+     * observable way: it passes {@code null}, which the repository writes as {@code PRERENDERED},
+     * exactly as it did when no such column existed. The resolution stage passes
+     * {@code RESOLVED}, so every row it causes says on its face which half of the box produced
+     * it — which is how "is this deployment on the thin path" is answered per message, in
+     * production, by looking at one column, rather than by reading a config that may have been
+     * dropped from an overlay.
+     *
+     * @param sourcePath {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered
+     */
+    public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
+                                  String sourcePath) {
         log.info("Processing pre-rendered domain event: eventId={}, eventName={}, tenant={}, channel={}, send={}",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
@@ -72,11 +90,12 @@ public class DispatchPipelineService {
         try {
             envelopeValidator.validate(event);
         } catch (CustomException ce) {
-            persistRejected(event, null, ce.getCode(), ce.getMessage());
+            persistRejected(event, null, ce.getCode(), ce.getMessage(), sourcePath);
             throw ce;
         }
 
         DerivedContext context = deriveContext(event);
+        context.setSourcePath(sourcePath);
         String subscriberId = event.getSubscriberId();   // validator guarantees it
         context.setSubscriberId(subscriberId);
 
@@ -313,6 +332,7 @@ public class DispatchPipelineService {
                 .lastErrorCode(errorCode)
                 .lastErrorMessage(errorMessage)
                 .providerResponse(providerResponse)
+                .sourcePath(context.getSourcePath())
                 .createdTime(System.currentTimeMillis())
                 .lastModifiedTime(System.currentTimeMillis())
                 .build());
@@ -324,7 +344,7 @@ public class DispatchPipelineService {
      * be written down; nothing is invented beyond the literal {@code unknown} markers.
      */
     private void persistRejected(NotificationEvent event, DerivedContext context,
-                                 String errorCode, String errorMessage) {
+                                 String errorCode, String errorMessage, String sourcePath) {
         String channel = firstNonBlank(context != null ? context.getChannel() : null, event.getChannel(), "UNKNOWN");
         String eventId = firstNonBlank(event.getEventId(), "unknown");
         Contact c = event.getContact();
@@ -348,6 +368,7 @@ public class DispatchPipelineService {
                 .attemptCount(1)
                 .lastErrorCode(errorCode)
                 .lastErrorMessage(errorMessage)
+                .sourcePath(sourcePath)
                 .createdTime(now)
                 .lastModifiedTime(now)
                 .build());

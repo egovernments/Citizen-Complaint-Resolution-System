@@ -41,6 +41,26 @@ public class ConfigurationSanityCheck {
         if (Boolean.TRUE.equals(config.getChannelPolicyEnabled()) && !StringUtils.hasText(config.getMdmsHost())) {
             fatal.add("novu.bridge.channel.policy.enabled=true but novu.bridge.mdms.host is blank");
         }
+        // The resolution stage reads all four config masters over MDMS v2. With no host, every
+        // thin event resolves to no routing and is SKIPPED — a tenant-wide silent outage that
+        // looks like missing config rather than missing configuration.
+        if (!StringUtils.hasText(config.getMdmsHost()) || !StringUtils.hasText(config.getMdmsSearchPath())) {
+            fatal.add("novu.bridge.mdms.host/search.path is blank — the resolution stage could read no "
+                    + "routing, template or catalogue row, and EVERY thin event would be SKIPPED/NB_NO_ROUTING");
+        }
+        if (!StringUtils.hasText(config.getNotificationConfigNamespace())) {
+            fatal.add("novu.bridge.notifications.namespace is blank — every config master would be "
+                    + "read at the schema code '.Routing' and match nothing");
+        }
+        if (config.getNotificationRecipientCap() == null || config.getNotificationRecipientCap() < 1) {
+            fatal.add("novu.bridge.notifications.recipient.cap must be at least 1; at "
+                    + config.getNotificationRecipientCap() + " every fan-out would be refused");
+        }
+        if (config.getNotificationConfigPageSize() == null || config.getNotificationConfigPageSize() < 1
+                || config.getNotificationConfigMaxPages() == null || config.getNotificationConfigMaxPages() < 1) {
+            fatal.add("novu.bridge.notifications.page.size/max.pages must both be at least 1; "
+                    + "otherwise no config row is ever read");
+        }
 
         boolean anyEnvChannel = config.getChannelsEnabled() != null
                 && config.getChannelsEnabled().stream().anyMatch(StringUtils::hasText);
@@ -49,6 +69,15 @@ public class ConfigurationSanityCheck {
         }
         if (config.isChannelEnabled("WHATSAPP") && !StringUtils.hasText(config.getWhatsappIntegrationId())) {
             warn.add("WHATSAPP is enabled without novu.bridge.integration.id.whatsapp — triggers will use Novu's PRIMARY sms integration, which is usually the plain-SMS sender");
+        }
+        if (!StringUtils.hasText(config.getUserHost()) || !StringUtils.hasText(config.getUserSearchPath())) {
+            warn.add("novu.bridge.user.host/search.path is blank — no role pool can be expanded and no "
+                    + "actor hydrated, so a ROLE audience resolves to nobody. Only a producer that "
+                    + "puts contacts on the event itself still works");
+        }
+        if (!StringUtils.hasText(config.getLocalizationHost())) {
+            warn.add("novu.bridge.localization.host is blank — placeholder values sent as localization "
+                    + "codes will never resolve, and those tokens will ship as literal braces");
         }
         if (!StringUtils.hasText(config.getSmsCountryAdapterUrl())) {
             warn.add("novu.bridge.smscountry.adapter.url is blank — an SMSCountry provider added from the "

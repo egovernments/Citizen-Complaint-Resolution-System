@@ -69,7 +69,11 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
     private static final Set<String> ADMIN_ONLY_PATHS = Set.of(
             NAMESPACE + "/providers",
             NAMESPACE + "/providers/_update",
-            NAMESPACE + "/providers/_delete");
+            NAMESPACE + "/providers/_delete",
+            // _resolve expands role pools and answers with rendered bodies and filled contact
+            // blocks — recipient PII for every holder of a role. The Logs screen's read tier is
+            // deliberately broader than that.
+            NAMESPACE + "/dispatch/_resolve");
 
     /** A resolved token: when it expires, and the role codes egov-user reported for it. */
     private static final class CachedUser {
@@ -117,7 +121,8 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (path.startsWith("/novu-adapter/v1/contract")) {
             return true;
         }
-        return !(path.startsWith("/novu-adapter/v1/logs")
+        return !(path.startsWith("/novu-adapter/v1/config")
+                || path.startsWith("/novu-adapter/v1/logs")
                 || path.startsWith("/novu-adapter/v1/integrations")
                 || path.startsWith("/novu-adapter/v1/preferences")
                 || path.startsWith("/novu-adapter/v1/providers")
@@ -217,12 +222,20 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
                 || containsAny(roles, config.getProxyAdminRoles());
     }
 
-    /** POST to one of the three credential-bearing/destructive provider paths. */
+    /** POST to one of the credential-bearing, destructive or PII-expanding paths. */
     private static boolean requiresAdmin(HttpServletRequest request) {
         if (!HttpMethod.POST.matches(request.getMethod())) {
             return false;
         }
-        return ADMIN_ONLY_PATHS.contains(normalize(pathOf(request)));
+        return isAdminOnly(pathOf(request));
+    }
+
+    /**
+     * Whether a path is on the admin tier. Exposed so a test can state which endpoints are, and
+     * which deliberately are not, rather than re-listing them and drifting from the set above.
+     */
+    public static boolean isAdminOnly(String path) {
+        return ADMIN_ONLY_PATHS.contains(normalize(path));
     }
 
     /**

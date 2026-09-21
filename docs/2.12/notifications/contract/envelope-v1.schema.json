@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://digit.org/schemas/notifications/envelope-v1.schema.json",
   "title": "novu-bridge notification envelope, version 1",
-  "description": "The ONE inbound contract of the notification subsystem: a fully-rendered message for a single recipient on a single channel, published on Kafka. The producing module resolves the recipient, picks the template, fills it and localizes it; the bridge only gates, delivers and records. The envelope names no business domain: `module`, `entityType`, `entityId` and `data` are the producer's own vocabulary and the bridge reads them only for the ledger.\n\nThis schema is enforced by org.egov.novubridge.service.EnvelopeValidator. `required` below is exactly the set that validator enforces; EnvelopeContractSchemaTest fails the build if the two drift.",
+  "description": "The PRE-RENDERED inbound contract of the notification subsystem: a fully-rendered message for a single recipient on a single channel, published on Kafka. The producing module resolves the recipient, picks the template, fills it and localizes it; the bridge only gates, delivers and records. The envelope names no business domain: `module`, `entityType`, `entityId` and `data` are the producer's own vocabulary and the bridge reads them only for the ledger.\n\nThere is now a second inbound kind, the thin domain event (`thin-event-v1.schema.json`), where the producer says only what happened and the box decides the rest. The two are told apart by the optional `kind` discriminator, never by sniffing the shape: `kind` ABSENT or `RENDERED` is this schema, `kind: \"THIN\"` is the other one. Absent is the historical and still-correct form — adding an optional field is not a version change — so every v1 producer written before the thin event existed is untouched and stays untouched.\n\nThis schema is enforced by org.egov.novubridge.service.EnvelopeValidator. `required` below is exactly the set that validator enforces; EnvelopeContractSchemaTest fails the build if the two drift, and EnvelopeV1FrozenTest fails the build if this file changes at all without that being a deliberate act.",
   "type": "object",
   "required": [
     "eventId",
@@ -16,6 +16,12 @@
   "additionalProperties": true,
   "$comment": "additionalProperties is true because the consumer really tolerates unknown keys: DomainEventConsumer deserializes with Jackson's FAIL_ON_UNKNOWN_PROPERTIES disabled, so an extra field is IGNORED — accepted, not stored, not forwarded. Do not rely on one surviving; put anything the ledger should see in `data`.",
   "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["RENDERED"],
+      "description": "OPTIONAL discriminator, and the only value this schema accepts. Omit it — that is what every v1 producer does and what the bridge assumes when the field is absent. State it only if you want the choice to be explicit on the wire. `kind: \"THIN\"` is a different contract entirely (`thin-event-v1.schema.json`) and is NOT an envelope: the bridge reads this field off the raw map before binding and routes to the resolution stage instead. Nothing else is accepted for either kind.",
+      "examples": ["RENDERED"]
+    },
     "schemaVersion": {
       "type": "string",
       "enum": ["1"],

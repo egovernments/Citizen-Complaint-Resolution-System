@@ -16,10 +16,15 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-tenant channel policy, read from the MDMS master
- * {@code RAINMAKER-PGR.NotificationChannel} at the tenant's STATE root
- * ({@code ke.bomet} → {@code ke}), cached with a short TTL. One row per channel:
- * {@code {code, enabled, gateway, senderId, provider, active}}.
+ * Per-tenant channel policy, read from the MDMS master {@code NOTIFICATIONS.Channel} at the
+ * tenant's STATE root ({@code ke.bomet} → {@code ke}), cached with a short TTL. One row per
+ * channel: {@code {code, enabled, gateway, senderId, provider, active}}.
+ *
+ * <p>A tenant with NO rows there falls back, automatically and per tenant, to the pre-move
+ * {@code RAINMAKER-PGR.NotificationChannel} master — the shape is unchanged, only the namespace
+ * moved — so a server upgraded before the seeder copied its config keeps working. There is no
+ * setting that chooses between them; the data chooses, and
+ * {@code GET /novu-adapter/v1/config/source} reports which answered.
  *
  * <p>{@code provider} (optional) is the Novu integration <em>identifier</em> of the ONE
  * configured provider that is active for this channel — written by the configurator's
@@ -72,6 +77,7 @@ public class ChannelPolicyClient {
     private final NovuBridgeConfiguration config;
     private final Map<String, Timed> cache = new ConcurrentHashMap<>();
     private final Set<String> fallbackLogged = ConcurrentHashMap.newKeySet();
+    private final Set<String> legacyLogged = ConcurrentHashMap.newKeySet();
 
     public ChannelPolicyClient(@Nullable RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -165,8 +171,9 @@ public class ChannelPolicyClient {
         Map<String, ChannelSetting> rows = rowsFor(stateTenant);
         if (rows.isEmpty()) {
             if (stateTenant != null && fallbackLogged.add(stateTenant)) {
-                log.info("No RAINMAKER-PGR.NotificationChannel rows at tenant {} — using the env fallback "
-                        + "(novu.bridge.channels.enabled / sms.provider) until the master is seeded", stateTenant);
+                log.info("No {} rows (nor legacy {}) at tenant {} — using the env fallback "
+                                + "(novu.bridge.channels.enabled / sms.provider) until the master is seeded",
+                        config.getChannelPolicySchema(), config.getChannelPolicyLegacySchema(), stateTenant);
             }
             return Optional.empty();
         }
@@ -188,7 +195,20 @@ public class ChannelPolicyClient {
         long ttl = config.getChannelPolicyCacheTtlMs() != null ? config.getChannelPolicyCacheTtlMs() : 60_000L;
         Timed cached = cache.get(stateTenant);
         if (cached != null && cached.fresh(ttl)) return cached.rows;
-        Map<String, ChannelSetting> fetched = fetch(stateTenant);
+        Map<String, ChannelSetting> fetched = fetch(stateTenant, config.getChannelPolicySchema());
+        if (fetched.isEmpty() && StringUtils.hasText(config.getChannelPolicyLegacySchema())
+                && !config.getChannelPolicyLegacySchema().equals(config.getChannelPolicySchema())) {
+            // Per-tenant fallback to the pre-move namespace, for a server upgraded to this image
+            // before the seeder copied its config. All-or-nothing and automatic: there is no
+            // setting that chooses, so no overlay can flip it, and /config/source says which
+            // namespace answered.
+            fetched = fetch(stateTenant, config.getChannelPolicyLegacySchema());
+            if (!fetched.isEmpty() && legacyLogged.add(stateTenant)) {
+                log.info("Tenant {} has no {} rows — serving channel policy from the legacy {} master. "
+                                + "Run `./deploy.sh <tenant> --tags notifications` to copy them.",
+                        stateTenant, config.getChannelPolicySchema(), config.getChannelPolicyLegacySchema());
+            }
+        }
         if (!fetched.isEmpty()) {
             cache.put(stateTenant, new Timed(fetched));
             return fetched;
@@ -197,11 +217,11 @@ public class ChannelPolicyClient {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, ChannelSetting> fetch(String stateTenant) {
+    private Map<String, ChannelSetting> fetch(String stateTenant, String schemaCode) {
         try {
             Map<String, Object> criteria = new LinkedHashMap<>();
             criteria.put("tenantId", stateTenant);
-            criteria.put("schemaCode", config.getChannelPolicySchema());
+            criteria.put("schemaCode", schemaCode);
             criteria.put("isActive", true);
             criteria.put("limit", 100);
             criteria.put("offset", 0);
@@ -235,7 +255,8 @@ public class ChannelPolicyClient {
             }
             return out;
         } catch (Exception e) {
-            log.warn("Channel policy lookup failed for tenant {} ({}); serving stale/fallback", stateTenant, e.getMessage());
+            log.warn("Channel policy lookup failed for tenant {} schema {} ({}); serving stale/fallback",
+                    stateTenant, schemaCode, e.getMessage());
             return Map.of();
         }
     }

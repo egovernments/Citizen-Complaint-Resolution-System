@@ -27,20 +27,36 @@ class ContractResourceSyncTest {
     }
 
     @Test
+    @DisplayName("the packaged thin-event schema and the published thin-event schema are byte-identical")
+    void thinEventSchemaCopiesAgree() {
+        assertCopiesAgree("thin-event-v1.schema.json", ContractResources.THIN_SCHEMA);
+    }
+
+    @Test
     @DisplayName("the packaged OpenAPI and the published OpenAPI are byte-identical")
     void openApiCopiesAgree() {
         assertCopiesAgree("openapi.yaml", ContractResources.OPENAPI);
     }
 
     @Test
-    @DisplayName("every published example is packaged, byte for byte")
+    @DisplayName("every published envelope example is packaged, byte for byte")
     void exampleCopiesAgree() {
+        assertExampleCopiesAgree("examples/", ContractResources.EXAMPLES_DIR, ContractResources.exampleNames());
+    }
+
+    @Test
+    @DisplayName("every published thin-event example is packaged, byte for byte")
+    void thinExampleCopiesAgree() {
+        assertExampleCopiesAgree("examples/thin/", ContractResources.THIN_EXAMPLES_DIR,
+                ContractResources.thinExampleNames());
+    }
+
+    private static void assertExampleCopiesAgree(String publishedDir, String packagedDir, List<String> names) {
         Assumptions.assumeTrue(ContractResources.publishedContractPresent(), skipReason());
-        List<String> names = ContractResources.exampleNames();
         for (String name : names) {
-            String published = ContractResources.published("examples/" + name);
-            assertEquals(published, ContractResources.packaged(ContractResources.EXAMPLES_DIR + "/" + name),
-                    "examples/" + name + " differs between docs/ and the jar — edit both");
+            String published = ContractResources.published(publishedDir + name);
+            assertEquals(published, ContractResources.packaged(packagedDir + "/" + name),
+                    publishedDir + name + " differs between docs/ and the jar — edit both");
         }
     }
 

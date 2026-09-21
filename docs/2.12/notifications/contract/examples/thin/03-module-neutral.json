@@ -1,0 +1,29 @@
+{
+  "kind": "THIN",
+  "eventId": "11111111-2222-3333-4444-555555555555",
+  "eventType": "XYZ_LICENCE_EVENT",
+  "eventTime": "2026-09-21T08:02:17.900Z",
+  "producer": "xyz-services",
+  "module": "XYZ",
+  "eventName": "XYZ.LICENCE.RENEWED",
+  "entityType": "LICENCE",
+  "entityId": "XYZ-LIC-2026-0042",
+  "tenantId": "ke.bomet",
+  "transactionSeed": "XYZ-LIC-2026-0042:RENEWED",
+  "actors": {
+    "holder": { "userId": "2c4e6a80-1111-4222-8333-944455556666", "type": "CITIZEN" }
+  },
+  "data": {
+    "licence_no": "XYZ-LIC-2026-0042",
+    "valid_until": "31/12/2027",
+    "trade_name": "Otieno Hardware",
+    "holder_name": "Amina Otieno"
+  },
+  "localized": {
+    "licence_status": "XYZ_LICENCE_ACTIVE"
+  },
+  "localizationModules": ["rainmaker-common"],
+  "dataByLocale": {
+    "sw_KE": { "trade_name": "Otieno Hardware (Duka la Vifaa)" }
+  }
+}

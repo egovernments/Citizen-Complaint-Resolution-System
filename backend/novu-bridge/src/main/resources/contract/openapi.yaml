@@ -8,22 +8,24 @@ info:
     fails the build if a path here has no matching controller mapping, or a controller mapping
     is missing here.
 
-    The bridge's PRIMARY interface is not HTTP at all — it is the Kafka envelope described by
-    `envelope-v1.schema.json`. These endpoints are the management and observability surface the
-    Configurator drives, plus machine callbacks.
+    The bridge's PRIMARY interface is not HTTP at all — it is the pair of Kafka messages
+    described by `envelope-v1.schema.json` (a finished message) and `thin-event-v1.schema.json`
+    (a domain event the box resolves), told apart by the `kind` discriminator. These endpoints
+    are the management and observability surface the Configurator drives, plus machine
+    callbacks.
 
     ## Tiers
 
     | Tier | Endpoints | Who may call |
     |---|---|---|
-    | Operator (read + exercise) | `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `/providers/test-send` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent) |
-    | Admin (credentials) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete` | the above **and** a role from `novu.bridge.proxy.admin.roles`; otherwise `403 NB_ADMIN_ROLE_REQUIRED` |
+    | Operator (read + exercise) | `/config/source`, `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `/providers/test-send` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent) |
+    | Admin (credentials) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /dispatch/_resolve` | the above **and** a role from `novu.bridge.proxy.admin.roles`; otherwise `403 NB_ADMIN_ROLE_REQUIRED` |
     | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
     | Internal only (never routed by the gateway) | `/gateways/smscountry/send` | the provider credential headers Novu's worker sends; Kong terminates this prefix with 404 |
-    | Unauthenticated | `/contract/envelope`, `/contract/openapi`, `/dispatch/*` (see below) | anyone who can reach the service |
+    | Unauthenticated | `/contract/envelope`, `/contract/thin-event`, `/contract/openapi`, `/dispatch/*` (see below) | anyone who can reach the service |
 
     `ProxyAuthFilter` is registered on `/novu-adapter/v1/*` but gates only the namespaces
-    `logs`, `integrations`, `preferences`, `providers` and `dispatch`. Anything else — the
+    `config`, `logs`, `integrations`, `preferences`, `providers` and `dispatch`. Anything else — the
     contract documents, the machine callbacks, the actuator endpoints — passes through
     unauthenticated by design.
 
@@ -91,6 +93,31 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /novu-bridge/novu-adapter/v1/contract/thin-event:
+    get:
+      tags: [contract]
+      summary: JSON Schema of the inbound thin domain event (version 1)
+      description: |
+        The second inbound kind: a producer says only what happened to which entity, and the
+        box decides who to tell, on which channel, in which language and what the words are.
+        Told apart from the envelope by the `kind` discriminator (`THIN`); see `README.md`.
+
+        The byte-identical copy packaged in this build's jar. Unauthenticated, for the same
+        reason as the other two: a description of an interface, not of a deployment.
+      security: []
+      responses:
+        "200":
+          description: JSON Schema 2020-12 document
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: The jar was built without `contract/thin-event-v1.schema.json`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   /novu-bridge/novu-adapter/v1/contract/openapi:
     get:
       tags: [contract]
@@ -126,8 +153,11 @@ paths:
             description: "Exact match, or prefix when `referenceNumberPrefix=true`." }
         - { name: referenceNumberPrefix, in: query, schema: { type: boolean, default: false } }
         - { name: transactionId, in: query, schema: { type: string } }
-        - { name: channel, in: query, schema: { type: string, enum: [SMS, WHATSAPP, EMAIL] } }
+        - { name: channel, in: query, schema: { type: string, enum: [SMS, WHATSAPP, EMAIL, NONE] },
+            description: "`NONE` selects the channel-less rows — decisions the box took before a channel existed." }
         - { name: status, in: query, schema: { $ref: "#/components/schemas/DispatchStatus" } }
+        - { name: sourcePath, in: query, schema: { $ref: "#/components/schemas/DispatchSourcePath" },
+            description: "Which inbound path produced the row. This is how you answer \"which path is this deployment on\" per message, in production." }
         - { name: includeTest, in: query, schema: { type: boolean, default: false },
             description: "Operator test-sends are hidden unless asked for." }
         - { name: limit, in: query, schema: { type: integer, default: 50, minimum: 1, maximum: 500 },
@@ -507,6 +537,75 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /novu-bridge/novu-adapter/v1/config/source:
+    get:
+      tags: [config]
+      summary: Which namespace is serving this tenant's notification config
+      description: |
+        Reports, per master, whether the tenant is being served from the new `NOTIFICATIONS.*`
+        MDMS masters or from the legacy `RAINMAKER-PGR.Notification*` ones, together with the
+        schema code actually read and how many rows it found.
+
+        **This exists because there is no setting to read.** The choice is made by the data — a
+        tenant with zero rows in the new namespace is served the old one, per tenant and
+        all-or-nothing — precisely so that no compose overlay can flip it. The cost is that two
+        tenants on the same build can legitimately differ, and this is how an operator sees which.
+
+        `stale: true` on a master means its rows came from a cache entry past its TTL because
+        MDMS could not be reached: the config is being served, and it is not fresh.
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+          description: Any tenant; the masters themselves are read at its state root.
+      responses:
+        "200":
+          description: The per-master report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigSourceReport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /novu-bridge/novu-adapter/v1/dispatch/_resolve:
+    post:
+      tags: [dispatch]
+      summary: Resolve a thin domain event WITHOUT sending or writing a row
+      description: |
+        Takes a thin domain event and returns the v1 envelopes the box WOULD mint for it: one per
+        recipient x channel, in emission order, fully rendered, with the contact block filled in.
+        Nothing is dispatched and **no ledger row is written**, which is what makes it safe to
+        point at a production tenant.
+
+        It runs the real resolver against the tenant's real config — the same routing rows,
+        templates, role pools and locale preferences — so it answers "why would this event send
+        nothing?" before the event happens rather than forensically afterwards. `terminalCode`
+        carries the channel-less decision when there would be none (`NB_NO_ROUTING`,
+        `NB_NO_RECIPIENTS`, `NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_RECIPIENT_LIMIT_EXCEEDED`) and
+        `diagnostics` lists every decision taken on the way, including per-recipient skips.
+
+        **Admin-only.** It expands role pools and returns recipient PII for every holder of a
+        role, which is broader than the Logs screen's read tier should hand out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ThinEventResolveRequest" }
+      responses:
+        "200":
+          description: The envelopes the event would produce
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThinEventResolveResponse" }
+        "400":
+          description: "`NB_EVENT_NOT_IN_CATALOGUE` — the event name has no active catalogue row for this tenant."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /novu-bridge/novu-adapter/v1/dispatch/_validate:
     post:
       tags: [dispatch]
@@ -807,6 +906,19 @@ components:
       enum: [RECEIVED, SENT, DELIVERED, BOUNCED, FAILED, SKIPPED, REJECTED]
       description: See `outputs.md` for the meaning of each and the legal transitions.
 
+    DispatchSourcePath:
+      type: string
+      enum: [PRERENDERED, RESOLVED]
+      default: PRERENDERED
+      description: |
+        Which inbound path produced this row. `PRERENDERED` — the producer sent a v1 envelope
+        and the bridge only gated and delivered it. `RESOLVED` — the producer sent a thin
+        domain event and the box routed, recruited, rendered and localized it.
+
+        There is no configuration to read for this: the path is on every row, per message, in
+        production. Rows written before the column existed are `PRERENDERED`, which is what
+        they were.
+
     DispatchLogEntry:
       type: object
       description: One row of the delivery ledger, PII masked at read time.
@@ -818,8 +930,9 @@ components:
         module: { type: string }
         eventName: { type: string }
         tenantId: { type: string }
-        channel: { type: string }
-        recipientValue: { type: string, description: "Masked." }
+        channel: { type: string, description: "`SMS` | `WHATSAPP` | `EMAIL`, or `NONE` for a decision taken before a channel existed." }
+        sourcePath: { $ref: "#/components/schemas/DispatchSourcePath" }
+        recipientValue: { type: string, description: "Masked. `none` on a channel-less row." }
         templateKey: { type: string, nullable: true }
         templateVersion: { type: string, nullable: true }
         status: { $ref: "#/components/schemas/DispatchStatus" }
@@ -933,6 +1046,63 @@ components:
         description: envelope-v1.schema.json
         url: ./envelope-v1.schema.json
       additionalProperties: true
+
+    ConfigSourceReport:
+      type: object
+      description: Which namespace served each notification-config master for one tenant.
+      properties:
+        tenantId: { type: string, description: The tenant asked about. }
+        stateTenantId:
+          type: string
+          description: The tenant the masters were actually read at — they are held at the state root.
+        anyLegacy:
+          type: boolean
+          description: True when ANY master is still being served from the legacy namespace.
+        masters:
+          type: object
+          description: "Master name (`Routing`, `Template`, `ProviderTemplate`, `EventCatalogue`) to its source."
+          additionalProperties:
+            type: object
+            properties:
+              master: { type: string }
+              schemaCode:
+                type: string
+                description: "The MDMS schema code actually read, e.g. `NOTIFICATIONS.Routing`."
+              rows: { type: integer, description: How many rows it found. }
+              legacy:
+                type: boolean
+                description: True when the legacy adapter served this master because the new one had no rows.
+              stale:
+                type: boolean
+                description: True when the rows came from a cache entry past its TTL, MDMS being unreachable.
+
+    ThinEventResolveRequest:
+      type: object
+      required: [RequestInfo, event]
+      properties:
+        RequestInfo:
+          type: object
+          description: The standard DIGIT RequestInfo.
+        event:
+          type: object
+          description: "A thin domain event; see `contract/thin-event-v1.schema.json`."
+
+    ThinEventResolveResponse:
+      type: object
+      properties:
+        responseInfo: { type: object }
+        envelopes:
+          type: array
+          description: One per recipient x channel, in emission order. Empty when nothing would be sent.
+          items: { $ref: "#/components/schemas/NotificationEvent" }
+        terminalCode:
+          type: string
+          nullable: true
+          description: "The channel-less decision code when nothing would be sent — `NB_NO_ROUTING`, `NB_NO_RECIPIENTS`, `NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_RECIPIENT_LIMIT_EXCEEDED`."
+        diagnostics:
+          type: array
+          items: { type: string }
+          description: Every decision the resolver took, in order, including per-recipient skips.
 
     DispatchDryRunRequest:
       type: object

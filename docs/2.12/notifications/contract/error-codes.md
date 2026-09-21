@@ -8,6 +8,18 @@ fails the build if one is missing from this file's machine-readable twin,
 `backend/novu-bridge/src/main/resources/contract/error-codes.txt`. A second assertion checks the
 two copies agree whenever both are present, so this page cannot quietly fall behind the code.
 
+**Six codes belong to the resolution stage.** `NB_NO_ROUTING`, `NB_NO_RECIPIENTS`,
+`NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_NO_TEMPLATE`, `NB_EVENT_NOT_IN_CATALOGUE` and
+`NB_RECIPIENT_LIMIT_EXCEEDED` are written by `service/resolution/NotificationResolver`, which
+turns a thin domain event into finished envelopes. They are named as constants in
+`service/thin/ThinEventErrorCodes.java`, with the row shape each produces, so that the catalogue
+test holds in both directions.
+
+There is **no code for "this build cannot resolve a thin event"**, and there was one until the
+resolution stage landed. It is gone because there is no such build: resolution is not optional
+and no bean's absence turns it off, so a deployment that somehow lacked it would fail to start
+rather than record a well-formed event as undeliverable.
+
 ## Where a code surfaces
 
 | Surface | What it is |
@@ -42,6 +54,23 @@ row first, so nothing disappears, and is then DLQ'd by the consumer.
 | `NB_UNSUPPORTED_EVENT_TYPE` | `eventType` is not in `novu.bridge.event.types`. The message lists what IS accepted. | ledger (`REJECTED`), DLQ, HTTP 400 | config | Add the type to `NOVU_BRIDGE_EVENT_TYPES` and restart, then replay the DLQ. This is the deliberate allowlist — a new producer is onboarded here, never by teaching the consumer to sniff payload shapes. |
 | `NB_INVALID_CORE_SMS` | A message on the DIGIT-core SMS topic could not be translated: no phone, no text, or no tenant and `novu.bridge.core.sms.default.tenant` is blank. | DLQ only — translation fails *before* the pipeline, so there is no ledger row | no / config | If the message genuinely lacked a phone or body, discard. If the tenant was missing, set `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` and replay. |
 
+## Thin-event rejections
+
+Thrown by `ThinEventValidator` before anything is resolved. Each writes a `REJECTED` ledger row
+first — **channel `NONE`**, because a thin event refused at validation never reached a channel and
+inventing `UNKNOWN` for one would put a meaningless value in the column — and is then DLQ'd by the
+consumer.
+
+The version rule and the `eventType` allowlist are shared with the envelope path rather than
+re-implemented, so the two kinds can never disagree about which producers a deployment accepts:
+`NB_UNSUPPORTED_SCHEMA_VERSION` and `NB_UNSUPPORTED_EVENT_TYPE` above apply to a thin event
+verbatim.
+
+| Code | Meaning | Surfaces | Retryable | Operator action |
+|---|---|---|---|---|
+| `NB_INVALID_THIN_EVENT` | A required field is missing or blank: `kind`, `eventId`, `eventType`, `module`, `eventName`, `tenantId`. Also raised when `kind` is not `THIN` — which a message only reaches this path by declaring — and for a null payload. The message names the field. | ledger (`REJECTED`, channel `NONE`), DLQ | no | Fix the producer against `thin-event-v1.schema.json`. The DLQ message carries the original event. |
+| `NB_EVENT_NOT_IN_CATALOGUE` | `eventName` has no active row in `NOTIFICATIONS.EventCatalogue`. An uncatalogued name cannot be validated and its placeholder vocabulary is unknown, so letting it through would make the Configurator's checks a suggestion rather than a contract. | ledger (`REJECTED`, channel `NONE`), DLQ | config | Add the catalogue row (Configurator → Notifications), then replay the DLQ. For PGR the rows are generated from the workflow and seeded by the playbook. |
+
 ## Delivery gates — `SKIPPED`
 
 The event was well-formed and a decision was taken not to deliver it. One ledger row, no DLQ,
@@ -52,9 +81,31 @@ no exception. These are the codes an operator sees most.
 | `NB_PREFERENCE_DENIED` | The recipient has not consented to this channel (`digit-user-preferences-service`). | ledger (`SKIPPED`) | no | Nothing. This is consent working. Note an outage of the preference service fails OPEN by default (`novu.bridge.preference.fail.open`) — a check that could not be made is not a refusal. |
 | `NB_UNSUPPORTED_CHANNEL` | The envelope's `channel` is not one of SMS, WHATSAPP, EMAIL. Never guessed, never defaulted to SMS. Also thrown by `NovuBridgeConfiguration.getNovuWorkflowId` for a null/unknown channel, which the gate above means is unreachable in normal operation. | ledger (`SKIPPED`), HTTP 500 in the unreachable case | no | A producer typo. Fix the producer. |
 | `NB_NO_PROVIDER` | The channel is not enabled for this tenant — no MDMS `NotificationChannel` row switching it on, and no `novu.bridge.channels.enabled` fallback. The most common "nothing is being sent" cause on a fresh deployment. | ledger (`SKIPPED`), startup warning | config | Configurator → Notifications → **Channels**: switch the channel on and pick a provider. `novu.bridge.channels.enabled` is only the bootstrap fallback for tenants with no rows. |
-| `NB_CONTACT_MISSING` | An EMAIL event carries no email address, or an SMS/WHATSAPP event no phone. A bridge-side defence: without it the message would trigger the workflow and record a phantom `SENT` with nowhere to go. | ledger (`SKIPPED`) | no | Fix the recipient's record, or fix the producer's recipient filter. |
+| `NB_CONTACT_MISSING` | An EMAIL event carries no email address, or an SMS/WHATSAPP event no phone. A bridge-side defence: without it the message would trigger the workflow and record a phantom `SENT` with nowhere to go. On the **resolution** path the same code is written when a resolved recipient cannot be reached on a routed channel — a phone-only role holder on an EMAIL row — and only that one recipient on that one channel is skipped. | ledger (`SKIPPED`) | no | Fix the recipient's record, or fix the producer's recipient filter / the routing row's channel. |
 | `NB_TEMPLATE_NOT_APPROVED` | A WHATSAPP event arrived with no `templateId`. Business-initiated WhatsApp must reference an approved provider template; free-form is rejected by the provider anyway. | ledger (`SKIPPED`) | config | Map an approved template in MDMS `NotificationProviderTemplate` (Configurator → Notifications → **Provider templates**). `GET /providers/twilio-templates` proposes the rows. |
 | `NB_PROVIDER_UNAVAILABLE` | The provider the tenant pinned on this channel is missing, disabled, or on the wrong Novu channel. Novu would ACCEPT a trigger naming it and fail the step internally, so the row would read `SENT` for a message that never left. | ledger (`SKIPPED`) | config | Configurator → Notifications → **Providers**: re-activate or replace it. A Novu that cannot be reached fails OPEN, so this code always means a real answer was read. |
+
+## Resolution decisions — `SKIPPED`, channel `NONE`
+
+These are outcomes the box reaches **before there is a channel or a recipient to name** — which
+is why their rows carry `channel = NONE`, `recipient_value = none` and
+`transaction_id = <transactionSeed>:NONE`. They only exist on the thin path, and every one of
+them was, until it existed, a log line inside the producing module and a message nobody ever
+knew was dropped. That is the whole gain: `SKIPPED` rows where there used to be silence.
+
+`NB_NO_TEMPLATE` is the exception that names a real channel — by the time it fires the box knows
+which channel it could not render for, and saying so is more useful than a channel-less row.
+
+None of these DLQ. They are decisions, not failures, and replaying the message would reach the
+same decision.
+
+| Code | Meaning | Surfaces | Retryable | Operator action |
+|---|---|---|---|---|
+| `NB_NO_ROUTING` | No active routing row matches the event's `eventName` for this tenant. The most likely reason an operator sees "nothing was sent" after onboarding a new event: the event is real, the config is not there yet. | ledger (`SKIPPED`, channel `NONE`) | config | Configurator → Notifications → **Routing**: add a row for this `eventName`. |
+| `NB_NO_RECIPIENTS` | Routing rows matched and every audience on them resolved to an empty list — no actor named, no holder of the role in this tenant, no event recipients. | ledger (`SKIPPED`, channel `NONE`) | config | Check the role actually has holders in this tenant, or that the producer named the actor the routing row refers to. |
+| `NB_UNKNOWN_AUDIENCE_SCHEME` | A routing row's audience names a scheme with no resolver — something other than `ACTOR:`, `ROLE:`, `EVENT_RECIPIENTS` or a legacy bare name. Never guessed at. | ledger (`SKIPPED`, channel `NONE`) | config | Fix the audience on that routing row. |
+| `NB_RECIPIENT_LIMIT_EXCEEDED` | The fan-out for one event exceeded the per-event recipient cap. A thin event naming a role is an unbounded instruction — one message in, one per role holder out — so the cap stops a mis-seeded role turning a single transition into a five-figure send. **Nothing is delivered**: half a fan-out is worse than none, because nobody can tell which half. | ledger (`SKIPPED`, channel `NONE`) | config | Check the role is not over-assigned. If the pool is legitimately that large, raise the cap deliberately. |
+| `NB_NO_TEMPLATE` | No template for `(eventName, audience, channel, locale)`, nor for the default locale. | ledger (`SKIPPED`, **real channel**) | config | Configurator → Notifications → **Templates**: add the row, or add the default-locale fallback. |
 
 ## Delivery failures — `FAILED`
 
@@ -118,7 +169,7 @@ is Novu's `generic-sms` provider, not a DIGIT client.
 
 | Code | Meaning | Surfaces | Retryable | Operator action |
 |---|---|---|---|---|
-| `NB_CONTRACT_NOT_PACKAGED` | `GET /contract/envelope` or `/contract/openapi` found no such resource on the classpath. This can only mean the jar was built without `src/main/resources/contract/`. | HTTP 404 | no | A packaging fault, not a request fault. Rebuild the image; read the published copies under `docs/2.12/notifications/contract/` meanwhile. |
+| `NB_CONTRACT_NOT_PACKAGED` | `GET /contract/envelope`, `/contract/thin-event` or `/contract/openapi` found no such resource on the classpath. This can only mean the jar was built without `src/main/resources/contract/`. | HTTP 404 | no | A packaging fault, not a request fault. Rebuild the image; read the published copies under `docs/2.12/notifications/contract/` meanwhile. |
 | `NB_CONTRACT_UNREADABLE` | The packaged document exists but could not be read. | HTTP 500 | yes | Rebuild the image. |
 
 ## Not an `NB_*` code

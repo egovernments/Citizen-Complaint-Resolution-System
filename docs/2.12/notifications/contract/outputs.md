@@ -1,8 +1,14 @@
 # What comes out of the box
 
-The envelope (`envelope-v1.schema.json`) is what goes in. This is everything that comes out:
-the delivery ledger, the dead-letter topic, and the receipts the bridge accepts back from
-providers.
+Either a pre-rendered envelope (`envelope-v1.schema.json`) or a thin domain event
+(`thin-event-v1.schema.json`) goes in. This is everything that comes out: the delivery ledger,
+the dead-letter topic, and the receipts the bridge accepts back from providers.
+
+The two inbound kinds produce the **same outputs**. A thin event is resolved into v1 envelopes
+in-process and those envelopes go through the same pipeline, so the statuses, the keys, the
+upsert semantics and the DLQ shape below are identical either way. What differs is arity and
+one column: one envelope is one row, one thin event is N rows, and every row says which path it
+came in on (`source_path`).
 
 - [The dispatch log](#the-dispatch-log)
 - [The DLQ](#the-dlq)
@@ -13,15 +19,53 @@ providers.
 ## The dispatch log
 
 One table, `nb_dispatch_log`. **Exactly one row per terminal outcome per (recipient × channel)**
-— including rejections, which used to vanish into the DLQ without a trace. Read through
-`GET /novu-adapter/v1/logs` (PII masked) and shown on Configurator → Notifications → **Logs**.
+— including rejections, which used to vanish into the DLQ without a trace, and including the
+decisions taken before there was a recipient or a channel at all, which used to be a log line
+inside the producing module. Read through `GET /novu-adapter/v1/logs` (PII masked) and shown on
+Configurator → Notifications → **Logs**.
+
+### Which path produced the row
+
+`source_path` is on every row: `PRERENDERED` when the producer sent a finished v1 envelope,
+`RESOLVED` when it sent a thin domain event and the box routed, recruited, rendered and
+localized it. Rows written before the column existed read `PRERENDERED`, which is what they
+were.
+
+This is not an audit nicety. There is **no configuration** that says which path a deployment is
+on — deliberately, because a setting can be dropped with a compose overlay and flip behaviour in
+silence, which is how a live server once lost its notifications for days. The path is recorded
+per message instead, filterable (`GET /logs?sourcePath=RESOLVED`), in production. Looking at one
+column beats reading any config you could have made readable.
+
+### Channel-less rows
+
+`channel` is normally `SMS`, `WHATSAPP` or `EMAIL`. On the thin path it can also be **`NONE`**:
+the box reached a terminal decision before there was a channel to name — no routing row matched,
+every audience resolved to nobody, the fan-out was refused, or a routing row named an audience
+scheme nothing can resolve. Such a row carries:
+
+| Column | Value |
+|---|---|
+| `channel` | `NONE` |
+| `recipient_value` | `none` (lower case, so it cannot be mistaken for a subscriber) |
+| `transaction_id` | `<transactionSeed>:NONE` |
+| `status` | `SKIPPED`, or `REJECTED` for a thin event refused at validation |
+| `last_error_code` | `NB_NO_ROUTING`, `NB_NO_RECIPIENTS`, `NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_RECIPIENT_LIMIT_EXCEEDED`, `NB_INVALID_THIN_EVENT`, `NB_EVENT_NOT_IN_CATALOGUE` |
+| `source_path` | `RESOLVED` |
+
+Appending the pseudo-channel to the transaction id is what keeps the unique key
+`(transaction_id, channel, recipient_value)` intact, so a redelivery upserts the same row rather
+than accumulating duplicates — the same property the real rows have, for the same reason.
+
+`NB_NO_TEMPLATE` is deliberately **not** channel-less: by the time it fires the box knows which
+channel it could not render for, and the row says so.
 
 ### Statuses
 
 | Status | Meaning | Written by |
 |---|---|---|
-| `REJECTED` | The envelope failed validation. Written *before* the error is thrown, so the operator can see what was refused; the consumer then DLQs the event. | `DispatchPipelineService.persistRejected` |
-| `SKIPPED` | Well-formed, and a deliberate decision not to deliver: consent denied, channel off for the tenant, unsupported channel, no contact for the channel, no approved WhatsApp template, provider unusable. A decision, not a failure — never DLQ'd. | the delivery gates |
+| `REJECTED` | The message failed validation — the envelope's, or the thin event's. Written *before* the error is thrown, so the operator can see what was refused; the consumer then DLQs it. | `DispatchPipelineService.persistRejected`, `ThinEventPipelineService.persistRejected` |
+| `SKIPPED` | Well-formed, and a deliberate decision not to deliver: consent denied, channel off for the tenant, unsupported channel, no contact for the channel, no approved WhatsApp template, provider unusable — or, on the thin path, no routing, no recipients, no template, a refused fan-out, or a build with no resolution stage. A decision, not a failure — never DLQ'd. | the delivery gates; the resolution stage |
 | `RECEIVED` | Validation-only pass (`POST /dispatch/_validate`, or `_dry-run` without `send`). Nothing was handed to a transport. | the dry-run path |
 | `SENT` | A transport ACCEPTED the message. **Not delivered** — queued. This is the strongest statement the bridge can make without a receipt. | the dispatch path |
 | `DELIVERED` | A provider receipt confirmed delivery. Stamps `delivered_time`. | `ReceiptController` |
@@ -57,6 +101,19 @@ is an upsert on that key, which is what lets:
 - Kafka redelivery of the same envelope update its row instead of creating a second one;
 - two recipients of the same business event coexist on the same channel.
 
+A thin event does not carry a `transactionId` — it carries a **`transactionSeed`**, which the
+box completes into `<seed>:<subscriberId>:<channel>` per resolved message and into
+`<seed>:NONE` on a channel-less row. A producer that seeds `<entityId>:<ACTION>:<TOSTATE>`
+therefore gets transaction ids byte-identical to the ones it used to mint itself, which is what
+makes a mid-flight redeploy safe. Absent, the seed is derived `<entityId>:<eventName>`, and
+failing that `<eventId>`.
+
+There is **no duplicate suppression** on either path. A replayed event is dispatched again and
+upserts the same row; there is no "a SENT row already exists, skip it" gate anywhere. That is
+today's semantics and it is deliberate — which is why the release that cuts a producer over must
+stop the old instance before starting the new one (compose recreate already does; Kubernetes
+needs `strategy: Recreate` for that release).
+
 This is why `transactionId` is the field that matters most in the envelope. A producer that
 sends a random `transactionId` per attempt gets one row per attempt; one that sends a
 deterministic key gets one row per real message. `CoreSmsTranslator` deliberately appends a
@@ -74,8 +131,9 @@ first.
 | `module` | varchar(128) NOT NULL | envelope `module`; `"unknown"` on a rejection that carried none |
 | `event_name` | varchar(256) NOT NULL | envelope `eventName` |
 | `tenant_id` | varchar(256) NOT NULL | |
-| `channel` | varchar(64) NOT NULL | `UNKNOWN` on a rejection that carried none |
-| `recipient_value` | varchar(256) NOT NULL | the `subscriberId`. Stored raw, **masked at read time**. Part of the unique key |
+| `channel` | varchar(64) NOT NULL | `UNKNOWN` on an envelope rejection that carried none; `NONE` on a channel-less row |
+| `source_path` | varchar(32) NOT NULL default `PRERENDERED` | `PRERENDERED` \| `RESOLVED` — which inbound kind produced this row. Indexed with `tenant_id`; filterable |
+| `recipient_value` | varchar(256) NOT NULL | the `subscriberId`, or `none` on a channel-less row. Stored raw, **masked at read time**. Part of the unique key |
 | `template_key` | varchar(256) | envelope `templateKey`, else `<audience>.<action>.<toState>.<channel>.<locale>`, else `eventName` |
 | `template_version` | varchar(64) | reserved; not written today |
 | `status` | varchar(32) NOT NULL | the table above |
@@ -89,7 +147,8 @@ first.
 | `created_time`, `last_modified_time` | bigint NOT NULL | epoch millis |
 
 Indexes: unique `(transaction_id, channel, recipient_value)`; `(status, last_modified_time)`,
-`(tenant_id, event_name)`, `(reference_number)`, `(provider_ref)`, `(tenant_id, is_test)`.
+`(tenant_id, event_name)`, `(reference_number)`, `(provider_ref)`, `(tenant_id, is_test)`,
+`(tenant_id, source_path)`.
 
 ### Test-send rows
 
@@ -117,15 +176,16 @@ published with the event's `tenantId` as the Kafka key.
 
 | Field | Notes |
 |---|---|
-| `event` | The envelope as received. For a message that failed CORE-SMS translation this is instead the raw `SMSRequest` map, because no envelope was ever built |
+| `event` | The message as received — the envelope, or the thin event. The shape does not vary by kind, and neither does the DLQ's. For a message that failed CORE-SMS translation this is instead the raw `SMSRequest` map, because no envelope was ever built |
 | `sourceTopic` | Which input topic it arrived on |
 | `errorCode` | The `NB_*` code, or `NB_PROCESSING_ERROR` for anything that carried none |
 | `errorMessage` | Human-readable detail |
 
 What does and does not get here:
 
-- **DLQ'd**: envelope rejections, and any failure that THROWS out of the pipeline (a provider
-  exception, a Novu transport failure).
+- **DLQ'd**: envelope rejections, thin-event rejections (`NB_INVALID_THIN_EVENT`,
+  `NB_EVENT_NOT_IN_CATALOGUE`, `NB_UNSUPPORTED_EVENT_TYPE`, `NB_UNSUPPORTED_SCHEMA_VERSION`), and
+  any failure that THROWS out of the pipeline (a provider exception, a Novu transport failure).
 - **Not DLQ'd**: every `SKIPPED` outcome, and a provider that answered cleanly with a rejection
   (a non-2xx from Novu) — those are recorded `FAILED` in the ledger and the pipeline returns
   normally.

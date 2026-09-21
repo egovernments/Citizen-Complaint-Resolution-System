@@ -1,0 +1,46 @@
+{
+  "kind": "THIN",
+  "schemaVersion": "1",
+  "eventId": "7b2d0a51-88c2-4f0e-9a77-1c0e4b6d2f30",
+  "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+  "eventTime": "2026-09-21T09:12:44.088Z",
+  "producer": "complaints-service",
+  "module": "Complaints",
+  "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+  "entityType": "COMPLAINT",
+  "entityId": "PGR-2026-000123",
+  "tenantId": "ke.bomet",
+  "transactionSeed": "PGR-2026-000123:ASSIGN:PENDINGATLME",
+  "actors": {
+    "citizen": {
+      "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f",
+      "type": "CITIZEN",
+      "name": "Amina Chebet",
+      "phone": "+254712345678",
+      "email": "amina@example.com"
+    },
+    "assignee": { "userId": "3c2b1a09-7f6e-4d5c-8b2a-1e0f9d8c7b6a", "type": "EMPLOYEE" }
+  },
+  "data": {
+    "id": "PGR-2026-000123",
+    "date": "21/09/2026",
+    "complaint_type": "Streetlight",
+    "status": "PENDINGATLME",
+    "additional_comments": "Assigned to the ward team",
+    "emp_name": "Peter Kirui",
+    "emp_department": "Public Works",
+    "emp_designation": "Engineer"
+  },
+  "localized": {
+    "status": ["CS_COMMON_PENDINGATLME"]
+  },
+  "localizationModules": ["rainmaker-pgr", "rainmaker-common"],
+  "localizationLocale": "en_IN",
+  "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+  "payload": {
+    "complaintNo": "PGR-2026-000123",
+    "status": "PENDINGATLME",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME"
+  }
+}

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.DispatchPipelineService;
+import org.egov.novubridge.service.thin.ThinEventPipelineService;
 import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +44,7 @@ class DomainEventConsumerWiringTest {
         producer = mock(Producer.class);
         config = new NovuBridgeConfiguration();
         config.setDlqTopic("novu-bridge.dlq");
-        consumer = new DomainEventConsumer(mapper, pipeline, producer, config);
+        consumer = new DomainEventConsumer(mapper, pipeline, mock(ThinEventPipelineService.class), producer, config);
     }
 
     private HashMap<String, Object> payload() {

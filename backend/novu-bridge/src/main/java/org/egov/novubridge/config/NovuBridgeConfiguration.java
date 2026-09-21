@@ -92,8 +92,17 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.channel.policy.enabled:true}")
     private Boolean channelPolicyEnabled;
 
-    @Value("${novu.bridge.channel.policy.schema:RAINMAKER-PGR.NotificationChannel}")
+    // The channel master moved into the shared NOTIFICATIONS namespace with the rest of the
+    // notification config. This is a DEFAULT and not a per-deployment setting on purpose: a
+    // schema code set per deployment is exactly the kind of knob a dropped compose overlay
+    // silently flips, and this one decides whether a tenant's channels are enabled at all.
+    // A tenant whose rows have not been copied yet is served the legacy master below, per
+    // tenant and automatically; GET /novu-adapter/v1/config/source reports which is in effect.
+    @Value("${novu.bridge.channel.policy.schema:NOTIFICATIONS.Channel}")
     private String channelPolicySchema;
+
+    @Value("${novu.bridge.channel.policy.legacy.schema:RAINMAKER-PGR.NotificationChannel}")
+    private String channelPolicyLegacySchema;
 
     @Value("${novu.bridge.channel.policy.cache.ttl.ms:60000}")
     private Long channelPolicyCacheTtlMs;
@@ -110,6 +119,66 @@ public class NovuBridgeConfiguration {
 
     @Value("${novu.bridge.mdms.search.path:/mdms-v2/v2/_search}")
     private String mdmsSearchPath;
+
+    // ---- Resolution stage: the NOTIFICATIONS.* config masters ----
+    // The namespace the four masters live in. A DEFAULT, not a per-deployment setting: the
+    // schema code is the kind of knob a dropped compose overlay silently flips, so the copy
+    // ships by changing this default and leaving deployments unset. The value in effect is
+    // readable at GET /novu-adapter/v1/config/source, per tenant, alongside the row counts.
+    @Value("${novu.bridge.notifications.namespace:NOTIFICATIONS}")
+    private String notificationConfigNamespace;
+
+    // Same cache semantics as the channel policy above and as the producer's readers: an empty
+    // fetch is never cached, a stale non-empty entry is served through an MDMS outage.
+    @Value("${novu.bridge.notifications.cache.ttl.ms:60000}")
+    private Long notificationConfigCacheTtlMs;
+
+    // MDMS v2 answers a PAGE, not a set. These bound the read loop; the warning at the cap is
+    // what turns "the 201st routing row silently never fires" into a log line.
+    @Value("${novu.bridge.notifications.page.size:200}")
+    private Integer notificationConfigPageSize;
+
+    @Value("${novu.bridge.notifications.max.pages:50}")
+    private Integer notificationConfigMaxPages;
+
+    // Hard ceiling on one event's fan-out. A thin event naming a role is an unbounded
+    // instruction — one message in, one per holder out — so a mis-seeded role must not turn one
+    // transition into a five-figure send. Over the cap, NOTHING is delivered and the event is
+    // SKIPPED / NB_RECIPIENT_LIMIT_EXCEEDED: half a fan-out is worse than none, because nobody
+    // can tell which half went. Matches the producer's old page.size x max.pages ceiling.
+    @Value("${novu.bridge.notifications.recipient.cap:1000}")
+    private Integer notificationRecipientCap;
+
+    // ---- Resolution stage: egov-user role pools ----
+    // One tenant-wide search per role per event, paged. The product of these two is the most
+    // holders one role can notify.
+    @Value("${novu.bridge.role.pool.page.size:100}")
+    private Integer rolePoolPageSize;
+
+    @Value("${novu.bridge.role.pool.max.pages:10}")
+    private Integer rolePoolMaxPages;
+
+    // The uuid the bridge presents when it calls egov-user as INTERNAL_MICROSERVICE_ROLE to
+    // expand a role pool or hydrate an actor. Blank still works against a permissive egov-user;
+    // set it on any deployment that enforces the internal-user check.
+    @Value("${novu.bridge.internal.user.uuid:}")
+    private String internalMicroserviceUserUuid;
+
+    // ---- Resolution stage: egov-localization ----
+    // Localization CODE -> message, for the placeholder values the producer sends as codes.
+    @Value("${novu.bridge.localization.host:http://egov-localization-service:8080}")
+    private String localizationHost;
+
+    @Value("${novu.bridge.localization.search.path:/localization/messages/v1/_search}")
+    private String localizationSearchPath;
+
+    // Messages change rarely and are read once per (tenant, locale, module) per window.
+    @Value("${novu.bridge.localization.cache.ttl.ms:300000}")
+    private Long localizationCacheTtlMs;
+
+    // Modules searched, IN ORDER, when a thin event names none of its own.
+    @Value("#{'${novu.bridge.localization.modules:rainmaker-pgr,rainmaker-common}'.split(',')}")
+    private java.util.List<String> localizationModules;
 
     @Value("${novu.bridge.proxy.auth.enabled:true}")
     private Boolean proxyAuthEnabled;

@@ -1,0 +1,2424 @@
+{
+  "$schema": "see ../README.md - plain JSON, no pgr-services classes required to read it",
+  "description": "Input matrix for the pgr-services notification golden master (task T9). Each scenario drives the REAL NotificationService.process with mocked collaborators and captures every envelope handed to the Kafka producer.",
+  "defaults": {
+    "tenantId": "ke.bomet",
+    "masters": {
+      "routing": "seed",
+      "templates": "seed",
+      "providerTemplates": "seed",
+      "$seedFiles": {
+        "routing": "golden/inputs/masters/RAINMAKER-PGR.NotificationRouting.json",
+        "templates": "golden/inputs/masters/RAINMAKER-PGR.NotificationTemplate.json",
+        "providerTemplates": "golden/inputs/masters/RAINMAKER-PGR.NotificationProviderTemplate.json",
+        "channels": "golden/inputs/masters/RAINMAKER-PGR.NotificationChannel.json"
+      }
+    },
+    "config": {
+      "notificationDefaultLocale": "en_IN",
+      "notificationLocalePerRecipient": true,
+      "notificationPreferenceCode": "USER_NOTIFICATION_PREFERENCES",
+      "notificationRolePoolPageSize": 100,
+      "notificationRolePoolMaxPages": 10,
+      "notificationMdmsCacheTtlMs": 60000,
+      "complaintsDomainEventsTopic": "complaints.domain.events",
+      "mobileDownloadLink": "https://citizen.example.gov/download",
+      "userHost": "http://user/",
+      "userSearchEndpoint": "user/_search",
+      "egovInternalMicroserviceUserUuid": "internal-microservice-uuid",
+      "userPreferenceHost": "http://prefs/",
+      "userPreferenceSearchPath": "user-preference/v1/_search",
+      "localizationHost": "http://localization/",
+      "localizationContextPath": "localization/",
+      "localizationSearchEndpoint": "messages/v1/_search",
+      "urlShortnerHost": "http://shortener/",
+      "urlShortnerEndpoint": "egov-url-shortening/shortener",
+      "hrmsHost": "http://hrms/",
+      "hrmsEndPoint": "egov-hrms/employees/_search",
+      "stateLevelTenant": "ke"
+    },
+    "world": {
+      "localization": {
+        "rainmaker-pgr": {
+          "messages": [
+            {
+              "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+              "message": "Pending for assignment",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "CS_COMMON_PENDINGATLME",
+              "message": "Pending at LME",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "CS_COMMON_PENDINGFORREASSIGNMENT",
+              "message": "Pending for reassignment",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "CS_COMMON_RESOLVED",
+              "message": "Resolved",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "CS_COMMON_REJECTED",
+              "message": "Rejected",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "CS_COMMON_CLOSEDAFTERRESOLUTION",
+              "message": "Closed after resolution",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "CS_COMMON_CLOSEDAFTERREJECTION",
+              "message": "Closed after rejection",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            },
+            {
+              "code": "pgr.complaint.category.GarbageNeedsTobeCleared",
+              "message": "Garbage needs to be cleared",
+              "module": "rainmaker-pgr",
+              "locale": "en_IN"
+            }
+          ]
+        },
+        "rainmaker-common": {
+          "messages": [
+            {
+              "code": "COMMON_MASTERS_DESIGNATION_AO",
+              "message": "Accounts Officer",
+              "module": "rainmaker-common",
+              "locale": "en_IN"
+            },
+            {
+              "code": "COMMON_MASTERS_DESIGNATION_DESIG_5",
+              "message": "Field Officer",
+              "module": "rainmaker-common",
+              "locale": "en_IN"
+            },
+            {
+              "code": "COMMON_MASTERS_DEPARTMENT_DEPT_3",
+              "message": "Sanitation",
+              "module": "rainmaker-common",
+              "locale": "en_IN"
+            },
+            {
+              "code": "KE_BOMET",
+              "message": "Bomet Municipality",
+              "module": "rainmaker-common",
+              "locale": "en_IN"
+            }
+          ]
+        }
+      },
+      "shortUrl": "https://sho.rt/dl1",
+      "usersByUuid": {
+        "emp-jane": {
+          "uuid": "emp-jane",
+          "name": "Jane Mwangi",
+          "mobileNumber": "722000111",
+          "countryCode": "+254",
+          "emailId": "jane.mwangi@bomet.go.ke",
+          "type": "EMPLOYEE",
+          "createdDate": "01-01-2026 10:00:00"
+        }
+      },
+      "rolePools": {},
+      "preferences": {},
+      "workflowHistory": null,
+      "hrms": null,
+      "mdms": {
+        "MdmsRes": {
+          "RAINMAKER-PGR": {
+            "ComplaintHierarchy": [
+              {
+                "code": "GarbageNeedsTobeCleared",
+                "department": "DEPT_3",
+                "active": true
+              }
+            ]
+          }
+        }
+      },
+      "shortUrlFails": false,
+      "localizationFails": false
+    }
+  },
+  "scenarios": [
+    {
+      "id": "S01-apply-citizen-all-channels",
+      "description": "APPLY -> PENDINGFORASSIGNMENT. Citizen with phone AND email; default locale. Three seeded CITIZEN rows (SMS/WHATSAPP/EMAIL); WHATSAPP has an approved Twilio provider template so templateId + positional contentVariables ride along.",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "APPLY",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S02-apply-citizen-phone-only",
+      "description": "Same transition, citizen has NO email: the EMAIL row is contact-gated away (no phantom send), SMS + WHATSAPP still emit.",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": null,
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "APPLY",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S03-apply-citizen-uuid-falls-back-to-accountId",
+      "description": "Citizen carries no uuid: the subscriber key falls back to service.accountId. The mobile already starts with '+', so the countryCode is NOT prefixed again.",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "accountId": "account-uuid-9",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": null,
+            "name": "Amina Chebet",
+            "mobileNumber": "+254712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "APPLY",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S04-assign-citizen-and-assignee",
+      "description": "ASSIGN -> PENDINGATLME with a named assignee (workflow.assignes[0]) resolved through egov-user, plus HRMS + MDMS ComplaintHierarchy so {emp_name}/{emp_department}/{emp_designation} resolve. Six envelopes: CITIZEN x3 and EMPLOYEE x3. The EMPLOYEE WHATSAPP row has NO provider template in the seed (they are all CITIZEN) so it emits with no templateId for an auditable bridge-side SKIP.",
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S05-reassign-citizen",
+      "description": "REASSIGN -> PENDINGFORREASSIGNMENT. The seeded rows author fromState=PENDINGATLME, which the Kafka path never supplies, so they match anyway (documentation-only).",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORREASSIGNMENT",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "REASSIGN",
+          "assignes": [],
+          "comments": "Wrong department"
+        }
+      }
+    },
+    {
+      "id": "S06-resolve-citizen",
+      "description": "RESOLVE -> RESOLVED, citizen only.",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "RESOLVED",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "RESOLVE",
+          "assignes": [],
+          "comments": "Cleared the dump site"
+        }
+      }
+    },
+    {
+      "id": "S07-reject-citizen-with-comments",
+      "description": "REJECT -> REJECTED; workflow.comments becomes {additional_comments}.",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "REJECTED",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "REJECT",
+          "assignes": [],
+          "comments": "Duplicate of PGR-2026-000101"
+        }
+      }
+    },
+    {
+      "id": "S08-reopen-citizen",
+      "description": "REOPEN -> PENDINGFORASSIGNMENT, citizen only.",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "REOPEN",
+          "assignes": [],
+          "comments": "Garbage is back"
+        }
+      }
+    },
+    {
+      "id": "S09-rate-closedafterresolution-assignee-from-history",
+      "description": "RATE -> CLOSEDAFTERRESOLUTION. workflow.assignes is empty, so the assignee comes from the LAST ASSIGN in workflow history (egov-workflow-v2 ?history=true) and is then hydrated from egov-user. EMPLOYEE-only routing; {rating} is filled.",
+      "world": {
+        "workflowHistory": {
+          "ProcessInstances": [
+            {
+              "action": "APPLY",
+              "assignes": []
+            },
+            {
+              "action": "ASSIGN",
+              "assignes": [
+                {
+                  "uuid": "emp-jane",
+                  "name": "Jane Mwangi",
+                  "mobileNumber": "722000111"
+                }
+              ]
+            },
+            {
+              "action": "RESOLVE",
+              "assignes": []
+            }
+          ]
+        },
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "CLOSEDAFTERRESOLUTION",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          },
+          "rating": 5
+        },
+        "workflow": {
+          "action": "RATE",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S10-rate-closedafterrejection-no-routing",
+      "description": "RATE -> CLOSEDAFTERREJECTION has NO routing row in the seed: zero envelopes. This is the transition the design calls out as invisible today (no ledger row at all).",
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "CLOSEDAFTERREJECTION",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          },
+          "rating": 2
+        },
+        "workflow": {
+          "action": "RATE",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S11-assign-citizen-prefers-hi",
+      "description": "The citizen's user-preference is hi_IN: body, subject and Twilio provider template all come from the hi_IN rows and contact.locale is hi_IN. NOTE the placeholder VALUES are still English - they are localized once per event from RequestInfo.msgId, not per recipient. No assignee, so the EMPLOYEE rows resolve to nobody and the CITIZEN body keeps its literal {emp_name}/{emp_designation}/{emp_department} braces.",
+      "world": {
+        "preferences": {
+          "citizen-uuid-1": "hi_IN"
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S12-assign-citizen-prefers-unseeded-locale",
+      "description": "Preference fr_FR has no template: body/subject/templateKey fall back to the default locale (en_IN) and so does the WhatsApp provider template - but contact.locale still carries the recipient's fr_FR.",
+      "world": {
+        "preferences": {
+          "citizen-uuid-1": "fr_FR"
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S13-assign-msgid-drives-placeholder-localization",
+      "description": "RequestInfo.msgId carries hi_IN while the recipient has no preference: the TEMPLATE is en_IN but {complaint_type}/{status} are localized in hi_IN. Pins the split between placeholder localization (msgId, per event) and template locale (per recipient).",
+      "world": {
+        "localization": {
+          "rainmaker-pgr": {
+            "messages": [
+              {
+                "code": "CS_COMMON_PENDINGATLME",
+                "message": "एलएमई कार्यालय में लंबित",
+                "module": "rainmaker-pgr",
+                "locale": "hi_IN"
+              },
+              {
+                "code": "pgr.complaint.category.GarbageNeedsTobeCleared",
+                "message": "कचरा साफ किया जाने की जरूरत है",
+                "module": "rainmaker-pgr",
+                "locale": "hi_IN"
+              }
+            ]
+          },
+          "rainmaker-common": {
+            "messages": [
+              {
+                "code": "COMMON_MASTERS_DESIGNATION_AO",
+                "message": "Accounts Officer",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              },
+              {
+                "code": "COMMON_MASTERS_DESIGNATION_DESIG_5",
+                "message": "Field Officer",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              },
+              {
+                "code": "COMMON_MASTERS_DEPARTMENT_DEPT_3",
+                "message": "Sanitation",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              },
+              {
+                "code": "KE_BOMET",
+                "message": "Bomet Municipality",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              }
+            ]
+          }
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|hi_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S14-assign-role-pool-dedupe-paging",
+      "description": "Seeded ASSIGN rows PLUS an extra PGR_LME SMS row. The pool has three holders paged two at a time: emp-jane (also the assignee - deduped on (channel, subscriberKey), audience deliberately not in the key), a holder with neither phone nor email (dropped at pool resolution) and lme-brian (emitted). Seven envelopes.",
+      "config": {
+        "notificationRolePoolPageSize": 2
+      },
+      "masters": {
+        "routingAppend": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "LME alert: complaint {id} ({complaint_type}) at {ulb} is awaiting action.",
+            "placeholders": [
+              "complaint_type",
+              "id",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        },
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "emp-jane",
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "countryCode": "+254",
+                "emailId": "jane.mwangi@bomet.go.ke",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00"
+              },
+              {
+                "uuid": "lme-no-contact",
+                "name": "Silent Sam",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00"
+              }
+            ],
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              }
+            ]
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S15-assigneeOnly-collapses-role-to-assignee",
+      "description": "A single PGR_LME SMS row with assigneeOnly=true and a named assignee: the pool is not searched at all and the row collapses to the assignee. NOTE contact.type is EMPLOYEE (from assignee resolution) while the TEMPLATE is still looked up under PGR_LME.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true,
+            "assigneeOnly": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "LME alert: complaint {id} ({complaint_type}) at {ulb} is awaiting action.",
+            "placeholders": [
+              "complaint_type",
+              "id",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S16-assigneeOnly-without-assignee-falls-back-to-pool",
+      "description": "Same row, but nothing names an assignee (no workflow.assignes, no history): rather than notifying no one, the row falls through to the full role pool.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true,
+            "assigneeOnly": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "LME alert: complaint {id} ({complaint_type}) at {ulb} is awaiting action.",
+            "placeholders": [
+              "complaint_type",
+              "id",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              },
+              {
+                "uuid": "lme-cate",
+                "name": "Cate Wanjiru",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "744333444",
+                "countryCode": "+254",
+                "emailId": "cate@bomet.go.ke"
+              }
+            ]
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S17-router-drops-inactive-unknown-channel-and-pseudo-audience",
+      "description": "Four rows the router must drop and two it must keep: active=false, an unknown channel (PUSH), the non-notifiable AUTO_ESCALATE pseudo-audience, a blank audience, and a row for another businessService. Only the WHATSAPP and EMAIL CITIZEN rows emit.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "CITIZEN",
+            "channel": "SMS",
+            "active": false
+          },
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "CITIZEN",
+            "channel": "PUSH",
+            "active": true
+          },
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "AUTO_ESCALATE",
+            "channel": "SMS",
+            "active": true
+          },
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "",
+            "channel": "SMS",
+            "active": true
+          },
+          {
+            "businessService": "TL",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "CITIZEN",
+            "channel": "SMS",
+            "active": true
+          },
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "CITIZEN",
+            "channel": "WHATSAPP",
+            "active": true
+          },
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "CITIZEN",
+            "channel": "EMAIL",
+            "active": true
+          }
+        ]
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "APPLY",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S18-whatsapp-provider-template-not-approved",
+      "description": "The only Twilio row for this key is approvalStatus=pending: PGR still EMITS the WHATSAPP envelope with no templateId/contentVariables so the bridge can write an auditable SKIPPED / NB_TEMPLATE_NOT_APPROVED row instead of dropping it silently.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "audience": "CITIZEN",
+            "channel": "WHATSAPP",
+            "active": true
+          }
+        ],
+        "providerTemplates": [
+          {
+            "provider": "twilio",
+            "channel": "WHATSAPP",
+            "audience": "CITIZEN",
+            "action": "APPLY",
+            "toState": "PENDINGFORASSIGNMENT",
+            "locale": "en_IN",
+            "templateId": "HXpending000000000000000000000000",
+            "templateName": "complaints_apply_pending_review",
+            "variables": [
+              "complaint_type",
+              "id",
+              "date"
+            ],
+            "approvalStatus": "pending",
+            "active": true
+          }
+        ]
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "APPLY",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S19-email-escapes-values-subject-does-not",
+      "description": "EMAIL bodies HTML-escape substituted values (they are delivered as raw HTML); the subject is plain text and is NOT escaped. The localized complaint type carries &, \" and < so both sides of the rule are visible in one envelope.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "REJECT",
+            "toState": "REJECTED",
+            "audience": "CITIZEN",
+            "channel": "EMAIL",
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "localization": {
+          "rainmaker-pgr": {
+            "messages": [
+              {
+                "code": "CS_COMMON_REJECTED",
+                "message": "Rejected",
+                "module": "rainmaker-pgr",
+                "locale": "en_IN"
+              },
+              {
+                "code": "pgr.complaint.category.GarbageNeedsTobeCleared",
+                "message": "Garbage & \"litter\" <cleared>",
+                "module": "rainmaker-pgr",
+                "locale": "en_IN"
+              }
+            ]
+          },
+          "rainmaker-common": {
+            "messages": [
+              {
+                "code": "COMMON_MASTERS_DESIGNATION_AO",
+                "message": "Accounts Officer",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              },
+              {
+                "code": "COMMON_MASTERS_DESIGNATION_DESIG_5",
+                "message": "Field Officer",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              },
+              {
+                "code": "COMMON_MASTERS_DEPARTMENT_DEPT_3",
+                "message": "Sanitation",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              },
+              {
+                "code": "KE_BOMET",
+                "message": "Bomet Municipality",
+                "module": "rainmaker-common",
+                "locale": "en_IN"
+              }
+            ]
+          }
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "REJECTED",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "REJECT",
+          "assignes": [],
+          "comments": "Duplicate of <b>PGR-2026-000101</b> & closed"
+        }
+      }
+    },
+    {
+      "id": "S20-email-subject-falls-back-to-complaint-id",
+      "description": "An EMAIL template with a null subject: Novu rejects a blank subject, so the service substitutes 'Complaint <serviceRequestId>'.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "EMAIL",
+            "active": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "EMAIL",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "LME alert: complaint {id} ({complaint_type}) at {ulb} is awaiting action.",
+            "placeholders": [
+              "complaint_type",
+              "id",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              }
+            ]
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S21-routed-channel-without-template-emits-nothing",
+      "description": "A routed (audience, channel) with a resolvable recipient but NO template in the recipient's locale nor the default: the recipient is skipped and nothing is emitted - today this is invisible downstream (no ledger row).",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "EMAIL",
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              }
+            ]
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S22-pool-member-without-uuid-keys-on-phone",
+      "description": "A pool holder with no uuid keys the subscriber on the phone number instead: subscriberId and transactionId carry the raw MSISDN (PII on the wire, masked only in the logs).",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "LME alert: complaint {id} ({complaint_type}) at {ulb} is awaiting action.",
+            "placeholders": [
+              "complaint_type",
+              "id",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": null,
+                "name": "Ops Desk",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "799000111",
+                "countryCode": "+254"
+              }
+            ]
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [],
+          "comments": null
+        }
+      }
+    },
+    {
+      "id": "S23-all-thirteen-placeholders",
+      "description": "One template using all 13 placeholders with every source healthy (localization, the URL shortener, egov-user, HRMS and MDMS ComplaintHierarchy). Pins exactly what each token resolves to for a role-pool recipient.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "ALL id={id} date={date} status={status} type={complaint_type} comments={additional_comments} rating={rating} citizen={citizen_name} link={download_link} ulb={ulb} ao={ao_designation} emp={emp_name} dept={emp_department} desig={emp_designation}",
+            "placeholders": [
+              "additional_comments",
+              "ao_designation",
+              "citizen_name",
+              "complaint_type",
+              "date",
+              "download_link",
+              "emp_department",
+              "emp_designation",
+              "emp_name",
+              "id",
+              "rating",
+              "status",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        },
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              }
+            ]
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          },
+          "rating": 4
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": "Please clear the dump site"
+        }
+      }
+    },
+    {
+      "id": "S24-url-shortener-down-blanks-download-link",
+      "description": "Same template with egov-url-shortening throwing: {download_link} is BLANKED (never left as a literal brace) and every other placeholder survives - the defensive try/catch structure the design says must be preserved.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "ALL id={id} date={date} status={status} type={complaint_type} comments={additional_comments} rating={rating} citizen={citizen_name} link={download_link} ulb={ulb} ao={ao_designation} emp={emp_name} dept={emp_department} desig={emp_designation}",
+            "placeholders": [
+              "additional_comments",
+              "ao_designation",
+              "citizen_name",
+              "complaint_type",
+              "date",
+              "download_link",
+              "emp_department",
+              "emp_designation",
+              "emp_name",
+              "id",
+              "rating",
+              "status",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        },
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              }
+            ]
+          ]
+        },
+        "shortUrlFails": true
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          },
+          "rating": 4
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": "Please clear the dump site"
+        }
+      }
+    },
+    {
+      "id": "S25-localization-down-falls-back-to-raw-values",
+      "description": "Same template with egov-localization throwing: {complaint_type} falls back to the raw service code, {status} to the raw applicationStatus, {ulb}/{ao_designation}/{emp_department}/{emp_designation} are left as literal braces, and id/date/rating/citizen_name/download_link/emp_name still resolve. This is the Twilio-21656 regression the base-placeholders-first ordering exists to prevent.",
+      "masters": {
+        "routing": [
+          {
+            "businessService": "PGR",
+            "fromState": null,
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "audience": "PGR_LME",
+            "channel": "SMS",
+            "active": true
+          }
+        ],
+        "templatesAppend": [
+          {
+            "audience": "PGR_LME",
+            "action": "ASSIGN",
+            "toState": "PENDINGATLME",
+            "channel": "SMS",
+            "locale": "en_IN",
+            "subject": null,
+            "body": "ALL id={id} date={date} status={status} type={complaint_type} comments={additional_comments} rating={rating} citizen={citizen_name} link={download_link} ulb={ulb} ao={ao_designation} emp={emp_name} dept={emp_department} desig={emp_designation}",
+            "placeholders": [
+              "additional_comments",
+              "ao_designation",
+              "citizen_name",
+              "complaint_type",
+              "date",
+              "download_link",
+              "emp_department",
+              "emp_designation",
+              "emp_name",
+              "id",
+              "rating",
+              "status",
+              "ulb"
+            ],
+            "active": true
+          }
+        ]
+      },
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        },
+        "rolePools": {
+          "PGR_LME": [
+            [
+              {
+                "uuid": "lme-brian",
+                "name": "Brian Kiptoo",
+                "type": "EMPLOYEE",
+                "createdDate": "01-01-2026 10:00:00",
+                "mobileNumber": "733222333",
+                "countryCode": "+254",
+                "emailId": "brian@bomet.go.ke"
+              }
+            ]
+          ]
+        },
+        "localizationFails": true
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          },
+          "rating": 4
+        },
+        "workflow": {
+          "action": "ASSIGN",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": "Please clear the dump site"
+        }
+      }
+    },
+    {
+      "id": "S26-escalate-has-no-routing-today",
+      "description": "PGR's supervisor escalation (PGRConstants.ESCALATE, PENDINGATLME --ESCALATE--> PENDINGATLME) reaches this code through the same Kafka path as every other transition, but the shipped seed has NO routing row for it: the new supervisor is never told. Recorded as current behaviour, not endorsed - the escalation notification gap is real.",
+      "world": {
+        "hrms": {
+          "Employees": [
+            {
+              "user": {
+                "name": "Jane Mwangi",
+                "mobileNumber": "722000111",
+                "emailId": "jane.mwangi@bomet.go.ke"
+              },
+              "assignments": [
+                {
+                  "department": "DEPT_3",
+                  "designation": "DESIG_5",
+                  "isCurrentAssignment": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "request": {
+        "RequestInfo": {
+          "apiId": "Rainmaker",
+          "ver": ".01",
+          "ts": 1782734400000,
+          "action": "_update",
+          "msgId": "1782734400000|en_IN",
+          "userInfo": {
+            "id": 1,
+            "uuid": "citizen-uuid-1",
+            "type": "CITIZEN",
+            "userName": "amina",
+            "name": "Amina Chebet",
+            "tenantId": "ke.bomet"
+          }
+        },
+        "service": {
+          "tenantId": "ke.bomet",
+          "serviceRequestId": "PGR-2026-000123",
+          "serviceCode": "GarbageNeedsTobeCleared",
+          "applicationStatus": "PENDINGATLME",
+          "accountId": "citizen-uuid-1",
+          "source": "web",
+          "active": true,
+          "address": {
+            "tenantId": "ke.bomet",
+            "district": "KE_BOMET",
+            "city": "Bomet"
+          },
+          "auditDetails": {
+            "createdBy": "citizen-uuid-1",
+            "createdTime": 1782734400000,
+            "lastModifiedBy": "citizen-uuid-1",
+            "lastModifiedTime": 1782734400000
+          },
+          "citizen": {
+            "uuid": "citizen-uuid-1",
+            "name": "Amina Chebet",
+            "mobileNumber": "712345678",
+            "countryCode": "+254",
+            "emailId": "amina@example.com",
+            "type": "CITIZEN"
+          }
+        },
+        "workflow": {
+          "action": "ESCALATE",
+          "assignes": [
+            "emp-jane"
+          ],
+          "comments": "Escalated to the reporting officer"
+        }
+      }
+    }
+  ]
+}

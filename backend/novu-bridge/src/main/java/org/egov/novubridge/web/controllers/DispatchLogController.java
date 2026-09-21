@@ -47,7 +47,9 @@ public class DispatchLogController {
      * List delivery-log rows for a tenant, newest first. {@code tenantId} is
      * required. Optional filters: {@code referenceNumber} (complaint number —
      * exact, or prefix when {@code referenceNumberPrefix=true}), {@code transactionId},
-     * {@code channel}, {@code status}. Paged via {@code limit}/{@code offset}.
+     * {@code channel} (including {@code NONE} for the channel-less rows),
+     * {@code status}, {@code sourcePath} ({@code PRERENDERED} | {@code RESOLVED} — which
+     * inbound kind produced the row). Paged via {@code limit}/{@code offset}.
      *
      * @return {@code {data:[DispatchLogEntry...], total}} where total is the
      *         unpaged count for the same filters.
@@ -60,6 +62,7 @@ public class DispatchLogController {
             @RequestParam(name = "transactionId", required = false) String transactionId,
             @RequestParam(name = "channel", required = false) String channel,
             @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "sourcePath", required = false) String sourcePath,
             @RequestParam(name = "includeTest", required = false, defaultValue = "false") boolean includeTest,
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "offset", required = false) Integer offset) {
@@ -72,10 +75,11 @@ public class DispatchLogController {
         int effectiveOffset = offset == null ? 0 : Math.max(offset, 0);
 
         List<DispatchLogEntry> data = dispatchLogRepository.list(
-                tenantId, referenceNumber, referenceNumberPrefix, transactionId, channel, status, includeTest,
-                effectiveLimit, effectiveOffset);
+                tenantId, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath,
+                includeTest, effectiveLimit, effectiveOffset);
         long total = dispatchLogRepository.count(
-                tenantId, referenceNumber, referenceNumberPrefix, transactionId, channel, status, includeTest);
+                tenantId, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath,
+                includeTest);
 
         // Mask recipient PII server-side so the full value never crosses the wire.
         // recipient_value is the subscriberId (tenantId:userUuid, or tenantId:mobile

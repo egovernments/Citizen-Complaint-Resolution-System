@@ -38,26 +38,26 @@ class DispatchLogControllerTest {
     void setUp() {
         repository = mock(DispatchLogRepository.class);
         controller = new DispatchLogController(repository);
-        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
+        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
                 .thenReturn(Collections.emptyList());
-        when(repository.count(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean()))
+        when(repository.count(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean()))
                 .thenReturn(0L);
     }
 
     @Test
     void blankTenantId_returns400_noRepositoryCall() {
-        assertEquals(400, controller.logs(null, null, false, null, null, null, false, null, null).getStatusCode().value());
-        assertEquals(400, controller.logs("   ", null, false, null, null, null, false, null, null).getStatusCode().value());
-        verify(repository, never()).list(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean(), anyInt(), anyInt());
-        verify(repository, never()).count(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean());
+        assertEquals(400, controller.logs(null, null, false, null, null, null, null, false, null, null).getStatusCode().value());
+        assertEquals(400, controller.logs("   ", null, false, null, null, null, null, false, null, null).getStatusCode().value());
+        verify(repository, never()).list(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt());
+        verify(repository, never()).count(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
     void filters_arePassedThroughVerbatim() {
-        controller.logs("ke.bomet", "PGR-001", true, "txn-1", "SMS", "SENT", false, 25, 5);
+        controller.logs("ke.bomet", "PGR-001", true, "txn-1", "SMS", "SENT", "RESOLVED", false, 25, 5);
 
-        verify(repository).list(eq("ke.bomet"), eq("PGR-001"), eq(true), eq("txn-1"), eq("SMS"), eq("SENT"), eq(false), eq(25), eq(5));
-        verify(repository).count(eq("ke.bomet"), eq("PGR-001"), eq(true), eq("txn-1"), eq("SMS"), eq("SENT"), eq(false));
+        verify(repository).list(eq("ke.bomet"), eq("PGR-001"), eq(true), eq("txn-1"), eq("SMS"), eq("SENT"), eq("RESOLVED"), eq(false), eq(25), eq(5));
+        verify(repository).count(eq("ke.bomet"), eq("PGR-001"), eq(true), eq("txn-1"), eq("SMS"), eq("SENT"), eq("RESOLVED"), eq(false));
     }
 
     @Test
@@ -65,12 +65,12 @@ class DispatchLogControllerTest {
         ArgumentCaptor<Integer> limit = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<Integer> offset = ArgumentCaptor.forClass(Integer.class);
 
-        controller.logs("ke.bomet", null, false, null, null, null, false, null, null);   // default
-        controller.logs("ke.bomet", null, false, null, null, null, false, 0, null);      // clamp up to 1
-        controller.logs("ke.bomet", null, false, null, null, null, false, 9999, -10);    // clamp down to 500, offset floor 0
+        controller.logs("ke.bomet", null, false, null, null, null, null, false, null, null);   // default
+        controller.logs("ke.bomet", null, false, null, null, null, null, false, 0, null);      // clamp up to 1
+        controller.logs("ke.bomet", null, false, null, null, null, null, false, 9999, -10);    // clamp down to 500, offset floor 0
 
         verify(repository, org.mockito.Mockito.times(3))
-                .list(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean(), limit.capture(), offset.capture());
+                .list(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean(), limit.capture(), offset.capture());
 
         List<Integer> limits = limit.getAllValues();
         List<Integer> offsets = offset.getAllValues();
@@ -83,17 +83,17 @@ class DispatchLogControllerTest {
 
     @Test
     void total_comesFromCountWithSameFilters() {
-        when(repository.count(eq("ke.bomet"), eq("PGR-001"), eq(false), eq("txn-9"), eq("EMAIL"), eq("FAILED"), anyBoolean()))
+        when(repository.count(eq("ke.bomet"), eq("PGR-001"), eq(false), eq("txn-9"), eq("EMAIL"), eq("FAILED"), any(), anyBoolean()))
                 .thenReturn(1234L);
 
         ResponseEntity<DispatchLogListResponse> response =
-                controller.logs("ke.bomet", "PGR-001", false, "txn-9", "EMAIL", "FAILED", false, 50, 0);
+                controller.logs("ke.bomet", "PGR-001", false, "txn-9", "EMAIL", "FAILED", null, false, 50, 0);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1234L, response.getBody().getTotal());
         // count must have received the identical filter tuple as list.
-        verify(repository).count(eq("ke.bomet"), eq("PGR-001"), eq(false), eq("txn-9"), eq("EMAIL"), eq("FAILED"), anyBoolean());
-        verify(repository).list(eq("ke.bomet"), eq("PGR-001"), eq(false), eq("txn-9"), eq("EMAIL"), eq("FAILED"), anyBoolean(), eq(50), eq(0));
+        verify(repository).count(eq("ke.bomet"), eq("PGR-001"), eq(false), eq("txn-9"), eq("EMAIL"), eq("FAILED"), any(), anyBoolean());
+        verify(repository).list(eq("ke.bomet"), eq("PGR-001"), eq(false), eq("txn-9"), eq("EMAIL"), eq("FAILED"), any(), anyBoolean(), eq(50), eq(0));
     }
 
     @Test
@@ -103,11 +103,11 @@ class DispatchLogControllerTest {
                 .recipientValue("ke.bomet:0712345678")
                 .transactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS")
                 .build();
-        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
+        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
                 .thenReturn(List.of(row));
 
         ResponseEntity<DispatchLogListResponse> response =
-                controller.logs("ke.bomet", null, false, null, null, null, false, null, null);
+                controller.logs("ke.bomet", null, false, null, null, null, null, false, null, null);
 
         DispatchLogEntry masked = response.getBody().getData().get(0);
         // The raw phone-bearing recipient value must never cross the wire.
@@ -137,11 +137,11 @@ class DispatchLogControllerTest {
                 .transactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS")
                 .providerResponse(providerResponse)
                 .build();
-        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
+        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
                 .thenReturn(List.of(row));
 
         ResponseEntity<DispatchLogListResponse> response =
-                controller.logs("ke.bomet", null, false, null, null, null, false, null, null);
+                controller.logs("ke.bomet", null, false, null, null, null, null, false, null, null);
 
         DispatchLogEntry masked = response.getBody().getData().get(0);
         String serialized = String.valueOf(masked.getProviderResponse());

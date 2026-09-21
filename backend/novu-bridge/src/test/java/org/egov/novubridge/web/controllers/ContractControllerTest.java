@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -44,6 +45,26 @@ class ContractControllerTest {
     }
 
     @Test
+    @DisplayName("GET /contract/thin-event returns the packaged thin-event JSON Schema as JSON")
+    void thinEventServesThePackagedSchema() throws Exception {
+        ResponseEntity<String> response = controller.thinEvent();
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(MediaType.APPLICATION_JSON, response.getHeaders().getContentType());
+        Map<?, ?> parsed = new ObjectMapper().readValue(response.getBody(), Map.class);
+        assertEquals("https://json-schema.org/draft/2020-12/schema", parsed.get("$schema"));
+        assertEquals("https://digit.org/schemas/notifications/thin-event-v1.schema.json", parsed.get("$id"));
+        assertNotNull(parsed.get("properties"), "the served schema must describe the thin event");
+    }
+
+    @Test
+    @DisplayName("the two schema endpoints serve DIFFERENT documents — one per inbound kind")
+    void theTwoSchemasAreNotTheSameDocument() {
+        assertNotEquals(controller.envelope().getBody(), controller.thinEvent().getBody(),
+                "a copy-paste that served one schema from both paths would be invisible without this");
+    }
+
+    @Test
     @DisplayName("GET /contract/openapi returns the packaged spec as YAML")
     void openapiServesThePackagedSpec() {
         ResponseEntity<String> response = controller.openapi();
@@ -65,7 +86,8 @@ class ContractControllerTest {
         config.setProxyAdminRoles(List.of("SUPERUSER"));
         ProxyAuthFilter filter = new ProxyAuthFilter(restTemplate, config);
 
-        for (String path : List.of("/novu-adapter/v1/contract/envelope", "/novu-adapter/v1/contract/openapi")) {
+        for (String path : List.of("/novu-adapter/v1/contract/envelope", "/novu-adapter/v1/contract/thin-event",
+                "/novu-adapter/v1/contract/openapi")) {
             MockHttpServletRequest request = new MockHttpServletRequest();
             request.setMethod("GET");
             request.setServletPath(path);

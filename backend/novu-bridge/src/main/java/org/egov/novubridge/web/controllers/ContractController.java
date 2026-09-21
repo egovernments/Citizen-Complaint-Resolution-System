@@ -13,9 +13,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * The published contract, served by the service that implements it. Two read-only documents:
- * the JSON Schema of the inbound Kafka envelope and the OpenAPI description of every
- * {@code /novu-adapter/v1} endpoint. Both are the byte-identical copies packaged in this jar
+ * The published contract, served by the service that implements it. Three read-only documents:
+ * the JSON Schema of each inbound Kafka kind — the pre-rendered envelope and the thin domain
+ * event, told apart by the {@code kind} discriminator — and the OpenAPI description of every
+ * {@code /novu-adapter/v1} endpoint. All are the byte-identical copies packaged in this jar
  * under {@code contract/}, so what a consumer fetches is what this build actually enforces —
  * never a wiki page that drifted.
  *
@@ -36,12 +37,22 @@ import java.nio.charset.StandardCharsets;
 public class ContractController {
 
     static final String ENVELOPE_SCHEMA = "contract/envelope-v1.schema.json";
+    static final String THIN_EVENT_SCHEMA = "contract/thin-event-v1.schema.json";
     static final String OPENAPI = "contract/openapi.yaml";
 
     /** JSON Schema (2020-12) of the inbound Kafka envelope, schema version 1. */
     @GetMapping(value = "/envelope", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> envelope() {
         return serve(ENVELOPE_SCHEMA, MediaType.APPLICATION_JSON);
+    }
+
+    /**
+     * JSON Schema (2020-12) of the inbound Kafka thin domain event, schema version 1 —
+     * {@code kind: "THIN"}. The kind a new module should produce.
+     */
+    @GetMapping(value = "/thin-event", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> thinEvent() {
+        return serve(THIN_EVENT_SCHEMA, MediaType.APPLICATION_JSON);
     }
 
     /** OpenAPI 3.0 description of every /novu-adapter/v1 endpoint this build exposes. */

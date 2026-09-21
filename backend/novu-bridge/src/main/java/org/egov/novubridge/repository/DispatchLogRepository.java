@@ -40,7 +40,7 @@ public class DispatchLogRepository {
         // redelivery upserts the same row instead of duplicating a send.
         String sql = "INSERT INTO nb_dispatch_log(id, event_id, transaction_id, reference_number, module, event_name, tenant_id, channel, recipient_value, " +
                 "template_key, template_version, status, attempt_count, last_error_code, last_error_message, provider_response_jsonb, " +
-                "created_time, last_modified_time, is_test, provider_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?, ?, ?) " +
+                "created_time, last_modified_time, is_test, provider_ref, source_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?, ?, ?, ?) " +
                 "ON CONFLICT (transaction_id, channel, recipient_value) DO UPDATE SET status=EXCLUDED.status, attempt_count=EXCLUDED.attempt_count, " +
                 "last_error_code=EXCLUDED.last_error_code, last_error_message=EXCLUDED.last_error_message, " +
                 "provider_response_jsonb=EXCLUDED.provider_response_jsonb, last_modified_time=EXCLUDED.last_modified_time, " +
@@ -67,12 +67,28 @@ public class DispatchLogRepository {
                     entry.getCreatedTime(),
                     entry.getLastModifiedTime(),
                     Boolean.TRUE.equals(entry.getIsTest()),
-                    entry.getProviderRef());
+                    entry.getProviderRef(),
+                    sourcePathOf(entry));
         } catch (JsonProcessingException e) {
             log.error("Failed serializing provider response for eventId={}", entry.getEventId(), e);
         } catch (Exception e) {
             log.error("Failed to upsert dispatch log for eventId={}", entry.getEventId(), e);
         }
+    }
+
+    /**
+     * The path a row came in on, defaulting to {@code PRERENDERED}.
+     *
+     * <p>The default lives HERE rather than at every call site, because the pre-rendered pipeline
+     * predates the column and must keep writing byte-identical rows without being edited in eight
+     * places to say what it has always been. A bind of NULL would not do — an explicit NULL beats
+     * a column DEFAULT and would fail the NOT NULL — so the value is written, not omitted, and
+     * there is never a row whose path a reader has to infer.
+     */
+    private static String sourcePathOf(DispatchLogEntry entry) {
+        return StringUtils.hasText(entry.getSourcePath())
+                ? entry.getSourcePath()
+                : DispatchLogEntry.SOURCE_PATH_PRERENDERED;
     }
 
     /**
@@ -129,16 +145,17 @@ public class DispatchLogRepository {
     }
 
     public List<DispatchLogEntry> list(String tenantId, String referenceNumber, boolean referenceNumberPrefix,
-                                       String transactionId, String channel, String status, boolean includeTest,
-                                       int limit, int offset) {
+                                       String transactionId, String channel, String status, String sourcePath,
+                                       boolean includeTest, int limit, int offset) {
         StringBuilder sql = new StringBuilder(
                 "SELECT id, event_id, transaction_id, reference_number, module, event_name, tenant_id, channel, " +
                         "recipient_value, template_key, template_version, status, attempt_count, last_error_code, " +
-                        "last_error_message, provider_response_jsonb, created_time, last_modified_time, is_test, provider_ref, delivered_time " +
+                        "last_error_message, provider_response_jsonb, created_time, last_modified_time, is_test, provider_ref, delivered_time, " +
+                        "source_path " +
                         "FROM nb_dispatch_log WHERE tenant_id = ?");
         List<Object> args = new ArrayList<>();
         args.add(tenantId);
-        appendFilters(sql, args, referenceNumber, referenceNumberPrefix, transactionId, channel, status, includeTest);
+        appendFilters(sql, args, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath, includeTest);
         sql.append(" ORDER BY created_time DESC, last_modified_time DESC LIMIT ? OFFSET ?");
         args.add(limit);
         args.add(offset);
@@ -151,18 +168,18 @@ public class DispatchLogRepository {
      * see {@link #list} for the observability-boundary caveat.
      */
     public long count(String tenantId, String referenceNumber, boolean referenceNumberPrefix,
-                      String transactionId, String channel, String status, boolean includeTest) {
+                      String transactionId, String channel, String status, String sourcePath, boolean includeTest) {
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM nb_dispatch_log WHERE tenant_id = ?");
         List<Object> args = new ArrayList<>();
         args.add(tenantId);
-        appendFilters(sql, args, referenceNumber, referenceNumberPrefix, transactionId, channel, status, includeTest);
+        appendFilters(sql, args, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath, includeTest);
         Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
         return total != null ? total : 0L;
     }
 
     private void appendFilters(StringBuilder sql, List<Object> args, String referenceNumber,
                                boolean referenceNumberPrefix, String transactionId, String channel, String status,
-                               boolean includeTest) {
+                               String sourcePath, boolean includeTest) {
         if (!includeTest) {
             sql.append(" AND is_test = FALSE");
         }
@@ -186,6 +203,10 @@ public class DispatchLogRepository {
         if (StringUtils.hasText(status)) {
             sql.append(" AND status = ?");
             args.add(status);
+        }
+        if (StringUtils.hasText(sourcePath)) {
+            sql.append(" AND source_path = ?");
+            args.add(sourcePath);
         }
     }
 
@@ -224,6 +245,7 @@ public class DispatchLogRepository {
                     .isTest(rs.getBoolean("is_test"))
                     .providerRef(rs.getString("provider_ref"))
                     .deliveredTime((Long) rs.getObject("delivered_time"))
+                    .sourcePath(rs.getString("source_path"))
                     .build();
         };
     }

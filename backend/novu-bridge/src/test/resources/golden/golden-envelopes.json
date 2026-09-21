@@ -1,0 +1,2447 @@
+{
+  "$comment": "GENERATED - do not hand-edit. See src/test/resources/golden/README.md. Regenerate with -Dgolden.regenerate=true ONLY for an intended behaviour change.",
+  "generator": "org.egov.pgr.service.notification.golden.GoldenEnvelopeFixtureGenerator",
+  "inputs": "golden/inputs/scenarios.json",
+  "normalisedFields": {
+    "event.eventId": "<uuid>",
+    "event.eventTime": "<timestamp>"
+  },
+  "envelopeOrdering": "envelopes[] sorted by (event.transactionId, event.templateKey, event.renderedBody); emissionOrder[] preserves the order the producer was actually called in",
+  "scenarios": [
+    {
+      "id": "S01-apply-citizen-all-channels",
+      "description": "APPLY -> PENDINGFORASSIGNMENT. Citizen with phone AND email; default locale. Three seeded CITIZEN rows (SMS/WHATSAPP/EMAIL); WHATSAPP has an approved Twilio provider template so templateId + positional contentVariables ride along.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            },
+            "templateId": "HX67fae4a61c4f50db8a11ebac21c50a79",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S02-apply-citizen-phone-only",
+      "description": "Same transition, citizen has NO email: the EMAIL row is contact-gated away (no phantom send), SMS + WHATSAPP still emit.",
+      "envelopeCount": 2,
+      "emissionOrder": [
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": null,
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": null,
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            },
+            "templateId": "HX67fae4a61c4f50db8a11ebac21c50a79",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S03-apply-citizen-uuid-falls-back-to-accountId",
+      "description": "Citizen carries no uuid: the subscriber key falls back to service.accountId. The mobile already starts with '+', so the countryCode is NOT prefixed again.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:account-uuid-9:SMS",
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:account-uuid-9:WHATSAPP",
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:account-uuid-9:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:account-uuid-9",
+            "contact": {
+              "userId": "account-uuid-9",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:account-uuid-9:EMAIL",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:account-uuid-9",
+            "contact": {
+              "userId": "account-uuid-9",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:account-uuid-9:SMS",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:account-uuid-9",
+            "contact": {
+              "userId": "account-uuid-9",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:account-uuid-9:WHATSAPP",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            },
+            "templateId": "HX67fae4a61c4f50db8a11ebac21c50a79",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S04-assign-citizen-and-assignee",
+      "description": "ASSIGN -> PENDINGATLME with a named assignee (workflow.assignes[0]) resolved through egov-user, plus HRMS + MDMS ComplaintHierarchy so {emp_name}/{emp_department}/{emp_designation} resolve. Six envelopes: CITIZEN x3 and EMPLOYEE x3. The EMPLOYEE WHATSAPP row has NO provider template in the seed (they are all CITIZEN) so it emits with no templateId for an auditable bridge-side SKIP.",
+      "envelopeCount": 6,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to Jane Mwangi, Field Officer, Sanitation. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to Jane Mwangi, Field Officer, Sanitation. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to Jane Mwangi, Field Officer, Sanitation. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            },
+            "templateId": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "Jane Mwangi",
+              "5": "Field Officer",
+              "6": "Sanitation"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for 'Garbage needs to be cleared' with ID PGR-2026-000123 has been assigned to you. Please take appropriate action. Accounts Officer - Bomet Municipality.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:EMAIL",
+            "templateKey": "EMPLOYEE.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for 'Garbage needs to be cleared' with ID PGR-2026-000123 has been assigned to you. Please take appropriate action. Accounts Officer - Bomet Municipality.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:SMS",
+            "templateKey": "EMPLOYEE.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for 'Garbage needs to be cleared' with ID PGR-2026-000123 has been assigned to you. Please take appropriate action. Accounts Officer - Bomet Municipality.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:WHATSAPP",
+            "templateKey": "EMPLOYEE.ASSIGN.PENDINGATLME.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S05-reassign-citizen",
+      "description": "REASSIGN -> PENDINGFORREASSIGNMENT. The seeded rows author fromState=PENDINGATLME, which the Kafka path never supplies, so they match anyway (documentation-only).",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.REASSIGN.PENDINGFORREASSIGNMENT.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORREASSIGNMENT",
+              "action": "REASSIGN",
+              "toState": "PENDINGFORREASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.REASSIGN.PENDINGFORREASSIGNMENT.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORREASSIGNMENT",
+              "action": "REASSIGN",
+              "toState": "PENDINGFORREASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:REASSIGN:PENDINGFORREASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.REASSIGN.PENDINGFORREASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORREASSIGNMENT",
+              "action": "REASSIGN",
+              "toState": "PENDINGFORREASSIGNMENT"
+            },
+            "templateId": "HX7dc390ab0a8cd7cd3bde32768278dbd7",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "",
+              "5": "",
+              "6": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S06-resolve-citizen",
+      "description": "RESOLVE -> RESOLVED, citizen only.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.RESOLVE.RESOLVED.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "RESOLVED",
+              "action": "RESOLVE",
+              "toState": "RESOLVED"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.RESOLVE.RESOLVED.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "RESOLVED",
+              "action": "RESOLVE",
+              "toState": "RESOLVED"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.RESOLVE",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:RESOLVE:RESOLVED:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.RESOLVE.RESOLVED.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "RESOLVED",
+              "action": "RESOLVE",
+              "toState": "RESOLVED"
+            },
+            "templateId": "HXe6f34b83cc6e7179c0ede06472dd81fb",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S07-reject-citizen-with-comments",
+      "description": "REJECT -> REJECTED; workflow.comments becomes {additional_comments}.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been rejected. Reason for Rejection: Duplicate of PGR-2026-000101 If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.REJECT.REJECTED.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "REJECTED",
+              "action": "REJECT",
+              "toState": "REJECTED"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been rejected. Reason for Rejection: Duplicate of PGR-2026-000101 If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.REJECT.REJECTED.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "REJECTED",
+              "action": "REJECT",
+              "toState": "REJECTED"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been rejected. Reason for Rejection: Duplicate of PGR-2026-000101 If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.REJECT.REJECTED.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "REJECTED",
+              "action": "REJECT",
+              "toState": "REJECTED"
+            },
+            "templateId": "HXea318abc741dd5c09555617a4ecad490",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "Duplicate of PGR-2026-000101"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S08-reopen-citizen",
+      "description": "REOPEN -> PENDINGFORASSIGNMENT, citizen only.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REOPEN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.REOPEN.PENDINGFORASSIGNMENT.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "REOPEN",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REOPEN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.REOPEN.PENDINGFORASSIGNMENT.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "REOPEN",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REOPEN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:REOPEN:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.REOPEN.PENDINGFORASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "REOPEN",
+              "toState": "PENDINGFORASSIGNMENT"
+            },
+            "templateId": "HXc7f239a0b267bbe208898c32bbd6034a",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S09-rate-closedafterresolution-assignee-from-history",
+      "description": "RATE -> CLOSEDAFTERRESOLUTION. workflow.assignes is empty, so the assignee comes from the LAST ASSIGN in workflow history (egov-workflow-v2 ?history=true) and is then hydrated from egov-user. EMPLOYEE-only routing; {rating} is filled.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION:ke.bomet:emp-jane:SMS",
+        "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION:ke.bomet:emp-jane:WHATSAPP",
+        "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION:ke.bomet:emp-jane:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.RATE",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for Garbage needs to be cleared with ID PGR-2026-000123 has received 5/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION:ke.bomet:emp-jane:EMAIL",
+            "templateKey": "EMPLOYEE.RATE.CLOSEDAFTERRESOLUTION.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "CLOSEDAFTERRESOLUTION",
+              "action": "RATE",
+              "toState": "CLOSEDAFTERRESOLUTION"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.RATE",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for Garbage needs to be cleared with ID PGR-2026-000123 has received 5/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION:ke.bomet:emp-jane:SMS",
+            "templateKey": "EMPLOYEE.RATE.CLOSEDAFTERRESOLUTION.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "CLOSEDAFTERRESOLUTION",
+              "action": "RATE",
+              "toState": "CLOSEDAFTERRESOLUTION"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.RATE",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for Garbage needs to be cleared with ID PGR-2026-000123 has received 5/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:RATE:CLOSEDAFTERRESOLUTION:ke.bomet:emp-jane:WHATSAPP",
+            "templateKey": "EMPLOYEE.RATE.CLOSEDAFTERRESOLUTION.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "CLOSEDAFTERRESOLUTION",
+              "action": "RATE",
+              "toState": "CLOSEDAFTERRESOLUTION"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S10-rate-closedafterrejection-no-routing",
+      "description": "RATE -> CLOSEDAFTERREJECTION has NO routing row in the seed: zero envelopes. This is the transition the design calls out as invisible today (no ledger row at all).",
+      "envelopeCount": 0,
+      "emissionOrder": [ ],
+      "envelopes": [ ]
+    },
+    {
+      "id": "S11-assign-citizen-prefers-hi",
+      "description": "The citizen's user-preference is hi_IN: body, subject and Twilio provider template all come from the hi_IN rows and contact.locale is hi_IN. NOTE the placeholder VALUES are still English - they are localized once per event from RequestInfo.msgId, not per recipient. No assignee, so the EMPLOYEE rows resolve to nobody and the CITIZEN body keeps its literal {emp_name}/{emp_designation}/{emp_department} braces.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "hi_IN"
+            },
+            "renderedBody": "प्रिय नागरिक, Garbage needs to be cleared और आईडी PGR-2026-000123 वाली आपकी शिकायत, जो 29/06/2026 को जमा की गई थी, {emp_name}, {emp_designation} और {emp_department} को सौंपी गई है। आप पोर्टल पर अपनी शिकायत की स्थिति देख सकते हैं। ई-गव फाउंडेशन",
+            "subject": "DIGIT: शिकायत PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.EMAIL.hi_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "hi_IN"
+            },
+            "renderedBody": "प्रिय नागरिक, Garbage needs to be cleared और आईडी PGR-2026-000123 वाली आपकी शिकायत, जो 29/06/2026 को जमा की गई थी, {emp_name}, {emp_designation} और {emp_department} को सौंपी गई है। आप पोर्टल पर अपनी शिकायत की स्थिति देख सकते हैं। ई-गव फाउंडेशन",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.SMS.hi_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "hi_IN"
+            },
+            "renderedBody": "प्रिय नागरिक, Garbage needs to be cleared और आईडी PGR-2026-000123 वाली आपकी शिकायत, जो 29/06/2026 को जमा की गई थी, {emp_name}, {emp_designation} और {emp_department} को सौंपी गई है। आप पोर्टल पर अपनी शिकायत की स्थिति देख सकते हैं। ई-गव फाउंडेशन",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.WHATSAPP.hi_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            },
+            "templateId": "HX0d5538241557b1b56a910b8a48fc6b48",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "",
+              "5": "",
+              "6": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S12-assign-citizen-prefers-unseeded-locale",
+      "description": "Preference fr_FR has no template: body/subject/templateKey fall back to the default locale (en_IN) and so does the WhatsApp provider template - but contact.locale still carries the recipient's fr_FR.",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "fr_FR"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "fr_FR"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "fr_FR"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            },
+            "templateId": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "",
+              "5": "",
+              "6": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S13-assign-msgid-drives-placeholder-localization",
+      "description": "RequestInfo.msgId carries hi_IN while the recipient has no preference: the TEMPLATE is en_IN but {complaint_type}/{status} are localized in hi_IN. Pins the split between placeholder localization (msgId, per event) and template locale (per recipient).",
+      "envelopeCount": 3,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for कचरा साफ किया जाने की जरूरत है with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (कचरा साफ किया जाने की जरूरत है)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for कचरा साफ किया जाने की जरूरत है with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for कचरा साफ किया जाने की जरूरत है with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            },
+            "templateId": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+            "contentVariables": {
+              "1": "कचरा साफ किया जाने की जरूरत है",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "",
+              "5": "",
+              "6": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S14-assign-role-pool-dedupe-paging",
+      "description": "Seeded ASSIGN rows PLUS an extra PGR_LME SMS row. The pool has three holders paged two at a time: emp-jane (also the assignee - deduped on (channel, subscriberKey), audience deliberately not in the key), a holder with neither phone nor email (dropped at pool resolution) and lme-brian (emitted). Seven envelopes.",
+      "envelopeCount": 7,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:WHATSAPP",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:EMAIL",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to Jane Mwangi, Field Officer, Sanitation. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to Jane Mwangi, Field Officer, Sanitation. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:SMS",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared with ID PGR-2026-000123 submitted on 29/06/2026 has been assigned to Jane Mwangi, Field Officer, Sanitation. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.ASSIGN.PENDINGATLME.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            },
+            "templateId": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026",
+              "4": "Jane Mwangi",
+              "5": "Field Officer",
+              "6": "Sanitation"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for 'Garbage needs to be cleared' with ID PGR-2026-000123 has been assigned to you. Please take appropriate action. Accounts Officer - Bomet Municipality.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:EMAIL",
+            "templateKey": "EMPLOYEE.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for 'Garbage needs to be cleared' with ID PGR-2026-000123 has been assigned to you. Please take appropriate action. Accounts Officer - Bomet Municipality.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:SMS",
+            "templateKey": "EMPLOYEE.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Shri Jane Mwangi, Complaint for 'Garbage needs to be cleared' with ID PGR-2026-000123 has been assigned to you. Please take appropriate action. Accounts Officer - Bomet Municipality.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:WHATSAPP",
+            "templateKey": "EMPLOYEE.ASSIGN.PENDINGATLME.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:lme-brian",
+            "contact": {
+              "userId": "lme-brian",
+              "type": "PGR_LME",
+              "name": "Brian Kiptoo",
+              "phone": "+254733222333",
+              "email": "brian@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "LME alert: complaint PGR-2026-000123 (Garbage needs to be cleared) at Bomet Municipality is awaiting action.",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S15-assigneeOnly-collapses-role-to-assignee",
+      "description": "A single PGR_LME SMS row with assigneeOnly=true and a named assignee: the pool is not searched at all and the row collapses to the assignee. NOTE contact.type is EMPLOYEE (from assignee resolution) while the TEMPLATE is still looked up under PGR_LME.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:emp-jane",
+            "contact": {
+              "userId": "emp-jane",
+              "type": "EMPLOYEE",
+              "name": "Jane Mwangi",
+              "phone": "+254722000111",
+              "email": "jane.mwangi@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "LME alert: complaint PGR-2026-000123 (Garbage needs to be cleared) at Bomet Municipality is awaiting action.",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:emp-jane:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S16-assigneeOnly-without-assignee-falls-back-to-pool",
+      "description": "Same row, but nothing names an assignee (no workflow.assignes, no history): rather than notifying no one, the row falls through to the full role pool.",
+      "envelopeCount": 2,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS",
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-cate:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:lme-brian",
+            "contact": {
+              "userId": "lme-brian",
+              "type": "PGR_LME",
+              "name": "Brian Kiptoo",
+              "phone": "+254733222333",
+              "email": "brian@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "LME alert: complaint PGR-2026-000123 (Garbage needs to be cleared) at Bomet Municipality is awaiting action.",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:lme-cate",
+            "contact": {
+              "userId": "lme-cate",
+              "type": "PGR_LME",
+              "name": "Cate Wanjiru",
+              "phone": "+254744333444",
+              "email": "cate@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "LME alert: complaint PGR-2026-000123 (Garbage needs to be cleared) at Bomet Municipality is awaiting action.",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-cate:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S17-router-drops-inactive-unknown-channel-and-pseudo-audience",
+      "description": "Four rows the router must drop and two it must keep: active=false, an unknown channel (PUSH), the non-notifiable AUTO_ESCALATE pseudo-audience, a blank audience, and a row for another businessService. Only the WHATSAPP and EMAIL CITIZEN rows emit.",
+      "envelopeCount": 2,
+      "emissionOrder": [
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage needs to be cleared)",
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        },
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            },
+            "templateId": "HX67fae4a61c4f50db8a11ebac21c50a79",
+            "contentVariables": {
+              "1": "Garbage needs to be cleared",
+              "2": "PGR-2026-000123",
+              "3": "29/06/2026"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S18-whatsapp-provider-template-not-approved",
+      "description": "The only Twilio row for this key is approvalStatus=pending: PGR still EMITS the WHATSAPP envelope with no templateId/contentVariables so the bridge can write an auditable SKIPPED / NB_TEMPLATE_NOT_APPROVED row instead of dropping it silently.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "WHATSAPP",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage needs to be cleared has been submitted with ID PGR-2026-000123 on 29/06/2026. You can track your complaint status on the web portal.\n\nEGOVS",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:ke.bomet:citizen-uuid-1:WHATSAPP",
+            "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.WHATSAPP.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGFORASSIGNMENT",
+              "action": "APPLY",
+              "toState": "PENDINGFORASSIGNMENT"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S19-email-escapes-values-subject-does-not",
+      "description": "EMAIL bodies HTML-escape substituted values (they are delivered as raw HTML); the subject is plain text and is NOT escaped. The localized complaint type carries &, \" and < so both sides of the rule are visible in one envelope.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.REJECT",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:citizen-uuid-1",
+            "contact": {
+              "userId": "citizen-uuid-1",
+              "type": "CITIZEN",
+              "name": "Amina Chebet",
+              "phone": "+254712345678",
+              "email": "amina@example.com",
+              "locale": "en_IN"
+            },
+            "renderedBody": "Dear Citizen, Your complaint for Garbage &amp; &quot;litter&quot; &lt;cleared&gt; with ID PGR-2026-000123 submitted on 29/06/2026 has been rejected. Reason for Rejection: Duplicate of &lt;b&gt;PGR-2026-000101&lt;/b&gt; &amp; closed If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+            "subject": "DIGIT: Complaint PGR-2026-000123 (Garbage & \"litter\" <cleared>)",
+            "transactionId": "PGR-2026-000123:REJECT:REJECTED:ke.bomet:citizen-uuid-1:EMAIL",
+            "templateKey": "CITIZEN.REJECT.REJECTED.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "REJECTED",
+              "action": "REJECT",
+              "toState": "REJECTED"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S20-email-subject-falls-back-to-complaint-id",
+      "description": "An EMAIL template with a null subject: Novu rejects a blank subject, so the service substitutes 'Complaint <serviceRequestId>'.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:EMAIL"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "EMAIL",
+            "subscriberId": "ke.bomet:lme-brian",
+            "contact": {
+              "userId": "lme-brian",
+              "type": "PGR_LME",
+              "name": "Brian Kiptoo",
+              "phone": "+254733222333",
+              "email": "brian@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "LME alert: complaint PGR-2026-000123 (Garbage needs to be cleared) at Bomet Municipality is awaiting action.",
+            "subject": "Complaint PGR-2026-000123",
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:EMAIL",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.EMAIL.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S21-routed-channel-without-template-emits-nothing",
+      "description": "A routed (audience, channel) with a resolvable recipient but NO template in the recipient's locale nor the default: the recipient is skipped and nothing is emitted - today this is invisible downstream (no ledger row).",
+      "envelopeCount": 0,
+      "emissionOrder": [ ],
+      "envelopes": [ ]
+    },
+    {
+      "id": "S22-pool-member-without-uuid-keys-on-phone",
+      "description": "A pool holder with no uuid keys the subscriber on the phone number instead: subscriberId and transactionId carry the raw MSISDN (PII on the wire, masked only in the logs).",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:+254799000111:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:+254799000111",
+            "contact": {
+              "userId": null,
+              "type": "PGR_LME",
+              "name": "Ops Desk",
+              "phone": "+254799000111",
+              "email": null,
+              "locale": "en_IN"
+            },
+            "renderedBody": "LME alert: complaint PGR-2026-000123 (Garbage needs to be cleared) at Bomet Municipality is awaiting action.",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:+254799000111:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S23-all-thirteen-placeholders",
+      "description": "One template using all 13 placeholders with every source healthy (localization, the URL shortener, egov-user, HRMS and MDMS ComplaintHierarchy). Pins exactly what each token resolves to for a role-pool recipient.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:lme-brian",
+            "contact": {
+              "userId": "lme-brian",
+              "type": "PGR_LME",
+              "name": "Brian Kiptoo",
+              "phone": "+254733222333",
+              "email": "brian@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "ALL id=PGR-2026-000123 date=29/06/2026 status=Pending at LME type=Garbage needs to be cleared comments=Please clear the dump site rating=4 citizen=Amina Chebet link=https://sho.rt/dl1 ulb=Bomet Municipality ao=Accounts Officer emp=Jane Mwangi dept=Sanitation desig=Field Officer",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S24-url-shortener-down-blanks-download-link",
+      "description": "Same template with egov-url-shortening throwing: {download_link} is BLANKED (never left as a literal brace) and every other placeholder survives - the defensive try/catch structure the design says must be preserved.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:lme-brian",
+            "contact": {
+              "userId": "lme-brian",
+              "type": "PGR_LME",
+              "name": "Brian Kiptoo",
+              "phone": "+254733222333",
+              "email": "brian@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "ALL id=PGR-2026-000123 date=29/06/2026 status=Pending at LME type=Garbage needs to be cleared comments=Please clear the dump site rating=4 citizen=Amina Chebet link= ulb=Bomet Municipality ao=Accounts Officer emp=Jane Mwangi dept=Sanitation desig=Field Officer",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S25-localization-down-falls-back-to-raw-values",
+      "description": "Same template with egov-localization throwing: {complaint_type} falls back to the raw service code, {status} to the raw applicationStatus, {ulb}/{ao_designation}/{emp_department}/{emp_designation} are left as literal braces, and id/date/rating/citizen_name/download_link/emp_name still resolve. This is the Twilio-21656 regression the base-placeholders-first ordering exists to prevent.",
+      "envelopeCount": 1,
+      "emissionOrder": [
+        "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS"
+      ],
+      "envelopes": [
+        {
+          "producerTenantId": "ke.bomet",
+          "topic": "complaints.domain.events",
+          "event": {
+            "schemaVersion": "1",
+            "eventId": "<uuid>",
+            "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+            "eventName": "COMPLAINTS.WORKFLOW.ASSIGN",
+            "eventTime": "<timestamp>",
+            "producer": "complaints-service",
+            "module": "Complaints",
+            "entityType": "COMPLAINT",
+            "entityId": "PGR-2026-000123",
+            "tenantId": "ke.bomet",
+            "channel": "SMS",
+            "subscriberId": "ke.bomet:lme-brian",
+            "contact": {
+              "userId": "lme-brian",
+              "type": "PGR_LME",
+              "name": "Brian Kiptoo",
+              "phone": "+254733222333",
+              "email": "brian@bomet.go.ke",
+              "locale": "en_IN"
+            },
+            "renderedBody": "ALL id=PGR-2026-000123 date=29/06/2026 status=PENDINGATLME type=GarbageNeedsTobeCleared comments=Please clear the dump site rating=4 citizen=Amina Chebet link=https://sho.rt/dl1 ulb={ulb} ao={ao_designation} emp=Jane Mwangi dept={emp_department} desig={emp_designation}",
+            "subject": null,
+            "transactionId": "PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:lme-brian:SMS",
+            "templateKey": "PGR_LME.ASSIGN.PENDINGATLME.SMS.en_IN",
+            "data": {
+              "complaintNo": "PGR-2026-000123",
+              "status": "PENDINGATLME",
+              "action": "ASSIGN",
+              "toState": "PENDINGATLME"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "S26-escalate-has-no-routing-today",
+      "description": "PGR's supervisor escalation (PGRConstants.ESCALATE, PENDINGATLME --ESCALATE--> PENDINGATLME) reaches this code through the same Kafka path as every other transition, but the shipped seed has NO routing row for it: the new supervisor is never told. Recorded as current behaviour, not endorsed - the escalation notification gap is real.",
+      "envelopeCount": 0,
+      "emissionOrder": [ ],
+      "envelopes": [ ]
+    }
+  ]
+}
