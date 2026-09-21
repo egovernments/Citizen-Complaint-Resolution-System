@@ -1795,6 +1795,7 @@
               + (['search']        if enable_search_stack  | default(false) else [])
               + (['mcp']           if enable_mcp           | default(false) else [])
               + (['notifications'] if enable_novu          | default(false) else [])
+              + (['chatbot']       if enable_chatbot       | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
               + (['matomo']        if enable_matomo        | default(false) else [])

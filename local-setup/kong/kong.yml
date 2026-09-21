@@ -141,6 +141,14 @@ plugins:
         -- RBAC-exempt rather than covered — see RBAC_EXEMPT in enforce_rbac.
         local ENFORCE_RBAC = true
         local AUTH_OPTIONAL = {
+          -- Inbound WhatsApp webhooks (#1992). Twilio cannot present a DIGIT token, so these
+          -- are authenticated by X-Twilio-Signature inside xstate-chatbot, not here. Without
+          -- them the global pre-function classifies every inbound message as PROTECTED: today
+          -- that is just RBAC-audit(#5) noise (Twilio's form body fails cjson.decode and lands
+          -- in deny_unauth), but the moment ENFORCE_UNAUTH flips to true every citizen message
+          -- 401s at Kong. Kong-only: the Spring gateway does not route the chatbot, so these
+          -- are registered in KONG_ONLY_AUTH_OPTIONAL rather than env.yaml.
+          ["/xstate-chatbot/message"]=true, ["/xstate-chatbot/status"]=true,
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
           ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
@@ -949,6 +957,19 @@ services:
     - GET
     paths:
     - /novu-bridge/novu-adapter/v1/providers/twilio-templates
+    strip_path: false
+- name: xstate-chatbot
+  url: http://xstate-chatbot:8080
+  tags:
+  - chatbot
+  routes:
+  # Twilio's inbound webhook. Deliberately NOT behind a DIGIT auth plugin -- Twilio
+  # cannot present a DIGIT token. Authentication is the X-Twilio-Signature check inside
+  # the service (TWILIO_VALIDATE_SIGNATURE). Only reachable when the `chatbot` compose
+  # profile is on; otherwise the upstream simply does not resolve.
+  - name: xstate-chatbot-route
+    paths:
+    - /xstate-chatbot
     strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
