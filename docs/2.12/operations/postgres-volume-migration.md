@@ -174,7 +174,7 @@ Edit `docker-compose.egov-digit.yaml`, in the `postgres-db` service:
 ```
 
 ```bash
-grep -A2 'container_name: docker-postgres' -n docker-compose.egov-digit.yaml | grep postgres_data
+grep -n 'postgres_data:/var/lib' docker-compose.egov-digit.yaml
 ```
 
 **Expect** exactly one line, ending `/var/lib/postgresql/data`.

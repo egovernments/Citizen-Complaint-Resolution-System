@@ -188,6 +188,50 @@
         _overlay_mount: "{{ _overlay_text | regex_findall('^\\s*-\\s*postgres_data:(\\S+)', multiline=True) }}"
         _base_mount: "{{ (base_compose.content | b64decode) | regex_findall('^\\s*-\\s*postgres_data:(\\S+)', multiline=True) }}"
 
+    # Has this box been deployed to before? Used to decide how loud an
+    # inconclusive probe should be: on a virgin machine "I could not tell" is
+    # fine, on one that already carries a stack it is not.
+    - name: "preflight — check whether this box already carries a stack"
+      ansible.builtin.stat:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+      register: pg_existing_stack
+      changed_when: false
+
+    # `SKIP no-daemon`, `UNKNOWN`, a non-zero rc or empty output all mean the
+    # SAME thing: the probe did not find out. Only `SAFE` and `ANON` are
+    # findings. Previously anything that was not `^ANON` passed the assert with
+    # "no pre-existing postgres cluster in the way" — a claim the probe had not
+    # made. A box with a live database whose dockerd happened to be stopped got
+    # waved through on that sentence.
+    #
+    # `SKIP no-docker` is the exception: no Docker binary at all means nothing
+    # has ever run here, which IS a finding.
+    - name: "preflight — classify the probe result"
+      ansible.builtin.set_fact:
+        pg_probe_inconclusive: >-
+          {{ (pg_cluster_probe.rc | default(1)) != 0
+             or not (pg_cluster_probe.stdout | default('') | trim)
+             or (pg_cluster_probe.stdout | default('') is search('^UNKNOWN'))
+             or (pg_cluster_probe.stdout | default('') is search('^SKIP no-daemon')) }}
+
+    - name: "preflight — refuse to guess on a box that already carries a stack"
+      ansible.builtin.assert:
+        that:
+          - not (pg_probe_inconclusive | bool and pg_existing_stack.stat.exists)
+        fail_msg: |
+          Could not determine where this box keeps its PostgreSQL data:
+
+            {{ pg_cluster_probe.stdout | default('(no output)') | trim }}
+
+          This box already carries a DIGIT stack ({{ digit_dir }}), so it may
+          hold a live database. Deploying blind risks mounting Postgres somewhere
+          other than where its data actually is.
+
+          Start the Docker daemon and re-run, so the check can see the volumes.
+          If the daemon is running and this still appears, inspect by hand:
+            docker inspect docker-postgres -f '{% raw %}{{ json .Mounts }}{% endraw %}'
+        success_msg: "postgres storage check is conclusive"
+
     - name: "preflight — show what this deploy resolves to"
       ansible.builtin.debug:
         msg: >-
@@ -207,7 +251,7 @@
     - name: "preflight — refuse to strand a database in an anonymous volume"
       ansible.builtin.assert:
         that:
-          - not (_data_is_anon and _mount_is_pgdata)
+          - not (_data_is_anon and _mount_is_pgdata and not _override)
         fail_msg: |
           This box holds a PostgreSQL cluster OUTSIDE the named postgres_data
           volume:
@@ -226,10 +270,16 @@
 
           Migrate the data onto the named volume, then re-run this deploy:
             docs/2.12/operations/postgres-volume-migration.md
+
+          If this box is scratch and you WANT the database replaced, set
+          `pg_allow_data_loss: true` in host_vars. Deliberately separate from
+          db_fast_path_ack_data_wipe, which asserts the box has no such data —
+          it cannot also mean "it does, proceed anyway".
         success_msg: "no database would be stranded by this deploy"
       vars:
         _data_is_anon: "{{ pg_cluster_probe.stdout | default('') is search('^ANON') }}"
         _mount_is_pgdata: "{{ pg_effective_mount | default('') == '/var/lib/postgresql/data' }}"
+        _override: "{{ pg_allow_data_loss | default(false) | bool }}"
 
     - name: "preflight — refuse to move a migrated box off its named volume"
       ansible.builtin.assert:

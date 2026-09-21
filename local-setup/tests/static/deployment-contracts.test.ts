@@ -145,15 +145,21 @@ describe('host_vars templates — db_fast_path ack (#2082)', () => {
   });
 
   test('preflight still fails _example.yml for exactly that reason', () => {
+    // preflight exits non-zero here by design, so execFileSync always throws and
+    // the output arrives on the error. Record whether it exited 0 rather than
+    // throwing from inside the try, which would land in this same catch and be
+    // reported as a confusing assertion failure instead of the real message.
     let out = '';
+    let exitedZero = false;
     try {
       out = execFileSync('python3',
         ['local-setup/scripts/preflight.py', `${HOST_VARS}/_example.yml`],
         { cwd: REPO_ROOT, encoding: 'utf8' });
-      throw new Error('preflight passed _example.yml; it must trip the ack gate');
+      exitedZero = true;
     } catch (e: any) {
-      out = e.stdout ?? out;
+      out = e.stdout ?? '';
     }
+    expect(exitedZero).toBe(false); // _example.yml must NOT pass preflight
     const fails = out.split('\n').filter((l) => l.startsWith('[FAIL]'));
     expect(fails).toHaveLength(1);
     expect(fails[0]).toContain('fastpath-data-wipe-ack');

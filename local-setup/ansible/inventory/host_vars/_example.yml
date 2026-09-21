@@ -658,6 +658,16 @@ db_fast_path: true
 # migrate it first: docs/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
+# Escape hatch for the on-box storage check. The playbook inspects the TARGET
+# and refuses when this deploy would mount Postgres somewhere other than where
+# its data actually is — which on a pre-#2085 box means the live database would
+# be left behind in an anonymous volume.
+#
+# Set true ONLY on a scratch box whose database you are content to replace. It
+# is deliberately NOT db_fast_path_ack_data_wipe: that flag asserts the box has
+# no such data, so it cannot also mean "it does, proceed anyway".
+pg_allow_data_loss: false
+
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.
 # Off by default — production deploys skip CI tests.
