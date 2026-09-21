@@ -19,7 +19,10 @@ export const notificationChannelDescriptor: SchemaDescriptor = {
     { path: 'code', required: true, label: 'Channel', help: 'SMS, WHATSAPP or EMAIL — one row per channel.' },
     { path: 'enabled', widget: 'boolean', required: true, label: 'Enabled', help: 'Off = every event on this channel is recorded SKIPPED / NB_NO_PROVIDER and never delivered.' },
     { path: 'provider', label: 'Active provider', help: 'Identifier of the configured provider that serves this channel — exactly one, no automatic failover. Pick it on Notifications → Providers → Channels rather than typing it here.' },
-    { path: 'gateway', label: 'Gateway (legacy)', help: 'Kept for existing rows: novu (default) delivers through the selected provider; smscountry (SMS only) posts straight to SMSCountry\'s bulk API and takes no provider. New setups choose a provider instead.' },
+    // Same list/form treatment as the NOTIFICATIONS.Channel descriptor — this
+    // master is read-only, but it renders through the same generic list, so
+    // without this it still shows the inline gateway <select>.
+    { path: 'gateway', widget: 'channel-gateway', listWidget: 'plain', label: 'Gateway (legacy)', help: 'Kept for existing rows: novu (default) delivers through the selected provider; smscountry (SMS only) posts straight to SMSCountry\'s bulk API and takes no provider. New setups choose a provider instead.' },
     { path: 'senderId', label: 'Sender ID', help: 'Registered sender id / DLT header for a direct SMS gateway. Ignored when a provider is selected.' },
     { path: 'active', widget: 'boolean', label: 'Active' },
   ],

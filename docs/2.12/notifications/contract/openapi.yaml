@@ -148,7 +148,7 @@ paths:
         Statuses and their transitions are described in `outputs.md`.
       parameters:
         - { name: tenantId, in: query, required: true, schema: { type: string },
-            description: "Required. A blank or missing value answers 400 with an empty body." }
+            description: "Required. A blank or missing value answers 400 with an empty body. A state-level tenant (no dot, e.g. `mz`) also returns the rows of its city tenants (`mz.*`); a city tenant matches only itself." }
         - { name: referenceNumber, in: query, schema: { type: string },
             description: "Exact match, or prefix when `referenceNumberPrefix=true`." }
         - { name: referenceNumberPrefix, in: query, schema: { type: boolean, default: false } }

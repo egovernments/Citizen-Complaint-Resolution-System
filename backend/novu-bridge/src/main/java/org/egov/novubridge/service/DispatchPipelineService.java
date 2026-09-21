@@ -82,7 +82,8 @@ public class DispatchPipelineService {
      */
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
                                   String sourcePath) {
-        log.info("Processing pre-rendered domain event: eventId={}, eventName={}, tenant={}, channel={}, send={}",
+        log.info("Processing {} envelope: eventId={}, eventName={}, tenant={}, channel={}, send={}",
+                sourcePath == null ? "pre-rendered" : "resolved",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         // Envelope rejections are persisted BEFORE they are thrown: the consumer still DLQs

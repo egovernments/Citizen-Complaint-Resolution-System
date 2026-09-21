@@ -272,7 +272,9 @@ export function ProviderRowActions({
   const refresh = useRefresh();
   const integrationId = idOf(record);
   const providerType = findProviderType(catalog, record.type);
-  const channel = integrationChannel(record, catalog);
+  // Non-deliverable integrations never reach this row (the list filters them
+  // out), so the fallback is only there to keep the dialogs' Channel type total.
+  const channel = integrationChannel(record, catalog) ?? 'SMS';
   const label = integrationLabel(record, catalog);
   const isActive = record.active !== false;
 

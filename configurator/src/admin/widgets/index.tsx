@@ -7,6 +7,7 @@ import { BooleanInput } from './BooleanInput';
 import { LocaleListInput } from './LocaleListInput';
 import { JsonInput } from './JsonInput';
 import { ReferenceSelectInput } from './ReferenceSelectInput';
+import { ChannelGatewayInput } from './ChannelGatewayInput';
 import type { FieldSpec } from '../schemaDescriptors/types';
 
 interface WidgetDispatchProps {
@@ -49,6 +50,8 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
       return <LocaleListInput {...shared} help={spec.help} />;
     case 'json':
       return <JsonInput {...shared} help={spec.help} />;
+    case 'channel-gateway':
+      return <ChannelGatewayInput {...shared} help={spec.help} />;
     case 'boolean':
       return <BooleanInput {...shared} help={spec.help} />;
     case 'integer':
@@ -63,4 +66,4 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
   }
 }
 
-export { ColorInput, RegexInput, ChipArrayInput, DurationMsInput, BooleanInput, LocaleListInput, JsonInput, ReferenceSelectInput };
+export { ColorInput, RegexInput, ChipArrayInput, DurationMsInput, BooleanInput, LocaleListInput, JsonInput, ReferenceSelectInput, ChannelGatewayInput };

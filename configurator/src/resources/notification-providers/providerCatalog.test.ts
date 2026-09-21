@@ -10,6 +10,7 @@ import {
   integrationChannel,
   integrationKey,
   integrationLabel,
+  isDeliverableIntegration,
   matchesProviderSelection,
   missingRequiredFields,
   normalizeCatalog,
@@ -155,6 +156,44 @@ describe('integration <-> catalog resolution', () => {
     // smtp is inactive, so Email has nothing selectable.
     expect(providerChoicesForChannel(rows, 'EMAIL', catalog)).toEqual([]);
     expect(providerChoicesForChannel(rows, 'SMS', catalog)[0].typeLabel).toBe('Twilio SMS');
+  });
+});
+
+describe('integrations we do not deliver on', () => {
+  // Exactly what Novu seeds into every workspace: an in_app "Novu Inbox"
+  // integration with no type and no credentials. It used to fall through
+  // rowChannel's SMS default and appear as an SMS provider.
+  const novuInbox = { _id: 'i1', channel: 'in_app', providerId: 'novu', name: 'Novu Inbox', type: null, active: true };
+  const push = { _id: 'i2', channel: 'push', providerId: 'fcm', name: 'Firebase', active: true };
+  const twilioSms = { _id: '1', channel: 'sms', providerId: 'twilio', identifier: 'twilio-sms-1', name: 'Twilio prod', type: 'twilio-sms', active: true };
+
+  it('gives a foreign Novu channel no DIGIT channel at all, instead of defaulting to SMS', () => {
+    expect(rowChannel(novuInbox)).toBeNull();
+    expect(rowChannel(push)).toBeNull();
+    expect(integrationChannel(novuInbox, catalog)).toBeNull();
+  });
+
+  it('still reads the deliverable channels, including WhatsApp-as-sms and a channel-less legacy row', () => {
+    expect(rowChannel({ channel: 'sms', identifier: 'plain' })).toBe('SMS');
+    expect(rowChannel({ channel: 'SMS', identifier: 'whatsapp-legacy' })).toBe('WHATSAPP');
+    expect(rowChannel({ channel: 'email', identifier: 'smtp-1' })).toBe('EMAIL');
+    // No channel at all is a row from before the bridge projected one — keep the
+    // historical reading rather than hiding a real provider.
+    expect(rowChannel({ identifier: 'ancient' })).toBe('SMS');
+  });
+
+  it('is the one predicate the listing and the dropdowns both use', () => {
+    expect(isDeliverableIntegration(novuInbox, catalog)).toBe(false);
+    expect(isDeliverableIntegration(push, catalog)).toBe(false);
+    expect(isDeliverableIntegration(twilioSms, catalog)).toBe(true);
+    expect(isDeliverableIntegration({ channel: 'email' }, catalog)).toBe(true);
+  });
+
+  it('never offers one as a provider for ANY channel', () => {
+    const rows = [novuInbox, push, twilioSms];
+    expect(providerChoicesForChannel(rows, 'SMS', catalog).map((c) => c.value)).toEqual(['twilio-sms-1']);
+    expect(providerChoicesForChannel(rows, 'WHATSAPP', catalog)).toEqual([]);
+    expect(providerChoicesForChannel(rows, 'EMAIL', catalog)).toEqual([]);
   });
 });
 

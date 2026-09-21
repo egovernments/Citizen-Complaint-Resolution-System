@@ -40,6 +40,8 @@ export {
   integrationChannel,
   integrationKey,
   integrationLabel,
+  isDeliverableIntegration,
+  DELIVERABLE_NOVU_CHANNELS,
   providerChoicesForChannel,
   findSelectedIntegration,
   matchesProviderSelection,

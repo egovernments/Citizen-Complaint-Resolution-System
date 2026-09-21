@@ -191,6 +191,21 @@ function SchemaFieldRow({
     );
   }
 
+  // Array / object → the same expandable viewer the "Nested Data" section uses.
+  // groupShowFields only calls a property complex when its `type` is exactly
+  // "array" or "object", so a nullable one (`type: ["array","null"]`, which is
+  // how NOTIFICATIONS.EventCatalogue declares actors / placeholders / channels)
+  // lands here instead — and `String(value)` printed it as "[object Object]".
+  // This is the detail view the compact list cell defers to, so it has to show
+  // the whole thing.
+  if (value != null && typeof value === 'object') {
+    return (
+      <FieldRow label={label}>
+        <JsonViewer data={value} initialExpanded={false} />
+      </FieldRow>
+    );
+  }
+
   // Default: plain text
   return (
     <FieldRow label={label}>

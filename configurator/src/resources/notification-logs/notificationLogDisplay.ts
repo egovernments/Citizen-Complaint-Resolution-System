@@ -110,6 +110,20 @@ export function maskRecipient(value: unknown): string {
   return `***${s.slice(-3)}`;
 }
 
+/**
+ * Tenant cell.
+ *
+ * A search run at a STATE tenant also returns rows of its CITY tenants (signed
+ * in at `mz`, rows written at `mz.maputo`), so which tenant a row belongs to is
+ * no longer implied by the session and has to be on the row. The value is
+ * carried straight through from the API response — the log rows are not
+ * projected onto a field allowlist anywhere between the bridge and this screen.
+ */
+export function tenantDisplay(record: LogRow): CellText {
+  const raw = String(record?.tenantId ?? '').trim();
+  return raw ? { text: raw, muted: false } : EMPTY;
+}
+
 /** Recipient cell. `none` on a channel-less row is the literal word the bridge
  *  wrote (lower case, so it cannot be mistaken for a subscriber) — never mask it. */
 export function recipientDisplay(record: LogRow): CellText {

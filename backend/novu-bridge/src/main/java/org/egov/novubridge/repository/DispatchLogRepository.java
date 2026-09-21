@@ -152,9 +152,9 @@ public class DispatchLogRepository {
                         "recipient_value, template_key, template_version, status, attempt_count, last_error_code, " +
                         "last_error_message, provider_response_jsonb, created_time, last_modified_time, is_test, provider_ref, delivered_time, " +
                         "source_path " +
-                        "FROM nb_dispatch_log WHERE tenant_id = ?");
+                        "FROM nb_dispatch_log WHERE ");
         List<Object> args = new ArrayList<>();
-        args.add(tenantId);
+        appendTenantScope(sql, args, tenantId);
         appendFilters(sql, args, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath, includeTest);
         sql.append(" ORDER BY created_time DESC, last_modified_time DESC LIMIT ? OFFSET ?");
         args.add(limit);
@@ -169,12 +169,28 @@ public class DispatchLogRepository {
      */
     public long count(String tenantId, String referenceNumber, boolean referenceNumberPrefix,
                       String transactionId, String channel, String status, String sourcePath, boolean includeTest) {
-        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM nb_dispatch_log WHERE tenant_id = ?");
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM nb_dispatch_log WHERE ");
         List<Object> args = new ArrayList<>();
-        args.add(tenantId);
+        appendTenantScope(sql, args, tenantId);
         appendFilters(sql, args, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath, includeTest);
         Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
         return total != null ? total : 0L;
+    }
+
+    /**
+     * A state-level tenant ("mz") also sees its city tenants ("mz.maputo"): complaints are
+     * raised at city level, so an operator signed in at the state would otherwise read an
+     * empty log as "nothing was sent". A city tenant still matches only itself.
+     */
+    private void appendTenantScope(StringBuilder sql, List<Object> args, String tenantId) {
+        if (tenantId.contains(".")) {
+            sql.append("tenant_id = ?");
+            args.add(tenantId);
+            return;
+        }
+        sql.append("(tenant_id = ? OR tenant_id LIKE ? ESCAPE '\\')");
+        args.add(tenantId);
+        args.add(tenantId.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + ".%");
     }
 
     private void appendFilters(StringBuilder sql, List<Object> args, String referenceNumber,

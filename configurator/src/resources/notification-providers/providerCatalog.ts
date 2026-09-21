@@ -60,6 +60,18 @@ export interface IntegrationRow {
 /** Display order for channel groupings — SMS first because it also carries login OTPs. */
 export const CATALOG_CHANNEL_ORDER: Channel[] = ['SMS', 'WHATSAPP', 'EMAIL'];
 
+/**
+ * The Novu `channel` values novu-bridge can actually deliver a DIGIT event on.
+ *
+ * Novu hosts more channels than we use — every workspace ships with a built-in
+ * "Novu Inbox" integration on `in_app`, and `push` / `chat` are available too.
+ * None of them is a DIGIT delivery provider: there is no SMS/EMAIL/WHATSAPP
+ * channel behind them, no credentials for an operator to rotate and nothing to
+ * test-send through. WhatsApp is absent on purpose — Novu stores it as a Twilio
+ * `sms` integration, which the identifier/name marker recovers (see rowChannel).
+ */
+export const DELIVERABLE_NOVU_CHANNELS = ['sms', 'email'];
+
 // ---------------------------------------------------------------------------
 // Offline fallback
 // ---------------------------------------------------------------------------
@@ -222,21 +234,44 @@ export function groupCatalogByChannel(
  * WhatsApp integrations in the identifier/name — the only round-trippable fields
  * (credentials are never echoed back). Derive WHATSAPP from that marker so the
  * row keeps its designation across refetches.
+ *
+ * `null` means "not a channel we deliver on": the row sits on a Novu channel
+ * outside DELIVERABLE_NOVU_CHANNELS. This used to fall through to the SMS
+ * default below, which is how Novu's built-in Inbox integration (`in_app`)
+ * appeared as an SMS provider — in the table, in the SMS dropdown, and with a
+ * full row of Verify / Test / Rotate / Delete buttons behind it.
  */
 export function rowChannel(record: {
   channel?: unknown;
   identifier?: unknown;
   name?: unknown;
-}): Channel {
-  if (String(record.channel ?? '').toUpperCase() === 'EMAIL') return 'EMAIL';
+}): Channel | null {
+  const channel = str(record.channel).toLowerCase();
+  if (channel === 'email') return 'EMAIL';
+  // An absent channel is a pre-Novu-projection row, not a foreign channel:
+  // keep the historical SMS/WhatsApp reading for it rather than hiding it.
+  if (channel && !DELIVERABLE_NOVU_CHANNELS.includes(channel)) return null;
   const marker = `${record.identifier ?? ''} ${record.name ?? ''}`;
   return /(^|[\s\-_])whatsapp/i.test(marker) ? 'WHATSAPP' : 'SMS';
 }
 
 /** Channel of an integration: the catalog type wins, the legacy marker is the fallback. */
-export function integrationChannel(row: IntegrationRow, catalog: ProviderType[]): Channel {
+export function integrationChannel(row: IntegrationRow, catalog: ProviderType[]): Channel | null {
   const pt = findProviderType(catalog, row.type);
   return pt ? pt.channel : rowChannel(row as Record<string, unknown>);
+}
+
+/**
+ * Is this integration one this screen may list, offer and act on?
+ *
+ * The single rule behind "in_app is not an SMS provider": a row is deliverable
+ * exactly when it resolves to a DIGIT channel. Used wherever integrations are
+ * LISTED (the providers table and its count) or OFFERED (a channel's active
+ * provider dropdown), so a Novu integration we cannot deliver through is never
+ * presented as one that we can.
+ */
+export function isDeliverableIntegration(row: IntegrationRow, catalog: ProviderType[] = []): boolean {
+  return integrationChannel(row, catalog) !== null;
 }
 
 /**
@@ -280,7 +315,8 @@ export function integrationLabel(row: IntegrationRow, catalog: ProviderType[]): 
 /**
  * The ACTIVE integrations that may be selected as a channel's provider: those
  * whose channel matches. WhatsApp therefore lists twilio-whatsapp rows only,
- * SMS lists twilio-sms / smscountry / ozeki, Email lists smtp.
+ * SMS lists twilio-sms / smscountry / ozeki, Email lists smtp. A row on a Novu
+ * channel we do not deliver on is never offered for any channel.
  */
 export function providerChoicesForChannel(
   integrations: IntegrationRow[],
@@ -288,7 +324,10 @@ export function providerChoicesForChannel(
   catalog: ProviderType[],
 ): Array<{ value: string; label: string; typeLabel: string; row: IntegrationRow }> {
   return integrations
-    .filter((row) => row.active !== false && integrationChannel(row, catalog) === channel)
+    .filter((row) =>
+      row.active !== false &&
+      isDeliverableIntegration(row, catalog) &&
+      integrationChannel(row, catalog) === channel)
     .map((row) => {
       const pt = findProviderType(catalog, row.type);
       return {

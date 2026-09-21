@@ -8,6 +8,7 @@ import {
   maskRecipient,
   recipientDisplay,
   sourcePathDisplay,
+  tenantDisplay,
 } from './notificationLogDisplay';
 // The filter → query-param mapping the data provider actually uses. Imported by
 // path rather than through '@digit-mcp/data-provider' on purpose: the package
@@ -113,6 +114,33 @@ describe('maskRecipient', () => {
 
   it('collapses a very short value entirely', () => {
     expect(maskRecipient('12')).toBe('***');
+  });
+});
+
+describe('tenantDisplay', () => {
+  it('shows the row\'s own tenant, which a state-level search no longer implies', () => {
+    // Signed in at `mz`, the backend now also returns rows written at its city
+    // tenants — without this column two identical-looking rows could be from
+    // different tenants.
+    expect(tenantDisplay({ tenantId: 'mz.maputo' })).toEqual({ text: 'mz.maputo', muted: false });
+    expect(tenantDisplay({ tenantId: 'mz' })).toEqual({ text: 'mz', muted: false });
+  });
+
+  it('falls back to -- on a row from a bridge that sent no tenant', () => {
+    expect(tenantDisplay({})).toEqual({ text: '--', muted: true });
+    expect(tenantDisplay({ tenantId: '' })).toEqual({ text: '--', muted: true });
+  });
+
+  it('reads the field straight off the row the data provider hands over', () => {
+    // The custom-resource fetcher spreads the API row and only ADDS an id — it
+    // never projects onto a field allowlist — so whatever the bridge sends as
+    // tenantId is what this cell reads. Asserted on a full-shaped row so a
+    // future projection step would break here rather than in the browser.
+    const row = {
+      id: 'txn-1', transactionId: 'txn-1', tenantId: 'mz.maputo',
+      channel: 'SMS', status: 'SENT', referenceNumber: 'PG-2026-1', recipientValue: '919876543210',
+    };
+    expect(tenantDisplay(row).text).toBe('mz.maputo');
   });
 });
 

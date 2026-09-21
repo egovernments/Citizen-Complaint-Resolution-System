@@ -45,7 +45,7 @@ public class DispatchLogController {
 
     /**
      * List delivery-log rows for a tenant, newest first. {@code tenantId} is
-     * required. Optional filters: {@code referenceNumber} (complaint number —
+     * required; a state-level tenant also returns its city tenants' rows. Optional filters: {@code referenceNumber} (complaint number —
      * exact, or prefix when {@code referenceNumberPrefix=true}), {@code transactionId},
      * {@code channel} (including {@code NONE} for the channel-less rows),
      * {@code status}, {@code sourcePath} ({@code PRERENDERED} | {@code RESOLVED} — which

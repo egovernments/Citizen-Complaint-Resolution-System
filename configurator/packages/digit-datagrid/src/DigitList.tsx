@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   useListController,
   ListContextProvider,
@@ -6,6 +6,7 @@ import {
   type ListControllerProps,
   type SortPayload,
   type FilterPayload,
+  type RaRecord,
 } from 'ra-core';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, Plus, Search, Settings2 } from 'lucide-react';
@@ -49,6 +50,15 @@ export interface DigitListProps {
   preferenceKey?: string;
   /** Filter input elements (react-admin style) */
   filters?: FilterElement[];
+  /**
+   * Drop records this screen must never show, e.g. a notification integration
+   * on a channel we cannot deliver on. Unlike `filter` (a query the fetcher
+   * runs) this is a client-side rule applied to the fetched page, so the count
+   * badge is corrected by the number of records dropped FROM THAT PAGE — exact
+   * for a list that fits on one page, an approximation beyond it. Use it for
+   * rows that are never legitimate here, not as a substitute for a real filter.
+   */
+  recordFilter?: (record: RaRecord) => boolean;
 }
 
 export function DigitList({
@@ -67,6 +77,7 @@ export function DigitList({
   alwaysVisibleSources,
   preferenceKey,
   filters,
+  recordFilter,
 }: DigitListProps) {
   const [searchValue, setSearchValue] = useState('');
   const navigate = useNavigate();
@@ -81,7 +92,26 @@ export function DigitList({
     disableSyncWithLocation: true,
   };
 
-  const listContext = useListController(controllerProps);
+  const rawContext = useListController(controllerProps);
+
+  // What the screen actually shows. Built once here (rather than inside the
+  // datagrid) so the count badge, the empty state and the rows all agree.
+  const listContext = useMemo(() => {
+    const fetched: RaRecord[] | undefined = rawContext.data;
+    const total: number | undefined = rawContext.total;
+    if (!recordFilter || !fetched) return rawContext;
+    const kept = fetched.filter(recordFilter);
+    const dropped = fetched.length - kept.length;
+    if (dropped === 0) return rawContext;
+    // `ListControllerResult` is a discriminated union (loading / error / success),
+    // and spreading it loses the discriminant; the values themselves are exactly
+    // the ones the controller produced, minus the records we dropped.
+    return {
+      ...rawContext,
+      data: kept,
+      total: total != null ? Math.max(0, total - dropped) : total,
+    } as typeof rawContext;
+  }, [rawContext, recordFilter]);
 
   const columnConfig =
     configurable && columns
@@ -113,24 +143,30 @@ export function DigitList({
   return (
     <ListContextProvider value={listContext}>
       <div className="space-y-4">
-        {/* Title bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-              {translate(title, { _: title })}
-            </h1>
+        {/* Title bar. The subtitle sits BELOW the title rather than beside it:
+            on a wide title with several actions ("Notification Providers" plus
+            Sync / Add / Refresh at 1280px) an inline subtitle squeezed the
+            heading into two lines and left the mono text wedged against the
+            buttons. Stacked, the heading keeps the full row width to itself. */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
+                {translate(title, { _: title })}
+              </h1>
+              {listContext.total != null && (
+                <Badge variant="secondary" className="text-xs">
+                  {listContext.total}
+                </Badge>
+              )}
+            </div>
             {subtitle && (
-              <span className="text-xs text-muted-foreground font-mono">
+              <p className="mt-1 text-xs text-muted-foreground font-mono">
                 {subtitle}
-              </span>
-            )}
-            {listContext.total != null && (
-              <Badge variant="secondary" className="text-xs">
-                {listContext.total}
-              </Badge>
+              </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {actions}
             {columnConfig && (
               <Popover>

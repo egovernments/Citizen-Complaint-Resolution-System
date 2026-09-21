@@ -67,12 +67,16 @@ const navGroups = [
     // Notifications it read as "Notifications → Notification Routing". The page
     // TITLES keep the long form so a screen is unambiguous out of context.
     //
-    // The masters below are the shared NOTIFICATIONS.* ones. The legacy
-    // RAINMAKER-PGR.Notification* four are deliberately NOT in the sidebar any
-    // more: they are read-only history, still reachable at
-    // /manage/notification-<x> and from the Advanced section, so an operator on
-    // an un-migrated tenant can still see their data without the sidebar
-    // offering two of everything.
+    // The masters below are the shared NOTIFICATIONS.* ones, and they appear
+    // HERE ONLY — `advancedResources` drops every id already listed in a
+    // primary group, so Advanced no longer repeats "Notification Events /
+    // Routing / Templates" a second time under different labels.
+    //
+    // The legacy RAINMAKER-PGR.Notification* four are deliberately NOT in this
+    // group: they are read-only history, still reachable at
+    // /manage/notification-<x> and, because they are in no primary group, still
+    // listed in Advanced — so an operator on an un-migrated tenant can see their
+    // data without the sidebar offering two of everything.
     items: [
       { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
       { id: 'notifications-channel', nameKey: 'app.nav.notification_channels', path: '/manage/notifications-channel', icon: ToggleRight },
@@ -128,12 +132,26 @@ const navGroups = [
   },
 ];
 
-/** Generic MDMS resources for the Advanced section */
-const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => ({
-  id: name,
-  name: getResourceLabel(name),
-  path: `/manage/${name}`,
-}));
+/** Every resource id that already has its own entry in a primary nav group. */
+const primaryNavIds = new Set(navGroups.flatMap((group) => group.items.map((item) => item.id)));
+
+/**
+ * Generic MDMS resources for the Advanced section.
+ *
+ * Derived from the menu definition above rather than from a hand-kept list, so
+ * a resource promoted into a primary group cannot end up listed twice — which
+ * is what "Notification Events / Routing / Templates" were, once under
+ * NOTIFICATIONS and again down here under their long registry labels. Anything
+ * NOT in a primary group stays, including the read-only Legacy (PGR)
+ * Notification masters, for which Advanced is the only way in.
+ */
+const advancedResources = Object.keys(getGenericMdmsResources())
+  .filter((name) => !primaryNavIds.has(name))
+  .map((name) => ({
+    id: name,
+    name: getResourceLabel(name),
+    path: `/manage/${name}`,
+  }));
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, setMode, toggleHelp } = useApp();

@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { deriveChannelStatus, type Channel } from './channelStatus';
 
-/** Minimal stand-in for providerCatalog.rowChannel (kept out of the test to avoid the app module graph). */
-const channelOf = (i: Record<string, unknown>): Channel =>
-  String(i.channel).toUpperCase() === 'EMAIL' ? 'EMAIL' : /whatsapp/i.test(`${i.identifier ?? ''} ${i.name ?? ''}`) ? 'WHATSAPP' : 'SMS';
+/** Minimal stand-in for providerCatalog.rowChannel (kept out of the test to avoid the app module graph).
+ *  `null` mirrors the real one: a Novu channel we do not deliver on is not a provider for anything. */
+const channelOf = (i: Record<string, unknown>): Channel | null => {
+  const channel = String(i.channel ?? '').toLowerCase();
+  if (channel === 'email') return 'EMAIL';
+  if (channel && channel !== 'sms') return null;
+  return /whatsapp/i.test(`${i.identifier ?? ''} ${i.name ?? ''}`) ? 'WHATSAPP' : 'SMS';
+};
 
 const twilioSms = { channel: 'sms', providerId: 'twilio', identifier: 'twilio-sms-1', name: 'Twilio SMS (prod)', active: true };
 const gmail = { channel: 'email', providerId: 'nodemailer', identifier: 'gmail-1', active: true };
+/** Novu's built-in Inbox: a real integration on a channel nothing is delivered through. */
+const novuInbox = { channel: 'in_app', providerId: 'novu', identifier: 'novu-inbox', name: 'Novu Inbox', active: true };
 const workflows = ['complaints-sms', 'complaints-email'];
 
 describe('deriveChannelStatus', () => {
@@ -82,6 +89,29 @@ describe('deriveChannelStatus — provider selection', () => {
     const s = deriveChannelStatus('SMS', on('gmail-1'), [gmail, twilioSms], workflows, channelOf);
     expect(s.providerState).toBe('mismatch');
     expect(s.verdict).toBe('provider-mismatch');
+    expect(s.effective).toBe(false);
+  });
+
+  it('never says "delivering" when the selection points at an integration we do not deliver on', () => {
+    // The whole point of the defect: an in_app integration read as SMS made this
+    // card report a channel as delivering while nothing could ever be sent.
+    const s = deriveChannelStatus('SMS', on('novu-inbox'), [novuInbox, twilioSms], workflows, channelOf);
+    expect(s.effective).toBe(false);
+    expect(s.providerState).toBe('mismatch');
+    expect(s.verdict).toBe('provider-mismatch');
+    expect(s.reasons).toContain('selected provider "novu-inbox" is not a SMS provider');
+    expect(s.summary).toMatch(/is not a SMS provider/);
+  });
+
+  it('still says "does not serve" when the provider is a real provider for another channel', () => {
+    // Same verdict, different reason — the operator's next move is not the same.
+    const s = deriveChannelStatus('SMS', on('gmail-1'), [gmail], workflows, channelOf);
+    expect(s.reasons).toContain('selected provider "gmail-1" does not serve SMS');
+  });
+
+  it('does not count a non-deliverable integration as "an active provider exists for this channel"', () => {
+    const s = deriveChannelStatus('SMS', on(), [novuInbox], workflows, channelOf);
+    expect(s.providerState).toBe('none');
     expect(s.effective).toBe(false);
   });
 

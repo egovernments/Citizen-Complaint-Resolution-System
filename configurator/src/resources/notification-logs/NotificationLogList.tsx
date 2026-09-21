@@ -16,6 +16,7 @@ import {
   channelDisplay,
   recipientDisplay,
   sourcePathDisplay,
+  tenantDisplay,
 } from './notificationLogDisplay';
 
 // Every choice list, label and row→cell rule lives in notificationLogDisplay.ts
@@ -38,7 +39,10 @@ const filters = [
   // inputs below onto server-side query params. (A generic `q` quick-search was
   // removed: the dataProvider drops `q` for this resource, so it was a dead
   // field operators typed into.)
-  <TextFilterInput key="referenceNumber" source="referenceNumber" label="Complaint #" alwaysOn />,
+  // "Reference #", not "Complaint #": `referenceNumber` is whatever the
+  // producing module put on the event, and the OTP rows — which have no
+  // complaint at all — carry a transaction UUID there.
+  <TextFilterInput key="referenceNumber" source="referenceNumber" label="Reference #" alwaysOn />,
   <SelectFilterInput key="channel" source="channel" label="Channel" choices={CHANNEL_CHOICES} alwaysOn />,
   <SelectFilterInput key="status" source="status" label="Status" choices={STATUS_CHOICES} alwaysOn />,
   <SelectFilterInput key="sourcePath" source="sourcePath" label="Produced by" choices={SOURCE_PATH_CHOICES} alwaysOn />,
@@ -61,15 +65,28 @@ const columns: DigitColumn[] = [
     render: (record) => <DateField value={record.createdTime} />,
   },
   {
+    source: 'tenantId',
+    label: 'Tenant',
+    sortable: false,
+    // A state-level search also returns its city tenants' rows (signed in at
+    // `mz`, rows written at `mz.maputo`), so the row has to say which one it is.
+    render: (record) => <Cell {...tenantDisplay(record)} mono />,
+  },
+  {
     source: 'referenceNumber',
-    label: 'Complaint',
+    // NOT "Complaint": an OTP row has no complaint, and this column showed its
+    // transaction UUID under a heading that promised one.
+    label: 'Reference',
     sortable: false,
     render: (record) => {
       const ref = String(record.referenceNumber ?? '');
-      return ref ? (
+      if (!ref) return <span className="text-muted-foreground">--</span>;
+      // Only a Complaints row's reference is a complaint number; an OTP's (module CORE)
+      // is an opaque id with nothing to open.
+      return String(record.module ?? '').toLowerCase() === 'complaints' ? (
         <EntityLink resource="complaints" id={ref} label={ref} />
       ) : (
-        <span className="text-muted-foreground">--</span>
+        <span className="font-mono text-xs">{ref}</span>
       );
     },
   },

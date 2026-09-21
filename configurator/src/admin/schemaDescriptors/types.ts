@@ -20,7 +20,30 @@ export type WidgetKind =
   | 'chip-array' // string[] editor (add on Enter, remove on x)
   | 'duration-ms' // number input alongside d/h/m/s display
   | 'locale-list' // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
-  | 'json';       // raw-JSON textarea for object/array fields (parse-validated; blocks save while invalid)
+  | 'json'        // raw-JSON textarea for object/array fields (parse-validated; blocks save while invalid)
+  | 'channel-gateway'; // novu / a direct gateway, offered only for the channels that gateway carries
+
+/**
+ * How a field's LIST cell renders, when the generic one would be wrong.
+ *
+ * The generic list builds its columns from the JSON Schema alone, which gets two
+ * things wrong on the notification masters. Arrays typed `["array","null"]` are
+ * not recognised as complex, so they print `JSON.stringify(...)` — the event
+ * catalogue's `placeholders` is ~1,700 characters, which made every row ~857px
+ * tall. And an `enum` field is auto-made inline-editable, which puts a live
+ * <select> in every cell of the column: the Channels list offered `smscountry`
+ * on EMAIL and WHATSAPP rows, one click from writing a gateway that cannot
+ * carry them.
+ *
+ * Like `customEditor`, these are STRING KEYS rather than component references,
+ * so descriptors stay serializable data with no React import.
+ *
+ *  - `badges`            string[] as small chips.
+ *  - `named-badges`      [{name, …}][] as chips of `name`.
+ *  - `token-summary`     [{name, …}][] as "12 · {a} {b} {c} …", full list on hover.
+ *  - `plain`             the value as read-only text — never an inline editor.
+ */
+export type ListWidgetKind = 'badges' | 'named-badges' | 'token-summary' | 'plain';
 
 /** A single field override. `path` is dot-notation into the record (e.g. "rules.pattern"). */
 export interface FieldSpec {
@@ -28,6 +51,8 @@ export interface FieldSpec {
   label?: string;
   help?: string;
   widget?: WidgetKind;
+  /** How this field's cell renders on the generic LIST page. Omit for the default. */
+  listWidget?: ListWidgetKind;
   required?: boolean;
   /** Hide this field in create / edit / always. */
   hidden?: 'create' | 'edit' | 'always';

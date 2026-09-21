@@ -280,6 +280,20 @@ describe('checkPendingChanges — end to end', () => {
     const r = checkPendingChanges(base, [{ resource: 'notifications-channel', op: 'upsert', row: { code: 'SMS', enabled: true, provider: '', active: true } }]);
     expect(r.blocking.map((f) => f.rule)).toContain('channel-needs-provider');
   });
+
+  it('blocks putting the SMS-only smscountry gateway on EMAIL, and puts the error on the gateway field', () => {
+    const base = snapshot({ channelRows: [{ code: 'EMAIL', enabled: true, gateway: 'novu', provider: 'p1', active: true }], integrationRows: [{ identifier: 'p1', name: 'P', active: true }] });
+    const row = { code: 'EMAIL', enabled: true, gateway: 'smscountry', provider: 'p1', active: true };
+    const r = checkPendingChanges(base, [{ resource: 'notifications-channel', op: 'upsert', row }]);
+    expect(r.blocking.map((f) => f.rule)).toContain('channel-gateway-mismatch');
+    expect(fieldErrorsFor(r.blocking, Object.keys(row)).gateway).toMatch(/channel-gateway-mismatch/);
+  });
+
+  it('lets the same gateway through on SMS', () => {
+    const base = snapshot({ channelRows: [{ code: 'SMS', enabled: true, gateway: 'novu', provider: 'p1', active: true }], integrationRows: [{ identifier: 'p1', name: 'P', active: true }] });
+    const r = checkPendingChanges(base, [{ resource: 'notifications-channel', op: 'upsert', row: { code: 'SMS', enabled: true, gateway: 'smscountry', senderId: 'KE-GOV', active: true } }]);
+    expect(r.blocking.map((f) => f.rule)).not.toContain('channel-gateway-mismatch');
+  });
 });
 
 describe('presenting the result', () => {

@@ -331,6 +331,52 @@ describe('R7 channel-enabled', () => {
   });
 });
 
+describe('R7a channel-gateway-mismatch', () => {
+  const base = { catalogue: CATALOGUE, routingRows: [routing()], templateRows: [template()], roleCodes: ROLE_CODES };
+  const rule = (f: ReturnType<typeof validateNotifications>) => f.filter((x) => x.rule === 'channel-gateway-mismatch');
+
+  it('rejects the SMS-only smscountry gateway on EMAIL and on WHATSAPP', () => {
+    for (const code of ['EMAIL', 'WHATSAPP']) {
+      const f = rule(validateNotifications({
+        ...base,
+        channelRows: [{ code, enabled: true, gateway: 'smscountry', active: true }],
+      }));
+      expect(f, code).toHaveLength(1);
+      expect(f[0].level).toBe('error');
+      expect(f[0].ref).toBe(code);
+      expect(f[0].message).toMatch(/carries SMS only/);
+    }
+  });
+
+  it('accepts smscountry on SMS, and novu anywhere', () => {
+    expect(rule(validateNotifications({
+      ...base,
+      channelRows: [
+        { code: 'SMS', enabled: true, gateway: 'smscountry', active: true },
+        { code: 'EMAIL', enabled: true, gateway: 'novu', active: true },
+        { code: 'WHATSAPP', enabled: true, active: true },
+      ],
+    }))).toHaveLength(0);
+  });
+
+  it('fires on a row that is switched off, because the row is wrong as written', () => {
+    // The save guard has to refuse this the moment it is typed — an operator who
+    // also unticks `enabled` has not fixed the gateway, only hidden it.
+    const f = rule(validateNotifications({
+      ...base,
+      channelRows: [{ code: 'EMAIL', enabled: false, gateway: 'SMSCountry', active: true }],
+    }));
+    expect(f).toHaveLength(1);
+  });
+
+  it('ignores a soft-deleted row', () => {
+    expect(rule(validateNotifications({
+      ...base,
+      channelRows: [{ code: 'EMAIL', enabled: true, gateway: 'smscountry', active: false }],
+    }))).toHaveLength(0);
+  });
+});
+
 describe('template content + WhatsApp provider template', () => {
   const base = { catalogue: CATALOGUE, roleCodes: ROLE_CODES };
 

@@ -109,6 +109,9 @@ function nameOf(integration: Record<string, unknown> | undefined, fallback: stri
 /**
  * @param channelOf classifies a Novu integration row into a DIGIT channel (the Providers
  *                  screen passes a catalog-aware classifier; `rowChannel` is the legacy one).
+ *                  `null` means the row sits on a Novu channel we do not deliver on at all
+ *                  (in_app / push / chat) — it is NOT a provider for any channel, so a
+ *                  selection pointing at one is a mismatch, never "delivering".
  * @param workflowIds Novu workflow ids, or null while unknown (treated as present).
  */
 export function deriveChannelStatus(
@@ -116,7 +119,7 @@ export function deriveChannelStatus(
   row: ChannelRow | undefined,
   integrations: Array<Record<string, unknown>>,
   workflowIds: string[] | null,
-  channelOf: (integration: Record<string, unknown>) => Channel,
+  channelOf: (integration: Record<string, unknown>) => Channel | null,
 ): ChannelStatus {
   const enabled = !!row?.enabled && row?.active !== false;
   const gateway = String(row?.gateway || 'novu').toLowerCase();
@@ -130,6 +133,10 @@ export function deriveChannelStatus(
   const activeForChannel = integrations.filter(
     (i) => channelOf(i) === channel && i.active !== false,
   );
+  // The selection points at something that serves NO DIGIT channel (a Novu
+  // in_app / push / chat integration). It reads differently from "serves the
+  // wrong channel", so the reason says which of the two it is.
+  const notAProvider = !!selectedIntegration && channelOf(selectedIntegration) === null;
 
   let providerState: ProviderSelectionState;
   if (direct) providerState = 'not-applicable';
@@ -160,7 +167,11 @@ export function deriveChannelStatus(
       } else if (providerState === 'inactive') {
         reasons.push(`selected provider "${provider}" is disabled — enable it or select another`);
       } else if (providerState === 'mismatch') {
-        reasons.push(`selected provider "${provider}" does not serve ${channel}`);
+        reasons.push(
+          notAProvider
+            ? `selected provider "${provider}" is not a ${channel} provider`
+            : `selected provider "${provider}" does not serve ${channel}`,
+        );
       } else if (providerState === 'none') {
         reasons.push('no active Novu integration for this channel');
       } else if (providerState === 'unselected') {
@@ -201,7 +212,9 @@ export function deriveChannelStatus(
     summary = `${channel} is on but its selected provider "${nameOf(selectedIntegration, provider)}" is disabled, so every event on it is recorded SKIPPED / NB_PROVIDER_UNAVAILABLE and nothing is delivered. Enable that provider or select another one.`;
   } else if (providerState === 'mismatch') {
     verdict = 'provider-mismatch';
-    summary = `${channel} is on but its selected provider "${nameOf(selectedIntegration, provider)}" does not serve ${channel}, so every event on it is recorded SKIPPED / NB_PROVIDER_UNAVAILABLE. Select a ${channel} provider.`;
+    summary = notAProvider
+      ? `${channel} is on but its selected provider "${nameOf(selectedIntegration, provider)}" is not a ${channel} provider — it is a notification-service integration we do not deliver on — so every event on it is recorded SKIPPED / NB_PROVIDER_UNAVAILABLE. Select a ${channel} provider.`
+      : `${channel} is on but its selected provider "${nameOf(selectedIntegration, provider)}" does not serve ${channel}, so every event on it is recorded SKIPPED / NB_PROVIDER_UNAVAILABLE. Select a ${channel} provider.`;
   } else if (providerState === 'none') {
     verdict = 'no-provider';
     summary = `${channel} is on but no provider is configured for it. Add one on the Providers screen, then select it here.`;

@@ -51,4 +51,4 @@ export function getFieldSpec(descriptor: SchemaDescriptor | undefined, path: str
   return descriptor?.fields.find((f) => f.path === path);
 }
 
-export type { SchemaDescriptor, FieldSpec, FieldGroup, WidgetKind } from './types';
+export type { SchemaDescriptor, FieldSpec, FieldGroup, WidgetKind, ListWidgetKind } from './types';

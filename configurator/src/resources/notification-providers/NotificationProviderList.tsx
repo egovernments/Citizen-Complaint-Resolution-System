@@ -7,7 +7,7 @@ import { StatusChip } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  integrationChannel, integrationKey, providerTypeLabelKey, findProviderType,
+  integrationChannel, integrationKey, isDeliverableIntegration, providerTypeLabelKey, findProviderType,
   type IntegrationRow,
 } from './providerApi';
 import { selectionsByProvider } from './channelStatus';
@@ -80,8 +80,9 @@ export function NotificationProviderList() {
       sortable: false,
       // The catalog `type` decides the channel; the legacy identifier/name marker
       // is the fallback for integrations created before types existed (Novu stores
-      // WhatsApp as a Twilio `sms` integration).
-      render: (record) => <span>{integrationChannel(record as IntegrationRow, catalog)}</span>,
+      // WhatsApp as a Twilio `sms` integration). A row with no DIGIT channel is
+      // filtered out below, so the dash is only ever a belt-and-braces fallback.
+      render: (record) => <span>{integrationChannel(record as IntegrationRow, catalog) ?? '--'}</span>,
     },
     {
       source: 'type',
@@ -142,6 +143,11 @@ export function NotificationProviderList() {
         _: 'Configure delivery providers. Credentials are stored by the notification service and never shown again.',
       })}
       sort={{ field: 'channel', order: 'ASC' }}
+      // Novu hosts integrations we do not deliver on — every workspace ships a
+      // built-in "Novu Inbox" on `in_app`. They are not DIGIT providers: listing
+      // them offered Verify / Test / Rotate / Delete on something with no
+      // credentials and no channel, and counted them in the header badge.
+      recordFilter={(record) => isDeliverableIntegration(record as IntegrationRow, catalog)}
       actions={
         <div className="flex items-center gap-2">
           <SyncTemplatesAction />

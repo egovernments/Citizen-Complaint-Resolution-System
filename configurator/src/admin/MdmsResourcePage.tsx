@@ -5,9 +5,10 @@ import { useListContext, useResourceContext } from 'ra-core';
 import { getResourceConfig, getResourceBySchema } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
-import { generateColumns, getRefMap, generateFilterElements } from './schemaUtils';
+import { generateColumns, getRefMap, generateFilterElements, applyDescriptorListWidgets } from './schemaUtils';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { ReadOnlyResourceNotice } from './ReadOnlyResourceNotice';
+import { getDescriptor, type SchemaDescriptor } from './schemaDescriptors';
 
 export function MdmsResourcePage() {
   const resource = useResourceContext() ?? '';
@@ -15,6 +16,10 @@ export function MdmsResourcePage() {
   const label = useResourceLabel()(resource);
   const { canEditResource } = useMastersCapability();
   const { definition } = useSchemaDefinition(config?.schema);
+  // Per-schema list-cell overrides. Applied to BOTH column sources below,
+  // because which one runs depends on whether this deployment can serve the
+  // schema definition — and the JSON dump this fixes shows up in either.
+  const descriptor = getDescriptor(config?.schema);
 
   // Compute refMap once, reused by columns and filters
   const refMap = useMemo(() => {
@@ -24,8 +29,8 @@ export function MdmsResourcePage() {
 
   const schemaColumns = useMemo(() => {
     if (!definition) return null;
-    return generateColumns(definition, refMap);
-  }, [definition, refMap]);
+    return applyDescriptorListWidgets(generateColumns(definition, refMap), descriptor);
+  }, [definition, refMap, descriptor]);
 
   // Auto-generate filter elements from schema
   const filterElements = useMemo(() => {
@@ -42,7 +47,7 @@ export function MdmsResourcePage() {
         {schemaColumns ? (
           <DigitDatagrid columns={schemaColumns} rowClick="show" />
         ) : (
-          <AutoDetectDatagrid />
+          <AutoDetectDatagrid descriptor={descriptor} />
         )}
       </DigitList>
     </>
@@ -50,20 +55,21 @@ export function MdmsResourcePage() {
 }
 
 /** Fallback: auto-detect columns from the first record (original behavior) */
-function AutoDetectDatagrid() {
+function AutoDetectDatagrid({ descriptor }: { descriptor?: SchemaDescriptor }) {
   const { data } = useListContext();
   const firstRecord = data?.[0];
 
   const columns: DigitColumn[] = useMemo(() => {
     if (!firstRecord) return [{ source: 'id', label: 'ID' }];
-    return Object.keys(firstRecord as Record<string, unknown>)
+    const detected = Object.keys(firstRecord as Record<string, unknown>)
       .filter((key) => !key.startsWith('_') && key !== 'id')
       .slice(0, 8)
       .map((key) => ({
         source: key,
         label: key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()),
       }));
-  }, [firstRecord]);
+    return applyDescriptorListWidgets(detected, descriptor);
+  }, [firstRecord, descriptor]);
 
   return <DigitDatagrid columns={columns} rowClick="show" />;
 }

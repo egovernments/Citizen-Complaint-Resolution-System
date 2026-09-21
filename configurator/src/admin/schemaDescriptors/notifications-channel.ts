@@ -23,7 +23,12 @@ export const notificationsChannelDescriptor: SchemaDescriptor = {
     { path: 'code', required: true, label: 'Channel', help: 'SMS, WHATSAPP or EMAIL — one row per channel.' },
     { path: 'enabled', widget: 'boolean', required: true, label: 'Enabled', help: 'Off = every event on this channel is recorded SKIPPED / NB_NO_PROVIDER and never delivered.' },
     { path: 'provider', label: 'Active provider', help: 'Identifier of the configured provider that serves this channel — exactly one, no automatic failover. Pick it on Notifications → Providers → Channels rather than typing it here.' },
-    { path: 'gateway', label: 'Gateway (legacy)', help: 'Kept for existing rows: novu (default) delivers through the selected provider; smscountry (SMS only) posts straight to SMSCountry\'s bulk API and takes no provider. New setups choose a provider instead.' },
+    // `listWidget: 'plain'` is what keeps the LIST from rendering this enum as an
+    // inline <select>: `smscountry` carries SMS only, and the list offered it on
+    // the EMAIL and WHATSAPP rows, one click from a policy that cannot deliver.
+    // The form below is where it is chosen, gated on `code` and guarded by
+    // channel-gateway-mismatch.
+    { path: 'gateway', widget: 'channel-gateway', listWidget: 'plain', label: 'Gateway (legacy)', help: 'Kept for existing rows: novu (default) delivers through the selected provider; smscountry (SMS only) posts straight to SMSCountry\'s bulk API and takes no provider. New setups choose a provider instead.' },
     { path: 'senderId', label: 'Sender ID', help: 'Registered sender id / DLT header for a direct SMS gateway. Ignored when a provider is selected.' },
     { path: 'active', widget: 'boolean', label: 'Active' },
   ],

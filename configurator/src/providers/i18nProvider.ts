@@ -192,12 +192,16 @@ const customEnglishMessages: TranslationMessages = {
       field_content_sid: 'Content SID',
       field_variables: 'Variables (comma-separated)',
       body_placeholder: 'Test message text',
-      // Column headers.
+      // Column headers. Every one of these is used as a bare `label:` on the
+      // providers datagrid (no `{ _: default }` at the call site), so a missing
+      // key renders as the raw `app.providers.col_*` string in the header row.
       col_channel: 'Channel',
       col_provider: 'Provider',
       col_name: 'Name',
       col_active: 'Active',
       col_primary: 'Primary',
+      col_type: 'Type',
+      col_selected: 'In use',
       // Credential field labels.
       cred: {
         account_sid: 'Account SID',

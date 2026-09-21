@@ -219,7 +219,7 @@ export const NOTIFICATION_RULES: ReadonlyArray<{
   id: string;
   level: 'error' | 'warn' | 'error | warn';
   /** Which form field the finding belongs next to, when it maps to one. */
-  field?: 'audience' | 'channel' | 'locale' | 'subject' | 'body' | 'variables' | 'provider' | 'enabled' | 'eventName';
+  field?: 'audience' | 'channel' | 'locale' | 'subject' | 'body' | 'variables' | 'provider' | 'enabled' | 'eventName' | 'gateway';
   summary: string;
   /** Absent means active. */
   status?: 'retired';
@@ -235,6 +235,7 @@ export const NOTIFICATION_RULES: ReadonlyArray<{
   { id: 'no-orphan-template', level: 'warn', summary: 'A template exists for a key no active routing row uses; it will never be rendered.' },
   { id: 'non-notifiable-audience', level: 'warn', field: 'audience', summary: 'AUTO_ESCALATE / SYSTEM are workflow actors, not people; a routing row on them never sends.' },
   { id: 'channel-enabled', level: 'warn', field: 'channel', summary: 'Routing rows exist on a channel with no policy row, or one that is switched off.' },
+  { id: 'channel-gateway-mismatch', level: 'error', field: 'gateway', summary: 'The row points at a legacy direct gateway that does not carry its channel (smscountry is SMS only).' },
   { id: 'channel-needs-provider', level: 'error | warn', field: 'provider', summary: 'An enabled channel has no provider selected, so it falls back to deployment-wide settings. Error when routing rows use the channel.' },
   { id: 'channel-provider-missing', level: 'error | warn', field: 'provider', summary: 'The selected provider no longer exists. Error when routing rows use the channel.' },
   { id: 'channel-provider-inactive', level: 'error | warn', field: 'provider', summary: 'The selected provider exists but is disabled. Error when routing rows use the channel.' },
@@ -259,6 +260,17 @@ export const EMAIL_SUBJECT_MAX = 150;
 
 const ALLOWED_CHANNELS = ['SMS', 'WHATSAPP', 'EMAIL'];
 const DEFAULT_LOCALE = 'en_IN';
+
+/**
+ * The legacy DIRECT gateways and the channels each one can carry. These bypass
+ * the notification service and post straight to a vendor API, so the transport
+ * itself fixes the channel: SMSCountry is a bulk SMS API and has no notion of
+ * email or WhatsApp. `novu` is absent because it is not direct — it delivers
+ * whatever the channel's selected provider delivers.
+ */
+export const DIRECT_GATEWAY_CHANNELS: Record<string, string[]> = {
+  SMSCOUNTRY: ['SMS'],
+};
 
 /** Case-insensitive, whitespace-trimmed normalisation. Nullish -> ''. */
 function norm(value: unknown): string {
@@ -372,6 +384,27 @@ export function validateNotifications({
           ref: channel,
         });
       }
+    }
+  }
+
+  // R7a: channel-gateway-mismatch (error). A direct gateway carries the channels its
+  // vendor API carries, and nothing else — `smscountry` is a bulk SMS endpoint, so an
+  // EMAIL or WHATSAPP row pointing at it can never deliver a single message. Unlike the
+  // rules below this one does not wait for the channel to be switched on: the row is
+  // wrong as written, and the save guard has to refuse it at the moment it is typed.
+  if (channelRows) {
+    for (const c of channelRows) {
+      if (!isActive(c.active)) continue;
+      const channel = norm(c.code);
+      const gateway = norm(c.gateway);
+      const carries = DIRECT_GATEWAY_CHANNELS[gateway];
+      if (!carries || carries.includes(channel)) continue;
+      findings.push({
+        level: 'error',
+        rule: 'channel-gateway-mismatch',
+        message: `Channel ${channel || '(none)'} uses gateway "${c.gateway ?? ''}", which carries ${carries.join(', ')} only. Leave the gateway as novu and select a ${channel || 'channel'} provider instead.`,
+        ref: channel,
+      });
     }
   }
 
