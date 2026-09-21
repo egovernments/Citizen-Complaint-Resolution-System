@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const config = require("../../env-variables");
+const mobileValidation = require('./mobile-validation-service');
 const getCityAndLocality = require("./util/google-maps-util");
 const localisationService = require("../util/localisation-service");
 const urlencode = require("urlencode");
@@ -377,8 +378,8 @@ class PGRService {
     return undefined; // No matching city found
   }
 
-  async fetchCitiesAndWebpageLink(tenantId, whatsAppBusinessNumber) {
-    let { cities, messageBundle } = await this.fetchCities(tenantId);
+  async fetchCitiesAndWebpageLink(tenantId, whatsAppBusinessNumber, user) {
+    let { cities, messageBundle } = await this.fetchCities(tenantId, user);
     let link = await this.getCityExternalWebpageLink(
       tenantId,
       whatsAppBusinessNumber
@@ -386,19 +387,67 @@ class PGRService {
     return { cities, messageBundle, link };
   }
 
-  async fetchCities(tenantId) {
-    let cities = await this.fetchMdmsData(
-      tenantId,
-      "tenant",
-      "citymodule",
-      "$.[?(@.module=='PGR.WHATSAPP')].tenants.*.code"
-    );
+  /**
+   * The city pick-list a citizen chooses from, and the tenant the complaint is filed against.
+   *
+   * Derived from `tenant.tenants`, NOT seeded statically. The previous implementation read
+   * only `tenant.citymodule` filtered on `module == 'PGR.WHATSAPP'`, which conflated two
+   * different questions: "which tenants have the WhatsApp module" and "which cities can a
+   * citizen file in". Seeding that row with the module's own tenant produced a one-entry
+   * pick-list containing the STATE tenant, with no localisation, so selecting it filed the
+   * complaint at state level while boundaries and employees live at the city tenant -- the
+   * complaint landed in nobody's inbox. An absent row was no better: an empty list is a dead
+   * end the citizen cannot get past.
+   *
+   * `tenant.tenants` is the master city onboarding actually populates, so the list stays
+   * correct without a seed step. `citymodule` is still honoured when present, as an operator
+   * override for restricting WhatsApp to a subset of cities.
+   */
+  async fetchCities(tenantId, user) {
+    let cities = await this.fetchWhatsAppCityOverride(tenantId, user);
+    if (!cities.length) cities = await this.fetchCityTenants(tenantId, user);
+
     let messageBundle = {};
     for (let city of cities) {
-      let message = localisationService.getMessageBundleForCode(city);
-      messageBundle[city] = message;
+      messageBundle[city] = localisationService.getMessageBundleForCode(city);
     }
     return { cities, messageBundle };
+  }
+
+  /** Optional `tenant.citymodule` PGR.WHATSAPP restriction. Empty when unset. */
+  async fetchWhatsAppCityOverride(tenantId, user) {
+    try {
+      const codes = await this.fetchMdmsData(
+        tenantId,
+        "tenant",
+        "citymodule",
+        "$.[?(@.module=='PGR.WHATSAPP')].tenants.*.code",
+        user
+      );
+      // A row listing only the state root is the mis-seeded shape described above; treat it
+      // as "no override" rather than filing every complaint at state level.
+      const stateRoot = String(tenantId || "").split(".")[0];
+      return (codes || []).filter((c) => c && c !== stateRoot);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /** City tenants from `tenant.tenants` -- everything below the state root. */
+  async fetchCityTenants(tenantId, user) {
+    const stateRoot = String(tenantId || "").split(".")[0];
+    try {
+      const rows = await this.fetchMdmsData(tenantId, "tenant", "tenants", "$.*", user);
+      const codes = (rows || [])
+        .map((r) => (typeof r === "string" ? r : r && r.code))
+        .filter((c) => c && c !== stateRoot);
+      if (codes.length) return codes;
+      // Single-tenant deployment: the state root IS the only place to file.
+      return stateRoot ? [stateRoot] : [];
+    } catch (error) {
+      console.error(`Unable to derive city tenants for ${tenantId}: ${error.message}`);
+      return stateRoot ? [stateRoot] : [];
+    }
   }
 
   async getCityExternalWebpageLink(tenantId, whatsAppBusinessNumber) {
@@ -406,9 +455,17 @@ class PGRService {
       config.egovServices.externalHost +
       config.egovServices.cityExternalWebpagePath +
       "?tenantId=" +
-      tenantId +
-      "&phone=+91" +
-      whatsAppBusinessNumber;
+      tenantId;
+    // The business number belongs to the TWILIO ACCOUNT, not to the citizen's tenant, so it
+    // is deliberately NOT normalised against the tenant's mobile rule: a Kenyan tenant on
+    // the Twilio US sandbox sender produced phone=%2B25414155238886, a dead wa.me target.
+    // It arrives in E.164 already, so its own digits are used as-is.
+    //
+    // Blank omits the parameter entirely, which is what host_vars promises. Previously
+    // toE164('') returned null and encodeURIComponent(null) rendered the literal
+    // "phone=null" into the URL.
+    const phoneDigits = mobileValidation.digitsOnly(whatsAppBusinessNumber);
+    if (phoneDigits) url += "&phone=" + encodeURIComponent("+" + phoneDigits);
     let shorturl = await this.getShortenedURL(url);
     return shorturl;
   }
@@ -427,9 +484,17 @@ class PGRService {
       config.egovServices.externalHost +
       config.egovServices.localityExternalWebpagePath +
       "?tenantId=" +
-      tenantId +
-      "&phone=+91" +
-      whatsAppBusinessNumber;
+      tenantId;
+    // The business number belongs to the TWILIO ACCOUNT, not to the citizen's tenant, so it
+    // is deliberately NOT normalised against the tenant's mobile rule: a Kenyan tenant on
+    // the Twilio US sandbox sender produced phone=%2B25414155238886, a dead wa.me target.
+    // It arrives in E.164 already, so its own digits are used as-is.
+    //
+    // Blank omits the parameter entirely, which is what host_vars promises. Previously
+    // toE164('') returned null and encodeURIComponent(null) rendered the literal
+    // "phone=null" into the URL.
+    const phoneDigits = mobileValidation.digitsOnly(whatsAppBusinessNumber);
+    if (phoneDigits) url += "&phone=" + encodeURIComponent("+" + phoneDigits);
     let shorturl = await this.getShortenedURL(url);
     return shorturl;
   }
@@ -454,7 +519,7 @@ class PGRService {
         if (mdmsData['CMS-BOUNDARY'] && mdmsData['CMS-BOUNDARY']['HierarchySchema']) {
           const hierarchySchemas = mdmsData['CMS-BOUNDARY']['HierarchySchema'];
           // Find ADMIN hierarchy
-          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === 'ADMIN');
+          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === config.boundaryHierarchyType);
           if (adminHierarchy && adminHierarchy.lowestHierarchy) {
             lowestBoundaryType = adminHierarchy.lowestHierarchy;
           }
@@ -465,7 +530,10 @@ class PGRService {
       // Step 1: Fetch boundary data from boundary service with specific boundary type
 
       // Use boundary type parameter to fetch only the lowest level boundaries
-      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=ADMIN&boundaryType=${lowestBoundaryType}&includeChildren=true`;
+      // hierarchyType is named per deployment (it is not always ADMIN), so it is
+      // configurable; the default preserves the previous behaviour.
+      const hierarchyType = config.boundaryHierarchyType;
+      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=${encodeURIComponent(hierarchyType)}&boundaryType=${lowestBoundaryType}&includeChildren=true`;
 
       const boundaryRequest = {
         RequestInfo: {

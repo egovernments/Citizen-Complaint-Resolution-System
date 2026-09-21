@@ -37,15 +37,20 @@ substituted. The vendor script, loaded `async` with `crossOrigin="anonymous"` an
 `referrerPolicy="no-referrer"`, consumes the queue exactly as it would if you had
 pasted the vendor's own snippet — minus the ability to run arbitrary logic.
 
-### The placeholder allowlist (16, exact, case-sensitive)
+### The placeholder allowlist (17, exact, case-sensitive)
 
 ```
 {{surface}}   {{entrance}}   {{stateTenant}}  {{cityTenant}}
-{{page}}      {{locale}}     {{module}}       {{contextPath}}
-{{referrerHost}}  {{now}}
+{{page}}      {{url}}        {{locale}}       {{module}}
+{{contextPath}}   {{referrerHost}}  {{now}}
 {{eventName}} {{eventCategory}} {{eventAction}} {{eventLabel}} {{eventValue}}
 {{errorName}}
 ```
+
+`{{page}}` is the grouping key, with the app's prefix stripped. `{{url}}` is the
+path as actually served. If your collector records a URL you want `{{url}}`:
+`{{page}}` produces rows that 404 when clicked, because the app lives under
+`/digit-ui`. Both are scrubbed the same way.
 
 Deliberately absent: `{{errorMessage}}`, `{{href}}`, anything user-shaped, and any
 way to reach storage. Substitution is a **single pass** over string leaves only —
@@ -91,7 +96,7 @@ PLAUSIBLE: {
     // Queue-then-load, or load-then-configure via loadScript's callback.
     loadScript(rec.scriptUrl, function () { /* configure the SDK */ });
   },
-  pageView: function (rec, ctx) { /* ctx.page is ALREADY scrubbed */ },
+  pageView: function (rec, ctx) { /* ctx.url = path as served, ctx.page = grouping key; both scrubbed */ },
   event: function (rec, ctx) { /* ctx.event = {name, category, action, label, value} */ },
   captureError: function (rec, ctx) { /* ctx.error = {name, message, stack}, pre-scrubbed */ }
 }

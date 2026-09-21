@@ -716,7 +716,7 @@ const pgr =  {
                 question: {
                   invoke: {
                     id: 'pgrFetchCities',
-                    src: (context, event) => pgrService.fetchCitiesAndWebpageLink(context.extraInfo.tenantId,context.extraInfo.whatsAppBusinessNumber),
+                    src: (context, event) => pgrService.fetchCitiesAndWebpageLink(context.extraInfo.tenantId,context.extraInfo.whatsAppBusinessNumber,context.user),
                     onDone: {
                       actions: assign((context, event) => {
                         let { cities, messageBundle } = event.data;

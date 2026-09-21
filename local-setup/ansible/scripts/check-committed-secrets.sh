@@ -47,6 +47,8 @@ SECRET_KEYS = {
   "postgres_password","mcp_db_password","minio_root_user","minio_root_password",
   "elasticsearch_master_password","elasticsearch_password","egov_hrms_default_password",
   "keycloak_admin_password","keycloak_db_password","keycloak_google_client_secret",
+  "keycloak_github_client_secret","identity_digit_admin_password",
+  "identity_digit_provisioner_password","identity_smtp_password",
   "token_exchange_system_password","bootstrap_password","grafana_admin_password",
   "novu_jwt_secret","novu_store_encryption_key","novu_secret_key","novu_mongo_password",
   # basic-auth passwords introduced by the security rework, and secrets this
@@ -69,6 +71,7 @@ FIXTURE_OK = {
   ("minio_root_user","minioadmin"), ("minio_root_password","minioadmin"),
   ("egov_hrms_default_password","eGov@123"), ("keycloak_admin_password","eGov@123"),
   ("keycloak_db_password","eGov@123"), ("token_exchange_system_password","eGov@123"),
+  ("identity_digit_admin_password","eGov@123"),
 }
 
 def walk(node, hits):

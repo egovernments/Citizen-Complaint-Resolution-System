@@ -48,6 +48,7 @@ plugins:
     - Content-Length
     - Content-Type
     - Authorization
+    - Idempotency-Key
     - X-API-Key
     - X-Requested-With
     - auth-token
@@ -140,6 +141,14 @@ plugins:
         -- RBAC-exempt rather than covered — see RBAC_EXEMPT in enforce_rbac.
         local ENFORCE_RBAC = true
         local AUTH_OPTIONAL = {
+          -- Inbound WhatsApp webhooks (#1992). Twilio cannot present a DIGIT token, so these
+          -- are authenticated by X-Twilio-Signature inside xstate-chatbot, not here. Without
+          -- them the global pre-function classifies every inbound message as PROTECTED: today
+          -- that is just RBAC-audit(#5) noise (Twilio's form body fails cjson.decode and lands
+          -- in deny_unauth), but the moment ENFORCE_UNAUTH flips to true every citizen message
+          -- 401s at Kong. Kong-only: the Spring gateway does not route the chatbot, so these
+          -- are registered in KONG_ONLY_AUTH_OPTIONAL rather than env.yaml.
+          ["/xstate-chatbot/message"]=true, ["/xstate-chatbot/status"]=true,
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
           ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
@@ -180,6 +189,17 @@ plugins:
           -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
           -- appropriate because HRMS employee creation does not guarantee a shared base role.
           ["/pgr-services/v2/employee/_context"]=true,
+          -- The new account-onboarding endpoints authenticate the tenant admin from the
+          -- identity BFF's HttpOnly session cookie inside pgr-services. They do not
+          -- accept DIGIT RequestInfo auth tokens because a tenant/user mapping does
+          -- not exist yet at this point in the journey.
+          ["/pgr-services/v2/onboarding/signups/_create"]=true,
+          ["/pgr-services/v2/onboarding/signups/_update"]=true,
+          ["/pgr-services/v2/onboarding/signups/_search"]=true,
+          ["/pgr-services/v2/onboarding/identifiers/_check"]=true,
+          ["/pgr-services/v2/onboarding/signups/_submit"]=true,
+          ["/pgr-services/v2/onboarding/operations/_search"]=true,
+          ["/pgr-services/v2/onboarding/operations/_retry"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
           -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
@@ -248,11 +268,10 @@ plugins:
         local function is_public_infra(p)
           return p == "/digit-ui" or p:find("/digit-ui/", 1, true) == 1
               or p == "/auth" or p:find("/auth/", 1, true) == 1
-              -- /kc is keycloak-api-route -> token-exchange-svc: the UI hits it
-              -- BEFORE the caller holds a DIGIT token (KeycloakAuthAdapter), and
-              -- /kc/healthz is a plain liveness probe that ends in "z" (so the
-              -- /health$ match below does not catch it). Same bucket as /auth.
-              or p == "/kc" or p:find("/kc/", 1, true) == 1
+              -- Identity browser routes run before the caller holds a DIGIT
+              -- token. The BFF enforces its own opaque session and CSRF checks.
+              -- Internal control-plane routes are deliberately not published.
+              or p == "/identity/v1" or p:find("/identity/v1/", 1, true) == 1
               -- `/health$` (suffix) not `== "/health"`: the per-service liveness
               -- endpoints are `/mdms-v2/health`, `/user/health`, `/access/health`,
               -- `/egov-idgen/health`, `/egov-workflow-v2/health`, `/pgr-services/health`
@@ -965,6 +984,19 @@ services:
     paths:
     - /user-preference
     strip_path: false
+- name: xstate-chatbot
+  url: http://xstate-chatbot:8080
+  tags:
+  - chatbot
+  routes:
+  # Twilio's inbound webhook. Deliberately NOT behind a DIGIT auth plugin -- Twilio
+  # cannot present a DIGIT token. Authentication is the X-Twilio-Signature check inside
+  # the service (TWILIO_VALIDATE_SIGNATURE). Only reachable when the `chatbot` compose
+  # profile is on; otherwise the upstream simply does not resolve.
+  - name: xstate-chatbot-route
+    paths:
+    - /xstate-chatbot
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:
@@ -1078,7 +1110,52 @@ services:
       minute: 60
       policy: local
       limit_by: ip
-# Keycloak identity provider (login, registration, admin console)
+# Keycloak privileged surface — DENIED at the edge (Dhruv review, #2088).
+#
+# `keycloak-route` below fronts a Keycloak that listens at `/`, and `/auth/` is
+# token-exempt in `is_public_infra`, so without these two routes every Keycloak
+# path is public: `/auth/admin/` served the admin console AND the Admin REST
+# API, and `/auth/realms/master/...` served the master realm's token endpoint —
+# on a box where `KC_BOOTSTRAP_ADMIN_PASSWORD` falls back to `admin`, that is a
+# full takeover from the internet. Host nginx forwards `location /` to Kong, so
+# this is the single enforcement point for both the Kong and nginx front doors.
+#
+# Only the login surface stays public: `/auth/realms/<tenant realm>/...` (OIDC
+# discovery, authorize, token, certs, login/registration forms, account console)
+# and `/auth/resources/...` (login theme assets).
+#
+# Nothing in this repository reaches the admin surface through Kong: the BFF,
+# the Organizations configurator, Gatus and the integration tests all address
+# Keycloak directly on `keycloak:8180` / `localhost:18180` over the private
+# network. Operators who need the console tunnel to that published port.
+#
+# MUST stay ABOVE `keycloak-service`: these are longer path prefixes than
+# `/auth`, and Kong's router matches the longest prefix first, so they win.
+- name: keycloak-admin-denied
+  url: http://localhost:9999
+  tags:
+  - identity
+  - keycloak
+  routes:
+  - name: keycloak-admin-deny-route
+    paths:
+    # Admin console UI and the Admin REST API (`/admin/realms/...`).
+    - /auth/admin
+    strip_path: false
+  - name: keycloak-master-realm-deny-route
+    paths:
+    # The master realm: its token endpoint mints admin tokens.
+    - /auth/realms/master
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      # 404, not 403: do not confirm to an unauthenticated caller that a
+      # Keycloak admin surface exists behind this gateway.
+      status_code: 404
+      content_type: application/json
+      body: '{"error":"not_found"}'
+# Keycloak identity provider (login and registration only — see the deny routes above)
 - name: keycloak-service
   url: http://keycloak:8180
   tags:
@@ -1088,18 +1165,20 @@ services:
   - name: keycloak-route
     paths:
     - /auth
-    strip_path: false
-# Token exchange — Keycloak JWT-protected DIGIT API access
-- name: token-exchange-service
-  url: http://token-exchange-svc:3000
+    # Keycloak listens at / internally; KC_HOSTNAME carries the public /auth
+    # prefix used in discovery and redirects.
+    strip_path: true
+# Identity BFF — OIDC session, tenant choice and user-scoped DIGIT token
+- name: identity-bff-service
+  url: http://identity-bff:3000
   tags:
   - identity
   - keycloak
   routes:
-  - name: keycloak-api-route
+  - name: identity-bff-route
     paths:
-    - /kc
-    strip_path: true
+    - /identity/v1
+    strip_path: false
 # OTP validate — real upstream (egov-otp:8089) fronted by a default request-termination MOCK.
 # Mirrors /user-otp: the mock rubber-stamps every OTP validation as successful, so citizen
 # login works with the fixed OTP (123456) without the `otp` profile running.

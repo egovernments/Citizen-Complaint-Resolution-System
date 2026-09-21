@@ -1,0 +1,17 @@
+ARG KEYCLOAK_VERSION=26.7.3
+ARG MAGIC_LINK_VERSION=0.75
+
+FROM alpine:3.22 AS extension
+ARG MAGIC_LINK_VERSION
+ARG MAGIC_LINK_SHA256=cf39e6b2c7f640af09d4a983554f1bd38aec3283313be25af40f58fe078fd5b7
+RUN wget -q \
+      "https://repo1.maven.org/maven2/io/phasetwo/keycloak/keycloak-magic-link/${MAGIC_LINK_VERSION}/keycloak-magic-link-${MAGIC_LINK_VERSION}.jar" \
+      -O /keycloak-magic-link.jar \
+    && echo "${MAGIC_LINK_SHA256}  /keycloak-magic-link.jar" | sha256sum -c -
+
+FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION} AS builder
+COPY --from=extension --chown=keycloak:keycloak /keycloak-magic-link.jar /opt/keycloak/providers/keycloak-magic-link.jar
+RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
+
+FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}
+COPY --from=builder /opt/keycloak/ /opt/keycloak/
