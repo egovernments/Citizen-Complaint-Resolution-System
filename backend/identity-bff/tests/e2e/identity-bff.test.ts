@@ -47,9 +47,9 @@ beforeAll(async () => {
   (config as any).identityCookieSecure = false;
   (config as any).identityCookieSameSite = "Lax";
   (config as any).identityAuthMethods = [
-    { id: "password", label: "Password", type: "password" },
-    { id: "google", label: "Google", type: "oauth", idpHint: "google" },
-    { id: "magic_link", label: "Email me a sign-in link", type: "magic_link" },
+    { id: "password", label: "Password", type: "password", intents: ["signin"] },
+    { id: "google", label: "Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
+    { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
   ];
   Object.assign(config as any, {
     cachePrefix: `identity-e2e-${process.pid}`,
@@ -186,10 +186,21 @@ describe("identity BFF", () => {
     );
     expect(methods.status).toBe(200);
     expect(await methods.json()).toEqual({ methods: [
-      { id: "password", label: "Password", type: "password" },
-      { id: "google", label: "Google", type: "oauth", idpHint: "google" },
-      { id: "magic_link", label: "Email me a sign-in link", type: "magic_link" },
+      { id: "password", label: "Password", type: "password", intents: ["signin"] },
+      { id: "google", label: "Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
+      { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
     ] });
+
+    const signinMethods = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
+    );
+    expect((await signinMethods.json()).methods.map((method: { id: string }) => method.id))
+      .toEqual(["password", "google"]);
+    const signupMethods = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signup`,
+    );
+    expect((await signupMethods.json()).methods.map((method: { id: string }) => method.id))
+      .toEqual(["google", "magic_link"]);
 
     const unknown = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=unknown`,
@@ -197,8 +208,14 @@ describe("identity BFF", () => {
     );
     expect(unknown.status).toBe(400);
 
+    const unsafeReturn = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&returnTo=${encodeURIComponent("/\\attacker.example")}`,
+      { redirect: "manual" },
+    );
+    expect(unsafeReturn.status).toBe(400);
+
     const magic = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link`,
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link&intent=signup&returnTo=%2Fconfigurator%2Fsignup`,
       { redirect: "manual" },
     );
     expect(magic.status).toBe(302);
@@ -216,6 +233,7 @@ describe("identity BFF", () => {
       { redirect: "manual", headers: { Cookie: magicLoginCookie } },
     );
     expect(callback.status).toBe(303);
+    expect(callback.headers.get("location")).toBe("/configurator/signup");
     const magicSessionCookie = callback.headers.getSetCookie()
       .find((value) => value.startsWith("digit_identity_session="))!
       .split(";", 1)[0];
@@ -225,6 +243,93 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/session`,
       { headers: { Cookie: magicSessionCookie } },
     )).status).toBe(200);
+  });
+
+  it("returns provider failures through a one-time, browser-safe result", async () => {
+    const authorize = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&intent=signin&returnTo=%2Fconfigurator%2Flogin`,
+      { redirect: "manual" },
+    );
+    const authorizeUrl = new URL(authorize.headers.get("location")!);
+    const state = authorizeUrl.searchParams.get("state")!;
+    const loginCookie = authorize.headers.get("set-cookie")!.split(";", 1)[0];
+    const callback = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+      { redirect: "manual", headers: { Cookie: loginCookie } },
+    );
+    expect(callback.status).toBe(303);
+    const resultLocation = new URL(callback.headers.get("location")!, "http://localhost");
+    expect(resultLocation.pathname).toBe("/configurator/login");
+    const id = resultLocation.searchParams.get("authResult")!;
+    const result = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(id)}`,
+    );
+    expect(await result.json()).toEqual({
+      status: "failed",
+      code: "AUTH_CANCELLED",
+      message: "Sign-in was cancelled. No changes were made to your account.",
+      actions: ["TRY_AGAIN"],
+    });
+    expect((await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(id)}`,
+    )).status).toBe(404);
+  });
+
+  it("offers non-enumerating, one-time password setup for OAuth accounts", async () => {
+    await kcAdmin("/users", {
+      id: "oauth-only-user", username: "oauth.only@example.com", email: "oauth.only@example.com",
+      firstName: "OAuth", lastName: "Only", enabled: true, emailVerified: true,
+      credentials: [],
+      federatedIdentities: [{ identityProvider: "google", userId: "google-user-1" }],
+    });
+    const endpoint = `http://localhost:${getAppPort()}/identity/v1/password/setup-requests`;
+    const requestSetup = (email: string) => fetch(endpoint, {
+      method: "POST",
+      headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ email, returnTo: "/configurator/login" }),
+    });
+    const accepted = await requestSetup("OAUTH.ONLY@example.com");
+    expect(accepted.status).toBe(202);
+    const genericBody = await accepted.json();
+    expect(genericBody).toEqual({
+      message: "If an eligible account exists, a password setup email has been sent.",
+    });
+    const absent = await requestSetup("nobody@example.com");
+    expect(absent.status).toBe(202);
+    expect(await absent.json()).toEqual(genericBody);
+
+    const user = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
+    )).json();
+    expect(user.requiredActions).toEqual(["UPDATE_PASSWORD"]);
+    expect(user.activationEmails).toBe(1);
+    const completion = new URL(user.lastActionRedirectUri);
+    expect(completion.pathname).toBe("/identity/v1/password/setup-complete");
+    const completionUnderTest = new URL(
+      `${completion.pathname}${completion.search}`,
+      `http://localhost:${getAppPort()}`,
+    );
+    completionUnderTest.searchParams.set("kc_action_status", "success");
+    const complete = await fetch(completionUnderTest, { redirect: "manual" });
+    expect(complete.status).toBe(303);
+    const completeLocation = new URL(complete.headers.get("location")!, "http://localhost");
+    expect(completeLocation.pathname).toBe("/configurator/login");
+    const resultId = completeLocation.searchParams.get("authResult")!;
+    const result = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(resultId)}`,
+    );
+    expect(await result.json()).toMatchObject({
+      status: "complete",
+      code: "PASSWORD_SETUP_COMPLETE",
+    });
+
+    const replay = await fetch(completionUnderTest, { redirect: "manual" });
+    expect(replay.status).toBe(303);
+    const replayLocation = new URL(replay.headers.get("location")!, "http://localhost");
+    const replayResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(replayLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await replayResult.json()).toMatchObject({ code: "AUTH_ATTEMPT_EXPIRED" });
   });
 
   it("does not accept a browser-supplied Keycloak token as a session", async () => {
@@ -315,7 +420,12 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(authorizeUrl.searchParams.get("nonce")!)}&state=${encodeURIComponent(state)}`,
       { redirect: "manual", headers: { Cookie: loginCookie } },
     );
-    expect(replay.status).toBe(400);
+    expect(replay.status).toBe(303);
+    const replayLocation = new URL(replay.headers.get("location")!, "http://localhost");
+    const replayResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(replayLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await replayResult.json()).toMatchObject({ code: "AUTH_ATTEMPT_EXPIRED" });
 
     // The first token expires immediately in the mock. Reading the session
     // exercises refresh without exposing either Keycloak token to the browser.

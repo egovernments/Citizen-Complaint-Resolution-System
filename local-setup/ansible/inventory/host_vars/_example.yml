@@ -645,7 +645,7 @@ identity_bff_image: ""
 identity_keycloak_image: ""
 identity_post_login_redirect: ""       # default: this deployment's origin + /
 identity_allowed_origins: ""           # comma-separated; default: this origin
-identity_auth_methods: '[{"id":"password","label":"Email and password","type":"password"}]'
+identity_auth_methods: '[{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]'
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900

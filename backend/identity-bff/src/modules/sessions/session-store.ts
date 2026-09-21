@@ -2,12 +2,19 @@ import { createHash, randomBytes } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import type { IdentityTokenSet, KeycloakClaims } from "../authentication/types.js";
+import type {
+  IdentityAuthIntent,
+  IdentityAuthResult,
+} from "../authentication/types.js";
 import type { IdentitySession, SelectedIdentityContext } from "./types.js";
 
 interface LoginAttempt {
   codeVerifier: string;
   nonce: string;
   oidcClientId: string;
+  intent: IdentityAuthIntent;
+  methodId: string;
+  returnTo: string;
 }
 
 function randomId(): string {
@@ -22,11 +29,24 @@ function sessionKey(sessionId: string): string {
   return `${config.cachePrefix}:identity:session:${sessionId}`;
 }
 
+function authResultKey(id: string): string {
+  return `${config.cachePrefix}:identity:auth-result:${id}`;
+}
+
+function passwordSetupKey(id: string): string {
+  return `${config.cachePrefix}:identity:password-setup:${id}`;
+}
+
 function contextKey(sessionId: string): string {
   return `${config.cachePrefix}:identity:context:${sessionId}`;
 }
 
-export async function createLoginAttempt(oidcClientId: string): Promise<{
+export async function createLoginAttempt(input: {
+  oidcClientId: string;
+  intent: IdentityAuthIntent;
+  methodId: string;
+  returnTo: string;
+}): Promise<{
   state: string;
   codeVerifier: string;
   codeChallenge: string;
@@ -40,7 +60,7 @@ export async function createLoginAttempt(oidcClientId: string): Promise<{
     .digest("base64url");
   await getRedis().set(
     loginKey(state),
-    JSON.stringify({ codeVerifier, nonce, oidcClientId } satisfies LoginAttempt),
+    JSON.stringify({ codeVerifier, nonce, ...input } satisfies LoginAttempt),
     "EX",
     config.identityLoginTtlSeconds,
   );
@@ -56,10 +76,49 @@ export async function consumeLoginAttempt(
     const attempt = JSON.parse(raw) as LoginAttempt;
     return typeof attempt.codeVerifier === "string" &&
       typeof attempt.nonce === "string" &&
-      typeof attempt.oidcClientId === "string" ? attempt : null;
+      typeof attempt.oidcClientId === "string" &&
+      (attempt.intent === "signin" || attempt.intent === "signup") &&
+      typeof attempt.methodId === "string" &&
+      typeof attempt.returnTo === "string" ? attempt : null;
   } catch {
     return null;
   }
+}
+
+export async function createAuthResult(result: IdentityAuthResult): Promise<string> {
+  const id = randomId();
+  await getRedis().set(
+    authResultKey(id),
+    JSON.stringify(result),
+    "EX",
+    config.identityAuthResultTtlSeconds,
+  );
+  return id;
+}
+
+export async function consumeAuthResult(id: string): Promise<IdentityAuthResult | null> {
+  const raw = await getRedis().getdel(authResultKey(id));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as IdentityAuthResult;
+  } catch {
+    return null;
+  }
+}
+
+export async function createPasswordSetupAttempt(returnTo: string): Promise<string> {
+  const id = randomId();
+  await getRedis().set(
+    passwordSetupKey(id),
+    returnTo,
+    "EX",
+    config.identityPasswordSetupTtlSeconds,
+  );
+  return id;
+}
+
+export async function consumePasswordSetupAttempt(id: string): Promise<string | null> {
+  return getRedis().getdel(passwordSetupKey(id));
 }
 
 function sessionTtl(tokens: IdentityTokenSet): number {

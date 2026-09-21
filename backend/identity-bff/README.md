@@ -23,9 +23,12 @@ See [the full API and operations guide](docs/identity-bff.md).
 ## Browser API
 
 ```http
-GET  /identity/v1/auth-methods
-GET  /identity/v1/authorize?method=password
+GET  /identity/v1/auth-methods?intent=signin
+GET  /identity/v1/authorize?method=password&intent=signin&returnTo=/configurator/login
 GET  /identity/v1/callback
+GET  /identity/v1/auth-results/:id
+POST /identity/v1/password/setup-requests
+GET  /identity/v1/password/setup-complete
 GET  /identity/v1/session
 GET  /identity/v1/tenants
 POST /identity/v1/contexts/_select

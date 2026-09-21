@@ -5,7 +5,9 @@ import { resolveTenantOptions } from "../access-context/tenant-options.js";
 import { IdentityAdminError } from "../organizations/organization-service.js";
 import {
   clearedLoginCookie,
+  consumeAuthResult,
   consumeLoginAttempt,
+  createAuthResult,
   createIdentitySession,
   createLoginAttempt,
   loginCookie,
@@ -20,11 +22,135 @@ import {
   verifyIdentityAccessToken,
   verifyIdentityIdToken,
 } from "./oidc.js";
+import type {
+  IdentityAuthIntent,
+  IdentityAuthResult,
+  IdentityAuthResultCode,
+} from "./types.js";
+
+function requestedIntent(value: unknown): IdentityAuthIntent | null {
+  return value === "signin" || value === "signup" ? value : null;
+}
+
+/**
+ * Relative paths stay on the BFF's public origin. Absolute development URLs
+ * must use the same origin allowlist as credentialed CORS; this keeps one
+ * deployment source of truth and avoids introducing a competing redirect list.
+ */
+function safeReturnTo(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const candidate = value.trim();
+  if (/^\/(?!\/)[^\u0000-\u001f\u007f\\]*$/.test(candidate)) return candidate;
+  try {
+    const parsed = new URL(candidate);
+    return config.identityAllowedOrigins.includes(parsed.origin) ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function withAuthResult(destination: string, id: string): string {
+  if (destination.startsWith("/") && !destination.startsWith("//")) {
+    const separator = destination.includes("?") ? "&" : "?";
+    return `${destination}${separator}authResult=${encodeURIComponent(id)}`;
+  }
+  const url = new URL(destination);
+  url.searchParams.set("authResult", id);
+  return url.toString();
+}
+
+const RESULT_COPY: Record<IdentityAuthResultCode, Omit<IdentityAuthResult, "code">> = {
+  AUTH_CANCELLED: {
+    status: "failed",
+    message: "Sign-in was cancelled. No changes were made to your account.",
+    actions: ["TRY_AGAIN"],
+  },
+  AUTH_ATTEMPT_EXPIRED: {
+    status: "failed",
+    message: "That sign-in attempt expired or was already used. Please start again.",
+    actions: ["TRY_AGAIN"],
+  },
+  IDENTITY_PROVIDER_UNAVAILABLE: {
+    status: "failed",
+    message: "That sign-in provider is temporarily unavailable. Try another method or try again later.",
+    actions: ["TRY_AGAIN", "TRY_EXISTING_METHOD"],
+  },
+  ACCOUNT_LINK_REQUIRED: {
+    status: "failed",
+    message: "An account already uses this email. Verify the existing account to link this sign-in method.",
+    actions: ["TRY_EXISTING_METHOD", "SETUP_PASSWORD"],
+  },
+  ACCOUNT_LINK_FAILED: {
+    status: "failed",
+    message: "We could not link that sign-in method. Your existing account was not changed.",
+    actions: ["TRY_EXISTING_METHOD", "SETUP_PASSWORD"],
+  },
+  IDENTITY_ALREADY_LINKED: {
+    status: "failed",
+    message: "That sign-in identity is already connected to another account. Contact an administrator for recovery.",
+    actions: ["TRY_EXISTING_METHOD"],
+  },
+  EMAIL_VERIFICATION_REQUIRED: {
+    status: "failed",
+    message: "Verify the email on the existing account before linking another sign-in method.",
+    actions: ["TRY_EXISTING_METHOD", "SETUP_PASSWORD"],
+  },
+  SIGN_IN_FAILED: {
+    status: "failed",
+    message: "Sign-in could not be completed. Please try again.",
+    actions: ["TRY_AGAIN", "TRY_EXISTING_METHOD"],
+  },
+  PASSWORD_SETUP_FAILED: {
+    status: "failed",
+    message: "Password setup was not completed. Request another link when you are ready.",
+    actions: ["SETUP_PASSWORD"],
+  },
+  PASSWORD_SETUP_COMPLETE: {
+    status: "complete",
+    message: "Your password is ready. You can now sign in with email and password.",
+    actions: ["TRY_AGAIN"],
+  },
+};
+
+function result(code: IdentityAuthResultCode): IdentityAuthResult {
+  return { code, ...RESULT_COPY[code] };
+}
+
+function providerErrorCode(error: unknown, description: unknown): IdentityAuthResultCode {
+  const detail = `${typeof error === "string" ? error : ""} ${
+    typeof description === "string" ? description : ""
+  }`.toLowerCase();
+  if (detail.includes("already linked") || detail.includes("federated_identity_exists")) {
+    return "IDENTITY_ALREADY_LINKED";
+  }
+  if (detail.includes("verify") && detail.includes("email")) return "EMAIL_VERIFICATION_REQUIRED";
+  if (detail.includes("existing account") || detail.includes("account_exists")) {
+    return "ACCOUNT_LINK_REQUIRED";
+  }
+  if (detail.includes("link")) return "ACCOUNT_LINK_FAILED";
+  if (error === "access_denied") return "AUTH_CANCELLED";
+  return "IDENTITY_PROVIDER_UNAVAILABLE";
+}
+
+async function redirectWithResult(
+  response: express.Response,
+  destination: string,
+  code: IdentityAuthResultCode,
+): Promise<void> {
+  const id = await createAuthResult(result(code));
+  response.redirect(303, withAuthResult(destination, id));
+}
 
 export function registerAuthenticationRoutes(app: express.Application): void {
-  app.get("/identity/v1/auth-methods", asyncRoute(async (_request, response) => {
+  app.get("/identity/v1/auth-methods", asyncRoute(async (request, response) => {
+    const intent = request.query.intent === undefined
+      ? undefined
+      : requestedIntent(request.query.intent);
+    if (request.query.intent !== undefined && !intent) {
+      return response.status(400).json({ error: "Unsupported authentication intent" });
+    }
     try {
-      return response.json({ methods: await enabledIdentityMethods() });
+      return response.json({ methods: await enabledIdentityMethods(intent || undefined) });
     } catch (error) {
       if (error instanceof IdentityAdminError) {
         return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
@@ -34,12 +160,17 @@ export function registerAuthenticationRoutes(app: express.Application): void {
   }));
 
   app.get("/identity/v1/authorize", asyncRoute(async (request, response) => {
+    const intent = requestedIntent(request.query.intent) || "signin";
+    const returnTo = safeReturnTo(request.query.returnTo) || config.identityPostLoginRedirect;
+    if (request.query.returnTo !== undefined && !safeReturnTo(request.query.returnTo)) {
+      return response.status(400).json({ error: "Unsupported return destination" });
+    }
     const requestedMethod = typeof request.query.method === "string"
       ? request.query.method
       : "password";
     let methods;
     try {
-      methods = await enabledIdentityMethods();
+      methods = await enabledIdentityMethods(intent);
     } catch (error) {
       if (error instanceof IdentityAdminError) {
         return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
@@ -50,7 +181,12 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     if (!method) return response.status(400).json({ error: "Unsupported sign-in method" });
 
     const oidcClient = oidcClientForMethod(method.type);
-    const { state, codeChallenge, nonce } = await createLoginAttempt(oidcClient.clientId);
+    const { state, codeChallenge, nonce } = await createLoginAttempt({
+      oidcClientId: oidcClient.clientId,
+      intent,
+      methodId: method.id,
+      returnTo,
+    });
     response.setHeader("Set-Cookie", loginCookie(state));
     return response.redirect(
       302,
@@ -67,9 +203,23 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     }
 
     const attempt = await consumeLoginAttempt(state);
-    if (!attempt || !code || request.query.error) {
+    if (!attempt) {
       response.setHeader("Set-Cookie", clearedLoginCookie());
-      return response.status(400).json({ error: "Sign-in attempt expired or was already used" });
+      await redirectWithResult(
+        response,
+        config.identityPostLoginRedirect,
+        "AUTH_ATTEMPT_EXPIRED",
+      );
+      return;
+    }
+    if (request.query.error || !code) {
+      response.setHeader("Set-Cookie", clearedLoginCookie());
+      await redirectWithResult(
+        response,
+        attempt.returnTo,
+        providerErrorCode(request.query.error, request.query.error_description),
+      );
+      return;
     }
 
     try {
@@ -99,11 +249,21 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         sessionCookie(sessionId, maxAge),
         clearedLoginCookie(),
       ]);
-      return response.redirect(303, config.identityPostLoginRedirect);
+      return response.redirect(303, attempt.returnTo);
     } catch (error) {
       console.error("Identity callback failed:", (error as Error).message);
       response.setHeader("Set-Cookie", clearedLoginCookie());
-      return response.status(502).json({ error: "Sign-in failed" });
+      await redirectWithResult(response, attempt.returnTo, "SIGN_IN_FAILED");
+      return;
     }
+  }));
+
+  app.get("/identity/v1/auth-results/:id", asyncRoute(async (request, response) => {
+    const id = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id;
+    const authResult = await consumeAuthResult(id);
+    if (!authResult) {
+      return response.status(404).json({ error: "Authentication result expired or was already read" });
+    }
+    return response.json(authResult);
   }));
 }

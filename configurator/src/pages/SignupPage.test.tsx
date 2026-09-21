@@ -87,7 +87,7 @@ describe('sign-in gate', () => {
     expect(row.className).toMatch(/space-y-|gap-/);
 
     fireEvent.click(magic);
-    expect(api.startSignIn).toHaveBeenCalledWith('magic-link');
+    expect(api.startSignIn).toHaveBeenCalledWith('magic-link', 'signup');
   });
 
   it('hands sign-in to the backend rather than collecting a credential', async () => {
@@ -99,7 +99,7 @@ describe('sign-in gate', () => {
     render(<SignupPage />);
     fireEvent.click(await screen.findByRole('button', { name: /email and password/i }));
 
-    expect(api.startSignIn).toHaveBeenCalledWith('password');
+    expect(api.startSignIn).toHaveBeenCalledWith('password', 'signup');
     // The whole point: no password field ever exists in this flow.
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });

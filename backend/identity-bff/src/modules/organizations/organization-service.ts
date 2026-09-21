@@ -31,6 +31,16 @@ interface UserRepresentation {
   requiredActions?: string[];
 }
 
+interface CredentialRepresentation {
+  id?: string;
+  type?: string;
+}
+
+interface FederatedIdentityRepresentation {
+  identityProvider?: string;
+  userId?: string;
+}
+
 const MANAGED_TENANTS_ATTRIBUTE = "digit.managedTenants";
 const BFF_INVITED_USER_ATTRIBUTE = "digit.identityBffInvited";
 
@@ -427,6 +437,60 @@ async function findIdentityUserByEmail(email: string): Promise<UserRepresentatio
     throw new IdentityAdminError("Multiple Keycloak users use this email address", 409);
   }
   return matches[0] || null;
+}
+
+export interface PasswordSetupInspection {
+  userId: string;
+  hasPassword: boolean;
+  federatedProviders: string[];
+  emailVerified: boolean;
+}
+
+/**
+ * Exact, non-public account inspection used only by password recovery. The
+ * route deliberately never returns this shape: credential/provider presence
+ * would otherwise be an account-enumeration oracle.
+ */
+export async function inspectPasswordSetupAccount(
+  email: string,
+): Promise<PasswordSetupInspection | null> {
+  const user = await findIdentityUserByEmail(email.trim().toLowerCase());
+  if (!user?.id || user.enabled === false) return null;
+  const [credentialsResponse, identitiesResponse] = await Promise.all([
+    request(`/users/${encodeURIComponent(user.id)}/credentials`),
+    request(`/users/${encodeURIComponent(user.id)}/federated-identity`),
+  ]);
+  const credentials = await credentialsResponse.json() as CredentialRepresentation[];
+  const identities = await identitiesResponse.json() as FederatedIdentityRepresentation[];
+  return {
+    userId: user.id,
+    hasPassword: credentials.some((credential) => credential.type === "password"),
+    federatedProviders: identities.flatMap((identity) =>
+      identity.identityProvider ? [identity.identityProvider] : []
+    ),
+    emailVerified: user.emailVerified === true,
+  };
+}
+
+export async function sendPasswordSetupEmail(input: {
+  userId: string;
+  emailVerified: boolean;
+  redirectUri: string;
+}): Promise<void> {
+  const query = new URLSearchParams({
+    client_id: config.keycloakBffClientId,
+    lifespan: String(config.identityPasswordSetupTtlSeconds),
+    redirect_uri: input.redirectUri,
+  });
+  await request(
+    `/users/${encodeURIComponent(input.userId)}/execute-actions-email?${query}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input.emailVerified
+        ? ["UPDATE_PASSWORD"]
+        : ["VERIFY_EMAIL", "UPDATE_PASSWORD"]),
+    },
+  );
 }
 
 /** Creates the passwordless Keycloak identity used by an employee invitation. */

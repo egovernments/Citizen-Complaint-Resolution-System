@@ -58,7 +58,7 @@ import HelpModal from './components/ui/HelpModal';
 import { Toaster } from './components/ui/toaster';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, trackEvent } from './lib/telemetry';
-import { clearLocalSession } from './lib/session';
+import { clearLocalSession, SESSION_EXPIRED_KEY } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
@@ -210,7 +210,6 @@ import { AUTH_STORAGE_KEY } from './lib/session';
 
 // One-shot flag (sessionStorage) set when a request is rejected for an expired
 // session, read by LoginPage to explain why the operator was sent back.
-export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 // Helper to restore apiClient from localStorage
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {

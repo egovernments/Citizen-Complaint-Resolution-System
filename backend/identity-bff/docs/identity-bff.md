@@ -26,9 +26,12 @@ password.
 
 | Method | Route | Result |
 |---|---|---|
-| `GET` | `/identity/v1/auth-methods` | Methods configured here and enabled in Keycloak |
-| `GET` | `/identity/v1/authorize?method=...` | Starts Authorization Code + PKCE with state and nonce |
+| `GET` | `/identity/v1/auth-methods?intent=signin\|signup` | Methods configured for this journey and enabled in Keycloak |
+| `GET` | `/identity/v1/authorize?method=...&intent=...&returnTo=...` | Starts Authorization Code + PKCE with state and nonce |
 | `GET` | `/identity/v1/callback` | Validates the callback and creates an opaque cookie session |
+| `GET` | `/identity/v1/auth-results/:id` | Consumes a one-time, browser-safe callback result |
+| `POST` | `/identity/v1/password/setup-requests` | Sends a non-enumerating password setup/recovery email |
+| `GET` | `/identity/v1/password/setup-complete` | One-time Keycloak action completion redirect |
 | `GET` | `/identity/v1/session` | Authentication state, opaque-session expiry, and selected tenant; never tokens |
 | `GET` | `/identity/v1/tenants` | Tenants in both Keycloak membership and DIGIT grants |
 | `POST` | `/identity/v1/contexts/_select` | Records the tenant and returns the normal DIGIT login response |
@@ -65,11 +68,13 @@ Frontend calls:
 1. Navigate the browser, rather than making an AJAX request, to:
 
    ```http
-   GET /identity/v1/authorize?method=password
+   GET /identity/v1/authorize?method=password&intent=signin&returnTo=/configurator/login
    ```
 
-   `magic_link`, `google`, and `github` use the same endpoint when advertised
-   by `GET /identity/v1/auth-methods`.
+   `google` and `github` use the same endpoint when advertised for `signin`.
+   Signup asks for `intent=signup`, where the default methods are magic link,
+   Google, and GitHub. The backend owns ordering and availability; the UI does
+   not keep a second provider list.
 
 2. Keycloak returns to `GET /identity/v1/callback?code=...&state=...`. The BFF
    consumes the code, stores Keycloak tokens server-side, sets the opaque
@@ -125,6 +130,28 @@ one-time login attempt and opaque session, so callback exchange, refresh, and
 logout use the correct client without exposing either client secret. The method
 is advertised only when that Keycloak client exists, is enabled, and
 `KEYCLOAK_MAGIC_LINK_CLIENT_SECRET` is configured.
+
+Google and GitHub are pinned to the realm's `digit-first-broker-login` flow.
+When a provider returns an email already owned by a local account, Keycloak
+does not create a duplicate: it asks the person to confirm linking and prove
+control of the existing account by verified email or re-authentication. The
+realm keeps duplicate emails disabled and does not trust broker-provided email
+without that proof. Once linked, password, Google, and GitHub are credentials
+of the same Keycloak user and therefore see the same Organization memberships.
+
+Callback failures return to the validated `returnTo` destination with only an
+opaque `authResult` id. The UI consumes that id once through
+`auth-results/:id`; provider details, tokens, and email addresses are never put
+in the URL. Both relative paths and absolute URLs from
+`IDENTITY_ALLOWED_ORIGINS` are accepted, so redirect and CORS policy have one
+deployment source of truth.
+
+Password setup is non-enumerating: every request gets the same `202` response,
+whether the account exists, has a password, or only has federated credentials.
+Eligible users receive Keycloak's one-use `UPDATE_PASSWORD` action (preceded by
+`VERIFY_EMAIL` when needed). Requests are rate-limited by IP and an HMAC of the
+normalized email; raw email addresses are not logged. The completion state and
+its browser result are each one-time and expire independently.
 
 Magic-link email is a single-use bearer credential valid for 10 minutes by
 default. Keycloak may create a previously unknown email user, but DIGIT account

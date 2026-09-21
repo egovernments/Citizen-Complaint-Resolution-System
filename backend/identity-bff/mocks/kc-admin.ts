@@ -12,6 +12,9 @@ interface MockUser {
   attributes?: Record<string, string[]>;
   requiredActions?: string[];
   activationEmails?: number;
+  lastActionRedirectUri?: string;
+  credentials?: Array<{ id: string; type: string }>;
+  federatedIdentities?: Array<{ identityProvider: string; userId: string; userName?: string }>;
 }
 
 interface RealmState {
@@ -251,6 +254,8 @@ export function createKcAdminMock() {
     const {
       id, username, email, firstName, lastName, enabled, emailVerified, attributes,
       requiredActions,
+      credentials,
+      federatedIdentities,
     } = req.body;
     // Check for duplicate by email or username
     const exists = realm.users.some(
@@ -269,6 +274,8 @@ export function createKcAdminMock() {
       emailVerified: emailVerified ?? false,
       attributes,
       requiredActions,
+      credentials: Array.isArray(credentials) ? credentials : [],
+      federatedIdentities: Array.isArray(federatedIdentities) ? federatedIdentities : [],
     };
     realm.users.push(user);
     res.status(201).set("Location", `/admin/realms/${req.params.realm}/users/${user.id}`).end();
@@ -297,7 +304,26 @@ export function createKcAdminMock() {
     }
     user.requiredActions = [...new Set([...(user.requiredActions || []), ...req.body])];
     user.activationEmails = (user.activationEmails || 0) + 1;
+    user.lastActionRedirectUri = typeof req.query.redirect_uri === "string"
+      ? req.query.redirect_uri
+      : undefined;
     return res.status(204).end();
+  });
+
+  app.get("/admin/realms/:realm/users/:userId/credentials", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const user = realm.users.find((candidate) => candidate.id === req.params.userId);
+    return user
+      ? res.json(user.credentials || [])
+      : res.status(404).json({ error: "User not found" });
+  });
+
+  app.get("/admin/realms/:realm/users/:userId/federated-identity", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const user = realm.users.find((candidate) => candidate.id === req.params.userId);
+    return user
+      ? res.json(user.federatedIdentities || [])
+      : res.status(404).json({ error: "User not found" });
   });
 
   // PUT /admin/realms/:realm/users/:userId/groups/:groupId — add user to group

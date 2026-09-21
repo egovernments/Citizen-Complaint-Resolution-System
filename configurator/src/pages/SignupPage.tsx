@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, Check, Loader2, Mail, RefreshCw } from 'lucide-react';
 import {
-  API_ORIGIN,
   type AvailabilityResult,
   type Operation,
   type ProvisioningStep,
@@ -33,13 +32,12 @@ import {
   tenants,
   updateSignup,
 } from '@/api/onboarding';
-import { clearLocalSession } from '@/lib/session';
+import { clearLocalSession, installDigitContext } from '@/lib/session';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
-import { themeVariables } from '@/themes';
-import { AuthBackdrop, RotatingNarrative } from '@/components/signup/AuthPanel';
+import { AuthShell } from '@/components/signup/AuthPanel';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -247,69 +245,6 @@ function AvailabilityNote({
  * the provisioning screen and the workspace picker all read as one product
  * instead of a form floating on an empty page.
  */
-const ONBOARDING_THEME: React.CSSProperties = {
-  ...(themeVariables('cms-blue') as React.CSSProperties),
-  // Inter here and Roboto everywhere else, scoped the same way the palette is.
-  // The reference is set in Inter and Roboto's narrower letterforms are most of
-  // why the panel still read differently once the colours matched. Not worth
-  // switching DIGIT's system face across the whole console for one screen.
-  fontFamily: 'Inter, Roboto, system-ui, sans-serif',
-};
-
-function SignupShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen w-full bg-background text-foreground" style={ONBOARDING_THEME}>
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[45fr_55fr] xl:grid-cols-2">
-        {/* Hidden on small screens so the form owns the viewport. */}
-        <div className="relative hidden min-h-[320px] flex-col justify-between overflow-hidden p-10 text-white lg:flex">
-          <AuthBackdrop />
-
-          <div className="relative z-[1] flex flex-col gap-6">
-            <img
-              src="/configurator/brand/egov-logo-white.png"
-              alt="eGov Foundation"
-              className="h-[37px] w-auto self-start"
-              style={{ filter: 'drop-shadow(0 2px 10px rgba(4,12,34,0.35))' }}
-            />
-            <div>
-              <p className="text-[28px] font-semibold leading-snug">DIGIT Complaint Management</p>
-              <p className="mt-2 text-xs uppercase tracking-widest text-white/70">
-                Digital infrastructure for public services
-              </p>
-            </div>
-          </div>
-
-          <div className="relative z-[1]">
-            <h1 className="text-5xl font-semibold leading-[1.1] tracking-[-0.01em]">
-              Manage complaints from intake to closure.
-            </h1>
-            <p className="mt-6 max-w-md text-sm leading-relaxed text-white/80">
-              Set up your account to receive complaints, assign them to the right team, track service
-              timelines, record actions and evidence, and monitor resolution across departments and
-              localities.
-            </p>
-            <RotatingNarrative />
-          </div>
-
-          <p className="relative z-[1] text-xs text-white/50">
-            © 2026 eGovernments Foundation · DIGIT
-          </p>
-        </div>
-
-        {/* Card column */}
-        <div className="flex flex-col items-center justify-center bg-background px-5 py-10 sm:p-10">
-          <div
-            className="w-full max-w-[460px] border bg-card/95 p-8"
-            style={{ borderRadius: 16, boxShadow: '0 12px 36px rgba(32,55,140,0.08)' }}
-          >
-            <div className="space-y-6">{children}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function SignupFlow() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -379,7 +314,7 @@ function SignupFlow() {
       const current = await session();
       if (current.user) setSessionUser({ email: current.user.email, name: current.user.name });
       if (!current.authenticated) {
-        const { methods: available } = await authMethods();
+        const { methods: available } = await authMethods('signup');
         setMethods(available);
         setPhase('signedOut');
         return;
@@ -549,7 +484,7 @@ function SignupFlow() {
       return;
     }
     try {
-      const { methods: available } = await authMethods();
+      const { methods: available } = await authMethods('signup');
       setMethods(available);
     } catch {
       /* The gate still renders; it just may list nothing. */
@@ -668,36 +603,7 @@ function SignupFlow() {
       // App.tsx reads one blob under `crs-auth-state`; writing digit-ui's
       // `Employee.*` keys instead left the operator looking at whichever
       // session was already there.
-      const { UserRequest: user, access_token: authToken } = context;
-      window.localStorage.setItem(
-        'crs-auth-state',
-        JSON.stringify({
-          isAuthenticated: true,
-          // What the person is actually called, from the backend first and the
-          // identity session second. The managed username is a machine handle
-          // (`kcbff-<uuid>`), so showing it as a name is wrong, and an address
-          // built out of it is an address that does not exist.
-          // `id` and `mobileNumber` travel too, as the legacy login path stores
-          // them. App rebuilds `RequestInfo.userInfo` from this blob, so
-          // leaving them out made every downstream request carry `id: 0` and an
-          // empty mobile while the BFF had returned the real values.
-          user: {
-            name: user.name || sessionUser?.name || user.userName,
-            email: user.emailId || sessionUser?.email || '',
-            roles: user.roles?.map((role) => role.code) ?? [],
-            uuid: user.uuid,
-            id: user.id,
-            mobileNumber: user.mobileNumber,
-          },
-          environment: API_ORIGIN || window.location.origin,
-          tenant: user.tenantId,
-          targetTenant: user.tenantId,
-          mode: 'management',
-          currentPhase: 1,
-          completedPhases: [],
-          authToken,
-        })
-      );
+      installDigitContext(context, sessionUser);
       setPhase('entering');
       window.location.assign('/configurator/');
     } catch (caught) {
@@ -754,7 +660,7 @@ function SignupFlow() {
           </div>
 
           {primary ? (
-            <Button className="w-full" onClick={() => startSignIn(primary.id)}>
+            <Button className="h-11 w-full" onClick={() => startSignIn(primary.id, 'signup')}>
               <Mail className="mr-2 h-4 w-4" /> {primary.label}
             </Button>
           ) : (
@@ -790,7 +696,7 @@ function SignupFlow() {
                     key={method.id}
                     variant="outline"
                     className="w-full"
-                    onClick={() => startSignIn(method.id)}
+                    onClick={() => startSignIn(method.id, 'signup')}
                   >
                     {method.label}
                   </Button>
@@ -1335,8 +1241,8 @@ function SignupFlow() {
 
 export default function SignupPage() {
   return (
-    <SignupShell>
+    <AuthShell>
       <SignupFlow />
-    </SignupShell>
+    </AuthShell>
   );
 }

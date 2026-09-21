@@ -1,4 +1,7 @@
-import type { IdentityAuthMethod } from "../modules/authentication/types.js";
+import type {
+  IdentityAuthIntent,
+  IdentityAuthMethod,
+} from "../modules/authentication/types.js";
 
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
@@ -49,8 +52,16 @@ export function parseIdentityAuthMethods(raw: string): IdentityAuthMethod[] {
     if (type === "oauth" && !idpHint) {
       throw new Error(`IDENTITY_AUTH_METHODS[${index}].idpHint is required`);
     }
+    const rawIntents = candidate.intents === undefined
+      ? ["signin", "signup"]
+      : candidate.intents;
+    if (!Array.isArray(rawIntents) || rawIntents.length === 0 ||
+        rawIntents.some((intent) => intent !== "signin" && intent !== "signup")) {
+      throw new Error(`IDENTITY_AUTH_METHODS[${index}].intents is invalid`);
+    }
+    const intents = [...new Set(rawIntents)] as IdentityAuthIntent[];
     seen.add(id);
-    return { id, label, type, ...(idpHint && { idpHint }) };
+    return { id, label, type, intents, ...(idpHint && { idpHint }) };
   });
 }
 
@@ -95,7 +106,7 @@ export const config = {
     process.env.IDENTITY_SCOPE || "openid profile email organization:*",
   identityAuthMethods: parseIdentityAuthMethods(
     process.env.IDENTITY_AUTH_METHODS ||
-      '[{"id":"password","label":"Password","type":"password"}]',
+      '[{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]',
   ),
   identityCookieName:
     process.env.IDENTITY_COOKIE_NAME || "digit_identity_session",
@@ -105,6 +116,15 @@ export const config = {
   ),
   identityLoginTtlSeconds: parseInt(
     process.env.IDENTITY_LOGIN_TTL_SECONDS || "300",
+  ),
+  identityAuthResultTtlSeconds: parseInt(
+    process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
+  ),
+  identityPasswordSetupTtlSeconds: parseInt(
+    process.env.IDENTITY_PASSWORD_SETUP_TTL_SECONDS || "900",
+  ),
+  identityPasswordSetupLimit: parseInt(
+    process.env.IDENTITY_PASSWORD_SETUP_LIMIT || "3",
   ),
   identitySessionTtlSeconds: parseInt(
     process.env.IDENTITY_SESSION_TTL_SECONDS || "604800",

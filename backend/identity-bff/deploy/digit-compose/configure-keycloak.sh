@@ -18,6 +18,7 @@ readonly ADMIN_CLIENT=digit-identity-admin
 readonly ROLE_CLIENT=digit-ui
 readonly MAGIC_LINK_FLOW=digit-magic-link-browser
 readonly MAGIC_LINK_FORMS=digit-magic-link-forms
+readonly FIRST_BROKER_FLOW=digit-first-broker-login
 
 # Standalone installs keep these values in identity-bff.env. Ansible deployments
 # pass them as task-scoped environment variables so no second secrets file has
@@ -31,6 +32,7 @@ fi
 readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
+readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete*"
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
   'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
@@ -103,11 +105,13 @@ ensure_social_provider() {
   if kc get "identity-provider/instances/$alias" -r "$REALM" >/dev/null 2>&1; then
     kc update "identity-provider/instances/$alias" -r "$REALM" \
       -s enabled=true -s trustEmail=false -s storeToken=false \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   else
     kc create identity-provider/instances -r "$REALM" \
       -s "alias=$alias" -s "providerId=$provider" -s enabled=true \
       -s trustEmail=false -s storeToken=false \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   fi
 }
@@ -129,6 +133,26 @@ ensure_mapper() {
 flow_uuid() {
   kc get authentication/flows -r "$REALM" |
     jq -r --arg alias "$1" '.[] | select(.alias == $alias) | .id' | head -1
+}
+
+configure_first_broker_login() {
+  # Pin the account-linking behaviour instead of inheriting whatever a realm's
+  # default happens to contain. Keycloak 26's built-in flow already has the
+  # exact safety properties required here: confirm linking, then prove the
+  # existing account by email or re-authentication before attaching the IdP.
+  if [ -z "$(flow_uuid "$FIRST_BROKER_FLOW")" ]; then
+    kc create 'authentication/flows/first%20broker%20login/copy' -r "$REALM" \
+      -s "newName=$FIRST_BROKER_FLOW" >/dev/null
+  fi
+  local providers
+  providers=$(kc get "authentication/flows/$FIRST_BROKER_FLOW/executions" -r "$REALM" |
+    jq -r '[.[].providerId // empty] | join(",")')
+  for required in idp-create-user-if-unique idp-confirm-link idp-email-verification idp-username-password-form; do
+    case ",$providers," in
+      *",$required,"*) ;;
+      *) printf 'first broker flow is missing required execution: %s\n' "$required" >&2; return 1 ;;
+    esac
+  done
 }
 
 ensure_execution() {
@@ -220,7 +244,7 @@ configure_magic_link() {
   magic_flow_id=$(flow_uuid "$MAGIC_LINK_FLOW")
   kc update "clients/$magic_uuid" -r "$REALM" \
     -s standardFlowEnabled=true \
-    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
+    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s 'attributes."pkce.code.challenge.method"=S256' \
     -s 'attributes."post.logout.redirect.uris"=+' \
@@ -257,7 +281,7 @@ fi
 bff_uuid=$(ensure_client "$BFF_CLIENT" "$KEYCLOAK_BFF_CLIENT_SECRET" false)
 kc update "clients/$bff_uuid" -r "$REALM" \
   -s standardFlowEnabled=true \
-  -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
+  -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
   -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
   -s 'attributes."pkce.code.challenge.method"=S256' \
   -s 'attributes."post.logout.redirect.uris"=+' \
@@ -301,6 +325,7 @@ if [ "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" = true ]; then
   configure_magic_link
 fi
 
+configure_first_broker_login
 ensure_social_provider google google \
   "${KEYCLOAK_GOOGLE_CLIENT_ID:-}" "${KEYCLOAK_GOOGLE_CLIENT_SECRET:-}"
 ensure_social_provider github github \

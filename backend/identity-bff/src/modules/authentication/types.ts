@@ -38,4 +38,26 @@ export interface IdentityAuthMethod {
   label: string;
   type: "password" | "oauth" | "magic_link";
   idpHint?: string;
+  intents: IdentityAuthIntent[];
+}
+
+export type IdentityAuthIntent = "signin" | "signup";
+
+export type IdentityAuthResultCode =
+  | "AUTH_CANCELLED"
+  | "AUTH_ATTEMPT_EXPIRED"
+  | "IDENTITY_PROVIDER_UNAVAILABLE"
+  | "ACCOUNT_LINK_REQUIRED"
+  | "ACCOUNT_LINK_FAILED"
+  | "IDENTITY_ALREADY_LINKED"
+  | "EMAIL_VERIFICATION_REQUIRED"
+  | "SIGN_IN_FAILED"
+  | "PASSWORD_SETUP_FAILED"
+  | "PASSWORD_SETUP_COMPLETE";
+
+export interface IdentityAuthResult {
+  status: "failed" | "complete";
+  code: IdentityAuthResultCode;
+  message: string;
+  actions: Array<"TRY_AGAIN" | "TRY_EXISTING_METHOD" | "SETUP_PASSWORD">;
 }

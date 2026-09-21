@@ -53,7 +53,7 @@ identity_keycloak_image: egovio/identity-keycloak:nightly-develop
 identity_digit_admin_username: IDENTITY_ACCOUNT_ADMIN
 identity_digit_admin_tenant_id: pg
 identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password"}]
+  [{"id":"password","label":"Email and password","type":"password","intents":["signin"]}]
 ```
 
 Store these values in `bootstrap_secrets` for a new deployment, or in the
@@ -78,7 +78,7 @@ Magic link needs the custom `identity-keycloak` image, SMTP, and:
 ```yaml
 identity_magic_link_enabled: true
 identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password"},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link"}]
+  [{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]}]
 identity_smtp_host: smtp.example.org
 identity_smtp_from: no-reply@example.org
 identity_smtp_user: smtp-user
@@ -94,14 +94,16 @@ only after the provider is configured:
 keycloak_google_client_id: "<id>"
 keycloak_github_client_id: "<id>"
 identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password"},{"id":"google","label":"Google","type":"oauth","idpHint":"google"},{"id":"github","label":"GitHub","type":"oauth","idpHint":"github"}]
+  [{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]
 bootstrap_secrets:
   keycloak_google_client_secret: "<secret>"
   keycloak_github_client_secret: "<secret>"
 ```
 
 The BFF checks Keycloak live and omits a configured OAuth or magic-link method
-when its provider/client is not enabled.
+when its provider/client is not enabled. `intents` is the one backend-owned
+source for which methods appear on sign-in and signup; omitting it keeps the
+legacy behaviour of enabling a method for both journeys.
 
 ## Onboarding integration
 
@@ -128,7 +130,8 @@ Before enabling the profile in an existing environment:
 1. Build/publish `identity-bff` and `identity-keycloak` from the same CCRS commit.
 2. Add the new OpenBao values and use a real `ACCOUNT_ADMIN` employee.
 3. Verify `/auth/realms/digit/.well-known/openid-configuration` and
-   `/identity/v1/auth-methods`.
+   `/identity/v1/auth-methods?intent=signin` and
+   `/identity/v1/auth-methods?intent=signup`.
 4. Reconcile or provision Organization memberships and managed accounts.
 5. Point the onboarding/employee frontend at `/identity/v1`; do not enable the
    legacy Keycloak auth adapter that expects `/kc`.
@@ -137,7 +140,8 @@ Before enabling the profile in an existing environment:
 
 ```bash
 curl -fsS https://example.org/auth/realms/digit/.well-known/openid-configuration
-curl -fsS https://example.org/identity/v1/auth-methods
+curl -fsS 'https://example.org/identity/v1/auth-methods?intent=signin'
+curl -fsS 'https://example.org/identity/v1/auth-methods?intent=signup'
 docker exec identity-bff wget -qO- http://127.0.0.1:3000/readyz
 docker compose --profile keycloak ps keycloak identity-bff
 

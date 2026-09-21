@@ -3126,7 +3126,7 @@ services:
       IDENTITY_REDIRECT_URI: ${IDENTITY_REDIRECT_URI:-http://localhost:5173/identity/v1/callback}
       IDENTITY_POST_LOGIN_REDIRECT: ${IDENTITY_POST_LOGIN_REDIRECT:-http://localhost:5173/}
       IDENTITY_ALLOWED_ORIGINS: ${IDENTITY_ALLOWED_ORIGINS:-http://localhost:5173}
-      IDENTITY_AUTH_METHODS: ${IDENTITY_AUTH_METHODS:-[{"id":"password","label":"Email and password","type":"password"}]}
+      IDENTITY_AUTH_METHODS: ${IDENTITY_AUTH_METHODS:-[{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]}
       IDENTITY_COOKIE_SECURE: ${IDENTITY_COOKIE_SECURE:-false}
       IDENTITY_COOKIE_SAME_SITE: ${IDENTITY_COOKIE_SAME_SITE:-Lax}
       IDENTITY_CONTROL_PLANE_TOKEN: ${IDENTITY_CONTROL_PLANE_TOKEN:-dev-only-change-me}

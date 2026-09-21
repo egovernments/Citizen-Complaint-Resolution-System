@@ -47,6 +47,16 @@ export interface AuthMethod {
   id: string;
   label: string;
   type: string;
+  intents?: AuthIntent[];
+}
+
+export type AuthIntent = 'signin' | 'signup';
+
+export interface AuthResult {
+  status: 'failed' | 'complete';
+  code: string;
+  message: string;
+  actions: Array<'TRY_AGAIN' | 'TRY_EXISTING_METHOD' | 'SETUP_PASSWORD'>;
 }
 
 export interface SessionUser {
@@ -360,8 +370,8 @@ export function newIdempotencyKey(): string {
  * switched on, and they use this same redirect flow, so no screen changes when
  * they do.
  */
-export function authMethods(): Promise<{ methods: AuthMethod[] }> {
-  return call(`${IDENTITY_BASE}/auth-methods`);
+export function authMethods(intent: AuthIntent): Promise<{ methods: AuthMethod[] }> {
+  return call(`${IDENTITY_BASE}/auth-methods?intent=${encodeURIComponent(intent)}`);
 }
 
 /**
@@ -369,8 +379,27 @@ export function authMethods(): Promise<{ methods: AuthMethod[] }> {
  * cookies and hand the browser to Keycloak; an XHR cannot do that, and
  * following it in JS would break PKCE.
  */
-export function startSignIn(methodId: string): void {
-  window.location.assign(`${IDENTITY_BASE}/authorize?method=${encodeURIComponent(methodId)}`);
+export function startSignIn(
+  methodId: string,
+  intent: AuthIntent,
+  returnTo = `${window.location.origin}/configurator/${intent === 'signup' ? 'signup' : 'login'}`,
+): void {
+  const query = new URLSearchParams({ method: methodId, intent, returnTo });
+  window.location.assign(`${IDENTITY_BASE}/authorize?${query}`);
+}
+
+export function consumeAuthResult(id: string): Promise<AuthResult> {
+  return call(`${IDENTITY_BASE}/auth-results/${encodeURIComponent(id)}`);
+}
+
+export function requestPasswordSetup(email: string): Promise<{ message: string }> {
+  return call(`${IDENTITY_BASE}/password/setup-requests`, {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      returnTo: `${window.location.origin}/configurator/login`,
+    }),
+  });
 }
 
 /**
