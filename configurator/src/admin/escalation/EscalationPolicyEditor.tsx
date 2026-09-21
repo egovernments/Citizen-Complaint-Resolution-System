@@ -56,7 +56,7 @@ export function EscalationPolicyEditor() {
   const isStateAdmin =
     roles.includes('MDMS_ADMIN') ||
     roles.includes('SUPERUSER') ||
-    canEditResource('mdms-resource');
+    canEditResource('pgr-escalation');
 
   const rootTenant = getConfiguredRootTenant() || tenantId.split('.')[0];
   const isStatePolicy = tenantId === rootTenant;
@@ -86,8 +86,12 @@ export function EscalationPolicyEditor() {
     setSaveError(null);
 
     try {
-      // 1. Fetch EscalationConfig record
-      const policyRecord = await mdmsService.getEscalationConfig(tenantId);
+      // 1. Fetch EscalationConfig record (own record, or fallback to rootTenant if city has no own record)
+      let policyRecord = await mdmsService.getEscalationConfig(tenantId);
+      if (!policyRecord && tenantId !== rootTenant) {
+        policyRecord = await mdmsService.getEscalationConfig(rootTenant);
+      }
+
       const policyData: EscalationConfigData = policyRecord?.data
         ? {
             code: 'DEFAULT',
@@ -118,13 +122,17 @@ export function EscalationPolicyEditor() {
         MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
         { limit: 5000 }
       );
+      // Filter exactly to this tenantId to prevent city prefix matching duplicates
+      hierarchy = hierarchy.filter((r) => r.tenantId === tenantId);
+
       // If city tenant has no hierarchy rows, fall back to state hierarchy
       if (hierarchy.length === 0 && tenantId !== rootTenant) {
-        hierarchy = await mdmsService.searchRecords(
+        const rootHierarchy = await mdmsService.searchRecords(
           rootTenant,
           MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
           { limit: 5000 }
         );
+        hierarchy = rootHierarchy.filter((r) => r.tenantId === rootTenant);
       }
       setRawHierarchyRecords(hierarchy);
 
@@ -148,10 +156,20 @@ export function EscalationPolicyEditor() {
     loadPolicy();
   }, [loadPolicy]);
 
-  // Derived catalogue and orphaned overrides
+  // Derived catalogue and orphaned overrides (with normalized defaults)
   const { catalogue, orphanedOverrides } = useMemo(() => {
-    return buildHierarchyCatalogue(rawHierarchyRecords, draft.overrides);
-  }, [rawHierarchyRecords, draft.overrides]);
+    return buildHierarchyCatalogue(rawHierarchyRecords, draft.overrides, {
+      percentages: draft.defaultSlaPercentageByLevel,
+      enabledByLevel: draft.enabledByLevel,
+      fallbacks: draft.defaultSlaByLevel,
+    });
+  }, [
+    rawHierarchyRecords,
+    draft.overrides,
+    draft.defaultSlaPercentageByLevel,
+    draft.enabledByLevel,
+    draft.defaultSlaByLevel,
+  ]);
 
   // Validate current default ladder
   const ladderValidation = useMemo(() => {
@@ -163,7 +181,8 @@ export function EscalationPolicyEditor() {
 
   // Handle maxDepth change
   const handleMaxDepthChange = (newDepth: number) => {
-    const depth = Math.min(5, Math.max(1, newDepth));
+    if (isNaN(newDepth) || !Number.isInteger(newDepth) || newDepth < 1 || newDepth > 5) return;
+    const depth = newDepth;
     const nextPcts = [...draft.defaultSlaPercentageByLevel];
     const nextEnabled = [...draft.enabledByLevel];
     const nextFallbacks = [...draft.defaultSlaByLevel];
@@ -285,12 +304,14 @@ export function EscalationPolicyEditor() {
 
     try {
       // 1. Optimistic locking check: ensure record wasn't updated in background
-      if (record) {
+      if (record && record.tenantId === tenantId) {
         const latestRecords = await mdmsService.searchRecords(
           tenantId,
           MDMS_SCHEMAS.ESCALATION_CONFIG
         );
-        const active = latestRecords.filter((r) => r.isActive !== false);
+        const active = latestRecords.filter(
+          (r) => r.isActive !== false && r.tenantId === tenantId
+        );
         const latest = active.find((r) => r.uniqueIdentifier === 'DEFAULT') ?? active[0];
 
         if (
@@ -306,7 +327,7 @@ export function EscalationPolicyEditor() {
 
       // 2. Persist update
       let savedRecord: MdmsRecord;
-      if (record) {
+      if (record && record.tenantId === tenantId) {
         savedRecord = await mdmsService.saveEscalationConfig(record, draft);
       } else {
         savedRecord = await mdmsService.create(
@@ -455,9 +476,16 @@ export function EscalationPolicyEditor() {
                 type="number"
                 min={1}
                 max={5}
+                step={1}
                 value={draft.maxDepth}
                 disabled={!isStateAdmin}
-                onChange={(e) => handleMaxDepthChange(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  if (!val) return;
+                  const num = parseInt(val, 10);
+                  if (isNaN(num)) return;
+                  handleMaxDepthChange(num);
+                }}
                 className="w-28 font-mono h-9"
               />
               <span className="text-xs text-muted-foreground">

@@ -213,7 +213,9 @@ export const mdmsService = {
    */
   async getEscalationConfig(tenantId: string): Promise<MdmsRecord | null> {
     const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.ESCALATION_CONFIG);
-    const active = records.filter((r) => r.isActive !== false);
+    const active = records.filter(
+      (r) => r.isActive !== false && r.tenantId === tenantId
+    );
     return active.find((r) => r.uniqueIdentifier === 'DEFAULT') ?? active[0] ?? null;
   },
 

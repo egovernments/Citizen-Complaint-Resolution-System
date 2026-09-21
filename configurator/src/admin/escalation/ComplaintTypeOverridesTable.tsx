@@ -119,7 +119,7 @@ export function ComplaintTypeOverridesTable({
       if (statusFilter === 'override' && !item.override) return false;
       if (statusFilter === 'default' && item.override) return false;
       if (statusFilter === 'disabled') {
-        if (!item.override || item.override.enabledByLevel.some((en) => en)) return false;
+        if (!item.override || (item.override.enabledByLevel || []).some((en) => en)) return false;
       }
       if (statusFilter === 'orphaned') return false; // Handled in orphaned section
 
@@ -167,15 +167,17 @@ export function ComplaintTypeOverridesTable({
     });
   }, [filtered, sortField, sortOrder]);
 
-  // Pagination
+  // Pagination (clamped to available totalPages)
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const startRecord = sorted.length > 0 ? (page - 1) * pageSize + 1 : 0;
-  const endRecord = Math.min(page * pageSize, sorted.length);
+  const safePage = Math.min(page, totalPages);
+
+  const startRecord = sorted.length > 0 ? (safePage - 1) * pageSize + 1 : 0;
+  const endRecord = Math.min(safePage * pageSize, sorted.length);
 
   const paginatedItems = useMemo(() => {
-    const start = (page - 1) * pageSize;
+    const start = (safePage - 1) * pageSize;
     return sorted.slice(start, start + pageSize);
-  }, [sorted, page, pageSize]);
+  }, [sorted, safePage, pageSize]);
 
   // Toggle single item selection
   const toggleSelect = (code: string) => {
@@ -424,11 +426,12 @@ export function ComplaintTypeOverridesTable({
               paginatedItems.map((item) => {
                 const isOverridden = !!item.override;
                 const isAutoOff =
-                  isOverridden && item.override?.enabledByLevel.every((en) => !en);
+                  isOverridden && (item.override?.enabledByLevel || []).every((en) => !en);
 
-                const effectivePcts = isOverridden
-                  ? item.override!.slaPercentageByLevel
-                  : defaultPcts;
+                const effectivePcts =
+                  isOverridden && item.override?.slaPercentageByLevel
+                    ? item.override.slaPercentageByLevel
+                    : defaultPcts;
 
                 return (
                   <TableRow key={item.code}>
@@ -537,20 +540,20 @@ export function ComplaintTypeOverridesTable({
             <Button
               variant="outline"
               size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="gap-1 text-xs h-8"
             >
               <ChevronLeft className="w-3.5 h-3.5" /> Previous
             </Button>
             <span className="text-sm text-muted-foreground px-2">
-              Page {page} of {totalPages}
+              Page {safePage} of {totalPages}
             </span>
             <Button
               variant="outline"
               size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="gap-1 text-xs h-8"
             >
               Next <ChevronRight className="w-3.5 h-3.5" />
@@ -589,7 +592,7 @@ export function ComplaintTypeOverridesTable({
                       {item.code}
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      {item.override?.slaPercentageByLevel.map((p) => `${p}%`).join(' · ')}
+                      {(item.override?.slaPercentageByLevel || []).map((p) => `${p}%`).join(' · ')}
                     </TableCell>
                     <TableCell className="text-right">
                       {!readOnly && (

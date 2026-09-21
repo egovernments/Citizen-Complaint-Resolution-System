@@ -109,6 +109,7 @@ export function EscalationLevelTable({
                           type="number"
                           min={1}
                           max={200}
+                          step={1}
                           value={pct ?? ''}
                           disabled={readOnly}
                           onChange={(e) => {

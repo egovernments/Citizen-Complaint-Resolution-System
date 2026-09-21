@@ -173,6 +173,7 @@ export function OverrideEditDialog({
                         type="number"
                         min={1}
                         max={200}
+                        step={1}
                         value={pct ?? ''}
                         onChange={(e) => {
                           const next = [...pcts];

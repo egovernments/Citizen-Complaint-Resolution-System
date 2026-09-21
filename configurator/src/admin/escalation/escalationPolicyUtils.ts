@@ -59,6 +59,9 @@ export function validateLadder(
     if (val == null || Number.isNaN(val) || val <= 0) {
       pctErrors[i] = 'Must be greater than 0';
       valid = false;
+    } else if (!Number.isInteger(val)) {
+      pctErrors[i] = 'Must be a whole number (integer)';
+      valid = false;
     } else if (val > 200) {
       pctErrors[i] = 'Cannot exceed 200%';
       valid = false;
@@ -72,6 +75,9 @@ export function validateLadder(
     const val = fallbacks[i];
     if (val == null || Number.isNaN(val) || val < 0) {
       fallbackErrors[i] = 'Cannot be negative';
+      valid = false;
+    } else if (!Number.isInteger(val)) {
+      fallbackErrors[i] = 'Must be a whole number of milliseconds';
       valid = false;
     } else if (i > 0 && val <= fallbacks[i - 1]) {
       fallbackErrors[i] = `Must be greater than L${i} (${fallbacks[i - 1]} ms)`;
@@ -126,12 +132,72 @@ export interface HierarchyRecordLike {
 }
 
 /**
+ * Normalizes an override value which may be:
+ * - undefined or null
+ * - a plain array of percentages: e.g. [60, 100, 180]
+ * - an object missing slaPercentageByLevel, enabledByLevel, or slaByLevel
+ */
+export function normalizeOverride(
+  rawOverride: unknown,
+  defaultPcts: number[] = [80, 120, 200],
+  defaultEnabled: boolean[] = [true, true, true],
+  defaultFallbacks: number[] = [3600000, 14400000, 86400000]
+): EscalationLevelOverride | undefined {
+  if (!rawOverride) return undefined;
+
+  // Plain list format accepted by backend: [60, 100, 180]
+  if (Array.isArray(rawOverride)) {
+    const pcts = rawOverride.map((n) => Number(n) || 0);
+    return {
+      slaPercentageByLevel: pcts,
+      enabledByLevel: defaultEnabled.slice(0, pcts.length),
+      slaByLevel: defaultFallbacks.slice(0, pcts.length),
+    };
+  }
+
+  if (typeof rawOverride === 'object') {
+    const obj = rawOverride as Record<string, unknown>;
+    const pcts = Array.isArray(obj.slaPercentageByLevel)
+      ? (obj.slaPercentageByLevel as number[]).map((n) => Number(n) || 0)
+      : [...defaultPcts];
+
+    const enabled = Array.isArray(obj.enabledByLevel)
+      ? (obj.enabledByLevel as boolean[])
+      : defaultEnabled.slice(0, pcts.length);
+
+    const fallbacks = Array.isArray(obj.slaByLevel)
+      ? (obj.slaByLevel as number[]).map((n) => Number(n) || 0)
+      : defaultFallbacks.slice(0, pcts.length);
+
+    while (enabled.length < pcts.length) {
+      enabled.push(defaultEnabled[enabled.length] ?? true);
+    }
+    while (fallbacks.length < pcts.length) {
+      fallbacks.push(defaultFallbacks[fallbacks.length] ?? 3600000);
+    }
+
+    return {
+      slaPercentageByLevel: pcts,
+      enabledByLevel: enabled.slice(0, pcts.length),
+      slaByLevel: fallbacks.slice(0, pcts.length),
+    };
+  }
+
+  return undefined;
+}
+
+/**
  * Builds the complete fileable complaint types catalogue joined with overrides,
  * matching the complaint-filing leaf selection rule (leaves + terminal nodes).
  */
 export function buildHierarchyCatalogue(
   records: HierarchyRecordLike[],
-  overrides: Record<string, EscalationLevelOverride> = {}
+  overrides: Record<string, unknown> = {},
+  defaults?: {
+    percentages?: number[];
+    enabledByLevel?: boolean[];
+    fallbacks?: number[];
+  }
 ): { catalogue: CatalogueItem[]; orphanedOverrides: CatalogueItem[] } {
   const activeRecords = records.filter((r) => r.isActive !== false && r.data);
   const nodeMap = new Map<string, Record<string, unknown>>();
@@ -169,7 +235,12 @@ export function buildHierarchyCatalogue(
     const departments = Array.isArray(d.departments) ? (d.departments as string[]) : undefined;
     const slaHours = typeof d.slaHours === 'number' ? d.slaHours : 0;
     const path = buildBreadcrumb(code, nodeMap);
-    const override = overrides[code];
+    const override = normalizeOverride(
+      overrides[code],
+      defaults?.percentages,
+      defaults?.enabledByLevel,
+      defaults?.fallbacks
+    );
 
     catalogue.push({
       code,
@@ -190,8 +261,14 @@ export function buildHierarchyCatalogue(
 
   // Find any orphaned overrides (keys present in overrides but missing from active fileable catalogue)
   const orphanedOverrides: CatalogueItem[] = [];
-  for (const [code, override] of Object.entries(overrides)) {
+  for (const [code, rawOverride] of Object.entries(overrides)) {
     if (!coveredCodes.has(code)) {
+      const override = normalizeOverride(
+        rawOverride,
+        defaults?.percentages,
+        defaults?.enabledByLevel,
+        defaults?.fallbacks
+      );
       orphanedOverrides.push({
         code,
         name: code,
@@ -254,7 +331,8 @@ export function diffEscalationPolicy(
   const origEnabled = original.enabledByLevel || [];
   const draftEnabled = draft.enabledByLevel || [];
   const enabledChanges: string[] = [];
-  for (let i = 0; i < maxLen; i++) {
+  const maxLenEnabled = Math.max(origEnabled.length, draftEnabled.length);
+  for (let i = 0; i < maxLenEnabled; i++) {
     const o = origEnabled[i];
     const d = draftEnabled[i];
     if (o !== d) {
@@ -269,7 +347,8 @@ export function diffEscalationPolicy(
   const origFb = original.defaultSlaByLevel || [];
   const draftFb = draft.defaultSlaByLevel || [];
   const fbChanges: string[] = [];
-  for (let i = 0; i < maxLen; i++) {
+  const maxLenFb = Math.max(origFb.length, draftFb.length);
+  for (let i = 0; i < maxLenFb; i++) {
     const o = origFb[i];
     const d = draftFb[i];
     if (o !== d) {

@@ -5,6 +5,7 @@ import {
   validateLadder,
   buildBreadcrumb,
   buildHierarchyCatalogue,
+  normalizeOverride,
   diffEscalationPolicy,
 } from './escalationPolicyUtils';
 import type { EscalationConfigData } from './escalationPolicyTypes';
@@ -49,6 +50,18 @@ describe('escalationPolicyUtils', () => {
       const res = validateLadder([80, 120, 250], [1000, 2000, 3000]);
       expect(res.valid).toBe(false);
       expect(res.pctErrors[2]).toBe('Cannot exceed 200%');
+    });
+
+    it('flags non-integer float percentages', () => {
+      const res = validateLadder([80.5, 120, 180], [1000, 2000, 3000]);
+      expect(res.valid).toBe(false);
+      expect(res.pctErrors[0]).toBe('Must be a whole number (integer)');
+    });
+
+    it('flags non-integer float fallbacks', () => {
+      const res = validateLadder([80, 120, 180], [1000.5, 2000, 3000]);
+      expect(res.valid).toBe(false);
+      expect(res.fallbackErrors[0]).toBe('Must be a whole number of milliseconds');
     });
 
     it('flags non-increasing percentages', () => {
@@ -180,6 +193,54 @@ describe('escalationPolicyUtils', () => {
       expect(diffs.some((d) => d.includes('added [PENDINGFORASSIGNMENT]'))).toBe(true);
       expect(diffs.some((d) => d.includes('L1: 80% → 60%'))).toBe(true);
       expect(diffs.some((d) => d.includes('Complaint-type overrides: 1 added'))).toBe(true);
+    });
+
+    it('detects changes when enabledByLevel or fallback array lengths differ from percentages', () => {
+      const orig: EscalationConfigData = {
+        code: 'DEFAULT',
+        maxDepth: 3,
+        eligibleStatuses: ['PENDINGATLME'],
+        defaultSlaPercentageByLevel: [80, 120, 200],
+        defaultSlaByLevel: [3600000, 14400000, 86400000],
+        enabledByLevel: [true, true, true],
+        overrides: {},
+      };
+
+      const draft: EscalationConfigData = {
+        ...orig,
+        enabledByLevel: [true, true, true, false], // 4 entries, longer than pcts
+        defaultSlaByLevel: [3600000, 14400000, 86400000, 100000000],
+      };
+
+      const diffs = diffEscalationPolicy(orig, draft);
+      expect(diffs.some((d) => d.includes('Automatic triggering per level: L4: Auto OFF → Auto OFF'))).toBe(true);
+      expect(diffs.some((d) => d.includes('Absolute fallbacks: L4: 0s → 1d 3h'))).toBe(true);
+    });
+  });
+
+  describe('normalizeOverride', () => {
+    it('returns undefined for empty/falsy overrides', () => {
+      expect(normalizeOverride(null)).toBeUndefined();
+      expect(normalizeOverride(undefined)).toBeUndefined();
+    });
+
+    it('normalizes plain list format [60, 100, 180]', () => {
+      const norm = normalizeOverride([60, 100, 180], [80, 120, 200], [true, true, true], [1000, 2000, 3000]);
+      expect(norm).toEqual({
+        slaPercentageByLevel: [60, 100, 180],
+        enabledByLevel: [true, true, true],
+        slaByLevel: [1000, 2000, 3000],
+      });
+    });
+
+    it('normalizes object missing enabledByLevel or slaByLevel', () => {
+      const partial = { slaPercentageByLevel: [50, 100] };
+      const norm = normalizeOverride(partial, [80, 120, 200], [true, false, true], [1000, 2000, 3000]);
+      expect(norm).toEqual({
+        slaPercentageByLevel: [50, 100],
+        enabledByLevel: [true, false],
+        slaByLevel: [1000, 2000],
+      });
     });
   });
 });
