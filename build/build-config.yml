@@ -90,6 +90,16 @@ config:
       - work-dir: "utilities/otp-publisher"
         dockerfile: "utilities/otp-publisher/Dockerfile"
         image-name: "otp-publisher"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/identity-bff"
+    build:
+      - work-dir: "backend/identity-bff"
+        dockerfile: "backend/identity-bff/Dockerfile"
+        image-name: "identity-bff"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/identity-keycloak"
+    build:
+      - work-dir: "backend/identity-bff"
+        dockerfile: "backend/identity-bff/keycloak/Dockerfile.magic-link"
+        image-name: "identity-keycloak"
   - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-esbuild"
     build:
       - work-dir: "digit-ui-esbuild"

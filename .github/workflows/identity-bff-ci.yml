@@ -1,0 +1,52 @@
+name: Identity BFF CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/identity-bff/**"
+      - ".github/workflows/identity-bff-ci.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "backend/identity-bff/**"
+      - ".github/workflows/identity-bff-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      REDIS_PORT: 6379
+    defaults:
+      run:
+        working-directory: backend/identity-bff
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/identity-bff/package-lock.json
+      - run: npm ci
+      - name: Configure Redis service endpoint
+        run: |
+          redis_id="$(docker ps --filter ancestor=redis:7-alpine --format '{{.ID}}' | head -n 1)"
+          redis_host="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$redis_id")"
+          echo "REDIS_HOST=$redis_host" >> "$GITHUB_ENV"
+          REDIS_HOST="$redis_host" node -e "const { Redis } = require('ioredis'); const client = new Redis({ host: process.env.REDIS_HOST, port: 6379, lazyConnect: true }); client.connect().then(() => client.ping()).then((reply) => { if (reply !== 'PONG') process.exitCode = 1; }).finally(() => client.quit())"
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev
+      - name: Build BFF image
+        run: docker build -t identity-bff:test .
+      - name: Build Keycloak 26.7.3 image
+        run: docker build -f keycloak/Dockerfile.magic-link -t identity-keycloak:test .

@@ -308,7 +308,7 @@ novu_bridge_channel: "sms"
 
 # ────────── Keycloak SSO ──────────
 
-# Adds keycloak + token-exchange-svc and the /auth/ + /token-exchange/ nginx
+# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes
 # blocks. Inert in the rest of the stack — DIGIT keeps working on OTP login
 # until auth_provider is flipped. Values: true | false.
 enable_keycloak: false
@@ -382,7 +382,7 @@ nginx_features:
                              # status_basic_auth_password (the deploy asserts).
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
-  keycloak: true           # /auth/ + /token-exchange/ — needs enable_keycloak: true
+  keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
                            # (true here but inert while enable_keycloak is false)
   digit_ui_v2: true        # /citizen/ — needs enable_digit_ui_v2: true
   integration_tests: false      # /tests/ + /tests-v2/
@@ -419,4 +419,4 @@ bootstrap_secrets:
   keycloak_admin_password: "eGov@123"
   keycloak_db_password: "eGov@123"
   keycloak_google_client_secret: ""
-  token_exchange_system_password: "eGov@123"
+  identity_digit_admin_password: "eGov@123"

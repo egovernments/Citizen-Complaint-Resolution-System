@@ -3391,7 +3391,7 @@
     },
     {
         "code": "WBH_MDMS_MASTER_RAINMAKER_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-workbench",
         "locale": "en_IN"
     },

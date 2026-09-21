@@ -62,6 +62,26 @@ const Header = ({
           handleClick={onHamburgerClick}
           color={theme === "dark" ? darkThemeColor : lightThemeColor}
         />
+        {/* The desktop bar renders `logo` (the eGov wordmark) ahead of the
+            tenant crest; this branch dropped it, so phones showed the crest
+            alone and the brand mark was missing from the whole mobile app
+            (#2038 mobile review). Same order as desktop, scaled down for the
+            narrow bar. Guarded on `logo`, so the citizen header, which never
+            passes one, is unchanged. */}
+        {logo && (
+          <div
+            className={`digit-topbar-logo mobileview ${onLogoClick ? "clickable" : ""}`}
+            onClick={() => onLogoClick?.()}
+          >
+            <img
+              className="digit-header-logo-img"
+              alt="Logo"
+              src={logo}
+              width={props?.logoWidthMobile || "48px"}
+              height={props?.logoHeightMobile || "36px"}
+            />
+          </div>
+        )}
         <div className="digit-header-img-ulb-wrapper-mobileview">
           <img
             className={`digit-header-img ${onImageClick ? "clickable" : ""}`}
