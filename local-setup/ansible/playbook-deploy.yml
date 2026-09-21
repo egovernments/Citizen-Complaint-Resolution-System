@@ -113,17 +113,30 @@
           # Fall back to the volumes themselves: a PG_VERSION file at a volume
           # root is the definitive marker of a Postgres data directory.
           probed=0
+          migrated=""
           for v in $(docker volume ls -q 2>/dev/null); do
             mp=$(docker volume inspect -f '{% raw %}{{ .Mountpoint }}{% endraw %}' "$v" 2>/dev/null) || continue
             [ -n "$mp" ] && [ -d "$mp" ] || continue
             probed=1
             if [ -f "$mp/PG_VERSION" ]; then
               case "$v" in
-                *postgres_data) ;;
+                # digit-mcp and Keycloak run their own postgres on their own
+                # named volumes, both already at the right path. Not this.
+                *mcp_postgres_data|*keycloak_postgres_data) ;;
+                *postgres_data) migrated="$v" ;;
                 *) echo "ANON dangling-volume:$v"; exit 0 ;;
               esac
             fi
           done
+
+          # A cluster in the NAMED volume with no container around it means the
+          # box has been migrated (runbook) and its stack is down. Distinct from
+          # a fresh box, which has no cluster at all — the next task needs to
+          # tell those apart.
+          if [ -n "$migrated" ]; then
+            echo "SAFE migrated-volume:$migrated"
+            exit 0
+          fi
 
           # Docker Desktop and remote daemons keep volume data off the host
           # filesystem, so an unreadable Mountpoint means "could not tell",
@@ -161,6 +174,48 @@
             - or set db_fast_path: false to deploy against the existing database.
         success_msg: "no pre-existing postgres cluster in the way ({{ pg_cluster_probe.stdout | default('') | trim }})"
       when: db_fast_path | default(false)
+
+    # A box migrated per the runbook holds its data in the NAMED volume, and its
+    # docker-compose.egov-digit.yaml was hand-edited to match. The repo's copy
+    # still carries the pre-#2085 path until that fix lands — and this deploy
+    # would overwrite the operator's edit with it. Postgres would then mount the
+    # named volume at the path it ignores, get a FRESH anonymous volume for the
+    # real PGDATA, and come up bare.
+    #
+    # The probe above cannot catch this: at probe time the box is still correct.
+    # The damage happens later, when the compose file is copied. So check what
+    # this deploy is about to install, not just what is on the box.
+    - name: "preflight — read the compose file this deploy would install"
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/../docker-compose.egov-digit.yaml"
+      register: repo_compose
+      delegate_to: localhost
+      become: false
+      when: pg_cluster_probe.stdout | default('') is search('^SAFE (named|migrated)-volume')
+
+    - name: "preflight — refuse to overwrite a migrated box with the old mount path"
+      ansible.builtin.assert:
+        that:
+          - not ((repo_compose.content | b64decode) is search('postgres_data:/var/lib/docker-postgresql/data'))
+        fail_msg: |
+          This box has already been migrated — its database is in the named
+          volume ({{ pg_cluster_probe.stdout | default('') | trim }}) — but the
+          docker-compose.egov-digit.yaml this deploy would install still has the
+          pre-#2085 mount path.
+
+          Deploying would overwrite the corrected compose file on the box, mount
+          postgres_data back at /var/lib/docker-postgresql/data, and bring
+          Postgres up on a FRESH empty anonymous volume. The migrated data would
+          be stranded again.
+
+          Nothing has been changed. Either:
+            - deploy from a branch that has the mount-path fix (#2085), or
+            - re-apply steps 5 and 6 of
+              docs/2.12/operations/postgres-volume-migration.md
+              immediately after this deploy, on this box, before anything else
+              starts.
+        success_msg: "compose file matches this box's migrated layout"
+      when: pg_cluster_probe.stdout | default('') is search('^SAFE (named|migrated)-volume')
 
     - name: "preflight — warn when the postgres probe was inconclusive"
       ansible.builtin.debug:
