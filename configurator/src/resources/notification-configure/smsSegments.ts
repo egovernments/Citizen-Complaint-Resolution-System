@@ -21,6 +21,13 @@
 //   warning threshold (above 3 segments) is generous enough that the exact
 //   allowance only matters for borderline bodies.
 //
+//   The number is MODULE-AGNOSTIC and stays a constant on purpose. The event
+//   catalogue could carry a per-token length hint, and the design lists that as
+//   an option — but a hint is only as good as the guess behind it, and a wrong
+//   per-token number reads as precision this estimate does not have. If it ever
+//   moves into the catalogue it should arrive as a measured value (the p95 of
+//   real substituted lengths from the dispatch log), not as another guess.
+//
 //   This is an ESTIMATE and the rule is a WARNING for that reason. It does NOT
 //   mean the message will be rejected, and it is not a billing figure.
 

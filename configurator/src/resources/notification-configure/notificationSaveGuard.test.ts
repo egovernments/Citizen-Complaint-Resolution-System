@@ -9,54 +9,58 @@ import {
   fieldForRule,
   blockingSummary,
   isNotificationResource,
+  replacesKeyFor,
   type NotificationSnapshot,
   type PendingChange,
 } from './notificationSaveGuard';
-import type { BusinessServiceRecord, ValidationFinding } from '../workflow-services/validateNotifications';
+import type { TemplateRow, ValidationFinding } from '../workflow-services/validateNotifications';
+import type { EventCatalogueRow } from './eventCatalogue';
+import { PLACEHOLDER_VOCABULARY } from './legacyAdapter';
 
-const BS: BusinessServiceRecord = {
-  businessService: 'PGR',
-  states: [
-    {
-      uuid: 'u1', state: 'PENDINGFORASSIGNMENT', applicationStatus: 'PENDINGFORASSIGNMENT',
-      actions: [
-        { action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] },
-        { action: 'REJECT', nextState: 'u3', roles: ['GRO'] },
-      ],
-    },
-    { uuid: 'u2', state: 'PENDINGATLME', applicationStatus: 'PENDINGATLME', actions: [] },
-    { uuid: 'u3', state: 'REJECTED', applicationStatus: 'REJECTED', actions: [] },
-  ],
-};
+const ASSIGN = 'COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME';
+const REJECT = 'COMPLAINTS.WORKFLOW.REJECT.REJECTED';
+
+const CATALOGUE: EventCatalogueRow[] = [ASSIGN, REJECT].map((eventName) => ({
+  module: 'Complaints',
+  eventName,
+  label: eventName,
+  actors: [{ name: 'citizen', required: true }, { name: 'assignee' }],
+  placeholders: PLACEHOLDER_VOCABULARY.map((name) => ({ name })),
+  active: true,
+}));
 
 /** A clean two-row config: ASSIGN/SMS and REJECT/SMS, both with templates. */
 function snapshot(over: Partial<NotificationSnapshot> = {}): NotificationSnapshot {
   return {
-    businessService: BS,
+    catalogue: CATALOGUE,
     roleCodes: ['GRO'],
     routingRows: [
-      { businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true },
-      { businessService: 'PGR', action: 'REJECT', toState: 'REJECTED', audience: 'CITIZEN', channel: 'SMS', active: true },
+      { module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'SMS', active: true },
+      { module: 'Complaints', eventName: REJECT, audience: 'ACTOR:citizen', channel: 'SMS', active: true },
     ],
     templateRows: [
-      { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'Complaint {id} assigned', active: true },
-      { audience: 'CITIZEN', action: 'REJECT', toState: 'REJECTED', channel: 'SMS', locale: 'en_IN', body: 'Complaint {id} rejected', active: true },
+      { module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'SMS', locale: 'en_IN', body: 'Complaint {id} assigned', active: true },
+      { module: 'Complaints', eventName: REJECT, audience: 'ACTOR:citizen', channel: 'SMS', locale: 'en_IN', body: 'Complaint {id} rejected', active: true },
     ],
     ...over,
   };
 }
 
 const templateChange = (row: Record<string, unknown>, over: Partial<PendingChange> = {}): PendingChange => ({
-  resource: 'notification-template',
+  resource: 'notifications-template',
   op: 'upsert',
-  row: { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', active: true, ...row },
+  row: { module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'SMS', locale: 'en_IN', active: true, ...row },
   ...over,
 });
 
 describe('resource recognition', () => {
-  it('knows the four notification masters and nothing else', () => {
-    expect(isNotificationResource('notification-template')).toBe(true);
-    expect(isNotificationResource('notification-channel')).toBe(true);
+  it('knows the four WRITABLE notification masters and nothing else', () => {
+    expect(isNotificationResource('notifications-template')).toBe(true);
+    expect(isNotificationResource('notifications-channel')).toBe(true);
+    // The legacy masters are read-only now, so there is no save path to guard,
+    // and the module-owned catalogue is not authored here either.
+    expect(isNotificationResource('notification-template')).toBe(false);
+    expect(isNotificationResource('notifications-event-catalogue')).toBe(false);
     expect(isNotificationResource('access-roles')).toBe(false);
     expect(isNotificationResource(undefined)).toBe(false);
   });
@@ -64,11 +68,43 @@ describe('resource recognition', () => {
 
 describe('naturalKey', () => {
   it('uses the MDMS x-unique tuple, case-insensitively', () => {
-    expect(naturalKey('notification-template', { audience: 'citizen', action: 'assign', toState: 'PendingAtLme', channel: 'sms', locale: 'en_IN' }))
-      .toBe('CITIZEN.ASSIGN.PENDINGATLME.SMS.EN_IN');
-    expect(naturalKey('notification-channel', { code: 'sms' })).toBe('SMS');
-    expect(naturalKey('notification-routing', { businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS' }))
-      .toBe('PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS');
+    expect(naturalKey('notifications-template', { eventName: ASSIGN.toLowerCase(), audience: 'ACTOR:citizen', channel: 'sms', locale: 'en_IN' }))
+      .toBe(`${ASSIGN}.ACTOR:CITIZEN.SMS.EN_IN`);
+    expect(naturalKey('notifications-channel', { code: 'sms' })).toBe('SMS');
+    expect(naturalKey('notifications-routing', { eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'SMS' }))
+      .toBe(`${ASSIGN}.ACTOR:CITIZEN.SMS`);
+  });
+});
+
+describe('replacesKeyFor', () => {
+  // The uid is no longer decomposable — `eventName` carries dots — so the old
+  // exact part-count check would reject every real key. What is left is a lower
+  // bound, plus the uid match applyPendingChanges does directly.
+  it('accepts a real uniqueIdentifier even though eventName contains dots', () => {
+    expect(replacesKeyFor('notifications-routing', `${ASSIGN}.ACTOR:citizen.SMS`))
+      .toBe(`${ASSIGN}.ACTOR:CITIZEN.SMS`);
+  });
+
+  it('rejects a blank uid and one with too few separators to be this key', () => {
+    expect(replacesKeyFor('notifications-routing', '')).toBeUndefined();
+    expect(replacesKeyFor('notifications-routing', '   ')).toBeUndefined();
+    expect(replacesKeyFor('notifications-template', 'SMS')).toBeUndefined();
+    expect(replacesKeyFor('notifications-channel', 'SMS')).toBe('SMS');
+  });
+
+  it('drops the replaced row when `replaces` is a stored uid rather than a derived key', () => {
+    const base = snapshot({
+      templateRows: [
+        // Carries the MDMS uniqueIdentifier the row was read with, as a real
+        // record does.
+        { id: 'legacy-uid-1', module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'SMS', locale: 'en_IN', body: 'old {id}', active: true } as TemplateRow,
+      ],
+    });
+    const next = applyPendingChanges(base, [
+      templateChange({ channel: 'EMAIL', subject: 'S', body: 'new {id}' }, { replaces: 'LEGACY-UID-1' }),
+    ]);
+    expect(next.templateRows).toHaveLength(1);
+    expect(next.templateRows[0].channel).toBe('EMAIL');
   });
 });
 
@@ -76,7 +112,7 @@ describe('applyPendingChanges', () => {
   it('replaces a row in place when the key is unchanged', () => {
     const next = applyPendingChanges(snapshot(), [templateChange({ body: 'new text {id}' })]);
     expect(next.templateRows).toHaveLength(2);
-    expect(next.templateRows.find((t) => t.action === 'ASSIGN')?.body).toBe('new text {id}');
+    expect(next.templateRows.find((t) => t.eventName === ASSIGN)?.body).toBe('new text {id}');
   });
 
   it('appends a row whose key is new', () => {
@@ -86,10 +122,10 @@ describe('applyPendingChanges', () => {
 
   it('drops the old row when an edit moved the key fields', () => {
     const next = applyPendingChanges(snapshot(), [
-      templateChange({ channel: 'EMAIL', subject: 'S', body: 'b {id}' }, { replaces: 'CITIZEN.ASSIGN.PENDINGATLME.SMS.EN_IN' }),
+      templateChange({ channel: 'EMAIL', subject: 'S', body: 'b {id}' }, { replaces: `${ASSIGN}.ACTOR:CITIZEN.SMS.EN_IN` }),
     ]);
     expect(next.templateRows).toHaveLength(2);
-    expect(next.templateRows.some((t) => t.channel === 'SMS' && t.action === 'ASSIGN')).toBe(false);
+    expect(next.templateRows.some((t) => t.channel === 'SMS' && t.eventName === ASSIGN)).toBe(false);
     expect(next.templateRows.some((t) => t.channel === 'EMAIL')).toBe(true);
   });
 
@@ -108,8 +144,8 @@ describe('applyPendingChanges', () => {
   it('routes each resource to its own list', () => {
     const base = snapshot({ channelRows: [{ code: 'SMS', enabled: true, provider: 'p1', active: true }], providerTemplateRows: [] });
     const next = applyPendingChanges(base, [
-      { resource: 'notification-channel', op: 'upsert', row: { code: 'SMS', enabled: false, active: true } },
-      { resource: 'notification-provider-template', op: 'upsert', row: { provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', variables: ['id'], active: true } },
+      { resource: 'notifications-channel', op: 'upsert', row: { code: 'SMS', enabled: false, active: true } },
+      { resource: 'notifications-provider-template', op: 'upsert', row: { provider: 'twilio', channel: 'WHATSAPP', audience: 'ACTOR:citizen', eventName: ASSIGN, locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', variables: ['id'], active: true } },
     ]);
     expect(next.channelRows).toEqual([{ code: 'SMS', enabled: false, active: true }]);
     expect(next.providerTemplateRows).toHaveLength(1);
@@ -118,14 +154,20 @@ describe('applyPendingChanges', () => {
 });
 
 describe('refsForChange', () => {
-  it('keys routing/template/provider-template rows on the routing ref shape', () => {
-    expect(refsForChange(templateChange({}))).toEqual(['CITIZEN · ASSIGN -> PENDINGATLME · SMS']);
-    expect(refsForChange({ resource: 'notification-provider-template', op: 'upsert', row: { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'WHATSAPP' } }))
-      .toEqual(['CITIZEN · ASSIGN -> PENDINGATLME · WHATSAPP']);
+  it('keys routing/template/provider-template rows on AUDIENCE · EVENT · CHANNEL', () => {
+    expect(refsForChange(templateChange({}))).toEqual([`ACTOR:CITIZEN · ${ASSIGN} · SMS`]);
+    expect(refsForChange({ resource: 'notifications-provider-template', op: 'upsert', row: { audience: 'ACTOR:citizen', eventName: ASSIGN, channel: 'WHATSAPP' } }))
+      .toEqual([`ACTOR:CITIZEN · ${ASSIGN} · WHATSAPP`]);
+  });
+
+  it('canonicalises the audience, so a legacy bare name produces the checker\'s ref', () => {
+    // Otherwise a save could not recognise its own finding and would block nothing.
+    expect(refsForChange({ resource: 'notifications-routing', op: 'upsert', row: { audience: 'CITIZEN', eventName: ASSIGN, channel: 'SMS' } }))
+      .toEqual([`ACTOR:CITIZEN · ${ASSIGN} · SMS`]);
   });
 
   it('keys a channel row on its code', () => {
-    expect(refsForChange({ resource: 'notification-channel', op: 'upsert', row: { code: 'sms' } })).toEqual(['SMS']);
+    expect(refsForChange({ resource: 'notifications-channel', op: 'upsert', row: { code: 'sms' } })).toEqual(['SMS']);
   });
 });
 
@@ -205,7 +247,7 @@ describe('checkPendingChanges — end to end', () => {
     // REJECT's template is missing entirely (a pre-existing error). Editing the
     // ASSIGN body must still save.
     const broken = snapshot({ templateRows: [
-      { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'Complaint {id}', active: true },
+      { module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'SMS', locale: 'en_IN', body: 'Complaint {id}', active: true },
     ] });
     expect(checkPendingChanges(broken, []).after.some((f) => f.level === 'error')).toBe(true);
     const r = checkPendingChanges(broken, [templateChange({ body: 'Complaint {id} was assigned' })]);
@@ -215,9 +257,9 @@ describe('checkPendingChanges — end to end', () => {
 
   it('blocks a WhatsApp body whose placeholder the provider template does not declare', () => {
     const base = snapshot({
-      routingRows: [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'WHATSAPP', active: true }],
-      templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'WHATSAPP', locale: 'en_IN', body: 'Complaint {id}', active: true }],
-      providerTemplateRows: [{ provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', variables: ['id'], active: true }],
+      routingRows: [{ module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'WHATSAPP', active: true }],
+      templateRows: [{ module: 'Complaints', eventName: ASSIGN, audience: 'ACTOR:citizen', channel: 'WHATSAPP', locale: 'en_IN', body: 'Complaint {id}', active: true }],
+      providerTemplateRows: [{ provider: 'twilio', channel: 'WHATSAPP', audience: 'ACTOR:citizen', eventName: ASSIGN, locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', variables: ['id'], active: true }],
     });
     expect(checkPendingChanges(base, []).after.filter((f) => f.level === 'error')).toEqual([]);
     const r = checkPendingChanges(base, [templateChange({ channel: 'WHATSAPP', body: 'Complaint {id} for {emp_name}' })]);
@@ -228,14 +270,14 @@ describe('checkPendingChanges — end to end', () => {
     // Disabling a channel is a WARNING (channel-enabled), never an error — an
     // operator must be able to turn a channel off without a fight.
     const base = snapshot({ channelRows: [{ code: 'SMS', enabled: true, provider: 'p1', active: true }], integrationRows: [{ identifier: 'p1', name: 'P', active: true }] });
-    const r = checkPendingChanges(base, [{ resource: 'notification-channel', op: 'upsert', row: { code: 'SMS', enabled: false, provider: 'p1', active: true } }]);
+    const r = checkPendingChanges(base, [{ resource: 'notifications-channel', op: 'upsert', row: { code: 'SMS', enabled: false, provider: 'p1', active: true } }]);
     expect(r.blocking).toEqual([]);
     expect(r.advisory.map((f) => f.rule)).toContain('channel-enabled');
   });
 
   it('blocks clearing the provider of an enabled channel that carries routing rows', () => {
     const base = snapshot({ channelRows: [{ code: 'SMS', enabled: true, provider: 'p1', active: true }], integrationRows: [{ identifier: 'p1', name: 'P', active: true }] });
-    const r = checkPendingChanges(base, [{ resource: 'notification-channel', op: 'upsert', row: { code: 'SMS', enabled: true, provider: '', active: true } }]);
+    const r = checkPendingChanges(base, [{ resource: 'notifications-channel', op: 'upsert', row: { code: 'SMS', enabled: true, provider: '', active: true } }]);
     expect(r.blocking.map((f) => f.rule)).toContain('channel-needs-provider');
   });
 });
@@ -245,12 +287,15 @@ describe('presenting the result', () => {
     expect(fieldForRule('template-needs-body')).toBe('body');
     expect(fieldForRule('email-needs-subject')).toBe('subject');
     expect(fieldForRule('routing-has-template')).toBeUndefined();
+    // transition-exists now maps to a field: with the catalogue as the vocabulary
+    // it is "this event does not exist", which belongs next to the event picker.
+    expect(fieldForRule('transition-exists')).toBe('eventName');
   });
 
   it('keys field errors by form field and keeps the rule id visible', () => {
     const errors = fieldErrorsFor([
       { level: 'error', rule: 'template-needs-body', message: 'body is empty', ref: 'A' },
-      { level: 'error', rule: 'transition-exists', message: 'no such transition', ref: 'A' },
+      { level: 'error', rule: 'routing-has-template', message: 'no template', ref: 'A' },
     ]);
     expect(Object.keys(errors)).toEqual(['body']);
     expect(errors.body).toMatch(/^template-needs-body: /);

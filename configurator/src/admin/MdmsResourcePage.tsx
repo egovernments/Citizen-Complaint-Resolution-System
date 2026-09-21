@@ -7,6 +7,7 @@ import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { generateColumns, getRefMap, generateFilterElements } from './schemaUtils';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { ReadOnlyResourceNotice } from './ReadOnlyResourceNotice';
 
 export function MdmsResourcePage() {
   const resource = useResourceContext() ?? '';
@@ -35,13 +36,16 @@ export function MdmsResourcePage() {
   const subtitle = config?.schema ? `Schema: ${config.schema}` : undefined;
 
   return (
-    <DigitList title={label} subtitle={subtitle} filters={filterElements} hasCreate={canEditResource(resource)}>
-      {schemaColumns ? (
-        <DigitDatagrid columns={schemaColumns} rowClick="show" />
-      ) : (
-        <AutoDetectDatagrid />
-      )}
-    </DigitList>
+    <>
+      <ReadOnlyResourceNotice resource={resource} />
+      <DigitList title={label} subtitle={subtitle} filters={filterElements} hasCreate={canEditResource(resource)}>
+        {schemaColumns ? (
+          <DigitDatagrid columns={schemaColumns} rowClick="show" />
+        ) : (
+          <AutoDetectDatagrid />
+        )}
+      </DigitList>
+    </>
   );
 }
 

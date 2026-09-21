@@ -5,62 +5,41 @@ import {
   placeholderTokens,
   resolveProviderTemplate,
   NOTIFICATION_RULES,
+  RETIRED_RULES,
   EMAIL_SUBJECT_MAX,
-  type BusinessServiceRecord,
+  type ProviderTemplateRow,
   type RoutingRow,
   type TemplateRow,
 } from './validateNotifications';
+import type { EventCatalogueRow } from '../notification-configure/eventCatalogue';
+import { PLACEHOLDER_VOCABULARY } from '../notification-configure/legacyAdapter';
 
-const PGR: BusinessServiceRecord = {
-  businessService: 'PGR',
-  states: [
-    {
-      state: 'PENDINGFORASSIGNMENT',
-      actions: [
-        { action: 'ASSIGN', nextState: 'PENDINGATLME', roles: ['GRO', 'PGR_LME'] },
-      ],
-    },
-    {
-      state: 'PENDINGATLME',
-      actions: [
-        { action: 'RESOLVE', nextState: 'RESOLVED', roles: ['PGR_LME'] },
-        { action: 'REJECT', nextState: 'REJECTED', roles: ['PGR_LME'] },
-      ],
-    },
-  ],
-};
+// The vocabulary is now the event catalogue, not a workflow state machine. These
+// fixtures are shaped like the rows the seed-time generator emits for PGR.
+const ASSIGN = 'COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME';
+const RESOLVE = 'COMPLAINTS.WORKFLOW.RESOLVE.RESOLVED';
 
-// Live workflow-v2 shape: action.nextState is the target state's UUID (not a
-// symbolic name). The checker must resolve UUID -> applicationStatus before
-// keying the transition set, otherwise every routing row (which stores the
-// status NAME in toState) would false-positive on R4. Mirrors the real PGR
-// business-service record the Configure tab loads.
-const PGR_LIVE: BusinessServiceRecord = {
-  businessService: 'PGR',
-  states: [
-    {
-      uuid: 'uuid-pfa',
-      state: 'PENDINGFORASSIGNMENT',
-      applicationStatus: 'PENDINGFORASSIGNMENT',
-      actions: [{ action: 'ASSIGN', nextState: 'uuid-lme', roles: ['GRO'] }],
-    },
-    {
-      uuid: 'uuid-lme',
-      state: 'PENDINGATLME',
-      applicationStatus: 'PENDINGATLME',
-      actions: [{ action: 'RESOLVE', nextState: 'uuid-res', roles: ['PGR_LME'] }],
-    },
-    { uuid: 'uuid-res', state: 'RESOLVED', applicationStatus: 'RESOLVED', actions: [] },
-  ],
-};
+function event(eventName: string, over: Partial<EventCatalogueRow> = {}): EventCatalogueRow {
+  return {
+    module: 'Complaints',
+    eventName,
+    entityType: 'COMPLAINT',
+    label: eventName,
+    actors: [{ name: 'citizen', required: true }, { name: 'assignee' }],
+    placeholders: PLACEHOLDER_VOCABULARY.map((name) => ({ name })),
+    active: true,
+    ...over,
+  };
+}
 
+const CATALOGUE: EventCatalogueRow[] = [event(ASSIGN), event(RESOLVE)];
 const ROLE_CODES = ['GRO', 'PGR_LME', 'CSR'];
 
 function template(overrides: Partial<TemplateRow> = {}): TemplateRow {
   return {
-    audience: 'CITIZEN',
-    action: 'ASSIGN',
-    toState: 'PENDINGATLME',
+    module: 'Complaints',
+    eventName: ASSIGN,
+    audience: 'ACTOR:citizen',
     channel: 'SMS',
     locale: 'en_IN',
     body: 'hi',
@@ -71,10 +50,9 @@ function template(overrides: Partial<TemplateRow> = {}): TemplateRow {
 
 function routing(overrides: Partial<RoutingRow> = {}): RoutingRow {
   return {
-    businessService: 'PGR',
-    action: 'ASSIGN',
-    toState: 'PENDINGATLME',
-    audience: 'CITIZEN',
+    module: 'Complaints',
+    eventName: ASSIGN,
+    audience: 'ACTOR:citizen',
     channel: 'SMS',
     active: true,
     ...overrides,
@@ -84,7 +62,7 @@ function routing(overrides: Partial<RoutingRow> = {}): RoutingRow {
 describe('validateNotifications', () => {
   it('returns no findings for a fully valid config', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing()],
       templateRows: [template()],
       roleCodes: ROLE_CODES,
@@ -92,29 +70,83 @@ describe('validateNotifications', () => {
     expect(findings).toEqual([]);
   });
 
-  it('R1: flags an audience that is not a known role code', () => {
+  it('R1: flags a ROLE: term that is not a known role code', () => {
     const findings = validateNotifications({
-      businessService: PGR,
-      routingRows: [routing({ audience: 'NONEXISTENT_ROLE' })],
-      templateRows: [template({ audience: 'NONEXISTENT_ROLE' })],
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'ROLE:NONEXISTENT_ROLE' })],
+      templateRows: [template({ audience: 'ROLE:NONEXISTENT_ROLE' })],
       roleCodes: ROLE_CODES,
     });
     expect(findings.some((f) => f.rule === 'audience-role-exists' && f.level === 'error')).toBe(true);
   });
 
-  it('R1: accepts a role present on a workflow action even if absent from access-roles', () => {
+  it('R1: flags an ACTOR: term the event does not declare, and names what it does declare', () => {
     const findings = validateNotifications({
-      businessService: PGR,
-      routingRows: [routing({ audience: 'PGR_LME' })],
-      templateRows: [template({ audience: 'PGR_LME' })],
-      roleCodes: [], // not in access-roles, but PGR_LME is on an action
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'ACTOR:inspector' })],
+      templateRows: [template({ audience: 'ACTOR:inspector' })],
+      roleCodes: ROLE_CODES,
     });
-    expect(findings.filter((f) => f.rule === 'audience-role-exists')).toHaveLength(0);
+    const f = findings.find((x) => x.rule === 'audience-role-exists');
+    expect(f?.level).toBe('error');
+    expect(f?.message).toMatch(/inspector/);
+    expect(f?.message).toMatch(/citizen, assignee/);
+  });
+
+  it('R1: checks EVERY term of a fallback chain, not just the first', () => {
+    // `ACTOR:assignee|ROLE:TYPO` resolves for most events and silently narrows
+    // for the rest — exactly the failure a chain is supposed to prevent.
+    const findings = validateNotifications({
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'ACTOR:assignee|ROLE:TYPO' })],
+      templateRows: [template({ audience: 'ACTOR:assignee|ROLE:TYPO' })],
+      roleCodes: ROLE_CODES,
+    });
+    const f = findings.filter((x) => x.rule === 'audience-role-exists');
+    expect(f).toHaveLength(1);
+    expect(f[0].message).toMatch(/TYPO/);
+  });
+
+  it('R1: accepts a legacy bare audience, mapped exactly as the box maps it', () => {
+    // CITIZEN -> ACTOR:citizen, EMPLOYEE -> ACTOR:assignee, bare role -> ROLE:<it>.
+    for (const [bare, ok] of [['CITIZEN', true], ['EMPLOYEE', true], ['GRO', true], ['NOPE', false]] as const) {
+      const findings = validateNotifications({
+        catalogue: CATALOGUE,
+        routingRows: [routing({ audience: bare })],
+        templateRows: [template({ audience: bare })],
+        roleCodes: ROLE_CODES,
+      });
+      expect(findings.filter((f) => f.rule === 'audience-role-exists').length === 0, bare).toBe(ok);
+    }
+  });
+
+  it('R1b: refuses an audience whose scheme the box has no resolver for', () => {
+    const findings = validateNotifications({
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'GROUP:ward-team' })],
+      templateRows: [template({ audience: 'GROUP:ward-team' })],
+      roleCodes: ROLE_CODES,
+    });
+    const f = findings.find((x) => x.rule === 'audience-scheme');
+    expect(f?.level).toBe('error');
+    expect(f?.message).toMatch(/GROUP:ward-team/);
+    // It must not ALSO be reported as an unknown role: one problem, one finding.
+    expect(findings.filter((x) => x.rule === 'audience-role-exists')).toHaveLength(0);
+  });
+
+  it('R1b: accepts EVENT_RECIPIENTS, which needs neither an actor nor a role', () => {
+    const findings = validateNotifications({
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'EVENT_RECIPIENTS' })],
+      templateRows: [template({ audience: 'EVENT_RECIPIENTS' })],
+      roleCodes: [],
+    });
+    expect(findings).toEqual([]);
   });
 
   it('R2: flags an active routing row with no matching template', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing()],
       templateRows: [], // no templates at all
       roleCodes: ROLE_CODES,
@@ -124,7 +156,7 @@ describe('validateNotifications', () => {
 
   it('R2: flags when only a non-default locale template exists', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing()],
       templateRows: [template({ locale: 'sw_KE' })],
       roleCodes: ROLE_CODES,
@@ -134,9 +166,20 @@ describe('validateNotifications', () => {
     expect(f?.message).toMatch(/another locale/);
   });
 
+  it('R2: matches a legacy bare audience against a scheme-form template', () => {
+    // A tenant part-way through the copy must not be told every row is an orphan.
+    const findings = validateNotifications({
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'CITIZEN' })],
+      templateRows: [template({ audience: 'ACTOR:citizen' })],
+      roleCodes: ROLE_CODES,
+    });
+    expect(findings).toEqual([]);
+  });
+
   it('R3: flags a disallowed channel', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing({ channel: 'PIGEON' })],
       templateRows: [template({ channel: 'PIGEON' })],
       roleCodes: ROLE_CODES,
@@ -144,23 +187,57 @@ describe('validateNotifications', () => {
     expect(findings.some((f) => f.rule === 'channel-allowed' && f.level === 'error')).toBe(true);
   });
 
-  it('R4: flags a routing transition that does not exist in the workflow', () => {
+  it('R4: flags a routing row whose event is not in the catalogue', () => {
     const findings = validateNotifications({
-      businessService: PGR,
-      routingRows: [routing({ action: 'ASSIGN', toState: 'GHOSTSTATE' })],
-      templateRows: [template({ action: 'ASSIGN', toState: 'GHOSTSTATE' })],
+      catalogue: CATALOGUE,
+      routingRows: [routing({ eventName: 'COMPLAINTS.WORKFLOW.GHOST.NOWHERE' })],
+      templateRows: [template({ eventName: 'COMPLAINTS.WORKFLOW.GHOST.NOWHERE' })],
       roleCodes: ROLE_CODES,
     });
-    expect(findings.some((f) => f.rule === 'transition-exists' && f.level === 'error')).toBe(true);
+    const f = findings.find((x) => x.rule === 'transition-exists');
+    expect(f?.level).toBe('error');
+    expect(f?.message).toMatch(/event catalogue/);
+  });
+
+  it('R4: an INACTIVE catalogue row is not a valid routing target', () => {
+    const findings = validateNotifications({
+      catalogue: [event(ASSIGN, { active: false }), event(RESOLVE)],
+      routingRows: [routing()],
+      templateRows: [template()],
+      roleCodes: ROLE_CODES,
+    });
+    expect(findings.some((f) => f.rule === 'transition-exists')).toBe(true);
+  });
+
+  it('R4b: warns when a routing row uses a channel the event does not declare', () => {
+    const findings = validateNotifications({
+      catalogue: [event(ASSIGN, { channels: ['EMAIL'] })],
+      routingRows: [routing({ channel: 'SMS' })],
+      templateRows: [template({ channel: 'SMS' })],
+      roleCodes: ROLE_CODES,
+    });
+    const f = findings.find((x) => x.rule === 'channel-in-event');
+    expect(f?.level).toBe('warn');
+    expect(f?.message).toMatch(/declares channels EMAIL/);
+  });
+
+  it('R4b: an absent channel list means "no restriction", not "nothing allowed"', () => {
+    const findings = validateNotifications({
+      catalogue: [event(ASSIGN, { channels: [] })],
+      routingRows: [routing({ channel: 'SMS' })],
+      templateRows: [template({ channel: 'SMS' })],
+      roleCodes: ROLE_CODES,
+    });
+    expect(findings.filter((f) => f.rule === 'channel-in-event')).toHaveLength(0);
   });
 
   it('R5: warns about an orphan template with no matching routing', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing()],
       templateRows: [
         template(),
-        template({ action: 'RESOLVE', toState: 'RESOLVED', channel: 'EMAIL' }),
+        template({ eventName: RESOLVE, channel: 'EMAIL', subject: 'S' }),
       ],
       roleCodes: ROLE_CODES,
     });
@@ -169,21 +246,22 @@ describe('validateNotifications', () => {
 
   it('R6: warns about a non-notifiable audience', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing({ audience: 'AUTO_ESCALATE' })],
       templateRows: [template({ audience: 'AUTO_ESCALATE' })],
       roleCodes: ROLE_CODES,
     });
     expect(findings.some((f) => f.rule === 'non-notifiable-audience' && f.level === 'warn')).toBe(true);
-    // R1 must NOT also fire for a non-notifiable pseudo-audience.
+    // R1 and R1b must NOT also fire for a non-notifiable pseudo-audience.
     expect(findings.filter((f) => f.rule === 'audience-role-exists')).toHaveLength(0);
+    expect(findings.filter((f) => f.rule === 'audience-scheme')).toHaveLength(0);
   });
 
   it('compares case-insensitively', () => {
     const findings = validateNotifications({
-      businessService: PGR,
-      routingRows: [routing({ audience: 'pgr_lme', action: 'assign', toState: 'pendingatlme', channel: 'sms' })],
-      templateRows: [template({ audience: 'pgr_lme', channel: 'sms' })],
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'actor:CITIZEN', eventName: ASSIGN.toLowerCase(), channel: 'sms' })],
+      templateRows: [template({ audience: 'ACTOR:citizen', channel: 'sms' })],
       roleCodes: ROLE_CODES,
     });
     expect(findings).toEqual([]);
@@ -191,7 +269,7 @@ describe('validateNotifications', () => {
 
   it('ignores inactive routing rows for template presence', () => {
     const findings = validateNotifications({
-      businessService: PGR,
+      catalogue: CATALOGUE,
       routingRows: [routing({ active: false })],
       templateRows: [],
       roleCodes: ROLE_CODES,
@@ -199,152 +277,132 @@ describe('validateNotifications', () => {
     expect(findings.filter((f) => f.rule === 'routing-has-template')).toHaveLength(0);
   });
 
-  // CFG-1 (gap G8): exercise the UUID-resolution branch that stays dead when
-  // every fixture uses symbolic nextState names. Against PGR_LIVE the workflow
-  // actions carry UUID nextStates, so statusByStateUuid is non-empty and
-  // resolveState actually maps uuid -> applicationStatus.
-  it('CFG-1 R4: does not false-positive on a valid transition when workflow nextState is a UUID', () => {
-    // routing() defaults are ASSIGN -> PENDINGATLME (the applicationStatus name),
-    // which is exactly how the Configure tab writes the row. The workflow stores
-    // ASSIGN -> uuid-lme; resolveState must bridge the two.
-    const findings = validateNotifications({
-      businessService: PGR_LIVE,
-      routingRows: [routing()],
-      templateRows: [template()],
-      roleCodes: ROLE_CODES,
-    });
-    expect(findings.filter((f) => f.rule === 'transition-exists')).toHaveLength(0);
-  });
-
-  it('CFG-1 R4: fires when a routing row stores the raw UUID instead of the applicationStatus name', () => {
-    // Operators must store the status NAME. A raw uuid-lme is the regression the
-    // resolution exists to catch: the transition key becomes ASSIGN|UUID-LME and
-    // never matches the resolved ASSIGN|PENDINGATLME.
-    const findings = validateNotifications({
-      businessService: PGR_LIVE,
-      routingRows: [routing({ action: 'ASSIGN', toState: 'uuid-lme' })],
-      templateRows: [template({ action: 'ASSIGN', toState: 'uuid-lme' })],
-      roleCodes: ROLE_CODES,
-    });
-    const te = findings.filter((f) => f.rule === 'transition-exists');
-    expect(te).toHaveLength(1);
-    expect(te[0].level).toBe('error');
-  });
-
-  it('CFG-1 R4: fires on a resolved-set miss and on a UUID that resolves to nowhere', () => {
-    // (a) A real status, but not ASSIGN's resolved target — proves the UUID
-    //     resolution did not over-broaden the transition set.
-    const missResolved = validateNotifications({
-      businessService: PGR_LIVE,
-      routingRows: [routing({ action: 'ASSIGN', toState: 'RESOLVED' })],
-      templateRows: [template({ action: 'ASSIGN', toState: 'RESOLVED' })],
-      roleCodes: ROLE_CODES,
-    });
-    expect(missResolved.filter((f) => f.rule === 'transition-exists')).toHaveLength(1);
-
-    // (b) GHOST -> uuid-nowhere: resolveState falls back to the raw uuid
-    //     (statusByStateUuid.get(ns) || ns), so the transition key is
-    //     GHOST|UUID-NOWHERE and a routing row keyed GHOST|PENDINGATLME never
-    //     matches a real workflow transition.
-    const withGhost: BusinessServiceRecord = {
-      businessService: 'PGR',
-      states: [
-        ...(PGR_LIVE.states ?? []),
-        {
-          uuid: 'uuid-ghost',
-          state: 'GHOSTORIGIN',
-          applicationStatus: 'GHOSTORIGIN',
-          actions: [{ action: 'GHOST', nextState: 'uuid-nowhere', roles: ['GRO'] }],
-        },
-      ],
-    };
-    const missGhost = validateNotifications({
-      businessService: withGhost,
-      routingRows: [routing({ action: 'GHOST', toState: 'PENDINGATLME' })],
-      templateRows: [template({ action: 'GHOST', toState: 'PENDINGATLME' })],
-      roleCodes: ROLE_CODES,
-    });
-    expect(missGhost.filter((f) => f.rule === 'transition-exists')).toHaveLength(1);
-  });
-
-  it('CFG-1: a full clean config passes against the live (UUID-nextState) shape', () => {
+  it('a full clean multi-row config passes', () => {
     const routingRows = [
-      routing({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS' }),
-      routing({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'GRO', channel: 'EMAIL' }),
-      routing({ action: 'RESOLVE', toState: 'RESOLVED', audience: 'CITIZEN', channel: 'SMS' }),
+      routing({ audience: 'ACTOR:citizen', channel: 'SMS' }),
+      routing({ audience: 'ROLE:GRO', channel: 'EMAIL' }),
+      routing({ eventName: RESOLVE, audience: 'ACTOR:citizen', channel: 'SMS' }),
     ];
     const templateRows = [
-      template({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS' }),
-      template({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'GRO', channel: 'EMAIL', subject: 'Complaint {id} assigned' }),
-      template({ action: 'RESOLVE', toState: 'RESOLVED', audience: 'CITIZEN', channel: 'SMS' }),
+      template({ audience: 'ACTOR:citizen', channel: 'SMS' }),
+      template({ audience: 'ROLE:GRO', channel: 'EMAIL', subject: 'Complaint {id} assigned' }),
+      template({ eventName: RESOLVE, audience: 'ACTOR:citizen', channel: 'SMS' }),
     ];
+    expect(validateNotifications({ catalogue: CATALOGUE, routingRows, templateRows, roleCodes: ROLE_CODES })).toEqual([]);
+  });
+
+  it('attaches a ref of AUDIENCE · EVENT · CHANNEL, with the audience canonicalised', () => {
     const findings = validateNotifications({
-      businessService: PGR_LIVE,
-      routingRows,
-      templateRows,
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'CITIZEN' })],
+      templateRows: [],
       roleCodes: ROLE_CODES,
     });
-    expect(findings).toEqual([]);
+    expect(findings[0].ref).toBe(`ACTOR:CITIZEN · ${ASSIGN} · SMS`);
   });
 });
 
 describe('R7 channel-enabled', () => {
-  const bs = { businessService: 'PGR', states: [{ state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] }, { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] }] };
-  const routing = [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true }];
-  const template = [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'x', active: true }];
+  const routingRows = [routing()];
+  const templateRows = [template()];
+  const base = { catalogue: CATALOGUE, routingRows, templateRows, roleCodes: ROLE_CODES };
 
   it('is silent when no channel rows are supplied (master not seeded)', () => {
-    const f = validateNotifications({ businessService: bs, routingRows: routing, templateRows: template, roleCodes: ['GRO'] });
-    expect(f.filter((x) => x.rule === 'channel-enabled')).toHaveLength(0);
+    expect(validateNotifications(base).filter((x) => x.rule === 'channel-enabled')).toHaveLength(0);
   });
 
   it('warns once per channel that is disabled or has no policy row', () => {
-    const disabled = validateNotifications({ businessService: bs, routingRows: routing, templateRows: template, roleCodes: ['GRO'], channelRows: [{ code: 'SMS', enabled: false, active: true }] });
+    const disabled = validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: false, active: true }] });
     expect(disabled.filter((x) => x.rule === 'channel-enabled').map((x) => x.level)).toEqual(['warn']);
     expect(disabled.find((x) => x.rule === 'channel-enabled')?.message).toMatch(/disabled/);
-    const missing = validateNotifications({ businessService: bs, routingRows: [...routing, { ...routing[0], channel: 'SMS', audience: 'GRO' }], templateRows: template, roleCodes: ['GRO'], channelRows: [{ code: 'EMAIL', enabled: true, active: true }] });
+
+    const missing = validateNotifications({
+      ...base,
+      routingRows: [routing(), routing({ audience: 'ROLE:GRO' })],
+      channelRows: [{ code: 'EMAIL', enabled: true, active: true }],
+    });
     expect(missing.filter((x) => x.rule === 'channel-enabled')).toHaveLength(1);
-    expect(missing.find((x) => x.rule === 'channel-enabled')?.message).toMatch(/no NotificationChannel row/);
+    expect(missing.find((x) => x.rule === 'channel-enabled')?.message).toMatch(/no channel-policy row/);
   });
 
   it('does not warn for an enabled channel', () => {
-    const f = validateNotifications({ businessService: bs, routingRows: routing, templateRows: template, roleCodes: ['GRO'], channelRows: [{ code: 'SMS', enabled: true, active: true }] });
+    const f = validateNotifications({ ...base, channelRows: [{ code: 'SMS', enabled: true, active: true }] });
     expect(f.filter((x) => x.rule === 'channel-enabled')).toHaveLength(0);
   });
 });
 
-describe('R8-R10 template content + WhatsApp provider template', () => {
-  const bs = { businessService: 'PGR', states: [{ state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] }, { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] }] };
-  const base = { businessService: bs, roleCodes: ['GRO'] };
+describe('template content + WhatsApp provider template', () => {
+  const base = { catalogue: CATALOGUE, roleCodes: ROLE_CODES };
 
-  it('flags tokens pgr-services does not fill', () => {
-    const f = validateNotifications({ ...base, routingRows: [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true }],
-      templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'Hi {citizen_name}, ref {ticket_no} on {date}', active: true }] });
+  it('flags tokens the event does not declare', () => {
+    const f = validateNotifications({
+      ...base,
+      routingRows: [routing()],
+      templateRows: [template({ body: 'Hi {citizen_name}, ref {ticket_no} on {date}' })],
+    });
     const u = f.find((x) => x.rule === 'unknown-token');
     expect(u?.message).toMatch(/\{ticket_no\}/);
     expect(u?.message).not.toMatch(/citizen_name\}/);
   });
 
+  it('takes the vocabulary from the EVENT, so two events can differ', () => {
+    const licence = event('XYZ.LICENCE.RENEWED', {
+      module: 'XYZ',
+      placeholders: [{ name: 'licence_no' }, { name: 'valid_until' }],
+    });
+    const f = validateNotifications({
+      catalogue: [...CATALOGUE, licence],
+      roleCodes: ROLE_CODES,
+      routingRows: [routing({ module: 'XYZ', eventName: 'XYZ.LICENCE.RENEWED', audience: 'EVENT_RECIPIENTS' })],
+      templateRows: [template({ module: 'XYZ', eventName: 'XYZ.LICENCE.RENEWED', audience: 'EVENT_RECIPIENTS', body: 'Licence {licence_no} valid to {valid_until}' })],
+    });
+    expect(f.filter((x) => x.rule === 'unknown-token')).toHaveLength(0);
+
+    const wrongVocab = validateNotifications({
+      catalogue: [...CATALOGUE, licence],
+      roleCodes: ROLE_CODES,
+      routingRows: [routing({ module: 'XYZ', eventName: 'XYZ.LICENCE.RENEWED', audience: 'EVENT_RECIPIENTS' })],
+      // `{id}` is fine for a complaint and meaningless for this licence event.
+      templateRows: [template({ module: 'XYZ', eventName: 'XYZ.LICENCE.RENEWED', audience: 'EVENT_RECIPIENTS', body: 'Licence {id}' })],
+    });
+    expect(wrongVocab.find((x) => x.rule === 'unknown-token')?.message).toMatch(/\{id\}/);
+  });
+
+  it('says nothing about tokens when the event itself is uncatalogued', () => {
+    // transition-exists already reports the cause; flagging every token would bury it.
+    const f = validateNotifications({
+      ...base,
+      routingRows: [routing({ eventName: 'NOPE.EVENT' })],
+      templateRows: [template({ eventName: 'NOPE.EVENT', body: 'Hi {whatever}' })],
+    });
+    expect(f.filter((x) => x.rule === 'unknown-token')).toHaveLength(0);
+    expect(f.some((x) => x.rule === 'transition-exists')).toBe(true);
+  });
+
   it('warns on an EMAIL template without a subject', () => {
-    const f = validateNotifications({ ...base, routingRows: [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'EMAIL', active: true }],
-      templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'EMAIL', locale: 'en_IN', body: 'x', subject: '', active: true }] });
+    const f = validateNotifications({
+      ...base,
+      routingRows: [routing({ channel: 'EMAIL' })],
+      templateRows: [template({ channel: 'EMAIL', subject: '' })],
+    });
     expect(f.some((x) => x.rule === 'email-needs-subject')).toBe(true);
   });
 
   it('warns on a WHATSAPP routing row with no approved provider template, silent when one exists or rows are not supplied', () => {
-    const routing = [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'WHATSAPP', active: true }];
-    const template = [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'WHATSAPP', locale: 'en_IN', body: 'x', active: true }];
-    expect(validateNotifications({ ...base, routingRows: routing, templateRows: template }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
-    expect(validateNotifications({ ...base, routingRows: routing, templateRows: template, providerTemplateRows: [] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(true);
-    expect(validateNotifications({ ...base, routingRows: routing, templateRows: template, providerTemplateRows: [{ provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', active: true }] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
+    const routingRows = [routing({ channel: 'WHATSAPP' })];
+    const templateRows = [template({ channel: 'WHATSAPP', body: 'x' })];
+    const approved: ProviderTemplateRow = {
+      provider: 'twilio', channel: 'WHATSAPP', audience: 'ACTOR:citizen', eventName: ASSIGN,
+      locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', active: true,
+    };
+    expect(validateNotifications({ ...base, routingRows, templateRows }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
+    expect(validateNotifications({ ...base, routingRows, templateRows, providerTemplateRows: [] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(true);
+    expect(validateNotifications({ ...base, routingRows, templateRows, providerTemplateRows: [approved] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
   });
 });
 
 describe('R7b channel provider selection', () => {
-  const bs = { businessService: 'PGR', states: [{ state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] }, { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] }] };
-  const smsRouting = [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true }];
-  const smsTemplate = [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'x', active: true }];
-  const base = { businessService: bs, roleCodes: ['GRO'], routingRows: smsRouting, templateRows: smsTemplate };
+  const base = { catalogue: CATALOGUE, roleCodes: ROLE_CODES, routingRows: [routing()], templateRows: [template()] };
   const twilio = { _id: 'i1', identifier: 'twilio-sms-1', name: 'Twilio prod', active: true };
   const providerRules = ['channel-needs-provider', 'channel-provider-missing', 'channel-provider-inactive'];
   const providerFindings = (f: ReturnType<typeof validateNotifications>) => f.filter((x) => providerRules.includes(x.rule));
@@ -415,29 +473,21 @@ describe('R7b channel provider selection', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 2: per-channel message-structure rules.
+// Per-channel message-structure rules.
 // ---------------------------------------------------------------------------
-const BS2: BusinessServiceRecord = {
-  businessService: 'PGR',
-  states: [
-    { state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] },
-    { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] },
-  ],
-};
 
 /** One routing row + one template row on `channel`, so only content rules can fire. */
-function pair(channel: string, template: Partial<TemplateRow> = {}) {
-  const routingRows: RoutingRow[] = [
-    { businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel, active: true },
-  ];
-  const templateRows: TemplateRow[] = [
-    { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel, locale: 'en_IN', body: 'ok', active: true, ...template },
-  ];
-  return { businessService: BS2, roleCodes: ['GRO'], routingRows, templateRows };
+function pair(channel: string, over: Partial<TemplateRow> = {}) {
+  return {
+    catalogue: CATALOGUE,
+    roleCodes: ROLE_CODES,
+    routingRows: [routing({ channel })],
+    templateRows: [template({ channel, body: 'ok', ...over })],
+  };
 }
 
 describe('scanPlaceholders', () => {
-  it('reports the tokens pgr-services substitutes, in first-appearance order', () => {
+  it('reports the tokens the renderer substitutes, in first-appearance order', () => {
     expect(placeholderTokens('Hi {citizen_name}, {id} on {date} ({id})')).toEqual(['citizen_name', 'id', 'date']);
   });
 
@@ -448,7 +498,7 @@ describe('scanPlaceholders', () => {
   it('flags the double brace an operator pastes in from Handlebars', () => {
     const s = scanPlaceholders('Complaint {{id}}');
     expect(s.malformed).toContain('{{');
-    // pgr-services' own regex still matches the INNER {id}, so the recipient
+    // The renderer's own regex still matches the INNER {id}, so the recipient
     // gets the value wrapped in braces. The token IS reported as substituted.
     expect(s.tokens).toEqual(['id']);
   });
@@ -465,7 +515,7 @@ describe('scanPlaceholders', () => {
   });
 });
 
-describe('R11 placeholder-braces', () => {
+describe('placeholder-braces', () => {
   it('errors on a malformed brace in the body and names it', () => {
     const f = validateNotifications(pair('SMS', { body: 'Complaint {{id}} filed' }));
     const r = f.find((x) => x.rule === 'placeholder-braces');
@@ -483,12 +533,12 @@ describe('R11 placeholder-braces', () => {
   });
 
   it('ignores an inactive template', () => {
-    const f = validateNotifications({ ...pair('SMS'), templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: '{{id}}', active: false }] });
+    const f = validateNotifications({ ...pair('SMS'), templateRows: [template({ body: '{{id}}', active: false })] });
     expect(f.filter((x) => x.rule === 'placeholder-braces')).toHaveLength(0);
   });
 });
 
-describe('R12 template-needs-body', () => {
+describe('template-needs-body', () => {
   it('errors on an active template with an empty body, on every channel', () => {
     for (const ch of ['SMS', 'WHATSAPP', 'EMAIL']) {
       const f = validateNotifications(pair(ch, { body: '   ', subject: 'S' }));
@@ -502,7 +552,7 @@ describe('R12 template-needs-body', () => {
   });
 });
 
-describe('R13 sms-length', () => {
+describe('sms-length', () => {
   const long = (n: number) => 'a'.repeat(n);
 
   it('stays silent for a body that fits in three GSM-7 segments', () => {
@@ -544,7 +594,7 @@ describe('R13 sms-length', () => {
   });
 });
 
-describe('R14 email-subject-length', () => {
+describe('email-subject-length', () => {
   it('warns above the documented maximum and stays silent at it', () => {
     const at = validateNotifications(pair('EMAIL', { subject: 'S'.repeat(EMAIL_SUBJECT_MAX) }));
     expect(at.filter((x) => x.rule === 'email-subject-length')).toHaveLength(0);
@@ -561,38 +611,38 @@ describe('R14 email-subject-length', () => {
   });
 });
 
-describe('resolveProviderTemplate (mirrors pgr-services)', () => {
-  const row = (over: Record<string, unknown> = {}) => ({
-    provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN',
-    toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', variables: ['id'],
+describe('resolveProviderTemplate (mirrors the runtime resolution order)', () => {
+  const row = (over: Record<string, unknown> = {}): ProviderTemplateRow => ({
+    provider: 'twilio', channel: 'WHATSAPP', audience: 'ACTOR:citizen', eventName: ASSIGN,
+    locale: 'en_IN', templateId: 'HX1', variables: ['id'],
     approvalStatus: 'approved', active: true, ...over,
   });
-  const t = { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'hi_IN' };
+  const t = { audience: 'ACTOR:citizen', eventName: ASSIGN, locale: 'hi_IN' };
 
   it('prefers the row locale, then falls back to the default locale', () => {
     expect(resolveProviderTemplate([row({ locale: 'hi_IN', templateId: 'HXhi' })], t, 'en_IN')?.templateId).toBe('HXhi');
     expect(resolveProviderTemplate([row()], t, 'en_IN')?.templateId).toBe('HX1');
   });
 
-  it('refuses a row that is inactive, unapproved, another provider/channel or has no templateId', () => {
+  it('refuses a row that is inactive, unapproved, another provider/channel/event or has no templateId', () => {
     const own = { ...t, locale: 'en_IN' };
-    for (const bad of [{ active: false }, { approvalStatus: 'pending' }, { provider: 'gupshup' }, { channel: 'SMS' }, { templateId: '' }]) {
+    for (const bad of [{ active: false }, { approvalStatus: 'pending' }, { provider: 'gupshup' }, { channel: 'SMS' }, { templateId: '' }, { eventName: RESOLVE }]) {
       expect(resolveProviderTemplate([row(bad)], own, 'en_IN'), JSON.stringify(bad)).toBeUndefined();
     }
   });
 
-  it('matches case-insensitively', () => {
-    expect(resolveProviderTemplate([row({ audience: 'citizen', action: 'assign', toState: 'pendingatlme', locale: 'EN_in', approvalStatus: 'APPROVED' })], { ...t, locale: 'en_IN' }, 'en_IN')).toBeTruthy();
+  it('matches case-insensitively, and matches a legacy bare audience to a scheme one', () => {
+    expect(resolveProviderTemplate([row({ audience: 'CITIZEN', eventName: ASSIGN.toLowerCase(), locale: 'EN_in', approvalStatus: 'APPROVED' })], { ...t, locale: 'en_IN' }, 'en_IN')).toBeTruthy();
   });
 });
 
-describe('R15/R16 WhatsApp provider-template variables', () => {
-  const pt = (over: Record<string, unknown> = {}) => ({
-    provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN',
-    toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1',
+describe('WhatsApp provider-template variables', () => {
+  const pt = (over: Record<string, unknown> = {}): ProviderTemplateRow => ({
+    provider: 'twilio', channel: 'WHATSAPP', audience: 'ACTOR:citizen', eventName: ASSIGN,
+    locale: 'en_IN', templateId: 'HX1',
     approvalStatus: 'approved', active: true, variables: ['complaint_type', 'id', 'date'], ...over,
   });
-  const base = (body: string, rows: Record<string, unknown>[]) => ({
+  const base = (body: string, rows: ProviderTemplateRow[]) => ({
     ...pair('WHATSAPP', { body }),
     providerTemplateRows: rows,
   });
@@ -622,7 +672,7 @@ describe('R15/R16 WhatsApp provider-template variables', () => {
     expect(f.filter((x) => x.rule === 'whatsapp-variable-unmapped')).toHaveLength(0);
   });
 
-  it('warns about a declared variable pgr-services cannot fill', () => {
+  it('warns about a declared variable the EVENT cannot fill', () => {
     const f = validateNotifications(base('Complaint {id}', [pt({ variables: ['id', 'ticket_no'] })]));
     const r = f.find((x) => x.rule === 'whatsapp-variable-unfilled');
     expect(r?.level).toBe('warn');
@@ -647,5 +697,24 @@ describe('rule table', () => {
     const ids = NOTIFICATION_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const r of NOTIFICATION_RULES) expect(r.summary.length, r.id).toBeGreaterThan(20);
+  });
+
+  it('gives every retired rule a reason, and never emits one', () => {
+    // A rule that stops making sense is marked retired here, never deleted — an
+    // operator reading a finding id in an old ticket must be able to find out
+    // what happened to it.
+    for (const r of NOTIFICATION_RULES) {
+      if (r.status === 'retired') expect((r.retiredReason ?? '').length, r.id).toBeGreaterThan(20);
+    }
+    const emitted = validateNotifications({
+      catalogue: CATALOGUE,
+      routingRows: [routing({ audience: 'GROUP:x', channel: 'PIGEON', eventName: 'NOPE' })],
+      templateRows: [template({ body: '{{id}' })],
+      roleCodes: ROLE_CODES,
+      channelRows: [{ code: 'SMS', enabled: false, active: true }],
+      providerTemplateRows: [],
+      integrationRows: [],
+    }).map((f) => f.rule);
+    for (const rule of emitted) expect(RETIRED_RULES.has(rule), rule).toBe(false);
   });
 });

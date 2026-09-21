@@ -1,10 +1,15 @@
-// React wiring for the notification save guard.
+// React wiring for the notification screens: load the configuration, decide
+// which namespace it lives in, and adapt the result to react-hook-form.
 //
-// The decidable half lives in notificationSaveGuard.ts (pure, unit-tested).
-// This file only loads the current configuration and adapts the result to
-// react-hook-form, so the four notification masters get the SAME validation
-// whether they are edited through the Configure screen or through the generic
-// MDMS create/edit forms.
+// Everything decidable lives in pure modules — notificationSaveGuard.ts (what
+// may block a save), notificationSource.ts (which namespace serves this tenant),
+// legacyAdapter.ts (how a legacy row reads in the new vocabulary) — so this file
+// is only data loading and plumbing.
+//
+// It loads BOTH namespaces on purpose. A tenant whose deploy-time copy step has
+// not run still has its live configuration in the legacy masters, and showing
+// that tenant an empty Configure screen would invite an operator to re-enter the
+// whole configuration into the new masters while the old rows keep firing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGetList } from 'ra-core';
@@ -18,8 +23,21 @@ import {
   type NotificationSnapshot,
   type PendingChange,
 } from './notificationSaveGuard';
+import {
+  selectNotificationSource,
+  type SourceDecision,
+} from './notificationSource';
+import {
+  adaptLegacyProviderTemplate,
+  adaptLegacyRouting,
+  adaptLegacyTemplate,
+  catalogueFromLegacyRows,
+  type LegacyProviderTemplateRow,
+  type LegacyRoutingRow,
+  type LegacyTemplateRow,
+} from './legacyAdapter';
+import type { EventCatalogueRow } from './eventCatalogue';
 import type {
-  BusinessServiceRecord,
   ChannelRow,
   IntegrationRow,
   ProviderTemplateRow,
@@ -28,72 +46,149 @@ import type {
   ValidationFinding,
 } from '../workflow-services/validateNotifications';
 
-const BIG = { pagination: { page: 1, perPage: 1000 }, sort: { field: 'action', order: 'ASC' as const } };
+const BIG = { pagination: { page: 1, perPage: 1000 }, sort: { field: 'eventName', order: 'ASC' as const } };
+const SMALL = { pagination: { page: 1, perPage: 20 }, sort: { field: 'code', order: 'ASC' as const } };
+const LEGACY_BIG = { pagination: { page: 1, perPage: 1000 }, sort: { field: 'action', order: 'ASC' as const } };
+
+/** A row carrying the react-admin id + the raw MDMS uniqueIdentifier. */
+export type Ided<T> = T & { id?: string; _uniqueIdentifier?: string };
 
 export interface NotificationConfigQuery {
-  snapshot: NotificationSnapshot | null;
   /**
-   * False while data is still arriving, or when the workflow could not be
-   * loaded. The guard must NOT run then: without the state machine every
-   * routing row would fail transition-exists and the operator would be locked
-   * out of a screen by a loading race.
+   * Everything the checker needs, or null while data is still arriving or when
+   * there is no event catalogue to validate against. The guard must NOT run
+   * then: without a vocabulary every routing row would fail transition-exists
+   * and the operator would be locked out of a screen by a loading race.
    */
+  snapshot: NotificationSnapshot | null;
   ready: boolean;
+  /** Which namespace served this tenant, and whether the screens may write. */
+  decision: SourceDecision;
+  catalogue: EventCatalogueRow[];
+  routingRows: Ided<RoutingRow>[];
+  templateRows: Ided<TemplateRow>[];
+  providerTemplateRows?: Ided<ProviderTemplateRow>[];
+  channelRows?: ChannelRow[];
+  integrationRows?: IntegrationRow[];
+  roleCodes: string[];
 }
 
 /**
- * Load the whole notification configuration for the guard. `businessService` is
- * the workflow to validate transitions against; it defaults to PGR, which is
- * the only workflow these masters are seeded for.
+ * Load the whole notification configuration, from whichever namespace this
+ * tenant's configuration actually lives in.
  */
-export function useNotificationConfig(
-  businessServiceId = 'PGR',
-  options: { enabled?: boolean } = {},
-): NotificationConfigQuery {
+export function useNotificationConfig(options: { enabled?: boolean } = {}): NotificationConfigQuery {
   const enabled = options.enabled !== false;
   const q = { enabled };
 
-  const { data: bsList, isPending: bsPending } = useGetList(
-    'workflow-business-services',
-    { pagination: { page: 1, perPage: 100 }, sort: { field: 'businessService', order: 'ASC' } },
-    q,
-  );
-  const { data: routingData, isPending: routingPending } = useGetList('notification-routing', BIG, q);
-  const { data: templateData, isPending: templatePending } = useGetList('notification-template', BIG, q);
-  const { data: channelData } = useGetList('notification-channel', { pagination: { page: 1, perPage: 20 }, sort: { field: 'code', order: 'ASC' } }, q);
-  const { data: providerTemplateData } = useGetList('notification-provider-template', BIG, q);
+  // The shared NOTIFICATIONS.* namespace.
+  const { data: catalogueData, isPending: cataloguePending } = useGetList('notifications-event-catalogue', BIG, q);
+  const { data: routingData, isPending: routingPending } = useGetList('notifications-routing', BIG, q);
+  const { data: templateData, isPending: templatePending } = useGetList('notifications-template', BIG, q);
+  const { data: providerTemplateData, isPending: providerTemplatePending } = useGetList('notifications-provider-template', BIG, q);
+  const { data: channelData, isPending: channelPending } = useGetList('notifications-channel', SMALL, q);
+
+  // The legacy PGR namespace — read-only, and only used when the tenant has
+  // nothing in the namespace above.
+  const { data: legacyRoutingData, isPending: legacyRoutingPending } = useGetList('notification-routing', LEGACY_BIG, q);
+  const { data: legacyTemplateData, isPending: legacyTemplatePending } = useGetList('notification-template', LEGACY_BIG, q);
+  const { data: legacyProviderTemplateData, isPending: legacyProviderTemplatePending } = useGetList('notification-provider-template', LEGACY_BIG, q);
+  const { data: legacyChannelData, isPending: legacyChannelPending } = useGetList('notification-channel', SMALL, q);
+
+  // Not namespaced: Novu integrations (a runtime fact, not MDMS) and the tenant's roles.
   const { data: integrationData } = useGetList('notification-provider', { pagination: { page: 1, perPage: 100 }, sort: { field: 'channel', order: 'ASC' } }, q);
   const { data: roleData } = useGetList('access-roles', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' } }, q);
 
-  const businessService = useMemo(() => {
-    const want = String(businessServiceId ?? '').trim().toUpperCase();
-    return (bsList ?? []).find(
-      (b) => String(b.businessService ?? '').toUpperCase() === want || String(b.id ?? '').toUpperCase() === want,
-    ) as unknown as BusinessServiceRecord | undefined;
-  }, [bsList, businessServiceId]);
+  const pending =
+    !enabled ||
+    cataloguePending || routingPending || templatePending || providerTemplatePending || channelPending ||
+    legacyRoutingPending || legacyTemplatePending || legacyProviderTemplatePending || legacyChannelPending;
+
+  const decision = useMemo(
+    () =>
+      selectNotificationSource({
+        pending,
+        modern: {
+          catalogue: catalogueData?.length ?? 0,
+          routing: routingData?.length ?? 0,
+          template: templateData?.length ?? 0,
+          providerTemplate: providerTemplateData?.length ?? 0,
+          channel: channelData?.length ?? 0,
+        },
+        legacy: {
+          routing: legacyRoutingData?.length ?? 0,
+          template: legacyTemplateData?.length ?? 0,
+          providerTemplate: legacyProviderTemplateData?.length ?? 0,
+          channel: legacyChannelData?.length ?? 0,
+        },
+      }),
+    [
+      pending, catalogueData, routingData, templateData, providerTemplateData, channelData,
+      legacyRoutingData, legacyTemplateData, legacyProviderTemplateData, legacyChannelData,
+    ],
+  );
+
+  const roleCodes = useMemo<string[]>(
+    () => (roleData ?? []).map((r) => String((r as Record<string, unknown>).code ?? (r as Record<string, unknown>).id ?? '')),
+    [roleData],
+  );
 
   return useMemo(() => {
-    const ready =
-      enabled &&
-      !bsPending && !routingPending && !templatePending &&
-      !!businessService && (businessService.states?.length ?? 0) > 0;
-    if (!ready) return { snapshot: null, ready: false };
+    const legacy = decision.source === 'LEGACY';
+
+    const catalogue = legacy
+      ? catalogueFromLegacyRows(
+          legacyRoutingData as unknown as LegacyRoutingRow[] | undefined,
+          legacyTemplateData as unknown as LegacyTemplateRow[] | undefined,
+          legacyProviderTemplateData as unknown as LegacyProviderTemplateRow[] | undefined,
+        )
+      : ((catalogueData ?? []) as unknown as EventCatalogueRow[]);
+
+    const routingRows = legacy
+      ? adaptLegacyRouting(legacyRoutingData as unknown as LegacyRoutingRow[] | undefined)
+      : ((routingData ?? []) as unknown as Ided<RoutingRow>[]);
+    const templateRows = legacy
+      ? adaptLegacyTemplate(legacyTemplateData as unknown as LegacyTemplateRow[] | undefined)
+      : ((templateData ?? []) as unknown as Ided<TemplateRow>[]);
+    const providerTemplateRows = legacy
+      ? adaptLegacyProviderTemplate(legacyProviderTemplateData as unknown as LegacyProviderTemplateRow[] | undefined)
+      : ((providerTemplateData ?? []) as unknown as Ided<ProviderTemplateRow>[]);
+
+    const rawChannels = legacy ? legacyChannelData : channelData;
+    // An EMPTY channel master is "not seeded", not "everything is off" — pass
+    // undefined so the channel rules stay silent rather than inventing findings.
+    const channelRows = rawChannels && rawChannels.length > 0 ? (rawChannels as unknown as ChannelRow[]) : undefined;
+    const integrationRows = integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined;
+
+    const ready = !pending && catalogue.length > 0;
+
     return {
-      ready: true,
-      snapshot: {
-        businessService: businessService as BusinessServiceRecord,
-        routingRows: (routingData ?? []) as unknown as RoutingRow[],
-        templateRows: (templateData ?? []) as unknown as TemplateRow[],
-        roleCodes: (roleData ?? []).map((r) => String((r as Record<string, unknown>).code ?? (r as Record<string, unknown>).id ?? '')),
-        // An EMPTY channel master is "not seeded", not "everything is off" —
-        // pass undefined so the channel rules stay silent, exactly as the
-        // Configure screen's Validate panel does.
-        channelRows: channelData && channelData.length > 0 ? (channelData as unknown as ChannelRow[]) : undefined,
-        providerTemplateRows: providerTemplateData ? (providerTemplateData as unknown as ProviderTemplateRow[]) : undefined,
-        integrationRows: integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined,
-      },
+      ready,
+      decision,
+      catalogue,
+      routingRows,
+      templateRows,
+      providerTemplateRows,
+      channelRows,
+      integrationRows,
+      roleCodes,
+      snapshot: ready
+        ? {
+            catalogue,
+            routingRows,
+            templateRows,
+            roleCodes,
+            channelRows,
+            providerTemplateRows,
+            integrationRows,
+          }
+        : null,
     };
-  }, [enabled, bsPending, routingPending, templatePending, businessService, routingData, templateData, roleData, channelData, providerTemplateData, integrationData]);
+  }, [
+    pending, decision, catalogueData, routingData, templateData, providerTemplateData, channelData,
+    legacyRoutingData, legacyTemplateData, legacyProviderTemplateData, legacyChannelData,
+    integrationData, roleCodes,
+  ]);
 }
 
 export interface FormGuard {
@@ -110,7 +205,7 @@ export interface FormGuard {
   validate: (values: Record<string, unknown>) => Record<string, string>;
   /** Everything the last run found, for the summary panel. */
   result: GuardResult | null;
-  /** True for the four notification masters — i.e. the guard applies at all. */
+  /** True for the writable notification masters — i.e. the guard applies at all. */
   enabled: boolean;
   /** True when the guard has the config it needs and is actually checking. */
   ready: boolean;
@@ -126,10 +221,10 @@ export interface FormGuard {
  */
 export function useNotificationFormGuard(
   resource: string | undefined,
-  options: { editingId?: string; businessService?: string } = {},
+  options: { editingId?: string } = {},
 ): FormGuard {
   const enabled = isNotificationResource(resource);
-  const { snapshot, ready } = useNotificationConfig(options.businessService || 'PGR', { enabled });
+  const { snapshot, ready } = useNotificationConfig({ enabled });
   const [result, setResult] = useState<GuardResult | null>(null);
   const lastSignature = useRef('');
   const { editingId } = options;

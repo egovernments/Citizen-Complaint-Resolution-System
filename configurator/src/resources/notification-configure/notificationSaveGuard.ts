@@ -19,7 +19,6 @@
 import {
   validateNotifications,
   NOTIFICATION_RULES,
-  type BusinessServiceRecord,
   type ChannelRow,
   type IntegrationRow,
   type ProviderTemplateRow,
@@ -27,19 +26,29 @@ import {
   type TemplateRow,
   type ValidationFinding,
 } from '../workflow-services/validateNotifications';
+import { audienceKey } from './audienceScheme';
+import type { EventCatalogueRow } from './eventCatalogue';
 
-/** The four MDMS masters that make up notification configuration. */
+/**
+ * The four writable MDMS masters that make up notification configuration, in
+ * the shared `NOTIFICATIONS.*` namespace.
+ *
+ * The legacy `RAINMAKER-PGR.Notification*` resources are deliberately NOT here:
+ * they are read-only in this release (see notificationSource.ts), so there is no
+ * save path to guard. `NOTIFICATIONS.EventCatalogue` is not here either — a
+ * module owns its own events and the Configurator does not author them.
+ */
 export type NotificationResource =
-  | 'notification-routing'
-  | 'notification-template'
-  | 'notification-channel'
-  | 'notification-provider-template';
+  | 'notifications-routing'
+  | 'notifications-template'
+  | 'notifications-channel'
+  | 'notifications-provider-template';
 
 export const NOTIFICATION_RESOURCES: NotificationResource[] = [
-  'notification-routing',
-  'notification-template',
-  'notification-channel',
-  'notification-provider-template',
+  'notifications-routing',
+  'notifications-template',
+  'notifications-channel',
+  'notifications-provider-template',
 ];
 
 /** True when `resource` is one of the notification masters this guard covers. */
@@ -49,7 +58,8 @@ export function isNotificationResource(resource: string | undefined): resource i
 
 /** Everything the checker needs, as the screens have it loaded. */
 export interface NotificationSnapshot {
-  businessService: BusinessServiceRecord;
+  /** NOTIFICATIONS.EventCatalogue rows (or the legacy-derived stand-in). */
+  catalogue: EventCatalogueRow[];
   routingRows: RoutingRow[];
   templateRows: TemplateRow[];
   roleCodes: string[];
@@ -92,10 +102,10 @@ const get = (row: Record<string, unknown>, key: string) => row[key];
  * one NotificationConfigure builds its uids with.
  */
 export const UNIQUE_FIELDS: Record<NotificationResource, string[]> = {
-  'notification-routing': ['businessService', 'action', 'toState', 'audience', 'channel'],
-  'notification-template': ['audience', 'action', 'toState', 'channel', 'locale'],
-  'notification-channel': ['code'],
-  'notification-provider-template': ['provider', 'channel', 'audience', 'action', 'toState', 'locale'],
+  'notifications-routing': ['eventName', 'audience', 'channel'],
+  'notifications-template': ['eventName', 'audience', 'channel', 'locale'],
+  'notifications-channel': ['code'],
+  'notifications-provider-template': ['provider', 'channel', 'eventName', 'audience', 'locale'],
 };
 
 /** Case-insensitive natural key for a row of `resource`. */
@@ -107,29 +117,36 @@ export function naturalKey(resource: NotificationResource, row: Record<string, u
  * Accept an MDMS `uniqueIdentifier` as a `replaces` key, or reject it.
  *
  * MDMS derives the uid by joining the x-unique field VALUES with '.', which is
- * exactly `naturalKey`'s scheme — but only when it has the right number of
- * parts. A uid from a differently-shaped record (a renamed schema, a hand-built
- * route) would silently fail to match any row and leave a stale copy in the
- * would-be state, inventing findings. Reject those instead.
+ * exactly `naturalKey`'s scheme. It is no longer DECOMPOSABLE, though:
+ * `eventName` itself contains dots (`COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT`),
+ * so counting parts — which is how this function used to reject a uid from a
+ * differently-shaped record — would reject every legitimate key. What survives
+ * is a lower bound: n key fields need at least n-1 separators. The exact match
+ * is recovered elsewhere: `applyPendingChanges` also drops a row whose stored
+ * `id` / `_uniqueIdentifier` equals the `replaces` value, which is the case
+ * this function was really protecting.
  */
 export function replacesKeyFor(resource: NotificationResource, uid: unknown): string | undefined {
   const raw = String(uid ?? '').trim();
   if (!raw) return undefined;
-  const parts = raw.split('.');
-  if (parts.length !== UNIQUE_FIELDS[resource].length) return undefined;
+  const separators = raw.split('.').length - 1;
+  if (separators < UNIQUE_FIELDS[resource].length - 1) return undefined;
   return norm(raw);
 }
 
 /**
  * The `ref` strings validateNotifications attaches to findings about this row.
  * Routing, template and provider-template rows all key on the same
- * `audience · action -> toState · channel` shape; channel policy keys on the
- * channel code.
+ * `AUDIENCE · EVENT · CHANNEL` shape; channel policy keys on the channel code.
+ *
+ * The audience goes through `audienceKey`, exactly as the checker's own `ref`
+ * does, so a legacy bare `CITIZEN` and an `ACTOR:citizen` produce the SAME ref
+ * — otherwise a save would fail to recognise its own finding and block nothing.
  */
 export function refsForChange(change: PendingChange): string[] {
   const r = change.row;
-  if (change.resource === 'notification-channel') return [norm(get(r, 'code'))].filter(Boolean);
-  const ref = `${norm(get(r, 'audience'))} · ${norm(get(r, 'action'))} -> ${norm(get(r, 'toState'))} · ${norm(get(r, 'channel'))}`;
+  if (change.resource === 'notifications-channel') return [norm(get(r, 'code'))].filter(Boolean);
+  const ref = `${audienceKey(get(r, 'audience'))} · ${norm(get(r, 'eventName'))} · ${norm(get(r, 'channel'))}`;
   return [ref];
 }
 
@@ -142,7 +159,13 @@ function replaceByKey<T>(rows: T[], resource: NotificationResource, change: Pend
   const targetKey = change.replaces ? norm(change.replaces) : naturalKey(resource, change.row);
   const newKey = naturalKey(resource, change.row);
   const kept = rows.filter((row) => {
-    const k = naturalKey(resource, row as unknown as Record<string, unknown>);
+    const record = row as unknown as Record<string, unknown>;
+    const k = naturalKey(resource, record);
+    // The stored uid is matched too: `eventName` carries dots, so a `replaces`
+    // value that came straight off a record's `uniqueIdentifier` cannot be
+    // decomposed and compared field by field, but it CAN be compared whole.
+    const uid = norm(record.id ?? record._uniqueIdentifier ?? '');
+    if (uid && uid === targetKey) return false;
     return k !== targetKey && k !== newKey;
   });
   return change.op === 'remove' ? kept : [...kept, change.row as unknown as T];
@@ -159,16 +182,16 @@ export function applyPendingChanges(
   let next: NotificationSnapshot = { ...snapshot };
   for (const change of changes) {
     switch (change.resource) {
-      case 'notification-routing':
+      case 'notifications-routing':
         next = { ...next, routingRows: replaceByKey(next.routingRows ?? [], change.resource, change) };
         break;
-      case 'notification-template':
+      case 'notifications-template':
         next = { ...next, templateRows: replaceByKey(next.templateRows ?? [], change.resource, change) };
         break;
-      case 'notification-channel':
+      case 'notifications-channel':
         next = { ...next, channelRows: replaceByKey(next.channelRows ?? [], change.resource, change) };
         break;
-      case 'notification-provider-template':
+      case 'notifications-provider-template':
         next = { ...next, providerTemplateRows: replaceByKey(next.providerTemplateRows ?? [], change.resource, change) };
         break;
     }

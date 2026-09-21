@@ -43,6 +43,7 @@ const customEnglishMessages: TranslationMessages = {
       notifications: 'Notifications',
       notification_configure: 'Configure',
       notification_channels: 'Channels',
+      notification_events: 'Events',
       notification_routing: 'Notification Routing',
       notification_templates: 'Notification Templates',
       notification_provider_templates: 'Provider Templates (WhatsApp)',

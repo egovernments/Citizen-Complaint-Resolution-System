@@ -11,6 +11,11 @@ import { notificationRoutingDescriptor } from './notification-routing';
 import { notificationTemplateDescriptor } from './notification-template';
 import { notificationChannelDescriptor } from './notification-channel';
 import { notificationProviderTemplateDescriptor } from './notification-provider-template';
+import { notificationsRoutingDescriptor } from './notifications-routing';
+import { notificationsTemplateDescriptor } from './notifications-template';
+import { notificationsChannelDescriptor } from './notifications-channel';
+import { notificationsProviderTemplateDescriptor } from './notifications-provider-template';
+import { notificationsEventCatalogueDescriptor } from './notifications-event-catalogue';
 import { mapConfigDescriptor } from './map-config';
 import { analyticsProviderDescriptor } from './analytics-provider';
 
@@ -28,6 +33,11 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [notificationTemplateDescriptor.schema]: notificationTemplateDescriptor,
   [notificationChannelDescriptor.schema]: notificationChannelDescriptor,
   [notificationProviderTemplateDescriptor.schema]: notificationProviderTemplateDescriptor,
+  [notificationsRoutingDescriptor.schema]: notificationsRoutingDescriptor,
+  [notificationsTemplateDescriptor.schema]: notificationsTemplateDescriptor,
+  [notificationsChannelDescriptor.schema]: notificationsChannelDescriptor,
+  [notificationsProviderTemplateDescriptor.schema]: notificationsProviderTemplateDescriptor,
+  [notificationsEventCatalogueDescriptor.schema]: notificationsEventCatalogueDescriptor,
   [mapConfigDescriptor.schema]: mapConfigDescriptor,
   [analyticsProviderDescriptor.schema]: analyticsProviderDescriptor,
 };

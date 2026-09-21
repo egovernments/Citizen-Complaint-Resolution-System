@@ -42,7 +42,12 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
   // card and the Add dialog never hit /providers/catalog twice.
   const { catalog } = catalogState;
 
-  const { rows, isLoading: rowsLoading, sessionTenant, stateTenant, scopedToCity } = useChannelRows();
+  const { rows, isLoading: rowsLoading, sessionTenant, stateTenant, scopedToCity, decision, readOnly: sourceReadOnly } = useChannelRows();
+  // Two independent reasons this card may be read-only, and they mean different
+  // things to the operator: `scopedToCity` is "you, here, cannot write the state
+  // tenant", `sourceReadOnly` is "this tenant's policy still lives in the legacy
+  // master and must be copied first". Both disable the controls; both say why.
+  const locked = scopedToCity || sourceReadOnly;
   const refresh = useRefresh();
   const [update] = useUpdate();
   const [create] = useCreate();
@@ -75,6 +80,17 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
 
   /** Persist a channel row, creating it if the tenant has none yet. */
   const save = async (s: ChannelStatus, patch: Partial<ChannelRow>) => {
+    // Belt as well as braces: the controls are disabled, but a stale render or a
+    // keyboard path must not slip a write into the legacy master or into a
+    // tenant this session may not write.
+    if (locked) {
+      notify(
+        t('app.channels.msg_read_only', { _: 'Channel policy is read-only here.' }),
+        decision.message || undefined,
+        'destructive',
+      );
+      return;
+    }
     setBusy(s.channel);
     try {
       const data: Record<string, unknown> = {
@@ -122,6 +138,9 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
             {t('app.channels.read_at', { _: 'Policy is read at' })}{' '}
             <span className="font-mono">{stateTenant || '—'}</span>.
           </span>
+          {sourceReadOnly && (
+            <span className="block mt-1 text-amber-700">{decision.message}</span>
+          )}
           {scopedToCity && (
             <span className="block mt-1 text-amber-700">
               {t('app.channels.scoped_warning', { _: 'You are scoped to' })}{' '}
@@ -188,7 +207,7 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
                         <Select
                           value={s.provider || NONE}
                           onValueChange={(v) => selectProvider(s, v)}
-                          disabled={scopedToCity || busy !== null}
+                          disabled={locked || busy !== null}
                         >
                           <SelectTrigger className="h-7 w-[260px] text-xs">
                             <SelectValue placeholder={t('app.channels.no_provider', { _: 'None selected' })} />
@@ -226,9 +245,15 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
                     size="sm"
                     variant={s.enabled ? 'outline' : 'default'}
                     className="h-7 text-xs shrink-0"
-                    disabled={scopedToCity || busy !== null}
+                    disabled={locked || busy !== null}
                     onClick={() => toggle(s)}
-                    title={scopedToCity ? t('app.channels.scoped_tooltip', { _: 'Switch to the state tenant to change channel policy' }) : undefined}
+                    title={
+                      sourceReadOnly
+                        ? t('app.channels.legacy_tooltip', { _: 'This tenant\'s channel policy is still in the legacy master — run the notification seed step to copy it' })
+                        : scopedToCity
+                          ? t('app.channels.scoped_tooltip', { _: 'Switch to the state tenant to change channel policy' })
+                          : undefined
+                    }
                   >
                     {busy === s.channel
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

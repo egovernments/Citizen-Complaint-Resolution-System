@@ -3,7 +3,7 @@ import * as assert from 'node:assert/strict';
 import {
   getResourceConfig, getAllResources, getDedicatedResources,
   getGenericMdmsResources, getResourceLabel, getResourceIdField,
-  getResourceBySchema,
+  getResourceBySchema, isReadOnlyResource, readOnlyNoticeFor,
 } from './resourceRegistry.js';
 
 describe('resourceRegistry', () => {
@@ -172,5 +172,77 @@ describe('analytics providers', () => {
     'must NOT appear in the generic set — the generic CRUD is unsafe for this master'
   );
     assert.equal(getResourceBySchema('common-masters.AnalyticsProvider'), 'analytics-providers');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Notification configuration: the shared NOTIFICATIONS.* namespace, plus the
+// legacy PGR masters kept READ-ONLY for one release.
+// ---------------------------------------------------------------------------
+describe('notification masters', () => {
+  const NEW = {
+    'notifications-event-catalogue': 'NOTIFICATIONS.EventCatalogue',
+    'notifications-routing': 'NOTIFICATIONS.Routing',
+    'notifications-template': 'NOTIFICATIONS.Template',
+    'notifications-provider-template': 'NOTIFICATIONS.ProviderTemplate',
+    'notifications-channel': 'NOTIFICATIONS.Channel',
+  } as const;
+
+  const LEGACY = {
+    'notification-routing': 'RAINMAKER-PGR.NotificationRouting',
+    'notification-template': 'RAINMAKER-PGR.NotificationTemplate',
+    'notification-provider-template': 'RAINMAKER-PGR.NotificationProviderTemplate',
+    'notification-channel': 'RAINMAKER-PGR.NotificationChannel',
+  } as const;
+
+  it('registers all five new masters, read and written at the STATE tenant', () => {
+    for (const [name, schema] of Object.entries(NEW)) {
+      const config = getResourceConfig(name);
+      assert.ok(config, `${name} must be registered`);
+      assert.equal(config!.schema, schema);
+      assert.equal(config!.type, 'mdms');
+      // The backend reads these only at the state root; a city-scoped operator
+      // must never author rows nothing reads.
+      assert.equal(config!.stateLevel, true, `${name} must be stateLevel`);
+      assert.equal(getResourceBySchema(schema), name);
+    }
+  });
+
+  it('leaves routing/template/provider-template/channel writable', () => {
+    for (const name of ['notifications-routing', 'notifications-template', 'notifications-provider-template', 'notifications-channel']) {
+      assert.equal(isReadOnlyResource(name), false, `${name} must stay writable`);
+      assert.equal(readOnlyNoticeFor(name), undefined);
+    }
+  });
+
+  it('keeps the module-owned event catalogue read-only, with a reason', () => {
+    // PGR's rows are generated from its workflow at seed time; a new event
+    // arrives with the module that fires it, not from this screen.
+    assert.equal(isReadOnlyResource('notifications-event-catalogue'), true);
+    assert.ok((readOnlyNoticeFor('notifications-event-catalogue') ?? '').length > 40);
+  });
+
+  it('keeps every legacy master registered, listable and READ-ONLY', () => {
+    for (const [name, schema] of Object.entries(LEGACY)) {
+      const config = getResourceConfig(name);
+      assert.ok(config, `${name} must stay registered — it is still live configuration on an un-migrated tenant`);
+      assert.equal(config!.schema, schema);
+      assert.equal(isReadOnlyResource(name), true, `${name} must be read-only`);
+      assert.match(config!.label, /^Legacy \(PGR\)/, `${name}'s label must say it is legacy`);
+      const notice = readOnlyNoticeFor(name);
+      assert.ok(notice, `${name} must explain where its configuration moved`);
+      assert.match(notice!, /NOTIFICATIONS\.\*/);
+      assert.match(notice!, /--tags notifications/);
+      assert.match(notice!, /never deleted/);
+    }
+  });
+
+  it('leaves the three bridge-proxied notification resources untouched', () => {
+    for (const name of ['notification-log', 'notification-provider', 'notification-preference']) {
+      const config = getResourceConfig(name);
+      assert.ok(config);
+      assert.equal(config!.type, 'custom');
+      assert.equal(isReadOnlyResource(name), false);
+    }
   });
 });

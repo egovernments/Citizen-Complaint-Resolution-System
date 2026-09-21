@@ -898,8 +898,34 @@ async function userGetList(client: DigitApiClient, config: ResourceConfig, tenan
   return users.map((u) => normalizeRecord(u, config));
 }
 
+/**
+ * Workflow business services for the tenant.
+ *
+ * `filter.businessServices` narrows the search; WITHOUT it every business
+ * service the tenant has is returned, because egov-workflow-v2's `_search`
+ * omits the `businessServices` query param entirely when the list is empty and
+ * then answers with all of them.
+ *
+ * This used to default to `['PGR']`, and that single literal was a ceiling, not
+ * a default: every screen reading this resource — including the notification
+ * Configure tab's picker — could only ever see PGR, whatever the tenant
+ * actually had configured. A product with an IM or TL workflow got a picker
+ * with one entry and no way to tell that was a client-side constant. PGR keeps
+ * working identically: it is simply one of the services that comes back, and a
+ * caller that genuinely wants only PGR still passes the filter (see the
+ * `getOne` path below, which searches by the requested id).
+ */
 async function workflowBsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-  const codes = filter?.businessServices ? filter.businessServices as string[] : ['PGR'];
+  const requested = filter?.businessServices;
+  const listed = Array.isArray(requested)
+    ? (requested as string[]).map((c) => String(c).trim()).filter((c) => c !== '')
+    : typeof requested === 'string' && requested.trim() !== ''
+      ? [requested.trim()]
+      : [];
+  // An empty filter is not a filter: collapse it to `undefined` so the caller
+  // cannot accidentally ask for "no business services" and get all of them by
+  // a coincidence of the client's param handling.
+  const codes = listed.length > 0 ? listed : undefined;
   const services = await client.workflowBusinessServiceSearch(tenantId, codes);
   return services.map((s) => normalizeRecord(s, config));
 }

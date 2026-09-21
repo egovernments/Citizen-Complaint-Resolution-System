@@ -45,7 +45,30 @@ export interface ResourceConfig {
    *  regardless of the session tenant, so a city-scoped operator can never author rows
    *  nothing reads. */
   stateLevel?: boolean;
+  /** Listable, showable, NOT writable — no create/edit/delete affordance anywhere in
+   *  the UI (`useMastersCapability.canEditResource` returns false for these, which is
+   *  the single choke point the list/show/edit screens already consult).
+   *
+   *  Used for a master whose configuration has MOVED: the rows are still the live
+   *  configuration on a tenant that has not been migrated, so hiding them would be a
+   *  lie, but editing them would leave the tenant with two answers to "what is
+   *  configured". Rows are never deleted — the resource disappears one release later. */
+  readOnly?: boolean;
+  /** Shown as a banner on a read-only resource's list and show screens. Says where the
+   *  configuration moved to and what to run; never just "this is read-only". */
+  readOnlyNotice?: string;
 }
+
+/**
+ * Shown on every legacy notification master. It has to answer three questions at
+ * once: where did the configuration go, is THIS tenant still using these rows,
+ * and what do I run to move it.
+ */
+export const LEGACY_NOTIFICATION_NOTICE =
+  'Notification configuration has moved to the shared NOTIFICATIONS.* masters, which every module uses — see Notifications → Configure. '
+  + 'These rows are kept and still read by the notification service on a tenant whose copy step has not run yet, so they are shown here, '
+  + 'read-only; they are never deleted. To move them, re-run the notification seed step (./deploy.sh <tenant> --tags notifications): it '
+  + 'copies what this tenant actually has, is additive, and leaves these rows untouched.';
 
 export const REGISTRY: Record<string, ResourceConfig> = {
   // Dedicated Resources
@@ -197,19 +220,59 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
   'pgr-escalation':         { type: 'mdms', label: 'PGR Escalation',           schema: 'RAINMAKER-PGR.EscalationConfig',           idField: 'code',              nameField: 'code' },
   'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
-  // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
-  // (see mapMdmsRecord), so idField/nameField here are display-only.
-  'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' , stateLevel: true },
-  'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' , stateLevel: true },
+  // -------------------------------------------------------------------------
+  // Notification configuration — the shared NOTIFICATIONS.* namespace.
+  //
+  // ONE namespace for every module, held at the STATE tenant, read by the box
+  // over MDMS v2 `_search` with the schemaCode in the body. Composite-key
+  // masters: the react-admin id comes from the MDMS uniqueIdentifier (see
+  // mapMdmsRecord), which MDMS derives server-side by joining the `x-unique`
+  // values with '.', so idField/nameField here are display-only.
+  //
+  // `eventName` replaced (businessService, action, toState) as the key: the
+  // business-service column had exactly one value ever ("PGR"), fromState was
+  // documentation-only, and a dotted module-prefixed event name is globally
+  // unique on its own. NOTE that eventName CONTAINS dots, so a uniqueIdentifier
+  // from these masters is deterministic but not decomposable — never split one
+  // on '.' to recover the key fields.
+  // -------------------------------------------------------------------------
+
+  // The event vocabulary: what a module can notify about, which actors each
+  // event carries, and which placeholder tokens it fills. Module-owned (PGR's
+  // rows are GENERATED from the workflow at seed time), so the Configurator
+  // shows it but does not author it.
+  'notifications-event-catalogue': {
+    type: 'mdms', label: 'Notification Events', schema: 'NOTIFICATIONS.EventCatalogue',
+    idField: 'eventName', nameField: 'label', descriptionField: 'module',
+    stateLevel: true, readOnly: true,
+    readOnlyNotice: 'Events are declared by the module that produces them — PGR\'s rows are generated from its workflow at seed time — so they are shown here but not edited here. A new event arrives with the module that fires it.',
+  },
+  'notifications-routing':  { type: 'mdms', label: 'Notification Routing',   schema: 'NOTIFICATIONS.Routing',  idField: 'eventName', nameField: 'eventName', descriptionField: 'audience', stateLevel: true },
+  'notifications-template': { type: 'mdms', label: 'Notification Templates', schema: 'NOTIFICATIONS.Template', idField: 'eventName', nameField: 'eventName', descriptionField: 'audience', stateLevel: true },
   // Provider-scoped external template mapping (e.g. Twilio WhatsApp ContentSids +
   // ordered variables + per-locale approval). Surfaces the localization linkage:
   // each row carries `locale` and `approvalStatus`, so an operator sees which
-  // (provider, channel, key, locale) templates are approved and sendable.
-  'notification-provider-template': { type: 'mdms', label: 'PGR Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' , stateLevel: true },
+  // (provider, channel, event, audience, locale) templates are approved and sendable.
+  'notifications-provider-template': { type: 'mdms', label: 'Notification Provider Templates', schema: 'NOTIFICATIONS.ProviderTemplate', idField: 'eventName', nameField: 'templateName', stateLevel: true },
   // Per-tenant channel policy novu-bridge reads on every dispatch (at the STATE tenant).
-  // One row per channel: enabled + gateway (+ senderId). The single switch that decides
-  // whether a channel delivers — the env allowlist is only a fallback for tenants with no rows.
-  'notification-channel':   { type: 'mdms', label: 'Notification Channels',     schema: 'RAINMAKER-PGR.NotificationChannel',   idField: 'code',   nameField: 'code', descriptionField: 'gateway' , stateLevel: true },
+  // One row per channel: enabled + provider (+ legacy gateway/senderId). The single
+  // switch that decides whether a channel delivers — the env allowlist is only a
+  // fallback for tenants with no rows.
+  'notifications-channel':  { type: 'mdms', label: 'Notification Channels',  schema: 'NOTIFICATIONS.Channel',  idField: 'code', nameField: 'code', descriptionField: 'gateway', stateLevel: true },
+
+  // -------------------------------------------------------------------------
+  // LEGACY notification masters (RAINMAKER-PGR.Notification*) — READ-ONLY.
+  //
+  // Their configuration moved to NOTIFICATIONS.* above. They stay registered,
+  // and their rows are never deleted, because on a tenant whose seed step has
+  // not run yet these rows ARE the live configuration (the box adapts them on
+  // read) and hiding them would show an operator an empty screen for a working
+  // tenant. They are removed from the UI one release after the copy ships.
+  // -------------------------------------------------------------------------
+  'notification-routing':   { type: 'mdms', label: 'Legacy (PGR) Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
+  'notification-template':  { type: 'mdms', label: 'Legacy (PGR) Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
+  'notification-provider-template': { type: 'mdms', label: 'Legacy (PGR) Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
+  'notification-channel':   { type: 'mdms', label: 'Legacy (PGR) Notification Channels',     schema: 'RAINMAKER-PGR.NotificationChannel',   idField: 'code',   nameField: 'code', descriptionField: 'gateway' , stateLevel: true, readOnly: true, readOnlyNotice: LEGACY_NOTIFICATION_NOTICE },
 
   // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
   // Routed by Kong (local-setup/kong/kong.yml); novu-bridge validates the Bearer
@@ -310,6 +373,25 @@ const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-role'
  * carries a real schema); a small explicit allowlist ({@link EXPLICITLY_GATED_TYPES}) covers the
  * non-'mdms'-typed exceptions that still need it.
  */
+/**
+ * Whether this resource may be created, edited or deleted from the UI at all.
+ *
+ * A `readOnly` resource is still listed and shown — it is live configuration on
+ * some tenants — but every write affordance is withheld. This is checked BEFORE
+ * the access-control policy, because it is a property of the resource, not of
+ * the operator: an MDMS_ADMIN must not be able to edit a legacy notification
+ * master either.
+ */
+export function isReadOnlyResource(resource: string): boolean {
+  return REGISTRY[resource]?.readOnly === true;
+}
+
+/** The banner a read-only resource shows, or undefined. */
+export function readOnlyNoticeFor(resource: string): string | undefined {
+  const config = REGISTRY[resource];
+  return config?.readOnly ? config.readOnlyNotice : undefined;
+}
+
 export function isAccessControlGated(config: ResourceConfig | undefined): boolean {
   if (!config) return false;
   return config.type === 'mdms' || EXPLICITLY_GATED_TYPES.has(config.type);

@@ -1,29 +1,34 @@
 // "Configure" tab under the Notifications nav.
 //
-// A transition-list view of one workflow BusinessService. For every workflow
-// transition (ACTION -> nextState) it shows the notifications configured for it
-// (routing rows matched on (action, toState=nextState)) as chips, and lets the
-// operator Add / Edit / Remove notifications inline — writing straight to the
-// two MDMS masters (RAINMAKER-PGR.NotificationRouting + .NotificationTemplate).
+// An EVENT-list view of one module. For every event the module declares in
+// NOTIFICATIONS.EventCatalogue it shows the notifications configured for it
+// (routing rows matched on eventName) as chips, and lets the operator
+// Add / Edit / Remove notifications inline — writing straight to the two MDMS
+// masters (NOTIFICATIONS.Routing + NOTIFICATIONS.Template).
+//
+// WHAT THIS SCREEN NO LONGER READS: the PGR workflow.
+//   It used to render one row per workflow transition, which meant fetching a
+//   BusinessService, walking its state machine, and resolving workflow-v2's
+//   state UUIDs to applicationStatus names in the browser — for PGR only,
+//   because the business-service list was a hardcoded ['PGR'] one layer down.
+//   The event catalogue replaced all of that: a module declares its events, the
+//   actors they carry and the tokens they fill, and this screen renders whatever
+//   is declared. PGR is one module among however many the tenant has.
 //
 // WHY THE WRITE PATH WORKS (verified against the schema + dataProvider):
 //   Both masters declare `x-unique` in their JSON Schema:
-//     NotificationRouting  x-unique = [businessService, action, toState, audience, channel]
-//     NotificationTemplate x-unique = [audience, action, toState, channel, locale]
+//     NOTIFICATIONS.Routing  x-unique = [eventName, audience, channel]
+//     NOTIFICATIONS.Template x-unique = [eventName, audience, channel, locale]
 //   egov-mdms-service v2 computes the record's `uniqueIdentifier` SERVER-SIDE by
 //   joining those field values with '.', ignoring whatever uniqueIdentifier the
 //   client passes. So `useCreate(resource, { data })` with the flat fields is
-//   enough — the derived uid is exactly the required scheme
-//   (businessService.action.toState.audience.channel /
-//   audience.action.toState.channel.locale). The dataProvider's mdms create
-//   sends `uniqueIdentifier = data[idField]` but that value is discarded by MDMS.
-//   On read, normalizeMdmsRecord sets react-admin `id = uniqueIdentifier`, so
-//   update/delete (which search by that id) round-trip correctly.
+//   enough. On read, normalizeMdmsRecord sets react-admin `id = uniqueIdentifier`,
+//   so update/delete (which search by that id) round-trip correctly.
+//   NOTE the uid is no longer decomposable: `eventName` contains dots. Never
+//   split one on '.' to recover its key fields.
 
 import { useMemo, useState, useEffect } from 'react';
 import {
-  useGetList,
-  useGetOne,
   useCreate,
   useUpdate,
   useDelete,
@@ -56,21 +61,29 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
-import { EntityLink } from '@/components/ui/EntityLink';
-import { StatusChip } from '@/admin/fields';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import {
   validateNotifications,
   type RoutingRow,
   type TemplateRow,
-  type BusinessServiceRecord,
   type ValidationFinding,
-  type ChannelRow,
-  type ProviderTemplateRow,
-  type IntegrationRow,
-  PLACEHOLDER_VOCABULARY,
 } from '../workflow-services/validateNotifications';
-import { saveNotificationPair, type Mutate, type WritePathDeps } from './notificationWritePath';
+import {
+  actorNames,
+  catalogueModules,
+  eventChannels,
+  eventLabel,
+  eventsForModule,
+  placeholderNames,
+  type EventCatalogueRow,
+} from './eventCatalogue';
+import {
+  describeAudience,
+  formatAudience,
+  parseAudience,
+  type AudienceSchemeName,
+} from './audienceScheme';
+import { saveNotificationPair, type Mutate, type WritePathDeps, ROUTING_RESOURCE, TEMPLATE_RESOURCE } from './notificationWritePath';
 import {
   checkPendingChanges,
   naturalKey,
@@ -80,14 +93,13 @@ import {
   type PendingChange,
 } from './notificationSaveGuard';
 import { GuardBanner, FindingList } from './NotificationFindings';
+import { useNotificationConfig, type Ided } from './useNotificationGuard';
+import { canWrite } from './notificationSource';
 
 // ---------------------------------------------------------------------------
 // Constants — mirror the checker + schema enums.
 // ---------------------------------------------------------------------------
 const CHANNELS = ['SMS', 'WHATSAPP', 'EMAIL'] as const;
-const NON_NOTIFIABLE = ['AUTO_ESCALATE', 'SYSTEM'];
-const CITIZEN = 'CITIZEN';
-const EMPLOYEE = 'EMPLOYEE';
 const DEFAULT_LOCALE = 'en_IN';
 
 /** Tokens in a body, first-appearance order — becomes the template's declared `placeholders`. */
@@ -102,9 +114,8 @@ function eq(a: unknown, b: unknown): boolean {
   return String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase();
 }
 
-/** A record carrying the react-admin id + the raw MDMS uniqueIdentifier. */
-type IdedRoutingRow = RoutingRow & { id?: string; _uniqueIdentifier?: string };
-type IdedTemplateRow = TemplateRow & { id?: string; _uniqueIdentifier?: string };
+type IdedRoutingRow = Ided<RoutingRow>;
+type IdedTemplateRow = Ided<TemplateRow>;
 
 // ---------------------------------------------------------------------------
 // Shared textarea (no shadcn Textarea in this project) — styled like Input.
@@ -120,15 +131,122 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 }
 
 // ---------------------------------------------------------------------------
-// Inline add/edit form for a single notification on a transition.
+// Audience composer — the scheme-aware picker.
+//
+// An audience is a CHAIN of terms tried in order until one yields a non-empty
+// recipient list, which is how "tell the assignee, or the whole ward team if
+// there is no assignee yet" is expressed. Each term names a scheme:
+//   ACTOR:<name>       an actor the event carries (from the catalogue row)
+//   ROLE:<code>        every holder of a role in this tenant
+//   EVENT_RECIPIENTS   contacts the event itself carries (account-less flows)
 // ---------------------------------------------------------------------------
-interface TransitionCtx {
-  businessService: string;
-  fromState: string;
-  action: string;
-  toState: string;
-  /** Uppercased roles on this workflow action + CITIZEN (audience options). */
-  audienceOptions: string[];
+interface Term { scheme: AudienceSchemeName; value: string }
+
+function AudienceComposer({
+  terms,
+  actors,
+  roles,
+  onChange,
+}: {
+  terms: Term[];
+  actors: string[];
+  roles: string[];
+  onChange: (next: Term[]) => void;
+}) {
+  const setTerm = (i: number, patch: Partial<Term>) =>
+    onChange(terms.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+
+  const defaultValueFor = (scheme: AudienceSchemeName): string => {
+    if (scheme === 'ACTOR') return actors[0] ?? '';
+    if (scheme === 'ROLE') return roles[0] ?? '';
+    return '';
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Audience</label>
+      {terms.map((t, i) => (
+        <div key={i} className="flex items-center gap-2">
+          {i > 0 && <span className="text-[11px] text-muted-foreground">or, if empty:</span>}
+          <Select
+            value={t.scheme}
+            onValueChange={(v) => setTerm(i, { scheme: v as AudienceSchemeName, value: defaultValueFor(v as AudienceSchemeName) })}
+          >
+            <SelectTrigger className="h-8 w-[150px] text-xs" aria-label={`Audience kind ${i + 1}`}>
+              <SelectValue placeholder="Kind" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ACTOR" className="text-xs">Actor on the event</SelectItem>
+              <SelectItem value="ROLE" className="text-xs">Everyone with a role</SelectItem>
+              <SelectItem value="EVENT_RECIPIENTS" className="text-xs">Contacts on the event</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {t.scheme === 'EVENT_RECIPIENTS' ? (
+            <span className="text-xs text-muted-foreground">
+              the contacts the producing module put on the event itself
+            </span>
+          ) : (
+            <Select value={t.value} onValueChange={(v) => setTerm(i, { value: v })}>
+              <SelectTrigger className="h-8 w-[200px] text-xs" aria-label={`Audience value ${i + 1}`}>
+                <SelectValue placeholder={t.scheme === 'ACTOR' ? 'Actor' : 'Role'} />
+              </SelectTrigger>
+              <SelectContent>
+                {(t.scheme === 'ACTOR' ? actors : roles).map((v) => (
+                  <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {terms.length > 1 && (
+            <button
+              type="button"
+              title="Remove this fallback"
+              className="rounded p-0.5 text-muted-foreground hover:text-destructive"
+              onClick={() => onChange(terms.filter((_, j) => j !== i))}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className="self-start text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        onClick={() => onChange([...terms, { scheme: 'ROLE', value: roles[0] ?? '' }])}
+      >
+        + add a fallback (used only when the one above resolves to nobody)
+      </button>
+    </div>
+  );
+}
+
+/** The terms an existing audience value decomposes into, for the composer. */
+function termsOf(audience: string, actors: string[]): Term[] {
+  const ref = parseAudience(audience);
+  const usable = ref.terms
+    .filter((t) => t.scheme === 'ACTOR' || t.scheme === 'ROLE' || t.scheme === 'EVENT_RECIPIENTS')
+    .map((t) => ({ scheme: t.scheme, value: t.value }));
+  if (usable.length > 0) return usable;
+  return [{ scheme: 'ACTOR', value: actors[0] ?? '' }];
+}
+
+// ---------------------------------------------------------------------------
+// Inline add/edit form for a single notification on an event.
+// ---------------------------------------------------------------------------
+interface EventCtx {
+  module: string;
+  event: EventCatalogueRow;
+  eventName: string;
+  /** Actor names the event declares (the Actor list in the audience picker). */
+  actors: string[];
+  /** Role codes in this tenant (the Role list in the audience picker). */
+  roles: string[];
+  /** Channels this event may be routed to. */
+  channels: string[];
+  /** Placeholder tokens this event fills. */
+  placeholders: string[];
   /** Locales already used by templates for this tenant (datalist suggestions). */
   knownLocales: string[];
 }
@@ -137,7 +255,6 @@ interface EditSeed {
   audience: string;
   channel: string;
   locale: string;
-  assigneeOnly: boolean;
   subject: string;
   body: string;
   /** react-admin ids of the existing rows being edited (undefined = create). */
@@ -152,7 +269,7 @@ function NotificationForm({
   onDone,
   onCancel,
 }: {
-  ctx: TransitionCtx;
+  ctx: EventCtx;
   seed?: EditSeed;
   /** Current whole-tenant config, so the edit can be validated before it is written. */
   snapshot: NotificationSnapshot | null;
@@ -167,15 +284,14 @@ function NotificationForm({
   const [blocked, setBlocked] = useState<ReturnType<typeof checkPendingChanges> | null>(null);
 
   const isEdit = !!(seed?.routingId || seed?.templateId);
-  const [audience, setAudience] = useState(seed?.audience ?? ctx.audienceOptions[0] ?? CITIZEN);
-  const [channel, setChannel] = useState(seed?.channel ?? 'SMS');
+  const [terms, setTerms] = useState<Term[]>(() => termsOf(seed?.audience ?? '', ctx.actors));
+  const [channel, setChannel] = useState(seed?.channel ?? ctx.channels[0] ?? 'SMS');
   const [locale, setLocale] = useState(seed?.locale ?? DEFAULT_LOCALE);
-  const [assigneeOnly, setAssigneeOnly] = useState(seed?.assigneeOnly ?? false);
   const [subject, setSubject] = useState(seed?.subject ?? '');
   const [body, setBody] = useState(seed?.body ?? '');
 
-  const isRolePool = !!audience && audience !== CITIZEN && audience !== EMPLOYEE;
-  const unknownTokens = bodyTokens(body).filter((t) => !(PLACEHOLDER_VOCABULARY as readonly string[]).includes(t));
+  const audience = formatAudience(terms);
+  const unknownTokens = bodyTokens(body).filter((t) => !ctx.placeholders.includes(t));
   const canSave = !!audience && !!channel && locale.trim().length > 0 && body.trim().length > 0 && !saving;
   /** Blocking findings the last save attempt raised for one form field. */
   const blockingFor = (field: string) =>
@@ -189,22 +305,17 @@ function NotificationForm({
     setSaving(true);
     try {
       const routingData: Record<string, unknown> = {
-        businessService: ctx.businessService,
-        // Runtime matches on action + toState only; a fromState value makes the router WARN
-        // and changes nothing. Leave it null, as the schema asks.
-        fromState: null,
-        action: ctx.action,
-        toState: ctx.toState,
+        module: ctx.module,
+        eventName: ctx.eventName,
         audience,
         channel,
-        assigneeOnly: isRolePool ? assigneeOnly : false,
         active: true,
       };
       const effectiveLocale = locale.trim() || DEFAULT_LOCALE;
       const templateData: Record<string, unknown> = {
+        module: ctx.module,
+        eventName: ctx.eventName,
         audience,
-        action: ctx.action,
-        toState: ctx.toState,
         channel,
         locale: effectiveLocale,
         subject: channel === 'EMAIL' ? subject || null : null,
@@ -215,10 +326,10 @@ function NotificationForm({
 
       // The uid schemes are deterministic and derivable client-side (they mirror
       // the server's x-unique derivation documented in this file's header).
-      //   routing uid:  businessService.action.toState.audience.channel
-      //   template uid: audience.action.toState.channel.locale
-      const routingUid = [ctx.businessService, ctx.action, ctx.toState, audience, channel].join('.');
-      const templateUid = [audience, ctx.action, ctx.toState, channel, effectiveLocale].join('.');
+      //   routing uid:  eventName.audience.channel
+      //   template uid: eventName.audience.channel.locale
+      const routingUid = [ctx.eventName, audience, channel].join('.');
+      const templateUid = [ctx.eventName, audience, channel, effectiveLocale].join('.');
 
       // VALIDATE ON UPDATE. Run the whole checker over the config as it WOULD BE
       // once this pair is written, and refuse the save on any error this change
@@ -227,24 +338,22 @@ function NotificationForm({
       // time. See notificationSaveGuard.ts.
       const changes: PendingChange[] = [
         {
-          resource: 'notification-routing',
+          resource: 'notifications-routing',
           op: 'upsert',
           row: routingData,
           replaces: seed
-            ? naturalKey('notification-routing', {
-                businessService: ctx.businessService, action: ctx.action, toState: ctx.toState,
-                audience: seed.audience, channel: seed.channel,
+            ? naturalKey('notifications-routing', {
+                eventName: ctx.eventName, audience: seed.audience, channel: seed.channel,
               })
             : undefined,
         },
         {
-          resource: 'notification-template',
+          resource: 'notifications-template',
           op: 'upsert',
           row: templateData,
           replaces: seed
-            ? naturalKey('notification-template', {
-                audience: seed.audience, action: ctx.action, toState: ctx.toState,
-                channel: seed.channel, locale: seed.locale,
+            ? naturalKey('notifications-template', {
+                eventName: ctx.eventName, audience: seed.audience, channel: seed.channel, locale: seed.locale,
               })
             : undefined,
         },
@@ -288,34 +397,23 @@ function NotificationForm({
 
   return (
     <div className="mt-2 rounded-md border border-border bg-muted/30 p-3 space-y-3">
-      <div className="flex flex-wrap gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Audience</label>
-          <Select value={audience} onValueChange={setAudience}>
-            <SelectTrigger className="h-8 w-[180px] text-xs">
-              <SelectValue placeholder="Audience" />
-            </SelectTrigger>
-            <SelectContent>
-              {ctx.audienceOptions.map((a) => (
-                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex flex-wrap gap-6">
+        <AudienceComposer terms={terms} actors={ctx.actors} roles={ctx.roles} onChange={setTerms} />
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Channel</label>
           <Select value={channel} onValueChange={setChannel}>
-            <SelectTrigger className="h-8 w-[140px] text-xs">
+            <SelectTrigger className="h-8 w-[140px] text-xs" aria-label="Channel">
               <SelectValue placeholder="Channel" />
             </SelectTrigger>
             <SelectContent>
-              {CHANNELS.map((c) => (
+              {ctx.channels.map((c) => (
                 <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
+      <FindingList findings={blockingFor('audience')} />
 
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
@@ -331,13 +429,6 @@ function NotificationForm({
             {Array.from(new Set([DEFAULT_LOCALE, ...ctx.knownLocales])).map((l) => <option key={l} value={l} />)}
           </datalist>
         </div>
-        {isRolePool && (
-          <label className="flex items-center gap-2 text-xs pb-2">
-            <input type="checkbox" checked={assigneeOnly} onChange={(e) => setAssigneeOnly(e.target.checked)} />
-            Assignee only
-            <span className="text-muted-foreground">(otherwise every holder of {audience} is notified)</span>
-          </label>
-        )}
       </div>
 
       {channel === 'EMAIL' && (
@@ -358,12 +449,17 @@ function NotificationForm({
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Message body — use {id} {complaint_type} {status} {ulb} {date} tokens"
+          placeholder="Message body — use the {tokens} listed below"
           className="text-xs"
         />
+        {ctx.placeholders.length > 0 && (
+          <span className="text-[11px] text-muted-foreground">
+            Tokens this event fills: {ctx.placeholders.map((p) => `{${p}}`).join(' ')}
+          </span>
+        )}
         {unknownTokens.length > 0 && (
           <span className="text-[11px] text-amber-700">
-            Unknown token{unknownTokens.length > 1 ? 's' : ''} {unknownTokens.map((t) => `{${t}}`).join(', ')} — pgr-services will ship the braces literally. Known: {PLACEHOLDER_VOCABULARY.join(', ')}.
+            Unknown token{unknownTokens.length > 1 ? 's' : ''} {unknownTokens.map((t) => `{${t}}`).join(', ')} — the producing module does not fill {unknownTokens.length > 1 ? 'them' : 'it'}, so the braces ship literally.
           </span>
         )}
         <FindingList findings={blockingFor('body')} />
@@ -391,7 +487,7 @@ function NotificationForm({
 }
 
 /** Fields the inline form renders a finding directly under. */
-const INLINE_FIELDS = ['subject', 'body'];
+const INLINE_FIELDS = ['subject', 'body', 'audience'];
 
 /** True when the (audience, channel) unique-key components are unchanged, so an
  *  in-place MDMS _update keeps the same uniqueIdentifier. */
@@ -406,54 +502,62 @@ function NotificationChip({
   row,
   template,
   locales,
+  readOnly,
   onEdit,
   onRemove,
 }: {
   row: IdedRoutingRow;
   template?: IdedTemplateRow;
   locales: string[];
+  readOnly: boolean;
   onEdit: () => void;
   onRemove: () => void;
 }) {
   const ref = template?.subject || template?.body ? ` · ${locales.join(',') || 'template'}` : '';
-  const pool = row.assigneeOnly ? ' · assignee' : '';
+  const who = describeAudience(parseAudience(row.audience));
   return (
     <Badge variant="outline" className="text-xs font-medium gap-1 pr-1">
-      <span>{`${row.audience ?? '?'} · ${row.channel ?? '?'}${ref}${pool}`}</span>
-      <button
-        type="button"
-        onClick={onEdit}
-        title="Edit"
-        className="ml-1 rounded p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground"
-      >
-        <Pencil className="w-3 h-3" />
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        title="Remove"
-        className="rounded p-0.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-      >
-        <Trash2 className="w-3 h-3" />
-      </button>
+      <span>{`${who} · ${row.channel ?? '?'}${ref}`}</span>
+      {!readOnly && (
+        <>
+          <button
+            type="button"
+            onClick={onEdit}
+            title="Edit"
+            className="ml-1 rounded p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Remove"
+            className="rounded p-0.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </>
+      )}
     </Badge>
   );
 }
 
 // ---------------------------------------------------------------------------
-// One transition row: ACTION -> nextState (actors) + notifications + inline add.
+// One event row: label + event key + notifications + inline add.
 // ---------------------------------------------------------------------------
-function TransitionRow({
+function EventRow({
   ctx,
   routingRows,
   templateRows,
   snapshot,
+  readOnly,
   onChanged,
 }: {
-  ctx: TransitionCtx;
+  ctx: EventCtx;
   routingRows: IdedRoutingRow[];
   templateRows: IdedTemplateRow[];
   snapshot: NotificationSnapshot | null;
+  readOnly: boolean;
   onChanged: () => void;
 }) {
   const notify = useNotify();
@@ -464,12 +568,11 @@ function TransitionRow({
   const templatesFor = (r: RoutingRow): IdedTemplateRow[] =>
     templateRows.filter(
       (t) =>
-        eq(t.audience, r.audience) &&
-        eq(t.action, ctx.action) &&
-        eq(t.toState, ctx.toState) &&
-        eq(t.channel, r.channel),
+        eq(t.eventName, ctx.eventName) &&
+        eq(t.channel, r.channel) &&
+        parseAudience(t.audience).key === parseAudience(r.audience).key,
     );
-  // Prefer the default-locale template (what pgr-services renders today); else any.
+  // Prefer the default-locale template (what the renderer uses today); else any.
   const findTemplate = (r: RoutingRow): IdedTemplateRow | undefined => {
     const all = templatesFor(r);
     return all.find((t) => eq(t.locale, DEFAULT_LOCALE)) ?? all[0];
@@ -482,7 +585,6 @@ function TransitionRow({
       audience: String(r.audience ?? ''),
       channel: String(r.channel ?? ''),
       locale: String(t?.locale ?? DEFAULT_LOCALE),
-      assigneeOnly: r.assigneeOnly === true,
       subject: String(t?.subject ?? ''),
       body: String(t?.body ?? ''),
       routingId: r.id,
@@ -501,24 +603,24 @@ function TransitionRow({
     const t0 = findTemplate(r);
     const guard = snapshot
       ? checkPendingChanges(snapshot, [
-          { resource: 'notification-routing', op: 'remove', row: r as Record<string, unknown> },
-          ...(t0 ? [{ resource: 'notification-template' as const, op: 'remove' as const, row: t0 as Record<string, unknown> }] : []),
+          { resource: 'notifications-routing', op: 'remove', row: r as Record<string, unknown> },
+          ...(t0 ? [{ resource: 'notifications-template' as const, op: 'remove' as const, row: t0 as Record<string, unknown> }] : []),
         ])
       : null;
     if (guard && guard.blocking.length > 0) {
       notify(`${blockingSummary(guard.blocking)} ${guard.blocking[0].message}`, { type: 'error' });
       return;
     }
-    if (!window.confirm(`Remove notification "${r.audience} · ${r.channel}" for ${ctx.action} → ${ctx.toState}?`)) {
+    if (!window.confirm(`Remove notification "${r.audience} · ${r.channel}" for ${ctx.eventName}?`)) {
       return;
     }
     try {
-      await deleteOne('notification-routing', { id: r.id, previousData: r }, { returnPromise: true });
+      await deleteOne(ROUTING_RESOURCE, { id: r.id, previousData: r }, { returnPromise: true });
       // Best-effort: deactivate the orphaned template too (ignore if absent).
       const t = findTemplate(r);
       if (t?.id) {
         try {
-          await deleteOne('notification-template', { id: t.id, previousData: t }, { returnPromise: true });
+          await deleteOne(TEMPLATE_RESOURCE, { id: t.id, previousData: t }, { returnPromise: true });
         } catch {
           /* template may already be gone — non-fatal */
         }
@@ -534,31 +636,31 @@ function TransitionRow({
     <div className="py-2 border-b border-border/60 last:border-b-0">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <span className="text-sm font-medium">{ctx.action}</span>
-          <span className="text-xs text-muted-foreground ml-1">{'→ '}{ctx.toState}</span>
-          {ctx.audienceOptions.filter((a) => a !== CITIZEN).length > 0 && (
+          <span className="text-sm font-medium">{eventLabel(ctx.event)}</span>
+          <div className="font-mono text-[11px] text-muted-foreground">{ctx.eventName}</div>
+          {ctx.actors.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-0.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">actors:</span>
-              {ctx.audienceOptions
-                .filter((a) => a !== CITIZEN)
-                .map((r) => (
-                  <EntityLink key={r} resource="access-roles" id={r} label={r} />
-                ))}
+              {ctx.actors.map((a) => (
+                <Badge key={a} variant="outline" className="text-[10px]">{a}</Badge>
+              ))}
             </div>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs shrink-0"
-          onClick={() => {
-            setEditSeed(null);
-            setAdding((v) => !v);
-          }}
-        >
-          {adding ? <X className="w-3.5 h-3.5 mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
-          {adding ? 'Close' : 'Add'}
-        </Button>
+        {!readOnly && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs shrink-0"
+            onClick={() => {
+              setEditSeed(null);
+              setAdding((v) => !v);
+            }}
+          >
+            {adding ? <X className="w-3.5 h-3.5 mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+            {adding ? 'Close' : 'Add'}
+          </Button>
+        )}
       </div>
 
       <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
@@ -572,6 +674,7 @@ function TransitionRow({
               row={r}
               template={findTemplate(r)}
               locales={templatesFor(r).map((t) => String(t.locale ?? '')).filter(Boolean)}
+              readOnly={readOnly}
               onEdit={() => startEdit(r)}
               onRemove={() => remove(r)}
             />
@@ -609,28 +712,12 @@ function TransitionRow({
 // ---------------------------------------------------------------------------
 // Validate panel — reuses validateNotifications + ValidationPanel styling.
 // ---------------------------------------------------------------------------
-function ValidatePanel({
-  businessService,
-  routingRows,
-  templateRows,
-  roleCodes,
-  channelRows,
-  providerTemplateRows,
-  integrationRows,
-}: {
-  businessService: BusinessServiceRecord;
-  routingRows: RoutingRow[];
-  templateRows: TemplateRow[];
-  roleCodes: string[];
-  channelRows?: ChannelRow[];
-  providerTemplateRows?: ProviderTemplateRow[];
-  integrationRows?: IntegrationRow[];
-}) {
+function ValidatePanel({ snapshot }: { snapshot: NotificationSnapshot }) {
   const [findings, setFindings] = useState<ValidationFinding[] | null>(null);
   const [expanded, setExpanded] = useState(true);
 
   const run = () => {
-    setFindings(validateNotifications({ businessService, routingRows, templateRows, roleCodes, channelRows, providerTemplateRows, integrationRows }));
+    setFindings(validateNotifications(snapshot));
     setExpanded(true);
   };
 
@@ -700,290 +787,130 @@ function ValidatePanel({
   );
 }
 
+/** The "where is this tenant's configuration" banner (notificationSource.ts). */
+function SourceBanner({ title, message }: { title: string; message: string }) {
+  if (!title && !message) return null;
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <div>
+        <div className="font-medium">{title}</div>
+        <p className="mt-0.5 leading-relaxed">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main screen.
 // ---------------------------------------------------------------------------
 export function NotificationConfigure() {
   const refresh = useRefresh();
+  const cfg = useNotificationConfig();
+  const { catalogue, routingRows, templateRows, decision, snapshot, roleCodes } = cfg;
 
-  // BusinessService picker.
-  const { data: bsList, isLoading: bsLoading } = useGetList('workflow-business-services', {
-    pagination: { page: 1, perPage: 100 },
-    sort: { field: 'businessService', order: 'ASC' },
-  });
-
+  const modules = useMemo(() => catalogueModules(catalogue), [catalogue]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [showJson, setShowJson] = useState(false);
 
-  // Default to PGR (else first) once the list arrives.
+  // Default to the first module in the catalogue once it arrives. There is no
+  // hardcoded module here — that is the whole point of the catalogue.
   useEffect(() => {
-    if (selected || !bsList || bsList.length === 0) return;
-    const pgr = bsList.find(
-      (b) => eq(b.businessService, 'PGR') || eq(b.id, 'PGR'),
-    );
-    setSelected(String((pgr ?? bsList[0]).id));
-  }, [bsList, selected]);
+    if (selected || modules.length === 0) return;
+    setSelected(modules[0]);
+  }, [modules, selected]);
 
-  const { data: record, isLoading: recordLoading } = useGetOne(
-    'workflow-business-services',
-    { id: selected ?? '' },
-    { enabled: !!selected },
+  const events = useMemo(() => eventsForModule(catalogue, selected ?? ''), [catalogue, selected]);
+  const knownLocales = useMemo(
+    () => Array.from(new Set(templateRows.map((t) => String(t.locale ?? '')).filter(Boolean))),
+    [templateRows],
   );
 
-  // Config lists.
-  const { data: routingData } = useGetList('notification-routing', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
-  });
-  const { data: templateData } = useGetList('notification-template', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
-  });
-  // Channel policy (RAINMAKER-PGR.NotificationChannel) for the channel-enabled validator rule.
-  const { data: channelData } = useGetList('notification-channel', {
-    pagination: { page: 1, perPage: 20 },
-    sort: { field: 'code', order: 'ASC' },
-  });
-  const { data: providerTemplateData } = useGetList('notification-provider-template', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
-  });
-  // Novu integrations, so the validator can tell "no provider selected" from
-  // "the selected provider was deleted / disabled".
-  const { data: integrationData } = useGetList('notification-provider', {
-    pagination: { page: 1, perPage: 100 },
-    sort: { field: 'channel', order: 'ASC' },
-  });
-  const { data: roleData } = useGetList('access-roles', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'name', order: 'ASC' },
-  });
-
-  const bsId = String(record?.businessService ?? record?.id ?? '');
-
-  const routingRows = useMemo<IdedRoutingRow[]>(() => {
-    const all = (routingData ?? []) as IdedRoutingRow[];
-    return all.filter((r) => !r.businessService || eq(r.businessService, bsId));
-  }, [routingData, bsId]);
-
-  // Memoised: a fresh `[]` on every render would re-key knownLocales and the
-  // save-guard snapshot each time.
-  const templateRows = useMemo<IdedTemplateRow[]>(() => (templateData ?? []) as IdedTemplateRow[], [templateData]);
-  const knownLocales = useMemo(() => Array.from(new Set(templateRows.map((t) => String(t.locale ?? '')).filter(Boolean))), [templateRows]);
-
-  const roleCodes = useMemo<string[]>(
-    () =>
-      (roleData ?? []).map((r) =>
-        String((r as Record<string, unknown>).code ?? (r as Record<string, unknown>).id ?? ''),
-      ),
-    [roleData],
-  );
-
+  const readOnly = !canWrite(decision);
   const onChanged = () => refresh();
-
-  const states = (record?.states as Array<Record<string, unknown>> | undefined) ?? [];
-
-  // The config the save guard validates a pending change against. Null until the
-  // workflow itself has loaded — running the checker without a state machine
-  // would fail transition-exists on every row and block every save.
-  const snapshot = useMemo<NotificationSnapshot | null>(() => {
-    if (!record || states.length === 0) return null;
-    return {
-      businessService: record as unknown as BusinessServiceRecord,
-      routingRows,
-      templateRows,
-      roleCodes,
-      channelRows: channelData && channelData.length > 0 ? (channelData as ChannelRow[]) : undefined,
-      providerTemplateRows: providerTemplateData ? (providerTemplateData as ProviderTemplateRow[]) : undefined,
-      integrationRows: integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined,
-    };
-  }, [record, states.length, routingRows, templateRows, roleCodes, channelData, providerTemplateData, integrationData]);
-
-  // workflow-v2 returns action.nextState as the target state's UUID, but
-  // NotificationRouting keys toState by the applicationStatus NAME. Resolve
-  // UUID -> applicationStatus so matching (and new writes) use the name.
-  const statusByStateUuid = new Map<string, string>();
-  for (const s of states) {
-    const u = s.uuid ? String(s.uuid) : '';
-    if (u) statusByStateUuid.set(u, String(s.applicationStatus ?? s.state ?? ''));
-  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-condensed font-bold text-foreground">Configure Notifications</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Per-transition notification setup for a workflow business service. Each row is a
-          workflow transition; add SMS / WhatsApp / Email notifications inline.
+          Per-event notification setup. Each row is an event a module can notify about; add
+          SMS / WhatsApp / Email notifications inline.
         </p>
       </div>
 
+      <SourceBanner title={decision.title} message={decision.message} />
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Business Service</CardTitle>
-          <CardDescription>Pick the workflow to configure notifications for.</CardDescription>
+          <CardTitle className="text-base">Module</CardTitle>
+          <CardDescription>Pick the module whose events you want to configure.</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center gap-3 flex-wrap">
           <Select
             value={selected ?? ''}
             onValueChange={setSelected}
-            disabled={bsLoading || !bsList?.length}
+            disabled={modules.length === 0}
           >
-            <SelectTrigger className="h-9 w-[280px] text-sm">
-              <SelectValue placeholder={bsLoading ? 'Loading…' : 'Select a business service'} />
+            <SelectTrigger className="h-9 w-[280px] text-sm" aria-label="Module">
+              <SelectValue placeholder={modules.length === 0 ? 'No events declared' : 'Select a module'} />
             </SelectTrigger>
             <SelectContent>
-              {(bsList ?? []).map((b) => (
-                <SelectItem key={String(b.id)} value={String(b.id)} className="text-sm">
-                  {String(b.businessService ?? b.id)}
-                </SelectItem>
+              {modules.map((m) => (
+                <SelectItem key={m} value={m} className="text-sm">{m}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {record && (
-            <ValidatePanel
-              businessService={record as unknown as BusinessServiceRecord}
-              routingRows={routingRows}
-              templateRows={templateRows}
-              roleCodes={roleCodes}
-              channelRows={channelData && channelData.length > 0 ? (channelData as ChannelRow[]) : undefined}
-              providerTemplateRows={providerTemplateData ? (providerTemplateData as ProviderTemplateRow[]) : undefined}
-              integrationRows={integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined}
-            />
-          )}
-          {record && (
-            <Button
-              variant={showJson ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setShowJson((v) => !v)}
-              className="h-9"
-            >
-              {showJson ? 'Hide' : 'Show'} business service JSON
-            </Button>
-          )}
+          {snapshot && <ValidatePanel snapshot={snapshot} />}
         </CardContent>
       </Card>
 
-      {showJson && record && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Business Service JSON</CardTitle>
-            <CardDescription>
-              The raw workflow-v2 record this panel renders. Note each action&apos;s{' '}
-              <code>nextState</code> is the target state&apos;s UUID (resolved to its
-              applicationStatus when matching notifications).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs leading-relaxed overflow-auto max-h-[520px] rounded-md bg-muted p-3">
-              {JSON.stringify(record, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
-
-      {!selected && !bsLoading && (
-        <p className="text-sm text-muted-foreground">No business service selected.</p>
-      )}
-
-      {selected && recordLoading && (
-        <p className="text-sm text-muted-foreground">Loading state machine…</p>
-      )}
-
-      {record && states.length === 0 && !recordLoading && (
-        <p className="text-sm text-muted-foreground">This business service has no states.</p>
-      )}
-
-      {record && states.length > 0 && (
-        <FieldSection title="Transitions">
+      {events.length > 0 && (
+        <FieldSection title="Events">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
-                <TableHead className="w-[220px]">State</TableHead>
-                <TableHead>Transitions & Notifications</TableHead>
+                <TableHead>Event & Notifications</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {states.map((state, i) => {
-                const actions = (state.actions as Array<Record<string, unknown>> | undefined) ?? [];
-                const stateName = String(state.applicationStatus ?? state.state ?? '');
-                return (
-                  <TableRow key={i} className="align-top">
-                    <TableCell className="align-top">
-                      <div className="font-medium text-sm">{String(state.state ?? '--')}</div>
-                      <div className="mt-1">
-                        <StatusChip value={state.applicationStatus} />
-                      </div>
-                      <div className="flex gap-1 mt-1">
-                        {!!state.isStartState && (
-                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700">Start</Badge>
-                        )}
-                        {!!state.isTerminateState && (
-                          <Badge variant="outline" className="text-xs bg-red-50 text-red-700">End</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      {actions.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">— no transitions —</span>
-                      ) : (
-                        actions.map((action, j) => {
-                          const roles = (action.roles as string[] | undefined) ?? [];
-                          const audienceOptions = dedupe([
-                            ...roles
-                              .map((r) => String(r).trim().toUpperCase())
-                              .filter((r) => r && !NON_NOTIFIABLE.includes(r)),
-                            CITIZEN,
-                          ]);
-                          const rawNext = String(action.nextState ?? '');
-                          const toState = statusByStateUuid.get(rawNext) ?? rawNext;
-                          const actionName = String(action.action ?? '');
-                          const ctx: TransitionCtx = {
-                            businessService: bsId,
-                            fromState: stateName,
-                            action: actionName,
-                            toState,
-                            audienceOptions,
-                            knownLocales,
-                          };
-                          const rows = routingRows.filter(
-                            (r) => eq(r.action, actionName) && eq(r.toState, toState),
-                          );
-                          return (
-                            <TransitionRow
-                              key={`${actionName}-${toState}-${j}`}
-                              ctx={ctx}
-                              routingRows={rows}
-                              templateRows={templateRows}
-                              snapshot={snapshot}
-                              onChanged={onChanged}
-                            />
-                          );
-                        })
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              <TableRow className="align-top">
+                <TableCell className="align-top">
+                  {events.map((event) => {
+                    const eventName = String(event.eventName ?? '');
+                    const ctx: EventCtx = {
+                      module: String(event.module ?? selected ?? ''),
+                      event,
+                      eventName,
+                      actors: actorNames(event),
+                      roles: roleCodes.filter(Boolean),
+                      channels: eventChannels(event) ?? [...CHANNELS],
+                      placeholders: placeholderNames(event),
+                      knownLocales,
+                    };
+                    const rows = routingRows.filter((r) => eq(r.eventName, eventName));
+                    return (
+                      <EventRow
+                        key={eventName}
+                        ctx={ctx}
+                        routingRows={rows}
+                        templateRows={templateRows}
+                        snapshot={snapshot}
+                        readOnly={readOnly}
+                        onChanged={onChanged}
+                      />
+                    );
+                  })}
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </FieldSection>
       )}
     </div>
   );
-}
-
-/** Order-preserving dedupe. */
-function dedupe(arr: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const v of arr) {
-    if (!seen.has(v)) {
-      seen.add(v);
-      out.push(v);
-    }
-  }
-  return out;
 }
 
 export default NotificationConfigure;

@@ -12,6 +12,17 @@
 //        "edited" notification does not fire twice.
 //   C4 — Remove -> re-Add resurrects the soft-deleted row via meta.includeInactive.
 
+/**
+ * The two react-admin resources this write path touches, named once.
+ *
+ * They are the NOTIFICATIONS.* masters, never the legacy RAINMAKER-PGR ones:
+ * the legacy masters are read-only in this release, and a screen that wrote to
+ * both namespaces would leave a tenant with two answers to "what is configured"
+ * (see notificationSource.ts).
+ */
+export const ROUTING_RESOURCE = 'notifications-routing';
+export const TEMPLATE_RESOURCE = 'notifications-template';
+
 /** A ra-core-style mutation callable: (resource, params, options) => Promise. */
 export type Mutate = (
   resource: string,
@@ -93,30 +104,30 @@ export async function saveNotificationPair(deps: WritePathDeps, input: WritePath
   if (isEdit && seedRoutingId && keyUnchanged && !templateKeyUnchanged) {
     // Same routing row, different locale: add the new-locale template and update the
     // routing in place. The old-locale template stays — it is still a valid body.
-    await upsert(deps, 'notification-template', templateUid, templateData);
-    await deps.update('notification-routing', { id: seedRoutingId, data: routingData, previousData: {} }, RETURN_PROMISE);
+    await upsert(deps, TEMPLATE_RESOURCE, templateUid, templateData);
+    await deps.update(ROUTING_RESOURCE, { id: seedRoutingId, data: routingData, previousData: {} }, RETURN_PROMISE);
     return;
   }
 
   if (isEdit && seedRoutingId && seedTemplateId && keyUnchanged) {
     // In-place edit, key unchanged: plain updates (with returnPromise).
-    await deps.update('notification-template', { id: seedTemplateId, data: templateData, previousData: {} }, RETURN_PROMISE);
-    await deps.update('notification-routing', { id: seedRoutingId, data: routingData, previousData: {} }, RETURN_PROMISE);
+    await deps.update(TEMPLATE_RESOURCE, { id: seedTemplateId, data: templateData, previousData: {} }, RETURN_PROMISE);
+    await deps.update(ROUTING_RESOURCE, { id: seedRoutingId, data: routingData, previousData: {} }, RETURN_PROMISE);
     return;
   }
 
-  await upsert(deps, 'notification-template', templateUid, templateData);
-  await upsert(deps, 'notification-routing', routingUid, routingData);
+  await upsert(deps, TEMPLATE_RESOURCE, templateUid, templateData);
+  await upsert(deps, ROUTING_RESOURCE, routingUid, routingData);
 
   if (isEdit && !keyUnchanged) {
     // The old (audience, channel) pair must stop firing — otherwise the "edit"
     // doubled the notification.
     if (seedRoutingId) {
-      await deps.deleteOne('notification-routing', { id: seedRoutingId, previousData: {} }, RETURN_PROMISE);
+      await deps.deleteOne(ROUTING_RESOURCE, { id: seedRoutingId, previousData: {} }, RETURN_PROMISE);
     }
     if (seedTemplateId) {
       try {
-        await deps.deleteOne('notification-template', { id: seedTemplateId, previousData: {} }, RETURN_PROMISE);
+        await deps.deleteOne(TEMPLATE_RESOURCE, { id: seedTemplateId, previousData: {} }, RETURN_PROMISE);
       } catch {
         /* old template may be shared/absent — routing deactivation already stops the send */
       }

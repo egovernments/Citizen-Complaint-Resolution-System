@@ -11,6 +11,7 @@ import { groupShowFields, getRefMap, formatFieldLabel } from './schemaUtils';
 import type { SchemaDefinition, RefMapEntry } from './schemaUtils';
 import type { ReverseRef } from '@/hooks/useReverseRefs';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { ReadOnlyResourceNotice } from './ReadOnlyResourceNotice';
 
 export function MdmsResourceShow() {
   const resource = useResourceContext() ?? '';
@@ -24,14 +25,17 @@ export function MdmsResourceShow() {
   const { refs: reverseRefs } = useReverseRefs(config?.schema);
 
   return (
-    <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
+    <>
+      <ReadOnlyResourceNotice resource={resource} />
+      <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
       {(rec: Record<string, unknown>) => {
         if (definition) {
           return <SchemaShowContent rec={rec} definition={definition} reverseRefs={reverseRefs} />;
         }
         return <FallbackShowContent rec={rec} />;
       }}
-    </DigitShow>
+      </DigitShow>
+    </>
   );
 }
 

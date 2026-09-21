@@ -3,6 +3,8 @@ import {
   saveNotificationPair,
   upsert,
   isMdmsDuplicate,
+  ROUTING_RESOURCE,
+  TEMPLATE_RESOURCE,
   type WritePathDeps,
 } from './notificationWritePath';
 
@@ -37,7 +39,7 @@ describe('isMdmsDuplicate', () => {
 describe('saveNotificationPair', () => {
   it('C2/C4: duplicate create falls back to update-with-reactivation on the derived uid', async () => {
     const create = vi.fn(async (resource: string) => {
-      if (resource === 'notification-template') throw DUP;
+      if (resource === TEMPLATE_RESOURCE) throw DUP;
       return {};
     });
     const update = vi.fn(async () => ({}));
@@ -46,7 +48,7 @@ describe('saveNotificationPair', () => {
     await saveNotificationPair(deps, baseInput);
 
     expect(update).toHaveBeenCalledWith(
-      'notification-template',
+      TEMPLATE_RESOURCE,
       expect.objectContaining({ id: baseInput.templateUid, meta: { includeInactive: true } }),
       { returnPromise: true },
     );
@@ -54,7 +56,7 @@ describe('saveNotificationPair', () => {
 
   it('C2: propagates when the routing write fails after the template write (no success path)', async () => {
     const create = vi.fn(async (resource: string) => {
-      if (resource === 'notification-routing') throw new Error('BOOM');
+      if (resource === ROUTING_RESOURCE) throw new Error('BOOM');
       return {};
     });
     const deps = makeDeps({ create });
@@ -74,12 +76,12 @@ describe('saveNotificationPair', () => {
     });
 
     expect(deps.deleteOne).toHaveBeenCalledWith(
-      'notification-routing',
+      ROUTING_RESOURCE,
       { id: 'PGR.ASSIGN.PENDINGATLME.CITIZEN.EMAIL', previousData: {} },
       { returnPromise: true },
     );
     expect(deps.deleteOne).toHaveBeenCalledWith(
-      'notification-template',
+      TEMPLATE_RESOURCE,
       { id: 'CITIZEN.ASSIGN.PENDINGATLME.EMAIL.en_IN', previousData: {} },
       { returnPromise: true },
     );
@@ -97,7 +99,7 @@ describe('saveNotificationPair', () => {
     });
 
     expect(deps.update).toHaveBeenCalledWith(
-      'notification-template',
+      TEMPLATE_RESOURCE,
       { id: baseInput.templateUid, data: baseInput.templateData, previousData: {} },
       { returnPromise: true },
     );
@@ -112,7 +114,7 @@ describe('upsert', () => {
     const update = vi.fn(async () => ({}));
     const deps = makeDeps({ create, update });
 
-    await expect(upsert(deps, 'notification-template', 'uid', {})).rejects.toThrow('SERVER_DOWN');
+    await expect(upsert(deps, TEMPLATE_RESOURCE, 'uid', {})).rejects.toThrow('SERVER_DOWN');
     expect(update).not.toHaveBeenCalled();
   });
 });
@@ -136,6 +138,6 @@ describe('locale change on an existing routing row', () => {
       seedRoutingId: 'PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS',
       seedTemplateId: 'CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN',
     });
-    expect(calls).toEqual(['create:notification-template', 'update:notification-routing']);
+    expect(calls).toEqual([`create:${TEMPLATE_RESOURCE}`, `update:${ROUTING_RESOURCE}`]);
   });
 });
