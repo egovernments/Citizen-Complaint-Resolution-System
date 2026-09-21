@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   validateNotifications,
+  scanPlaceholders,
+  placeholderTokens,
+  resolveProviderTemplate,
+  NOTIFICATION_RULES,
+  EMAIL_SUBJECT_MAX,
   type BusinessServiceRecord,
   type RoutingRow,
   type TemplateRow,
@@ -406,5 +411,241 @@ describe('R7b channel provider selection', () => {
 
   it('is silent altogether when the channel master is not supplied', () => {
     expect(providerFindings(validateNotifications({ ...base, integrationRows: [twilio] }))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2: per-channel message-structure rules.
+// ---------------------------------------------------------------------------
+const BS2: BusinessServiceRecord = {
+  businessService: 'PGR',
+  states: [
+    { state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] },
+    { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] },
+  ],
+};
+
+/** One routing row + one template row on `channel`, so only content rules can fire. */
+function pair(channel: string, template: Partial<TemplateRow> = {}) {
+  const routingRows: RoutingRow[] = [
+    { businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel, active: true },
+  ];
+  const templateRows: TemplateRow[] = [
+    { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel, locale: 'en_IN', body: 'ok', active: true, ...template },
+  ];
+  return { businessService: BS2, roleCodes: ['GRO'], routingRows, templateRows };
+}
+
+describe('scanPlaceholders', () => {
+  it('reports the tokens pgr-services substitutes, in first-appearance order', () => {
+    expect(placeholderTokens('Hi {citizen_name}, {id} on {date} ({id})')).toEqual(['citizen_name', 'id', 'date']);
+  });
+
+  it('accepts a well-formed single-brace body', () => {
+    expect(scanPlaceholders('Complaint {id} for {complaint_type}').malformed).toEqual([]);
+  });
+
+  it('flags the double brace an operator pastes in from Handlebars', () => {
+    const s = scanPlaceholders('Complaint {{id}}');
+    expect(s.malformed).toContain('{{');
+    // pgr-services' own regex still matches the INNER {id}, so the recipient
+    // gets the value wrapped in braces. The token IS reported as substituted.
+    expect(s.tokens).toEqual(['id']);
+  });
+
+  it('flags an unclosed brace, a stray closing brace and a non-token inside braces', () => {
+    expect(scanPlaceholders('Complaint {id').malformed).toEqual(['{id']);
+    expect(scanPlaceholders('Complaint id}').malformed).toEqual(['}']);
+    expect(scanPlaceholders('Complaint { id }').malformed).toEqual(['{ id }']);
+    expect(scanPlaceholders('Complaint {}').malformed).toEqual(['{}']);
+  });
+
+  it('does not flag ordinary punctuation', () => {
+    expect(scanPlaceholders('Complaint {id} (urgent) — 50% done').malformed).toEqual([]);
+  });
+});
+
+describe('R11 placeholder-braces', () => {
+  it('errors on a malformed brace in the body and names it', () => {
+    const f = validateNotifications(pair('SMS', { body: 'Complaint {{id}} filed' }));
+    const r = f.find((x) => x.rule === 'placeholder-braces');
+    expect(r?.level).toBe('error');
+    expect(r?.message).toMatch(/\{\{/);
+  });
+
+  it('errors on a malformed brace in an EMAIL subject too', () => {
+    const f = validateNotifications(pair('EMAIL', { subject: 'Complaint {id', body: 'x {id}' }));
+    expect(f.some((x) => x.rule === 'placeholder-braces' && x.level === 'error')).toBe(true);
+  });
+
+  it('is silent for a clean body', () => {
+    expect(validateNotifications(pair('SMS', { body: 'Complaint {id}' })).filter((x) => x.rule === 'placeholder-braces')).toHaveLength(0);
+  });
+
+  it('ignores an inactive template', () => {
+    const f = validateNotifications({ ...pair('SMS'), templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: '{{id}}', active: false }] });
+    expect(f.filter((x) => x.rule === 'placeholder-braces')).toHaveLength(0);
+  });
+});
+
+describe('R12 template-needs-body', () => {
+  it('errors on an active template with an empty body, on every channel', () => {
+    for (const ch of ['SMS', 'WHATSAPP', 'EMAIL']) {
+      const f = validateNotifications(pair(ch, { body: '   ', subject: 'S' }));
+      const r = f.find((x) => x.rule === 'template-needs-body');
+      expect(r?.level, ch).toBe('error');
+    }
+  });
+
+  it('is silent for a non-empty body', () => {
+    expect(validateNotifications(pair('SMS')).filter((x) => x.rule === 'template-needs-body')).toHaveLength(0);
+  });
+});
+
+describe('R13 sms-length', () => {
+  const long = (n: number) => 'a'.repeat(n);
+
+  it('stays silent for a body that fits in three GSM-7 segments', () => {
+    // 3 * 153 = 459 septets is the last body that is still 3 segments.
+    expect(validateNotifications(pair('SMS', { body: long(459) })).filter((x) => x.rule === 'sms-length')).toHaveLength(0);
+  });
+
+  it('warns once past three segments and says what it costs', () => {
+    const f = validateNotifications(pair('SMS', { body: long(460) }));
+    const r = f.find((x) => x.rule === 'sms-length');
+    expect(r?.level).toBe('warn');
+    expect(r?.message).toMatch(/4 segments/);
+    expect(r?.message).toMatch(/billed separately/);
+  });
+
+  it('warns far earlier for a non-GSM-7 body and explains why', () => {
+    // 220 Devanagari characters is 4 UCS-2 segments; the same count of ASCII is 2.
+    expect(validateNotifications(pair('SMS', { body: long(220) })).filter((x) => x.rule === 'sms-length')).toHaveLength(0);
+    const f = validateNotifications(pair('SMS', { body: 'न'.repeat(220) }));
+    const r = f.find((x) => x.rule === 'sms-length');
+    expect(r?.level).toBe('warn');
+    expect(r?.message).toMatch(/UCS-2/);
+    expect(r?.message).toMatch(/"न"/);
+  });
+
+  it('counts the placeholder allowance, so a token-heavy body trips earlier', () => {
+    // 450 characters of text is 3 segments; add 3 placeholders (+12 each) and
+    // the estimate crosses into a 4th.
+    expect(validateNotifications(pair('SMS', { body: long(450) })).filter((x) => x.rule === 'sms-length')).toHaveLength(0);
+    const withTokens = `${long(426)}{id}{date}{ulb}`;
+    expect(validateNotifications(pair('SMS', { body: withTokens })).some((x) => x.rule === 'sms-length')).toBe(true);
+  });
+
+  it('never fires on WHATSAPP or EMAIL', () => {
+    for (const ch of ['WHATSAPP', 'EMAIL']) {
+      const f = validateNotifications(pair(ch, { body: long(2000), subject: 'S' }));
+      expect(f.filter((x) => x.rule === 'sms-length'), ch).toHaveLength(0);
+    }
+  });
+});
+
+describe('R14 email-subject-length', () => {
+  it('warns above the documented maximum and stays silent at it', () => {
+    const at = validateNotifications(pair('EMAIL', { subject: 'S'.repeat(EMAIL_SUBJECT_MAX) }));
+    expect(at.filter((x) => x.rule === 'email-subject-length')).toHaveLength(0);
+    const over = validateNotifications(pair('EMAIL', { subject: 'S'.repeat(EMAIL_SUBJECT_MAX + 1) }));
+    const r = over.find((x) => x.rule === 'email-subject-length');
+    expect(r?.level).toBe('warn');
+    expect(r?.message).toMatch(String(EMAIL_SUBJECT_MAX + 1));
+  });
+
+  it('does not double-report with email-needs-subject', () => {
+    const f = validateNotifications(pair('EMAIL', { subject: '' }));
+    expect(f.filter((x) => x.rule === 'email-needs-subject')).toHaveLength(1);
+    expect(f.filter((x) => x.rule === 'email-subject-length')).toHaveLength(0);
+  });
+});
+
+describe('resolveProviderTemplate (mirrors pgr-services)', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN',
+    toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', variables: ['id'],
+    approvalStatus: 'approved', active: true, ...over,
+  });
+  const t = { audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'hi_IN' };
+
+  it('prefers the row locale, then falls back to the default locale', () => {
+    expect(resolveProviderTemplate([row({ locale: 'hi_IN', templateId: 'HXhi' })], t, 'en_IN')?.templateId).toBe('HXhi');
+    expect(resolveProviderTemplate([row()], t, 'en_IN')?.templateId).toBe('HX1');
+  });
+
+  it('refuses a row that is inactive, unapproved, another provider/channel or has no templateId', () => {
+    const own = { ...t, locale: 'en_IN' };
+    for (const bad of [{ active: false }, { approvalStatus: 'pending' }, { provider: 'gupshup' }, { channel: 'SMS' }, { templateId: '' }]) {
+      expect(resolveProviderTemplate([row(bad)], own, 'en_IN'), JSON.stringify(bad)).toBeUndefined();
+    }
+  });
+
+  it('matches case-insensitively', () => {
+    expect(resolveProviderTemplate([row({ audience: 'citizen', action: 'assign', toState: 'pendingatlme', locale: 'EN_in', approvalStatus: 'APPROVED' })], { ...t, locale: 'en_IN' }, 'en_IN')).toBeTruthy();
+  });
+});
+
+describe('R15/R16 WhatsApp provider-template variables', () => {
+  const pt = (over: Record<string, unknown> = {}) => ({
+    provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN',
+    toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1',
+    approvalStatus: 'approved', active: true, variables: ['complaint_type', 'id', 'date'], ...over,
+  });
+  const base = (body: string, rows: Record<string, unknown>[]) => ({
+    ...pair('WHATSAPP', { body }),
+    providerTemplateRows: rows,
+  });
+
+  it('passes when every body placeholder is declared, in any order', () => {
+    const f = validateNotifications(base('Your {complaint_type} complaint {id} on {date}', [pt()]));
+    expect(f.filter((x) => x.rule.startsWith('whatsapp-variable'))).toEqual([]);
+  });
+
+  it('errors on a body placeholder the provider template does not declare', () => {
+    const f = validateNotifications(base('Assigned to {emp_name} — complaint {id}', [pt()]));
+    const r = f.find((x) => x.rule === 'whatsapp-variable-unmapped');
+    expect(r?.level).toBe('error');
+    expect(r?.message).toMatch(/\{emp_name\}/);
+    expect(r?.message).toMatch(/HX1/);
+  });
+
+  it('errors when the provider template declares no variables at all but the body has some', () => {
+    const f = validateNotifications(base('Complaint {id}', [pt({ variables: undefined })]));
+    const r = f.find((x) => x.rule === 'whatsapp-variable-unmapped');
+    expect(r?.level).toBe('error');
+    expect(r?.message).toMatch(/declares no variables/);
+  });
+
+  it('accepts a declared variable the body does not use (the provider template may reference it)', () => {
+    const f = validateNotifications(base('Complaint {id}', [pt({ variables: ['id', 'complaint_type'] })]));
+    expect(f.filter((x) => x.rule === 'whatsapp-variable-unmapped')).toHaveLength(0);
+  });
+
+  it('warns about a declared variable pgr-services cannot fill', () => {
+    const f = validateNotifications(base('Complaint {id}', [pt({ variables: ['id', 'ticket_no'] })]));
+    const r = f.find((x) => x.rule === 'whatsapp-variable-unfilled');
+    expect(r?.level).toBe('warn');
+    expect(r?.message).toMatch(/ticket_no/);
+    expect(r?.message).toMatch(/empty string/);
+  });
+
+  it('stays silent when there is no provider template (whatsapp-needs-template owns that case)', () => {
+    const f = validateNotifications(base('Complaint {emp_name}', []));
+    expect(f.filter((x) => x.rule.startsWith('whatsapp-variable'))).toEqual([]);
+    expect(f.some((x) => x.rule === 'whatsapp-needs-template')).toBe(true);
+  });
+
+  it('is silent altogether when provider templates were not supplied', () => {
+    const f = validateNotifications(pair('WHATSAPP', { body: 'Complaint {emp_name}' }));
+    expect(f.filter((x) => x.rule.startsWith('whatsapp-variable'))).toEqual([]);
+  });
+});
+
+describe('rule table', () => {
+  it('has a unique id and a summary for every rule', () => {
+    const ids = NOTIFICATION_RULES.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const r of NOTIFICATION_RULES) expect(r.summary.length, r.id).toBeGreaterThan(20);
   });
 });

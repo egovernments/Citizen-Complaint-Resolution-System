@@ -13,6 +13,17 @@ import {
   type MutationErrorInfo,
 } from './mutationError';
 
+/**
+ * Contract of the `validate` prop, as ra-core ACTUALLY calls it: it hands the
+ * function the form values and expects `{ field: 'message' }` back
+ * (getSimpleValidationResolver). Its <Form> prop type is the accidental
+ * INTERSECTION of that signature with react-hook-form's own `ValidateForm`
+ * (which takes `{ formValues, formState, … }`), so nothing satisfies both and
+ * the cast at the call site is unavoidable. Typed here once, with the reason.
+ */
+export type FormValidate = (values: Record<string, unknown>) => Record<string, string> | undefined;
+type RaFormValidate = React.ComponentProps<typeof Form>['validate'];
+
 /** Pull a human-facing label off a just-created record for the toast copy. */
 function pickRecordLabel(data: RaRecord | undefined): string {
   if (!data) return 'Record';
@@ -49,6 +60,14 @@ export interface DigitCreateProps {
    *  redirect. Failures are caught + surfaced as a toast; the redirect
    *  still fires so the operator isn't stranded on the create form. */
   afterCreate?: (data: RaRecord) => void | Promise<void>;
+  /**
+   * Form-level validation. Receives the WHOLE would-be record and returns
+   * `{ field: message }` for anything that must block the save; react-hook-form
+   * attaches each message to that field and refuses to submit. Used by the
+   * notification masters to run the same checker the Configure screen runs
+   * (see resources/notification-configure/useNotificationGuard.ts).
+   */
+  validate?: FormValidate;
 }
 
 function DigitCreateContent({
@@ -56,11 +75,13 @@ function DigitCreateContent({
   children,
   errorInfo,
   onDismissError,
+  validate,
 }: {
   title?: string;
   children: React.ReactNode;
   errorInfo: MutationErrorInfo | null;
   onDismissError: () => void;
+  validate?: FormValidate;
 }) {
   const { saving, defaultTitle } = useCreateContext();
   const navigate = useNavigate();
@@ -105,7 +126,7 @@ function DigitCreateContent({
         {/* mode="onChange": ra-core's <Form> defaults to react-hook-form's
             "onSubmit" mode, which leaves fieldState.invalid unset (and thus
             no red/error styling) until the first submit attempt. */}
-        <Form mode="onChange">
+        <Form mode="onChange" validate={validate as RaFormValidate}>
           {/* fieldset[disabled] natively blocks all interaction with (and keyboard/Enter
               submission via) every native form control inside it — a view-only form has one
               blocking input, but hiding the submit button alone doesn't stop that. */}
@@ -139,7 +160,7 @@ function DigitCreateContent({
   );
 }
 
-export function DigitCreate({ title, children, resource, record, redirect = 'list', transform, afterCreate }: DigitCreateProps) {
+export function DigitCreate({ title, children, resource, record, redirect = 'list', transform, afterCreate, validate }: DigitCreateProps) {
   const { info, capture, clear } = useMutationError();
   const contextResource = useResourceContext();
   const redirectTo = useRedirect();
@@ -193,7 +214,7 @@ export function DigitCreate({ title, children, resource, record, redirect = 'lis
         },
       }}
     >
-      <DigitCreateContent title={title} errorInfo={info} onDismissError={clear}>
+      <DigitCreateContent title={title} errorInfo={info} onDismissError={clear} validate={validate}>
         {children}
       </DigitCreateContent>
     </CreateBase>

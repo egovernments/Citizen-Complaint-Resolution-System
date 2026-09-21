@@ -71,6 +71,15 @@ import {
   PLACEHOLDER_VOCABULARY,
 } from '../workflow-services/validateNotifications';
 import { saveNotificationPair, type Mutate, type WritePathDeps } from './notificationWritePath';
+import {
+  checkPendingChanges,
+  naturalKey,
+  blockingSummary,
+  fieldForRule,
+  type NotificationSnapshot,
+  type PendingChange,
+} from './notificationSaveGuard';
+import { GuardBanner, FindingList } from './NotificationFindings';
 
 // ---------------------------------------------------------------------------
 // Constants — mirror the checker + schema enums.
@@ -139,11 +148,14 @@ interface EditSeed {
 function NotificationForm({
   ctx,
   seed,
+  snapshot,
   onDone,
   onCancel,
 }: {
   ctx: TransitionCtx;
   seed?: EditSeed;
+  /** Current whole-tenant config, so the edit can be validated before it is written. */
+  snapshot: NotificationSnapshot | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -152,6 +164,7 @@ function NotificationForm({
   const [update] = useUpdate();
   const [deleteOne] = useDelete();
   const [saving, setSaving] = useState(false);
+  const [blocked, setBlocked] = useState<ReturnType<typeof checkPendingChanges> | null>(null);
 
   const isEdit = !!(seed?.routingId || seed?.templateId);
   const [audience, setAudience] = useState(seed?.audience ?? ctx.audienceOptions[0] ?? CITIZEN);
@@ -164,6 +177,9 @@ function NotificationForm({
   const isRolePool = !!audience && audience !== CITIZEN && audience !== EMPLOYEE;
   const unknownTokens = bodyTokens(body).filter((t) => !(PLACEHOLDER_VOCABULARY as readonly string[]).includes(t));
   const canSave = !!audience && !!channel && locale.trim().length > 0 && body.trim().length > 0 && !saving;
+  /** Blocking findings the last save attempt raised for one form field. */
+  const blockingFor = (field: string) =>
+    (blocked?.blocking ?? []).filter((f) => fieldForRule(f.rule) === field);
 
   const save = async () => {
     if (!canSave) {
@@ -203,6 +219,43 @@ function NotificationForm({
       //   template uid: audience.action.toState.channel.locale
       const routingUid = [ctx.businessService, ctx.action, ctx.toState, audience, channel].join('.');
       const templateUid = [audience, ctx.action, ctx.toState, channel, effectiveLocale].join('.');
+
+      // VALIDATE ON UPDATE. Run the whole checker over the config as it WOULD BE
+      // once this pair is written, and refuse the save on any error this change
+      // is answerable for. Pre-existing errors on other rows are reported but do
+      // not block — an operator has to be able to repair a tenant one row at a
+      // time. See notificationSaveGuard.ts.
+      const changes: PendingChange[] = [
+        {
+          resource: 'notification-routing',
+          op: 'upsert',
+          row: routingData,
+          replaces: seed
+            ? naturalKey('notification-routing', {
+                businessService: ctx.businessService, action: ctx.action, toState: ctx.toState,
+                audience: seed.audience, channel: seed.channel,
+              })
+            : undefined,
+        },
+        {
+          resource: 'notification-template',
+          op: 'upsert',
+          row: templateData,
+          replaces: seed
+            ? naturalKey('notification-template', {
+                audience: seed.audience, action: ctx.action, toState: ctx.toState,
+                channel: seed.channel, locale: seed.locale,
+              })
+            : undefined,
+        },
+      ];
+      const guard = snapshot ? checkPendingChanges(snapshot, changes) : null;
+      if (guard && guard.blocking.length > 0) {
+        setBlocked(guard);
+        notify(blockingSummary(guard.blocking), { type: 'error' });
+        return;   // `finally` clears `saving`
+      }
+      setBlocked(guard);
 
       // ra-core mutation callables need { returnPromise: true } to become real
       // awaitable promises (else await is a no-op). saveNotificationPair carries
@@ -296,6 +349,7 @@ function NotificationForm({
             placeholder="Optional email subject"
             className="h-8 text-xs"
           />
+          <FindingList findings={blockingFor('subject')} />
         </div>
       )}
 
@@ -312,7 +366,17 @@ function NotificationForm({
             Unknown token{unknownTokens.length > 1 ? 's' : ''} {unknownTokens.map((t) => `{${t}}`).join(', ')} — pgr-services will ship the braces literally. Known: {PLACEHOLDER_VOCABULARY.join(', ')}.
           </span>
         )}
+        <FindingList findings={blockingFor('body')} />
       </div>
+
+      {/* Anything the guard flagged that has no field of its own, plus the
+          advisory findings it did not block on. */}
+      {blocked && (
+        <GuardBanner
+          blocking={blocked.blocking.filter((f) => !INLINE_FIELDS.includes(fieldForRule(f.rule) ?? ''))}
+          advisory={blocked.advisory}
+        />
+      )}
 
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={save} disabled={!canSave}>
@@ -325,6 +389,9 @@ function NotificationForm({
     </div>
   );
 }
+
+/** Fields the inline form renders a finding directly under. */
+const INLINE_FIELDS = ['subject', 'body'];
 
 /** True when the (audience, channel) unique-key components are unchanged, so an
  *  in-place MDMS _update keeps the same uniqueIdentifier. */
@@ -380,11 +447,13 @@ function TransitionRow({
   ctx,
   routingRows,
   templateRows,
+  snapshot,
   onChanged,
 }: {
   ctx: TransitionCtx;
   routingRows: IdedRoutingRow[];
   templateRows: IdedTemplateRow[];
+  snapshot: NotificationSnapshot | null;
   onChanged: () => void;
 }) {
   const notify = useNotify();
@@ -424,6 +493,20 @@ function TransitionRow({
   const remove = async (r: IdedRoutingRow) => {
     if (!r.id) {
       notify('Cannot remove: missing record id.', { type: 'error' });
+      return;
+    }
+    // VALIDATE ON UPDATE — a removal is a change like any other. Removing the
+    // last template for a still-active routing row leaves the tenant unable to
+    // send, so the checker gets a say before the delete is issued.
+    const t0 = findTemplate(r);
+    const guard = snapshot
+      ? checkPendingChanges(snapshot, [
+          { resource: 'notification-routing', op: 'remove', row: r as Record<string, unknown> },
+          ...(t0 ? [{ resource: 'notification-template' as const, op: 'remove' as const, row: t0 as Record<string, unknown> }] : []),
+        ])
+      : null;
+    if (guard && guard.blocking.length > 0) {
+      notify(`${blockingSummary(guard.blocking)} ${guard.blocking[0].message}`, { type: 'error' });
       return;
     }
     if (!window.confirm(`Remove notification "${r.audience} · ${r.channel}" for ${ctx.action} → ${ctx.toState}?`)) {
@@ -499,6 +582,7 @@ function TransitionRow({
       {adding && (
         <NotificationForm
           ctx={ctx}
+          snapshot={snapshot}
           onDone={() => {
             setAdding(false);
             onChanged();
@@ -510,6 +594,7 @@ function TransitionRow({
         <NotificationForm
           ctx={ctx}
           seed={editSeed}
+          snapshot={snapshot}
           onDone={() => {
             setEditSeed(null);
             onChanged();
@@ -681,7 +766,9 @@ export function NotificationConfigure() {
     return all.filter((r) => !r.businessService || eq(r.businessService, bsId));
   }, [routingData, bsId]);
 
-  const templateRows = (templateData ?? []) as IdedTemplateRow[];
+  // Memoised: a fresh `[]` on every render would re-key knownLocales and the
+  // save-guard snapshot each time.
+  const templateRows = useMemo<IdedTemplateRow[]>(() => (templateData ?? []) as IdedTemplateRow[], [templateData]);
   const knownLocales = useMemo(() => Array.from(new Set(templateRows.map((t) => String(t.locale ?? '')).filter(Boolean))), [templateRows]);
 
   const roleCodes = useMemo<string[]>(
@@ -695,6 +782,22 @@ export function NotificationConfigure() {
   const onChanged = () => refresh();
 
   const states = (record?.states as Array<Record<string, unknown>> | undefined) ?? [];
+
+  // The config the save guard validates a pending change against. Null until the
+  // workflow itself has loaded — running the checker without a state machine
+  // would fail transition-exists on every row and block every save.
+  const snapshot = useMemo<NotificationSnapshot | null>(() => {
+    if (!record || states.length === 0) return null;
+    return {
+      businessService: record as unknown as BusinessServiceRecord,
+      routingRows,
+      templateRows,
+      roleCodes,
+      channelRows: channelData && channelData.length > 0 ? (channelData as ChannelRow[]) : undefined,
+      providerTemplateRows: providerTemplateData ? (providerTemplateData as ProviderTemplateRow[]) : undefined,
+      integrationRows: integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined,
+    };
+  }, [record, states.length, routingRows, templateRows, roleCodes, channelData, providerTemplateData, integrationData]);
 
   // workflow-v2 returns action.nextState as the target state's UUID, but
   // NotificationRouting keys toState by the applicationStatus NAME. Resolve
@@ -852,6 +955,7 @@ export function NotificationConfigure() {
                               ctx={ctx}
                               routingRows={rows}
                               templateRows={templateRows}
+                              snapshot={snapshot}
                               onChanged={onChanged}
                             />
                           );

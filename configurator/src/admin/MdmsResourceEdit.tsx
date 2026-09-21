@@ -3,9 +3,12 @@ import { DigitFormInput } from './DigitFormInput';
 import { BooleanInput } from './widgets/BooleanInput';
 import { WidgetForFieldSpec } from './widgets';
 import { useEditContext, useResourceContext } from 'ra-core';
+import { useParams } from 'react-router-dom';
 import { getResourceConfig, getResourceLabel } from '@/providers/bridge';
 import { getDescriptor } from './schemaDescriptors';
 import { customEditors } from './themeEditor';
+import { useNotificationFormGuard } from '@/resources/notification-configure/useNotificationGuard';
+import { GuardBanner } from '@/resources/notification-configure/NotificationFindings';
 
 function MdmsEditFields() {
   const resource = useResourceContext() ?? '';
@@ -71,6 +74,12 @@ export function MdmsResourceEdit() {
   const config = getResourceConfig(resource);
   const descriptor = getDescriptor(config?.schema);
   const label = getResourceLabel(resource);
+  // The route id IS the MDMS uniqueIdentifier (normalizeMdmsRecord sets
+  // record.id from it), which is the x-unique tuple joined with '.' — exactly
+  // the natural key the guard needs in order to REPLACE the edited row rather
+  // than validate against a config holding both the old and the new one.
+  const { id } = useParams();
+  const guard = useNotificationFormGuard(resource, { editingId: id });
 
   // Escape hatch: if the descriptor names a custom editor, mount that instead.
   if (descriptor?.customEditor) {
@@ -82,8 +91,11 @@ export function MdmsResourceEdit() {
   }
 
   return (
-    <DigitEdit title={`Edit ${label}`}>
+    <DigitEdit title={`Edit ${label}`} validate={guard.enabled ? guard.validate : undefined}>
       <MdmsEditFields />
+      {guard.result && (
+        <GuardBanner blocking={guard.result.blocking} advisory={guard.result.advisory} />
+      )}
     </DigitEdit>
   );
 }

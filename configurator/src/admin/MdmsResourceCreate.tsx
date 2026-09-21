@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { getDescriptor } from './schemaDescriptors';
 import type { SchemaDescriptor } from './schemaDescriptors/types';
 import type { SchemaDefinition, SchemaProperty } from './schemaUtils';
+import { useNotificationFormGuard } from '@/resources/notification-configure/useNotificationGuard';
+import { GuardBanner } from '@/resources/notification-configure/NotificationFindings';
 
 function inputType(prop: SchemaProperty): string {
   if (prop.type === 'number' || prop.type === 'integer') return 'number';
@@ -106,6 +108,10 @@ export function MdmsResourceCreate() {
   const label = useResourceLabel()(resource);
   const { definition } = useSchemaDefinition(config?.schema);
   const descriptor = getDescriptor(config?.schema);
+  // No-op for every resource except the four notification masters; those get
+  // the same whole-config checker the Configure screen runs, on the record this
+  // form would create. Errors this row causes block the Create button.
+  const guard = useNotificationFormGuard(resource);
 
   const defaults = useMemo(() => {
     if (!definition) return undefined;
@@ -121,8 +127,15 @@ export function MdmsResourceCreate() {
   }
 
   return (
-    <DigitCreate title={`Create ${label}`} record={defaults}>
+    <DigitCreate
+      title={`Create ${label}`}
+      record={defaults}
+      validate={guard.enabled ? guard.validate : undefined}
+    >
       <MdmsCreateFields definition={definition} descriptor={descriptor} />
+      {guard.result && (
+        <GuardBanner blocking={guard.result.blocking} advisory={guard.result.advisory} />
+      )}
     </DigitCreate>
   );
 }
