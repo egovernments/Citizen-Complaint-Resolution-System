@@ -10,6 +10,7 @@ var uuid = require("uuid-random");
 var geturl = require("url");
 var path = require("path");
 const exifr = require("exifr");
+const { verifySharedSecret } = require("./shared-secret");
 require("url-search-params-polyfill");
 
 let valueFirstRequestBody =
@@ -492,6 +493,14 @@ class ValueFirstWhatsAppProvider {
       this.sendMessage(requestBody);
     }
   }
+
+  // ValueFirst signs nothing, so a shared secret is all there is. Explicit
+  // rather than absent: the route used to skip verification for any provider
+  // that simply did not define this.
+  verifyRequest(req) {
+    return verifySharedSecret(req, "ValueFirst");
+  }
+
 }
 
 module.exports = new ValueFirstWhatsAppProvider();

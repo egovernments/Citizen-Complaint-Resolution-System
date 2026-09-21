@@ -39,6 +39,13 @@ class ConsoleProvider {
             console.log(message);
         }
     }
+
+    // The console channel is selected only when no real provider is configured,
+    // i.e. local development. Exempt on purpose, but stated rather than absent.
+    verifyRequest() {
+        return true;
+    }
+
 }
 
 module.exports = new ConsoleProvider();

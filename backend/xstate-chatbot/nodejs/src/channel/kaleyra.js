@@ -6,6 +6,7 @@ var geturl = require("url");
 const fs = require("fs");
 const FormData = require("form-data");
 const path = require("path");
+const { verifySharedSecret } = require("./shared-secret");
 
 class KaleyraWhatsAppProvider {
   constructor() {
@@ -120,6 +121,13 @@ class KaleyraWhatsAppProvider {
         fs.unlinkSync(path.resolve(__dirname, `../../${message.output}`));
       }
     }
+  }
+  
+  // Kaleyra signs nothing, so a shared secret is all there is. Explicit
+  // rather than absent: the route used to skip verification for any provider
+  // that simply did not define this.
+  verifyRequest(req) {
+    return verifySharedSecret(req, "Kaleyra");
   }
 }
 

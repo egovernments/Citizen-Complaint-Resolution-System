@@ -23,12 +23,13 @@ const { summarizeInbound, maskMobile } = require("../../privacy");
 // Reject anything the channel provider cannot vouch for, before it reaches the
 // limiter, a parser, or a session.
 function verifySignature(req, res, next) {
-  if (typeof channelProvider.verifyRequest === "function" && !channelProvider.verifyRequest(req)) {
-    console.warn(`Rejected inbound webhook: signature verification failed (${req.originalUrl})`);
+  if (!channelProvider.verifyRequest(req)) {
+    console.warn(`Rejected inbound webhook: verification failed (${req.originalUrl})`);
     return res.sendStatus(403);
   }
   next();
 }
+
 
 // Entry point for inbound messages from the channel provider
 router.post("/message", verifySignature, webhookLimiter, async (req, res) => {

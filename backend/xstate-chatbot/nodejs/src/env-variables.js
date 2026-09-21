@@ -116,8 +116,16 @@ const envVariables = {
         webhookBaseUrl: process.env.TWILIO_WEBHOOK_BASE_URL || process.env.EXTERNAL_HOST || '',
         // Whether to verify the Twilio webhook signature. Set to false only for local testing.
         verifyWebhookSignature: (process.env.TWILIO_VERIFY_WEBHOOK_SIGNATURE || 'true') !== 'false',
-
     },
+
+    // Providers with no signing scheme of their own (ValueFirst, Kaleyra) verify
+    // a shared secret instead, sent as X-Webhook-Secret or ?webhookSecret=.
+    webhook: {
+        sharedSecret: process.env.WEBHOOK_SHARED_SECRET || '',
+        // Mirrors TWILIO_VERIFY_WEBHOOK_SIGNATURE: the only way to run unverified.
+        verify: (process.env.VERIFY_WEBHOOK_SIGNATURE || 'true') !== 'false',
+    },
+
 
     valueFirstWhatsAppProvider: {
         valueFirstUsername: process.env.VALUEFIRST_USERNAME || 'demo',
