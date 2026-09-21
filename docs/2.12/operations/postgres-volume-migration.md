@@ -174,10 +174,12 @@ Edit `docker-compose.egov-digit.yaml`, in the `postgres-db` service:
 ```
 
 ```bash
-grep -n 'postgres_data:/var/lib' docker-compose.egov-digit.yaml
+grep -nE '^[[:space:]]*-[[:space:]]*postgres_data:' docker-compose.egov-digit.yaml
 ```
 
-**Expect** exactly one line, ending `/var/lib/postgresql/data`.
+**Expect** exactly one line, ending `/var/lib/postgresql/data`. The anchor matters: an
+unanchored search also matches `mcp_postgres_data` and `keycloak_postgres_data`, which are
+digit-mcp's and Keycloak's own databases and are not what you are editing.
 
 ---
 
