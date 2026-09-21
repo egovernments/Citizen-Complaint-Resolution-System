@@ -71,21 +71,24 @@ class State {
 
     const items = Array.isArray(this.prompt) ? this.prompt : [{ bundle: this.prompt }];
 
+    // Delays are absolute offsets in the config, but the queue runs these in
+    // order, so each waits only for the gap since the last queued send.
+    let elapsed = 0;
     for (const item of items) {
-      const send = () => {
-        const fill = { ...this.fill, ...extraFill };
-        const text = this.renderText(item.bundle, fill, context, event);
-        context.lastPrompt = text;
-        dialog.sendMessage(context, text, item.immediate !== false);
-      };
+      const fill = { ...this.fill, ...extraFill };
+      const text = this.renderText(item.bundle, fill, context, event);
+      // Rendered now rather than on a timer: lastPrompt must be set before this
+      // turn's state is persisted, or a resume replays the previous prompt.
+      context.lastPrompt = text;
 
+      const immediate = item.immediate !== false;
+      const wait = Math.max(0, (item.delay || 0) - elapsed);
+      if (immediate) elapsed += wait;
 
-      if (item.delay)
-        setTimeout(send, item.delay);
-      else
-        send();
+      dialog.sendMessage(context, text, immediate, immediate ? wait : 0);
     }
   }
+
 
 
   // builds the guarded transitions array for this state's branches, targeting by

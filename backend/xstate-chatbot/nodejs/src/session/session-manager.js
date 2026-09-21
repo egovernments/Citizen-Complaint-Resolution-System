@@ -134,7 +134,8 @@ class SessionManager {
 
   // Chain sends per conversation: two unawaited Twilio calls race, so the menu
   // can land before the welcome it followed.
-  async toUser(user, outputMessages, extraInfo) {
+  async toUser(user, outputMessages, extraInfo, { delayMs = 0 } = {}) {
+
     // Pre-auth prompts have no userId; keyed on undefined they all shared one
     // chain, so each citizen waited behind a stranger's send.
     const queueKey = user.userId ?? user.mobileNumber;
@@ -142,6 +143,9 @@ class SessionManager {
 
     const thisSend = previousSend
       .catch(() => {}) // a prior send's failure must not skip this one
+      // Delayed prompts wait INSIDE the queue. On a setTimeout they enqueued
+      // after dispatch had already snapshotted it and moved on.
+      .then(() => (delayMs > 0 ? new Promise((resolve) => setTimeout(resolve, delayMs)) : undefined))
       .then(() => channelProvider.sendMessageToUser(user, outputMessages, extraInfo))
       .catch((error) =>
         console.error(`Failed to send message to ${user.userId ?? maskMobile(user.mobileNumber)}:`, error))

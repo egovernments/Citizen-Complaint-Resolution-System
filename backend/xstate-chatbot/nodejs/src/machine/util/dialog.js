@@ -105,16 +105,17 @@ function validateInputType(event, type) {
   return Array.isArray(type) ? type.includes(inputType) : inputType === type;
 }
 
-function sendMessage(context, message, immediate = true) {
+function sendMessage(context, message, immediate = true, delayMs = 0) {
   if(!context.output) {
     context.output = [];
   }
   context.output.push(message);
   if(immediate) {
-    context.chatInterface.toUser(context.user, context.output, context.extraInfo);
+    context.chatInterface.toUser(context.user, context.output, context.extraInfo, { delayMs });
     context.output = [];
   }
 }
+
 
 let global_messages = {
   error: {
