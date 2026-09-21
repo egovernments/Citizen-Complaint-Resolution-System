@@ -25,7 +25,9 @@ git clone https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.g
 cd ccrs/local-setup/ansible
 
 cp inventory/host_vars/maputo.yml.example inventory/host_vars/maputo.yml
-# Edit maputo.yml if you want — defaults are validated.
+# Set db_fast_path_ack_data_wipe: true in maputo.yml — preflight stops without
+# it, because the DB loader replaces any database already on this machine.
+# Everything else is validated; edit only if you want to.
 
 ./deploy.sh maputo
 ```

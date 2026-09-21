@@ -55,7 +55,14 @@ jobs:
         run: yamllint -c .yamllint playbook-deploy.yml
 
       - name: yamllint — inventory
-        run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/
+        run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/ tasks/ tests/
+
+      # Drives the real tasks in tasks/pg-storage-guard.yml over the decision
+      # matrix, with the box probe stubbed. Offline — no Docker, no target host.
+      # Exists because review of #2101 found three blocking bugs in this logic,
+      # none of which were reachable by testing the probe shell script alone.
+      - name: pg storage guard — decision matrix
+        run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-test.yml
 
   config-contracts:
     name: Config combination + infra contracts

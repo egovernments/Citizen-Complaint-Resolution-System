@@ -1,0 +1,29 @@
+---
+# One row of the matrix: include the real guard with the probe stubbed, and
+# translate "did it abort" into a value we can assert on. A failing assert
+# inside the guard is the expected outcome for half the rows, so it is caught
+# here rather than failing the run.
+- name: "{{ case.name }}"
+  block:
+    - name: "run the guard"
+      ansible.builtin.include_tasks: ../tasks/pg-storage-guard.yml
+      vars:
+        pg_guard_probe_override: "{{ case.probe }}"
+        pg_guard_probe_rc_override: "{{ case.probe_rc | default(0) }}"
+        pg_guard_base_compose: "{{ fixtures }}/{{ case.base }}"
+        pg_guard_overlay_compose: "{{ fixtures }}/{{ case.overlay }}"
+        db_fast_path: "{{ case.db_fast_path }}"
+        pg_allow_data_loss: "{{ case.allow_loss | default(false) }}"
+    - name: "record: the guard let it through"
+      ansible.builtin.set_fact:
+        guard_result: PROCEED
+  rescue:
+    - name: "record: the guard refused"
+      ansible.builtin.set_fact:
+        guard_result: ABORT
+
+- name: "verdict — {{ case.name }}"
+  ansible.builtin.assert:
+    that: guard_result == case.expect
+    fail_msg: "{{ case.name }}: guard said {{ guard_result }}, expected {{ case.expect }}"
+    success_msg: "{{ case.expect }}  <-  {{ case.name }}"

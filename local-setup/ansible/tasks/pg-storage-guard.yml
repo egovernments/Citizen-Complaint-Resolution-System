@@ -1,0 +1,280 @@
+---
+# Refuses a deploy that would move Postgres off the volume holding its data.
+#
+# Boxes deployed before #2085 keep their database in an ANONYMOUS volume: the
+# base compose mounted postgres_data at /var/lib/docker-postgresql/data, a path
+# Postgres never reads, so the named volume stayed empty and Docker auto-created
+# one for the image's declared VOLUME. Whether a given deploy is safe therefore
+# depends on TWO things — where the data is now, and where this deploy would
+# mount postgres_data — so the rule compares them:
+#
+#   data in named volume    + mount at PGDATA  -> proceed
+#   data in named volume    + mount elsewhere  -> abort, deploy moves it
+#   data in anonymous vol   + mount at PGDATA  -> abort, anon volume detached
+#   data in anonymous vol   + mount elsewhere  -> proceed, status quo
+#
+# Lives in its own file so tests/pg-storage-guard-test.yml can exercise the real
+# tasks rather than a copy of the expressions — the three blocking bugs found in
+# review of #2101 were all in this logic, and none were reachable by testing the
+# probe script alone.
+#
+# Test seams (never set in production):
+#   pg_guard_probe_override     - use this verdict instead of probing the box
+#   pg_guard_probe_rc_override  - pretend the probe exited with this rc
+#   pg_guard_base_compose       - path to the base compose to inspect
+#   pg_guard_overlay_compose    - path to the fast-path overlay to inspect
+#
+# Included from pre_tasks, so it runs BEFORE the force-clean teardown and before
+# any compose file is copied: a refusal leaves the box byte-identical.
+
+# ── db_fast_path data-wipe guard (issue #2082) ─────────────────────────
+# `db_fast_path_ack_data_wipe` is an operator ASSERTION, and preflight.py
+# can only read host_vars — it never touches the box. So the ack alone
+# cannot tell a fresh machine from one carrying a live database.
+#
+# This asks the target itself. The base compose mounts postgres_data at
+# /var/lib/docker-postgresql/data, a path Postgres never uses (issue
+# #2085), so on every existing box the real cluster sits in an ANONYMOUS
+# volume. The fast-path overlay corrects that mount, which recreates the
+# container onto the empty named volume, fires initdb, and loads
+# db/full-dump.sql over the tenant — the stack comes back up on the demo
+# snapshot. Catch it here, in seconds, before anything is touched.
+#
+# Runs BEFORE force-clean on purpose: that teardown must not run either.
+- name: "preflight — look for an existing postgres cluster on the target"
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -o pipefail
+      command -v docker >/dev/null 2>&1 || { echo "SKIP no-docker"; exit 0; }
+      docker info >/dev/null 2>&1      || { echo "SKIP no-daemon"; exit 0; }
+
+      # Preferred check: the stack's own postgres container. An anonymous
+      # volume still shows up in .Mounts, carrying its 64-hex id as .Name,
+      # so the named/anonymous distinction is readable straight off it.
+      mount_name=$(docker inspect docker-postgres \
+        --format '{% raw %}{{ range .Mounts }}{{ if eq .Destination "/var/lib/postgresql/data" }}{{ .Name }}{{ end }}{{ end }}{% endraw %}' \
+        2>/dev/null || true)
+      if [ -n "$mount_name" ]; then
+        case "$mount_name" in
+          *postgres_data) echo "SAFE named-volume:$mount_name" ;;
+          *)              echo "ANON container-volume:$mount_name" ;;
+        esac
+        exit 0
+      fi
+
+      # No container (removed by a previous force-clean, or never created).
+      # Fall back to the volumes themselves: a PG_VERSION file at a volume
+      # root is the definitive marker of a Postgres data directory.
+      probed=0
+      migrated=""
+      anon=""
+      for v in $(docker volume ls -q 2>/dev/null); do
+        mp=$(docker volume inspect -f '{% raw %}{{ .Mountpoint }}{% endraw %}' "$v" 2>/dev/null) || continue
+        [ -n "$mp" ] && [ -d "$mp" ] || continue
+        probed=1
+        if [ -f "$mp/PG_VERSION" ]; then
+          case "$v" in
+            # digit-mcp and Keycloak run their own postgres on their own
+            # named volumes, both already at the right path. Not this.
+            *mcp_postgres_data|*keycloak_postgres_data) ;;
+            *postgres_data) migrated="$v" ;;
+            *) anon="$v" ;;
+          esac
+        fi
+      done
+
+      # Decide AFTER the loop. Returning from inside it made the verdict
+      # depend on which volume `docker volume ls` happened to yield first,
+      # and the runbook deliberately RETAINS the old anonymous volume as
+      # the rollback — so a correctly migrated box always still has one,
+      # and an early return reported it as broken.
+      #
+      # When both exist, the named volume is authoritative: that is exactly
+      # the post-migration state, data moved across and the old volume kept.
+      if [ -n "$migrated" ]; then
+        echo "SAFE migrated-volume:$migrated"
+        exit 0
+      fi
+      if [ -n "$anon" ]; then
+        echo "ANON dangling-volume:$anon"
+        exit 0
+      fi
+
+      # Docker Desktop and remote daemons keep volume data off the host
+      # filesystem, so an unreadable Mountpoint means "could not tell",
+      # NOT "nothing there". Say so rather than reporting a clean box.
+      if [ "$probed" -eq 0 ] && [ -n "$(docker volume ls -q 2>/dev/null)" ]; then
+        echo "UNKNOWN mountpoints-not-readable"
+      else
+        echo "SAFE no-cluster"
+      fi
+  register: pg_cluster_probe
+  changed_when: false
+  failed_when: false
+  when: pg_guard_probe_override is not defined
+
+# Where would THIS deploy mount postgres_data? The base compose file is not
+# the answer on its own: Compose merges volumes keyed on the container path,
+# so when the fast-path overlay is layered ITS entry wins. Reading only the
+# base file made every repeat fast-path deploy abort on a box where nothing
+# was wrong.
+- name: "preflight — read the base compose this deploy would install"
+  ansible.builtin.slurp:
+    src: "{{ pg_guard_base_compose | default(playbook_dir ~ '/../docker-compose.egov-digit.yaml') }}"
+  register: base_compose
+  delegate_to: localhost
+  become: false
+
+- name: "preflight — read the fast-path overlay this deploy would layer"
+  ansible.builtin.slurp:
+    src: "{{ pg_guard_overlay_compose | default(playbook_dir ~ '/../docker-compose.fast-path.yml') }}"
+  register: fastpath_compose
+  delegate_to: localhost
+  become: false
+  when: db_fast_path | default(false)
+
+- name: "preflight — resolve the effective postgres_data mount"
+  ansible.builtin.set_fact:
+    pg_effective_mount: >-
+      {{ (_overlay_mount | first) if _overlay_mount else ((_base_mount | first) if _base_mount else '') }}
+  vars:
+    _overlay_text: "{{ (fastpath_compose.content | default('') | b64decode) if not (fastpath_compose.skipped | default(false)) else '' }}"
+    _overlay_mount: "{{ _overlay_text | regex_findall('^\\s*-\\s*postgres_data:(\\S+)', multiline=True) }}"
+    _base_mount: "{{ (base_compose.content | b64decode) | regex_findall('^\\s*-\\s*postgres_data:(\\S+)', multiline=True) }}"
+
+# Single source of truth for the rest of this file, so the test seam and the
+# real probe are indistinguishable downstream.
+- name: "preflight — normalise the probe result"
+  ansible.builtin.set_fact:
+    pg_probe_verdict: "{{ pg_guard_probe_override | default(pg_probe_verdict) }}"
+    pg_probe_rc: "{{ pg_guard_probe_rc_override | default(pg_cluster_probe.rc | default(1)) }}"
+
+# Has this box been deployed to before? Used to decide how loud an
+# inconclusive probe should be: on a virgin machine "I could not tell" is
+# fine, on one that already carries a stack it is not.
+- name: "preflight — check whether this box already carries a stack"
+  ansible.builtin.stat:
+    path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+  register: pg_existing_stack
+  changed_when: false
+
+# `SKIP no-daemon`, `UNKNOWN`, a non-zero rc or empty output all mean the
+# SAME thing: the probe did not find out. Only `SAFE` and `ANON` are
+# findings. Previously anything that was not `^ANON` passed the assert with
+# "no pre-existing postgres cluster in the way" — a claim the probe had not
+# made. A box with a live database whose dockerd happened to be stopped got
+# waved through on that sentence.
+#
+# `SKIP no-docker` is the exception: no Docker binary at all means nothing
+# has ever run here, which IS a finding.
+- name: "preflight — classify the probe result"
+  ansible.builtin.set_fact:
+    pg_probe_inconclusive: >-
+      {{ (pg_probe_rc | int) != 0
+         or not (pg_probe_verdict | trim)
+         or (pg_probe_verdict is search('^UNKNOWN'))
+         or (pg_probe_verdict is search('^SKIP no-daemon')) }}
+
+- name: "preflight — refuse to guess on a box that already carries a stack"
+  ansible.builtin.assert:
+    that:
+      - not (pg_probe_inconclusive | bool and pg_existing_stack.stat.exists)
+    fail_msg: |
+      Could not determine where this box keeps its PostgreSQL data:
+
+        {{ pg_probe_verdict | trim }}
+
+      This box already carries a DIGIT stack ({{ digit_dir }}), so it may
+      hold a live database. Deploying blind risks mounting Postgres somewhere
+      other than where its data actually is.
+
+      Start the Docker daemon and re-run, so the check can see the volumes.
+      If the daemon is running and this still appears, inspect by hand:
+        docker inspect docker-postgres -f '{% raw %}{{ json .Mounts }}{% endraw %}'
+    success_msg: "postgres storage check is conclusive"
+
+- name: "preflight — show what this deploy resolves to"
+  ansible.builtin.debug:
+    msg: >-
+      postgres storage — on the box: {{ pg_probe_verdict | trim }};
+      this deploy would mount postgres_data at: {{ pg_effective_mount | default('(unknown)') }}
+
+# One rule, asked from both directions: the volume that ends up at Postgres'
+# data directory must be the one that holds the data.
+#
+#   data in named volume + mount at PGDATA      -> fine
+#   data in named volume + mount elsewhere      -> deploy moves it   (assert 2)
+#   data in anonymous volume + mount at PGDATA  -> anon detached     (assert 1)
+#   data in anonymous volume + mount elsewhere  -> status quo, fine
+#
+# This replaces the two separate guards that used to disagree with each
+# other: one keyed on db_fast_path, the other on the base file's contents.
+- name: "preflight — refuse to strand a database in an anonymous volume"
+  ansible.builtin.assert:
+    that:
+      - not (_data_is_anon and _mount_is_pgdata and not _override)
+    fail_msg: |
+      This box holds a PostgreSQL cluster OUTSIDE the named postgres_data
+      volume:
+
+        {{ pg_probe_verdict | trim }}
+
+      This deploy would mount postgres_data at {{ pg_effective_mount }}, which
+      is Postgres' data directory — so the anonymous volume holding the data
+      is detached, and {{ 'initdb loads db/full-dump.sql over this tenant'
+      if (db_fast_path | default(false))
+      else 'Postgres comes up completely BARE' }}.
+
+      Nothing has been changed. The existing data is NOT deleted; it is still
+      in that volume. Do NOT run `docker compose down -v`, `docker volume rm`
+      or `docker system prune` on this box — that is what would destroy it.
+
+      Migrate the data onto the named volume, then re-run this deploy:
+        docs/2.12/operations/postgres-volume-migration.md
+
+      If this box is scratch and you WANT the database replaced, set
+      `pg_allow_data_loss: true` in host_vars. Deliberately separate from
+      db_fast_path_ack_data_wipe, which asserts the box has no such data —
+      it cannot also mean "it does, proceed anyway".
+    success_msg: "no database would be stranded by this deploy"
+  vars:
+    _data_is_anon: "{{ pg_probe_verdict is search('^ANON') }}"
+    _mount_is_pgdata: "{{ pg_effective_mount | default('') == '/var/lib/postgresql/data' }}"
+    _override: "{{ pg_allow_data_loss | default(false) | bool }}"
+
+- name: "preflight — refuse to move a migrated box off its named volume"
+  ansible.builtin.assert:
+    that:
+      - not (_data_is_named and not _mount_is_pgdata)
+    fail_msg: |
+      This box's database is in the named postgres_data volume
+      ({{ pg_probe_verdict | trim }}), but this deploy
+      would mount that volume at {{ pg_effective_mount }} — a path Postgres
+      does not use.
+
+      Postgres would take a FRESH anonymous volume for its real data
+      directory and come up bare, stranding the migrated data a second time.
+
+      Nothing has been changed. Either:
+        - deploy from a branch that carries the mount-path fix (#2085), or
+        - re-apply steps 5 and 6 of
+          docs/2.12/operations/postgres-volume-migration.md
+          on this box immediately after the deploy, before anything else
+          starts.
+    success_msg: "this deploy keeps postgres on the volume that holds its data"
+  vars:
+    _data_is_named: "{{ pg_probe_verdict is search('^SAFE (named|migrated)-volume') }}"
+    _mount_is_pgdata: "{{ pg_effective_mount | default('') == '/var/lib/postgresql/data' }}"
+
+- name: "preflight — warn when the postgres probe was inconclusive"
+  ansible.builtin.debug:
+    msg: |
+      Could not read volume mountpoints on this target, so the db_fast_path
+      data-wipe check could not run (Docker Desktop or a remote daemon does
+      not expose them on the host). Confirm by hand that this box has no
+      postgres data worth keeping before continuing:
+        docker inspect docker-postgres -f '{% raw %}{{ json .Mounts }}{% endraw %}'
+  when:
+    - db_fast_path | default(false)
+    - pg_probe_verdict is search('^UNKNOWN')

@@ -1,0 +1,147 @@
+---
+# Drives the REAL guard (tasks/pg-storage-guard.yml) over every combination that
+# decides whether a deploy is safe, with the box probe stubbed via the seams
+# that file documents.
+#
+# Why this exists: review of #2101 found three blocking bugs, all in this logic,
+# none reachable by testing the probe shell script on its own —
+#   - the migrated-box check read only the base compose, so it aborted every
+#     repeat fast-path deploy;
+#   - the probe was gated on db_fast_path, so the check skipped in exactly the
+#     case it was written for;
+#   - the volume scan returned from inside its loop, so a correctly migrated box
+#     that kept its rollback volume (which the runbook mandates) read as broken.
+# Each is a row below.
+#
+# Runs offline, no Docker, no target host:
+#   ansible-playbook -i localhost, -c local tests/pg-storage-guard-test.yml
+- name: pg storage guard — decision matrix
+  hosts: localhost
+  gather_facts: false
+  vars:
+    fixtures: "{{ playbook_dir }}/fixtures/compose"
+    # No stack on disk, so "refuse to guess" only fires where a row asks for it.
+    digit_dir: /nonexistent-for-tests
+    cases:
+      # ── the three blocking findings ──────────────────────────────────────
+      - name: "fast-path box, second deploy (finding 1)"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: true
+        probe: "SAFE named-volume:digit_postgres_data"
+        expect: PROCEED
+      - name: "migrated box, fast-path off, base not yet fixed (finding 2)"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "SAFE migrated-volume:digit_postgres_data"
+        expect: ABORT
+      - name: "migrated box that kept its rollback volume (finding 3)"
+        base: base-fixed.yaml
+        overlay: overlay-without.yml
+        db_fast_path: false
+        probe: "SAFE migrated-volume:digit_postgres_data"
+        expect: PROCEED
+
+      # ── the rule itself, all four quadrants ──────────────────────────────
+      - name: "unmigrated box, fast-path on — dump would load over the tenant"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: true
+        probe: "ANON container-volume:9c2f1ab"
+        expect: ABORT
+      - name: "unmigrated box, nothing moves — status quo is safe"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "ANON container-volume:9c2f1ab"
+        expect: PROCEED
+      - name: "unmigrated box after the #2085 path fix — would come up bare"
+        base: base-fixed.yaml
+        overlay: overlay-without.yml
+        db_fast_path: false
+        probe: "ANON container-volume:9c2f1ab"
+        expect: ABORT
+      - name: "migrated box, base fixed — the end state"
+        base: base-fixed.yaml
+        overlay: overlay-without.yml
+        db_fast_path: false
+        probe: "SAFE named-volume:digit_postgres_data"
+        expect: PROCEED
+      - name: "fresh box"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: true
+        probe: "SAFE no-cluster"
+        expect: PROCEED
+
+      # ── explicit override ────────────────────────────────────────────────
+      - name: "pg_allow_data_loss lets a scratch box through"
+        base: base-fixed.yaml
+        overlay: overlay-without.yml
+        db_fast_path: false
+        probe: "ANON container-volume:9c2f1ab"
+        allow_loss: true
+        expect: PROCEED
+
+      # ── inconclusive probes ──────────────────────────────────────────────
+      # No stack on disk in these, so they warn rather than fail; the
+      # "already carries a stack" variant is the play below.
+      - name: "daemon down, no stack on disk"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "SKIP no-daemon"
+        expect: PROCEED
+      - name: "no docker at all — genuinely fresh"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "SKIP no-docker"
+        expect: PROCEED
+      - name: "mountpoints unreadable, no stack on disk"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "UNKNOWN mountpoints-not-readable"
+        expect: PROCEED
+  tasks:
+    - name: "run every case"
+      ansible.builtin.include_tasks: run-guard-case.yml
+      loop: "{{ cases }}"
+      loop_control:
+        loop_var: case
+
+- name: pg storage guard — inconclusive on a box that already carries a stack
+  hosts: localhost
+  gather_facts: false
+  vars:
+    fixtures: "{{ playbook_dir }}/fixtures/compose"
+    # An existing stack file, so "refuse to guess" must fire.
+    digit_dir: "{{ playbook_dir }}/fixtures/existing-stack"
+    cases:
+      - name: "daemon down on a box that already carries a stack"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "SKIP no-daemon"
+        expect: ABORT
+      - name: "probe errored on a box that already carries a stack"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: ""
+        probe_rc: 1
+        expect: ABORT
+      - name: "conclusive result on the same box still proceeds"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "ANON container-volume:9c2f1ab"
+        expect: PROCEED
+  tasks:
+    - name: "run every case"
+      ansible.builtin.include_tasks: run-guard-case.yml
+      loop: "{{ cases }}"
+      loop_control:
+        loop_var: case
