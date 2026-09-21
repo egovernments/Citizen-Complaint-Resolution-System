@@ -33,6 +33,7 @@ readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
 readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete*"
+readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/configurator/login}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
   'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
@@ -144,14 +145,23 @@ configure_first_broker_login() {
     kc create 'authentication/flows/first%20broker%20login/copy' -r "$REALM" \
       -s "newName=$FIRST_BROKER_FLOW" >/dev/null
   fi
-  local providers
-  providers=$(kc get "authentication/flows/$FIRST_BROKER_FLOW/executions" -r "$REALM" |
-    jq -r '[.[].providerId // empty] | join(",")')
-  for required in idp-create-user-if-unique idp-confirm-link idp-email-verification idp-username-password-form; do
-    case ",$providers," in
-      *",$required,"*) ;;
-      *) printf 'first broker flow is missing required execution: %s\n' "$required" >&2; return 1 ;;
-    esac
+  local executions
+  executions=$(kc get "authentication/flows/$FIRST_BROKER_FLOW/executions" -r "$REALM")
+  local invariant provider requirement
+  for invariant in \
+    idp-create-user-if-unique:ALTERNATIVE \
+    idp-confirm-link:REQUIRED \
+    idp-email-verification:ALTERNATIVE \
+    idp-username-password-form:REQUIRED; do
+    provider=${invariant%%:*}
+    requirement=${invariant#*:}
+    if ! printf '%s' "$executions" | jq -e \
+      --arg provider "$provider" --arg requirement "$requirement" \
+      'any(.[]; .providerId == $provider and .requirement == $requirement)' >/dev/null; then
+      printf 'first broker flow execution invariant failed: %s must be %s\n' \
+        "$provider" "$requirement" >&2
+      return 1
+    fi
   done
 }
 
@@ -244,6 +254,7 @@ configure_magic_link() {
   magic_flow_id=$(flow_uuid "$MAGIC_LINK_FLOW")
   kc update "clients/$magic_uuid" -r "$REALM" \
     -s standardFlowEnabled=true \
+    -s "baseUrl=$POST_LOGIN_REDIRECT" \
     -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s 'attributes."pkce.code.challenge.method"=S256' \
@@ -257,8 +268,8 @@ configure_magic_link() {
     -r "$REALM" -n >/dev/null
 }
 
-# A new realm gets conservative defaults; an existing realm is only switched
-# to Organizations so operator-tuned settings are preserved.
+# A new realm gets conservative defaults; the small set of identity invariants
+# applied below is also pinned on existing realms.
 if kc get "realms/$REALM" >/dev/null 2>&1; then
   kc update "realms/$REALM" -s organizationsEnabled=true \
     -s "sslRequired=$SSL_REQUIRED" >/dev/null
@@ -269,6 +280,12 @@ else
     -s "sslRequired=$SSL_REQUIRED" -s accessTokenLifespan=300 \
     -s ssoSessionIdleTimeout=1800 -s ssoSessionMaxLifespan=604800 >/dev/null
 fi
+
+# These are identity invariants, not magic-link settings. Pin them on both new
+# and existing realms even when the optional magic-link flow is disabled.
+kc update "realms/$REALM" -s organizationsEnabled=true \
+  -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
+  -s "sslRequired=$SSL_REQUIRED" >/dev/null
 
 # Organization-group client roles are published under this client and filtered
 # by the DIGIT projection allowlist. It is a role container, not a login client.
@@ -281,6 +298,7 @@ fi
 bff_uuid=$(ensure_client "$BFF_CLIENT" "$KEYCLOAK_BFF_CLIENT_SECRET" false)
 kc update "clients/$bff_uuid" -r "$REALM" \
   -s standardFlowEnabled=true \
+  -s "baseUrl=$POST_LOGIN_REDIRECT" \
   -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
   -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
   -s 'attributes."pkce.code.challenge.method"=S256' \

@@ -100,6 +100,12 @@ The `keycloak` Compose profile starts:
 - `identity-bff`, built from this folder; and
 - the existing dedicated Keycloak Postgres container.
 
+The current Configurator login is an Identity-BFF client, so deployments that
+publish `/configurator/` must also enable this `keycloak` profile and publish
+the `keycloak` nginx feature. Ansible validates that prerequisite before it
+changes the host; it does not silently fall back to the legacy direct
+egov-user password form.
+
 Ansible runs `deploy/digit-compose/configure-keycloak.sh` after Keycloak is
 healthy. The script idempotently enables Organizations and reconciles the BFF,
 magic-link, admin, role, Google, and GitHub configuration. Kong publishes only

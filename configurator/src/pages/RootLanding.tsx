@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 
 /**
  * The public root has one identity entry point.
@@ -9,5 +9,6 @@ import { Navigate } from 'react-router-dom';
  * the normal sign-in journey without a second session-routing implementation.
  */
 export default function RootLanding() {
-  return <Navigate to="/login" replace />;
+  const location = useLocation();
+  return <Navigate to={{ pathname: '/login', search: location.search }} replace />;
 }

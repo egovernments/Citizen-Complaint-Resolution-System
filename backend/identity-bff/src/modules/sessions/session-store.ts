@@ -17,6 +17,12 @@ interface LoginAttempt {
   returnTo: string;
 }
 
+export interface PasswordSetupAttempt {
+  returnTo: string;
+  userId: string;
+  hadPassword: boolean;
+}
+
 function randomId(): string {
   return randomBytes(32).toString("base64url");
 }
@@ -106,19 +112,32 @@ export async function consumeAuthResult(id: string): Promise<IdentityAuthResult 
   }
 }
 
-export async function createPasswordSetupAttempt(returnTo: string): Promise<string> {
+export async function createPasswordSetupAttempt(
+  attempt: PasswordSetupAttempt,
+): Promise<string> {
   const id = randomId();
   await getRedis().set(
     passwordSetupKey(id),
-    returnTo,
+    JSON.stringify(attempt),
     "EX",
     config.identityPasswordSetupTtlSeconds,
   );
   return id;
 }
 
-export async function consumePasswordSetupAttempt(id: string): Promise<string | null> {
-  return getRedis().getdel(passwordSetupKey(id));
+export async function consumePasswordSetupAttempt(
+  id: string,
+): Promise<PasswordSetupAttempt | null> {
+  const raw = await getRedis().getdel(passwordSetupKey(id));
+  if (!raw) return null;
+  try {
+    const attempt = JSON.parse(raw) as PasswordSetupAttempt;
+    return typeof attempt.returnTo === "string" &&
+      typeof attempt.userId === "string" &&
+      typeof attempt.hadPassword === "boolean" ? attempt : null;
+  } catch {
+    return null;
+  }
 }
 
 function sessionTtl(tokens: IdentityTokenSet): number {

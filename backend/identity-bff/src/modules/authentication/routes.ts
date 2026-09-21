@@ -27,6 +27,7 @@ import type {
   IdentityAuthResult,
   IdentityAuthResultCode,
 } from "./types.js";
+import { safeIdentityReturnTo, withAuthResult } from "./redirects.js";
 
 function requestedIntent(value: unknown): IdentityAuthIntent | null {
   return value === "signin" || value === "signup" ? value : null;
@@ -37,28 +38,6 @@ function requestedIntent(value: unknown): IdentityAuthIntent | null {
  * must use the same origin allowlist as credentialed CORS; this keeps one
  * deployment source of truth and avoids introducing a competing redirect list.
  */
-function safeReturnTo(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const candidate = value.trim();
-  if (/^\/(?!\/)[^\u0000-\u001f\u007f\\]*$/.test(candidate)) return candidate;
-  try {
-    const parsed = new URL(candidate);
-    return config.identityAllowedOrigins.includes(parsed.origin) ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-function withAuthResult(destination: string, id: string): string {
-  if (destination.startsWith("/") && !destination.startsWith("//")) {
-    const separator = destination.includes("?") ? "&" : "?";
-    return `${destination}${separator}authResult=${encodeURIComponent(id)}`;
-  }
-  const url = new URL(destination);
-  url.searchParams.set("authResult", id);
-  return url.toString();
-}
-
 const RESULT_COPY: Record<IdentityAuthResultCode, Omit<IdentityAuthResult, "code">> = {
   AUTH_CANCELLED: {
     status: "failed",
@@ -161,8 +140,8 @@ export function registerAuthenticationRoutes(app: express.Application): void {
 
   app.get("/identity/v1/authorize", asyncRoute(async (request, response) => {
     const intent = requestedIntent(request.query.intent) || "signin";
-    const returnTo = safeReturnTo(request.query.returnTo) || config.identityPostLoginRedirect;
-    if (request.query.returnTo !== undefined && !safeReturnTo(request.query.returnTo)) {
+    const returnTo = safeIdentityReturnTo(request.query.returnTo) || config.identityPostLoginRedirect;
+    if (request.query.returnTo !== undefined && !safeIdentityReturnTo(request.query.returnTo)) {
       return response.status(400).json({ error: "Unsupported return destination" });
     }
     const requestedMethod = typeof request.query.method === "string"
@@ -199,7 +178,8 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     const state = typeof request.query.state === "string" ? request.query.state : null;
     if (!state || loginStateFromCookie(request.headers.cookie) !== state) {
       response.setHeader("Set-Cookie", clearedLoginCookie());
-      return response.status(400).json({ error: "Invalid sign-in callback" });
+      await redirectWithResult(response, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
+      return;
     }
 
     const attempt = await consumeLoginAttempt(state);

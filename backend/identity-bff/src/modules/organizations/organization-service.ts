@@ -456,6 +456,15 @@ export async function inspectPasswordSetupAccount(
 ): Promise<PasswordSetupInspection | null> {
   const user = await findIdentityUserByEmail(email.trim().toLowerCase());
   if (!user?.id || user.enabled === false) return null;
+  return inspectPasswordSetupAccountById(user.id);
+}
+
+export async function inspectPasswordSetupAccountById(
+  userId: string,
+): Promise<PasswordSetupInspection | null> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  if (!user.id || user.enabled === false) return null;
   const [credentialsResponse, identitiesResponse] = await Promise.all([
     request(`/users/${encodeURIComponent(user.id)}/credentials`),
     request(`/users/${encodeURIComponent(user.id)}/federated-identity`),
@@ -470,6 +479,12 @@ export async function inspectPasswordSetupAccount(
     ),
     emailVerified: user.emailVerified === true,
   };
+}
+
+export async function hasPasswordCredential(userId: string): Promise<boolean> {
+  const response = await request(`/users/${encodeURIComponent(userId)}/credentials`);
+  const credentials = await response.json() as CredentialRepresentation[];
+  return credentials.some((credential) => credential.type === "password");
 }
 
 export async function sendPasswordSetupEmail(input: {

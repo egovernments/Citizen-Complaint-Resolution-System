@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,8 +33,9 @@ const signedIn = {
   user: { id: 'user-1', email: 'person@example.com', name: 'Demo Person', preferredUsername: 'person' },
 };
 
-function renderPage(path = '/login') {
-  return render(<MemoryRouter initialEntries={[path]}><LoginPage /></MemoryRouter>);
+function renderPage(path = '/login', strict = false) {
+  const page = <MemoryRouter initialEntries={[path]}><LoginPage /></MemoryRouter>;
+  return render(strict ? <StrictMode>{page}</StrictMode> : page);
 }
 
 beforeEach(() => {
@@ -84,16 +86,17 @@ describe('configurator sign in', () => {
     expect(screen.getByText('Check your email')).toBeInTheDocument();
   });
 
-  it('shows a broker conflict on the login page with an account-recovery action', async () => {
+  it('consumes a recovery result once under StrictMode and shows its action', async () => {
     vi.mocked(api.consumeAuthResult).mockResolvedValue({
       status: 'failed',
-      code: 'ACCOUNT_LINK_REQUIRED',
-      message: 'An account already uses this email. Verify the existing account to link this sign-in method.',
+      code: 'PASSWORD_SETUP_FAILED',
+      message: 'Password setup was not completed. Request another link when you are ready.',
       actions: ['TRY_EXISTING_METHOD', 'SETUP_PASSWORD'],
     });
-    renderPage('/login?authResult=result-1');
+    renderPage('/login?authResult=result-1', true);
 
-    expect(await screen.findByText(/account already uses this email/i)).toBeInTheDocument();
+    expect(await screen.findByText(/password setup was not completed/i)).toBeInTheDocument();
+    expect(api.consumeAuthResult).toHaveBeenCalledTimes(1);
     expect(api.consumeAuthResult).toHaveBeenCalledWith('result-1');
     expect(screen.getByRole('button', { name: /send password setup link/i })).toBeInTheDocument();
   });

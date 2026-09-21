@@ -27,6 +27,14 @@ async function kcAdmin(path: string, body: unknown): Promise<Response> {
   });
 }
 
+async function kcUpdate(path: string, body: unknown): Promise<Response> {
+  return fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 beforeAll(async () => {
   const digitBase = await digit.start();
   digit.addAccount({
@@ -46,6 +54,7 @@ beforeAll(async () => {
   (config as any).identityAllowedOrigins = ["http://localhost:3000", "http://localhost:5173"];
   (config as any).identityCookieSecure = false;
   (config as any).identityCookieSameSite = "Lax";
+  (config as any).identityTrustProxyHops = 2;
   (config as any).identityAuthMethods = [
     { id: "password", label: "Password", type: "password", intents: ["signin"] },
     { id: "google", label: "Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
@@ -305,7 +314,11 @@ describe("identity BFF", () => {
     const endpoint = `http://localhost:${getAppPort()}/identity/v1/password/setup-requests`;
     const requestSetup = (email: string) => fetch(endpoint, {
       method: "POST",
-      headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      headers: {
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.10",
+      },
       body: JSON.stringify({ email, returnTo: "/configurator/login" }),
     });
     const accepted = await requestSetup("OAUTH.ONLY@example.com");
@@ -318,18 +331,26 @@ describe("identity BFF", () => {
     expect(absent.status).toBe(202);
     expect(await absent.json()).toEqual(genericBody);
 
-    const user = await (await fetch(
-      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
-    )).json();
+    let user: any;
+    await expect.poll(async () => {
+      user = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
+      )).json();
+      return user.activationEmails;
+    }).toBe(1);
     expect(user.requiredActions).toEqual(["UPDATE_PASSWORD"]);
-    expect(user.activationEmails).toBe(1);
     const completion = new URL(user.lastActionRedirectUri);
     expect(completion.pathname).toBe("/identity/v1/password/setup-complete");
     const completionUnderTest = new URL(
       `${completion.pathname}${completion.search}`,
       `http://localhost:${getAppPort()}`,
     );
-    completionUnderTest.searchParams.set("kc_action_status", "success");
+    // Keycloak's execute-actions flow does not append a success flag. The
+    // callback proves completion for resets, while a first password is also
+    // checked against the credential Admin API.
+    expect((await kcUpdate("/users/oauth-only-user", {
+      credentials: [{ id: "password-1", type: "password" }],
+    })).status).toBe(204);
     const complete = await fetch(completionUnderTest, { redirect: "manual" });
     expect(complete.status).toBe(303);
     const completeLocation = new URL(complete.headers.get("location")!, "http://localhost");
@@ -351,16 +372,20 @@ describe("identity BFF", () => {
     );
     expect(await replayResult.json()).toMatchObject({ code: "AUTH_ATTEMPT_EXPIRED" });
 
+    expect((await kcUpdate("/users/oauth-only-user", { credentials: [] })).status).toBe(204);
     expect((await requestSetup("oauth.only@example.com")).status).toBe(202);
-    const retryUser = await (await fetch(
-      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
-    )).json();
+    let retryUser: any;
+    await expect.poll(async () => {
+      retryUser = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
+      )).json();
+      return retryUser.activationEmails;
+    }).toBe(2);
     const cancelledCompletion = new URL(retryUser.lastActionRedirectUri);
     const cancelledUnderTest = new URL(
       `${cancelledCompletion.pathname}${cancelledCompletion.search}`,
       `http://localhost:${getAppPort()}`,
     );
-    cancelledUnderTest.searchParams.set("kc_action_status", "cancelled");
     const cancelled = await fetch(cancelledUnderTest, { redirect: "manual" });
     const cancelledLocation = new URL(cancelled.headers.get("location")!, "http://localhost");
     const cancelledResult = await fetch(
@@ -371,6 +396,60 @@ describe("identity BFF", () => {
       code: "PASSWORD_SETUP_FAILED",
       actions: ["SETUP_PASSWORD"],
     });
+
+    await kcAdmin("/users", {
+      id: "unverified-provider-user",
+      username: "unverified.provider@example.com",
+      email: "unverified.provider@example.com",
+      enabled: true,
+      emailVerified: false,
+      credentials: [],
+      federatedIdentities: [{ identityProvider: "github", userId: "github-user-1" }],
+    });
+    const anonymousUnverified = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.11",
+      },
+      body: JSON.stringify({
+        email: "unverified.provider@example.com",
+        returnTo: "/configurator/login",
+      }),
+    });
+    expect(anonymousUnverified.status).toBe(202);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const unverifiedBeforeAuthentication = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user`,
+    )).json();
+    expect(unverifiedBeforeAuthentication.activationEmails).toBeUndefined();
+
+    const { sessionId } = await createIdentitySession({
+      accessToken: "unverified-provider-session",
+      accessExpiresIn: 3600,
+    }, {
+      sub: "unverified-provider-user",
+      email: "unverified.provider@example.com",
+      email_verified: false,
+    }, "digit-identity-bff");
+    const authenticatedSetup = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Cookie: `${config.identityCookieName}=${sessionId}`,
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.12",
+      },
+      body: JSON.stringify({ returnTo: "/configurator/login" }),
+    });
+    expect(authenticatedSetup.status).toBe(202);
+    await expect.poll(async () => {
+      const authenticatedUser = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user`,
+      )).json();
+      return authenticatedUser.activationEmails;
+    }).toBe(1);
   });
 
   it("does not accept a browser-supplied Keycloak token as a session", async () => {
@@ -440,7 +519,13 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(authorizeUrl.searchParams.get("nonce")!)}&state=${encodeURIComponent(state)}`,
       { redirect: "manual" },
     );
-    expect(unboundCallback.status).toBe(400);
+    expect(unboundCallback.status).toBe(303);
+    const unboundLocation = new URL(unboundCallback.headers.get("location")!, "http://localhost");
+    expect(unboundLocation.pathname).toBe("/after-login");
+    const unboundResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(unboundLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await unboundResult.json()).toMatchObject({ code: "SIGN_IN_FAILED" });
 
     const callback = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(authorizeUrl.searchParams.get("nonce")!)}&state=${encodeURIComponent(state)}`,

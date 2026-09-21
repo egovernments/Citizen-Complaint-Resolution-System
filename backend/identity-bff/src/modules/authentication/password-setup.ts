@@ -5,14 +5,18 @@ import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import {
+  hasPasswordCredential,
   inspectPasswordSetupAccount,
+  inspectPasswordSetupAccountById,
   sendPasswordSetupEmail,
 } from "../organizations/organization-service.js";
+import { currentSession } from "../sessions/current-session.js";
 import {
   consumePasswordSetupAttempt,
   createAuthResult,
   createPasswordSetupAttempt,
 } from "../sessions/session-store.js";
+import { safeIdentityReturnTo, withAuthResult } from "./redirects.js";
 
 const ACCEPTED = {
   message: "If an eligible account exists, a password setup email has been sent.",
@@ -26,19 +30,6 @@ function normalizedEmail(value: unknown): string | null {
     : null;
 }
 
-function safeReturnTo(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) return "/configurator/login";
-  const candidate = value.trim();
-  if (/^\/(?!\/)[^\u0000-\u001f\u007f\\]*$/.test(candidate)) return candidate;
-  try {
-    const parsed = new URL(candidate);
-    if (config.identityAllowedOrigins.includes(parsed.origin)) return parsed.toString();
-  } catch {
-    // Fall through to the fixed same-origin login route.
-  }
-  return "/configurator/login";
-}
-
 function completionRedirectUri(state: string): string {
   const callback = new URL(config.identityRedirectUri);
   callback.pathname = callback.pathname.replace(/\/callback$/, "/password/setup-complete");
@@ -46,26 +37,68 @@ function completionRedirectUri(state: string): string {
   return callback.toString();
 }
 
-function appendResult(destination: string, id: string): string {
-  if (destination.startsWith("/") && !destination.startsWith("//")) {
-    return `${destination}${destination.includes("?") ? "&" : "?"}authResult=${encodeURIComponent(id)}`;
-  }
-  const url = new URL(destination);
-  url.searchParams.set("authResult", id);
-  return url.toString();
-}
-
 async function withinLimit(bucket: string): Promise<boolean> {
-  const redis = getRedis();
-  const count = await redis.incr(bucket);
-  if (count === 1) await redis.expire(bucket, config.identityPasswordSetupTtlSeconds);
-  return count <= config.identityPasswordSetupLimit;
+  const count = await getRedis().eval(
+    `local current = redis.call('INCR', KEYS[1])
+     if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+     return current`,
+    1,
+    bucket,
+    config.identityPasswordSetupTtlSeconds,
+  );
+  return Number(count) <= config.identityPasswordSetupLimit;
 }
 
-function privateEmailKey(email: string): string {
-  return createHmac("sha256", config.keycloakBffClientSecret)
-    .update(email)
+function privateRateLimitKey(identifier: string): string {
+  const rateLimitKey = createHmac("sha256", config.keycloakBffClientSecret)
+    .update("digit.identity.password-setup.rate-limit.v1")
+    .digest();
+  return createHmac("sha256", rateLimitKey)
+    .update(identifier)
     .digest("hex");
+}
+
+async function processPasswordSetup(input: {
+  email: string | null;
+  authenticatedUserId: string | null;
+  returnTo: string;
+}): Promise<void> {
+  try {
+    const account = input.authenticatedUserId
+      ? await inspectPasswordSetupAccountById(input.authenticatedUserId)
+      : input.email
+        ? await inspectPasswordSetupAccount(input.email)
+        : null;
+    // A provider-only account whose provider has not established email
+    // ownership cannot be recovered by an unauthenticated email request. The
+    // user must first authenticate with that provider; that live session then
+    // proves ownership without exposing provider/account state to the caller.
+    const unsafeUnauthenticatedFederatedAccount = !input.authenticatedUserId &&
+      account && !account.emailVerified && !account.hasPassword &&
+      account.federatedProviders.length > 0;
+    if (!account || unsafeUnauthenticatedFederatedAccount) {
+      console.info("Password setup request processed", { outcome: "ineligible" });
+      return;
+    }
+    const state = await createPasswordSetupAttempt({
+      returnTo: input.returnTo,
+      userId: account.userId,
+      hadPassword: account.hasPassword,
+    });
+    await sendPasswordSetupEmail({
+      userId: account.userId,
+      emailVerified: account.emailVerified,
+      redirectUri: completionRedirectUri(state),
+    });
+    console.info("Password setup request processed", {
+      outcome: "sent",
+      authenticated: Boolean(input.authenticatedUserId),
+      hadPassword: account.hasPassword,
+      federatedIdentityCount: account.federatedProviders.length,
+    });
+  } catch (error) {
+    console.warn("Password setup request failed", { error: (error as Error).message });
+  }
 }
 
 export function registerPasswordSetupRoutes(app: express.Application): void {
@@ -74,56 +107,45 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       return response.status(403).json({ error: "Untrusted request origin" });
     }
 
+    const signedIn = await currentSession(request.headers.cookie);
     const email = normalizedEmail(request.body?.email);
-    if (!email) return response.status(202).json(ACCEPTED);
+    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || "/configurator/login";
+    if (!email && !signedIn) return response.status(202).json(ACCEPTED);
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;
-    const [ipAllowed, emailAllowed] = await Promise.all([
+    const accountRateKey = signedIn?.session.claims.sub || email!;
+    const [ipAllowed, accountAllowed] = await Promise.all([
       withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:email:${privateEmailKey(email)}`),
+      withinLimit(`${prefix}:account:${privateRateLimitKey(accountRateKey)}`),
     ]);
-    if (!ipAllowed || !emailAllowed) {
+    if (!ipAllowed || !accountAllowed) {
       console.info("Password setup request suppressed", { reason: "rate_limited" });
       return response.status(202).json(ACCEPTED);
     }
 
-    try {
-      const account = await inspectPasswordSetupAccount(email);
-      if (account) {
-        const state = await createPasswordSetupAttempt(safeReturnTo(request.body?.returnTo));
-        await sendPasswordSetupEmail({
-          userId: account.userId,
-          emailVerified: account.emailVerified,
-          redirectUri: completionRedirectUri(state),
-        });
-        console.info("Password setup request processed", {
-          outcome: "sent",
-          hadPassword: account.hasPassword,
-          federatedIdentityCount: account.federatedProviders.length,
-        });
-      } else {
-        console.info("Password setup request processed", { outcome: "ineligible" });
-      }
-    } catch (error) {
-      // Recovery is intentionally non-enumerating. Dependency detail stays in
-      // server logs while the caller gets the same accepted response.
-      console.warn("Password setup request failed", { error: (error as Error).message });
-    }
-    return response.status(202).json(ACCEPTED);
+    response.status(202).json(ACCEPTED);
+    // Keep account lookup and SMTP timing out of the public response. This is
+    // best-effort recovery work: errors are logged and the public contract
+    // remains deliberately non-enumerating.
+    setImmediate(() => void processPasswordSetup({
+      email,
+      authenticatedUserId: signedIn?.session.claims.sub || null,
+      returnTo,
+    }));
   }));
 
   app.get("/identity/v1/password/setup-complete", asyncRoute(async (request, response) => {
     const state = typeof request.query.state === "string" ? request.query.state : "";
-    const returnTo = state ? await consumePasswordSetupAttempt(state) : null;
-    const actionStatus = typeof request.query.kc_action_status === "string"
-      ? request.query.kc_action_status
-      : "";
-    const authResult = await createAuthResult(returnTo && actionStatus === "success" ? {
+    const attempt = state ? await consumePasswordSetupAttempt(state) : null;
+    const passwordReady = attempt
+      ? attempt.hadPassword || await hasPasswordCredential(attempt.userId).catch(() => false)
+      : false;
+    const authResult = await createAuthResult(attempt && passwordReady ? {
       status: "complete",
       code: "PASSWORD_SETUP_COMPLETE",
       message: "Your password is ready. You can now sign in with email and password.",
       actions: ["TRY_AGAIN"],
-    } : returnTo ? {
+    } : attempt ? {
       status: "failed",
       code: "PASSWORD_SETUP_FAILED",
       message: "Password setup was not completed. Request another link when you are ready.",
@@ -134,6 +156,9 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       message: "That password setup link expired or was already used. Please request another.",
       actions: ["SETUP_PASSWORD"],
     });
-    return response.redirect(303, appendResult(returnTo || "/configurator/login", authResult));
+    return response.redirect(303, withAuthResult(
+      attempt?.returnTo || "/configurator/login",
+      authResult,
+    ));
   }));
 }

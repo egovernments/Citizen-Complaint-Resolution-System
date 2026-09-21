@@ -38,6 +38,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
 import { AuthShell } from '@/components/signup/AuthPanel';
+import { useAuthResult } from '@/hooks/useAuthResult';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -246,6 +247,7 @@ function AvailabilityNote({
  * instead of a form floating on an empty page.
  */
 function SignupFlow() {
+  const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
   const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
@@ -625,11 +627,13 @@ function SignupFlow() {
     slugState?.available !== false &&
     tenantAdminMobile.trim().length > 0;
 
-  const banner = error ? (
+  const callbackError = authResult.error ||
+    (authResult.result?.status === 'failed' ? authResult.result.message : null);
+  const banner = (callbackError || error) ? (
     <Alert variant="destructive" className="mb-4">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Could not continue</AlertTitle>
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{callbackError || error}</AlertDescription>
     </Alert>
   ) : null;
 

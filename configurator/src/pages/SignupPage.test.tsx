@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
 
 // The gate links to /login, so the page needs a Router around it.
-const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+const render = (ui: React.ReactElement, path = '/') =>
+  rtlRender(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
 
 /**
  * The network-facing half of the contract is mocked; the pure helpers
@@ -17,6 +18,7 @@ vi.mock('@/api/onboarding', async () => {
     ...actual,
     session: vi.fn(),
     authMethods: vi.fn(),
+    consumeAuthResult: vi.fn(),
     tenants: vi.fn(),
     findSignup: vi.fn(),
     createSignup: vi.fn(),
@@ -102,6 +104,24 @@ describe('sign-in gate', () => {
     expect(api.startSignIn).toHaveBeenCalledWith('password', 'signup');
     // The whole point: no password field ever exists in this flow.
     expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('renders a callback failure on the signup page that initiated it', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic_link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.consumeAuthResult).mockResolvedValue({
+      status: 'failed',
+      code: 'AUTH_CANCELLED',
+      message: 'Sign-up was cancelled. No changes were made to your account.',
+      actions: ['TRY_AGAIN'],
+    });
+
+    render(<SignupPage />, '/signup?authResult=signup-result');
+
+    expect(await screen.findByText(/sign-up was cancelled/i)).toBeInTheDocument();
+    expect(api.consumeAuthResult).toHaveBeenCalledWith('signup-result');
   });
 });
 

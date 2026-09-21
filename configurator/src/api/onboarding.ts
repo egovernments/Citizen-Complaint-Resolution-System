@@ -39,6 +39,10 @@ export const API_ORIGIN: string = (import.meta.env.VITE_ONBOARDING_API_ORIGIN as
 const IDENTITY_BASE = `${API_ORIGIN}/identity/v1`;
 const ONBOARDING_BASE = `${API_ORIGIN}/pgr-services/v2/onboarding`;
 
+function identityReturnTo(path: string): string {
+  return API_ORIGIN ? `${window.location.origin}${path}` : path;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Contract types                                                             */
 /* -------------------------------------------------------------------------- */
@@ -382,7 +386,7 @@ export function authMethods(intent: AuthIntent): Promise<{ methods: AuthMethod[]
 export function startSignIn(
   methodId: string,
   intent: AuthIntent,
-  returnTo = `${window.location.origin}/configurator/${intent === 'signup' ? 'signup' : 'login'}`,
+  returnTo = identityReturnTo(`/configurator/${intent === 'signup' ? 'signup' : 'login'}`),
 ): void {
   const query = new URLSearchParams({ method: methodId, intent, returnTo });
   window.location.assign(`${IDENTITY_BASE}/authorize?${query}`);
@@ -392,12 +396,12 @@ export function consumeAuthResult(id: string): Promise<AuthResult> {
   return call(`${IDENTITY_BASE}/auth-results/${encodeURIComponent(id)}`);
 }
 
-export function requestPasswordSetup(email: string): Promise<{ message: string }> {
+export function requestPasswordSetup(email?: string): Promise<{ message: string }> {
   return call(`${IDENTITY_BASE}/password/setup-requests`, {
     method: 'POST',
     body: JSON.stringify({
-      email,
-      returnTo: `${window.location.origin}/configurator/login`,
+      ...(email && { email }),
+      returnTo: identityReturnTo('/configurator/login'),
     }),
   });
 }

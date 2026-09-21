@@ -333,6 +333,18 @@
         - core_mobile_configs | default({}, true) | length > 0
         - _mobile_missing_keys | length > 0
 
+    - name: "preflight — configurator authentication requires the identity stack"
+      ansible.builtin.assert:
+        that:
+          - enable_keycloak | default(false) | bool
+          - nginx_features.keycloak | default(false) | bool
+        fail_msg: >-
+          The configurator now authenticates exclusively through the Identity
+          BFF. Set enable_keycloak: true and nginx_features.keycloak: true when
+          nginx_features.configurator is enabled; otherwise the login API would
+          not be deployed.
+      when: nginx_features.configurator | default(false)
+
     # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
     # route in front of token-exchange-svc, the per-tenant realm template and
     # its `digit-ui` public client were all removed in favour of the Identity

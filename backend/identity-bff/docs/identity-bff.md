@@ -139,7 +139,7 @@ realm keeps duplicate emails disabled and does not trust broker-provided email
 without that proof. Once linked, password, Google, and GitHub are credentials
 of the same Keycloak user and therefore see the same Organization memberships.
 
-Callback failures return to the validated `returnTo` destination with only an
+Callback failures that Keycloak returns to the BFF are sent to the validated `returnTo` destination with only an
 opaque `authResult` id. The UI consumes that id once through
 `auth-results/:id`; provider details, tokens, and email addresses are never put
 in the URL. Both relative paths and absolute URLs from
@@ -150,8 +150,16 @@ Password setup is non-enumerating: every request gets the same `202` response,
 whether the account exists, has a password, or only has federated credentials.
 Eligible users receive Keycloak's one-use `UPDATE_PASSWORD` action (preceded by
 `VERIFY_EMAIL` when needed). Requests are rate-limited by IP and an HMAC of the
-normalized email; raw email addresses are not logged. The completion state and
-its browser result are each one-time and expire independently.
+normalized email (or the signed-in subject); raw identifiers are not logged.
+The deployed BFF trusts exactly the configured host-nginx and Kong proxy hops,
+so unrelated clients do not collapse into one gateway-IP bucket. Provider-only accounts
+whose email has not yet been verified must first sign in with that provider;
+the live BFF session then authorizes password setup without trusting an
+unverified email claim. The completion state and its browser result are each
+one-time and expire independently. Keycloak's execute-actions flow does not
+append a completion flag, so first-password completion is confirmed against
+the credential Admin API; a reset of an existing password is complete when its
+one-use action returns through the configured application link.
 
 Magic-link email is a single-use bearer credential valid for 10 minutes by
 default. Keycloak may create a previously unknown email user, but DIGIT account

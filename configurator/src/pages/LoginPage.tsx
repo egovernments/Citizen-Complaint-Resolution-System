@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, Github, KeyRound, Loader2, LogOut, Mail } from 'lucide-react';
 import {
   type AuthMethod,
-  type AuthResult,
   type SessionUser,
   type TenantOption,
   authMethods,
-  consumeAuthResult,
   logout,
   requestPasswordSetup,
   selectContext,
@@ -21,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { clearLocalSession, installDigitContext, SESSION_EXPIRED_KEY } from '@/lib/session';
+import { useAuthResult } from '@/hooks/useAuthResult';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'setupRequired' | 'entering';
 
@@ -45,7 +44,7 @@ function expiredSessionMessage(): string | null {
 }
 
 export default function LoginPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [methods, setMethods] = useState<AuthMethod[]>([]);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
@@ -54,7 +53,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(expiredSessionMessage);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTitle, setNoticeTitle] = useState('Check your email');
-  const [resultActions, setResultActions] = useState<AuthResult['actions']>([]);
   const [showPasswordSetup, setShowPasswordSetup] = useState(false);
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
@@ -79,33 +77,11 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    const resultId = searchParams.get('authResult');
-    if (resultId) {
-      consumeAuthResult(resultId)
-        .then((result) => {
-          if (result.status === 'complete') {
-            setNoticeTitle(result.code === 'PASSWORD_SETUP_COMPLETE' ? 'Password ready' : 'Complete');
-            setNotice(result.message);
-          } else {
-            setError(result.message);
-          }
-          setResultActions(result.actions);
-          if (result.actions.includes('SETUP_PASSWORD')) setShowPasswordSetup(true);
-        })
-        .catch(() => setError('That sign-in message expired. Please try again.'))
-        .finally(() => {
-          const next = new URLSearchParams(searchParams);
-          next.delete('authResult');
-          setSearchParams(next, { replace: true });
-        });
-    }
     // `load` only updates state after its session request settles. The rule
     // follows the function call but does not model that async boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-    // Auth results are deliberately consumed once on the initial landing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load]);
 
   const enter = async (option: TenantOption) => {
     setError(null);
@@ -143,29 +119,46 @@ export default function LoginPage() {
     }
   };
 
+  const requestSignedInPasswordSetup = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      const response = await requestPasswordSetup();
+      setNoticeTitle('Check your email');
+      setNotice(response.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not request a password setup link.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const signOut = async () => {
     clearLocalSession();
     await logout().catch(() => undefined);
     setIdentityUser(null);
     setError(null);
     setNotice(null);
-    setResultActions([]);
     setShowPasswordSetup(false);
     setPhase('loading');
     await load();
   };
 
-  const banner = error ? (
+  const resultError = authResult.result?.status === 'failed' ? authResult.result.message : null;
+  const resultNotice = authResult.result?.status === 'complete' ? authResult.result.message : null;
+  const bannerError = authResult.error || resultError || error;
+  const bannerNotice = resultNotice || notice;
+  const banner = bannerError ? (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Could not sign in</AlertTitle>
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{bannerError}</AlertDescription>
     </Alert>
-  ) : notice ? (
+  ) : bannerNotice ? (
     <Alert>
       <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-      <AlertTitle>{noticeTitle}</AlertTitle>
-      <AlertDescription>{notice}</AlertDescription>
+      <AlertTitle>{resultNotice && authResult.result?.code === 'PASSWORD_SETUP_COMPLETE' ? 'Password ready' : noticeTitle}</AlertTitle>
+      <AlertDescription>{bannerNotice}</AlertDescription>
     </Alert>
   ) : null;
 
@@ -209,6 +202,15 @@ export default function LoginPage() {
               </Button>
             ))}
           </div>
+          <Button
+            variant="link"
+            className="h-auto w-full p-0"
+            disabled={sending}
+            onClick={() => void requestSignedInPasswordSetup()}
+          >
+            {sending && <Loader2 className="mr-2 animate-spin" />}
+            Set up or reset your password
+          </Button>
           <Button variant="tertiary" className="w-full" onClick={() => void signOut()}>
             <LogOut className="mr-2" /> Sign out
           </Button>
@@ -257,6 +259,15 @@ export default function LoginPage() {
           {banner}
           <Button asChild className="h-11 w-full">
             <Link to="/signup">Create a new account</Link>
+          </Button>
+          <Button
+            variant="link"
+            className="h-auto w-full p-0"
+            disabled={sending}
+            onClick={() => void requestSignedInPasswordSetup()}
+          >
+            {sending && <Loader2 className="mr-2 animate-spin" />}
+            Set up or reset your password
           </Button>
           <Button variant="outline" className="h-11 w-full" onClick={() => void signOut()}>
             Sign in another way
@@ -312,7 +323,7 @@ export default function LoginPage() {
           </>
         )}
 
-        {(showPasswordSetup || resultActions.includes('SETUP_PASSWORD')) ? (
+        {(showPasswordSetup || authResult.result?.actions.includes('SETUP_PASSWORD')) ? (
           <form className="space-y-3 rounded-lg border bg-muted/30 p-4" onSubmit={submitPasswordSetup}>
             <div>
               <label htmlFor="password-setup-email" className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">

@@ -11,6 +11,23 @@ function csv(value: string): string[] {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
 }
 
+export function parseAllowedOrigins(value: string): string[] {
+  return [...new Set(csv(value).map((candidate) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      throw new Error(`IDENTITY_ALLOWED_ORIGINS contains an invalid URL: ${candidate}`);
+    }
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+        parsed.username || parsed.password || parsed.pathname !== "/" ||
+        parsed.search || parsed.hash) {
+      throw new Error(`IDENTITY_ALLOWED_ORIGINS must contain origins only: ${candidate}`);
+    }
+    return parsed.origin;
+  }))];
+}
+
 function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   const normalized = value.trim().toLowerCase();
   if (normalized === "lax") return "Lax";
@@ -96,8 +113,8 @@ export const config = {
     process.env.IDENTITY_REDIRECT_URI ||
     "http://localhost:18201/identity/v1/callback",
   identityPostLoginRedirect:
-    process.env.IDENTITY_POST_LOGIN_REDIRECT || "/",
-  identityAllowedOrigins: csv(
+    process.env.IDENTITY_POST_LOGIN_REDIRECT || "/configurator/login",
+  identityAllowedOrigins: parseAllowedOrigins(
     process.env.IDENTITY_ALLOWED_ORIGINS ||
       process.env.IDENTITY_ALLOWED_ORIGIN ||
       "http://localhost:3000",
@@ -115,8 +132,9 @@ export const config = {
     process.env.IDENTITY_COOKIE_SAME_SITE || "Lax",
   ),
   identityLoginTtlSeconds: parseInt(
-    process.env.IDENTITY_LOGIN_TTL_SECONDS || "300",
+    process.env.IDENTITY_LOGIN_TTL_SECONDS || "1800",
   ),
+  identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
   ),

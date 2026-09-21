@@ -15,6 +15,9 @@ import { registerSessionRoutes } from "../modules/sessions/routes.js";
  */
 export function createIdentityApp(): express.Application {
   const app = express();
+  if (config.identityTrustProxyHops > 0) {
+    app.set("trust proxy", config.identityTrustProxyHops);
+  }
   app.use(express.json({ limit: "1mb" }));
   registerOperationalRoutes(app);
 
