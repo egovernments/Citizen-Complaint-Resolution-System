@@ -235,10 +235,18 @@ cluster instead — which is why that backup is not optional.
 
 ## After every box is migrated
 
-The compose path fix lands centrally so nobody has to hand-edit it again. Until then, a box
-migrated by this runbook has a locally modified `docker-compose.egov-digit.yaml`; the next
-Ansible deploy overwrites it with the repo's version and puts the wrong path back.
+The compose path fix lands centrally so nobody has to hand-edit it again
+([#2085](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2085)).
+Until then, a box migrated by this runbook has a locally modified
+`docker-compose.egov-digit.yaml`, and a deploy from a branch without that fix would overwrite
+it and put the wrong path back — stranding the data a second time.
 
-**So: re-run this runbook's step 5 and 6 after any deploy, until the central fix has landed.**
-Track that on
-[#2085](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2085).
+You do not have to remember this. The playbook refuses in both directions:
+
+- an **unmigrated** box (database in an anonymous volume) — it will not deploy at all;
+- a **migrated** box where the compose file being installed still has the old path — it stops
+  and tells you to deploy from a branch carrying the fix, or to re-apply steps 5 and 6
+  immediately afterwards.
+
+So the safe order is: migrate the box, then deploy only from a branch that has the mount-path
+fix. A routine deploy in between is blocked rather than silently destructive.
