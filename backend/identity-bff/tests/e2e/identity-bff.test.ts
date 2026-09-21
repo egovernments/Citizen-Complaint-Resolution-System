@@ -273,6 +273,26 @@ describe("identity BFF", () => {
     expect((await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(id)}`,
     )).status).toBe(404);
+
+    const conflictAuthorize = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&returnTo=%2Fconfigurator%2Flogin`,
+      { redirect: "manual" },
+    );
+    const conflictUrl = new URL(conflictAuthorize.headers.get("location")!);
+    const conflictState = conflictUrl.searchParams.get("state")!;
+    const conflictCookie = conflictAuthorize.headers.get("set-cookie")!.split(";", 1)[0];
+    const conflict = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/callback?error=account_exists&error_description=existing%20account&state=${encodeURIComponent(conflictState)}`,
+      { redirect: "manual", headers: { Cookie: conflictCookie } },
+    );
+    const conflictLocation = new URL(conflict.headers.get("location")!, "http://localhost");
+    const conflictResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(conflictLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await conflictResult.json()).toMatchObject({
+      code: "ACCOUNT_LINK_REQUIRED",
+      actions: ["TRY_EXISTING_METHOD", "SETUP_PASSWORD"],
+    });
   });
 
   it("offers non-enumerating, one-time password setup for OAuth accounts", async () => {
@@ -330,6 +350,27 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(replayLocation.searchParams.get("authResult")!)}`,
     );
     expect(await replayResult.json()).toMatchObject({ code: "AUTH_ATTEMPT_EXPIRED" });
+
+    expect((await requestSetup("oauth.only@example.com")).status).toBe(202);
+    const retryUser = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
+    )).json();
+    const cancelledCompletion = new URL(retryUser.lastActionRedirectUri);
+    const cancelledUnderTest = new URL(
+      `${cancelledCompletion.pathname}${cancelledCompletion.search}`,
+      `http://localhost:${getAppPort()}`,
+    );
+    cancelledUnderTest.searchParams.set("kc_action_status", "cancelled");
+    const cancelled = await fetch(cancelledUnderTest, { redirect: "manual" });
+    const cancelledLocation = new URL(cancelled.headers.get("location")!, "http://localhost");
+    const cancelledResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(cancelledLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await cancelledResult.json()).toMatchObject({
+      status: "failed",
+      code: "PASSWORD_SETUP_FAILED",
+      actions: ["SETUP_PASSWORD"],
+    });
   });
 
   it("does not accept a browser-supplied Keycloak token as a session", async () => {
