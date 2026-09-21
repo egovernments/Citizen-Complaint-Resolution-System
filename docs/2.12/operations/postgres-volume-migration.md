@@ -22,7 +22,10 @@ that exposure is gone and `db_fast_path` is safe to use on the box.
 ## Before you start
 
 - [ ] A maintenance window. The stack is down for the whole procedure.
-- [ ] Somewhere **off this box** to put a backup, with room for the database twice over.
+- [ ] Free disk space on this box for **twice** the database size — once for the backup,
+      once for the copy in step 4. Step 2 checks this.
+- [ ] Somewhere off the box for a second copy of the backup, **if you have it**. Not required;
+      the procedure is written to work on a single machine.
 - [ ] Do this on **one box at a time**, least critical first.
 - [ ] Nobody else is deploying to this box while you work.
 
@@ -73,30 +76,47 @@ use the variables, and keep this shell open for the whole procedure.
 
 ---
 
-## 2. Back up, off the box
+## 2. Back up
+
+**Check there is room first.** The backup and the volume copy in step 4 each need space, and
+a box that fills up mid-copy is a worse problem than the one you are fixing:
+
+```bash
+df -h /var/lib/docker /root
+docker exec docker-postgres psql -U egov -d egov -tAc \
+  "select pg_size_pretty(pg_database_size('egov'));"
+```
+
+**Expect** free space of at least twice the reported database size.
+
+- **Space is tight** → **stop** and free some first. Do not start and hope.
 
 With the stack still running:
 
 ```bash
-docker exec docker-postgres pg_dumpall -U egov > /tmp/pg-backup-$(date +%F).sql
-ls -lh /tmp/pg-backup-*.sql
-tail -5 /tmp/pg-backup-*.sql
+docker exec docker-postgres pg_dumpall -U egov | gzip > /root/pg-backup-$(date +%F).sql.gz
+ls -lh /root/pg-backup-*.sql.gz
+gzip -t /root/pg-backup-*.sql.gz && echo "archive OK"
+zcat /root/pg-backup-*.sql.gz | tail -3
 ```
 
-**Expect** a file of a plausible size (hundreds of MB on a live tenant, never a few KB), and
-a last line reading `--` or `-- PostgreSQL database cluster dump complete`.
+**Expect** a plausible file size (tens to hundreds of MB compressed on a live tenant, never a
+few KB), the words `archive OK`, and a last line reading `--` or
+`-- PostgreSQL database cluster dump complete`.
 
-- **File is tiny, or the tail shows an error** → **stop.** The backup did not work and
-  nothing else in this procedure should run.
+- **File is tiny, `gzip -t` fails, or the tail shows an error** → **stop.** The backup did not
+  work, and nothing else in this procedure should run.
 
-Copy it off the machine and confirm it arrived:
+`/root` is deliberate: it is outside `/var/lib/docker`, so a `docker system prune` cannot
+reach it. Do not put the backup inside the stack directory.
+
+If you do have somewhere off the box, copy it there as well — that is the only copy that
+survives the disk itself failing. It is not required for this procedure:
 
 ```bash
-scp /tmp/pg-backup-*.sql you@elsewhere:/backups/
+# optional, only if you have somewhere to put it
+scp /root/pg-backup-*.sql.gz you@elsewhere:/backups/
 ```
-
-**Expect** the transfer to complete and the file to be the same size at the far end. Check
-that yourself — do not take scp's word for it.
 
 Record the row counts you will verify against later:
 
@@ -229,7 +249,13 @@ The original anonymous volume is untouched and re-attaches by name. Confirm with
 step 7 counts, then escalate with what you saw.
 
 If the anonymous volume has somehow been lost, restore the step 2 backup into a fresh
-cluster instead — which is why that backup is not optional.
+cluster instead — which is why that backup is not optional:
+
+```bash
+zcat /root/pg-backup-*.sql.gz | docker exec -i docker-postgres psql -U egov -d postgres
+```
+
+**Expect** it to run to completion without errors, then verify with the step 7 counts.
 
 ---
 
