@@ -46,15 +46,39 @@ const STEPS = [
 ];
 
 /** Base countries, with the IANA zone each one suggests. */
-const COUNTRIES: { code: string; name: string; timeZone: string }[] = [
-  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi' },
-  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata' },
-  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa' },
-  { code: 'NG', name: 'Nigeria', timeZone: 'Africa/Lagos' },
-  { code: 'SN', name: 'Senegal', timeZone: 'Africa/Dakar' },
-  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo' },
-  { code: 'ZA', name: 'South Africa', timeZone: 'Africa/Johannesburg' },
-  { code: 'ID', name: 'Indonesia', timeZone: 'Asia/Jakarta' },
+/**
+ * `dialCode` is shown beside the mobile field so it is obvious the field takes
+ * the national number and the prefix is added for you. That distinction is not
+ * cosmetic: the value is submitted as `tenantMetadata.tenantAdmin.mobileNumber`
+ * and egov-user validates it as a national number, so a founder who copied the
+ * old `+254700000199` placeholder was being shown a shape the backend rejects.
+ *
+ * `nationalExample` is deliberately absent for most countries. The only
+ * authoritative mobile formats in this repo are the three
+ * `common-masters.MobileNumberValidation` records it ships (`+254`, `+91`,
+ * `+251`), and an invented example is the same class of defect as the hardcoded
+ * Kenyan one: a confident hint that happens to be wrong. Countries without one
+ * get the dial code and a neutral hint instead.
+ *
+ * The durable home for this is that MDMS schema, which onboarding cannot read
+ * because the tenant does not exist yet. Sharing it with tenant provisioning is
+ * CCRS#2073 / CCRS#2076 territory.
+ */
+const COUNTRIES: {
+  code: string;
+  name: string;
+  timeZone: string;
+  dialCode: string;
+  nationalExample?: string;
+}[] = [
+  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi', dialCode: '+254', nationalExample: '712345678' },
+  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata', dialCode: '+91', nationalExample: '9876543210' },
+  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa', dialCode: '+251', nationalExample: '911234567' },
+  { code: 'NG', name: 'Nigeria', timeZone: 'Africa/Lagos', dialCode: '+234' },
+  { code: 'SN', name: 'Senegal', timeZone: 'Africa/Dakar', dialCode: '+221' },
+  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo', dialCode: '+258' },
+  { code: 'ZA', name: 'South Africa', timeZone: 'Africa/Johannesburg', dialCode: '+27' },
+  { code: 'ID', name: 'Indonesia', timeZone: 'Asia/Jakarta', dialCode: '+62' },
 ];
 
 const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
@@ -267,6 +291,9 @@ function SignupFlow() {
   // Fields the operator has edited by hand stop being derived from the name.
   const codeTouched = useRef(false);
   const slugTouched = useRef(false);
+  const timeZoneTouched = useRef(false);
+  /** Drives the dial-code prefix and the mobile hint on the Preferences step. */
+  const selectedCountry = COUNTRIES.find((c) => c.code === countryCode);
   // Reused when retrying the *same* action after a network failure, which is
   // the whole point of the header.
   const createKey = useRef<string>(newIdempotencyKey());
@@ -285,6 +312,9 @@ function SignupFlow() {
     setAcceptedTerms(Boolean(record.acceptedTermsVersion));
     if (record.accountCode) codeTouched.current = true;
     if (record.urlSlug) slugTouched.current = true;
+    // A resumed draft's zone was already settled once; changing country
+    // on the way back through should not quietly rewrite it.
+    if (record.timeZone) timeZoneTouched.current = true;
   }, []);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
@@ -1025,9 +1055,13 @@ function SignupFlow() {
               onChange={(e) => {
                 const next = e.target.value;
                 setCountryCode(next);
-                // Suggest, never overwrite a zone already chosen by hand.
+                // Suggest, never overwrite a zone chosen by hand. "Chosen by
+                // hand" has to be tracked, not inferred from the field being
+                // non-empty: the first country pick fills it, so that test was
+                // true from then on and every later country change silently
+                // kept the old zone. Same ref pattern as the code and slug.
                 const suggested = COUNTRIES.find((c) => c.code === next)?.timeZone;
-                if (suggested && !timeZone) setTimeZone(suggested);
+                if (suggested && !timeZoneTouched.current) setTimeZone(suggested);
               }}
             >
               <option value="">Select a country</option>
@@ -1077,7 +1111,11 @@ function SignupFlow() {
               id="timeZone"
               className={selectClass}
               value={timeZone}
-              onChange={(e) => setTimeZone(e.target.value)}
+              onChange={(e) => {
+                // From here on the country no longer overrides it.
+                timeZoneTouched.current = true;
+                setTimeZone(e.target.value);
+              }}
             >
               <option value="">Select a time zone</option>
               {TIME_ZONES.map((zone) => (
@@ -1136,14 +1174,26 @@ function SignupFlow() {
           <Field
             id="tenantAdminMobile"
             label="Your mobile number"
-            help="Used to create your account inside the new workspace."
+            help={
+              selectedCountry
+                ? `Used to create your account inside the new workspace. Enter the number without the ${selectedCountry.dialCode} prefix.`
+                : 'Used to create your account inside the new workspace.'
+            }
           >
-            <Input
-              id="tenantAdminMobile"
-              value={tenantAdminMobile}
-              onChange={(e) => setTenantAdminMobile(e.target.value)}
-              placeholder="+254700000199"
-            />
+            <div className="flex items-center gap-2">
+              {selectedCountry ? (
+                <span className="shrink-0 rounded border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  {selectedCountry.dialCode}
+                </span>
+              ) : null}
+              <Input
+                id="tenantAdminMobile"
+                className="flex-1"
+                value={tenantAdminMobile}
+                onChange={(e) => setTenantAdminMobile(e.target.value)}
+                placeholder={selectedCountry?.nationalExample ?? 'National number'}
+              />
+            </div>
           </Field>
 
           <div className="flex gap-3">
