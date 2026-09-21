@@ -25,8 +25,15 @@ const GRADIENT_FALLBACK =
  * 6s, which is the reference's own timing — slow enough to read, and the gap
  * between fade and advance is what stops the swap being abrupt.
  *
- * `aria-live="polite"` because the text changes without the reader asking, and
- * the fixed `minHeight` stops the footer below it jumping on every swap.
+ * `aria-hidden` because this is decorative: announcing a strap-line every six
+ * seconds interrupts whatever field the reader is on, and the copy carries no
+ * information a signup needs. The fixed `minHeight` stops the footer below it
+ * jumping on every swap.
+ *
+ * Reduced motion stops the rotation outright, not just its transition. Text
+ * swapping under someone who asked for less motion is the more disruptive of
+ * the two effects here, so it is the first to go, and the backdrop drift keeps
+ * its existing media query.
  */
 const AUTH_ROTATING: { title: string; quote: string }[] = [
   {
@@ -46,11 +53,27 @@ const AUTH_ROTATING: { title: string; quote: string }[] = [
   },
 ];
 
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+
 export function RotatingNarrative() {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
+  // Read live rather than once: the setting can be changed while the page is
+  // open, and a signup sits on one screen long enough for that to matter.
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia?.(REDUCED_MOTION).matches ?? false,
+  );
 
   useEffect(() => {
+    const query = window.matchMedia?.(REDUCED_MOTION);
+    if (!query) return;
+    const onChange = () => setReduced(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (reduced) return;
     const fadeOut = window.setTimeout(() => setVisible(false), 5200);
     const advance = window.setTimeout(() => {
       setIndex((i) => (i + 1) % AUTH_ROTATING.length);
@@ -60,19 +83,22 @@ export function RotatingNarrative() {
       window.clearTimeout(fadeOut);
       window.clearTimeout(advance);
     };
-  }, [index]);
+  }, [index, reduced]);
 
-  const item = AUTH_ROTATING[index]!;
+  // Derived rather than reset through state, so switching the setting on
+  // mid-rotation cannot strand a faded-out line on screen.
+  const item = AUTH_ROTATING[reduced ? 0 : index]!;
+  const shown = reduced || visible;
   return (
     <div
-      aria-live="polite"
+      aria-hidden="true"
       className="mt-8 max-w-md"
       style={{
         // Fixed height so the footer below does not jump on every swap.
         minHeight: 96,
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(6px)',
-        transition: 'opacity 800ms ease, transform 800ms ease',
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'translateY(0)' : 'translateY(6px)',
+        transition: reduced ? 'none' : 'opacity 800ms ease, transform 800ms ease',
       }}
     >
       <p className="text-sm font-semibold">{item.title}</p>
@@ -90,6 +116,11 @@ export function AuthBackdrop() {
         <img
           src="/configurator/brand/signup-crowd.jpg"
           alt=""
+          // Intrinsic size of the file. The element is absolutely positioned
+          // and object-cover, so these never drive layout, but without them
+          // the panel reflows when the LCP image lands.
+          width={1440}
+          height={1800}
           onError={() => setImageFailed(true)}
           className="absolute inset-0 h-full w-full object-cover"
         />
@@ -115,16 +146,6 @@ export function AuthBackdrop() {
         }
         .signup-backdrop-drift { animation: signupBackdropDrift 46s ease-in-out infinite; will-change: transform; }
         @media (prefers-reduced-motion: reduce) { .signup-backdrop-drift { animation: none; } }
-        .signup-brand-mark { top: 20px; left: 20px; }
-        .signup-brand-logo { width: 140px; }
-        @media (min-width: 768px) {
-          .signup-brand-mark { top: 28px; left: 28px; }
-          .signup-brand-logo { width: 160px; }
-        }
-        @media (min-width: 1024px) {
-          .signup-brand-mark { top: 36px; left: 40px; }
-          .signup-brand-logo { width: 180px; }
-        }
       `}</style>
     </div>
   );
