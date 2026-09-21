@@ -38,6 +38,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
+import { themeVariables } from '@/themes';
+import { AuthBackdrop, RotatingNarrative } from '@/components/signup/AuthPanel';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -125,8 +127,15 @@ const FINANCIAL_YEARS = [
 
 const TERMS_VERSION = '2026-09';
 
+/**
+ * 44px tall, to the reference's `authInputStyle`. The shadcn default is 36px,
+ * which reads cramped beside a 28px step heading and sits under the comfortable
+ * touch target on the phone layout.
+ */
+const CONTROL_HEIGHT = 'h-11';
+
 const selectClass =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ' +
+  `flex ${CONTROL_HEIGHT} w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm ` +
   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
@@ -185,7 +194,7 @@ function Field({
     <div>
       <label
         htmlFor={id}
-        className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
       >
         {label}
       </label>
@@ -238,35 +247,65 @@ function AvailabilityNote({
  * the provisioning screen and the workspace picker all read as one product
  * instead of a form floating on an empty page.
  */
+const ONBOARDING_THEME: React.CSSProperties = {
+  ...(themeVariables('cms-blue') as React.CSSProperties),
+  // Inter here and Roboto everywhere else, scoped the same way the palette is.
+  // The reference is set in Inter and Roboto's narrower letterforms are most of
+  // why the panel still read differently once the colours matched. Not worth
+  // switching DIGIT's system face across the whole console for one screen.
+  fontFamily: 'Inter, Roboto, system-ui, sans-serif',
+};
+
 function SignupShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Hidden on small screens so the form owns the viewport. */}
-      <aside className="hidden flex-col justify-between bg-secondary p-10 text-white lg:flex">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-1 bg-primary" />
-          <div>
-            <p className="font-condensed text-xl font-bold">DIGIT Complaint Management</p>
-            <p className="text-xs uppercase tracking-widest text-white/70">
-              Digital infrastructure for public services
-            </p>
+    <div className="min-h-screen w-full bg-background text-foreground" style={ONBOARDING_THEME}>
+      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[45fr_55fr] xl:grid-cols-2">
+        {/* Hidden on small screens so the form owns the viewport. */}
+        <div className="relative hidden min-h-[320px] flex-col justify-between overflow-hidden p-10 text-white lg:flex">
+          <AuthBackdrop />
+
+          <div className="relative z-[1] flex flex-col gap-6">
+            <img
+              src="/configurator/brand/egov-logo-white.png"
+              alt="eGov Foundation"
+              className="h-[37px] w-auto self-start"
+              style={{ filter: 'drop-shadow(0 2px 10px rgba(4,12,34,0.35))' }}
+            />
+            <div>
+              <p className="text-[28px] font-semibold leading-snug">DIGIT Complaint Management</p>
+              <p className="mt-2 text-xs uppercase tracking-widest text-white/70">
+                Digital infrastructure for public services
+              </p>
+            </div>
           </div>
-        </div>
-        <div>
-          <h1 className="font-condensed text-4xl font-bold leading-tight">
-            Manage complaints from intake to closure.
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-white/80">
-            Set up your account to receive complaints, assign them to the right team, track service
-            timelines, and monitor resolution across departments and localities.
+
+          <div className="relative z-[1]">
+            <h1 className="text-5xl font-semibold leading-[1.1] tracking-[-0.01em]">
+              Manage complaints from intake to closure.
+            </h1>
+            <p className="mt-6 max-w-md text-sm leading-relaxed text-white/80">
+              Set up your account to receive complaints, assign them to the right team, track service
+              timelines, record actions and evidence, and monitor resolution across departments and
+              localities.
+            </p>
+            <RotatingNarrative />
+          </div>
+
+          <p className="relative z-[1] text-xs text-white/50">
+            © 2026 eGovernments Foundation · DIGIT
           </p>
         </div>
-        <p className="text-xs text-white/50">© 2026 eGovernments Foundation · DIGIT</p>
-      </aside>
 
-      <main className="flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md space-y-6">{children}</div>
-      </main>
+        {/* Card column */}
+        <div className="flex flex-col items-center justify-center bg-background px-5 py-10 sm:p-10">
+          <div
+            className="w-full max-w-[460px] border bg-card/95 p-8"
+            style={{ borderRadius: 16, boxShadow: '0 12px 36px rgba(32,55,140,0.08)' }}
+          >
+            <div className="space-y-6">{children}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -707,7 +746,7 @@ function SignupFlow() {
         {banner}
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Verify your email to begin</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Verify your email to begin</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Confirm who you are first. Once your email is verified, you can name your account and
               continue the setup.
@@ -733,18 +772,31 @@ function SignupFlow() {
               was not only ugly, the two targets touched, so aiming for one
               reliably hit the other. */}
           {rest.length > 0 && (
-            <div className="flex flex-col items-center gap-2 text-sm">
-              {rest.map((method) => (
-                <button
-                  key={method.id}
-                  type="button"
-                  onClick={() => startSignIn(method.id)}
-                  className="text-primary underline underline-offset-4"
-                >
-                  {method.label}
-                </button>
-              ))}
-            </div>
+            <>
+              {/* The reference separates the primary path from the rest with a
+                  rule and an OR, then gives each alternative a full-width
+                  outline button. Same shape here, with one difference that is
+                  deliberate: which buttons exist is whatever `auth-methods`
+                  reports, so a deployment that enables only password sees only
+                  password and nothing renders an option it cannot honour. */}
+              <div className="flex items-center gap-3">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">OR</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <div className="space-y-3">
+                {rest.map((method) => (
+                  <Button
+                    key={method.id}
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => startSignIn(method.id)}
+                  >
+                    {method.label}
+                  </Button>
+                ))}
+              </div>
+            </>
           )}
 
           <p className="text-sm text-muted-foreground">
@@ -792,7 +844,7 @@ function SignupFlow() {
     const provisioned = signup?.status === 'ACTIVE';
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">
+        <h1 className="text-[28px] font-semibold leading-[1.15]">
           {provisioned ? 'Opening your workspace' : `Setting up ${accountName || 'your account'}`}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -833,7 +885,7 @@ function SignupFlow() {
     const { title, body } = copy[gated.readiness as Exclude<TenantReadiness, 'READY'>];
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">{title}</h1>
+        <h1 className="text-[28px] font-semibold leading-[1.15]">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{body}</p>
         <div className="mt-6 rounded border px-4 py-3 text-sm">
           <div className="font-medium">{gated.option.name}</div>
@@ -990,7 +1042,7 @@ function SignupFlow() {
       {step === 'account' ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Set up your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Set up your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Create the account details that will identify your account in DIGIT Complaint
               Management.
@@ -1051,7 +1103,7 @@ function SignupFlow() {
       ) : step === 'preferences' ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Personalise your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Personalise your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Set the defaults your account will use across the product.
             </p>
@@ -1088,7 +1140,7 @@ function SignupFlow() {
           </Field>
 
           <div>
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Languages
             </span>
             {/* Pills, not checkboxes: a short multi-select reads better as
@@ -1222,7 +1274,7 @@ function SignupFlow() {
       ) : (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Review and create your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Review and create your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               These will be the main entry points for your account once your workspace has been set
               up.

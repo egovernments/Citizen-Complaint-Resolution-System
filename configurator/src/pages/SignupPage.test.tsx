@@ -76,12 +76,15 @@ describe('sign-in gate', () => {
 
     // Worth being explicit: the defect was visual, and the DOM alone cannot see
     // it. Both buttons resolved by accessible name before this fix too, which
-    // is exactly why it survived to production. So assert the layout that
-    // separates them, since that is the actual fix.
+    // is exactly why it survived to production. So assert what stops them
+    // running together rather than the exact utilities, which have already
+    // changed once: each alternative is a full-width block, so two of them
+    // cannot share a line whatever the container does.
+    expect(magic.className).toMatch(/w-full/);
+    expect(github.className).toMatch(/w-full/);
     const row = magic.parentElement as HTMLElement;
     expect(row).toBe(github.parentElement);
-    expect(row.className).toMatch(/flex-col/);
-    expect(row.className).toMatch(/gap-/);
+    expect(row.className).toMatch(/space-y-|gap-/);
 
     fireEvent.click(magic);
     expect(api.startSignIn).toHaveBeenCalledWith('magic-link');
