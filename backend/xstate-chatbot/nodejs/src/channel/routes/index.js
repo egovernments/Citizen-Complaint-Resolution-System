@@ -10,26 +10,29 @@ const express = require("express"),
   rateLimit = require("express-rate-limit");
 const { summarizeInbound, maskMobile } = require("../../privacy");
 
-  // Inbound webhooks are unauthenticated and exposed directly — the service is not
-// behind Kong, which rate-limits only its own routes. 300/min is well above real
-// traffic, so it blunts a flood without dropping a provider's delivery retries.
-const webhookLimiter = rateLimit({
+ const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 500,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  // Use the sender or recipient as the key for rate limiting, falling back to the IP address if neither is available.
+  keyGenerator: (req) =>
+    req.body?.From ?? req.body?.To ?? req.query?.From ?? req.query?.To ?? "unattributed",
 });
 
-// Entry point for inbound messages from the channel provider
-router.post("/message", webhookLimiter, async (req, res) => {
-  console.log(`Inbound ${req.originalUrl}: ${summarizeInbound(req.body)}`);
-
-  // Verify the authenticity of the inbound request using the channel provider's signature verification mechanism.
+// Reject anything the channel provider cannot vouch for, before it reaches the
+// limiter, a parser, or a session.
+function verifySignature(req, res, next) {
   if (typeof channelProvider.verifyRequest === "function" && !channelProvider.verifyRequest(req)) {
-    console.warn("Rejected inbound webhook: signature verification failed");
+    console.warn(`Rejected inbound webhook: signature verification failed (${req.originalUrl})`);
     return res.sendStatus(403);
   }
+  next();
+}
 
+// Entry point for inbound messages from the channel provider
+router.post("/message", verifySignature, webhookLimiter, async (req, res) => {
+  console.log(`Inbound ${req.originalUrl}: ${summarizeInbound(req.body)}`);
 
   try {
     
@@ -58,12 +61,7 @@ router.post("/message", webhookLimiter, async (req, res) => {
 });
 
 // Handle WhatsApp delivery status webhooks (both GET and POST)
-router.all("/status", webhookLimiter, async (req, res) => {
-
-  if (typeof channelProvider.verifyRequest === "function" && !channelProvider.verifyRequest(req)) {
-    console.warn("Rejected status webhook: signature verification failed");
-    return res.sendStatus(403);
-  }
+router.all("/status", verifySignature, webhookLimiter, async (req, res) => {
 
   try {
     const isDeliveryStatusWebhook = req.method === 'GET' ||
