@@ -343,8 +343,8 @@ class TwilioWhatsAppProvider {
         // Set up a cancellation mechanism for the media download to enforce the timeout.
         const cancellation = axios.CancelToken.source();
         const timer = setTimeout(
-            () => cancellation.cancel(`media processing timed out after ${config.mediaProcessingTimeoutMs}ms`),
-            config.mediaProcessingTimeoutMs
+            () => cancellation.cancel(`media processing timed out after ${config.timeouts.mediaProcessing}ms`),
+            config.timeouts.mediaProcessing
         );
 
         try {

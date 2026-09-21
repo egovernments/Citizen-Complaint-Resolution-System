@@ -94,5 +94,9 @@ module.exports = {
     en_IN: "Sorry, this number is not yet authorized to use this service.",
     pt_PT: "Lamentamos, este número ainda não está autorizado a utilizar este serviço.",
   },
-
+  submissionStalled: {
+    code: 'chatbot.pgr.submissionStalled',
+    en_IN: 'Sorry, we could not complete your request. The session has been closed — send a message to start again.',
+    pt_PT: 'Lamentamos, não foi possível concluir o seu pedido. A sessão foi terminada — envie uma mensagem para recomeçar.',
+  },
 };

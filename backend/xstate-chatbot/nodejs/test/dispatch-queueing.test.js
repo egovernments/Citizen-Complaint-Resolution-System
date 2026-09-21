@@ -19,7 +19,7 @@ stub("../env-variables", sessionDir, {
   allowedMobileNumbers: "", rootTenantId: "mz", timeZone: "Africa/Maputo",
   dateFormat: "DD/MM/YYYY", egovServices: {}, kafka: {},
   instituteNameMaxLength: 300, descriptionMinLength: 20,
-  avgSessionTime: 30, dispatchSettleTimeoutMs: 30000,
+  avgSessionTime: 30, timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
   replyCooldownMs: 0,                // no cooldown, so the test is fast
   maxQueuedMessagesPerUser: MAX_QUEUED,
 });

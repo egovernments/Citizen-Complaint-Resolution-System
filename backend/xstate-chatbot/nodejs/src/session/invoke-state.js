@@ -16,26 +16,32 @@ function hasActiveInvoke(state) {
 
 /**
  * Resolves once the interpreter reaches a state with no invocation in flight (or
- * is done). Capped by dispatchSettleTimeoutMs so a hung HTTP call cannot hold a
+ * is done). Capped by timeouts.dispatchSettle so a hung HTTP call cannot hold a
  * citizen's dispatch lock forever.
+ *
+ * Resolves true when the machine settled on its own, false when the cap fired.
+ * On the cap the interpreter is STOPPED: past that point the invocation is
+ * unsupervised, and leaving it running lets a late resolution drive a
+ * transition — and a persist — for a citizen whose turn is already over.
  */
 function waitUntilSettled(service) {
-  if (service.state.done || !hasActiveInvoke(service.state)) return Promise.resolve();
+  if (service.state.done || !hasActiveInvoke(service.state)) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
-      console.warn(`Dispatch settle timeout after ${config.dispatchSettleTimeoutMs}ms; releasing the lock`);
-      done();
-    }, config.dispatchSettleTimeoutMs);
+      console.warn(`Dispatch settle timeout after ${config.timeouts.dispatchSettle}ms; stopping the machine`);
+      done(false);
+      service.stop();
+    }, config.timeouts.dispatchSettle);
 
     const subscription = service.subscribe((state) => {
-      if (state.done || !hasActiveInvoke(state)) done();
+      if (state.done || !hasActiveInvoke(state)) done(true);
     });
 
-    function done() {
+    function done(settled) {
       clearTimeout(timer);
       subscription.unsubscribe();
-      resolve();
+      resolve(settled);
     }
   });
 }

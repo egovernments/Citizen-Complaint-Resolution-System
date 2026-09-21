@@ -38,7 +38,6 @@ class ChatService {
       await chatStateRepository.clearResumePending(sessionUserId);
     }
 
-
     const chatState = await this.getOrCreateChatState(sessionUserId, session.user, inboundRequestModel);
     if (!chatState) return; // awaiting the citizen's resume/restart choice
 
@@ -52,11 +51,29 @@ class ChatService {
 
     stateMachineService.send(event, inboundRequestModel);
 
-    // Wait until the machine has no active invocation AND its transition writes
-    // have landed, so the next queued message cannot read a half-written state.
-    await waitUntilSettled(stateMachineService);
+    const settled = await waitUntilSettled(stateMachineService);
+    if (!settled) this.abandonStalledSession(session, inboundRequestModel);
     return pendingPersist(sessionUserId);
   }
+
+  /**
+   * Handles the scenario where a session has stalled due to an active state machine invocation not completing.
+   * Persists the current state and notifies the user that their submission could not be processed.
+   */
+  abandonStalledSession(session, inboundRequestModel) {
+    const persistableState = this.createChatStateFor(session.user).toPersistableState().state;
+
+    enqueuePersist(session.userId, () =>
+      chatStateRepository.updateState(session.userId, false, persistableState, new Date().getTime())
+    );
+
+    this.sessionManager.toUser(
+      session.user,
+      [dialog.get_message(messages.submissionStalled, session.user.locale)],
+      inboundRequestModel.extraInfo
+    );
+  }
+
 
   /**
    * How a pending resume prompt should be treated for this message:

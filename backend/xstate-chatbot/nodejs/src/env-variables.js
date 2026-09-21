@@ -68,9 +68,16 @@ const envVariables = {
     msgId: process.env.MSG_ID || '20170310130900',
     avgSessionTime: process.env.AVG_SESSION_TIME || 10,
     replyCooldownMs: parseInt(process.env.REPLY_COOLDOWN_MS || '2000', 10),
-    mediaProcessingTimeoutMs: parseInt(process.env.MEDIA_PROCESSING_TIMEOUT_MS || '13000', 10),
-    // Time to wait for all dispatches to settle before considering the operation complete.
-    dispatchSettleTimeoutMs: parseInt(process.env.DISPATCH_SETTLE_TIMEOUT_MS || '30000', 10),
+
+    // Deadlines for work a dispatch waits on. `dispatchSettle` supervises the
+    // other two and MUST stay above both: if a request and its supervisor
+    // expire together, the dispatch lock is released while the call may still
+    // be resolving, and the citizen's retry files a second complaint.
+    timeouts: {
+        request: parseInt(process.env.REQUEST_TIMEOUT_MS || '20000', 10),
+        mediaProcessing: parseInt(process.env.MEDIA_PROCESSING_TIMEOUT_MS || '13000', 10),
+        dispatchSettle: parseInt(process.env.DISPATCH_SETTLE_TIMEOUT_MS || '30000', 10),
+    },
     maxMediaSizeBytes: parseInt(process.env.MAX_MEDIA_SIZE_MB || '5', 10) * 1024 * 1024,
     // Maximum number of messages that can be queued per user before older messages are dropped.
     maxQueuedMessagesPerUser: parseInt(process.env.MAX_QUEUED_MESSAGES_PER_USER || '3', 10),

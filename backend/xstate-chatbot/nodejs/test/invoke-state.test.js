@@ -5,7 +5,7 @@ const path = require("node:path");
 process.env.DISPATCH_SETTLE_TIMEOUT_MS = "80";
 
 const projectRoot = path.resolve(__dirname, "..");
-const { Machine, interpret, State } = require(path.join(projectRoot, "node_modules/xstate"));
+const { Machine, interpret, State, InterpreterStatus } = require(path.join(projectRoot, "node_modules/xstate"));
 const { hasActiveInvoke, waitUntilSettled } = require(path.join(projectRoot, "src/session/invoke-state.js"));
 
 /** Stands in for pgr-machine's confirm -> persistComplaint -> receipt shape. */
@@ -66,24 +66,30 @@ test("waitUntilSettled resolves only after the invocation completes", async () =
   await pending;
   assert.equal(settled, true);
   assert.equal(service.state.value, "receipt");
+  assert.equal(service.status, InterpreterStatus.Running, "a clean settle leaves the machine alive");
 });
 
 test("waitUntilSettled returns immediately when nothing is in flight", async () => {
   const runs = { count: 0 };
   const service = interpret(probeMachine({ runs })).start();
-  await waitUntilSettled(service);
+  assert.equal(await waitUntilSettled(service), true, "nothing in flight is a clean settle");
   assert.equal(service.state.value, "confirm");
 });
 
-test("a hung invocation releases the lock via the timeout", async () => {
+test("a hung invocation releases the lock via the timeout, and stops the machine", async () => {
   const runs = { count: 0 };
   const service = interpret(probeMachine({ runs, hang: true })).start();
   service.send("GO");
 
   const started = Date.now();
-  await waitUntilSettled(service);
+  const settled = await waitUntilSettled(service);
   const waited = Date.now() - started;
 
   assert.ok(waited >= 70, `released after ~timeout, waited ${waited}ms`);
-  assert.equal(hasActiveInvoke(service.state), true, "the invocation is still pending; we gave up waiting");
+  assert.equal(settled, false, "the caller is told this was a timeout, not a clean settle");
+  assert.equal(
+    service.status,
+    InterpreterStatus.Stopped,
+    "stopped, so a late resolution cannot drive a transition or a persist"
+  );
 });

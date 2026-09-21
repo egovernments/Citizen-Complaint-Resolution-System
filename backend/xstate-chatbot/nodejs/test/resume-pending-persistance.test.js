@@ -31,7 +31,7 @@ stub("../env-variables", sessionDir, {
   instituteNameMaxLength: 300,
   descriptionMinLength: 20,
   avgSessionTime: AVG_SESSION_MINUTES,
-  dispatchSettleTimeoutMs: 30000,
+  timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
 });
 stub("./service/service-loader", machineDir, { pgrService: {} });
 stub("./service/egov-user-profile", machineDir, { updateUser: async () => ({}) });

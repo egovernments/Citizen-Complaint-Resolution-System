@@ -741,6 +741,7 @@ class PGRService {
       headers: {
         "Content-Type": "application/json",
       },
+      timeout: config.timeouts.request,
     };
 
     let response = await fetch(url, options);
