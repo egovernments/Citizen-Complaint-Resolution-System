@@ -2,7 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
+// Pinned before env-variables loads: the defaults are India's (91/10), so on a
+// clean checkout createUser rejects a 9-digit MZ number before reaching the
+// assertion. .env supplies these locally, which is why this only failed there.
 process.env.CITIZEN_PLACEHOLDER_NAME = "Cidadão";
+process.env.COUNTRY_CODE = "258";
+process.env.MOBILE_NUMBER_LENGTH = "9";
 
 const projectRoot = path.resolve(__dirname, "..");
 const p = (rel) => path.join(projectRoot, rel);

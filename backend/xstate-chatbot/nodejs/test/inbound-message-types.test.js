@@ -2,6 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
+// Pinned before env-variables loads. The shipped defaults are 'hello,hi,ola'
+// for reset, so "reiniciar" is not a reset word without .env — see the note on
+// the cancel/reset test below.
+process.env.CANCEL_WORDS = "cancel,cancelar,cancele,stop";
+process.env.RESET_WORDS = "reset,reiniciar,reinicie,restart,ola,oi,hello";
+
 const projectRoot = path.resolve(__dirname, "..");
 const p = (rel) => path.join(projectRoot, rel);
 
@@ -39,6 +45,9 @@ test("an unrecognized future type degrades to unsupported", () => {
 });
 
 test("cancel and reset words still work on a text message", () => {
+  // These are the words the copy tells citizens to type. They come from config,
+  // and the shipped default for RESET_WORDS does not include "reiniciar" — a
+  // deployment that sets neither ships a bot whose own instructions do nothing.
   assert.equal(InboundMessage.create({ type: "text", input: "cancelar" }).isCancel(), true);
   assert.equal(InboundMessage.create({ type: "text", input: "reiniciar" }).isReset(), true);
 });
