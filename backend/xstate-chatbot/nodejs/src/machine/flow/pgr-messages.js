@@ -1,14 +1,7 @@
 module.exports = {
   menu: {
-    // used by the original pgr.js (still has both fileComplaint/trackComplaint)
-    question: {
-      code: 'chatbot.pgr.menu.question',
-      en_IN: 'Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To start over, type and send *reiniciar*.',
-      pt_PT: 'Envie o número da sua opção: \n\n*1.* Apresentar uma nova manifestação\n*2.* Consultar reclamações existentes\n\n  Para começar de novo, escreva e envie *reiniciar*.'
-    },
-    // used by pgr-machine.js, which dropped trackComplaint - no `code`, since
-    // the real localization service still has an old translation stored
-    // under chatbot.pgr.menu.question (get_message would check that first)
+    // No `code`: a live localization row under chatbot.pgr.menu.question still
+    // holds the old two-option wording, and get_message would prefer it.
     singleOptionQuestion: {
       en_IN: 'Please type and send *1* to file a new complaint, or *2* to cancel.',
       pt_PT: '*Menu* \n\n*1.* Apresentar uma manifestação\n*2.* Cancelar'

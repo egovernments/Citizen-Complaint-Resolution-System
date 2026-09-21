@@ -72,12 +72,6 @@
         "locale": "pt_PT"
     },
     {
-        "code": "chatbot.pgr.menu.question",
-        "message": "Envie o número da sua opção: \n\n*1.* Apresentar uma nova manifestação\n*2.* Consultar reclamações existentes\n\n  Para começar de novo, escreva e envie *reiniciar*.",
-        "module": "rainmaker-pgr",
-        "locale": "pt_PT"
-    },
-    {
         "code": "chatbot.pgr.onboarding.name.change",
         "message": "Indique o seu nome para continuar.",
         "module": "rainmaker-pgr",

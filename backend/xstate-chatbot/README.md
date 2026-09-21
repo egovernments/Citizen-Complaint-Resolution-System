@@ -6,11 +6,11 @@ The chatbot is a backend service: it receives messages incoming from the user, k
 
 In this project, the `nodejs` directory contains the primary project. It contains all the files of the project that will get deployed on the server. `react-app` is provided only to ease the process of dialog development. It should be used only on a developer's local machine when developing any new chat flow. `nodejs` should be run as a backend service and tested once on the local machine using postman before deploying the build to the server.
 
-For the full design — layers, state kinds, the generator, slots, sessions — read [`nodejs/ARCHITECTURE.md`](./nodejs/ARCHITECTURE.md). The sections below are the overview.
+For the full design — layers, state kinds, slots, sessions — read [`nodejs/ARCHITECTURE.md`](./nodejs/ARCHITECTURE.md). The sections below are the overview.
 
 ## Getting Started
 
-The service needs Node 18 or newer — the test runner uses the built-in `node --test`. All commands below run inside `nodejs/`.
+The service needs Node 18 or newer — the test runner uses the built-in `node --test`. The image and CI both build on the version in `nodejs/Dockerfile` (23.9.0 today), so match that if you are chasing a difference between your machine and a pipeline. All commands below run inside `nodejs/`.
 
 ```
 npm install
@@ -18,9 +18,11 @@ cp .env.example .env
 npm start
 ```
 
-The service listens on `SERVICE_PORT` (8082 by default) under `CONTEXT_PATH` (`/xstate-chatbot`). `npm start` runs with `--inspect` for debugging and loads the CA bundle in `certs/`.
+The service listens on `SERVICE_PORT` (8082 by default) under `CONTEXT_PATH` (`/xstate-chatbot`). `npm start` runs with `--inspect` for debugging.
 
-`REPO_PROVIDER` chooses where conversation state lives: `InMemory` keeps sessions in process, so a local run needs no database but loses every conversation on restart; `Postgres` persists them using the `DB_*` settings.
+If your eGov host serves an incomplete TLS chain, Node will reject it with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Fetch the intermediate certificate from the leaf's AIA extension and point `NODE_EXTRA_CA_CERTS` at it yourself — nothing is loaded automatically, and certificates are not committed.
+
+`REPO_PROVIDER` chooses where conversation state lives. `InMemory` keeps sessions in process, so a local run needs no database but loses every conversation on restart. `Postgres` persists them using the `DB_*` settings, and needs the migrations in `nodejs/db/migration/main/` applied first — including `V20260918000000__chat_resume_pending.sql`, without which a resumed session cannot be tracked.
 
 ### Configuration
 
@@ -35,6 +37,10 @@ Every tenant- and country-specific value is an environment variable, so the same
 | `WHATSAPP_PROVIDER` and the provider's credentials | outbound channel |
 | `ALLOWED_MOBILE_NUMBERS` | whitelist gating the welcome step; empty allows all |
 | `CANCEL_WORDS`, `RESET_WORDS` | words that cancel or restart a session |
+| `TWILIO_VERIFY_WEBHOOK_SIGNATURE`, `TWILIO_WEBHOOK_BASE_URL` | inbound authenticity on Twilio |
+| `WEBHOOK_SHARED_SECRET`, `VERIFY_WEBHOOK_SIGNATURE` | inbound authenticity on ValueFirst and Kaleyra |
+
+Four deadlines govern how long anything may take. `REQUEST_TIMEOUT_MS` caps one outbound service call and `MEDIA_PROCESSING_TIMEOUT_MS` caps an attachment fetch; `DISPATCH_SETTLE_TIMEOUT_MS` supervises both and **must stay above them**, or a request and its supervisor expire together and the citizen's lock is released while the call may still be resolving. `REPLY_COOLDOWN_MS` is the pause after a turn settles.
 
 The remaining variables point at the backend services the flow reads from — MDMS, localization, user and PGR. The chatbot is a client of those services; it holds no copy of their data.
 
@@ -43,6 +49,8 @@ The remaining variables point at the backend services the flow reads from — MD
 ```
 npm test
 ```
+
+`.github/workflows/xstate-chatbot-ci.yml` runs the same command on every push and pull request touching `backend/xstate-chatbot/**`. It asserts `.env` is absent first, because the suite must pass on a clean checkout: a test that silently depends on your local `.env` passes for you and fails for everyone else. If you add one, pin what it needs with `process.env.X = ...` before requiring `env-variables`.
 
 ### Wiring it into a local DIGIT stack
 
@@ -84,13 +92,13 @@ docker network inspect digit_egov-network --format '{{range .Containers}}{{.Name
 docker restart kong-gateway
 ```
 
-**3. Verify.** Kong's proxy is published on host port 18000, so the inbound webhook is reachable at `http://localhost:18000/xstate-chatbot/message`. A POST with an empty body should reach the service and be answered rather than 404:
+**3. Verify.** Kong's proxy is published on host port 18000, so the inbound webhook is reachable at `http://localhost:18000/xstate-chatbot/message`:
 
 ```
 curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:18000/xstate-chatbot/message
 ```
 
-A `404` means Kong did not match the route; check the path and that the restart picked up your edit. A `000` means Kong cannot reach the container — usually the wrong network name.
+Expect **`403`**. That is the success case: Kong matched the route, the service received the request, and it refused an unsigned one. A `404` means Kong did not match the route — check the path and that the restart picked up your edit. A `000` means Kong cannot reach the container, usually the wrong network name.
 
 For a provider to deliver messages, its webhook must point at a publicly reachable URL for that path, which on a local machine means a tunnel.
 
@@ -120,22 +128,32 @@ Because both hierarchies come from MDMS, a tenant with three levels and a tenant
 
 ## Concurrency and failure handling
 
-A conversation is single-threaded per user. Outbound sends are serialized so replies cannot arrive out of order, and the dispatch lock is held through the send plus a short cooldown. An inbound message that arrives while a previous one for the same user is still being processed is discarded rather than interleaved.
+A conversation is single-threaded per citizen. Outbound sends are serialized so replies cannot arrive out of order, and the dispatch lock is held through the send plus a short cooldown. A message arriving while the previous one is still being processed is **queued**, not dropped — up to `MAX_QUEUED_MESSAGES_PER_USER`, beyond which further messages are discarded so a citizen tapping repeatedly cannot build a backlog that answers for the next minute. Queues are keyed per conversation, so one slow send never delays anyone else.
 
-Media uploads time out instead of hanging the conversation, and oversized attachments are rejected with a retry prompt. Errors are typed exceptions handled in one place; on a system error the session is parked rather than silently restarted, so the citizen is not thrown back to the beginning.
+Prompts that are deliberately staggered wait inside that same queue rather than on a timer, or they would enqueue after the lock was released and a later reply could overtake the question it answers.
+
+Submitting a complaint is the one step that must not be retried blindly: restoring a state whose invocation is still running re-runs that invocation, so those states are never persisted. If a submission has not settled within `DISPATCH_SETTLE_TIMEOUT_MS` the machine is stopped and the session closed, rather than left resumable at the confirmation prompt where the next "1" would file a second complaint.
+
+An expired session is not silently discarded either: the citizen is asked whether to resume or start over, and that question survives a restart because it lives on the row rather than in process memory.
+
+Media uploads time out instead of hanging the conversation, and oversized attachments are rejected with a retry prompt. Errors are typed exceptions handled in one place, and the citizen sees them in their own language with values drawn from configuration — not a hardcoded English sentence about a digit count from another country.
 
 ## Access control
 
-Inbound messages are filtered before any session work happens. A configurable mobile-number whitelist gates the welcome step, messages from numbers outside the configured country are dropped, and the reset path no longer bypasses the whitelist.
+Inbound messages are filtered before any session work happens.
 
-Citizen records are provisioned through a service account, so the chatbot files complaints without a citizen ever holding credentials.
+**Authenticity comes first.** Every channel provider must implement `verifyRequest`, and the service refuses to start if the configured one does not — a missing check used to be indistinguishable from a deliberate opt-out, which left three of the four providers wide open. Twilio verifies the `X-Twilio-Signature` HMAC. ValueFirst and Kaleyra sign nothing, so they verify a shared secret sent as `X-Webhook-Secret` or `?webhookSecret=`; both **fail closed** when no secret is configured, so an unconfigured deployment rejects traffic loudly instead of accepting it silently. The console provider is exempt on purpose and says so at startup, since it is only selected for local development.
+
+Verification runs *before* the rate limiter, and the limiter counts the signed sender rather than the source address. Keyed on the address it was a denial-of-service lever rather than a defence: behind a tunnel every citizen shares one, so a flood of unsigned requests would have locked everyone out for the rest of the window.
+
+A configurable mobile-number whitelist then gates the welcome step, messages from numbers outside the configured country are dropped, and the reset path does not bypass the whitelist.
+
+Citizen records are provisioned through a service account, so the chatbot files complaints without a citizen ever holding credentials. That account's token is stripped from anything persisted or published — including the event history inside a serialized machine state, where it is easy to miss.
 
 ## Remote Debugging
 
-To support remote debugging, we recommend using [VSCode](https://code.visualstudio.com). The VSCode [launch](./.vscode/launch.json) script file is written which will be used to start the remote debugging session. 
+`npm start` runs the service under `--inspect`, which listens on 9229. To attach from [VSCode](https://code.visualstudio.com):
 
-Steps to start a remote debugging session:
-
-1. Port forward to the the remote server (9229:9229)
-2. In VSCode Run options, select "Attach to remote" 
-3. Start Debugging
+1. Port forward from the remote server (`9229:9229`).
+2. Add an *Attach to Node* configuration on port 9229 — there is no `.vscode/launch.json` committed here, so create one locally.
+3. Start debugging.

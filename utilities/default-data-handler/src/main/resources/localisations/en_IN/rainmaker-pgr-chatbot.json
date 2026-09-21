@@ -72,12 +72,6 @@
         "locale": "en_IN"
     },
     {
-        "code": "chatbot.pgr.menu.question",
-        "message": "Please type and send the number for your option 👇\n\n*1.* File a new complaint\n*2.* Track existing complaints\n\n👉 To start over, type and send *reiniciar*.",
-        "module": "rainmaker-pgr",
-        "locale": "en_IN"
-    },
-    {
         "code": "chatbot.pgr.onboarding.name.change",
         "message": "Please provide your name to continue.",
         "module": "rainmaker-pgr",
