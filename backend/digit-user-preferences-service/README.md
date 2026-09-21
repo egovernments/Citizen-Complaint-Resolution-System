@@ -77,7 +77,7 @@ An absent `tenantId` is stored as the empty string, and the constraint coalesces
 | `status` | `GRANTED` / `REVOKED` | Whether the user has opted in |
 | `scope` | `GLOBAL` / `TENANT` | Consent scope |
 | `tenantId` | string | Required when scope is `TENANT` |
-| `preferredLanguage` | `en_IN`, `hi_IN`, `fr_IN`, `pt_IN` | The user's locale for notifications |
+| `preferredLanguage` | see `user.preference.valid-languages` | The user's locale for notifications |
 
 The payload is validated only when `preferenceCode` is `USER_NOTIFICATION_PREFERENCES`; any other code stores an arbitrary JSON document unchecked. Either way the document is stored **verbatim** — key casing and extra keys survive a round trip, which matters because consumers read `consent.WHATSAPP` with exact casing.
 
@@ -156,6 +156,7 @@ Failures return the DIGIT error envelope with a capital-`Errors` list. All valid
 | `INVALID_JSON` | 400 | The body is missing, truncated or not JSON |
 | `INVALID_REQUEST_INFO` | 400 | No `RequestInfo` block |
 | `INVALID_REQUEST` | 400 | No `preference` (upsert) or `criteria` (search) |
+| `INVALID_ID` | 400 | A caller-supplied `id` that is not a UUID |
 | `INVALID_USER_ID` | 400 | `userId` missing, or longer than 64 characters |
 | `INVALID_TENANT_ID` | 400 | `tenantId` present but not 2–64 characters |
 | `INVALID_PREFERENCE_CODE` | 400 | `preferenceCode` missing, or not 2–128 characters |
@@ -167,11 +168,24 @@ Failures return the DIGIT error envelope with a capital-`Errors` list. All valid
 | `MISSING_TENANT_ID` | 400 | `TENANT`-scoped consent with no `tenantId` |
 | `INVALID_CRITERIA` | 400 | No search criterion supplied |
 | `INVALID_LIMIT` / `INVALID_OFFSET` | 400 | Negative paging |
+| `NOT_AUTHORIZED` | 403 | A citizen acting on another user's record |
 | `INTERNAL_ERROR` | 500 | The database is unreachable or rejected the write |
+
+Internal errors return a fixed message. The database's own text names indexes, constraints and columns, so it is logged rather than returned (CWE-209).
 
 ### Request Envelope Casing
 
 The envelope key is `RequestInfo` per the DIGIT standard, but `requestInfo` is accepted too — the Go implementation matched JSON keys case-insensitively and callers settled on different spellings as a result (`novu-bridge` posts `requestInfo`, the seed scripts post `RequestInfo`). Both are supported, and unknown fields are ignored rather than rejected.
+
+## Authorization
+
+Both endpoints key on the `userId` in the request body, not on the authenticated principal, so the service enforces ownership itself:
+
+- A caller whose `RequestInfo.userInfo.uuid` is set may only `_upsert` their own record, and must narrow `_search` to their own `userId`. A tenant-only search is refused, since that is what turns "read one record" into "enumerate every citizen's consent".
+- A caller holding one of `user.preference.security.privileged-roles` (default `EMPLOYEE,SUPERUSER,ACCOUNT_ADMIN,SYSTEM`) may act across the tenant.
+- A call with **no** `userInfo` is service-to-service and passes through. novu-bridge posts an empty `requestInfo` for both the consent gate and the configurator listing, and the gateway is the authN boundary: it populates `userInfo` for anything arriving with a citizen token.
+
+Set `ENFORCE_OWNERSHIP=false` to restore the Go service's behaviour while a caller is adjusted. The Go service had no such check, so any caller who could reach the route could read or overwrite another citizen's consent (CWE-639).
 
 ## How novu-bridge Uses This Service
 
@@ -231,6 +245,12 @@ The `DB_*` and `SERVER_*` variables are the ones the Helm chart and the compose 
 | `DB_MIN_CONNS` | `5` | Hikari minimum idle |
 | `DB_MAX_CONN_LIFETIME` | `1h` | Hikari max lifetime (`1h`, `30m`, or plain milliseconds) |
 | `DB_MAX_CONN_IDLE_TIME` | `30m` | Hikari idle timeout (same formats) |
+| `SEARCH_DEFAULT_LIMIT` | `10` | Page size when the criteria omit `limit` |
+| `SEARCH_DEFAULT_OFFSET` | `0` | Offset when the criteria omit `offset` |
+| `SEARCH_MAX_LIMIT` | `100` | Ceiling an oversized `limit` is clamped to |
+| `VALID_LANGUAGES` | `en_IN,hi_IN,fr_IN,pt_IN` | Locales a notification payload may carry; empty disables the check |
+| `ENFORCE_OWNERSHIP` | `true` | Hold a citizen principal to their own record |
+| `PRIVILEGED_ROLES` | `EMPLOYEE,SUPERUSER,ACCOUNT_ADMIN,SYSTEM` | Roles that may act across the tenant |
 | `SPRING_DATASOURCE_URL` | derived from `DB_*` | Full JDBC URL, overriding the `DB_*` parts |
 | `SPRING_FLYWAY_ENABLED` | `true` | Set `false` where a migration init container owns the schema |
 | `SPRING_FLYWAY_TABLE` | `digit_user_preferences_service_schema` | Flyway history table |
@@ -246,14 +266,15 @@ Location: [`devops/deploy-as-code/charts/common-services/digit-user-preferences-
 
 The rewrite is behaviour-preserving. Worth knowing:
 
-- **Schema unchanged.** The same `V20260205120000__create_user_preference.sql` migration is now applied by Flyway instead of GORM's `AutoMigrate`. On a database the Go service created, Flyway baselines the existing schema and the migration's `IF NOT EXISTS` statements add the indexes AutoMigrate never created — including the unique index on `(user_id, COALESCE(tenant_id, ''), preference_code)`. If such a database somehow holds duplicate rows under that key, creating the index will fail and the duplicates must be resolved first.
+- **Schema unchanged.** The same `V20260205120000__create_user_preference.sql` migration is now applied by Flyway instead of GORM's `AutoMigrate`. On a database the Go service created, Flyway baselines the existing schema and the migration's `IF NOT EXISTS` statements add the indexes AutoMigrate never created — including the unique index on `(user_id, COALESCE(tenant_id, ''), preference_code)`. Because AutoMigrate declared no such index, duplicates under that key are possible there and would make the index creation fail, so the migration collapses them first, keeping the lowest `id` (the row GORM's `First()` returned, i.e. the one the Go service was actually serving).
 - **Wire contract unchanged**, down to which keys are omitted: `responseInfo` is lower-camel, the error list is capital-`Errors`, `resMsgId` is never sent, and a zero `offset`/`totalCount` is omitted from `pagination`. `WireContractTest` pins the serialized JSON byte for byte.
 - **Pool durations still accept Go spellings.** `DB_MAX_CONN_LIFETIME=1h` would be rejected by Hikari's own millisecond-typed property, so these are bound to `Duration` in `DataSourceConfig`.
 - **`userInfo.id` still accepts a number or a string** (`FlexibleStringDeserializer`), as Go's `FlexibleString` did.
 - **Strict payload parsing.** Scalar coercion is switched off for the notification payload so `"status": 5` fails as `INVALID_PAYLOAD_FORMAT` rather than being widened to `"5"` and reported as an invalid status. Jackson would otherwise be more permissive than Go here.
 - **Routing failures keep their status.** An unknown path is a 404 and a wrong method a 405, wrapped in the DIGIT error envelope. Gin returned a plain-text 404; nothing keys on that body.
+- **Four deliberate improvements on Go**, each a case where parity would have meant keeping a defect: a malformed caller-supplied `id` is a 400 rather than a 500; internal errors no longer echo the database's text; the payload parser matches keys case-insensitively as `encoding/json` did, so a lower-cased `consent.sms` block is validated rather than stored unchecked; and the upsert lookup trims its key, which keeps it idempotent for padded input now that the unique index exists.
 - **Dropped as unreachable:** the repository's unused `Delete` helper, the never-thrown `ErrNotFound` (404) branch, a `json.Valid` check on a payload that had already been parsed, and the `sortBy`/`order` pagination fields the shared Go struct carried but nothing ever set (always omitted, so the response is unchanged). The Go service's duplicated page-size clamp — applied in both the service and the repository — is applied once, in the enricher.
-- **Identity is still taken from the request body.** `preference.userId` and `criteria.userId` come from the caller, not from the auth token, which the token uuid is used only for audit. That is the Go behaviour, preserved deliberately; closing it is tracked in [`docs/dashboard-rbac-design/50-packs-config-ownership.md`](../../docs/dashboard-rbac-design/50-packs-config-ownership.md) as a gateway/BFF concern, since a change here would alter the contract for every existing caller.
+- **Identity is still taken from the request body**, but it is now checked against the principal. `preference.userId` and `criteria.userId` still come from the caller, and the token uuid still drives the audit columns; the difference is that a citizen principal may no longer point them at someone else. See [Authorization](#authorization). The gateway-level fix contemplated in [`docs/dashboard-rbac-design/50-packs-config-ownership.md`](../../docs/dashboard-rbac-design/50-packs-config-ownership.md) remains the broader answer; this closes the hole at the service.
 
 ## Resources
 

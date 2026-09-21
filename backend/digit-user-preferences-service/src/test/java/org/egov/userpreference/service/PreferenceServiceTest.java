@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.userpreference.config.ApplicationConfig;
 import org.egov.userpreference.repository.PreferenceRepository;
 import org.egov.userpreference.service.enrichment.PreferenceEnricher;
+import org.egov.userpreference.service.validator.OwnershipValidator;
 import org.egov.userpreference.service.validator.PreferenceValidator;
 import org.egov.userpreference.utils.CustomException;
 import org.egov.userpreference.web.model.AuditDetails;
@@ -18,10 +19,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,16 +52,21 @@ class PreferenceServiceTest {
         config.setDefaultLimit(10);
         config.setDefaultOffset(0);
         config.setMaxLimit(100);
+        config.setValidLanguages(List.of("en_IN", "hi_IN", "fr_IN", "pt_IN"));
 
         repository = mock(PreferenceRepository.class);
-        service = new PreferenceService(new PreferenceValidator(), new PreferenceEnricher(config), repository);
+        OwnershipValidator ownershipValidator = new OwnershipValidator();
+        ReflectionTestUtils.setField(ownershipValidator, "enforceOwnership", true);
+        ReflectionTestUtils.setField(ownershipValidator, "privilegedRoles", List.of("EMPLOYEE", "SUPERUSER"));
+        service = new PreferenceService(new PreferenceValidator(config), ownershipValidator,
+                new PreferenceEnricher(config), repository);
     }
 
     private PreferenceRequest upsertRequest() {
         try {
             return PreferenceRequest.builder()
                     .requestInfo(RequestInfo.builder()
-                            .userInfo(RequestInfo.UserInfo.builder().uuid("author").build())
+                            .userInfo(RequestInfo.UserInfo.builder().uuid("u1").build())
                             .build())
                     .preference(Preference.builder()
                             .userId("u1")
@@ -81,7 +89,7 @@ class PreferenceServiceTest {
 
         verify(repository).create(any());
         verify(repository, never()).update(any());
-        assertEquals("author", response.getPreferences().get(0).getAuditDetails().getCreatedBy());
+        assertEquals("u1", response.getPreferences().get(0).getAuditDetails().getCreatedBy());
         assertNull(response.getPagination(), "an upsert carries no pagination block");
     }
 
@@ -115,7 +123,10 @@ class PreferenceServiceTest {
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, e.getHttpStatus());
         assertEquals("INTERNAL_ERROR", e.getErrors().get(0).getCode());
-        assertEquals("failed to check existing preference: statement timed out", e.getErrors().get(0).getMessage());
+        // The driver's text is logged, not returned: it names indexes,
+        // constraints and columns the caller has no business seeing.
+        assertEquals("failed to check existing preference", e.getErrors().get(0).getMessage());
+        assertFalse(e.getErrors().get(0).getMessage().contains("statement timed out"));
     }
 
     @Test
@@ -128,10 +139,8 @@ class PreferenceServiceTest {
         CustomException e = assertThrows(CustomException.class, () -> service.upsert(upsertRequest()));
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, e.getHttpStatus());
-        // The message unwraps to the database's own complaint, as Go's %v on a
-        // wrapped error did.
-        assertEquals("failed to save preference: duplicate key value violates unique constraint",
-                e.getErrors().get(0).getMessage());
+        assertEquals("failed to save preference", e.getErrors().get(0).getMessage());
+        assertFalse(e.getErrors().get(0).getMessage().contains("unique constraint"));
     }
 
     @Test
@@ -146,7 +155,7 @@ class PreferenceServiceTest {
         CustomException e = assertThrows(CustomException.class, () -> service.search(request));
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, e.getHttpStatus());
-        assertEquals("failed to search preferences: statement timed out", e.getErrors().get(0).getMessage());
+        assertEquals("failed to search preferences", e.getErrors().get(0).getMessage());
     }
 
     @Test
@@ -161,10 +170,12 @@ class PreferenceServiceTest {
     }
 
     @Test
-    void looksUpTheRawKeyBeforeItIsTrimmed() {
-        // Normalization happens after the lookup, so a padded tenantId misses
-        // the trimmed row it will be stored under. Preserved from the Go
-        // ordering rather than quietly corrected.
+    void looksUpTheTrimmedKeySoPaddedInputStaysIdempotent() {
+        // The Go service looked up the raw value, which merely inserted a
+        // second row for padded input. With the unique index the migration now
+        // creates, that same path would miss and then fail the insert with a
+        // duplicate-key 500, so the lookup uses the key the row is stored
+        // under.
         when(repository.findByKey(anyString(), anyString(), anyString())).thenReturn(null);
         when(repository.create(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -173,7 +184,7 @@ class PreferenceServiceTest {
 
         PreferenceResponse response = service.upsert(request);
 
-        verify(repository).findByKey("u1", "  pg.citya  ", "USER_PROFILE");
+        verify(repository).findByKey("u1", "pg.citya", "USER_PROFILE");
         assertEquals("pg.citya", response.getPreferences().get(0).getTenantId());
     }
 

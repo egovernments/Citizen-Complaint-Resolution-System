@@ -160,7 +160,7 @@ expect_json '.pagination | has("offset")' "false" "a zero offset is omitted"
 section "4. Upsert — update on the same key"
 call POST "${API}/_upsert" "$(cat <<JSON
 {
-  "RequestInfo": { "msgId": "e2e-003", "userInfo": { "uuid": "e2e-editor-${SUFFIX}" } },
+  "RequestInfo": { "msgId": "e2e-003", "userInfo": { "uuid": "e2e-editor-${SUFFIX}", "roles": [ { "code": "EMPLOYEE" } ] } },
   "preference": {
     "userId": "${USER_A}", "tenantId": "${TENANT}", "preferenceCode": "${CODE}",
     "payload": {
@@ -387,6 +387,7 @@ expect_json '.Errors[1].code' "INVALID_OFFSET" "  INVALID_OFFSET"
 call POST "${API}/_upsert" '{"RequestInfo":{},'
 expect_status 400 "a malformed body is rejected"
 expect_json '.Errors[0].code' "INVALID_JSON" "  INVALID_JSON"
+expect_json '.Errors[0].message' "Invalid JSON format" "  the parser message is logged, not returned"
 
 call POST "${API}/_upsert" ''
 expect_status 400 "an empty body is rejected"
@@ -451,8 +452,72 @@ JSON
 )"
 expect_json '.preferences[0].auditDetails.createdBy' "system" "an unidentified caller is attributed to system"
 
+# ── Identifier and payload-casing checks ────────────────────────────────────
+section "10. Identifier and payload casing"
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"id\":\"not-a-uuid\",\"userId\":\"e2e-badid-${SUFFIX}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
+expect_status 400 "a caller-supplied id that is not a uuid is a 400, not a 500"
+expect_json '.Errors[0].code' "INVALID_ID" "  INVALID_ID"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"e2e-lower-${SUFFIX}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"sms\":{\"status\":\"MAYBE\",\"scope\":\"REGIONAL\"}}}}}"
+expect_status 400 "a lower-cased consent block is validated, as Go's encoding/json did"
+expect_json '.Errors | length' "2" "  both the status and scope errors are returned"
+expect_json '.Errors[0].code' "INVALID_CONSENT_STATUS" "  INVALID_CONSENT_STATUS"
+expect_json '.Errors[1].code' "INVALID_CONSENT_SCOPE" "  INVALID_CONSENT_SCOPE"
+
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "  e2e-pad-${SUFFIX}  ", "tenantId": "  ${TENANT}  ",
+    "preferenceCode": "${CODE}", "payload": { "preferredLanguage": "en_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "a padded key is accepted"
+PAD_ID=$(printf '%s' "$BODY" | jq -r '.preferences[0].id')
+call POST "${API}/_upsert" "$(cat <<JSON
+{
+  "RequestInfo": {},
+  "preference": {
+    "userId": "e2e-pad-${SUFFIX}", "tenantId": "${TENANT}",
+    "preferenceCode": "${CODE}", "payload": { "preferredLanguage": "hi_IN" }
+  }
+}
+JSON
+)"
+expect_status 200 "the same key unpadded is an update, not a duplicate-key 500"
+expect_json '.preferences[0].id' "${PAD_ID}" "  and lands on the same row"
+
+# ── Ownership ───────────────────────────────────────────────────────────────
+# Both endpoints key on the body userId, so a citizen principal is held to
+# their own record (CWE-639). A call with no principal is service-to-service.
+section "11. Ownership"
+OWNER="11111111-1111-1111-1111-1111${SUFFIX:0:8}"
+VICTIM="22222222-2222-2222-2222-2222${SUFFIX:0:8}"
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"preference\":{\"userId\":\"${OWNER}\",\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"en_IN\"}}}"
+expect_status 200 "a citizen writes their own record"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"preference\":{\"userId\":\"${VICTIM}\",\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"en_IN\"}}}"
+expect_status 403 "a citizen cannot write someone else's record"
+expect_json '.Errors[0].code' "NOT_AUTHORIZED" "  NOT_AUTHORIZED"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 403 "a citizen cannot enumerate the tenant"
+expect_json '.Errors[0].code' "NOT_AUTHORIZED" "  NOT_AUTHORIZED"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\",\"roles\":[{\"code\":\"CITIZEN\"}]}},\"criteria\":{\"userId\":\"${OWNER}\"}}"
+expect_status 200 "a citizen reads their own record"
+expect_json '.preferences | length' "1" "  and gets it"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"emp-${SUFFIX}\",\"roles\":[{\"code\":\"EMPLOYEE\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 200 "an employee reads across the tenant"
+
+call POST "${API}/_search" "{\"requestInfo\":{},\"criteria\":{\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\"}}"
+expect_status 200 "novu-bridge's principal-less call still lists the tenant"
+
 # ── Routing ─────────────────────────────────────────────────────────────────
-section "10. Routing"
+section "12. Routing"
 call POST "${API}/_nope" '{}'
 expect_status 404 "an unknown path is a 404, not a 500"
 call GET "${API}/_upsert"

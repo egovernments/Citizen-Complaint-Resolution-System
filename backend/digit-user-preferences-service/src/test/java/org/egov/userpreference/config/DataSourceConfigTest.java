@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 import javax.sql.DataSource;
@@ -19,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * get a boot failure for it.
  */
 @SpringBootTest
+@ActiveProfiles("test")
 @TestPropertySource(properties = {
         "DB_MAX_CONNS=7",
         "DB_MIN_CONNS=2",

@@ -27,21 +27,26 @@ import java.time.Duration;
  * <p>{@code @ConfigurationProperties} is still applied on top, so an operator
  * who prefers the Spring-native {@code spring.datasource.hikari.*} keys can
  * override any of this in the usual way.
+ *
+ * <p>The four knobs are read through {@code user.preference.db.*}, declared in
+ * {@code application.properties} as {@code ${DB_…:default}} like every other
+ * setting, rather than as bare environment keys with their defaults buried
+ * here. Same values, but an operator finds them where they look for them.
  */
 @Configuration
 @Slf4j
 public class DataSourceConfig {
 
-    @Value("${DB_MAX_CONNS:25}")
+    @Value("${user.preference.db.max-conns}")
     private int maxConnections;
 
-    @Value("${DB_MIN_CONNS:5}")
+    @Value("${user.preference.db.min-conns}")
     private int minConnections;
 
-    @Value("${DB_MAX_CONN_LIFETIME:1h}")
+    @Value("${user.preference.db.max-conn-lifetime}")
     private Duration maxConnectionLifetime;
 
-    @Value("${DB_MAX_CONN_IDLE_TIME:30m}")
+    @Value("${user.preference.db.max-conn-idle-time}")
     private Duration maxConnectionIdleTime;
 
     @Bean

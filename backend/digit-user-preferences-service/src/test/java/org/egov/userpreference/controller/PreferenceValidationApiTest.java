@@ -461,8 +461,7 @@ class PreferenceValidationApiTest extends ApiTestBase {
         upsert("{ \"RequestInfo\": {}, ")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.Errors[0].code").value("INVALID_JSON"))
-                .andExpect(jsonPath("$.Errors[0].message")
-                        .value(org.hamcrest.Matchers.startsWith("Invalid JSON format: ")))
+                .andExpect(jsonPath("$.Errors[0].message").value("Invalid JSON format"))
                 .andExpect(jsonPath("$.responseInfo").doesNotExist());
     }
 
@@ -471,5 +470,119 @@ class PreferenceValidationApiTest extends ApiTestBase {
         upsert("")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.Errors[0].code").value("INVALID_JSON"));
+    }
+
+    @Test
+    void rejectsACallerSuppliedIdThatIsNotAUuid() throws Exception {
+        // The honoured id binds straight into CAST(? AS uuid); without this
+        // check the driver's conversion error surfaced as a 500.
+        String body = """
+                {
+                  "RequestInfo": {},
+                  "preference": {
+                    "id": "not-a-uuid",
+                    "userId": "u1",
+                    "preferenceCode": "USER_PROFILE",
+                    "payload": { "k": "v" }
+                  }
+                }
+                """;
+
+        upsert(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors[0].code").value("INVALID_ID"))
+                .andExpect(jsonPath("$.Errors[0].message").value("id must be a valid UUID"));
+    }
+
+    @Test
+    void acceptsAWellFormedCallerSuppliedId() throws Exception {
+        String body = """
+                {
+                  "RequestInfo": {},
+                  "preference": {
+                    "id": "11111111-2222-3333-4444-555555555555",
+                    "userId": "u-valid-id",
+                    "preferenceCode": "USER_PROFILE",
+                    "payload": { "k": "v" }
+                  }
+                }
+                """;
+
+        upsert(body)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferences[0].id").value("11111111-2222-3333-4444-555555555555"));
+    }
+
+    @Test
+    void validatesALowerCasedConsentBlockJustAsGoDid() throws Exception {
+        // encoding/json matched keys case-insensitively, so Go reported both
+        // of these. A case-sensitive payload mapper would have let them
+        // through and stored an invalid status.
+        String body = """
+                {
+                  "RequestInfo": {},
+                  "preference": {
+                    "userId": "u1",
+                    "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
+                    "payload": { "consent": { "sms": { "status": "MAYBE", "scope": "REGIONAL" } } }
+                  }
+                }
+                """;
+
+        upsert(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors", hasSize(2)))
+                .andExpect(jsonPath("$.Errors[0].code").value("INVALID_CONSENT_STATUS"))
+                .andExpect(jsonPath("$.Errors[1].code").value("INVALID_CONSENT_SCOPE"));
+    }
+
+    @Test
+    void validatesALowerCasedPreferredLanguageKey() throws Exception {
+        String body = """
+                {
+                  "RequestInfo": {},
+                  "preference": {
+                    "userId": "u1",
+                    "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
+                    "payload": { "preferredlanguage": "ta_IN" }
+                  }
+                }
+                """;
+
+        upsert(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors[0].code").value("INVALID_LANGUAGE"));
+    }
+
+    @Test
+    void doesNotLeakTheDatabaseErrorTextOnAnInternalFailure() throws Exception {
+        // A duplicate id forces a constraint violation. The response must not
+        // carry the index, constraint or column names the driver reports.
+        String body = """
+                {
+                  "RequestInfo": {},
+                  "preference": {
+                    "id": "99999999-9999-9999-9999-999999999999",
+                    "userId": "dup-a",
+                    "preferenceCode": "USER_PROFILE",
+                    "payload": { "k": "v" }
+                  }
+                }
+                """;
+        upsert(body).andExpect(status().isOk());
+
+        String clash = body.replace("dup-a", "dup-b");
+        upsert(clash)
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.Errors[0].code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.Errors[0].message").value("failed to save preference"));
+    }
+
+    @Test
+    void doesNotLeakTheParserMessageOnAMalformedBody() throws Exception {
+        upsert("{ \"RequestInfo\": {}, ")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.Errors[0].code").value("INVALID_JSON"))
+                .andExpect(jsonPath("$.Errors[0].message").value("Invalid JSON format"));
     }
 }

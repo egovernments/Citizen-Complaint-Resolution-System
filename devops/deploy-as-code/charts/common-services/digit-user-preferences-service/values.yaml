@@ -70,6 +70,13 @@ env: |
   # The init container above applies the migrations, so the app must not.
   - name: SPRING_FLYWAY_ENABLED
     value: "false"
+  # Both endpoints key on the userId in the request body, and this route is
+  # exposed through the gateway, so the service holds a citizen principal to
+  # its own record. Roles listed here may act across the tenant.
+  - name: ENFORCE_OWNERSHIP
+    value: "true"
+  - name: PRIVILEGED_ROLES
+    value: "EMPLOYEE,SUPERUSER,ACCOUNT_ADMIN,SYSTEM"
   - name: DB_HOST
     valueFrom:
       configMapKeyRef:

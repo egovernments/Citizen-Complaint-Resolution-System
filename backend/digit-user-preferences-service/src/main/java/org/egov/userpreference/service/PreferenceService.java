@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.userpreference.repository.PreferenceRepository;
 import org.egov.userpreference.service.enrichment.PreferenceEnricher;
+import org.egov.userpreference.service.validator.OwnershipValidator;
 import org.egov.userpreference.service.validator.PreferenceValidator;
 import org.egov.userpreference.utils.CustomException;
 import org.egov.userpreference.utils.ErrorCodes;
 import org.egov.userpreference.utils.ResponseUtil;
+import org.egov.userpreference.utils.StringUtil;
 import org.egov.userpreference.web.model.Pagination;
 import org.egov.userpreference.web.model.Preference;
 import org.egov.userpreference.web.model.PreferenceCriteria;
@@ -27,6 +29,7 @@ import java.util.List;
 public class PreferenceService {
 
     private final PreferenceValidator validator;
+    private final OwnershipValidator ownershipValidator;
     private final PreferenceEnricher enricher;
     private final PreferenceRepository repository;
 
@@ -51,19 +54,24 @@ public class PreferenceService {
         if (PreferenceValidator.USER_NOTIFICATION_PREFERENCES.equals(preference.getPreferenceCode())) {
             validator.validateNotificationPayload(preference.getPayload(), requestInfo);
         }
+        ownershipValidator.validateUpsert(preference, requestInfo);
 
         String userId = PreferenceEnricher.userIdFrom(requestInfo);
 
-        // The lookup runs on the raw key, before normalization, exactly as it
-        // did in the Go service — a tenantId of "  " therefore misses the
-        // trimmed row it will later be stored under.
+        // The lookup uses the same trimmed key the row is stored under. The Go
+        // service looked up the raw value, which merely inserted a second row
+        // for padded input; now that the migration creates the unique index,
+        // the same path would miss here and then fail the insert with a
+        // duplicate-key 500. Trimming first keeps the upsert idempotent.
         Preference existing;
         try {
             existing = repository.findByKey(
-                    preference.getUserId(), preference.getTenantId(), preference.getPreferenceCode());
+                    StringUtil.trimToEmpty(preference.getUserId()),
+                    StringUtil.trimToEmpty(preference.getTenantId()),
+                    StringUtil.trimToEmpty(preference.getPreferenceCode()));
         } catch (DataAccessException e) {
             log.error("Failed to look up the existing preference", e);
-            throw CustomException.internal("failed to check existing preference: " + rootCause(e), requestInfo);
+            throw CustomException.internal("failed to check existing preference", requestInfo);
         }
 
         Preference result;
@@ -77,7 +85,7 @@ public class PreferenceService {
             }
         } catch (DataAccessException e) {
             log.error("Failed to save the preference", e);
-            throw CustomException.internal("failed to save preference: " + rootCause(e), requestInfo);
+            throw CustomException.internal("failed to save preference", requestInfo);
         }
 
         return PreferenceResponse.builder()
@@ -97,6 +105,7 @@ public class PreferenceService {
         }
 
         validator.validateCriteria(criteria, requestInfo);
+        ownershipValidator.validateSearch(criteria, requestInfo);
         enricher.enrichSearchDefaults(criteria);
 
         List<Preference> preferences;
@@ -106,7 +115,7 @@ public class PreferenceService {
             preferences = repository.search(criteria);
         } catch (DataAccessException e) {
             log.error("Failed to search preferences", e);
-            throw CustomException.internal("failed to search preferences: " + rootCause(e), requestInfo);
+            throw CustomException.internal("failed to search preferences", requestInfo);
         }
 
         return PreferenceResponse.builder()
@@ -118,17 +127,5 @@ public class PreferenceService {
                         .totalCount(totalCount)
                         .build())
                 .build();
-    }
-
-    /**
-     * The message Go's {@code %v} on a wrapped error produced — the innermost
-     * cause, which is the database's own complaint.
-     */
-    private static String rootCause(Throwable e) {
-        Throwable cause = e;
-        while (cause.getCause() != null) {
-            cause = cause.getCause();
-        }
-        return cause.getMessage();
     }
 }

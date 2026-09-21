@@ -41,13 +41,16 @@ public class GlobalExceptionHandler {
      * A body that is missing, truncated or not JSON at all. The Go service
      * reported this from the binding step before any {@code RequestInfo}
      * existed, so no {@code responseInfo} is echoed.
+     *
+     * <p>The parser's own message is logged rather than returned: it carries
+     * internal class and field names alongside the parse position, none of
+     * which the caller needs in order to fix their request (CWE-209).
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex) {
-        log.debug("Rejecting an unreadable request body", ex);
+        log.warn("Rejecting an unreadable request body: {}", ex.getMostSpecificCause().getMessage());
         return new ResponseEntity<>(ErrorResponse.builder()
-                .errors(List.of(CustomException.error(ErrorCodes.INVALID_JSON,
-                        "Invalid JSON format: " + ex.getMostSpecificCause().getMessage())))
+                .errors(List.of(CustomException.error(ErrorCodes.INVALID_JSON, "Invalid JSON format")))
                 .build(), HttpStatus.BAD_REQUEST);
     }
 

@@ -44,7 +44,17 @@ public class CustomException extends RuntimeException {
         return validation(List.of(error(code, message)), requestInfo);
     }
 
-    /** A 500 for a failure below the service layer, e.g. an unreachable database. */
+    /** A 403 for a caller acting on a record that is not theirs. */
+    public static CustomException forbidden(String code, String message, RequestInfo requestInfo) {
+        return new CustomException(List.of(error(code, message)), requestInfo, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * A 500 for a failure below the service layer, e.g. an unreachable
+     * database. The message is the fixed text sent to the caller; the
+     * underlying cause is logged, not returned, so index, constraint and
+     * column names stay out of the response (CWE-209).
+     */
     public static CustomException internal(String message, RequestInfo requestInfo) {
         return new CustomException(List.of(error(ErrorCodes.INTERNAL_ERROR, message)), requestInfo,
                 HttpStatus.INTERNAL_SERVER_ERROR);

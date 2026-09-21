@@ -8,6 +8,16 @@ All notable changes to this module will be documented in this file.
 - Schema ownership moved from GORM `AutoMigrate` to Flyway. The migration SQL is unchanged and idempotent, so an existing database is baselined and gains the indexes AutoMigrate never created — including the unique index on `(user_id, COALESCE(tenant_id, ''), preference_code)`. The Helm chart's `dbMigration` init container and a compose migrator are enabled to match the sibling services, with the app's embedded Flyway off in those deployments
 - Helm/compose values updated for a JVM workload (`appType: java-spring`, heap, tracing, 512Mi limit)
 
+### Fixed (review round 1, PR #2081)
+- Ownership is enforced on both endpoints: a citizen principal may only read and write their own record, and a tenant-only `_search` is refused. Both endpoints key on the body `userId`, so without this any caller reaching the route could read or overwrite another citizen's consent (CWE-639). Privileged roles and service-to-service calls (novu-bridge posts an empty `requestInfo`) are unaffected; `ENFORCE_OWNERSHIP=false` restores the old behaviour
+- The migration collapses duplicate keys before creating the unique index. A GORM-created database has no such index and can hold duplicates, which would have failed the migration and left the pod unable to start
+- A caller-supplied `id` that is not a UUID is a 400 (`INVALID_ID`) instead of a 500 from the driver's cast
+- The notification payload parser matches keys case-insensitively, as `encoding/json` did. A lower-cased `consent.sms` block was reaching the table with its status unvalidated
+- The upsert lookup trims its key, so padded input updates the existing row instead of failing the insert with a duplicate-key 500
+- Internal errors and malformed-body errors return fixed messages; the database and parser text is logged instead (CWE-209)
+- The language allowlist, the paging defaults and the pool knobs are configuration rather than constants buried in Java. The language list in particular is tenant data: the citizen profile screen offers whatever MDMS `StateInfo.languages` carries
+- The test resources no longer shadow `application.properties` with a second copy, so the shipped defaults are what the suite exercises
+
 ### Preserved
 - HTTP contract byte for byte: endpoint paths, request envelopes (including the case-insensitive `RequestInfo`/`requestInfo` both callers rely on), response key casing, which keys are omitted when empty, error codes, messages and statuses
 - `/health` remains at the container root rather than under the API context path, so the compose healthcheck, both Kubernetes probes and both Gatus catalogues keep working

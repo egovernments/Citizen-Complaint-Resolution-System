@@ -1,6 +1,7 @@
 package org.egov.userpreference.service.validator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.egov.userpreference.config.ApplicationConfig;
 import org.egov.userpreference.utils.CustomException;
 import org.egov.userpreference.web.model.Preference;
 import org.egov.userpreference.web.model.PreferenceCriteria;
@@ -23,7 +24,9 @@ class PreferenceValidatorTest {
 
     @BeforeEach
     void setUp() {
-        validator = new PreferenceValidator();
+        ApplicationConfig config = new ApplicationConfig();
+        config.setValidLanguages(List.of("en_IN", "hi_IN", "fr_IN", "pt_IN"));
+        validator = new PreferenceValidator(config);
     }
 
     private Preference preference(String userId, String tenantId, String code, String payloadJson) {

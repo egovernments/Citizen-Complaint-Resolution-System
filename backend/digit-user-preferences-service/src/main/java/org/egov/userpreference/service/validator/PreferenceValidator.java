@@ -2,11 +2,14 @@ package org.egov.userpreference.service.validator;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.cfg.CoercionAction;
 import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.type.LogicalType;
 import lombok.extern.slf4j.Slf4j;
+import org.egov.userpreference.config.ApplicationConfig;
 import org.egov.userpreference.utils.CustomException;
 import org.egov.userpreference.utils.ErrorCodes;
 import org.egov.userpreference.utils.StringUtil;
@@ -25,6 +28,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Input validation for the two preference endpoints.
@@ -42,14 +46,19 @@ public class PreferenceValidator {
     /** The one {@code preferenceCode} whose payload has a known schema. */
     public static final String USER_NOTIFICATION_PREFERENCES = "USER_NOTIFICATION_PREFERENCES";
 
+    // These bounds mirror the column widths in
+    // db/migration/main/V20260205120000__create_user_preference.sql —
+    // user_id varchar(64), preference_code varchar(128), tenant_id varchar(64).
+    // They are checked here so an over-long value is a 400 rather than a 500
+    // from the driver, which means widening a column in a future migration
+    // must widen the matching constant too or the old bound silently stands.
     private static final int USER_ID_MAX_LENGTH = 64;
     private static final int PREFERENCE_CODE_MIN_LENGTH = 2;
     private static final int PREFERENCE_CODE_MAX_LENGTH = 128;
     private static final int TENANT_ID_MIN_LENGTH = 2;
     private static final int TENANT_ID_MAX_LENGTH = 64;
 
-    private static final Set<String> VALID_LANGUAGES = Set.of("en_IN", "hi_IN", "fr_IN", "pt_IN");
-    private static final String VALID_LANGUAGES_MESSAGE = "en_IN, hi_IN, fr_IN, pt_IN";
+    private final ApplicationConfig applicationConfig;
 
     /**
      * Parses the notification payload for validation only.
@@ -60,12 +69,23 @@ public class PreferenceValidator {
      * Go's {@code json.Unmarshal} did. Jackson would otherwise quietly widen
      * {@code 5} to {@code "5"} and report a different error code downstream.
      * Unknown keys stay ignored, also matching Go.
+     *
+     * <p>Key matching is case-insensitive for the same reason the service-wide
+     * mapper is: {@code encoding/json} matched keys that way, so Go validated
+     * a {@code "sms"} consent block just as it did {@code "SMS"}. This mapper
+     * is built by hand and would not otherwise pick up
+     * {@code spring.jackson.mapper.accept-case-insensitive-properties}, which
+     * would let a lower-cased channel carry an invalid status past validation
+     * and into the table.
      */
     private final ObjectMapper payloadMapper;
 
-    public PreferenceValidator() {
-        this.payloadMapper = new ObjectMapper()
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    public PreferenceValidator(ApplicationConfig applicationConfig) {
+        this.applicationConfig = applicationConfig;
+        this.payloadMapper = JsonMapper.builder()
+                .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build();
         this.payloadMapper.coercionConfigFor(LogicalType.Textual)
                 .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
                 .setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
@@ -105,6 +125,13 @@ public class PreferenceValidator {
             errors.add(CustomException.error(ErrorCodes.INVALID_PAYLOAD, "payload is required"));
         }
 
+        // A caller-supplied id is honoured on create and binds into
+        // CAST(? AS uuid). Rejecting a malformed one here keeps it a 400
+        // rather than the 500 the driver's conversion error would produce.
+        if (StringUtil.isNotEmpty(preference.getId()) && isNotUuid(preference.getId())) {
+            errors.add(CustomException.error(ErrorCodes.INVALID_ID, "id must be a valid UUID"));
+        }
+
         int tenantIdLength = StringUtil.length(preference.getTenantId());
         if (StringUtil.isNotEmpty(preference.getTenantId())
                 && (tenantIdLength < TENANT_ID_MIN_LENGTH || tenantIdLength > TENANT_ID_MAX_LENGTH)) {
@@ -140,10 +167,12 @@ public class PreferenceValidator {
 
         List<ErrorResponse.Error> errors = new ArrayList<>();
 
+        Set<String> validLanguages = applicationConfig.getValidLanguageSet();
         String language = parsed.getPreferredLanguage();
-        if (StringUtil.isNotEmpty(language) && !VALID_LANGUAGES.contains(language)) {
+        if (StringUtil.isNotEmpty(language) && !validLanguages.isEmpty() && !validLanguages.contains(language)) {
             errors.add(CustomException.error(ErrorCodes.INVALID_LANGUAGE,
-                    "preferredLanguage must be one of: " + VALID_LANGUAGES_MESSAGE + "; got: " + language));
+                    "preferredLanguage must be one of: " + applicationConfig.getValidLanguagesMessage()
+                            + "; got: " + language));
         }
 
         if (parsed.getConsent() != null) {
@@ -186,6 +215,15 @@ public class PreferenceValidator {
         errors.addAll(validatePolicy(Channel.SMS, consent.getSms()));
         errors.addAll(validatePolicy(Channel.EMAIL, consent.getEmail()));
         return errors;
+    }
+
+    private static boolean isNotUuid(String value) {
+        try {
+            UUID.fromString(value);
+            return false;
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
     }
 
     private List<ErrorResponse.Error> validatePolicy(Channel channel, ConsentPolicy policy) {

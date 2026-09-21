@@ -1,16 +1,20 @@
 package org.egov.userpreference.utils;
 
 /**
- * Error codes on the wire. Every value here was emitted by the Go service and
- * is part of the API contract, so none of them may be renamed without a
- * consumer-side change.
+ * Error codes on the wire. Everything except {@link #INVALID_ID} and
+ * {@link #NOT_AUTHORIZED} was emitted by the Go service and is part of the
+ * API contract, so none of those may be renamed without a consumer-side
+ * change. The two additions replace failure modes the Go service answered
+ * with a 500 and a silent success respectively.
  */
 public final class ErrorCodes {
 
     public static final String INVALID_JSON = "INVALID_JSON";
     public static final String INVALID_REQUEST = "INVALID_REQUEST";
     public static final String INVALID_REQUEST_INFO = "INVALID_REQUEST_INFO";
+    public static final String INVALID_ID = "INVALID_ID";
     public static final String INVALID_USER_ID = "INVALID_USER_ID";
+    public static final String NOT_AUTHORIZED = "NOT_AUTHORIZED";
     public static final String INVALID_TENANT_ID = "INVALID_TENANT_ID";
     public static final String INVALID_PREFERENCE_CODE = "INVALID_PREFERENCE_CODE";
     public static final String INVALID_PAYLOAD = "INVALID_PAYLOAD";

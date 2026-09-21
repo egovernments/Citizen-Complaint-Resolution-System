@@ -15,6 +15,24 @@ CREATE TABLE IF NOT EXISTS user_preference (
     last_modified_time BIGINT NOT NULL
 );
 
+-- Collapse any duplicate key before the unique index is built.
+--
+-- On a fresh database this matches nothing. It matters on a database created
+-- by the Go service's GORM AutoMigrate, which declared no unique index and
+-- whose upsert was read-then-insert with no constraint behind it, so
+-- duplicates under this key are possible there. Without this, CREATE UNIQUE
+-- INDEX would error, the migration would never complete, and the service
+-- would not start.
+--
+-- The lowest id is kept because that is the row GORM's First() returned, so
+-- the survivor is the record the Go service was actually serving.
+DELETE FROM user_preference a
+      USING user_preference b
+      WHERE a.id > b.id
+        AND a.user_id = b.user_id
+        AND COALESCE(a.tenant_id, '') = COALESCE(b.tenant_id, '')
+        AND a.preference_code = b.preference_code;
+
 -- Create unique constraint on (user_id, tenant_id, preference_code)
 -- This ensures one preference record per user per code per tenant
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_preference_unique
