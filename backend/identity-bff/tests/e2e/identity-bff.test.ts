@@ -217,6 +217,12 @@ describe("identity BFF", () => {
     );
     expect(unknown.status).toBe(400);
 
+    const invalidIntent = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&intent=register`,
+      { redirect: "manual" },
+    );
+    expect(invalidIntent.status).toBe(400);
+
     const unsafeReturn = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&returnTo=${encodeURIComponent("/\\attacker.example")}`,
       { redirect: "manual" },
@@ -419,7 +425,11 @@ describe("identity BFF", () => {
       }),
     });
     expect(anonymousUnverified.status).toBe(202);
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await expect.poll(async () => {
+      const log = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json() as string[];
+      return log.some((entry) => entry ===
+        `GET /admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user/federated-identity`);
+    }).toBe(true);
     const unverifiedBeforeAuthentication = await (await fetch(
       `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user`,
     )).json();

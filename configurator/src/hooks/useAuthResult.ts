@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { type AuthResult, consumeAuthResult } from '@/api/onboarding';
 
@@ -33,5 +33,10 @@ export function useAuthResult() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get('authResult')]);
 
-  return { result, error };
+  const clear = useCallback(() => {
+    setResult(null);
+    setError(null);
+  }, []);
+
+  return { result, error, clear };
 }

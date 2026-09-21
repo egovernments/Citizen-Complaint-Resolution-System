@@ -52,6 +52,9 @@ identity_bff_image: egovio/identity-bff:nightly-develop
 identity_keycloak_image: egovio/identity-keycloak:nightly-develop
 identity_digit_admin_username: IDENTITY_ACCOUNT_ADMIN
 identity_digit_admin_tenant_id: pg
+identity_smtp_host: smtp.example.org
+identity_smtp_from: no-reply@example.org
+identity_smtp_user: smtp-user
 identity_auth_methods: >-
   [{"id":"password","label":"Email and password","type":"password","intents":["signin"]}]
 ```
@@ -64,6 +67,7 @@ bootstrap_secrets:
   keycloak_admin_password: "<strong password>"
   keycloak_db_password: "<strong password>"
   identity_digit_admin_password: "<DIGIT ACCOUNT_ADMIN password>"
+  identity_smtp_password: "<SMTP password>"
 ```
 
 The deploy derives separate stable BFF-client and workload secrets from the
@@ -73,17 +77,16 @@ the next converge.
 
 ### Optional authentication methods
 
-Magic link needs the custom `identity-keycloak` image, SMTP, and:
+SMTP is required for the identity stack even when magic link is disabled:
+password setup/reset, invitation activation, and first-broker email proof all
+send through the realm mail server. Deployment fails before changing Keycloak
+when those settings are absent. Magic link additionally needs the custom
+`identity-keycloak` image and:
 
 ```yaml
 identity_magic_link_enabled: true
 identity_auth_methods: >-
   [{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]}]
-identity_smtp_host: smtp.example.org
-identity_smtp_from: no-reply@example.org
-identity_smtp_user: smtp-user
-bootstrap_secrets:
-  identity_smtp_password: "<SMTP password>"
 ```
 
 Google and GitHub need their provider application callback set to Keycloak's

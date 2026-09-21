@@ -333,18 +333,6 @@
         - core_mobile_configs | default({}, true) | length > 0
         - _mobile_missing_keys | length > 0
 
-    - name: "preflight — configurator authentication requires the identity stack"
-      ansible.builtin.assert:
-        that:
-          - enable_keycloak | default(false) | bool
-          - nginx_features.keycloak | default(false) | bool
-        fail_msg: >-
-          The configurator now authenticates exclusively through the Identity
-          BFF. Set enable_keycloak: true and nginx_features.keycloak: true when
-          nginx_features.configurator is enabled; otherwise the login API would
-          not be deployed.
-      when: nginx_features.configurator | default(false)
-
     # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
     # route in front of token-exchange-svc, the per-tenant realm template and
     # its `digit-ui` public client were all removed in favour of the Identity
@@ -5282,19 +5270,19 @@
       changed_when: false
       when: enable_keycloak | default(false)
 
-    - name: "identity-bootstrap — validate magic-link mail configuration"
+    - name: "identity-bootstrap — validate identity email configuration"
       ansible.builtin.assert:
         that:
           - (identity_smtp_host | default('')) | length > 0
           - (identity_smtp_from | default('')) | length > 0
           - not (identity_smtp_auth | default(true) | bool) or (bao_secrets.json.data.data.identity_smtp_password | default('')) | length > 0
         fail_msg: >-
-          identity_magic_link_enabled requires identity_smtp_host,
-          identity_smtp_from, and an OpenBao identity_smtp_password when SMTP
-          authentication is enabled.
+          Identity password recovery, invitations, email verification and
+          optional magic links require identity_smtp_host, identity_smtp_from,
+          and an OpenBao identity_smtp_password when SMTP authentication is
+          enabled.
       when:
         - enable_keycloak | default(false)
-        - identity_magic_link_enabled | default(false)
 
     - name: "identity-bootstrap — reconcile Organizations realm and BFF clients"
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
@@ -5309,7 +5297,8 @@
         KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ identity_secrets.keycloak_magic_link_client_secret }}"
         KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ identity_secrets.keycloak_admin_client_secret }}"
         IDENTITY_REDIRECT_URI: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/identity/v1/callback' }}"
-        IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain) }}"
+        IDENTITY_POST_LOGIN_REDIRECT: "{{ identity_post_login_redirect | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/configurator/login', true) }}"
+        IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain, true) }}"
         KC_BOOTSTRAP_ADMIN_USERNAME: admin
         KC_BOOTSTRAP_ADMIN_PASSWORD: "{{ bao_secrets_identity.json.data.data.keycloak_admin_password }}"
         KEYCLOAK_SMTP_HOST: "{{ identity_smtp_host | default('') }}"

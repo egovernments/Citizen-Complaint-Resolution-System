@@ -15,7 +15,9 @@ export function safeIdentityReturnTo(value: unknown): string | null {
 
 export function withAuthResult(destination: string, id: string): string {
   if (destination.startsWith("/") && !destination.startsWith("//")) {
-    return `${destination}${destination.includes("?") ? "&" : "?"}authResult=${encodeURIComponent(id)}`;
+    const relative = new URL(destination, "http://identity.invalid");
+    relative.searchParams.set("authResult", id);
+    return `${relative.pathname}${relative.search}${relative.hash}`;
   }
   const url = new URL(destination);
   url.searchParams.set("authResult", id);

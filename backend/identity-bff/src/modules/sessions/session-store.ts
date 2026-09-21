@@ -120,15 +120,15 @@ export async function createPasswordSetupAttempt(
     passwordSetupKey(id),
     JSON.stringify(attempt),
     "EX",
-    config.identityPasswordSetupTtlSeconds,
+    // The action token may be opened just before its own expiry and then use a
+    // full Keycloak browser-login session to finish. Keep correlation state
+    // for both windows rather than expiring it while the form is still valid.
+    config.identityPasswordSetupTtlSeconds + config.identityLoginTtlSeconds,
   );
   return id;
 }
 
-export async function consumePasswordSetupAttempt(
-  id: string,
-): Promise<PasswordSetupAttempt | null> {
-  const raw = await getRedis().getdel(passwordSetupKey(id));
+function parsePasswordSetupAttempt(raw: string | null): PasswordSetupAttempt | null {
   if (!raw) return null;
   try {
     const attempt = JSON.parse(raw) as PasswordSetupAttempt;
@@ -138,6 +138,18 @@ export async function consumePasswordSetupAttempt(
   } catch {
     return null;
   }
+}
+
+export async function getPasswordSetupAttempt(
+  id: string,
+): Promise<PasswordSetupAttempt | null> {
+  return parsePasswordSetupAttempt(await getRedis().get(passwordSetupKey(id)));
+}
+
+export async function consumePasswordSetupAttempt(
+  id: string,
+): Promise<PasswordSetupAttempt | null> {
+  return parsePasswordSetupAttempt(await getRedis().getdel(passwordSetupKey(id)));
 }
 
 function sessionTtl(tokens: IdentityTokenSet): number {

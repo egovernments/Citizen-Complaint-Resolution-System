@@ -11,6 +11,7 @@ RUN wget -q \
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION} AS builder
 COPY --from=extension --chown=keycloak:keycloak /keycloak-magic-link.jar /opt/keycloak/providers/keycloak-magic-link.jar
+COPY --chown=keycloak:keycloak keycloak/theme/digit /opt/keycloak/themes/digit
 RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}

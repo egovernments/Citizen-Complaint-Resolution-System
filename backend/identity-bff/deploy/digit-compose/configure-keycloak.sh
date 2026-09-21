@@ -182,8 +182,7 @@ ensure_execution() {
       --config "$KC_CONFIG" >/dev/null
 }
 
-configure_magic_link() {
-  : "${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:?set KEYCLOAK_MAGIC_LINK_CLIENT_SECRET}"
+configure_smtp() {
   : "${KEYCLOAK_SMTP_HOST:?set KEYCLOAK_SMTP_HOST}"
   : "${KEYCLOAK_SMTP_FROM:?set KEYCLOAK_SMTP_FROM}"
 
@@ -209,6 +208,10 @@ configure_magic_link() {
        if $password != "" then .smtpServer.password = $password else . end' |
     docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
       update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
+}
+
+configure_magic_link() {
+  : "${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:?set KEYCLOAK_MAGIC_LINK_CLIENT_SECRET}"
 
   if [ -z "$(flow_uuid "$MAGIC_LINK_FLOW")" ]; then
     kc create authentication/flows -r "$REALM" \
@@ -285,7 +288,9 @@ fi
 # and existing realms even when the optional magic-link flow is disabled.
 kc update "realms/$REALM" -s organizationsEnabled=true \
   -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
+  -s resetPasswordAllowed=false -s loginTheme=digit \
   -s "sslRequired=$SSL_REQUIRED" >/dev/null
+configure_smtp
 
 # Organization-group client roles are published under this client and filtered
 # by the DIGIT projection allowlist. It is a role container, not a login client.

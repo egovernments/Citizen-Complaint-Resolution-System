@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAllowedOrigins } from "../../src/infrastructure/config.js";
+import { safeIdentityReturnTo, withAuthResult } from "../../src/modules/authentication/redirects.js";
 
 describe("identity configuration", () => {
   it("normalizes allowlisted URLs to exact origins", () => {
@@ -12,5 +13,12 @@ describe("identity configuration", () => {
     expect(() => parseAllowedOrigins("https://digit.example.org/configurator")).toThrow(/origins only/);
     expect(() => parseAllowedOrigins("https://user:secret@digit.example.org")).toThrow(/origins only/);
     expect(() => parseAllowedOrigins("javascript:alert(1)")).toThrow(/origins only/);
+  });
+
+  it("places result ids before relative URL fragments", () => {
+    expect(safeIdentityReturnTo("/configurator/login?from=keycloak#help"))
+      .toBe("/configurator/login?from=keycloak#help");
+    expect(withAuthResult("/configurator/login?from=keycloak#help", "result-1"))
+      .toBe("/configurator/login?from=keycloak&authResult=result-1#help");
   });
 });

@@ -161,6 +161,14 @@ append a completion flag, so first-password completion is confirmed against
 the credential Admin API; a reset of an existing password is complete when its
 one-use action returns through the configured application link.
 
+The hosted Keycloak password screen keeps the configured Google and GitHub
+choices visible after a generic invalid-credential error. Its thin DIGIT theme
+also links back to the Configurator's non-enumerating password help. An
+OAuth-first user can therefore switch to the provider that owns the account or
+return to recovery without the Configurator publicly inspecting an email's
+credential types. Keycloak's native forgot-password entry remains disabled so
+it cannot bypass the unverified-federated-account check above.
+
 Magic-link email is a single-use bearer credential valid for 10 minutes by
 default. Keycloak may create a previously unknown email user, but DIGIT account
 creation and tenant access still require Organization membership and the normal
@@ -407,6 +415,11 @@ Postgres database. Ansible runs `configure-keycloak.sh` with task-scoped secrets
 after Keycloak is healthy. It creates or updates the shared Organizations realm,
 confidential clients, protocol mappers, service-account permissions, roles,
 magic-link flow, and configured Google/GitHub providers.
+
+Realm SMTP is mandatory for the identity stack, not only for optional magic
+links. Password setup/reset, invitation activation, and email proof in the
+first-broker linking flow all depend on it; Ansible fails before bootstrap when
+the mail settings are incomplete.
 
 Kong publishes `/identity/v1` and `/auth`; the internal control plane is not
 registered with Kong. `deploy/digit-compose/` remains a standalone overlay and

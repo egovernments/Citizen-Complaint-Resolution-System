@@ -102,9 +102,10 @@ The `keycloak` Compose profile starts:
 
 The current Configurator login is an Identity-BFF client, so deployments that
 publish `/configurator/` must also enable this `keycloak` profile and publish
-the `keycloak` nginx feature. Ansible validates that prerequisite before it
-changes the host; it does not silently fall back to the legacy direct
-egov-user password form.
+the `keycloak` nginx feature when rolling out this Configurator build. It does
+not silently fall back to the legacy direct egov-user password form. Older
+Configurator images remain deployable without the identity profile, so the
+shared playbook does not impose this requirement on every historical image.
 
 Ansible runs `deploy/digit-compose/configure-keycloak.sh` after Keycloak is
 healthy. The script idempotently enables Organizations and reconciles the BFF,

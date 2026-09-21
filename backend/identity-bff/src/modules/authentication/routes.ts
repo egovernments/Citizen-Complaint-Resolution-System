@@ -91,8 +91,18 @@ const RESULT_COPY: Record<IdentityAuthResultCode, Omit<IdentityAuthResult, "code
   },
 };
 
-function result(code: IdentityAuthResultCode): IdentityAuthResult {
-  return { code, ...RESULT_COPY[code] };
+function result(
+  code: IdentityAuthResultCode,
+  intent: IdentityAuthIntent = "signin",
+): IdentityAuthResult {
+  const base = { code, ...RESULT_COPY[code] };
+  if (intent === "signup" && code === "AUTH_CANCELLED") {
+    return { ...base, message: "Sign-up was cancelled. No changes were made to your account." };
+  }
+  if (intent === "signup" && code === "SIGN_IN_FAILED") {
+    return { ...base, message: "Sign-up could not be completed. Please try again." };
+  }
+  return base;
 }
 
 function providerErrorCode(error: unknown, description: unknown): IdentityAuthResultCode {
@@ -115,8 +125,9 @@ async function redirectWithResult(
   response: express.Response,
   destination: string,
   code: IdentityAuthResultCode,
+  intent: IdentityAuthIntent = "signin",
 ): Promise<void> {
-  const id = await createAuthResult(result(code));
+  const id = await createAuthResult(result(code, intent));
   response.redirect(303, withAuthResult(destination, id));
 }
 
@@ -139,7 +150,12 @@ export function registerAuthenticationRoutes(app: express.Application): void {
   }));
 
   app.get("/identity/v1/authorize", asyncRoute(async (request, response) => {
-    const intent = requestedIntent(request.query.intent) || "signin";
+    const intent = request.query.intent === undefined
+      ? "signin"
+      : requestedIntent(request.query.intent);
+    if (!intent) {
+      return response.status(400).json({ error: "Unsupported authentication intent" });
+    }
     const returnTo = safeIdentityReturnTo(request.query.returnTo) || config.identityPostLoginRedirect;
     if (request.query.returnTo !== undefined && !safeIdentityReturnTo(request.query.returnTo)) {
       return response.status(400).json({ error: "Unsupported return destination" });
@@ -198,6 +214,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         response,
         attempt.returnTo,
         providerErrorCode(request.query.error, request.query.error_description),
+        attempt.intent,
       );
       return;
     }
@@ -233,7 +250,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     } catch (error) {
       console.error("Identity callback failed:", (error as Error).message);
       response.setHeader("Set-Cookie", clearedLoginCookie());
-      await redirectWithResult(response, attempt.returnTo, "SIGN_IN_FAILED");
+      await redirectWithResult(response, attempt.returnTo, "SIGN_IN_FAILED", attempt.intent);
       return;
     }
   }));

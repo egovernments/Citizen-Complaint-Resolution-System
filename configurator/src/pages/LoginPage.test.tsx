@@ -87,6 +87,9 @@ describe('configurator sign in', () => {
   });
 
   it('consumes a recovery result once under StrictMode and shows its action', async () => {
+    vi.mocked(api.requestPasswordSetup).mockResolvedValue({
+      message: 'If an eligible account exists, a password setup email has been sent.',
+    });
     vi.mocked(api.consumeAuthResult).mockResolvedValue({
       status: 'failed',
       code: 'PASSWORD_SETUP_FAILED',
@@ -98,7 +101,15 @@ describe('configurator sign in', () => {
     expect(await screen.findByText(/password setup was not completed/i)).toBeInTheDocument();
     expect(api.consumeAuthResult).toHaveBeenCalledTimes(1);
     expect(api.consumeAuthResult).toHaveBeenCalledWith('result-1');
-    expect(screen.getByRole('button', { name: /send password setup link/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: 'oauth.only@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /send password setup link/i }));
+
+    await waitFor(() => expect(api.requestPasswordSetup).toHaveBeenCalledWith('oauth.only@example.com'));
+    expect(await screen.findByText(/if an eligible account exists/i)).toBeInTheDocument();
+    expect(screen.queryByText(/password setup was not completed/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /send password setup link/i })).not.toBeInTheDocument();
   });
 
   it('selects a tenant only after identity sign-in and installs the shared DIGIT context', async () => {

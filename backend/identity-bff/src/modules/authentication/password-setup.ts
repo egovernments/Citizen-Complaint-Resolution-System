@@ -15,6 +15,7 @@ import {
   consumePasswordSetupAttempt,
   createAuthResult,
   createPasswordSetupAttempt,
+  getPasswordSetupAttempt,
 } from "../sessions/session-store.js";
 import { safeIdentityReturnTo, withAuthResult } from "./redirects.js";
 
@@ -109,7 +110,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
 
     const signedIn = await currentSession(request.headers.cookie);
     const email = normalizedEmail(request.body?.email);
-    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || "/configurator/login";
+    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || config.identityPostLoginRedirect;
     if (!email && !signedIn) return response.status(202).json(ACCEPTED);
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;
@@ -136,10 +137,14 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
 
   app.get("/identity/v1/password/setup-complete", asyncRoute(async (request, response) => {
     const state = typeof request.query.state === "string" ? request.query.state : "";
-    const attempt = state ? await consumePasswordSetupAttempt(state) : null;
-    const passwordReady = attempt
-      ? attempt.hadPassword || await hasPasswordCredential(attempt.userId).catch(() => false)
+    const preview = state ? await getPasswordSetupAttempt(state) : null;
+    // Do not burn the one-use state during a transient Admin API outage. A
+    // refresh can retry the credential check; GETDEL below still makes a
+    // successful completion single-consumer.
+    const passwordReady = preview
+      ? preview.hadPassword || await hasPasswordCredential(preview.userId)
       : false;
+    const attempt = preview ? await consumePasswordSetupAttempt(state) : null;
     const authResult = await createAuthResult(attempt && passwordReady ? {
       status: "complete",
       code: "PASSWORD_SETUP_COMPLETE",
@@ -157,7 +162,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       actions: ["SETUP_PASSWORD"],
     });
     return response.redirect(303, withAuthResult(
-      attempt?.returnTo || "/configurator/login",
+      attempt?.returnTo || config.identityPostLoginRedirect,
       authResult,
     ));
   }));

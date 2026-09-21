@@ -104,6 +104,10 @@ export default function LoginPage() {
 
   const submitPasswordSetup = async (event: FormEvent) => {
     event.preventDefault();
+    // A consumed callback result describes the previous attempt. Once the user
+    // starts recovery it must not mask this request's success or failure.
+    authResult.clear();
+    setShowPasswordSetup(true);
     setSending(true);
     setError(null);
     try {
@@ -120,6 +124,7 @@ export default function LoginPage() {
   };
 
   const requestSignedInPasswordSetup = async () => {
+    authResult.clear();
     setSending(true);
     setError(null);
     try {
