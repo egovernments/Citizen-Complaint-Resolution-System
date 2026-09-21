@@ -63,6 +63,20 @@ const STEPS = [
  * The durable home for this is that MDMS schema, which onboarding cannot read
  * because the tenant does not exist yet. Sharing it with tenant provisioning is
  * CCRS#2073 / CCRS#2076 territory.
+ *
+ * A caveat that matters, so the three examples are not read as safe:
+ * `tenant-foundation` seeds no `common-masters.MobileNumberValidation` row for
+ * a new tenant, so egov-user's per-tenant lookup misses and it falls back to
+ * the HOST's default regex. The founder's country selection has no bearing on
+ * what actually validates their number. On a Kenyan deployment a founder who
+ * picks India is shown a correct Indian example and rejected by a Kenyan rule,
+ * and per CCRS#2073 that rejection is terminal.
+ *
+ * So these examples only hold where the selected country matches the
+ * deployment's own. Refusing to invent the other five avoided one version of
+ * this defect; this note records the version that is left, which is a correct
+ * example resting on a wrong premise about which rule applies. The seeding gap
+ * is tracked on CCRS#2073.
  */
 const COUNTRIES: {
   code: string;
@@ -466,7 +480,16 @@ function SignupFlow() {
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
     if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
     if (tenantAdminMobile.trim()) {
-      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: tenantAdminMobile.trim() } };
+      // countryCode travels with the number so the worker's strip branch is
+      // live. Without it that guard never fires, and a founder who pasted a
+      // full international number earns a terminal rejection.
+      next.tenantMetadata = {
+        schemaVersion: 1,
+        tenantAdmin: {
+          mobileNumber: tenantAdminMobile.trim(),
+          ...(selectedCountry ? { countryCode: selectedCountry.dialCode } : {}),
+        },
+      };
     }
     return next;
   }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile]);
@@ -1223,7 +1246,13 @@ function SignupFlow() {
               ['Languages', languages.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')],
               ['Timezone', timeZone],
               ['Financial year', FINANCIAL_YEARS.find((f) => f.code === financialYearPolicy)?.label || financialYearPolicy],
-              ['Mobile number', tenantAdminMobile],
+              // With the prefix: the previous step taught "national part only,
+              // prefix added for you", so showing it back bare gives the
+              // founder nothing to check against the number they meant.
+              [
+                'Mobile number',
+                selectedCountry ? `${selectedCountry.dialCode} ${tenantAdminMobile}` : tenantAdminMobile,
+              ],
             ].map(([label, value], i) => (
               <div
                 key={label}

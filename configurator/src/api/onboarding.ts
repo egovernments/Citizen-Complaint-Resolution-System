@@ -154,12 +154,18 @@ export interface TenantMetadata {
   schemaVersion: 1;
   tenantAdmin: {
     /**
-     * E.164, with the dial prefix. `_submit` requires it: the worker creates
-     * the tenant-local DIGIT employee from it, and the backend validates it
-     * against Signup.countryCode, normalises it to the national number and
-     * derives the prefix itself. A draft may be saved without it.
+     * The national number, without the dial prefix. egov-user stores the prefix
+     * separately and validates only the national digits.
      */
     mobileNumber: string;
+    /**
+     * The dial prefix, e.g. `+254`. Send it: the worker strips it from
+     * `mobileNumber` when the two agree, which is the guard that saves a
+     * founder who pasted a full international number. Omit it and that branch
+     * is dead code, the whole string reaches egov-user, and the 400 it answers
+     * with is terminal — one signup per Keycloak subject, ever (CCRS#2073).
+     */
+    countryCode?: string;
   };
 }
 
