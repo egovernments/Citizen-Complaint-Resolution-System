@@ -70,7 +70,7 @@ const sessionManager = require(path.join(sessionDir, "session-manager.js"));
 const ChatService = require(path.join(sessionDir, "chat-service.js"));
 const chatService = new ChatService(sessionManager);
 
-const user = { userId: "u1", mobileNumber: "258840000000", locale: "pt_PT" };
+const user = { userId: "u1", mobileNumber: "258840000000", locale: "pt_PT", name: "Feliciano" };
 
 function model({ input = "1", cancel = false, reset = false } = {}) {
   return {

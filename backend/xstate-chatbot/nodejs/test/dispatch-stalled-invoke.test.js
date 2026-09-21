@@ -76,7 +76,9 @@ const sessionManager = require(path.join(sessionDir, "session-manager.js"));
 const ChatService = require(path.join(sessionDir, "chat-service.js"));
 const chatService = new ChatService(sessionManager);
 
-const user = { userId: "u1", mobileNumber: "258840000000", locale: "pt_PT" };
+// A returning citizen: locale AND a real name, so the onboarding gate lets
+// them straight through to the flow under test.
+const user = { userId: "u1", mobileNumber: "258840000000", locale: "pt_PT", name: "Feliciano" };
 const session = { userId: "u1", user };
 
 function model(input = "ola") {

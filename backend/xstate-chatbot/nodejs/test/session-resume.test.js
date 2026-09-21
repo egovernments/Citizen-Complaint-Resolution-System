@@ -66,7 +66,7 @@ const chatService = new ChatService(sessionManager);
 
 function reformattedMessage() {
   return {
-    user: { userId: "u1", mobileNumber: "258840000000", locale: "en_IN" },
+    user: { userId: "u1", mobileNumber: "258840000000", locale: "en_IN", name: "Feliciano" },
     extraInfo: { tenantId: "mz.ige", whatsAppBusinessNumber: "258840000001" },
     message: { type: "text", input: "1" },
   };
@@ -76,7 +76,7 @@ function persistedState(mutate) {
   const service = interpret(
     stateMachine.withContext({
       chatInterface: sessionManager,
-      user: { userId: "u1", mobileNumber: "258840000000", locale: "en_IN" },
+      user: { userId: "u1", mobileNumber: "258840000000", locale: "en_IN", name: "Feliciano" },
       extraInfo: { tenantId: "mz.ige" },
       slots: { pgr: {} },
     })

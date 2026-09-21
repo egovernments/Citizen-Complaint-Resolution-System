@@ -68,6 +68,7 @@ const welcomeGroup = new Group('welcome')
 
 startNode
   .setConditionalNext(notAuthorized, (context) => !isWhitelisted(context))
+  .setConditionalNext(checkProfile, (context) => isOnboarded(context) && !hasProfileName(context))
   .setConditionalNext(welcomeGroup, isOnboarded)
   .setNext(onboardingGroup);
 
@@ -128,7 +129,7 @@ updateUserProfile
   .setOnError(welcomeGroup)
   .setConditionalNext(sayThankYou, (context) => context.onboarding && context.onboarding.name, (context) => {
     context.user.name = context.onboarding.name;
-    context.user.locale = context.onboarding.locale;
+    context.user.locale = context.onboarding.locale || context.user.locale;
     context.onboarding = undefined;
   })
   .setNext(sayThankYou);

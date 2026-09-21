@@ -7,6 +7,7 @@ const path = require("node:path");
 // assertion. .env supplies these locally, which is why this only failed there.
 process.env.CITIZEN_PLACEHOLDER_NAME = "Cidadão";
 process.env.COUNTRY_CODE = "258";
+process.env.ALLOWED_MOBILE_NUMBERS = "";   // empty = open, so the whitelist gate is not what is under test
 process.env.MOBILE_NUMBER_LENGTH = "9";
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -66,4 +67,65 @@ test("a citizen who completed onboarding skips it", () => {
 
   assert.ok(isOnboarded(context));
   assert.equal(hasProfileName(context), true);
+});
+
+const shell = require(p("src/machine/shell-machine.js"));
+
+/** The first branch on `start` whose guard passes — i.e. where this citizen lands. */
+function routeFromStart(user) {
+  const context = { user };
+  for (const branch of shell.config.states.start.on.USER_MESSAGE) {
+    if (!branch.cond || branch.cond(context)) return branch.target;
+  }
+  return undefined;
+}
+
+test("a citizen provisioned by the earlier build is sent to the profile check", () => {
+  // They have a locale, so isOnboarded passed and the gate sent them straight
+  // to PGR — keeping the placeholder name forever. They are not made to pick a
+  // locale again, only to supply the name nobody ever asked them for.
+  const legacy = { userId: "u-1", mobileNumber: "840000001", locale: "pt_PT", name: config.citizenPlaceholderName };
+
+  assert.ok(isOnboarded({ user: legacy }), "the locale that let them slip through is still there");
+  assert.equal(routeFromStart(legacy), "#checkProfile");
+});
+
+test("the fully onboarded and the brand new still route as before", () => {
+  assert.equal(
+    routeFromStart({ userId: "u-1", mobileNumber: "840000001", locale: "pt_PT", name: "Feliciano" }),
+    "#welcome",
+    "a real name skips onboarding"
+  );
+  assert.equal(
+    routeFromStart({ userId: "u-2", mobileNumber: "840000002", name: config.citizenPlaceholderName }),
+    "#onboarding",
+    "no locale means the full journey, locale question included"
+  );
+});
+
+test("finishing the name does not clear the locale that skipped the locale question", () => {
+  // Entering at checkProfile never runs askLocale, so onboarding.locale is
+  // unset. Assigning it blindly logged the citizen back out of onboarding.
+  const commit = shell.states.onboardingUpdateUserProfile.branches[0].set;
+  const context = {
+    user: { userId: "u-1", locale: "pt_PT", name: config.citizenPlaceholderName },
+    onboarding: { name: "Feliciano" },
+  };
+
+  commit(context);
+
+  assert.equal(context.user.name, "Feliciano");
+  assert.equal(context.user.locale, "pt_PT", "their existing locale survives");
+});
+
+test("a citizen who did pick a locale during onboarding gets that one", () => {
+  const commit = shell.states.onboardingUpdateUserProfile.branches[0].set;
+  const context = {
+    user: { userId: "u-2", locale: undefined, name: config.citizenPlaceholderName },
+    onboarding: { name: "Ana", locale: "en_IN" },
+  };
+
+  commit(context);
+
+  assert.equal(context.user.locale, "en_IN");
 });
