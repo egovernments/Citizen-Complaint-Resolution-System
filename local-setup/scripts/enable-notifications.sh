@@ -341,8 +341,9 @@ normalize_step() { local x="$1"; [[ "$x" =~ ^[0-9]+$ ]] && x="step$x"; echo "$x"
 
 # =============================================================================
 # STEP 1 — PGR image check.
-#   PGR is always on the MDMS-driven notification path (the former
-#   PGR_NOTIFICATION_CONFIG_DRIVEN flag and the legacy path were removed).
+#   There is no notification path to select: pgr-services emits one thin event
+#   per workflow transition and novu-bridge routes, renders and delivers it.
+#   Which image you run is the only thing that decides what PGR emits.
 #   pre : pgr-services exists as a compose service
 #   act : pin the Content-SID pgr image when WHATSAPP is enabled; up -d pgr-services
 #   post: the container is running

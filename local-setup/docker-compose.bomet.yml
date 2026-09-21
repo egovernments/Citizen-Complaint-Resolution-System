@@ -19,7 +19,9 @@ services:
     environment:
       SPRING_FLYWAY_ENABLED: "false"
 
-  # (Notifications: PGR is always on the MDMS-driven path now — the former
-  # PGR_NOTIFICATION_CONFIG_DRIVEN pin is gone, which also closes the
-  # overlay-drop failure mode where a `compose up pgr-services` without this
-  # file silently flipped bomet back to the legacy path.)
+  # (Notifications: nothing to pin here any more. pgr-services emits one thin
+  # event per workflow transition and novu-bridge does the routing, rendering
+  # and delivery, so there is no path to choose between and no notification
+  # setting in this overlay. That also closed the old overlay-drop failure mode,
+  # where a `compose up pgr-services` without this file silently flipped bomet
+  # back to a legacy path.)

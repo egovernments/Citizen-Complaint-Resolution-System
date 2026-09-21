@@ -123,10 +123,13 @@ tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see 
 requires_nairobi_mdms: false
 
 # ── Config-driven notifications (design D1/D4/D6/D7/D8) ──
-# Bomet is the FIRST tenant cut over. PGR reads PGR.NotificationRouting +
-# PGR.NotificationTemplate from MDMS, renders + localizes per recipient, and
-# emits one pre-rendered event per (recipient × channel); novu-bridge delivers.
-# docker-compose.bomet.yml ALSO hard-sets PGR_NOTIFICATION_CONFIG_DRIVEN=true.
+# Bomet was the FIRST tenant cut over. Config-driven notifications are now the
+# only path and are decided by which image you run, not by a setting: pgr-services
+# emits ONE thin event per workflow transition and novu-bridge reads the
+# NOTIFICATIONS.* masters to route, render and deliver it.
+# The variable below is an INERT leftover — nothing renders it into any env file
+# or compose service any more. It is kept only so an existing inventory copied
+# from this example does not need editing; setting it either way changes nothing.
 pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 

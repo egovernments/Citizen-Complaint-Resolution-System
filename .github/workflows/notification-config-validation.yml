@@ -8,8 +8,10 @@ name: Notification config validation
 #     SAME validator the configurator runs, and a seed edit that breaks a
 #     message structure fails the build
 #     (configurator/src/resources/notification-configure/defaultSeeds.test.ts);
-#   * the placeholder vocabulary the configurator advertises stays identical to
-#     the tokens pgr-services actually fills
+#   * the placeholder vocabulary the shipped event catalogue advertises stays
+#     identical to the tokens pgr-services actually sends — the union of the
+#     `data` and `localized` maps of ThinEventBuilder, since the thin-event
+#     cutover left the producer filling values rather than rendering messages
 #     (configurator/src/resources/workflow-services/placeholderParity.test.ts);
 #   * the rules themselves and the save guard keep their unit coverage.
 #
@@ -52,6 +54,10 @@ on:
       - 'utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json'
       - 'local-setup/dataloader/templates/PgrWorkflowConfig.json'
       - 'backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java'
+      # The PRODUCER of the placeholder values. pgr-services renders nothing any more:
+      # ThinEventBuilder's `data` + `localized` maps ARE the token vocabulary that
+      # placeholderParity.test.ts reads, so a change in this package must run this job.
+      - 'backend/pgr-services/src/main/java/org/egov/pgr/service/notification/**'
       - '.github/workflows/notification-config-validation.yml'
   # No branch filter on pull_request: a branch list here is a SILENT skip, and
   # retargeting a PR must not quietly drop this check.
@@ -72,6 +78,10 @@ on:
       - 'utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json'
       - 'local-setup/dataloader/templates/PgrWorkflowConfig.json'
       - 'backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java'
+      # The PRODUCER of the placeholder values. pgr-services renders nothing any more:
+      # ThinEventBuilder's `data` + `localized` maps ARE the token vocabulary that
+      # placeholderParity.test.ts reads, so a change in this package must run this job.
+      - 'backend/pgr-services/src/main/java/org/egov/pgr/service/notification/**'
       - '.github/workflows/notification-config-validation.yml'
   workflow_dispatch:
 

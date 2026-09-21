@@ -41,6 +41,9 @@ on:
       - 'local-setup/scripts/test_event_catalogue.py'
       - 'local-setup/scripts/test_acl_dump_parity.py'
       - 'local-setup/dataloader/templates/PgrWorkflowConfig.json'
+      # test_event_catalogue.py now also pins the generator's 13-placeholder list to
+      # what ThinEventBuilder actually sends, so a producer change must run this job.
+      - 'backend/pgr-services/src/main/java/org/egov/pgr/service/notification/**'
       - 'local-setup/db/full-dump.sql'
       - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
       - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.Notification*.json'
@@ -58,6 +61,9 @@ on:
       - 'local-setup/scripts/test_event_catalogue.py'
       - 'local-setup/scripts/test_acl_dump_parity.py'
       - 'local-setup/dataloader/templates/PgrWorkflowConfig.json'
+      # test_event_catalogue.py now also pins the generator's 13-placeholder list to
+      # what ThinEventBuilder actually sends, so a producer change must run this job.
+      - 'backend/pgr-services/src/main/java/org/egov/pgr/service/notification/**'
       - 'local-setup/db/full-dump.sql'
       - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
       - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.Notification*.json'

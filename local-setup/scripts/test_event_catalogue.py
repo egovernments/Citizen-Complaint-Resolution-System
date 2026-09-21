@@ -10,6 +10,7 @@ silent SKIP, not a failure.
 """
 import json
 import os
+import re
 import unittest
 
 import generate_event_catalogue as gen
@@ -23,6 +24,11 @@ CATALOGUE = os.path.join(ROOT, "utilities", "default-data-handler", "src", "main
                          "resources", "mdmsData-dev", "NOTIFICATIONS",
                          "NOTIFICATIONS.EventCatalogue.json")
 NEW_DIR = os.path.dirname(CATALOGUE)
+# The PRODUCER. pgr-services renders nothing any more: it emits one thin event per
+# workflow transition, and the placeholder values ride on it in two maps built here.
+THIN_EVENT_BUILDER = os.path.join(ROOT, "backend", "pgr-services", "src", "main", "java",
+                                  "org", "egov", "pgr", "service", "notification",
+                                  "ThinEventBuilder.java")
 
 
 def _read_text(path):
@@ -175,6 +181,106 @@ class CommittedCatalogueTest(unittest.TestCase):
             for token in row.get("placeholders") or []:
                 self.assertIn(token, vocabulary,
                               "%s declares a token no event carries" % row["eventName"])
+
+
+# The two map-building methods of ThinEventBuilder, by the signature the extraction
+# anchors on and the local variable each one writes through. Anchoring on BOTH is what
+# keeps the neighbouring actors() and payload() maps out — payload() has a "status" key
+# of its own, so a file-wide grep for put(..., "status") would be wrong.
+PRODUCER_MAPS = (("data", "private Map<String, Object> data(", "data"),
+                 ("localized", "private Map<String, Object> localized(", "localized"))
+
+# Tokens no PGR message has ever gone without; the canaries that stop this test passing
+# vacuously if the extraction ever matches nothing.
+WELL_KNOWN_TOKENS = ("id", "complaint_type", "status", "emp_name", "download_link")
+
+
+def _method_body(source, marker):
+    """A method's body, brace-matched from its signature, or "" if it is not there."""
+    start = source.find(marker)
+    if start == -1:
+        return ""
+    open_brace = source.find("{", start)
+    if open_brace == -1:
+        return ""
+    depth = 0
+    for i in range(open_brace, len(source)):
+        if source[i] == "{":
+            depth += 1
+        elif source[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[open_brace:i + 1]
+    return ""
+
+
+def _map_keys(body, variable):
+    """Keys written into `variable`, through either shape the builder uses: the
+    null-skipping helper put(<var>, "name", value) and the direct <var>.put("name", …)."""
+    pattern = re.compile(r'\b(?:put\(\s*%s\s*,\s*|%s\.put\(\s*)"([A-Za-z0-9_]+)"'
+                         % (re.escape(variable), re.escape(variable)))
+    return set(pattern.findall(body))
+
+
+def producer_tokens(source):
+    """Every token the producer can put on an event: data keys UNION localized keys.
+    A token is fillable if it arrives as a literal OR as a localization code."""
+    tokens = set()
+    for _, marker, variable in PRODUCER_MAPS:
+        tokens |= _map_keys(_method_body(source, marker), variable)
+    return tokens
+
+
+@unittest.skipUnless(os.path.exists(THIN_EVENT_BUILDER),
+                     "pgr-services source is not in this checkout")
+class ProducerParityTest(unittest.TestCase):
+    """The generator's PLACEHOLDERS list is what every catalogue row advertises, so it
+    must equal what pgr-services actually sends. The configurator asserts the same
+    property from the TypeScript side (placeholderParity.test.ts); this is the Python
+    half, so the GENERATOR cannot drift from the producer either — the list lives here,
+    and a token added to the Java side with no entry here would otherwise ship a
+    catalogue that hides a working placeholder."""
+
+    def setUp(self):
+        with open(THIN_EVENT_BUILDER, encoding="utf-8") as fh:
+            self.source = fh.read()
+
+    def test_the_producer_maps_are_still_where_the_extraction_looks(self):
+        # Non-vacuity. If this fails, ThinEventBuilder moved or the maps are no longer
+        # built from string-literal keys -- fix the extraction deliberately rather than
+        # letting the parity assertion below pass on an empty set.
+        for what, marker, variable in PRODUCER_MAPS:
+            body = _method_body(self.source, marker)
+            self.assertGreater(len(body), 200,
+                               "%s(): %r no longer appears in ThinEventBuilder.java"
+                               % (what, marker))
+            self.assertGreater(len(_map_keys(body, variable)), 4,
+                               "%s(): the key extraction matched nothing" % what)
+        tokens = producer_tokens(self.source)
+        self.assertGreaterEqual(len(tokens), 13)
+        for token in WELL_KNOWN_TOKENS:
+            self.assertIn(token, tokens,
+                          "the producer no longer appears to send {%s}" % token)
+
+    def test_the_generator_vocabulary_equals_what_the_producer_sends(self):
+        self.assertEqual(sorted(p["name"] for p in gen.PLACEHOLDERS),
+                         sorted(producer_tokens(self.source)),
+                         "generate_event_catalogue.PLACEHOLDERS has drifted from "
+                         "ThinEventBuilder's data/localized maps")
+
+    def test_the_four_code_only_tokens_carry_no_literal(self):
+        # The union is the contract; the SPLIT is the design. Moving one of these four
+        # into `data` would keep the union intact while changing what survives a
+        # localization outage, and every blankWhen note above assumes today's split.
+        data_keys = _map_keys(_method_body(self.source, PRODUCER_MAPS[0][1]), "data")
+        localized_keys = _map_keys(_method_body(self.source, PRODUCER_MAPS[1][1]),
+                                   "localized")
+        for token in ("ulb", "ao_designation", "emp_department", "emp_designation"):
+            self.assertIn(token, localized_keys)
+            self.assertNotIn(token, data_keys)
+        for token in ("complaint_type", "status"):
+            self.assertIn(token, data_keys)
+            self.assertIn(token, localized_keys)
 
 
 if __name__ == "__main__":
