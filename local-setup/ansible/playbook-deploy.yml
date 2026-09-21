@@ -333,6 +333,44 @@
         - core_mobile_configs | default({}, true) | length > 0
         - _mobile_missing_keys | length > 0
 
+    # Read-only MCP preflight. Kept below the mobile-validation checks so the
+    # comment block above documents its own core_mobile_configs task, not this.
+    - name: "preflight — read-only MCP flags must be consistent (fail-closed)"
+      ansible.builtin.assert:
+        that:
+          # Both nginx blocks define /mcp + /v1/. Enabling both would leave the
+          # INTERNAL admin /mcp (no auth) serving while the operator believes
+          # they've moved to the read-only instance behind basic auth.
+          - not (nginx_features.mcp | default(false) and nginx_features.mcp_readonly | default(false))
+          # The container flag (enable_mcp_readonly) and the nginx flag
+          # (nginx_features.mcp_readonly) must move together: only the container
+          # → it's published with no front and no auth; only nginx → 502.
+          - (enable_mcp_readonly | default(false)) == (nginx_features.mcp_readonly | default(false))
+          # nginx fronts the read-only instance with basic auth, so the htpasswd
+          # password must be set. Otherwise auth_basic_user_file points at a file
+          # that is never created and nginx returns 500 at RUNTIME — the one
+          # misconfig in this set that slips past deploy time, so assert it here.
+          - >-
+            (not (nginx_features.mcp_readonly | default(false)))
+            or (mcp_readonly_basic_auth_password is defined
+                and (mcp_readonly_basic_auth_password | default('') | length > 0))
+          # Linux-only. On Darwin nginx runs as a container reaching the host via
+          # host.docker.internal, which cannot reach the loopback-published
+          # 127.0.0.1:13102, and the htpasswd task is skipped and never mounted —
+          # so /mcp and /v1/ 502/500 while the deploy reports success. Fail fast.
+          - >-
+            (not (enable_mcp_readonly | default(false) or nginx_features.mcp_readonly | default(false)))
+            or (ansible_system | default('') != 'Darwin')
+        fail_msg: >-
+          Invalid read-only MCP config on {{ inventory_hostname }}: set
+          enable_mcp_readonly and nginx_features.mcp_readonly TOGETHER (never
+          nginx_features.mcp alongside nginx_features.mcp_readonly — both serve
+          /mcp and the internal one has no auth), set
+          mcp_readonly_basic_auth_password when nginx fronts it, and note the
+          read-only instance is Linux-only (the macOS container-nginx path cannot
+          reach a loopback-bound port). See host_vars/_example.yml.
+      when: (enable_mcp_readonly | default(false)) or (nginx_features.mcp_readonly | default(false))
+
     # ==================== WSL2 resource config (.wslconfig) ====================
     # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
     # thrashes the VM into a freeze (deploy hangs, new WSL sessions won't
@@ -1756,6 +1794,7 @@
             ([]
               + (['search']        if enable_search_stack  | default(false) else [])
               + (['mcp']           if enable_mcp           | default(false) else [])
+              + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
@@ -3234,6 +3273,47 @@
       changed_when: false
       when: enable_mcp | default(false)
 
+    # ==================== Verify the read-only MCP actually dropped writes ====================
+    # The digit-mcp image defaults to the pre-read-only tag
+    # (egovio/digit-mcp:2.12-81fc6be, see docker-compose.egov-digit.yaml). An
+    # image that predates MCP_READ_ONLY ignores the env var and serves the FULL
+    # write toolset (tenant_destroy, mdms_create, user_create, ...) on the public
+    # /mcp + /v1 routes behind nothing but basic auth — a silent full-admin
+    # exposure that a passing /healthz and a "healthy" container both hide. The
+    # helm path guards this with `installed: false` + "ensure the image carries
+    # MCP_READ_ONLY"; the compose/Ansible path has no build-time equivalent, so
+    # verify it at RUNTIME: read /v1/version off the running instance and fail the
+    # deploy if it does not report read-only. Image-agnostic — works for a future
+    # published flag-carrying tag without a tag allowlist to maintain.
+    - name: "mcp-readonly — wait for the read-only instance to answer /v1/version"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:13102/v1/version
+        return_content: true
+      register: mcp_ro_version
+      retries: 12
+      delay: 10
+      until: mcp_ro_version.status == 200
+      changed_when: false
+      when:
+        - enable_mcp_readonly | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "mcp-readonly — assert the image honours MCP_READ_ONLY (writes dropped)"
+      ansible.builtin.assert:
+        that:
+          - mcp_ro_version.json.readOnly | default(false) | bool
+        fail_msg: >-
+          digit-mcp-readonly is running but /v1/version reports readOnly=false on
+          {{ inventory_hostname }} — the configured MCP image
+          ({{ mcp_image | default('the egovio/digit-mcp default tag') }}) predates
+          MCP_READ_ONLY and is serving the FULL write toolset on the public /mcp +
+          /v1 routes. Build from source (build_mcp: true) or set mcp_image /
+          MCP_IMAGE to a tag that carries the flag, then redeploy.
+        success_msg: "digit-mcp-readonly confirmed read-only ({{ mcp_ro_version.json.toolCount | default('?') }} tools, writes absent)."
+      when:
+        - enable_mcp_readonly | default(false)
+        - ansible_system != "Darwin"
+
     # ==================== Post-stack: DB password safety net + observability settle ====================
     # OpenBao itself, the secret read, and the .env write all now happen in
     # "Secrets prep" above, BEFORE "Start DIGIT stack" — see the ordering-bug
@@ -3856,6 +3936,31 @@
       when:
         - enable_integration_tests | default(false)
         - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # ---- digit-mcp-readonly basic-auth (nginx front for the public read-only MCP) ----
+    # community.general.htpasswd, not `htpasswd -bB … creates:` — same convention
+    # (and same reasons) as the status-board / integration-tests peers above:
+    #   - idempotent against the STORED HASH, so editing
+    #     mcp_readonly_basic_auth_password in host_vars and redeploying actually
+    #     rotates the credential; the old `creates:` guard made rotation a silent
+    #     no-op (file exists → task skipped, old password still valid).
+    #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
+    #     so `-b` would defeat no_log for the lifetime of the exec).
+    # Skips when the password is unset — nginx then 500s (no auth_basic_user_file),
+    # which still fails closed; the preflight already asserts it's set. Linux-only
+    # (read-only MCP is refused on Darwin), so no container-path variant needed.
+    - name: "mcp-readonly — basic-auth user in /etc/nginx/.htpasswd-mcp-readonly"
+      community.general.htpasswd:
+        path: /etc/nginx/.htpasswd-mcp-readonly
+        name: "{{ mcp_readonly_basic_auth_user | default('digit-mcp') }}"
+        password: "{{ mcp_readonly_basic_auth_password }}"
+        crypt_scheme: bcrypt
+        mode: '0640'
+      no_log: true
+      when:
+        - enable_mcp_readonly | default(false)
+        - mcp_readonly_basic_auth_password is defined
         - ansible_system != "Darwin"
 
     # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----
