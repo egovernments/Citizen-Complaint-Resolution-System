@@ -21,10 +21,23 @@ class ChatService {
   // updateState (which keys by state.context.user.userId) in sync with insertNewState.
   async dispatch(session, inboundRequestModel) {
     const sessionUserId = session.userId;
+    
+    const verdict = await this.resumePromptVerdict(sessionUserId, inboundRequestModel);
 
-    if (await this.isResumeChoicePending(sessionUserId, inboundRequestModel)) {
-      return this.resolveResumeChoice(session, inboundRequestModel);
+    if (verdict === "answer") return this.resolveResumeChoice(session, inboundRequestModel);
+
+    // The user has issued a cancel or reset command, so we override the pending resume prompt.
+    if (verdict === "override") {
+      const message = inboundRequestModel.getMessage();
+      await chatStateRepository.clearResumePending(sessionUserId);
+      return this.restartSession(session, inboundRequestModel, message.isCancel() ? "USER_CANCEL" : "USER_RESET");
     }
+
+    // The pending resume prompt has been abandoned due to session expiration.
+    if (verdict === "abandoned") {
+      await chatStateRepository.clearResumePending(sessionUserId);
+    }
+
 
     const chatState = await this.getOrCreateChatState(sessionUserId, session.user, inboundRequestModel);
     if (!chatState) return; // awaiting the citizen's resume/restart choice
@@ -46,31 +59,25 @@ class ChatService {
   }
 
   /**
-   * True when the citizen still owes us a resume-or-restart answer.
+   * How a pending resume prompt should be treated for this message:
+   *   'answer'    — the citizen is answering it (1 or 2)
+   *   'override'  — a cancel or reset word: not an answer, so honour the word
+   *   'abandoned' — nobody answered within a session, so re-prompt
+   *   null        — no prompt pending
    *
    * Read from the row, not a process-local Map: a restart between asking and
-   * answering used to lose the prompt, so the citizen's "1" was taken as a normal
-   * message and their expired session was discarded without them choosing.
-   *
-   * Cancel and reset words win over the prompt — someone typing "cancelar" is not
-   * answering the question, and the old gate swallowed those. A prompt older than
-   * avgSessionTime is treated as abandoned rather than intercepting forever.
+   * answering used to lose the prompt entirely.
    */
-  async isResumeChoicePending(sessionUserId, inboundRequestModel) {
-    if (typeof chatStateRepository.getResumePendingAt !== "function") return false;
+  async resumePromptVerdict(sessionUserId, inboundRequestModel) {
+    if (typeof chatStateRepository.getResumePendingAt !== "function") return null;
 
     const pendingAt = await chatStateRepository.getResumePendingAt(sessionUserId);
-    if (!pendingAt) return false;
+    if (!pendingAt) return null;
 
     const message = inboundRequestModel.getMessage();
-    const abandoned = (Date.now() - pendingAt) / 1000 / 60 > config.avgSessionTime;
-
-    if (message.isCancel() || message.isReset() || abandoned) {
-      await chatStateRepository.clearResumePending(sessionUserId);
-      return false;
-    }
-
-    return true;
+    if (message.isCancel() || message.isReset()) return "override";
+    if ((Date.now() - pendingAt) / 1000 / 60 > config.avgSessionTime) return "abandoned";
+    return "answer";
   }
 
 
@@ -138,13 +145,14 @@ class ChatService {
     this.sessionManager.toUser(session.user, [dialog.get_message(messages.sessionExpired.invalid, session.user.locale)], inboundRequestModel.extraInfo);
   }
 
-  // Discards whatever was stored and starts the conversation from the menu.
-  async restartSession(session, inboundRequestModel) {
+  // decides where it lands: USER_RESET goes to the menu, USER_CANCEL ends the
+  // session — the citizen's own word chooses, not this method.
+  async restartSession(session, inboundRequestModel, event = "USER_RESET") {
     const chatState = this.createChatStateFor(session.user);
     await chatStateRepository.updateState(session.userId, true, chatState.toPersistableState().state, new Date().getTime());
     await chatStateRepository.updateSessionId(session.userId, config.avgSessionTime);
     const stateMachineService = this.getStateMachineServiceFor(chatState, inboundRequestModel);
-    stateMachineService.send("USER_RESET", inboundRequestModel);
+    stateMachineService.send(event, inboundRequestModel);
   }
 
 

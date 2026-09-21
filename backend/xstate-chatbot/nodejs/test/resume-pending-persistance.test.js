@@ -97,22 +97,37 @@ test("an expired session marks the prompt on the row, not in memory", async () =
 
 test("the prompt survives a restart: a pending row still intercepts", async () => {
   repo.row.resumePendingAt = Date.now();
-  assert.equal(await chatService.isResumeChoicePending("u1", model({ input: "1" })), true);
+  assert.equal(await chatService.resumePromptVerdict("u1", model({ input: "1" })), "answer");
 });
 
-test("cancel and reset win over the prompt instead of being swallowed", async () => {
+test("cancel and reset are treated as the word, not as an answer", async () => {
   repo.row.resumePendingAt = Date.now();
-  assert.equal(await chatService.isResumeChoicePending("u1", model({ input: "cancelar", cancel: true })), false);
-  assert.equal(repo.row.resumePendingAt, null, "and the marker is cleared");
+  assert.equal(await chatService.resumePromptVerdict("u1", model({ input: "cancelar", cancel: true })), "override");
 
   repo.row.resumePendingAt = Date.now();
-  assert.equal(await chatService.isResumeChoicePending("u1", model({ input: "reiniciar", reset: true })), false);
+  assert.equal(await chatService.resumePromptVerdict("u1", model({ input: "reiniciar", reset: true })), "override");
+});
+
+test("a reset word restarts the session instead of re-prompting", async () => {
+  // Regression: the verdict used to clear the marker and report "not pending", so
+  // dispatch fell through, found the session still expired, set the marker again
+  // and re-sent the same prompt. Only "2" could escape it. Asserting the boolean
+  // is what let that through, so this asserts the repo calls instead.
+  repo.calls = [];
+  repo.row.resumePendingAt = Date.now();
+  repo.row.chatState = { toPersistableState: () => ({ state: "{}" }), context: {} };
+  sent.length = 0;
+
+  await chatService.dispatch({ userId: "u1", user }, model({ input: "reiniciar", reset: true }));
+  await flush();
+
+  assert.ok(repo.calls.includes("clearResumePending"), "the marker is dropped");
+  assert.ok(!repo.calls.includes("setResumePending"), "and NOT set again - that was the bug");
 });
 
 test("a prompt nobody ever answered stops intercepting", async () => {
   repo.row.resumePendingAt = Date.now() - (AVG_SESSION_MINUTES + 1) * 60 * 1000;
-  assert.equal(await chatService.isResumeChoicePending("u1", model({ input: "ola" })), false);
-  assert.equal(repo.row.resumePendingAt, null);
+  assert.equal(await chatService.resumePromptVerdict("u1", model({ input: "ola" })), "abandoned");
 });
 
 test("answering 1 reads the expired state back from the row and clears the marker", async () => {
