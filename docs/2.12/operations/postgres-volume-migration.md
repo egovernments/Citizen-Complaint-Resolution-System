@@ -2,10 +2,12 @@
 
 **For:** the engineer who owns the deployment. Server access, root, a maintenance window.
 
-**Why:** the base compose mounts `postgres_data` at `/var/lib/docker-postgresql/data` — a
-path PostgreSQL never uses. The real database therefore lives in an **anonymous** volume
-that Docker created on its own. The volume the compose file names is empty
-([#2085](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2085)).
+**Why:** boxes deployed before
+[#2085](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2085)
+mount `postgres_data` at `/var/lib/docker-postgresql/data` — a path PostgreSQL never uses.
+The real database therefore lives in an **anonymous** volume that Docker created on its own,
+and the volume the compose file names is empty. This is about the state of the *box*, so it
+applies whether or not the repo you are holding has the fix.
 
 Nothing is broken today: the database persists across restarts. But the data is one
 `docker compose down -v`, one `docker system prune`, or one change to the postgres volume
@@ -201,7 +203,11 @@ docker image inspect alpine >/dev/null 2>&1 && echo "alpine present" || docker p
 
 ## 5. Point the compose file at the named volume
 
-Edit `docker-compose.egov-digit.yaml`, in the `postgres-db` service:
+**Skip this step if the box's `docker-compose.egov-digit.yaml` already reads
+`/var/lib/postgresql/data`** — the central fix has shipped and there is nothing to edit.
+Check with the `grep` below first.
+
+Otherwise edit `docker-compose.egov-digit.yaml`, in the `postgres-db` service:
 
 ```diff
    volumes:
@@ -461,11 +467,12 @@ scrolled the `initdb` messages out of view.
 
 ## After every box is migrated
 
-The compose path fix lands centrally so nobody has to hand-edit it again
-([#2085](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2085)).
-Until then, a box migrated by this runbook has a locally modified
-`docker-compose.egov-digit.yaml`, and a deploy from a branch without that fix would overwrite
-it and put the wrong path back — stranding the data a second time.
+Once the central path fix has shipped, the repo's own `docker-compose.egov-digit.yaml`
+carries the correct path — skip step 5 and let the deploy apply it for you.
+
+If you are working from a branch that does **not** have that fix, a box migrated by this
+runbook has a locally modified compose file, and deploying would overwrite it and put the
+wrong path back — stranding the data a second time.
 
 You do not have to remember this. The playbook refuses in both directions:
 
@@ -475,4 +482,4 @@ You do not have to remember this. The playbook refuses in both directions:
   immediately afterwards.
 
 So the safe order is: migrate the box, then deploy only from a branch that has the mount-path
-fix. A routine deploy in between is blocked rather than silently destructive.
+fix. A routine deploy in between is blocked rather than silently destructive.: mount postgres_data at the real PGDATA (#2085))
