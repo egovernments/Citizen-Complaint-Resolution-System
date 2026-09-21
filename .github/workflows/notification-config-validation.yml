@@ -34,6 +34,11 @@ on:
       - 'configurator/src/resources/notification-providers/**'
       - 'configurator/src/resources/workflow-services/**'
       - 'configurator/src/admin/**'
+      # The resource registry decides which MDMS schema each screen reads and writes,
+      # and which of them are read-only. The five NOTIFICATIONS.* masters and the four
+      # legacy ones now live there; a change to it that nothing checked would point a
+      # screen at a schema that does not exist, or make a frozen master writable again.
+      - 'configurator/packages/data-provider/**'
       - 'configurator/package.json'
       - 'configurator/package-lock.json'
       - 'configurator/vitest.config.ts'
@@ -56,6 +61,7 @@ on:
       - 'configurator/src/resources/notification-providers/**'
       - 'configurator/src/resources/workflow-services/**'
       - 'configurator/src/admin/**'
+      - 'configurator/packages/data-provider/**'
       - 'configurator/package.json'
       - 'configurator/package-lock.json'
       - 'configurator/vitest.config.ts'
@@ -98,3 +104,49 @@ jobs:
             src/resources/notification-configure \
             src/resources/notification-providers \
             src/resources/workflow-services
+
+  data-provider:
+    name: Resource registry (data-provider package)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: configurator/packages/data-provider
+    steps:
+      - uses: actions/checkout@v4
+
+      # NODE 22, NOT 20, and only in this job. `--test-skip-pattern` is what keeps the
+      # three network-dependent cases below out of the run, and it landed in Node 22.1.
+      # The vitest job above stays on 20 so this does not move the whole toolchain.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'configurator/packages/data-provider/package-lock.json'
+
+      - name: Install
+        run: npm ci
+
+      # The registry is where the five NOTIFICATIONS.* masters are declared (state-tenant
+      # reads and writes, the event catalogue read-only) and where the four legacy masters
+      # are frozen. Nothing else asserts either fact.
+      - name: Resource registry
+        run: node --import tsx --test src/providers/resourceRegistry.test.ts
+
+      # dataProvider.test.ts is run with three cases EXCLUDED BY NAME. All three resolve a
+      # complaint type's hierarchyType/levelCode and reach for a real DIGIT host, so they
+      # fail on a runner with no DNS for it — for reasons that have nothing to do with the
+      # code under review. They are, verbatim:
+      #
+      #   "resolves hierarchyType/levelCode for a new complaint type from the tenant's
+      #    actual hierarchy definition, not a hardcoded literal"
+      #   "falls back to PGR/SUB_TYPE for a new complaint type when the tenant has no
+      #    hierarchy definition yet"
+      #   "does not overwrite an existing complaint type's hierarchyType/levelCode on update"
+      #
+      # The filter is the substring "complaint type", which today matches exactly those
+      # three and nothing else. A future case whose name contains it would be skipped
+      # silently, so: name new cases in this file without that phrase, or narrow the
+      # pattern here. The remaining 31 cases run for real.
+      - name: Data provider (excluding the three network-dependent complaint-type cases)
+        run: node --import tsx --test --test-skip-pattern='complaint type' src/providers/dataProvider.test.ts

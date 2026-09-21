@@ -1,0 +1,124 @@
+name: Backend notification tests (novu-bridge + pgr-services)
+
+# WHY THIS JOB EXISTS
+#
+# Nothing in this repository ran `mvn test` for either service on a pull request. The
+# only Maven build is build-images.yml, which is nightly/release and builds each service
+# from build/maven/Dockerfile — and that Dockerfile copies ONLY `<service>/pom.xml` and
+# `<service>/src`. Two of the bridge's most important tests are written to SKIP in
+# exactly that situation, on purpose:
+#
+#   ContractResourceSyncTest  compares the contract packaged in the jar against the copy
+#     published under docs/2.12/notifications/contract/, resolving it at
+#     ../../docs/2.12/notifications/contract. In the image build that path does not
+#     exist, so every assertion is skipped by an Assumption and the job is green.
+#
+#   GoldenFixtureSyncTest     compares this module's copy of the golden fixture against
+#     the generated original at ../pgr-services/src/test/resources/golden/, and the
+#     committed NOTIFICATIONS.* defaults at ../../utilities/default-data-handler/... .
+#     Same story: absent in the image build, skipped, green.
+#
+# Both are tripwires for two copies of one thing drifting apart. A tripwire that only
+# ever runs where it cannot fire is not a tripwire. Run from a FULL CHECKOUT, with the
+# module directory as the working directory, those relative paths resolve and the tests
+# run for real — which is what this workflow does.
+#
+# NOTE ON `paths`: a path filter is a SILENT SKIP, not a failure. The bridge's paths
+# therefore include the published contract, the golden fixture in the OTHER module, and
+# the generated NOTIFICATIONS.* seed data — because a change to any of those is exactly
+# what those two tests exist to catch, and none of them is under backend/novu-bridge/.
+# The lists are duplicated by hand; GitHub Actions does not support YAML anchors.
+
+on:
+  push:
+    branches: [master, main, develop]
+    paths:
+      - 'backend/novu-bridge/**'
+      - 'backend/pgr-services/**'
+      - 'docs/2.12/notifications/contract/**'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
+      - '.github/workflows/backend-notification-tests.yml'
+  # No branch filter on pull_request: a branch list here is a SILENT skip, and
+  # retargeting a PR must not quietly drop this check.
+  pull_request:
+    paths:
+      - 'backend/novu-bridge/**'
+      - 'backend/pgr-services/**'
+      - 'docs/2.12/notifications/contract/**'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/**'
+      - '.github/workflows/backend-notification-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  novu-bridge:
+    name: novu-bridge (mvn test, full checkout)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # The working directory is the module, so `src/main/resources/contract` and the
+      # `../..` hops out to docs/ and utilities/ both resolve — the whole point.
+      - name: mvn -B test
+        working-directory: backend/novu-bridge
+        run: mvn -B test
+
+      # Prove the two sync tests actually RAN rather than skipping, so a future change to
+      # how they find the repo root cannot quietly turn this job back into a no-op.
+      - name: the contract + golden sync tests ran unskipped
+        working-directory: backend/novu-bridge
+        run: |
+          python3 - <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          want = {
+              'org.egov.novubridge.contract.ContractResourceSyncTest',
+              'org.egov.novubridge.service.resolution.golden.GoldenFixtureSyncTest',
+          }
+          seen, bad = set(), []
+          for path in glob.glob('target/surefire-reports/TEST-*.xml'):
+              root = ET.parse(path).getroot()
+              name = root.get('name')
+              if name not in want:
+                  continue
+              seen.add(name)
+              for case in root.iter('testcase'):
+                  if case.find('skipped') is not None:
+                      bad.append('%s#%s' % (name, case.get('name')))
+          missing = want - seen
+          if missing:
+              print('::error::these tests did not run at all: %s' % ', '.join(sorted(missing)))
+          if bad:
+              print('::error::these assertions SKIPPED — the build context is missing the other '
+                    'copy they compare against, so they proved nothing: %s' % ', '.join(sorted(bad)))
+          sys.exit(1 if (missing or bad) else 0)
+          PY
+
+  pgr-services:
+    name: pgr-services (mvn test, full checkout)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: mvn -B test
+        working-directory: backend/pgr-services
+        run: mvn -B test

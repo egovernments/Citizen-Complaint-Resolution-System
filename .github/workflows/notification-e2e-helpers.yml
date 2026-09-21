@@ -1,0 +1,75 @@
+name: Notification e2e helpers
+
+# The notification e2e suites can only RUN on a DIGIT host: they shell out to
+# `docker exec <pg> psql` and reach Kong on localhost. That is fine for the parts that
+# drive a live stack — and it used to mean the parts that DECIDE WHAT TO EXPECT were
+# untestable too, which is precisely where they went wrong:
+#
+#   * which namespace serves a tenant's notification config (NOTIFICATIONS.* vs the
+#     legacy RAINMAKER-PGR.Notification* rows) — per tenant, all-or-nothing;
+#   * what `COMPLAINTS.WORKFLOW.<ACTION>.<TOSTATE>` means, split back into the
+#     (action, toState) pair the dispatch log's transaction_id still carries;
+#   * which audience group an audience scheme asserts on — ACTOR:citizen,
+#     ACTOR:assignee, ROLE:<code>, EVENT_RECIPIENTS, pipe chains, and the legacy
+#     bare-name table;
+#   * what status a dispatch row should carry for a given channel policy (channel off
+#     -> NB_NO_PROVIDER, on with no approved WhatsApp template ->
+#     NB_TEMPLATE_NOT_APPROVED, unusable provider -> NB_PROVIDER_UNAVAILABLE, else SENT).
+#
+# Those are pure functions in local-setup/tests/e2e/notifications/notif-config.js, with
+# no I/O and no env, and this job runs their tests on every change. Node's built-in test
+# runner, no install step, seconds long.
+#
+# It also `node --check`s the suite files themselves. A syntax error in a script nobody
+# can run in CI is otherwise found by an operator, on a server, at the worst moment.
+#
+# NOTE ON `paths`: a path filter is a SILENT SKIP, not a failure. The two lists below are
+# duplicated on purpose — GitHub Actions does not support YAML anchors — so keep them in
+# sync by hand.
+
+on:
+  push:
+    branches: [master, main, develop]
+    paths:
+      - 'local-setup/tests/e2e/notifications/**'
+      - '.github/workflows/notification-e2e-helpers.yml'
+  # No branch filter on pull_request: a branch list here is a SILENT skip, and
+  # retargeting a PR must not quietly drop this check.
+  pull_request:
+    paths:
+      - 'local-setup/tests/e2e/notifications/**'
+      - '.github/workflows/notification-e2e-helpers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  helpers:
+    name: Pure config rules + syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: local-setup/tests/e2e/notifications
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No npm install: notif-config.js requires nothing, and its tests use only
+      # node:test and node:assert. That is what keeps this job a seconds-long gate.
+      - name: the config rules the e2e suites decide with
+        run: node --test notif-config.test.js
+
+      - name: every suite file parses
+        run: |
+          fail=0
+          for f in *.js cases/*.js; do
+            node --check "$f" || { echo "::error file=local-setup/tests/e2e/notifications/$f::does not parse"; fail=1; }
+          done
+          exit $fail
