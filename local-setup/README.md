@@ -11,19 +11,20 @@ follow it start to finish.
 
 There are **three independent ways** to run this stack. Pick one:
 
-| Path | Best for | What you need |
-|------|----------|---------------|
-| **[Option A: Docker Compose](#option-a-docker-compose)** | Quick setup, no extra tools | Docker only |
-| **[Option B: Tilt](#option-b-tilt)** | Dashboard, grouped services, dev buttons | Docker + Tilt |
-| **[Option C: Ansible](#option-c-ansible--the-whole-stack-one-command)** | A real deployment — web server, secret store, monitoring, onboarding wizard. This machine or a server. | Ansible (a script installs it) |
+| Option | When to use | Min. RAM | Min. CPU | Tools |
+|--------|-------------|----------|----------|-------|
+| **[A — Docker Compose](#option-a-docker-compose)** | Exploring the API, reproducing a bug, running smoke tests — no code changes needed | 8 GB allocated to Docker (~3.8 GB used at rest) | Any | Docker |
+| **[B — Tilt](#option-b-tilt)** | Actively changing PGR Java or UI code; want live logs, hot reload, and a service health dashboard | 8 GB allocated to Docker | Any (Maven + Yarn required for hot reload) | Docker + Tilt |
+| **[C — Ansible](#option-c-ansible--the-whole-stack-one-command)** | Testing a full deployment, onboarding a city, or running on a server — includes nginx, TLS, secret store, monitoring, and the onboarding wizard | 16 GB (local slim profile) / 32 GB (full stack or server) | 4 vCPU (local) / 16 vCPU (server) | Ansible (a script installs it) |
 
 Options A and B are development stacks: containers on your machine, everything on
 `localhost:18xxx` ports, no web server. **Option C is a deployment** — one command builds
 the whole thing, on this machine or on a server, and serves it on the normal web ports.
 It is also the only option with the browser onboarding wizard.
 
-**Not sure?** Want to poke at the API or change some code — Option A. Setting the system
-up for someone to actually use — Option C.
+**Not sure?** Exploring or debugging → Option A. Changing code → Option B. Deploying for real → Option C.
+
+> **Planning a production deployment?** For single-server vs Kubernetes guidance, capacity by city size, and complaint volume thresholds, see [`docs/deployment-decision-guide-africa.md`](../docs/deployment-decision-guide-africa.md) or [`docs/deployment-decision-guide-india.md`](../docs/deployment-decision-guide-india.md).
 
 > **On Windows?** The full Ansible stack also runs locally via WSL2 — see
 > [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) (validated end-to-end on a

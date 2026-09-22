@@ -1,9 +1,10 @@
 # DIGIT/CCRS Ansible
 
 Single-playbook, config-driven deploy for DIGIT tenants. Each tenant is a
-fully independent stack (~35 containers) on its own machine — same
-playbook, different `host_vars/<tenant>.yml`. Today: `nairobi`, `bomet`,
-plus `mh-iterations` (sandbox).
+fully independent stack on its own machine — same playbook, different
+`host_vars/<tenant>.yml`. Today: `nairobi`, `bomet`, plus `mh-iterations`
+(sandbox). See [Container inventory](#container-inventory) for the full
+service breakdown.
 
 > **Deploying from Windows?** Follow the
 > [Windows Quickstart (WSL2)](../../WINDOWS-QUICKSTART.md) — it walks the
@@ -33,6 +34,53 @@ ansible/
 │   └── 01-openbao.md          # OpenBao secrets backend
 └── inventory.ini              # Legacy — kept for backwards compat
 ```
+
+## Container inventory
+
+A standard Ansible deploy runs **61 service definitions** across two compose
+files. Of those, five are one-shot init containers that exit after startup,
+leaving **~56 containers running persistently** in steady state.
+
+### Always-on (default stack)
+
+| Category | Count | Services |
+|---|---|---|
+| **Core data stores** | 5 | postgres-db, pgbouncer, redis, redpanda, minio |
+| **DIGIT platform** | 17 | egov-user, egov-user-proxy, egov-workflow-v2, egov-workflow-proxy, mdms-backend, egov-mdms-service (nginx proxy), egov-idgen, egov-localization, egov-accesscontrol, egov-persister, egov-filestore, egov-enc-service, egov-hrms, boundary-service, egov-bndry-mgmnt, audit-service, egov-url-shortening |
+| **PGR** | 1 | pgr-services |
+| **Frontend / UI** | 2 | digit-ui, configurator |
+| **API gateway** | 1 | kong |
+| **Observability base** | 2 | otel-collector, gatus |
+| **Secrets** | 1 | openbao |
+| **Init containers** *(exit after startup)* | 4 | db-migrations, minio-init, hrms-prereq-gate, user-seed |
+| **Monitoring exporters** *(docker-compose.monitoring.yml)* | 2 | node-exporter, postgres-exporter |
+| **Default total** | **35** | |
+
+### Profile-gated (opt-in)
+
+Enabled via `COMPOSE_PROFILES` in `.env`, driven by `host_vars` flags in the
+playbook. Each profile is independent — enable any combination.
+
+| Profile | `host_vars` flag | Count | Services |
+|---|---|---|---|
+| `obs-metrics` | `observability_level: metrics` | 2 | prometheus, grafana |
+| `obs-traces` | `observability_level: traces` | 1 | tempo |
+| `obs-logs` | `observability_level: logs` | 2 | loki, promtail |
+| `search` | `enable_search_stack: true` | 3 | elasticsearch, egov-indexer, inbox |
+| `otp` | `enable_otp_services: true` | 3 | egov-otp, user-otp, egov-notification-sms |
+| `notifications` | `enable_novu: true` | 10 | novu-mongo, novu-api, novu-worker, novu-ws, novu-dashboard, novu-bridge-endpoint, digit-config-service, digit-user-preferences-service, novu-bridge, otp-publisher |
+| `keycloak` | `enable_keycloak: true` | 3 | keycloak-postgres, keycloak, token-exchange-svc |
+| `mcp` | `enable_mcp: true` | 2 | mcp-postgres, digit-mcp |
+
+**Full stack (all profiles): 57 persistent + 4 init = 61 total.**
+
+The `notifications` profile is the largest single addition — 10 containers for
+the Novu pipeline. The `otp` profile is superseded by `notifications` in
+production (the notifications pipeline handles OTP delivery end-to-end);
+`otp` exists for lightweight installs that only need SMS OTP without the full
+Novu stack.
+
+---
 
 ## What you need locally before deploying
 
