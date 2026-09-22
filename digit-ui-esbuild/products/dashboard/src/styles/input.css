@@ -2526,7 +2526,11 @@
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  padding-top: 56px !important;
+  /* Clears the fixed employee header. Read from the same custom property the
+   * header's own height is declared with (see public/vendor/overrides.css) so
+   * this cannot drift from it — the literal 56px here outlived two changes to
+   * the bar and left the dashboard title tucked 19px underneath it. */
+  padding-top: var(--employee-header-h, 56px) !important;
   box-sizing: border-box !important;
 }
 

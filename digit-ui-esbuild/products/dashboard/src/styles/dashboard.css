@@ -236,10 +236,6 @@
   overflow-wrap: anywhere;
 }
 
-.dashboard-filter-inline-select-wrap.dashboard-widget-group-by-wrap::after {
-  content: none !important;
-}
-
 .dashboard-drag-handle-title{
   min-width: 0px;
   font-weight: 600;
@@ -921,15 +917,6 @@
   padding: 0;
 }
 
-.dashboard-filter-inline-select-wrap{
-  position: relative;
-  display: inline-flex;
-  height: 1.75rem;
-  flex-shrink: 0;
-  align-items: center;
-  align-self: center;
-}
-
 .dashboard-filter-inline-select{
   margin: 0px;
   box-sizing: border-box;
@@ -965,21 +952,6 @@
 
 .dashboard-filter-inline-select:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
-}
-
-.dashboard-filter-inline-select-wrap::after {
-  content: none;
-}
-
-.dashboard-filter-inline-chevron {
-  position: absolute;
-  right: 0.35rem;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  width: 10px;
-  height: 10px;
-  color: var(--dashboard-muted-foreground, #6b6860);
 }
 
 .dashboard-filters-clear-inline{
@@ -3945,7 +3917,11 @@
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  padding-top: 56px !important;
+  /* Clears the fixed employee header. Read from the same custom property the
+   * header's own height is declared with (see public/vendor/overrides.css) so
+   * this cannot drift from it — the literal 56px here outlived two changes to
+   * the bar and left the dashboard title tucked 19px underneath it. */
+  padding-top: var(--employee-header-h, 56px) !important;
   box-sizing: border-box !important;
 }
 

@@ -29,6 +29,19 @@ const present = (value) => (typeof value === "string" && value.trim() ? value.tr
  */
 const tenantLabelKey = (tenantId) => `TENANT_TENANTS_${tenantId.toUpperCase().replace(/\./g, "_")}`;
 
+/**
+ * Two initials from the name, one from a single word. Falls back to the
+ * identifier so the avatar is never an empty circle — an employee record can
+ * carry a username with no display name.
+ */
+function initialsFor(name, identifier) {
+  const source = name || identifier || "";
+  const words = source.split(/[\s._-]+/).filter(Boolean);
+  if (!words.length) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 function useAccountSummary() {
   // Read here rather than by prop: LogoutDialog is mounted from the employee
   // topbar and the citizen drawer, and only one of the two has userDetails to
@@ -48,23 +61,30 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
   const { t } = useTranslation();
   const account = useAccountSummary();
 
+  // The account card carries the whole body. The heading already asks the
+  // question, so a separate "you will need to sign in again" line would be the
+  // same restatement this dialog was rewritten to remove.
   const children = [
     <div className="digit-logout-popup-body" key="body">
-      {account && (
+      {account ? (
         <div className="digit-logout-account">
-          {account.name && <span className="digit-logout-account-name">{account.name}</span>}
-          {(account.identifier || account.tenant) && (
+          <span className="digit-logout-account-avatar" aria-hidden="true">
+            {initialsFor(account.name, account.identifier)}
+          </span>
+          <span className="digit-logout-account-text">
+            <span className="digit-logout-account-name">{account.name || account.identifier}</span>
             <span className="digit-logout-account-meta">
-              {[account.identifier, account.tenant && t(tenantLabelKey(account.tenant))]
+              {[account.name && account.identifier, account.tenant && t(tenantLabelKey(account.tenant))]
                 .filter(Boolean)
                 .join(" · ")}
             </span>
-          )}
+          </span>
         </div>
+      ) : (
+        <CardText>
+          {t("CORE_LOGOUT_CONFIRMATION_BODY", "You will need to sign in again to continue.")}
+        </CardText>
       )}
-      <CardText>
-        {t("CORE_LOGOUT_CONFIRMATION_BODY", "You will need to sign in again to continue.")}
-      </CardText>
     </div>,
   ];
 
@@ -103,7 +123,7 @@ const LogoutDialog = ({ onSelect, onCancel, onDismiss, PopupStyles, isDisabled, 
     <PopUp
       type="default"
       children={children}
-      heading={t("CORE_LOGOUT_WEB_HEADER")}
+      heading={t("CORE_LOGOUT_CONFIRM_HEADING", "Are you sure you want to log out?")}
       footerChildren={hideSubmit ? footerWithoutSubmit : footer}
       sortFooterButtons={true}
       onClose={onDismiss}
