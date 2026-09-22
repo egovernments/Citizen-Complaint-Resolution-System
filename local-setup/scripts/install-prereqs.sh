@@ -10,6 +10,8 @@
 # What it installs
 #   git, curl, rsync, unzip           via your distro's package manager
 #   python3 + venv + pip              via your distro's package manager
+#   passlib + bcrypt                  via your distro's package manager (ansible
+#                                     modules run under the TARGET interpreter)
 #   Node.js 20 + npm                  NodeSource on Debian/RHEL, distro repo elsewhere
 #   ansible-core (<2.19), ansible-lint, yamllint   into a private venv,
 #                                     symlinked into ~/.local/bin
@@ -264,6 +266,58 @@ install_python() {
   ok "venv module available"
 }
 
+# ── 2b. Ansible module dependencies (TARGET interpreter, not the venv) ───────
+#
+# community.general.htpasswd imports passlib (and bcrypt, for crypt_scheme:
+# bcrypt). Ansible runs MODULES under the TARGET's discovered interpreter --
+# /usr/bin/python3 -- not under the venv this script builds for the controller.
+# With ansible_connection: local those are the same machine but DIFFERENT
+# interpreters, so a pip install into the venv does not help: the deploy still
+# dies with "Failed to import the required Python library (passlib)".
+#
+# Distro packages, not pip: PEP 668 refuses pip into system python on Ubuntu
+# 24.04 / Debian 12+ / Fedora 38+, which is why the venv exists at all. The
+# packaged passlib+bcrypt pair is also mutually compatible -- passlib 1.7.4
+# against bcrypt >= 4.1 fails its backend self-test with
+# "password cannot be longer than 72 bytes", which passlib then misreports as
+# an import error.
+#
+# Needed by: nginx_features.status, enable_integration_tests,
+# enable_mcp_readonly -- each writes an .htpasswd via that module.
+
+install_module_deps() {
+  step "Ansible module dependencies (passlib, bcrypt)"
+
+  local pkgs=()
+  case "$FAMILY" in
+    debian) pkgs=(python3-passlib python3-bcrypt) ;;
+    rhel)   pkgs=(python3-passlib python3-bcrypt) ;;
+    arch)   pkgs=(python-passlib python-bcrypt) ;;
+    suse)   pkgs=(python3-passlib python3-bcrypt) ;;
+  esac
+
+  if "${PYTHON:-python3}" -c 'import passlib, bcrypt' >/dev/null 2>&1; then
+    skip "passlib and bcrypt already importable by $( "${PYTHON:-python3}" -c 'import sys; print(sys.executable)' )"
+    return 0
+  fi
+
+  if [ "$CHECK_ONLY" -eq 1 ]; then
+    warn "passlib/bcrypt missing — /status/, integration-tests and read-only MCP basic-auth would fail"
+    return 0
+  fi
+
+  pkg_install "${pkgs[@]}" || {
+    warn "could not install ${pkgs[*]} — basic-auth-protected endpoints will fail to deploy"
+    return 0
+  }
+
+  if "${PYTHON:-python3}" -c 'import passlib, bcrypt' >/dev/null 2>&1; then
+    ok "passlib and bcrypt importable"
+  else
+    warn "installed ${pkgs[*]} but they are still not importable by ${PYTHON:-python3}"
+  fi
+}
+
 # ── 3. Node.js ───────────────────────────────────────────────────────────────
 
 node_major() {
@@ -480,6 +534,7 @@ main() {
 
   install_base
   install_python
+  install_module_deps
   install_node
   install_ansible
   install_collections

@@ -3893,12 +3893,19 @@
     #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
     #     so `-b` defeats no_log for the lifetime of the exec — the same reason
     #     the Grafana reset uses --password-from-stdin).
+    # `group:` is load-bearing. Without it the file lands 0640 root:root and the
+    # nginx WORKER (www-data on Debian, nginx on RHEL) cannot open it, so nginx
+    # logs "open() ... failed (13: Permission denied)" and every /status/ request
+    # is a 500 instead of a 401 — and the deploy's own "validate — gatus /status/
+    # returns 200" then fails. Same reasoning as the Mac-container note below,
+    # different cause: there the file is invisible, here it is unreadable.
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
       community.general.htpasswd:
         path: /etc/nginx/.htpasswd-status
         name: "{{ status_basic_auth_user | default('digit-status') }}"
         password: "{{ status_basic_auth_password }}"
         crypt_scheme: bcrypt
+        group: "{{ 'www-data' if ansible_facts['os_family'] == 'Debian' else 'nginx' }}"
         mode: '0640'
       no_log: true
       when:
@@ -3931,6 +3938,7 @@
         name: "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
         password: "{{ integration_tests_basic_auth_password }}"
         crypt_scheme: bcrypt
+        group: "{{ 'www-data' if ansible_facts['os_family'] == 'Debian' else 'nginx' }}"
         mode: '0640'
       no_log: true
       when:
@@ -3956,6 +3964,7 @@
         name: "{{ mcp_readonly_basic_auth_user | default('digit-mcp') }}"
         password: "{{ mcp_readonly_basic_auth_password }}"
         crypt_scheme: bcrypt
+        group: "{{ 'www-data' if ansible_facts['os_family'] == 'Debian' else 'nginx' }}"
         mode: '0640'
       no_log: true
       when:
