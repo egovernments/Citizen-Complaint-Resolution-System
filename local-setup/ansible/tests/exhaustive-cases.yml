@@ -1,0 +1,55 @@
+---
+# Cross every probe verdict with every mount, stack and override state, derive
+# the expected outcome from the rule, and run the real guard for each.
+# `generated` is a fact, so without this the second play starts with the first
+# play's rows and re-runs them under ITS digit_dir — labelled no-stack while
+# executing against a stack. Same leak that made the production-path check need
+# its own playbook.
+- name: "start from an empty case list"
+  ansible.builtin.set_fact:
+    generated: []
+
+- name: "build the case list"
+  ansible.builtin.set_fact:
+    generated: >-
+      {{ generated | default([]) + [{
+        'name': item.0.key ~ ' / mount=' ~ item.1.key
+                ~ ' / ' ~ ('stack' if has_stack else 'no-stack')
+                ~ ' / ' ~ ('override' if item.2 else 'no-override'),
+        'probe': item.0.probe,
+        'probe_rc': item.0.rc,
+        'base': item.1.base,
+        'overlay': 'overlay-without.yml',
+        'db_fast_path': false,
+        'allow_loss': item.2,
+        'expect': ('PROCEED' if item.2 else (
+                     'ABORT' if (
+                       (item.0.key in ['unknown', 'skip-daemon', 'probe-error'] and has_stack)
+                       or (item.0.key == 'data-in-anon' and item.1.key == 'PGDATA')
+                       or (item.0.key == 'data-in-named' and item.1.key != 'PGDATA')
+                     ) else 'PROCEED')),
+        'reason': ('refuse to guess' if item.0.key in ['unknown', 'skip-daemon', 'probe-error']
+                   else ('strand a database' if item.0.key == 'data-in-anon'
+                   else 'move a migrated box'))
+      }] }}
+  loop: "{{ probes | product(mounts) | product(overrides) | map('flatten') | list }}"
+  vars:
+    probes:
+      - {key: data-in-named, probe: "SAFE named-volume:digit_postgres_data", rc: 0}
+      - {key: data-in-anon,  probe: "ANON container-volume:9c2f1ab", rc: 0}
+      - {key: no-data,       probe: "SAFE no-cluster", rc: 0}
+      - {key: unknown,       probe: "UNKNOWN mountpoints-not-readable", rc: 0}
+      - {key: skip-daemon,   probe: "SKIP no-daemon", rc: 0}
+      - {key: skip-docker,   probe: "SKIP no-docker", rc: 0}
+      - {key: probe-error,   probe: "", rc: 1}
+    mounts:
+      - {key: PGDATA, base: base-fixed.yaml}
+      - {key: other,  base: base-old.yaml}
+    overrides: [false, true]
+
+- name: "run every generated case"
+  ansible.builtin.include_tasks: run-guard-case.yml
+  loop: "{{ generated }}"
+  loop_control:
+    loop_var: case
+    label: "{{ case.name }} -> {{ case.expect }}"

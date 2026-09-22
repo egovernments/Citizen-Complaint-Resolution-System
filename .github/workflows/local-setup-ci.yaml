@@ -64,6 +64,12 @@ jobs:
       - name: pg storage guard — decision matrix
         run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-test.yml
 
+      # Every combination of probe verdict x effective mount x stack state x
+      # override, generated rather than hand-picked. The named rows above cover
+      # the incidents; a coverage count showed they reached 14 of 56 tuples.
+      - name: pg storage guard — exhaustive matrix
+        run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-exhaustive.yml
+
       # Separate run on purpose: set_fact persists across plays, so the
       # production shape (no injected probe verdict) only isolates as its own
       # invocation. See the playbook header.
