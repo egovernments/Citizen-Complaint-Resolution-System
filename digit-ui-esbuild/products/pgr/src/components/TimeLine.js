@@ -3,6 +3,7 @@ import React, { Fragment, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { LOCALIZATION_KEY } from "../constants/Localization";
 import PendingAtLME from "./timelineInstances/pendingAtLme";
+import { maskName, maskPhone } from "../utils";
 import PendingForAssignment from "./timelineInstances/PendingForAssignment";
 import PendingForReassignment from "./timelineInstances/PendingForReassignment";
 import Reopen from "./timelineInstances/reopen";
@@ -91,10 +92,13 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
   }, [timeline]);
 
   const getCommentsInCustomChildComponent = ({ comment, thumbnailsToShow, auditDetails, assigner, status }) => {
+    // #1970: the citizen timeline showed each actor's real name and mobile
+    // number. Mask both here, where the caption is assembled, so TLCaption
+    // stays a dumb renderer and there is one place to change the policy.
     const captionDetails = {
       date: auditDetails?.lastModified,
-      name: assigner?.name,
-      mobileNumber: assigner?.mobileNumber,
+      name: maskName(assigner?.name),
+      mobileNumber: maskPhone(assigner?.mobileNumber),
       source: status == "COMPLAINT_FILED" ? complaintDetails?.audit.source : ""
     }
     return <>
@@ -122,10 +126,15 @@ const TimeLine = ({ isLoading, data, serviceRequestId, complaintWorkflow, rating
 
       case "PENDINGATLME":
         let { name, mobileNumber } = caption && caption.length > 0 ? caption[0] : { name: "", mobileNumber: "" };
+        // #1970: mask the assigned employee too. `masked` makes PendingAtLME
+        // render plain text instead of a tel: link — a masked number would
+        // otherwise produce a dead "tel:******0028" the citizen could tap.
+        name = maskName(name);
+        mobileNumber = maskPhone(mobileNumber);
         // The outer CheckPoint already prints the "Pending at LME" label, so
         // pass an empty prefix to PendingAtLME — it just needs the assignee
         // name + mobile beside the phone icon (issue CCRS#490).
-        return <PendingAtLME isCompleted={isCurrent} key={index} name={name} mobile={mobileNumber} text="" customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })} />;
+        return <PendingAtLME isCompleted={isCurrent} key={index} name={name} mobile={mobileNumber} masked text="" customChild={getCommentsInCustomChildComponent({ comment, thumbnailsToShow, auditDetails, assigner })} />;
 
       case "RESOLVED":
         return (

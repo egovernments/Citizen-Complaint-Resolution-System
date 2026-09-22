@@ -2,9 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from "react-i18next";
 import { PopUp, Timeline, TimelineMolecule, Loader } from '@egovernments/digit-ui-components';
 import { useMyContext } from "../utils/context";
-import { convertEpochFormateToDate } from '../utils';
+import { convertEpochFormateToDate, maskName, maskPhone } from '../utils';
 
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
+// maskContacts is passed by the EMPLOYEE details page only — the citizen page
+// never sets it, so citizen-side rendering is unchanged. It masks EVERY actor
+// (employee and citizen alike): pgr-services' field-visibility policy REDACTs
+// citizen name/mobile on the COMPLAINT record, but the timeline's actors come
+// from egov-workflow-v2's process search, which that policy never touches — so
+// without masking here the reporting citizen's number is still readable to
+// every employee who can open the complaint (#1970).
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", maskContacts = false }) => {
     const { state } = useMyContext();
     const { t } = useTranslation();
 
@@ -65,9 +72,15 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
-                const personLine = formatPerson(personRecord);
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
-                const contactLine = mobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${mobile}` : null;
+                // QA #19 + #1970: on the employee page every actor's name and
+                // contact number are masked — visible shape, hidden value. Guarded
+                // on personRecord so a row with no actor keeps its plain "NA"
+                // caption instead of rendering a masked "N***".
+                const maskThis = maskContacts && personRecord;
+                const personLine = maskThis ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
+                const shownMobile = maskThis ? maskPhone(mobile) : mobile;
+                const contactLine = shownMobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${shownMobile}` : null;
 
                 return {
                     label: t(`${labelPrefix}${instance?.action}`),
