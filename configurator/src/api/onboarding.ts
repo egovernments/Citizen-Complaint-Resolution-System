@@ -207,6 +207,8 @@ export interface AvailabilityResult {
   type: IdentifierType;
   value: string;
   available: boolean;
+  conflictingType?: IdentifierType;
+  derivedTenantId?: string;
 }
 
 export type OperationStatus =

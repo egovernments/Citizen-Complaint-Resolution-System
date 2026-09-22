@@ -214,7 +214,10 @@ function AvailabilityNote({
     </p>
   ) : (
     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-      <AlertCircle className="h-3 w-3" /> Already taken.
+      <AlertCircle className="h-3 w-3" />{' '}
+      {state.conflictingType === 'TENANT_ID' && state.derivedTenantId
+        ? `This URL maps to tenant ID “${state.derivedTenantId}”, which is already in use.`
+        : 'Already taken.'}
     </p>
   );
 }

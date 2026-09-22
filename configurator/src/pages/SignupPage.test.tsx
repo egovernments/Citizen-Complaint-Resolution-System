@@ -180,6 +180,18 @@ describe('wizard', () => {
     expect(await screen.findByText(/at least two letters/i)).toBeInTheDocument();
   });
 
+  it('explains when a free slug projects to an occupied tenant id', async () => {
+    vi.mocked(api.checkIdentifier).mockImplementation(async (type, value) => type === 'URL_SLUG'
+      ? { type, value, available: false, conflictingType: 'TENANT_ID', derivedTenantId: 'kd' }
+      : { type, value, available: true });
+
+    render(<SignupPage />);
+    await completeAccountStep();
+    fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'kd4' } });
+
+    expect(await screen.findByText(/maps to tenant ID “kd”.*already in use/i)).toBeInTheDocument();
+  });
+
   it('creates the draft once Preferences is complete, not before', async () => {
     vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1', status: 'DRAFT' } as never);
     render(<SignupPage />);
