@@ -8,13 +8,21 @@ import type {
 } from "../authentication/types.js";
 import type { IdentitySession, SelectedIdentityContext } from "./types.js";
 
-interface LoginAttempt {
+export interface SignupIdentityDraft {
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface LoginAttempt {
   codeVerifier: string;
   nonce: string;
   oidcClientId: string;
   intent: IdentityAuthIntent;
   methodId: string;
   returnTo: string;
+  requiresLoginCookie: boolean;
+  signupIdentityDraft?: SignupIdentityDraft;
 }
 
 export interface PasswordSetupAttempt {
@@ -52,6 +60,8 @@ export async function createLoginAttempt(input: {
   intent: IdentityAuthIntent;
   methodId: string;
   returnTo: string;
+  requiresLoginCookie?: boolean;
+  signupIdentityDraft?: SignupIdentityDraft;
 }): Promise<{
   state: string;
   codeVerifier: string;
@@ -66,29 +76,49 @@ export async function createLoginAttempt(input: {
     .digest("base64url");
   await getRedis().set(
     loginKey(state),
-    JSON.stringify({ codeVerifier, nonce, ...input } satisfies LoginAttempt),
+    JSON.stringify({
+      codeVerifier,
+      nonce,
+      requiresLoginCookie: input.requiresLoginCookie !== false,
+      ...input,
+    } satisfies LoginAttempt),
     "EX",
     config.identityLoginTtlSeconds,
   );
   return { state, codeVerifier, codeChallenge, nonce };
 }
 
-export async function consumeLoginAttempt(
-  state: string,
-): Promise<LoginAttempt | null> {
-  const raw = await getRedis().getdel(loginKey(state));
+function parseLoginAttempt(raw: string | null): LoginAttempt | null {
   if (!raw) return null;
   try {
     const attempt = JSON.parse(raw) as LoginAttempt;
+    const signupDraft = attempt.signupIdentityDraft;
+    const validSignupDraft = signupDraft === undefined || (
+      typeof signupDraft.email === "string" &&
+      typeof signupDraft.firstName === "string" &&
+      typeof signupDraft.lastName === "string"
+    );
     return typeof attempt.codeVerifier === "string" &&
       typeof attempt.nonce === "string" &&
       typeof attempt.oidcClientId === "string" &&
       (attempt.intent === "signin" || attempt.intent === "signup") &&
       typeof attempt.methodId === "string" &&
-      typeof attempt.returnTo === "string" ? attempt : null;
+      typeof attempt.returnTo === "string" &&
+      typeof attempt.requiresLoginCookie === "boolean" &&
+      validSignupDraft ? attempt : null;
   } catch {
     return null;
   }
+}
+
+export async function getLoginAttempt(state: string): Promise<LoginAttempt | null> {
+  return parseLoginAttempt(await getRedis().get(loginKey(state)));
+}
+
+export async function consumeLoginAttempt(
+  state: string,
+): Promise<LoginAttempt | null> {
+  return parseLoginAttempt(await getRedis().getdel(loginKey(state)));
 }
 
 export async function createAuthResult(result: IdentityAuthResult): Promise<string> {

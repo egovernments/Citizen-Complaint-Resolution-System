@@ -28,6 +28,7 @@ vi.mock('@/api/onboarding', async () => {
     findOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
+    requestMagicLinkSignup: vi.fn(),
     logout: vi.fn(),
   };
 });
@@ -57,11 +58,7 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
-  it('keeps every alternative method separately clickable', async () => {
-    // With two methods `rest` held one item and nothing was visibly wrong.
-    // A third made them touch: they rendered inline with no separator, so
-    // "Continue with GitHub" and "Email me a sign-in link" ran together as one
-    // string and aiming for one hit the other.
+  it('keeps OAuth alternatives separate from the email signup form', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
       methods: [
@@ -76,20 +73,37 @@ describe('sign-in gate', () => {
     const magic = await screen.findByRole('button', { name: 'Email me a sign-in link' });
     const github = screen.getByRole('button', { name: 'Continue with GitHub' });
 
-    // Worth being explicit: the defect was visual, and the DOM alone cannot see
-    // it. Both buttons resolved by accessible name before this fix too, which
-    // is exactly why it survived to production. So assert what stops them
-    // running together rather than the exact utilities, which have already
-    // changed once: each alternative is a full-width block, so two of them
-    // cannot share a line whatever the container does.
-    expect(magic.className).toMatch(/w-full/);
+    // The magic-link action is a form submit; provider alternatives remain
+    // distinct full-width buttons below it.
     expect(github.className).toMatch(/w-full/);
-    const row = magic.parentElement as HTMLElement;
-    expect(row).toBe(github.parentElement);
-    expect(row.className).toMatch(/space-y-|gap-/);
+    expect(magic.closest('form')).not.toBeNull();
+    fireEvent.click(github);
+    expect(api.startSignIn).toHaveBeenCalledWith('github', 'signup');
+  });
 
-    fireEvent.click(magic);
-    expect(api.startSignIn).toHaveBeenCalledWith('magic-link', 'signup');
+  it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.requestMagicLinkSignup).mockResolvedValue({
+      message: 'Check your email for a link to continue creating your account.',
+    });
+
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/first name/i), { target: { value: 'Amina' } });
+    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Diallo' } });
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'amina@example.org' } });
+    fireEvent.click(screen.getByRole('button', { name: /email me a sign-in link/i }));
+
+    await waitFor(() => expect(api.requestMagicLinkSignup).toHaveBeenCalledWith({
+      firstName: 'Amina',
+      lastName: 'Diallo',
+      email: 'amina@example.org',
+    }));
+    expect(await screen.findByRole('heading', { name: /check your email/i })).toBeInTheDocument();
+    expect(screen.getByText(/amina@example.org/i)).toBeInTheDocument();
+    expect(api.startSignIn).not.toHaveBeenCalled();
   });
 
   it('hands sign-in to the backend rather than collecting a credential', async () => {

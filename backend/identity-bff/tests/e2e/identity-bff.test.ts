@@ -229,23 +229,55 @@ describe("identity BFF", () => {
     );
     expect(unsafeReturn.status).toBe(400);
 
-    const magic = await fetch(
+    const hostedMagic = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link&intent=signup&returnTo=%2Fconfigurator%2Fsignup`,
       { redirect: "manual" },
     );
-    expect(magic.status).toBe(302);
-    const magicUrl = new URL(magic.headers.get("location")!);
-    expect(magicUrl.searchParams.get("client_id")).toBe(
-      "digit-identity-bff-magic-link",
+    expect(hostedMagic.status).toBe(400);
+
+    const magic = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/signup/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.30",
+        },
+        body: JSON.stringify({
+          firstName: "Magic",
+          lastName: "Founder",
+          email: "person@example.com",
+          returnTo: "/configurator/signup",
+        }),
+      },
     );
-    expect(magicUrl.searchParams.has("client_secret")).toBe(false);
-    expect(magicUrl.searchParams.has("kc_idp_hint")).toBe(false);
-    const magicState = magicUrl.searchParams.get("state")!;
-    const magicNonce = magicUrl.searchParams.get("nonce")!;
-    const magicLoginCookie = magic.headers.get("set-cookie")!.split(";", 1)[0];
+    expect(magic.status).toBe(202);
+    expect(await magic.json()).toEqual({
+      message: "Check your email for a link to continue creating your account.",
+    });
+    let magicRequests: Array<Record<string, unknown>> = [];
+    await expect.poll(async () => {
+      magicRequests = await (
+        await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+      ).json() as Array<Record<string, unknown>>;
+      return magicRequests.length;
+    }).toBeGreaterThan(0);
+    const magicRequest = magicRequests.at(-1)!;
+    expect(magicRequest).toMatchObject({
+      email: "person@example.com",
+      client_id: "digit-identity-bff-magic-link",
+      redirect_uri: config.identityRedirectUri,
+      force_create: false,
+      send_email: true,
+      reusable: false,
+      response_mode: "query",
+    });
+    const magicState = String(magicRequest.state);
+    const magicNonce = String(magicRequest.nonce);
     const callback = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(magicNonce)}&state=${encodeURIComponent(magicState)}`,
-      { redirect: "manual", headers: { Cookie: magicLoginCookie } },
+      { redirect: "manual" },
     );
     expect(callback.status).toBe(303);
     expect(callback.headers.get("location")).toBe("/configurator/signup");
@@ -258,6 +290,54 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/session`,
       { headers: { Cookie: magicSessionCookie } },
     )).status).toBe(200);
+    const magicUser = await (
+      await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/identity-user-1`)
+    ).json();
+    expect(magicUser).toMatchObject({
+      email: "person@example.com",
+      emailVerified: true,
+      firstName: "Magic",
+      lastName: "Founder",
+    });
+    expect((await kcUpdate("/users/identity-user-1", {
+      firstName: "Demo", lastName: "Person",
+    })).status).toBe(204);
+
+    const newIdentity = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/signup/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.31",
+        },
+        body: JSON.stringify({
+          firstName: "New",
+          lastName: "Founder",
+          email: "new.founder@example.com",
+        }),
+      },
+    );
+    expect(newIdentity.status).toBe(202);
+    let createdUsers: Array<Record<string, unknown>> = [];
+    await expect.poll(async () => {
+      createdUsers = await (
+        await fetch(
+          `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?email=new.founder%40example.com&exact=true`,
+        )
+      ).json() as Array<Record<string, unknown>>;
+      return createdUsers.length;
+    }).toBe(1);
+    expect(createdUsers).toHaveLength(1);
+    expect(createdUsers[0]).toMatchObject({
+      email: "new.founder@example.com",
+      firstName: "New",
+      lastName: "Founder",
+      emailVerified: false,
+      enabled: true,
+      attributes: { "digit.identityBffSignup": ["true"] },
+    });
   });
 
   it("returns provider failures through a one-time, browser-safe result", async () => {

@@ -43,6 +43,7 @@ interface FederatedIdentityRepresentation {
 
 const MANAGED_TENANTS_ATTRIBUTE = "digit.managedTenants";
 const BFF_INVITED_USER_ATTRIBUTE = "digit.identityBffInvited";
+const BFF_SIGNUP_USER_ATTRIBUTE = "digit.identityBffSignup";
 
 export async function managedTenantsFromIdentity(userId: string): Promise<string[]> {
   const response = await request(`/users/${encodeURIComponent(userId)}`);
@@ -402,6 +403,91 @@ export async function readIdentityUserProfile(userId: string): Promise<IdentityU
     name,
     ...(user.emailVerified === true && user.email ? { emailId: user.email } : {}),
   };
+}
+
+/**
+ * Applies the name collected by the Configurator only after the magic-link
+ * redemption has proved ownership of the same email address. This is profile
+ * completion on Keycloak's structural user record, not tenant authorization.
+ */
+export async function applyVerifiedSignupIdentityProfile(input: {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<void> {
+  const response = await request(`/users/${encodeURIComponent(input.userId)}`);
+  const user = await response.json() as UserRepresentation;
+  if (user.id !== input.userId || user.enabled === false ||
+      user.email?.trim().toLowerCase() !== input.email || user.emailVerified !== true) {
+    throw new IdentityAdminError("The verified magic-link identity does not match the signup");
+  }
+  const attributes = { ...user.attributes };
+  delete attributes[BFF_SIGNUP_USER_ATTRIBUTE];
+  await request(`/users/${encodeURIComponent(input.userId)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ...user,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      attributes,
+    }),
+  });
+}
+
+/**
+ * Creates the structural Keycloak record before email verification so its
+ * profile is complete when the action token is redeemed. It grants no tenant
+ * membership or role and deliberately leaves `emailVerified` false.
+ */
+export async function ensureMagicLinkSignupIdentity(input: {
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<{ id: string; created: boolean }> {
+  const existing = await findIdentityUserByEmail(input.email);
+  if (existing) {
+    if (!existing.id || existing.enabled === false) {
+      throw new IdentityAdminError("The Keycloak user is not available for signup", 409);
+    }
+    const managedDraft = existing.emailVerified !== true &&
+      existing.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+    if (managedDraft &&
+        (existing.firstName !== input.firstName || existing.lastName !== input.lastName)) {
+      await request(`/users/${encodeURIComponent(existing.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...existing,
+          firstName: input.firstName,
+          lastName: input.lastName,
+        }),
+      });
+    }
+    return { id: existing.id, created: false };
+  }
+
+  const response = await request("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      username: input.email,
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      enabled: true,
+      emailVerified: false,
+      attributes: { [BFF_SIGNUP_USER_ATTRIBUTE]: ["true"] },
+    }),
+  }, [201, 409]);
+  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  if (response.status === 201 && id) return { id, created: true };
+
+  // A concurrent request may have won the create. Resolve the same unique
+  // email record rather than treating the idempotent retry as a new identity.
+  const raced = await findIdentityUserByEmail(input.email);
+  if (!raced?.id || raced.enabled === false) {
+    throw new IdentityAdminError("Keycloak did not identify the signup user", 409);
+  }
+  return { id: raced.id, created: false };
 }
 
 function invitedUser(user: UserRepresentation, email: string, created: boolean): InvitedIdentityUser {

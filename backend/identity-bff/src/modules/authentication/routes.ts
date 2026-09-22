@@ -2,7 +2,10 @@ import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { config } from "../../infrastructure/config.js";
 import { resolveTenantOptions } from "../access-context/tenant-options.js";
-import { IdentityAdminError } from "../organizations/organization-service.js";
+import {
+  applyVerifiedSignupIdentityProfile,
+  IdentityAdminError,
+} from "../organizations/organization-service.js";
 import {
   clearedLoginCookie,
   consumeAuthResult,
@@ -10,6 +13,7 @@ import {
   createAuthResult,
   createIdentitySession,
   createLoginAttempt,
+  getLoginAttempt,
   loginCookie,
   loginStateFromCookie,
   sessionCookie,
@@ -174,6 +178,11 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     }
     const method = methods.find((candidate) => candidate.id === requestedMethod);
     if (!method) return response.status(400).json({ error: "Unsupported sign-in method" });
+    if (method.type === "magic_link") {
+      return response.status(400).json({
+        error: "Email sign-up must be started from the Configurator signup form",
+      });
+    }
 
     const oidcClient = oidcClientForMethod(method.type);
     const { state, codeChallenge, nonce } = await createLoginAttempt({
@@ -192,7 +201,19 @@ export function registerAuthenticationRoutes(app: express.Application): void {
   app.get("/identity/v1/callback", asyncRoute(async (request, response) => {
     const code = typeof request.query.code === "string" ? request.query.code : null;
     const state = typeof request.query.state === "string" ? request.query.state : null;
-    if (!state || loginStateFromCookie(request.headers.cookie) !== state) {
+    if (!state) {
+      response.setHeader("Set-Cookie", clearedLoginCookie());
+      await redirectWithResult(response, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
+      return;
+    }
+
+    const preview = await getLoginAttempt(state);
+    const loginCookieMatches = loginStateFromCookie(request.headers.cookie) === state;
+    // OAuth/password redirects must remain bound to the browser that started
+    // them. A signup magic link is deliberately cross-device: possession of
+    // Keycloak's single-use emailed action token is the browser binding, so it
+    // is the sole attempt type allowed to return without our login cookie.
+    if (!loginCookieMatches && preview?.requiresLoginCookie !== false) {
       response.setHeader("Set-Cookie", clearedLoginCookie());
       await redirectWithResult(response, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
       return;
@@ -234,12 +255,29 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       if (idClaims.sub !== claims.sub) {
         throw new Error("Keycloak token subjects do not match");
       }
+      let sessionClaims = claims;
+      if (attempt.signupIdentityDraft) {
+        const draft = attempt.signupIdentityDraft;
+        if (attempt.intent !== "signup" ||
+            claims.email.trim().toLowerCase() !== draft.email ||
+            claims.email_verified !== true) {
+          throw new Error("Magic-link identity does not match the signup draft");
+        }
+        await applyVerifiedSignupIdentityProfile({
+          userId: claims.sub,
+          ...draft,
+        });
+        sessionClaims = {
+          ...claims,
+          name: `${draft.firstName} ${draft.lastName}`,
+        };
+      }
       const { sessionId, maxAge } = await createIdentitySession(
         tokens,
-        claims,
+        sessionClaims,
         attempt.oidcClientId,
       );
-      await resolveTenantOptions(claims).catch((error) => {
+      await resolveTenantOptions(sessionClaims).catch((error) => {
         console.warn("DIGIT account resolution after sign-in failed:", (error as Error).message);
       });
       response.setHeader("Set-Cookie", [

@@ -9,6 +9,7 @@ import {
   isValidAccountCode,
   isValidUrlSlug,
   newIdempotencyKey,
+  requestMagicLinkSignup,
   session,
   tenantReadiness,
   slugifyAccountName,
@@ -41,6 +42,20 @@ describe('transport', () => {
     await session();
     // The session is an opaque HttpOnly cookie; without this it never travels.
     expect(calls[0].init.credentials).toBe('include');
+  });
+
+  it('posts the Configurator-collected identity to the signup magic-link endpoint', async () => {
+    const calls = stubFetch(() => ({ status: 202, body: { message: 'Check your email.' } }));
+    await requestMagicLinkSignup({
+      firstName: 'Amina', lastName: 'Diallo', email: 'amina@example.org',
+    });
+    expect(calls[0].url).toContain('/identity/v1/signup/magic-link-requests');
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
+      firstName: 'Amina',
+      lastName: 'Diallo',
+      email: 'amina@example.org',
+      returnTo: expect.stringContaining('/configurator/signup'),
+    });
   });
 
   it('requires an idempotency key on create, and sends the one it was given', async () => {

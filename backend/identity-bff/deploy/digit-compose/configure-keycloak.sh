@@ -16,8 +16,6 @@ readonly BFF_CLIENT=digit-identity-bff
 readonly RETIRED_ASSERTION_AUDIENCE=digit-identity-exchange
 readonly ADMIN_CLIENT=digit-identity-admin
 readonly ROLE_CLIENT=digit-ui
-readonly MAGIC_LINK_FLOW=digit-magic-link-browser
-readonly MAGIC_LINK_FORMS=digit-magic-link-forms
 readonly FIRST_BROKER_FLOW=digit-first-broker-login
 
 # Standalone installs keep these values in identity-bff.env. Ansible deployments
@@ -165,23 +163,6 @@ configure_first_broker_login() {
   done
 }
 
-ensure_execution() {
-  local flow=$1 provider=$2 requirement=$3 execution
-  execution=$(kc get "authentication/flows/$flow/executions" -r "$REALM" |
-    jq -c --arg provider "$provider" '.[] | select(.providerId == $provider)' | head -1)
-  if [ -z "$execution" ]; then
-    kc create "authentication/flows/$flow/executions/execution" -r "$REALM" \
-      -s "provider=$provider" >/dev/null
-    execution=$(kc get "authentication/flows/$flow/executions" -r "$REALM" |
-      jq -c --arg provider "$provider" '.[] | select(.providerId == $provider)' | head -1)
-  fi
-  printf '%s' "$execution" | jq --arg requirement "$requirement" \
-    '.requirement = $requirement' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-      update "authentication/flows/$flow/executions" -r "$REALM" -f - \
-      --config "$KC_CONFIG" >/dev/null
-}
-
 configure_smtp() {
   : "${KEYCLOAK_SMTP_HOST:?set KEYCLOAK_SMTP_HOST}"
   : "${KEYCLOAK_SMTP_FROM:?set KEYCLOAK_SMTP_FROM}"
@@ -212,57 +193,19 @@ configure_smtp() {
 
 configure_magic_link() {
   : "${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:?set KEYCLOAK_MAGIC_LINK_CLIENT_SECRET}"
-
-  if [ -z "$(flow_uuid "$MAGIC_LINK_FLOW")" ]; then
-    kc create authentication/flows -r "$REALM" \
-      -s "alias=$MAGIC_LINK_FLOW" \
-      -s 'description=Passwordless email magic-link browser flow' \
-      -s providerId=basic-flow -s topLevel=true -s builtIn=false >/dev/null
-  fi
-  ensure_execution "$MAGIC_LINK_FLOW" auth-cookie ALTERNATIVE
-
-  local forms_execution
-  forms_execution=$(kc get "authentication/flows/$MAGIC_LINK_FLOW/executions" -r "$REALM" |
-    jq -c --arg display "$MAGIC_LINK_FORMS" '.[] | select(.displayName == $display)' | head -1)
-  if [ -z "$forms_execution" ]; then
-    kc create "authentication/flows/$MAGIC_LINK_FLOW/executions/flow" -r "$REALM" \
-      -s "alias=$MAGIC_LINK_FORMS" -s 'description=Magic link email form' \
-      -s provider=registration-page -s type=basic-flow >/dev/null
-  fi
-  forms_execution=$(kc get "authentication/flows/$MAGIC_LINK_FLOW/executions" -r "$REALM" |
-    jq -c --arg display "$MAGIC_LINK_FORMS" '.[] | select(.displayName == $display)' | head -1)
-  printf '%s' "$forms_execution" | jq '.requirement = "ALTERNATIVE"' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-      update "authentication/flows/$MAGIC_LINK_FLOW/executions" -r "$REALM" -f - \
-      --config "$KC_CONFIG" >/dev/null
-
-  ensure_execution "$MAGIC_LINK_FORMS" ext-magic-form REQUIRED
-  local magic_execution magic_execution_id magic_config_id
-  magic_execution=$(kc get "authentication/flows/$MAGIC_LINK_FORMS/executions" -r "$REALM" |
-    jq -c '.[] | select(.providerId == "ext-magic-form")' | head -1)
-  magic_execution_id=$(printf '%s' "$magic_execution" | jq -r .id)
-  magic_config_id=$(printf '%s' "$magic_execution" | jq -r '.authenticationConfig // empty')
-  if [ -z "$magic_config_id" ]; then
-    kc create "authentication/executions/$magic_execution_id/config" -r "$REALM" \
-      -s alias=digit-magic-link-config \
-      -s 'config."ext-magic-create-nonexistent-user"=true' \
-      -s 'config."ext-magic-update-profile-action"=false' \
-      -s 'config."ext-magic-update-password-action"=false' \
-      -s 'config."ext-magic-allow-token-reuse"=false' \
-      -s 'config."ext-magic-token-life-span"=600' >/dev/null
-  fi
-
-  local magic_uuid magic_flow_id
+  # Configurator collects the identity draft and the BFF calls the extension's
+  # authenticated /magic-link resource. Its action token skips browser flows,
+  # so this client must not retain the old hosted email-form binding.
+  local magic_uuid
   magic_uuid=$(ensure_client "$MAGIC_LINK_CLIENT" "$KEYCLOAK_MAGIC_LINK_CLIENT_SECRET" false)
-  magic_flow_id=$(flow_uuid "$MAGIC_LINK_FLOW")
   kc update "clients/$magic_uuid" -r "$REALM" \
     -s standardFlowEnabled=true \
     -s "baseUrl=$POST_LOGIN_REDIRECT" \
-    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
+    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s 'attributes."pkce.code.challenge.method"=S256' \
     -s 'attributes."post.logout.redirect.uris"=+' \
-    -s "authenticationFlowBindingOverrides.browser=$magic_flow_id" >/dev/null
+    -s 'authenticationFlowBindingOverrides={}' >/dev/null
 
   ensure_mapper "clients/$magic_uuid" digit-identity-bff-audience oidc-audience-mapper \
     -s "config.\"included.client.audience\"=$BFF_CLIENT" \
@@ -285,7 +228,7 @@ else
 fi
 
 # These are identity invariants, not magic-link settings. Pin them on both new
-# and existing realms even when the optional magic-link flow is disabled.
+# and existing realms even when the optional magic-link resource is disabled.
 kc update "realms/$REALM" -s organizationsEnabled=true \
   -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
   -s resetPasswordAllowed=false -s loginTheme=digit \

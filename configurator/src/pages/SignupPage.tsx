@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, Check, Loader2, Mail, RefreshCw } from 'lucide-react';
 import {
+  type AuthMethod,
   type AvailabilityResult,
   type Operation,
   type ProvisioningStep,
@@ -23,6 +24,7 @@ import {
   logout,
   newIdempotencyKey,
   retryOperation,
+  requestMagicLinkSignup,
   selectContext,
   tenantReadiness,
   session,
@@ -156,6 +158,7 @@ const STEP_LABELS: Record<ProvisioningStep, string> = {
 type Phase =
   | 'loading'
   | 'signedOut'
+  | 'checkEmail'
   | 'chooseTenant'
   | 'wizard'
   | 'provisioning'
@@ -250,7 +253,10 @@ function SignupFlow() {
   const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
+  const [methods, setMethods] = useState<AuthMethod[]>([]);
+  const [signupFirstName, setSignupFirstName] = useState('');
+  const [signupLastName, setSignupLastName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   // The tenant the operator picked and how far it has actually been built. Set
@@ -523,6 +529,25 @@ function SignupFlow() {
     }
   };
 
+  const sendSignupLink = async (event: React.FormEvent) => {
+    event.preventDefault();
+    authResult.clear();
+    setSaving(true);
+    setError(null);
+    try {
+      await requestMagicLinkSignup({
+        firstName: signupFirstName.trim(),
+        lastName: signupLastName.trim(),
+        email: signupEmail.trim(),
+      });
+      setPhase('checkEmail');
+    } catch (caught) {
+      setError(errorText(caught));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Poll while the worker runs. Stops as soon as the operation settles, so a
   // terminal failure does not sit here hammering the endpoint.
   useEffect(() => {
@@ -646,10 +671,10 @@ function SignupFlow() {
   }
 
   if (phase === 'signedOut') {
-    // Deliberately the same card as the original first step: stepper, heading,
-    // small print, the sign-in line. Only the middle changed, because Keycloak
-    // collects the email now and there is nothing left for us to ask for.
-    const [primary, ...rest] = methods;
+    const magicLink = methods.find((method) => method.type === 'magic_link');
+    const alternatives = methods.filter((method) => method.type !== 'magic_link');
+    const magicReady = signupFirstName.trim() && signupLastName.trim() &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim());
     return (
       <>
         <Stepper steps={STEPS} current="account" />
@@ -663,39 +688,62 @@ function SignupFlow() {
             </p>
           </div>
 
-          {primary ? (
-            <Button className="h-11 w-full" onClick={() => startSignIn(primary.id, 'signup')}>
-              <Mail className="mr-2 h-4 w-4" /> {primary.label}
-            </Button>
-          ) : (
+          {magicLink ? (
+            <form className="space-y-3" onSubmit={(event) => void sendSignupLink(event)}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field id="signup-first-name" label="First name">
+                  <Input
+                    id="signup-first-name"
+                    className={CONTROL_HEIGHT}
+                    autoComplete="given-name"
+                    value={signupFirstName}
+                    onChange={(event) => setSignupFirstName(event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field id="signup-last-name" label="Last name">
+                  <Input
+                    id="signup-last-name"
+                    className={CONTROL_HEIGHT}
+                    autoComplete="family-name"
+                    value={signupLastName}
+                    onChange={(event) => setSignupLastName(event.target.value)}
+                    required
+                  />
+                </Field>
+              </div>
+              <Field id="signup-email" label="Email address">
+                <Input
+                  id="signup-email"
+                  className={CONTROL_HEIGHT}
+                  type="email"
+                  autoComplete="email"
+                  value={signupEmail}
+                  onChange={(event) => setSignupEmail(event.target.value)}
+                  required
+                />
+              </Field>
+              <Button className="h-11 w-full" type="submit" disabled={!magicReady || saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                {magicLink.label}
+              </Button>
+            </form>
+          ) : alternatives.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No sign-in method is enabled on this environment.
             </p>
-          )}
+          ) : null}
 
-          {/* Anything beyond the first sits under it as a quiet alternative
-              rather than a second wall of buttons.
-
-              One per row. They were laid out inline with no separator, which
-              read as a single run-on link the moment a deployment enabled a
-              third method: "Continue with GitHubEmail me a sign-in link". It
-              was not only ugly, the two targets touched, so aiming for one
-              reliably hit the other. */}
-          {rest.length > 0 && (
+          {/* Provider sign-up remains visually secondary to email verification. */}
+          {alternatives.length > 0 && (
             <>
-              {/* The reference separates the primary path from the rest with a
-                  rule and an OR, then gives each alternative a full-width
-                  outline button. Same shape here, with one difference that is
-                  deliberate: which buttons exist is whatever `auth-methods`
-                  reports, so a deployment that enables only password sees only
-                  password and nothing renders an option it cannot honour. */}
               <div className="flex items-center gap-3">
                 <span className="h-px flex-1 bg-border" />
                 <span className="text-xs text-muted-foreground">OR</span>
                 <span className="h-px flex-1 bg-border" />
               </div>
               <div className="space-y-3">
-                {rest.map((method) => (
+                {alternatives.map((method) => (
                   <Button
                     key={method.id}
                     variant="outline"
@@ -718,6 +766,29 @@ function SignupFlow() {
               Sign in
             </Link>
           </p>
+        </section>
+      </>
+    );
+  }
+
+  if (phase === 'checkEmail') {
+    return (
+      <>
+        <Stepper steps={STEPS} current="account" />
+        <section className="space-y-5 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Mail className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Check your email</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              We sent a secure sign-up link to <span className="font-medium text-foreground">{signupEmail.trim()}</span>.
+              Open it to verify your email and continue creating your account.
+            </p>
+          </div>
+          <Button variant="outline" className="w-full" onClick={() => setPhase('signedOut')}>
+            Use a different email
+          </Button>
         </section>
       </>
     );

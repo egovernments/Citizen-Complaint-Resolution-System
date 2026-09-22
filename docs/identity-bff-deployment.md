@@ -24,8 +24,10 @@ egov-user account.
 ## Runtime flow
 
 1. The browser asks the BFF for enabled authentication methods.
-2. The BFF starts Keycloak Authorization Code + PKCE for password, magic link,
-   Google, or GitHub.
+2. The BFF starts Keycloak Authorization Code + PKCE for password, Google, or
+   GitHub. For signup magic link, Configurator posts name/email to the BFF; the
+   BFF stores that interim draft and asks Keycloak to email a single-use action
+   token without rendering a hosted screen.
 3. Keycloak returns the code to the BFF callback. The BFF stores Keycloak tokens
    in Redis and gives the browser an opaque HttpOnly cookie.
 4. The browser loads eligible tenants. The BFF checks live Organization

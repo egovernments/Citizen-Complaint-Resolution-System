@@ -46,11 +46,13 @@ let realms: Map<string, RealmState>;
 let lastAdminGrantType: string | undefined;
 /** "METHOD /path" of every Admin API call, so tests can assert read scope. */
 let adminRequests: string[];
+let magicLinkRequests: Array<Record<string, unknown>>;
 
 function initState() {
   realms = new Map();
   lastAdminGrantType = undefined;
   adminRequests = [];
+  magicLinkRequests = [];
 }
 
 export function getLastAdminGrantType(): string | undefined {
@@ -124,7 +126,39 @@ export function createKcAdminMock() {
     resetAdminRequestLog();
     res.status(204).end();
   });
+  app.get("/__test/magic-links", (_req, res) => res.json(magicLinkRequests));
   app.use(express.json({ limit: "10mb", strict: false }));
+
+  app.post("/realms/:realm/magic-link", (req, res) => {
+    if (req.get("authorization") !== "Bearer mock-kc-admin-token") {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    const realm = getOrCreateRealm(req.params.realm);
+    const email = typeof req.body?.email === "string" ? req.body.email : "";
+    if (!email || req.body?.send_email !== true) {
+      return res.status(400).json({ error: "email and send_email are required" });
+    }
+    let user = realm.users.find((candidate) => candidate.email === email);
+    if (!user && req.body?.force_create === true) {
+      user = {
+        id: crypto.randomUUID(),
+        username: email,
+        email,
+        enabled: true,
+        emailVerified: false,
+        credentials: [],
+        federatedIdentities: [],
+      };
+      realm.users.push(user);
+    }
+    if (!user) return res.status(404).json({ error: "user not found" });
+    magicLinkRequests.push({ ...req.body, user_id: user.id });
+    return res.json({
+      user_id: user.id,
+      link: `http://localhost/action-token/${magicLinkRequests.length}`,
+      sent: true,
+    });
+  });
 
   // POST /realms/master/protocol/openid-connect/token — admin auth
   app.post(

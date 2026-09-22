@@ -109,5 +109,5 @@ shared playbook does not impose this requirement on every historical image.
 
 Ansible runs `deploy/digit-compose/configure-keycloak.sh` after Keycloak is
 healthy. The script idempotently enables Organizations and reconciles the BFF,
-magic-link, admin, role, Google, and GitHub configuration. Kong publishes only
+magic-link resource client, admin, role, Google, and GitHub configuration. Kong publishes only
 `/identity/v1`; `/internal/identity/v1` remains private.

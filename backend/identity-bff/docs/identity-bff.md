@@ -28,6 +28,7 @@ password.
 |---|---|---|
 | `GET` | `/identity/v1/auth-methods?intent=signin\|signup` | Methods configured for this journey and enabled in Keycloak |
 | `GET` | `/identity/v1/authorize?method=...&intent=...&returnTo=...` | Starts Authorization Code + PKCE with state and nonce |
+| `POST` | `/identity/v1/signup/magic-link-requests` | Saves a short-lived signup identity draft and sends the non-enumerating verification link |
 | `GET` | `/identity/v1/callback` | Validates the callback and creates an opaque cookie session |
 | `GET` | `/identity/v1/auth-results/:id` | Consumes a one-time, browser-safe callback result |
 | `POST` | `/identity/v1/password/setup-requests` | Sends a non-enumerating password setup/recovery email |
@@ -73,8 +74,10 @@ Frontend calls:
 
    `google` and `github` use the same endpoint when advertised for `signin`.
    Signup asks for `intent=signup`, where the default methods are magic link,
-   Google, and GitHub. The backend owns ordering and availability; the UI does
-   not keep a second provider list.
+   Google, and GitHub. Google and GitHub use `/authorize`; Configurator starts
+   email signup by posting first name, last name, and email to
+   `POST /identity/v1/signup/magic-link-requests`. The backend owns ordering
+   and availability; the UI does not keep a second provider list.
 
 2. Keycloak returns to `GET /identity/v1/callback?code=...&state=...`. The BFF
    consumes the code, stores Keycloak tokens server-side, sets the opaque
@@ -117,18 +120,23 @@ Frontend calls:
 tenant is no longer available to that user, and `503` means a required identity
 dependency is temporarily unavailable.
 
-Password, magic link, Google, and GitHub all enter the same Keycloak browser
-flow (brokered methods use `kc_idp_hint`) and converge on one callback. Keycloak
-tokens stay in Redis behind a random HttpOnly cookie. `SameSite=Lax` is the
+Password, Google, and GitHub enter Keycloak's browser flow (brokered methods use
+`kc_idp_hint`). Signup magic link does not render a Keycloak page: the BFF saves
+the Configurator-collected name/email as a short-lived Redis login attempt and
+calls the extension's authenticated magic-link resource. Its emailed,
+single-use action token returns an Authorization Code + PKCE result directly to
+the same callback. Only then does the BFF mark the matching Keycloak profile
+complete and create the opaque session. Keycloak tokens stay in Redis behind a
+random HttpOnly cookie. `SameSite=Lax` is the
 default; a cross-site development frontend may set `IDENTITY_COOKIE_SAME_SITE=None`
 with a Secure cookie and an explicit `IDENTITY_ALLOWED_ORIGINS` entry.
 
 Password accepts either username or email. Magic link uses a second confidential
-Keycloak client bound to an email-only browser flow; this keeps the realm's
-normal password flow unchanged. The BFF stores the selected OIDC client with the
-one-time login attempt and opaque session, so callback exchange, refresh, and
-logout use the correct client without exposing either client secret. The method
-is advertised only when that Keycloak client exists, is enabled, and
+Keycloak client and the extension's server-side resource, keeping the realm's
+normal password flow unchanged. The BFF stores the selected OIDC client with
+the one-time login attempt and opaque session, so callback exchange, refresh,
+and logout use the correct client without exposing either client secret. The
+method is advertised only when that Keycloak client exists, is enabled, and
 `KEYCLOAK_MAGIC_LINK_CLIENT_SECRET` is configured.
 
 Google and GitHub are pinned to the realm's `digit-first-broker-login` flow.
@@ -414,7 +422,7 @@ Setting `enable_keycloak: true` starts the BFF, Keycloak 26.7.3 and its dedicate
 Postgres database. Ansible runs `configure-keycloak.sh` with task-scoped secrets
 after Keycloak is healthy. It creates or updates the shared Organizations realm,
 confidential clients, protocol mappers, service-account permissions, roles,
-magic-link flow, and configured Google/GitHub providers.
+the magic-link resource client, and configured Google/GitHub providers.
 
 Realm SMTP is mandatory for the identity stack, not only for optional magic
 links. Password setup/reset, invitation activation, and email proof in the
