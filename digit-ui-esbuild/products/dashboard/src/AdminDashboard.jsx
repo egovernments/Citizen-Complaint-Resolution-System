@@ -657,10 +657,13 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   const isTablet = useMediaQuery(TABLET_VIEWPORT);
   // Both breakpoints render a derived layout, so neither may be persisted.
   const isDerivedLayout = isPhone || isTablet;
+  // Assigned during render, not in an effect: react-grid-layout calls
+  // onLayoutChange from its own componentDidUpdate, which runs before this
+  // component's passive effects. An effect-synced ref is still `false` on the
+  // render that crosses into a narrow breakpoint (window resize, tablet
+  // rotation), so the reflowed layout would be persisted over the desktop one.
   const isDerivedLayoutRef = useRef(isDerivedLayout);
-  useEffect(() => {
-    isDerivedLayoutRef.current = isDerivedLayout;
-  }, [isDerivedLayout]);
+  isDerivedLayoutRef.current = isDerivedLayout;
 
   const handleWrapDrop = useCallback(
     (event) => {
