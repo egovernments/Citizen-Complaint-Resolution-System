@@ -2104,8 +2104,24 @@ button[class*="toast-close"] svg,
   height: var(--employee-header-h) !important;
   min-height: var(--employee-header-h) !important;
   align-items: center !important;
+  /* Vertical padding is symmetric so `align-items: center` actually centres;
+   * the bar is a fixed height, so these only bound the children. */
   padding-top: 8px !important;
   padding-bottom: 8px !important;
+  /* Vendor asks for 2.5rem (40px) of side gutter, which was set against a
+   * short bar with small logos and now reads as the brand floating in the
+   * middle of the strip rather than anchored to the edge. 24px lines the
+   * lockup up closer to the 48px nav rail below it and gives the action
+   * cluster on the right the same margin. */
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+@media (max-width: 47.99rem) {
+  .employee .digit-topbar,
+  .employee .digit-topbar.digit-employee-header {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
 }
 /* Topbar logos — sized per CCRS#562 ("logos are the wrong size and hard to
  * read"), then corrected in the #2038 review.
@@ -2114,10 +2130,11 @@ button[class*="toast-close"] svg,
  * asset was an 800x800 canvas holding a 800x200 wordmark on transparency, so
  * a 44px box rendered 11px of actual wordmark and three quarters of nothing.
  * Both lockups are cropped to their wordmark now (see TopBar.js), which means
- * the declared height is finally the height you see — and 44px of real
- * wordmark overpowered the tenant mark beside it. 36px puts the two marks on
- * comparable footing and is still more than three times the wordmark that was
- * visible before.
+ * the declared height is finally the height you see. 28px, because the mark
+ * it sits beside is often a small square badge — Bomet ships a 2251x2251
+ * crest rendered at 38px — and a 4:1 wordmark at any greater height reads as
+ * the primary brand on someone else's deployment. Still two and a half times
+ * the wordmark that was actually visible before the crop.
  *
  * The wrapper has to stop constraining it. Vendor pins
  * `.digit-logo-ulb-wrapper` to a fixed 2rem, which was sized for the old
@@ -2132,9 +2149,9 @@ button[class*="toast-close"] svg,
   align-items: center !important;
 }
 .employee .digit-topbar .digit-header-logo-img {
-  height: 36px !important;
+  height: 28px !important;
   width: auto !important;
-  max-height: 36px !important;
+  max-height: 28px !important;
   max-width: 180px !important;
   display: block !important;
 }
@@ -3259,7 +3276,9 @@ button[class*="toast-close"] svg,
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  padding-top: var(--employee-header-h, 56px) !important;
+  /* padding-top intentionally NOT set here: the dashboard product ships this
+   * same selector in its own stylesheet, which loads later and wins. It is
+   * fixed there. */
   box-sizing: border-box !important;
 }
 
@@ -7947,21 +7966,54 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   opacity: 1;
 }
 
-/* Logout dialog account block — the name and the identifying line are
- * separate rows. As inline spans they ran together ("AdminADMIN"), which is
- * worse than showing nothing: it reads as one corrupted string rather than
+/* Logout dialog account card — avatar, name, and the identifying line inside
+ * a bordered block, so the dialog shows WHICH account is being signed out
+ * rather than restating its own heading three times (#2038 review).
+ *
+ * The name and meta are separate rows deliberately: as inline spans they ran
+ * together as "AdminADMIN", which reads as one corrupted string rather than
  * two facts about the account. */
 .digit-logout-account {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-card-border, #E5E7EB);
+  border-radius: 8px;
+}
+.digit-logout-account-avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-primary-1-bg, #FFF4D7);
+  color: var(--color-primary-1, #204F37);
+  font-weight: 700;
+  font-size: 0.875rem;
+  /* The initials are decorative next to the name they are derived from; the
+   * fixed box keeps a long pair from stretching the circle into an ellipse. */
+  letter-spacing: 0.02em;
+}
+.digit-logout-account-text {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: 12px;
+  min-width: 0;
 }
 .digit-logout-account-name {
   font-weight: 700;
   color: var(--color-text-primary, #363636);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .digit-logout-account-meta {
   font-size: 0.875rem;
   color: var(--color-text-secondary, #505A5F);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
