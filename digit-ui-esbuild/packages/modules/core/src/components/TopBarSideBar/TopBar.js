@@ -77,6 +77,28 @@ const TopBar = ({
   const headerTone = useHeaderTone();
   const [profilePic, setProfilePic] = React.useState(null);
 
+  /**
+   * The header has two image slots: `img` (the tenant mark) and `ulb`, which
+   * on a tenant with no ULB grade falls back to the state mark. Plenty of
+   * deployments point both at the same asset — Bomet serves one crest for
+   * both — and below the header's own mobile breakpoint the shared component
+   * puts them side by side inside `.digit-header-img-ulb-wrapper-mobileview`,
+   * so the same crest rendered twice at two different sizes with a divider
+   * between them (#2038 review).
+   *
+   * The `ulb` slot is the one that survives: it is the only one that renders
+   * above that breakpoint, since `.digit-header-img` is present but zero width
+   * on desktop. Dropping `ulb` takes the crest off the desktop header
+   * entirely, and blanking the `img` prop is worse still — the shared header
+   * then falls back to its own default mSeva mark.
+   *
+   * So both props stay and the duplicate is hidden in CSS, which needs this
+   * flag: only here can the two URLs be compared. A tenant whose state and
+   * city marks genuinely differ keeps both images and the rule between them.
+   */
+  const ulbLogo = logoUrlWhite || stateInfo?.logoUrlWhite;
+  const ulbLogoDuplicatesHeaderImg = Boolean(ulbLogo) && ulbLogo === logoUrl;
+
   React.useEffect(async () => {
     const tenant = Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getStateId() : Digit.ULBService.getCurrentTenantId();
     const uuid = userDetails?.info?.uuid;
@@ -242,7 +264,9 @@ const TopBar = ({
         onHamburgerClick={() => {
           toggleSidebar();
         }}
-        className="digit-employee-header"
+        className={`digit-employee-header${
+          ulbLogoDuplicatesHeaderImg ? " digit-employee-header--single-mark" : ""
+        }`}
         img={logoUrl}
         logoWidth={"64px"}
         logoHeight={"48px"}
@@ -264,7 +288,7 @@ const TopBar = ({
                 {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
               </>
             ) : (
-              <ImageComponent className="state" src={logoUrlWhite || stateInfo?.logoUrlWhite} alt="State Logo" />
+              <ImageComponent className="state" src={ulbLogo} alt="State Logo" />
             )
           ) : (
             <>

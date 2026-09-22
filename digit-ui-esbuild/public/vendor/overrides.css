@@ -7937,24 +7937,46 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   padding: 0;
 }
 
-/* Pin control. Sits above the nav items, right-aligned, and reads as chrome
- * rather than as another destination in the list. */
+/* …and the open state must not clamp its own animation.
+ *
+ * Vendor's `.digit-sidebar.hovered` sets `min-width: 15rem`. `min-width` is
+ * not an animatable property and it clamps the USED width, so the moment the
+ * class lands the rail is 240px wide regardless of what `width` is busy
+ * transitioning towards. Opening therefore snapped while closing animated —
+ * on close the class is removed, the clamp disappears, and the width
+ * transition finally has somewhere to travel.
+ *
+ * SideNav now supplies both widths inline, so the vendor's minimum has no job
+ * left to do. Releasing it is what lets the open direction animate at all. */
+.employee .digit-sidebar.hovered,
+.employee .digit-sidebar.pinned {
+  min-width: 0 !important;
+}
+
+/* Pin control. Sits at the FOOT of the rail, not above the items: rendered
+ * above them, every expand pushed the whole nav list down a row, and watching
+ * the destinations jump is worse than the control is worth.
+ *
+ * `margin-top: auto` in the sidebar's existing flex column is what parks it at
+ * the bottom, so it costs the items nothing when it appears. */
 .digit-sidebar-pin-row {
+  margin-top: auto;
   display: flex;
-  justify-content: flex-end;
-  padding: 0.75rem 0.75rem 0.25rem;
+  padding: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 .digit-sidebar-pin {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
   border: 0;
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
   opacity: 0.72;
+  text-align: left;
   transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 .digit-sidebar-pin:hover,
@@ -7964,6 +7986,13 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 }
 .digit-sidebar-pin.pinned {
   opacity: 1;
+}
+/* Label rides with the icon, matching the nav items' own type so the control
+ * reads as part of the rail rather than pasted onto it. */
+.digit-sidebar-pin-label {
+  font-size: 0.875rem;
+  color: var(--color-sidebar-text-default, #D1D5DB);
+  white-space: nowrap;
 }
 
 /* Logout dialog account card — avatar, name, and the identifying line inside
@@ -8016,4 +8045,60 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Mobile header: one tenant mark, not two.
+ *
+ * Below the shared header's own breakpoint the `img` slot and the `ulb` slot
+ * sit side by side in `.digit-header-img-ulb-wrapper-mobileview` with a
+ * `.topbar-divider` between them. Plenty of deployments point both at the same
+ * asset — Bomet serves one crest for both — so the same image rendered twice,
+ * at 28px and 38px, split by a rule.
+ *
+ * Neither prop can simply be dropped: `ulb` is the only one that renders above
+ * this breakpoint, and blanking `img` makes the shared header substitute its
+ * own default mSeva mark. So both stay and the smaller one is hidden here,
+ * along with the now-pointless divider.
+ *
+ * `--single-mark` is set by TopBar.js, which is the only place the two URLs
+ * can be compared; a tenant whose marks differ never gets the class and keeps
+ * both images. */
+.employee .digit-topbar.digit-employee-header--single-mark
+  .digit-header-img-ulb-wrapper-mobileview .digit-header-img,
+.employee .digit-topbar.digit-employee-header--single-mark
+  .digit-header-img-ulb-wrapper-mobileview .topbar-divider {
+  display: none !important;
+}
+
+/* Dropdown carets are chrome, not action icons.
+ *
+ * The rule above bumps every SVG under `[class*="header-action"]` to 28px, to
+ * stop the right-hand action icons reading tiny against the enlarged logos.
+ * It also caught `.header-dropdown-arrow`, which is not an action icon but the
+ * caret belonging to a text label — at 28px beside a 14px word it outweighed
+ * the thing it points at, and sat 4px low because the SVG is inline and so
+ * rides the text baseline rather than the line box.
+ *
+ * 18px matches the label's own optical weight, and taking the caret out of
+ * inline flow is what actually centres it. Measured before: 28px, 4px low. */
+.employee .digit-topbar .header-dropdown-arrow {
+  display: inline-flex !important;
+  align-items: center !important;
+  /* The caret reads as part of its label, so it sits closer to it than the
+     8px the action row uses between separate controls. */
+  margin-left: 2px !important;
+}
+.employee .digit-topbar .header-dropdown-arrow svg {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+}
+
+/* Action row spacing — 32px between three small controls reads as three
+ * unrelated things rather than one cluster, and it pushes the working-context
+ * pill away from the header's right edge for no reason. 16px still separates
+ * them clearly at this size; the caret rule above already tightens each label
+ * to its own caret, so the only gaps left are the ones between controls. */
+.employee .digit-topbar .digit-header-action-fields {
+  gap: 16px !important;
 }
