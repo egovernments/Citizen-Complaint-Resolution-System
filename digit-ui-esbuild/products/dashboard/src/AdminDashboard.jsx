@@ -625,6 +625,34 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     []
   );
 
+  /**
+   * Tell the grid when its CONTAINER changes width, not just the window.
+   *
+   * WidthProvider in react-grid-layout 1.3.4 listens to `window.resize` and
+   * nothing else — it has no ResizeObserver. Pinning the employee nav rail
+   * open insets this surface by 192px through CSS, which never fires a window
+   * resize, so the grid kept laying out against its pre-pin width and every
+   * widget overflowed. The library's own source says to fire your own event
+   * for this case.
+   *
+   * Guarded on the last width actually dispatched: WidthProvider responds by
+   * setting state, which re-renders the grid inside the box being observed,
+   * and an unguarded observer would feed itself.
+   */
+  useEffect(() => {
+    const node = gridWrapRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return undefined;
+    let lastWidth = node.getBoundingClientRect().width;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width;
+      if (width == null || Math.abs(width - lastWidth) < 1) return;
+      lastWidth = width;
+      window.dispatchEvent(new Event("resize"));
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const isPhone = useMediaQuery(PHONE_VIEWPORT);
   const isTablet = useMediaQuery(TABLET_VIEWPORT);
   // Both breakpoints render a derived layout, so neither may be persisted.

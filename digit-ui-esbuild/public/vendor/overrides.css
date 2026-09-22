@@ -8141,3 +8141,26 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
    * than derived — left ink 24px, right ink 24px. */
   margin-right: -11px !important;
 }
+
+/* One row rhythm, open or closed.
+ *
+ * Two separate causes, which is why setting the gap alone was not enough.
+ *
+ * Vendor puts `gap: 24px` on the items container while the rail is collapsed,
+ * so items sat 64px apart. It also switches the container from `flex` to
+ * `block` once the rail opens — and `gap` does nothing on a block box — so the
+ * open state ignored any gap at all and the rows fell to 40px apart. Every
+ * item below the first visibly closed ranks as the panel widened.
+ *
+ * Pinning the display is the half that matters: a constant gap is meaningless
+ * if the box stops being a flex container. 4px rather than either original —
+ * 24 is airy for a labelled list and 0 leaves the rows touching, and the point
+ * is that the rail should not re-space itself just because it got wider. */
+.employee .digit-sidebar .digit-sidebar-items-container,
+.employee .digit-sidebar.hovered .digit-sidebar-items-container,
+.employee .digit-sidebar.collapsed .digit-sidebar-items-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  row-gap: 4px !important;
+}
