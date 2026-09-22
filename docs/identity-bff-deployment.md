@@ -110,6 +110,27 @@ when its provider/client is not enabled. `intents` is the one backend-owned
 source for which methods appear on sign-in and signup; omitting it keeps the
 legacy behaviour of enabling a method for both journeys.
 
+## Login theme
+
+The Keycloak-owned screens in the sign-in journey — password entry,
+invalid-credential errors, password setup/reset, email verification,
+account-linking conflicts, expired sessions and generic errors — render in the
+DIGIT login theme, a Keycloakify build of the Configurator's auth shell
+(`backend/identity-bff/keycloak/theme-src`, CCRS #2108). The theme is built into
+the `identity-keycloak` image, so the custom image is what a deployment needs
+for a coherent password journey, not only for magic link.
+
+`configure-keycloak.sh` selects the theme **per client** (`login_theme` on the
+identity BFF and magic-link clients) and leaves the shared realm's `loginTheme`
+empty, so unrelated clients in the realm keep their own theme. An environment
+that must pin a different theme can set `KEYCLOAK_LOGIN_THEME`.
+
+The theme fetches the shared brand assets from `/configurator/brand/` on the
+same origin, which is where nginx already serves the Configurator. If Keycloak
+is deployed on its own host, set `DIGIT_BRAND_BASE_URL` (a Keycloak theme
+environment variable) to an absolute URL; otherwise the brand panel falls back
+to its gradient, which is the same navy as the theme's secondary colour.
+
 ## Onboarding integration
 
 The BFF is independently deployable. Its browser sign-in, tenant selection,

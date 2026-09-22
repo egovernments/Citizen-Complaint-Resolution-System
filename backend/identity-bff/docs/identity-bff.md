@@ -170,8 +170,10 @@ the credential Admin API; a reset of an existing password is complete when its
 one-use action returns through the configured application link.
 
 The hosted Keycloak password screen keeps the configured Google and GitHub
-choices visible after a generic invalid-credential error. Its thin DIGIT theme
-also links back to the OIDC client's configured base URL for non-enumerating password help. An
+choices visible after a generic invalid-credential error. It wears the DIGIT
+login theme (`keycloak/theme-src`, CCRS #2108), a Keycloakify build of the
+Configurator's auth shell that covers every screen in this journey and links
+back to the OIDC client's configured base URL for non-enumerating password help. An
 OAuth-first user can therefore switch to the provider that owns the account or
 return to recovery without the client application publicly inspecting an email's
 credential types. Keycloak's native forgot-password entry remains disabled so

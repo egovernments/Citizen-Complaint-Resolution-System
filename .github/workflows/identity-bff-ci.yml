@@ -50,3 +50,40 @@ jobs:
         run: docker build -t identity-bff:test .
       - name: Build Keycloak 26.7.3 image
         run: docker build -f keycloak/Dockerfile.magic-link -t identity-keycloak:test .
+      - name: Smoke-test the login theme on that Keycloak
+        working-directory: backend/identity-bff/keycloak/theme-src
+        env:
+          IDENTITY_KEYCLOAK_IMAGE: identity-keycloak:test
+          SKIP_BUILD: "1"
+        run: scripts/keycloak-smoke.sh
+
+  login-theme:
+    runs-on: ubuntu-latest
+    # The screenshot baselines are recorded in this image (see
+    # keycloak/theme-src/scripts/screenshots.sh). Running the job anywhere else
+    # rasterizes text differently and the comparison flaps.
+    container: mcr.microsoft.com/playwright:v1.63.0-noble
+    defaults:
+      run:
+        working-directory: backend/identity-bff/keycloak/theme-src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/identity-bff/keycloak/theme-src/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run lint
+      - name: Unit tests (rendering, palette drift, page coverage)
+        run: npm test
+      - name: Screenshot regression (desktop and mobile)
+        run: npx playwright test
+      # The jar itself is built and asserted by the Keycloak image build in the
+      # `test` job, which is also where a packaging failure would matter.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: login-theme-screenshot-diff
+          path: backend/identity-bff/keycloak/theme-src/test-results/

@@ -17,6 +17,10 @@ readonly RETIRED_ASSERTION_AUDIENCE=digit-identity-exchange
 readonly ADMIN_CLIENT=digit-identity-admin
 readonly ROLE_CLIENT=digit-ui
 readonly FIRST_BROKER_FLOW=digit-first-broker-login
+# The Keycloakify login theme shipped in the Keycloak image
+# (keycloak/theme-src, built by keycloak/Dockerfile.magic-link). Selected per
+# client rather than on the shared realm.
+readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-digit}
 
 # Standalone installs keep these values in identity-bff.env. Ansible deployments
 # pass them as task-scoped environment variables so no second secrets file has
@@ -207,6 +211,7 @@ configure_magic_link() {
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s 'attributes."pkce.code.challenge.method"=S256' \
     -s 'attributes."post.logout.redirect.uris"=+' \
+    -s "attributes.\"login_theme\"=$LOGIN_THEME" \
     -s 'authenticationFlowBindingOverrides={}' >/dev/null
 
   ensure_mapper "clients/$magic_uuid" digit-identity-bff-audience oidc-audience-mapper \
@@ -233,8 +238,20 @@ fi
 # and existing realms even when the optional magic-link resource is disabled.
 kc update "realms/$REALM" -s organizationsEnabled=true \
   -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
-  -s resetPasswordAllowed=false -s loginTheme=digit \
+  -s resetPasswordAllowed=false \
   -s "sslRequired=$SSL_REQUIRED" >/dev/null
+
+# The DIGIT theme is selected per client below (CCRS #2108) so that a client
+# that is not part of the Configurator journey keeps its own theme. Earlier
+# revisions pinned it on the shared realm, where every client inherits it, so
+# undo exactly that: a realm-level theme an operator chose is left alone.
+#
+# kcadm drops an empty `-s` value, so clearing has to go through the JSON body.
+if [ "$(kc get "realms/$REALM" | jq -r '.loginTheme // ""')" = "$LOGIN_THEME" ]; then
+  kc get "realms/$REALM" | jq '.loginTheme = ""' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
+fi
 configure_smtp
 
 # Organization-group client roles are published under this client and filtered
@@ -253,6 +270,7 @@ kc update "clients/$bff_uuid" -r "$REALM" \
   -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
   -s 'attributes."pkce.code.challenge.method"=S256' \
   -s 'attributes."post.logout.redirect.uris"=+' \
+  -s "attributes.\"login_theme\"=$LOGIN_THEME" \
   -s 'attributes."standard.token.exchange.enabled"=false' >/dev/null
 
 retired_uuid=$(client_uuid "$RETIRED_ASSERTION_AUDIENCE")
