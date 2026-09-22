@@ -105,10 +105,15 @@ fields only for account-less recipients.
 
 **Idempotency.** The dispatch log's unique key is `(transaction_id, channel, recipient_value)`
 and writes are upserts. The bridge sets `transactionId = <transactionSeed>:<subscriberId>:<channel>`
-(`<seed>:NONE` on channel-less rows). Derive the seed deterministically from the business fact
-(PGR: `<serviceRequestId>:<ACTION>:<TOSTATE>`); make genuinely different messages differ.
-Absent, it is `<entityId>:<eventName>`, then `<eventId>`. There is no duplicate suppression —
-a replay dispatches again.
+(`<seed>:NONE` on channel-less rows), and never re-sends a `transactionId` that is already
+`SENT` or `DELIVERED`. So the seed must be **one per occurrence**: identical when that occurrence
+is redelivered or replayed from the DLQ, different for every new one — including a repeat of the
+same kind on the same entity (a second `ASSIGN` into the same state, next year's renewal). A seed
+built only from the entity and the kind of event silently drops every repeat. PGR sends
+`<serviceRequestId>:<action>:<toState>:<workflow ProcessInstance id>`, falling back to
+`auditDetails.lastModifiedTime` for the last part; with neither it omits the seed. Absent, the
+seed is `<eventId>`, so keep `eventId` stable when you retry one occurrence. The skip is
+check-then-act: two copies of one message arriving at the same moment can both be sent.
 
 **Localization.** Per token the bridge tries each code in `localized[token]`, then
 `dataByLocale[locale][token]`, then `data[token]`; with none, the token is left as `{token}`.
@@ -193,7 +198,13 @@ Use a translator bound to the topic, not shape-sniffing in the consumer. Model:
   (`NB_INVALID_CORE_SMS`);
 - fill gaps from configuration (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`,
   `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`) and mint a unique `transactionId` per send;
+- drop what is no longer worth sending: an OTP (`category` `OTP`) whose `expiryTime` (epoch
+  milliseconds) has passed is logged at INFO — without phone or text — and gets no dispatch-log
+  row and no DLQ message;
 - a translation failure is DLQ'd with no dispatch-log row;
+- the listener starts at the **latest** offset when its group has no committed offset (the
+  domain-event listeners start at `earliest`): replaying days of queued OTPs is worse than
+  missing them;
 - wire a `@KafkaListener` on its own topic property, `@ConditionalOnProperty` so it can be
   switched off, and pass the result to `DomainEventConsumer.handle(event, topic)` (not straight
   to the pipeline, or the DLQ is lost).

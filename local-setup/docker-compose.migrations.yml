@@ -43,7 +43,9 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/pgr-services-db:2.12-5137119
+    # Same build as pgr-services (NOTIFICATION_STACK_TAG — see the note on that
+    # service in docker-compose.egov-digit.yaml). PGR_SERVICES_DB_IMAGE pins it alone.
+    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
@@ -91,7 +93,12 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/novu-bridge-db:2.12-5137119
+    # Same build as novu-bridge (NOTIFICATION_STACK_TAG). A hard pin here meant a new
+    # bridge ran against the old schema: its dispatch-log migrations (delivery
+    # receipts, source_path) never ran and every ledger write failed. build-config.yml
+    # builds this image from backend/novu-bridge/src/main/resources/db in the same run,
+    # under the same tag, as the app. NOVU_BRIDGE_DB_IMAGE pins it alone.
+    image: ${NOVU_BRIDGE_DB_IMAGE:-egovio/novu-bridge-db:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: novu-bridge-migration
     profiles: ["notifications"]   # active exactly when novu-bridge is
     depends_on:

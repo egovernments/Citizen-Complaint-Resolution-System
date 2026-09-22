@@ -84,8 +84,8 @@
     },
     "transactionSeed": {
       "type": "string",
-      "description": "IDEMPOTENCY SEED. The box does not invent an idempotency key, it COMPLETES one: `transactionId = <transactionSeed>:<subscriberId>:<channel>`. A producer that sets `<entityId>:<ACTION>:<TOSTATE>` therefore gets byte-identical transaction ids to the pre-rendered path, so a mid-flight redeploy cannot double-send. Absent, the box derives `<entityId>:<eventName>`, and failing that `<eventId>`. Two genuinely different sends (a re-sent OTP) must carry different seeds, because the ledger upserts on the derived key.",
-      "examples": ["PGR-2026-000123:ASSIGN:PENDINGATLME"]
+      "description": "IDEMPOTENCY SEED. The box does not invent an idempotency key, it COMPLETES one: `transactionId = <transactionSeed>:<subscriberId>:<channel>`, and a channel-less row is `<transactionSeed>:NONE`. The box never re-sends a transactionId that is already SENT or DELIVERED, and the ledger upserts on it, so the seed must be ONE PER OCCURRENCE of the event: the same when that occurrence is redelivered or replayed from the DLQ, and different for every new occurrence, including a repeat of the same kind on the same entity (a second ASSIGN into the same state, next year's renewal of the same licence, a re-sent OTP). A seed built only from the entity and the kind of event, such as `<entityId>:<ACTION>:<TOSTATE>` or `<entityId>:<eventName>`, silently drops every repeat. PGR sends `<complaintNo>:<action>:<toState>:<workflow ProcessInstance id>`. Absent, the box uses `<eventId>`, so a producer that omits the seed must keep `eventId` stable when it retries one occurrence.",
+      "examples": ["PGR-2026-000123:ASSIGN:PENDINGATLME:7d2c4b1e-5f60-4a8b-9c3d-2e1f0a9b8c7d"]
     },
     "actors": {
       "type": "object",

@@ -1725,9 +1725,17 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
+    # ONE BUILD, FOUR IMAGES: pgr-services, pgr-services-db (migrations.yml),
+    # novu-bridge and novu-bridge-db (migrations.yml) all default to
+    # ${NOTIFICATION_STACK_TAG}, so they move together. pgr-services emits thin events
+    # that only a bridge from the same build resolves (an older bridge dead-letters
+    # them), and each app needs the Flyway migrations its -db image carries.
+    # `nightly-develop` is what the develop nightly publishes for all four
+    # (build/NIGHTLY-BUILDS.md); it moves per image, so a live deployment pins an
+    # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars.
+    # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
+    # pin the other three to the same build yourself.
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2852,11 +2860,10 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Overridable so Bomet can pull the pass-through build (PGR pre-renders
-    # + localizes; the bridge only identifies the Novu subscriber and
-    # delivers renderedBody — design D4/D6). Default is the multi-arch
-    # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}
+    # Same build as pgr-services — see the ONE BUILD, FOUR IMAGES note there.
+    # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
+    # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]

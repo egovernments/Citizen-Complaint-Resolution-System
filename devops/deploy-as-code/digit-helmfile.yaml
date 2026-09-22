@@ -11,8 +11,13 @@ environments:
 helmfiles:
   - path: ./charts/backbone-services/backboneservices-helmfile.yaml
   - path: ./charts/core-services/coreservices-helmfile.yaml
-  - path: ./charts/urban/urban-helmfile.yaml
+  # common-services BEFORE urban: it holds novu-bridge (released with wait: true), and
+  # urban holds pgr-services. A new pgr-services publishes thin events that a bridge
+  # from before the thin-event stack dead-letters — unrecoverably, nothing replays the
+  # DLQ — so on an upgrade the new bridge must be rolled out and Ready before the new
+  # pgr-services starts. Nothing in common-services depends on urban.
   - path: ./charts/common-services/common-services-helmfile.yaml
+  - path: ./charts/urban/urban-helmfile.yaml
   - path: ./charts/analytics/analytics-helmfile.yaml
   - path: ./charts/auxiliary-services/auxiliary-helmfile.yaml
   # Monitoring (#1619). This arrived already commented out in the wholesale

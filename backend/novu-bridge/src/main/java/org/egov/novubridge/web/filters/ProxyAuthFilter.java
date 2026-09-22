@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.Values;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -206,7 +207,7 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> introspect(String token) {
-        String url = config.getUserHost() + config.getUserDetailsPath() + "?access_token=" + token;
+        String url = ServiceUrl.join(config.getUserHost(), config.getUserDetailsPath()) + "?access_token=" + token;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.POST,

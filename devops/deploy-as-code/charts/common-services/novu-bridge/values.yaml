@@ -15,14 +15,23 @@ initContainers:
   dbMigration:
     enabled: true
     schemaTable: "novu_bridge_schema"
+    # Same build as the app image below — see "One build" there.
     image:
       repository: "novu-bridge-db"
-      tag: "2.12-5137119"
+      tag: "nightly-develop"
+      pullPolicy: Always   # a rolling tag is only re-read with Always
 
 # Container Configs
+# One build for the notification stack: novu-bridge, novu-bridge-db, pgr-services and
+# pgr-services-db MUST come from the same build (the bridge's dispatch-log migrations
+# ship in novu-bridge-db; pgr-services' thin events need a bridge of the same build).
+# global.notificationStackTag in charts/environments/env.yaml sets all four at once
+# (templates/deployment.yaml); these tags are the fallback when it is unset. See
+# charts/urban/pgr-services/values.yaml for the tag policy.
 image:
   repository: "novu-bridge"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"
+  pullPolicy: Always   # a rolling tag is only re-read with Always
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"
@@ -90,15 +99,6 @@ env: |
     value: {{ index .Values "preference-check-path" | quote }}
   - name: NOVU_BRIDGE_PREFERENCE_CODE
     value: "USER_NOTIFICATION_PREFERENCES"
-  - name: NOVU_BRIDGE_CONFIG_HOST
-    valueFrom:
-      configMapKeyRef:
-        name: egov-service-host
-        key: digit-config-service
-  - name: NOVU_BRIDGE_CONFIG_RESOLVE_PATH
-    value: {{ index .Values "config-resolve-path" | quote }}
-  - name: NOVU_BRIDGE_CONFIG_SEARCH_PATH
-    value: {{ index .Values "config-search-path" | quote }}
   - name: NOVU_BRIDGE_USER_HOST
     valueFrom:
       configMapKeyRef:

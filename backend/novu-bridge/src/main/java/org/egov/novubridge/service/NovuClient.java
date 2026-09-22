@@ -10,6 +10,7 @@ import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.tracer.model.CustomException;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -323,7 +324,7 @@ public class NovuClient {
         headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<?> entity = body == null ? new HttpEntity<>(headers) : new HttpEntity<>(body, headers);
-        return restTemplate.exchange(config.getNovuBaseUrl() + path, method, entity, Map.class);
+        return restTemplate.exchange(ServiceUrl.join(config.getNovuBaseUrl(), path), method, entity, Map.class);
     }
 
     private static void putIfText(Map<String, Object> map, String key, String value) {

@@ -61,7 +61,14 @@ public class ThinEvent {
     /** DIGIT tenant. Decides routing, templates, channel policy and provider. */
     private String tenantId;
 
-    /** IDEMPOTENCY SEED: {@code transactionId = <transactionSeed>:<subscriberId>:<channel>}. */
+    /**
+     * IDEMPOTENCY SEED: {@code transactionId = <transactionSeed>:<subscriberId>:<channel>}, and a
+     * channel-less row is {@code <transactionSeed>:NONE}. The contract: ONE seed per occurrence of
+     * the domain event, identical whenever that same occurrence is redelivered or replayed. The
+     * pipeline never re-sends an id already SENT/DELIVERED and the ledger upserts on it, so a seed
+     * two occurrences share (an entity plus the kind of event, say) silently swallows the second.
+     * PGR sends {@code <complaintNo>:<action>:<toState>:<workflow ProcessInstance id>}.
+     */
     private String transactionSeed;
 
     /** The people this event is ABOUT, keyed by the name routing refers to as {@code ACTOR:<name>}. */
@@ -104,15 +111,14 @@ public class ThinEvent {
     public static final String KIND = "THIN";
 
     /**
-     * {@code transactionSeed}, else {@code <entityId>:<eventName>}, else {@code eventId}, as the
-     * contract says. Never null for a validated event. A channel-less row uses {@code <seed>:NONE}.
+     * {@code transactionSeed}, else {@code eventId}, as the contract says. Never null for a
+     * validated event. NOT {@code <entityId>:<eventName>}: that names every renewal of one licence
+     * the same way, so the second would be skipped as already sent. {@code eventId} is unique per
+     * event and survives a DLQ replay of it unchanged.
      */
     public String resolvedTransactionSeed() {
         if (hasText(transactionSeed)) {
             return transactionSeed.trim();
-        }
-        if (hasText(entityId) && hasText(eventName)) {
-            return entityId.trim() + ":" + eventName.trim();
         }
         return eventId == null ? null : eventId.trim();
     }

@@ -5,15 +5,19 @@ labels:
 
 # Deployment strategy — Recreate, NOT a rolling update.
 #
-# The notification box has no dedupe suppression (thin-event design decision D4): a
-# replayed event with the same idempotency key is dispatched again and upserts the same
-# ledger row. During the thin-event cutover an OLD pgr-services replica renders and
-# publishes N pre-rendered envelopes while a NEW one publishes one thin event the bridge
-# resolves into the same N. Run both for even a few seconds and one workflow transition
-# sends two real SMS — and because transactionId is chosen to be byte-identical across
-# the two paths, both outcomes upsert the SAME nb_dispatch_log row. The ledger would show
-# one row, one send. A double-send that leaves no trace is the worst failure shape there
-# is, so the release must stop the old pod before starting the new one.
+# During the thin-event cutover an OLD pgr-services replica renders and publishes N
+# pre-rendered envelopes while a NEW one publishes one thin event the bridge resolves
+# into the same N. Their transaction ids differ: the new seed carries the workflow
+# ProcessInstance id, the old one does not. novu-bridge skips a transactionId it has
+# already SENT or DELIVERED, but it matches on the id, so the same message arriving
+# once per path under two ids is sent twice — two real SMS for one workflow transition.
+# (Even with equal ids the skip is check-then-act and two near-simultaneous copies can
+# both pass it.) So the release must stop the old pod before starting the new one.
+#
+# Upgrade order: novu-bridge BEFORE this chart. A bridge from before the thin-event
+# stack dead-letters thin events and nothing replays them (docs/2.20/notifications/
+# migration.md). digit-helmfile.yaml applies common-services (novu-bridge, with
+# wait: true) before urban for that reason.
 #
 # docker compose already recreates; Kubernetes does not unless told. Consumed by
 # charts/common/templates/_deployment.yaml. Do not add a rollingUpdate block here — the
@@ -33,9 +37,11 @@ initContainers:
   dbMigration:
     enabled: true
     schemaTable: "pgr_services_schema"
+    # Same build as the app image below and as novu-bridge — see "One build" below.
     image:
       repository: "pgr-services-db"
-      tag: "2.12-5137119"
+      tag: "nightly-develop"
+      pullPolicy: Always   # a rolling tag is only re-read with Always
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
         - name: SCHEMA_NAME
@@ -65,15 +71,18 @@ initContainers:
                 key: flyway-locations
 
 # Container Configs
-# Repinned to the 2.12 release build 2.12-5137119 (matches
-# local-setup/docker-compose.egov-digit.yaml) to keep k8s and Compose on the same
-# build. Built from commit 5137119, well after #1100
-# (fix/pgr-search-citizen-scoping — PrincipalScopeResolver.java,
-# EnrichmentService.java, the citizen-scoping / search-IDOR fix), so the fix is
-# included. The -db initContainer above is pinned to the same tag.
+# One build for the notification stack: pgr-services, pgr-services-db, novu-bridge and
+# novu-bridge-db MUST come from the same build. This pgr-services publishes thin events
+# only a novu-bridge of the same build resolves, and each app needs the Flyway
+# migrations its -db image carries. global.notificationStackTag in
+# charts/environments/env.yaml sets all four at once (templates/deployment.yaml); the
+# tags here are the fallback when it is unset. `nightly-develop` is the rolling tag the
+# develop nightly publishes for all four (build/NIGHTLY-BUILDS.md). It moves per image,
+# so a production environment pins an immutable release or develop-<sha8> tag there.
 image:
   repository: "pgr-services"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"
+  pullPolicy: Always   # a rolling tag is only re-read with Always
 replicas: "1"
 healthChecks:
   enabled: true

@@ -600,10 +600,23 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_proxy_allowed_roles: "EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN"
 # novu_bridge_proxy_admin_roles:   "SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN"
 
-# Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
-# Leave unset to keep the published preview / local-build defaults.
-# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
-# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+# ONE BUILD for the notification stack. pgr-services, its pgr-services-db
+# migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same
+# build: pgr-services emits thin events only a bridge of the same build resolves
+# (an older bridge dead-letters them, unrecoverably), and each app needs the
+# Flyway migrations its -db image carries. This one tag moves all four.
+# Unset = "nightly-develop", the rolling tag the develop nightly publishes for all
+# four (build/NIGHTLY-BUILDS.md). That tag moves PER IMAGE and can briefly point
+# at different commits for different images, so a live deployment pins an
+# immutable tag that exists for all four: a release tag, or a develop-<sha8>.
+# notification_stack_tag: "develop-<sha8>"
+#
+# Per-image overrides — for a local or VPC-registry build. Each wins over the tag
+# above for ITS image only, so pin all four to the same build or none:
+# pgr_services_image:     "10.0.0.4:5000/egovio/pgr-services:develop-<sha8>"
+# pgr_services_db_image:  "10.0.0.4:5000/egovio/pgr-services-db:develop-<sha8>"
+# novu_bridge_image:      "10.0.0.4:5000/egovio/novu-bridge:develop-<sha8>"
+# novu_bridge_db_image:   "10.0.0.4:5000/egovio/novu-bridge-db:develop-<sha8>"
 
 # NOTE: `build_novu_bridge` and `build_pgr_services` used to be listed here.
 # Neither has ever had a playbook task behind it — the images come only from
@@ -614,7 +627,31 @@ novu_bridge_smscountry_password: ""
 # Channels rows yet. Once Notifications → Channels has rows, THAT is the switch
 # that decides whether a channel delivers, and this is ignored — so prefer the
 # screen and leave this unset.
+# The notification seed turns this list into channel rows for a tenant that has
+# none (listed = on, the rest off), so an upgraded tenant keeps delivering what it
+# delivered; after that the rows decide. Unset on a new deployment = every
+# channel starts off.
 # novu_bridge_channels_enabled: "SMS,EMAIL"
+
+# Delivery receipts: the shared secret providers present on
+# /novu-bridge/novu-adapter/v1/receipts/{novu|smscountry}. Blank = receipts off
+# (rows never move past SENT). A SECRET — keep it vault-encrypted.
+# novu_bridge_receipts_secret: ""
+
+# Consent gate: ask digit-user-preferences-service whether the recipient granted
+# the channel. fail_open: allow delivery when that service cannot be reached.
+# novu_bridge_preference_enabled: false
+# novu_bridge_preference_fail_open: true
+
+# Country code prefixed to OTP numbers that arrive without one (core SMS from
+# user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
+# novu_bridge_core_sms_country_code: ""
+
+# Hosts the SMSCountry adapter may post to when a provider's Gateway URL names
+# one (comma-separated). The host of NOVU_BRIDGE_SMSCOUNTRY_URL is always allowed.
+# A mock gateway MUST be listed, or the send goes to the configured default URL —
+# with the real credentials. Unset = "api.smscountry.com,www.smscountry.com".
+# novu_bridge_smscountry_allowed_hosts: "api.smscountry.com,www.smscountry.com,sms-mock"
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels
 # in payload.body — the workflow is just the delivery shell). Defaults match the

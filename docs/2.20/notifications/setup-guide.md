@@ -67,9 +67,11 @@ governed by the ordinary MDMS roles (`MDMS_ADMIN`, `ACCOUNT_ADMIN`, `SUPERUSER`)
 The deploy starts novu-bridge, Novu and digit-user-preferences-service; mints the Novu API
 key into `/opt/digit/.env`; creates the Novu workflows `complaints-sms`,
 `complaints-whatsapp`, `complaints-email`; creates the Kafka topics
-([kafka-events.md](./kafka-events.md)); seeds the `NOTIFICATIONS.*` masters with **all three
-channels off and no provider selected**; grants the access-control actions and restarts
-`egov-accesscontrol` when it added any. It also syncs `local-setup/kong/kong.yml`; if you edit
+([kafka-events.md](./kafka-events.md)); grants the access-control actions (restarting
+`egov-accesscontrol` when it added any) and then seeds the `NOTIFICATIONS.*` masters. A tenant
+with no channel rows gets one row per channel, **on only if `novu_bridge_channels_enabled` lists
+it** (unset: all three off) and with no provider selected; a tenant that has rows keeps them
+([migration.md](./migration.md#channel-rows-what-happens-to-an-existing-tenant)). It also syncs `local-setup/kong/kong.yml`; if you edit
 that file by hand, apply it with `sudo docker exec kong-gateway kong reload`.
 
 > Never set `NOVU_BRIDGE_PROXY_AUTH_ENABLED=false` on a reachable deployment: Kong delegates
@@ -86,7 +88,7 @@ credential fields, **Create Provider**.
 | Twilio SMS | SMS | Account SID (`AC…`), Auth token, From number (E.164, e.g. `+14155238886`) |
 | Twilio WhatsApp | WHATSAPP | Account SID, Auth token, WhatsApp sender (`whatsapp:+14155238886`; the sandbox number works after `join <code>` from your handset) |
 | Email (SMTP) | EMAIL | SMTP host, SMTP port (`587`), Username, Password (app password), From address (usually = username), From name, Use TLS on connect (port 465) |
-| SMSCountry | SMS | Panel username, Panel password, Registered sender id, Gateway URL (blank = standard bulk endpoint). Legacy bulk API only; a panel showing AuthKey/AuthToken is the unsupported REST API |
+| SMSCountry | SMS | Panel username, Panel password, Registered sender id, Gateway URL (blank = standard bulk endpoint). Legacy bulk API only; a panel showing AuthKey/AuthToken is the unsupported REST API. A Gateway URL on any other host (a mock, a regional endpoint) must be listed in `novu_bridge_smscountry_allowed_hosts` ([§8.1](#81-deployment-settings)), or the bridge ignores it and sends — with these credentials — to the standard endpoint |
 | Ozeki SMS Gateway | SMS | HTTP API URL (e.g. `https://ozeki.example.org:9509/api?action=sendmessage`), Username, Password, Sender id (optional) |
 
 Email traps:
@@ -159,13 +161,18 @@ missing becomes a `SKIPPED` row on Logs with the reason.
 Use **Configure** day to day; it edits a routing row and its templates together. The masters
 live at the state tenant. Legacy `RAINMAKER-PGR.Notification*` masters appear read-only under
 **Advanced** as "Legacy (PGR) …"; a tenant not yet copied shows the banner *"This tenant has not
-been migrated yet — shown read-only"* — see [migration.md](./migration.md).
+been migrated yet — shown read-only"* — see [migration.md](./migration.md). The Configurator
+decides which namespace is live exactly as novu-bridge does: routing and templates from whether
+the tenant has any `NOTIFICATIONS.Routing` row (active or not), channel policy from whether it
+has channel rows. While a tenant is on its legacy masters, creating a raw
+`NOTIFICATIONS.Routing` or `NOTIFICATIONS.Channel` row is refused (`namespace-switch`, below).
 
 Shipped defaults for complaints: 14 events, 24 routing rows (citizen on SMS/WhatsApp/email for
 APPLY, ASSIGN, REASSIGN, REJECT, RESOLVE, REOPEN; assignee on all three when assigned and when
 rated), 42 templates (24 `en_IN` + 18 `hi_IN`), 14 WhatsApp provider templates (7 events ×
 `en_IN`/`hi_IN`, **belonging to the reference demo Twilio account — they will not work on
-yours**), 3 channel rows switched off.
+yours**), 3 channel rows (off, unless `novu_bridge_channels_enabled` listed the channel when the
+tenant was seeded).
 
 ### 5.1 Events
 
@@ -246,6 +253,7 @@ other rows do not. Removing the last template of an active routing row is refuse
 | `placeholder-braces` | error | `{{id}}`, unclosed `{`, stray `}` → exactly `{id}` |
 | `template-needs-body` | error | Active template with empty body |
 | `whatsapp-variable-unmapped` | error | Body placeholder missing from the provider template's **Variables (ordered)** → add it in the approved position or remove it |
+| `namespace-switch` | error | A raw `NOTIFICATIONS.Routing` or `NOTIFICATIONS.Channel` create while the tenant is still served from its legacy masters: the first such row would stop every legacy route (or the legacy channel policy) at once → move the tenant with `./deploy.sh <tenant> --tags notifications` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | `channel-in-event` | warn | Channel not declared on the event's catalogue row → usually fix the routing row |
 | `no-orphan-template` | warn | Template with no active routing row → harmless |
 | `non-notifiable-audience` | warn | `AUTO_ESCALATE` / `SYSTEM` never send |
@@ -257,7 +265,8 @@ other rows do not. Removing the last template of an active routing row is refuse
 | `whatsapp-needs-template` | warn | WhatsApp routing without an approved provider template (`NB_TEMPLATE_NOT_APPROVED`) |
 | `whatsapp-variable-unfilled` | warn | Provider template variable the event cannot fill; sent empty |
 
-Expected warnings on the shipped defaults: `channel-enabled` (channels ship off),
+Expected warnings on the shipped defaults: `channel-enabled` (channels ship off unless the
+allowlist named them),
 `whatsapp-needs-template` (the assignee WhatsApp rows have no approved template), `sms-length`
 (Hindi bodies).
 
@@ -328,7 +337,7 @@ Checklist:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Nothing arrives on any channel | Channels are off (ship off) | [§4](#4-switch-the-channel-on); Logs full of `NB_NO_PROVIDER` |
+| Nothing arrives on any channel | Channels are off (they ship off unless `novu_bridge_channels_enabled` named them) | [§4](#4-switch-the-channel-on); Logs full of `NB_NO_PROVIDER` |
 | Nothing on Logs at all | No event reached the bridge | Confirm the complaint moved; check services, then the DLQ ([kafka-events.md](./kafka-events.md#verify-delivery)) |
 | WhatsApp rows skipped | `NB_TEMPLATE_NOT_APPROVED` | [§5.5](#55-whatsapp-provider-templates) |
 | `SENT` but nothing arrives | Gateway dropped it later | Gateway's own delivery report: sender id, DLT template, barred number; email: spam, SPF/DKIM |
@@ -356,14 +365,21 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `novu_bridge_proxy_allowed_roles` / `novu_bridge_proxy_admin_roles` | The two role tiers ([§1](#1-before-you-start)) | see §1 |
 | `novu_admin_email` / `novu_admin_password` | Novu's first account | — |
 | `novu_api_key` | Leave unset; the deploy mints it | — |
-| `novu_bridge_channels_enabled` | **Fallback only**, for a tenant with no channel rows, e.g. `"SMS"` | unset = nothing sent |
+| `notification_stack_tag` | Image tag of pgr-services, pgr-services-db, novu-bridge and novu-bridge-db — one build ([migration.md](./migration.md#1-take-all-four-images-from-one-build)) | `nightly-develop` |
+| `novu_bridge_channels_enabled` | **Fallback only**, for a tenant with no channel rows, e.g. `"SMS"`. The seed turns it into rows for such a tenant | unset = nothing sent |
+| `novu_bridge_receipts_secret` | Enables delivery receipts ([§8.3](#83-delivery-receipts)); a secret | blank = off |
+| `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | Consent gate; allow delivery when the preference service is down | `false` / `true` |
+| `novu_bridge_core_sms_country_code` | Prefix for OTP numbers sent without a country code, e.g. `254` | blank |
+| `novu_bridge_smscountry_allowed_hosts` | Hosts an SMSCountry provider's Gateway URL may name; the default endpoint's host is always allowed | `api.smscountry.com,www.smscountry.com` |
 | `twilio_account_sid` / `twilio_auth_token` / `twilio_whatsapp_from` | Bootstrap the `twilio-whatsapp` Novu integration at deploy | — |
 | `novu_bridge_workflow_id_sms` / `_whatsapp` / `_email` | Novu workflow ids | `complaints-*` |
 | `novu_bridge_integration_id_whatsapp` | Only if a second Twilio integration exists | blank |
 | `novu_bridge_sms_provider` / `novu_bridge_sms_sender_id` / `novu_bridge_smscountry_user` / `novu_bridge_smscountry_password` | Legacy direct-SMSCountry route (bypasses Novu) — use **either** this **or** an SMSCountry provider, not both | blank |
 
-novu-bridge environment. On Compose these are set in `/opt/digit/.env` (they are interpolated
-into the `novu-bridge` service in `local-setup/docker-compose.egov-digit.yaml`); on Helm in
+novu-bridge environment. On Compose the deploy renders these into `/opt/digit/.env` from the
+host_vars above (they are interpolated into the `novu-bridge` service in
+`local-setup/docker-compose.egov-digit.yaml`; `./deploy.sh` regenerates `.env` on every run, so
+set them in host_vars, not in `.env`); on Helm set them in
 `devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml`.
 
 | Env | Meaning | Default |
@@ -371,13 +387,13 @@ into the `novu-bridge` service in `local-setup/docker-compose.egov-digit.yaml`);
 | `NOVU_BRIDGE_RECEIPTS_SECRET` | Enables delivery receipts ([§8.3](#83-delivery-receipts)) | blank = off |
 | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `NOVU_BRIDGE_PREFERENCE_FAIL_OPEN` | Consent gate; allow delivery when the preference service is down | Compose `false` / `true` |
 | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Prefix for OTP numbers sent without a country code | blank |
-
-> `./deploy.sh` regenerates `/opt/digit/.env` from `templates/digit.env.j2`, which does not
-> carry these three: re-add them after every deploy, then recreate `novu-bridge` with the same
-> compose files and profiles the deploy uses.
+| `NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS` | Hosts the SMSCountry adapter may post to ([providers.md](./providers.md#the-smscountry-adapter)) | `api.smscountry.com,www.smscountry.com` |
 
 Any other property in `backend/novu-bridge/src/main/resources/application.properties` must be
-added to the service's `environment:` block — Compose reads `.env` only for interpolation.
+added to the service's `environment:` block — Compose reads `.env` only for interpolation. One
+worth knowing: channel policy is cached for `novu.bridge.channel.policy.cache.ttl.ms`
+(`NOVU_BRIDGE_CHANNEL_POLICY_CACHE_TTL_MS`, 60 s), so a Channels change or a seed takes up to a
+minute to apply.
 Leave `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` unset.
 
 ### 8.2 WhatsApp server side
@@ -412,11 +428,18 @@ to the Configurator at it ([#1943](https://github.com/egovernments/Citizen-Compl
 export NOTIF_TENANT=pg DIGIT_URL='http://127.0.0.1:18000' DIGIT_USERNAME='ADMIN' \
        DIGIT_PASSWORD='<bootstrap_password>' DIGIT_LOGIN_TENANT=pg
 cd /opt/digit/notification-seed
-SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. python3 seed-notifications.py
-unset DIGIT_PASSWORD
+NOTIF_SEED_PHASE=access python3 seed-notifications.py
+# printed ACL-CHANGED? then: sudo docker restart egov-accesscontrol, and wait for
+# curl -sf http://127.0.0.1:18000/access/health before the next command
+export NOTIF_CHANNELS_ALLOWLIST="$(sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' novu-bridge | sed -n 's/^NOVU_BRIDGE_CHANNELS_ENABLED=//p')"
+SCHEMA_FILE=RAINMAKER-PGR.json NOTIF_SCHEMA_FILE=NOTIFICATIONS.json DATA_DIR=. \
+  NOTIF_SEED_PHASE=data python3 seed-notifications.py
+unset DIGIT_PASSWORD NOTIF_CHANNELS_ALLOWLIST
 ```
 
-Omitting `NOTIF_SCHEMA_FILE` seeds only the legacy masters.
+Exit 3 means a write was refused with 403: restart `egov-accesscontrol` and run the data phase
+again. Without `NOTIF_CHANNELS_ALLOWLIST` a tenant with no channel rows gets none (it keeps
+following the env allowlist). Omitting `NOTIF_SCHEMA_FILE` seeds only the legacy masters.
 
 ### 8.3 Delivery receipts
 

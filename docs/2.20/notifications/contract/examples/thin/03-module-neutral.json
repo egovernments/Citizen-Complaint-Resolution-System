@@ -9,7 +9,7 @@
   "entityType": "LICENCE",
   "entityId": "XYZ-LIC-2026-0042",
   "tenantId": "ke.bomet",
-  "transactionSeed": "XYZ-LIC-2026-0042:RENEWED",
+  "transactionSeed": "XYZ-LIC-2026-0042:RENEWED:2027",
   "actors": {
     "holder": { "userId": "2c4e6a80-1111-4222-8333-944455556666", "type": "CITIZEN" }
   },

@@ -23,6 +23,8 @@ public class CoreSmsTranslator {
     public static final String MODULE = "CORE";
     /** SMSRequest category DIGIT uses for marketing sends; the only core category that is not user-requested. */
     private static final String PROMOTION_CATEGORY = "PROMOTION";
+    /** The only category whose {@code expiryTime} is honoured, as in egov-notification-sms. */
+    private static final String OTP_CATEGORY = "OTP";
     private static final List<String> PHONE_KEYS = List.of("mobileNumber", "mobile", "phone", "to");
     private static final List<String> MESSAGE_KEYS = List.of("message", "body", "text");
     private static final List<String> TENANT_KEYS = List.of("tenantId", "tenant");
@@ -46,6 +48,28 @@ public class CoreSmsTranslator {
                 && event.getEventName() != null
                 && event.getEventName().startsWith("CORE.SMS.")
                 && !event.getEventName().equals("CORE.SMS." + PROMOTION_CATEGORY);
+    }
+
+    /**
+     * How long ago this OTP expired, in ms, or -1 when it has not (or cannot be judged). The check
+     * egov-notification-sms made before sending ("OTP Expired"), with its semantics: only
+     * {@code category OTP}; {@code expiryTime} is epoch MILLISECONDS, set by user-otp to
+     * now + {@code expiry.time.for.otp}. An absent or non-numeric expiryTime never expires anything.
+     */
+    public static long expiredForMs(Map<String, Object> sms, long nowMillis) {
+        if (sms == null || !OTP_CATEGORY.equalsIgnoreCase(trim(String.valueOf(sms.get("category"))))) {
+            return -1;
+        }
+        Object raw = sms.get("expiryTime");
+        long expiry;
+        if (raw instanceof Number n) {
+            expiry = n.longValue();
+        } else if (raw instanceof CharSequence s && s.toString().trim().matches("\\d+")) {
+            expiry = Long.parseLong(s.toString().trim());
+        } else {
+            return -1;
+        }
+        return expiry < nowMillis ? nowMillis - expiry : -1;
     }
 
     public NotificationEvent translate(Map<String, Object> sms) {

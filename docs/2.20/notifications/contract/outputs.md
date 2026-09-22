@@ -51,10 +51,13 @@ unknown audience scheme) or a thin event is rejected at validation:
 
 Unique key `(transaction_id, channel, recipient_value)`; writes are upserts, so Kafka redelivery
 updates the row and two recipients of one event coexist. A thin event's `transactionSeed`
-becomes `<seed>:<subscriberId>:<channel>` (default seed `<entityId>:<eventName>`, then
-`<eventId>`). There is **no duplicate suppression**: a replay is dispatched again and upserts
-the same row. A random `transactionId` per attempt gives one row per attempt;
-`CoreSmsTranslator` deliberately adds a uuid so each OTP is its own row.
+becomes `<seed>:<subscriberId>:<channel>` (default seed `<eventId>`); the seed is one per
+occurrence of the event, stable on redelivery and replay
+([thin-event-v1.schema.json](./thin-event-v1.schema.json) `transactionSeed`). A `transactionId`
+that is already `SENT` or `DELIVERED` is not sent again: a redelivery or replay of it leaves the
+row as it is. The check is check-then-act, so two copies arriving at the same moment can both be
+sent. A random `transactionId` per attempt gives one row per attempt; `CoreSmsTranslator`
+deliberately adds a uuid so each OTP is its own row.
 
 ### Columns
 

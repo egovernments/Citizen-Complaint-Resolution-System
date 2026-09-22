@@ -38,8 +38,25 @@ public class CoreSmsConsumer {
         this.config = config;
     }
 
-    @KafkaListener(topics = "${novu.bridge.kafka.core.sms.topic}")
+    /**
+     * {@code auto.offset.reset=latest} for THIS listener only. It shares the {@code novu-bridge}
+     * group with the domain-event listener, and on a box upgraded from egov-notification-sms that
+     * group has never committed an offset on this topic, so the factory-wide {@code earliest} would
+     * replay the topic's whole retention (7 days on Redpanda): old OTPs, password resets, HRMS
+     * credentials. Starting at the end loses at most what was published between the old service
+     * stopping and this listener's first poll; a user whose OTP falls in that gap asks for another.
+     * Once an offset is committed, restarts resume from it as usual.
+     */
+    @KafkaListener(topics = "${novu.bridge.kafka.core.sms.topic}", properties = "auto.offset.reset=latest")
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        // A stale OTP is useless and misleading; egov-notification-sms dropped it too. No ledger row
+        // and no DLQ: nothing is wrong with it, it is just late. The log names neither the phone
+        // nor the text, which is the OTP itself.
+        long expiredFor = CoreSmsTranslator.expiredForMs(record, System.currentTimeMillis());
+        if (expiredFor >= 0) {
+            log.info("Core SMS on {} not sent: OTP expired {} ms before it was consumed", topic, expiredFor);
+            return;
+        }
         NotificationEvent event;
         try {
             event = translator.translate(record);

@@ -57,7 +57,7 @@ Novu worker ──JSON──► POST /novu-bridge/novu-adapter/v1/gateways/smsco
 |---|---|
 | Auth | The `X-SMSCountry-User` / `X-SMSCountry-Password` headers **are** the authentication (the path is excluded from `ProxyAuthFilter`). Missing → `401 NB_ADAPTER_UNAUTHENTICATED` |
 | Request | Recipient from `to` (or `recipient`, `phone`, `mobilenumber`); text from `content` (or `text`, `message`, `body`); sender from `from` / `sender` / `senderId`, else `NOVU_BRIDGE_SMS_SENDER_ID`. Missing recipient or text → `400 NB_ADAPTER_BAD_REQUEST` |
-| Gateway URL | `?apiUrl=` query parameter, honoured only if it is an absolute `http(s)` URL; otherwise `novu.bridge.smscountry.url` |
+| Gateway URL | `?apiUrl=` query parameter, honoured only if it is an absolute `http(s)` URL **and** its host is the `novu.bridge.smscountry.url` host or listed in `novu.bridge.smscountry.allowed.hosts` (`NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS`, default `api.smscountry.com,www.smscountry.com`). Otherwise the bridge logs a warning and posts to `novu.bridge.smscountry.url` — with the provider's credentials. A mock or regional gateway host must be listed |
 | Success | `200 {"id": "<jobid>", "date": "<ISO-8601>"}` — Novu fails the step unless `id` is non-empty |
 | Rejection | `502 {"error": "NB_SMSCOUNTRY_REJECTED", "message": …}` — non-2xx so Novu records the step failed instead of a false success |
 
@@ -66,10 +66,16 @@ Novu worker ──JSON──► POST /novu-bridge/novu-adapter/v1/gateways/smsco
 **from the Novu worker** over the container/cluster network.
 
 **Internal only.** The request carries gateway credentials, so
-`/novu-bridge/novu-adapter/v1/gateways/**` is never routed through Kong: it is absent from
-Kong's auth-optional list, the `novu-bridge-internal-gateways-deny` route in
-`local-setup/kong/kong.yml` answers 404, and that route's upstream is a dead address. Do not add
-a route or an access-control action for it.
+`/novu-bridge/novu-adapter/v1/gateways/**` is never routed through Kong. From outside it answers
+**401** without a token (it is absent from Kong's auth-optional list) and **403** with one (no
+access-control action exists for it); behind those, the `novu-bridge-internal-gateways-deny`
+route in `local-setup/kong/kong.yml` terminates it with 404 and its upstream is a dead address.
+Do not add a route or an access-control action for it.
+
+**Allowed hosts.** `apiUrl` is where the adapter sends the operator's panel credentials, so it
+is an allow-list, not a proxy: set `novu_bridge_smscountry_allowed_hosts` in host_vars (Compose)
+or `NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS` (Helm) to add a host. A value replaces the default
+list; the host of `novu.bridge.smscountry.url` stays allowed either way.
 
 ### The legacy direct route
 
@@ -153,7 +159,9 @@ symptom.
 3. **Credential mapping** as Tier 2, with `baseUrl` = your adapter's in-cluster URL (add a
    property like `novu.bridge.smscountry.adapter.url`) and the gateway URL as a query parameter.
 4. **Keep it internal.** `ProxyAuthFilter` already skips `/novu-adapter/v1/gateways`, and Kong
-   already 404s the prefix. Add nothing to Kong.
+   already refuses the prefix (401 / 403 from outside, 404 behind that). Add nothing to Kong.
+   If the adapter takes a gateway URL, allow-list its hosts as
+   `novu.bridge.smscountry.allowed.hosts` does — never post credentials to a caller's URL.
 5. Error codes for the new gateway go in [contract/error-codes.md](./contract/error-codes.md)
    and `backend/novu-bridge/src/main/resources/contract/error-codes.txt`.
 6. Steps 1, 4 and 5 of Tier 1 (`transport("bridge-adapter")`).

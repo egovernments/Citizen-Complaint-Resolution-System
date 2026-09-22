@@ -3,6 +3,7 @@ package org.egov.novubridge.service;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.PiiMask;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -51,7 +52,7 @@ public class PreferenceServiceClient {
                     "offset", 0
             ));
 
-            String url = config.getPreferenceHost() + config.getPreferenceCheckPath();
+            String url = ServiceUrl.join(config.getPreferenceHost(), config.getPreferenceCheckPath());
             log.info("Preference request: url={}, preferenceCode={}, userId={}, tenantId={}",
                     url, config.getPreferenceCode(), userId, tenantId);
 
@@ -125,7 +126,7 @@ public class PreferenceServiceClient {
             payload.put("requestInfo", new HashMap<>());
             payload.put("criteria", criteria);
 
-            String url = config.getPreferenceHost() + config.getPreferenceSearchPath();
+            String url = ServiceUrl.join(config.getPreferenceHost(), config.getPreferenceSearchPath());
             log.info("Preference list request: url={}, preferenceCode={}, tenantId={}, limit={}, offset={}",
                     url, config.getPreferenceCode(), tenantId, limit, offset);
 

@@ -470,9 +470,9 @@ public class NotificationResolver implements ThinEventHandler {
     // ---- minting -----------------------------------------------------------
 
     /**
-     * One v1 envelope. {@code transactionId = <seed>:<tenantId>:<subscriberKey>:<channel>}: a
-     * producer seed of {@code entityId:ACTION:TOSTATE} gives ids byte-identical to the pre-rendered
-     * path, which is what stops a redeploy or a replay double-sending. {@code contact.locale} is
+     * One v1 envelope. {@code transactionId = <seed>:<tenantId>:<subscriberKey>:<channel>}: the
+     * seed is one per event occurrence and stable on replay ({@link ThinEvent#getTransactionSeed}),
+     * which is what stops a replay double-sending without swallowing a repeat. {@code contact.locale} is
      * the recipient's preference; {@code templateKey} is what actually rendered. {@code templateId}
      * and {@code contentVariables} are absent, not null, without an approved provider template.
      */

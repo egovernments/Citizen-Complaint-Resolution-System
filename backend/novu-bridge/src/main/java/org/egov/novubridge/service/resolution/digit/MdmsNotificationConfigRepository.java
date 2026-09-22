@@ -10,6 +10,7 @@ import org.egov.novubridge.service.resolution.config.NotificationConfigRows.Rout
 import org.egov.novubridge.service.resolution.config.NotificationConfigRows.TemplateRow;
 import org.egov.novubridge.service.thin.ThinEventErrorCodes;
 import org.egov.tracer.model.CustomException;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;

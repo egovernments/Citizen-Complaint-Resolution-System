@@ -2,6 +2,7 @@ package org.egov.novubridge.service.policy;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -183,7 +184,7 @@ public class ChannelPolicyClient {
             body.put("MdmsCriteria", criteria);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            String url = config.getMdmsHost() + config.getMdmsSearchPath();
+            String url = ServiceUrl.join(config.getMdmsHost(), config.getMdmsSearchPath());
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
             Object mdms = response.getBody() != null ? response.getBody().get("mdms") : null;
             Map<String, ChannelSetting> out = new LinkedHashMap<>();

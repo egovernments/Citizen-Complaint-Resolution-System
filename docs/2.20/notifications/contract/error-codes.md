@@ -12,7 +12,8 @@ Every `NB_*` code the bridge emits. Machine-readable twin:
 | HTTP | An error response from a `/novu-adapter/v1` endpoint |
 
 A `SKIPPED` outcome writes a row and never DLQs. A rejection writes a `REJECTED` row **and**
-DLQs. **Retryable**: *no* = the same input fails again; *config* = fix configuration, then
+DLQs. `NB_INVALID_CORE_SMS`, `NB_CONFIG_UNAVAILABLE` and `NB_RESOLUTION_INCOMPLETE` DLQ with no
+row of their own. **Retryable**: *no* = the same input fails again; *config* = fix configuration, then
 replay the DLQ; *yes* = transient.
 
 ## Envelope rejections (`REJECTED`, then DLQ)
@@ -30,8 +31,16 @@ replay the DLQ; *yes* = transient.
 |---|---|---|---|
 | `NB_INVALID_THIN_EVENT` | Missing/blank `kind`, `eventId`, `eventType`, `module`, `eventName` or `tenantId`; `kind` not `THIN`; null payload | no | Fix the producer against `thin-event-v1.schema.json` |
 | `NB_EVENT_NOT_IN_CATALOGUE` | `eventName` has no active `NOTIFICATIONS.EventCatalogue` row | config | Add the catalogue row, replay |
+
+## Thin-event failures (DLQ only, no row)
+
+These write **no** dispatch-log row for the event: it goes to `novu-bridge.dlq` only, so the Logs
+screen does not show it — read the DLQ ([kafka-events.md](../kafka-events.md#verify-delivery)).
+
+| Code | Meaning | Retryable | Action |
+|---|---|---|---|
 | `NB_CONFIG_UNAVAILABLE` | A notification master could not be read from MDMS and no cached copy exists; nothing was sent | yes | Replay from the DLQ once MDMS is reachable |
-| `NB_RESOLUTION_INCOMPLETE` | A user lookup or a per-recipient send failed; every other recipient was delivered | yes | Replay from the DLQ once the cause is fixed; recipients already `SENT`/`DELIVERED` are not sent again |
+| `NB_RESOLUTION_INCOMPLETE` | A user lookup or a per-recipient send failed; every other recipient was delivered (and keeps its own row) | yes | Replay from the DLQ once the cause is fixed; recipients already `SENT`/`DELIVERED` are not sent again |
 
 ## Delivery gates (`SKIPPED`)
 
@@ -39,7 +48,7 @@ replay the DLQ; *yes* = transient.
 |---|---|---|---|
 | `NB_PREFERENCE_DENIED` | Recipient has not consented to the channel. A preference-service outage allows delivery by default (`NOVU_BRIDGE_PREFERENCE_FAIL_OPEN`) | no | None — consent working |
 | `NB_UNSUPPORTED_CHANNEL` | Envelope `channel` is not SMS, WHATSAPP or EMAIL | no | Fix the producer |
-| `NB_NO_PROVIDER` | Channel not enabled for the tenant (no `NOTIFICATIONS.Channel` row enabling it, no `novu.bridge.channels.enabled` fallback). Also a startup warning | config | Notifications → **Channels**: switch it on, select a provider |
+| `NB_NO_PROVIDER` | Channel not enabled for the tenant: it has channel rows and none enables this channel (a missing row is off), or it has no rows and the channel is not in `novu.bridge.channels.enabled`. Also a startup warning | config | Notifications → **Channels**: switch it on, select a provider |
 | `NB_CONTACT_MISSING` | EMAIL without an address, SMS/WHATSAPP without a phone; on the thin path, per resolved recipient | no | Fix the recipient record, the producer, or the routing channel |
 | `NB_TEMPLATE_NOT_APPROVED` | WHATSAPP message with no approved `templateId` | config | Providers → **Sync WhatsApp templates**, save on **Provider Templates (WhatsApp)** |
 | `NB_PROVIDER_UNAVAILABLE` | The channel's selected provider is missing, disabled or on another channel | config | Re-enable it or select another on **Channels** |

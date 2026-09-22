@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.resolution.LocaleProvider;
+import org.egov.novubridge.util.ServiceUrl;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -68,7 +69,7 @@ public class DigitLocaleProvider implements LocaleProvider {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            String url = config.getPreferenceHost() + config.getPreferenceSearchPath();
+            String url = ServiceUrl.join(config.getPreferenceHost(), config.getPreferenceSearchPath());
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST,
                     new HttpEntity<>(body, headers), Map.class);
             Object preferences = response.getBody() == null ? null : response.getBody().get("preferences");

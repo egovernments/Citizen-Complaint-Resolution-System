@@ -13,6 +13,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGetList } from 'ra-core';
+import { useQuery } from '@tanstack/react-query';
+import { digitClient, getResourceConfig } from '@/providers/bridge';
 import {
   checkPendingChanges,
   fieldErrorsFor,
@@ -24,6 +26,8 @@ import {
   type PendingChange,
 } from './notificationSaveGuard';
 import {
+  NAMESPACE_SWITCH_RULE,
+  namespaceSwitchMessage,
   selectNotificationSource,
   type SourceDecision,
 } from './notificationSource';
@@ -64,6 +68,8 @@ export interface NotificationConfigQuery {
   ready: boolean;
   /** Which namespace served this tenant, and whether the screens may write. */
   decision: SourceDecision;
+  /** The same decision for channel policy, which the box makes on its own master. */
+  channelDecision: SourceDecision;
   catalogue: EventCatalogueRow[];
   routingRows: Ided<RoutingRow>[];
   templateRows: Ided<TemplateRow>[];
@@ -74,26 +80,56 @@ export interface NotificationConfigQuery {
 }
 
 /**
+ * Does `resource`'s master hold ANY record at the state tenant, active or not?
+ * That, not the active-row count the lists show, is what novu-bridge switches
+ * on: its routing read carries no isActive filter, so a tenant whose routing
+ * rows were all deleted stays on NOTIFICATIONS.* rather than falling back to
+ * legacy. `present` is undefined while unknown (loading, failed, no state
+ * tenant); the decision then falls back to the active counts.
+ */
+function useAnyRecord(resource: string, stateTenant: string, enabled: boolean): { present?: boolean; loading: boolean } {
+  const schema = getResourceConfig(resource)?.schema;
+  const { data, isLoading } = useQuery({
+    queryKey: ['notification-source-probe', stateTenant, schema],
+    queryFn: async () => (await digitClient.mdmsSearch(stateTenant, schema!, { limit: 1 })).length > 0,
+    enabled: enabled && !!stateTenant && !!schema,
+    retry: false,
+  });
+  return { present: data, loading: isLoading };
+}
+
+/**
  * Load the whole notification configuration, from whichever namespace this
- * tenant's configuration actually lives in.
+ * tenant's configuration actually lives in — decided exactly as novu-bridge
+ * decides it (see notificationSource.ts).
  */
 export function useNotificationConfig(options: { enabled?: boolean } = {}): NotificationConfigQuery {
   const enabled = options.enabled !== false;
+  // Every master is read where novu-bridge reads it: the STATE tenant. The
+  // registry marks them stateLevel, but the generic list path reads the session
+  // tenant unless told otherwise, and a city session would otherwise decide on
+  // a city tenant that holds nothing.
+  const stateTenant = String(digitClient.stateTenantId || '');
   const q = { enabled };
+  const at = <T extends object>(params: T) => (stateTenant ? { ...params, filter: { __tenantId: stateTenant } } : params);
 
   // The shared NOTIFICATIONS.* namespace.
-  const { data: catalogueData, isPending: cataloguePending } = useGetList('notifications-event-catalogue', BIG, q);
-  const { data: routingData, isPending: routingPending } = useGetList('notifications-routing', BIG, q);
-  const { data: templateData, isPending: templatePending } = useGetList('notifications-template', BIG, q);
-  const { data: providerTemplateData, isPending: providerTemplatePending } = useGetList('notifications-provider-template', BIG, q);
-  const { data: channelData, isPending: channelPending } = useGetList('notifications-channel', SMALL, q);
+  const { data: catalogueData, isPending: cataloguePending } = useGetList('notifications-event-catalogue', at(BIG), q);
+  const { data: routingData, isPending: routingPending } = useGetList('notifications-routing', at(BIG), q);
+  const { data: templateData, isPending: templatePending } = useGetList('notifications-template', at(BIG), q);
+  const { data: providerTemplateData, isPending: providerTemplatePending } = useGetList('notifications-provider-template', at(BIG), q);
+  const { data: channelData, isPending: channelPending } = useGetList('notifications-channel', at(SMALL), q);
 
   // The legacy PGR namespace — read-only, and only used when the tenant has
-  // nothing in the namespace above.
-  const { data: legacyRoutingData, isPending: legacyRoutingPending } = useGetList('notification-routing', LEGACY_BIG, q);
-  const { data: legacyTemplateData, isPending: legacyTemplatePending } = useGetList('notification-template', LEGACY_BIG, q);
-  const { data: legacyProviderTemplateData, isPending: legacyProviderTemplatePending } = useGetList('notification-provider-template', LEGACY_BIG, q);
-  const { data: legacyChannelData, isPending: legacyChannelPending } = useGetList('notification-channel', SMALL, q);
+  // no NOTIFICATIONS.Routing record (or, for channels, no NOTIFICATIONS.Channel row).
+  const { data: legacyRoutingData, isPending: legacyRoutingPending } = useGetList('notification-routing', at(LEGACY_BIG), q);
+  const { data: legacyTemplateData, isPending: legacyTemplatePending } = useGetList('notification-template', at(LEGACY_BIG), q);
+  const { data: legacyProviderTemplateData, isPending: legacyProviderTemplatePending } = useGetList('notification-provider-template', at(LEGACY_BIG), q);
+  const { data: legacyChannelData, isPending: legacyChannelPending } = useGetList('notification-channel', at(SMALL), q);
+
+  // The switch itself, as the box reads it: any routing record, active or not.
+  const modernRouting = useAnyRecord('notifications-routing', stateTenant, enabled);
+  const legacyRouting = useAnyRecord('notification-routing', stateTenant, enabled);
 
   // Not namespaced: Novu integrations (a runtime fact, not MDMS) and the tenant's roles.
   const { data: integrationData } = useGetList('notification-provider', { pagination: { page: 1, perPage: 100 }, sort: { field: 'channel', order: 'ASC' } }, q);
@@ -102,12 +138,15 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
   const pending =
     !enabled ||
     cataloguePending || routingPending || templatePending || providerTemplatePending || channelPending ||
-    legacyRoutingPending || legacyTemplatePending || legacyProviderTemplatePending || legacyChannelPending;
+    legacyRoutingPending || legacyTemplatePending || legacyProviderTemplatePending || legacyChannelPending ||
+    modernRouting.loading || legacyRouting.loading;
 
   const decision = useMemo(
     () =>
       selectNotificationSource({
         pending,
+        switchOn: 'routing',
+        present: { modern: modernRouting.present, legacy: legacyRouting.present },
         modern: {
           catalogue: catalogueData?.length ?? 0,
           routing: routingData?.length ?? 0,
@@ -123,9 +162,23 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
         },
       }),
     [
-      pending, catalogueData, routingData, templateData, providerTemplateData, channelData,
+      pending, modernRouting.present, legacyRouting.present,
+      catalogueData, routingData, templateData, providerTemplateData, channelData,
       legacyRoutingData, legacyTemplateData, legacyProviderTemplateData, legacyChannelData,
     ],
+  );
+
+  // Channel policy is switched on its own master (ChannelPolicyClient), the same
+  // decision the Channels page makes in useChannelRows.
+  const channelDecision = useMemo(
+    () =>
+      selectNotificationSource({
+        pending,
+        switchOn: 'channel',
+        modern: { channel: channelData?.length ?? 0 },
+        legacy: { channel: legacyChannelData?.length ?? 0 },
+      }),
+    [pending, channelData, legacyChannelData],
   );
 
   const roleCodes = useMemo<string[]>(
@@ -154,7 +207,8 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
       ? adaptLegacyProviderTemplate(legacyProviderTemplateData as unknown as LegacyProviderTemplateRow[] | undefined)
       : ((providerTemplateData ?? []) as unknown as Ided<ProviderTemplateRow>[]);
 
-    const rawChannels = legacy ? legacyChannelData : channelData;
+    // Not `legacy ? … : …`: the box picks the channel master independently.
+    const rawChannels = channelDecision.source === 'LEGACY' ? legacyChannelData : channelData;
     // An EMPTY channel master is "not seeded", not "everything is off" — pass
     // undefined so the channel rules stay silent rather than inventing findings.
     const channelRows = rawChannels && rawChannels.length > 0 ? (rawChannels as unknown as ChannelRow[]) : undefined;
@@ -165,6 +219,7 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
     return {
       ready,
       decision,
+      channelDecision,
       catalogue,
       routingRows,
       templateRows,
@@ -185,7 +240,7 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
         : null,
     };
   }, [
-    pending, decision, catalogueData, routingData, templateData, providerTemplateData, channelData,
+    pending, decision, channelDecision, catalogueData, routingData, templateData, providerTemplateData, channelData,
     legacyRoutingData, legacyTemplateData, legacyProviderTemplateData, legacyChannelData,
     integrationData, roleCodes,
   ]);
@@ -224,22 +279,49 @@ export function useNotificationFormGuard(
   options: { editingId?: string } = {},
 ): FormGuard {
   const enabled = isNotificationResource(resource);
-  const { snapshot, ready } = useNotificationConfig({ enabled });
+  const { snapshot, ready, decision, channelDecision } = useNotificationConfig({ enabled });
   const [result, setResult] = useState<GuardResult | null>(null);
   const lastSignature = useRef('');
   const { editingId } = options;
 
+  // A save that would flip the tenant off its legacy configuration is refused
+  // outright, before (and regardless of) the whole-config check.
+  const switchBlock = useMemo<GuardResult | null>(() => {
+    const message = enabled ? namespaceSwitchMessage(resource, decision, channelDecision) : null;
+    if (!message) return null;
+    const finding: ValidationFinding = { level: 'error', rule: NAMESPACE_SWITCH_RULE, message };
+    return { blocking: [finding], advisory: [], before: [], after: [] };
+  }, [enabled, resource, decision, channelDecision]);
+
   // Read through a ref so `validate` below never changes identity — see FormGuard.
   // Written in an effect, not during render: the ref only has to be fresh by the
   // time the operator types, which is always after the effect has run.
-  const live = useRef({ enabled, ready, snapshot, resource, editingId });
+  const live = useRef({ enabled, ready, snapshot, resource, editingId, switchBlock });
   useEffect(() => {
-    live.current = { enabled, ready, snapshot, resource, editingId };
-  }, [enabled, ready, snapshot, resource, editingId]);
+    live.current = { enabled, ready, snapshot, resource, editingId, switchBlock };
+  }, [enabled, ready, snapshot, resource, editingId, switchBlock]);
+
+  // Shown as soon as it is known, not on the first keystroke: the operator should
+  // learn why this form cannot be saved before filling it in.
+  useEffect(() => {
+    if (switchBlock) {
+      lastSignature.current = JSON.stringify([switchBlock.blocking, switchBlock.advisory]);
+      setResult(switchBlock);
+    } else if (lastSignature.current.includes(NAMESPACE_SWITCH_RULE)) {
+      lastSignature.current = '';
+      setResult(null);
+    }
+  }, [switchBlock]);
 
   const validate = useCallback((values: Record<string, unknown>) => {
-    const { enabled: on, ready: rdy, snapshot: snap, resource: res0, editingId: id } = live.current;
-    if (!on || !rdy || !snap) return {};
+    const { enabled: on, ready: rdy, snapshot: snap, resource: res0, editingId: id, switchBlock: block } = live.current;
+    if (!on) return {};
+    if (block) {
+      const f = block.blocking[0];
+      // On the row's key field, so react-hook-form refuses the submit.
+      return { [res0 === 'notifications-channel' ? 'code' : 'eventName']: `${f.rule}: ${f.message}` };
+    }
+    if (!rdy || !snap) return {};
     const res = checkPendingChanges(snap, [
       {
         resource: res0 as NotificationResource,

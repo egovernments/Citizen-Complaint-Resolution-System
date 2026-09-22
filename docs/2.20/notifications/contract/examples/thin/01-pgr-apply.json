@@ -10,7 +10,7 @@
   "entityType": "COMPLAINT",
   "entityId": "PGR-2026-000123",
   "tenantId": "ke.bomet",
-  "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT",
+  "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:c41e8a07-3b5d-4f29-a8e6-0d7b9f2c1a53",
   "actors": {
     "citizen": { "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f", "type": "CITIZEN" }
   },

@@ -56,6 +56,7 @@ export function useChannelRows(): ChannelRowsState {
 
   const decision = selectNotificationSource({
     pending: isLoading || legacyLoading,
+    switchOn: 'channel',
     modern: { channel: data?.length ?? 0 },
     legacy: { channel: legacyData?.length ?? 0 },
   });

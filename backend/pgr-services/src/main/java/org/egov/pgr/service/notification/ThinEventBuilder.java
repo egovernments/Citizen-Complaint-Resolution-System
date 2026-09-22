@@ -109,10 +109,17 @@ public class ThinEventBuilder {
         event.put("entityType", ENTITY_TYPE);
         put(event, "entityId", serviceRequestId);
         put(event, "tenantId", service.getTenantId());
-        // Chosen so the bridge's transactionId (<seed>:<subscriberId>:<channel>) comes out
-        // byte-identical to the pre-rendered path's. RAW action/toState, NOT uppercased: the old
-        // transactionId interpolated them verbatim, and a redeploy mid-flight must not double-send.
-        event.put("transactionSeed", String.join(":", serviceRequestId, action, toState));
+        // ONE SEED PER TRANSITION. The bridge completes it into <seed>:<subscriberId>:<channel> and
+        // never sends an id that is already SENT/DELIVERED, so the seed must differ between two
+        // transitions of the same kind (ASSIGN after a REASSIGN lands in PENDINGATLME again,
+        // RESOLVE after a REOPEN in RESOLVED again, COMMENT is a self-loop every time) and must NOT
+        // differ when this same transition is redelivered from save/update-pgr-request or its
+        // thin event is replayed from the DLQ. action:toState alone fails the first; eventId
+        // (minted per build) fails the second. See transitionId for what satisfies both.
+        String transition = transitionId(service);
+        if (transition != null) {
+            event.put("transactionSeed", String.join(":", serviceRequestId, action, toState, transition));
+        }
         event.put("actors", actors(service, assignee));
         event.put("data", data(request, assignee, downloadLink));
         event.put("localized", localized(service, assignee, department, designation));
@@ -240,6 +247,25 @@ public class ThinEventBuilder {
     }
 
     // ---- helpers ---------------------------------------------------------------------------
+
+    /**
+     * What makes this transition THIS one: the id egov-workflow-v2 minted for it. Every create and
+     * update path, SLA auto-escalation included, goes through
+     * {@code WorkflowService.updateWorkflowStatus}, which stores the {@code _transition} response
+     * on the service before the record is published, so the id travels on the Kafka record and is
+     * identical on every redelivery. {@code auditDetails.lastModifiedTime}, stamped by every update
+     * enrichment, is the fallback. Null only when the record has neither; the seed is then
+     * omitted and the bridge falls back to the event's own {@code eventId}.
+     */
+    static String transitionId(org.egov.pgr.web.models.Service service) {
+        if (service.getProcessInstance() != null && StringUtils.hasText(service.getProcessInstance().getId())) {
+            return service.getProcessInstance().getId().trim();
+        }
+        if (service.getAuditDetails() != null && service.getAuditDetails().getLastModifiedTime() != null) {
+            return String.valueOf(service.getAuditDetails().getLastModifiedTime());
+        }
+        return null;
+    }
 
     /** {@code RequestInfo.msgId} is {@code <ts>|<locale>}; absent, the deployment default. */
     static String localeFromMsgId(RequestInfo requestInfo) {

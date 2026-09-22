@@ -108,7 +108,7 @@ flag: rollback means redeploying the previous image.
 | Field | Carries |
 |---|---|
 | `eventName` / `ledgerEventName` | `COMPLAINTS.WORKFLOW.<ACTION>.<TOSTATE>` (config key) / `COMPLAINTS.WORKFLOW.<ACTION>` (dispatch-log name) |
-| `transactionSeed` | `<complaintNo>:<action>:<toState>` |
+| `transactionSeed` | `<complaintNo>:<action>:<toState>:<workflow ProcessInstance id>` — one per transition, the same on redelivery (falls back to `auditDetails.lastModifiedTime`) |
 | `actors` | `citizen` (inline contact from the complaint) and `assignee` (uuid only; the bridge looks up contacts) |
 | `data` | complaint number, date, service code, status, comments, rating, citizen name, short download link, assignee name |
 | `localized` | localization codes for `complaint_type`, `status`, `ulb`, `ao_designation`, `emp_department`, `emp_designation` |

@@ -422,4 +422,49 @@ describe('Novu workflow creation deployment contract', () => {
     // nothing routes SMSCountry through Novu — it is a direct client
     expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
+
+  // These were documented as "add them to /opt/digit/.env by hand" — and every deploy
+  // regenerates that file from digit.env.j2, so the receipts secret, the consent gate
+  // and the OTP country code silently reverted on the next deploy.
+  test('the bridge settings an operator sets survive a redeploy', () => {
+    const vars = [
+      'NOVU_BRIDGE_RECEIPTS_SECRET',
+      'NOVU_BRIDGE_PREFERENCE_ENABLED',
+      'NOVU_BRIDGE_PREFERENCE_FAIL_OPEN',
+      'NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE',
+      'NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS',
+    ];
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const bridgeBlock = next === -1 ? rest : rest.slice(0, next);
+    for (const v of vars) {
+      expect(composeEnv).toMatch(new RegExp(`^${v}=\\{\\{ `, 'm'));
+      expect(bridgeBlock).toContain(`${v}: \${${v}`);
+    }
+  });
+});
+
+describe('notification stack images come from one build', () => {
+  // pgr-services emits thin events only a novu-bridge of the same build resolves (an
+  // older bridge dead-letters them), and each app needs the Flyway migrations its -db
+  // image carries. The migrator used to be hard-pinned to 2.12 while the app image was
+  // overridable, so a new bridge ran on the old schema and every ledger write failed.
+  const base = read('local-setup/docker-compose.egov-digit.yaml');
+  const migrations = read('local-setup/docker-compose.migrations.yml');
+  const env = read('local-setup/ansible/templates/digit.env.j2');
+
+  test.each([
+    [base, 'PGR_SERVICES_IMAGE', 'egovio/pgr-services'],
+    [base, 'NOVU_BRIDGE_IMAGE', 'egovio/novu-bridge'],
+    [migrations, 'PGR_SERVICES_DB_IMAGE', 'egovio/pgr-services-db'],
+    [migrations, 'NOVU_BRIDGE_DB_IMAGE', 'egovio/novu-bridge-db'],
+  ])('%#: %s defaults to the shared NOTIFICATION_STACK_TAG', (file, override, image) => {
+    expect(file).toContain(`image: \${${override}:-${image}:\${NOTIFICATION_STACK_TAG:-nightly-develop}}`);
+    expect(env).toMatch(new RegExp(`^${override}=\\{\\{ `, 'm'));
+  });
+
+  test('the shared tag is rendered from host_vars', () => {
+    expect(env).toContain("NOTIFICATION_STACK_TAG={{ notification_stack_tag | default('') }}");
+  });
 });
