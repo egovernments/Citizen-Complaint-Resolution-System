@@ -6625,6 +6625,16 @@ header.digit-header .digit-dropdown-master {
 
 /* Positioned inline as fixed by the component (the header container is
  * overflow:hidden), so only the chrome lives here. */
+/* Same surface as the other two header dropdowns.
+ *
+ * This panel was drawn to its own spec — 2px radius against their 4px, a heavy
+ * single `0 6px 22px` shadow against their two-layer soft one, and hardcoded
+ * #d6d8da / #0b0c0c where they read theme tokens. Three menus hanging off one
+ * bar looked like three different components.
+ *
+ * Only the surface is aligned. The panel's contents are genuinely richer than
+ * a list of options — grouped labels and chips — and that difference is the
+ * point of it. */
 .employee .digit-working-context-panel {
   z-index: 10000;
   min-width: 272px;
@@ -6632,9 +6642,10 @@ header.digit-header .digit-dropdown-master {
   max-height: 70vh;
   overflow-y: auto;
   background: #fff;
-  border: 1px solid #d6d8da;
-  border-radius: 2px;
-  box-shadow: 0 6px 22px rgba(11, 12, 12, .16);
+  border: 1px solid var(--color-card-border, #E5E7EB);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.10),
+              0 2px 4px -2px rgba(16, 24, 40, 0.06);
   padding: 8px 0;
   text-align: left;
 }
@@ -6653,7 +6664,9 @@ header.digit-header .digit-dropdown-master {
 .employee .digit-working-context-panel,
 .employee .digit-working-context-panel div,
 .employee .digit-working-context-panel span {
-  color: #0b0c0c;
+  /* Themed, like the other menus' option text. The literal near-black was one
+   * more way this panel opted out of the tenant's palette. */
+  color: var(--color-text-primary, #363636);
 }
 .employee .digit-working-context-group-value {
   font-size: 13px;
@@ -7195,13 +7208,20 @@ header.digit-header .digit-dropdown-master {
   opacity: 0.78;
 }
 
-/* Panel */
+/* Panel.
+ *
+ * Radius and shadow match the other two header dropdowns rather than the
+ * card scale: this is a menu hanging off the bar, not a page card, and at
+ * 12px with a `0 12px 32px` drop it read as a different component from the
+ * language and profile menus beside it. Padding stays generous — its contents
+ * are grouped labels and chips, not a list of options. */
 .employee .digit-working-context-panel {
   min-width: 280px;
   padding: 16px 18px 18px !important;
-  border-radius: 12px !important;
+  border-radius: 4px !important;
   border: 1px solid var(--color-card-border, #E5E7EB) !important;
-  box-shadow: 0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.1) !important;
+  box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.10),
+              0 2px 4px -2px rgba(16, 24, 40, 0.06) !important;
 }
 .employee .digit-working-context-place-block {
   padding-bottom: 12px;
@@ -8182,4 +8202,22 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * popups have no Cancel and still need a way out. */
 .digit-logout-popup-wrapper .digit-popup-close {
   display: none !important;
+}
+
+/* Logout dialog heading: dialog scale, not page scale.
+ *
+ * The shared PopUp renders its heading at 32px/700 — measured identical to the
+ * dashboard's page <h1>. A confirm dialog is not a page, and inside a 520px
+ * box that put the question at the same weight as the title of the screen
+ * behind it. 20px still leads the dialog without competing with the page.
+ *
+ * Scoped here rather than changed on PopUp: every dialog in the app inherits
+ * that 32px, so it is worth correcting centrally, but not from a ticket about
+ * the employee chrome. */
+.digit-logout-popup-wrapper .digit-popup-heading,
+.digit-logout-popup-wrapper .digit-popup-heading-subheading-wrap h1,
+.digit-logout-popup-wrapper .digit-popup-heading-subheading-wrap h2,
+.digit-logout-popup-wrapper .digit-popup-heading-subheading-wrap > * {
+  font-size: 20px !important;
+  line-height: 1.35 !important;
 }
