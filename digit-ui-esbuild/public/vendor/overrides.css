@@ -913,12 +913,16 @@ html .header-dropdown-option:hover * {
  * footer down to where it overlaps the fixed `.digit-action-bar` at the
  * bottom of the viewport.
  *
- * Tighten the top gap to ~88px (topbar 72 + 16px breathing room) and
- * add bottom padding equal to the action bar's typical 72px height so
- * the page can scroll past the action bar without the footer hiding
- * behind it. */
+ * Tighten the top gap to the header height plus one gap unit, and add bottom
+ * padding equal to the action bar's typical 72px height so the page can
+ * scroll past the action bar without the footer hiding behind it.
+ *
+ * Derived from --employee-header-h rather than restated: the literal 88px
+ * here was computed from the vendor's 72px bar, but the employee block later
+ * in this file pins the bar to its own height, so the two had already drifted
+ * apart by 16px. */
 .main.digit-home-main {
-  padding-top: 88px !important;
+  padding-top: calc(var(--employee-header-h, 56px) + var(--employee-header-gap, 16px)) !important;
   margin-top: 0 !important;
 }
 .employee-app-wrapper.digit-home-app-wrapper {
@@ -2072,35 +2076,85 @@ button[class*="toast-close"] svg,
  *    soft top divider, theme-aligned text colour.
  * -------------------------------------------------------------------- */
 
-/* Topbar pinned + larger logos */
+/* Topbar height + larger logos.
+ *
+ * 76px, up from 56px (#2038 review: "make top navbar 1.3-1.5 times taller").
+ * That is 1.36x, and the number is not only about presence: the logo below is
+ * 44px, so a 56px bar left it 6px of air top and bottom and the lockup read as
+ * jammed against both edges. At 76px it gets 16px, which is the same rhythm
+ * the rest of the employee chrome uses.
+ *
+ * Declared once as a custom property because three rules have to agree: this
+ * height, and the content offset further down. They did not agree before —
+ * the offset was computed from the vendor's 72px bar that this very block had
+ * already overridden to 56px, so every employee page carried 32px of dead
+ * space above its content instead of the 16px the comment claimed. */
+:root {
+  --employee-header-h: 76px;
+  /* Breathing room between the fixed bar and the first content. */
+  --employee-header-gap: 16px;
+}
+@media (max-width: 30rem) {
+  /* Vendor drops to 3.5rem here and vertical space is scarcer than presence
+   * on a phone, so this takes a smaller lift than the desktop bar. */
+  :root { --employee-header-h: 64px; }
+}
 .employee .digit-topbar,
 .employee .digit-topbar.digit-employee-header {
-  height: 56px !important;
-  min-height: 56px !important;
+  height: var(--employee-header-h) !important;
+  min-height: var(--employee-header-h) !important;
   align-items: center !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
 }
-/* Topbar logos — bumped per CCRS#562 ("logos are the wrong size
- * and hard to read"). Previous 36/28px shrunk the brand assets
- * far below their natural aspect; on naipepea both eGov and Nairobi
- * marks ship at 400×120 source (10:3) and 360×100 source so a 28px
- * height left them looking like icons. Lifting to 44px on the
- * primary eGov mark and 38px on the secondary marks gives the
- * topbar a properly weighted brand strip while still fitting inside
- * the 56px topbar height. */
-.employee .digit-topbar .digit-header-logo-img {
-  height: 44px !important;
-  width: auto !important;
-  max-height: 44px !important;
-  max-width: 180px !important;
+/* Topbar logos — sized per CCRS#562 ("logos are the wrong size and hard to
+ * read"), then corrected in the #2038 review.
+ *
+ * 44px was compensating for a defect rather than being a real size. The eGov
+ * asset was an 800x800 canvas holding a 800x200 wordmark on transparency, so
+ * a 44px box rendered 11px of actual wordmark and three quarters of nothing.
+ * Both lockups are cropped to their wordmark now (see TopBar.js), which means
+ * the declared height is finally the height you see — and 44px of real
+ * wordmark overpowered the tenant mark beside it. 36px puts the two marks on
+ * comparable footing and is still more than three times the wordmark that was
+ * visible before.
+ *
+ * The wrapper has to stop constraining it. Vendor pins
+ * `.digit-logo-ulb-wrapper` to a fixed 2rem, which was sized for the old
+ * short bar; an image taller than that overflowed an inline box and sat 11px
+ * off centre. Letting both wrapper and slot size to their content is what
+ * actually centres the lockup, rather than nudging it with margins. */
+.employee .digit-topbar .digit-logo-ulb-wrapper,
+.employee .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-logo {
+  height: auto !important;
+  max-height: none !important;
+  display: flex !important;
+  align-items: center !important;
 }
+.employee .digit-topbar .digit-header-logo-img {
+  height: 36px !important;
+  width: auto !important;
+  max-height: 36px !important;
+  max-width: 180px !important;
+  display: block !important;
+}
+/* The tenant mark sat 4.7px low for the same reason the eGov one did, by a
+ * different route: it is an `display:inline` image on a text baseline, so its
+ * block reserved descender space underneath it — a 38px image in a 41.7px
+ * box. Taking it out of inline flow removes the phantom descender, which is
+ * what actually centres it; nudging it with a margin would only have hidden
+ * the gap at this one font size. */
 .employee .digit-topbar img.state,
 .employee .digit-topbar .digit-topbar-ulb img,
 .employee .digit-topbar .digit-logo-ulb-wrapper img.state {
   height: 38px !important;
   max-height: 38px !important;
   width: auto !important;
+  display: block !important;
+}
+.employee .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-ulb {
+  display: flex !important;
+  align-items: center !important;
 }
 /* Right-side action icons (language switcher, ULB picker, profile,
  * notifications, etc.) — vendor renders 24×24 SVGs that read tiny
@@ -2278,12 +2332,15 @@ button[class*="toast-close"] svg,
   box-shadow: none !important;
 }
 
-/* Sidebar position — vendor `top: 0` + topbar height 72 + sidebar
- * effective top from layout = 64. With our 56px topbar override the
- * sidebar should park at top: 56 with no gap. Pin it. */
+/* Sidebar position — vendor ships `top: 0`, which parks the rail behind the
+ * fixed header. It has to start exactly where the header ends.
+ *
+ * Derived from --employee-header-h, not restated. It was pinned to a literal
+ * 56px, so raising the bar to 76px hid the rail's top 20px behind it and left
+ * the column 20px too tall. The literal is why the breakage existed at all. */
 .employee .digit-sidebar {
-  top: 56px !important;
-  height: calc(100vh - 56px) !important;
+  top: var(--employee-header-h, 56px) !important;
+  height: calc(100vh - var(--employee-header-h, 56px)) !important;
   margin-top: 0 !important;
 }
 
@@ -3202,7 +3259,7 @@ button[class*="toast-close"] svg,
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  padding-top: 56px !important;
+  padding-top: var(--employee-header-h, 56px) !important;
   box-sizing: border-box !important;
 }
 
@@ -5953,11 +6010,11 @@ html .h1, html header.h1, html [class~="h1"] {
    * down past the topbar (~64px) and stretch it to the viewport bottom
    * so it reads as a proper full-height sidebar. */
   .digit-msb-sidebar {
-    /* Topbar is 56px tall on mobile (was 64-78px on larger viewports);
-     * pin the drawer flush against it. */
-    top: 56px !important;
-    height: calc(100vh - 56px) !important;
-    max-height: calc(100vh - 56px) !important;
+    /* Flush against the bar, whatever height it is at this width —
+     * --employee-header-h already carries the per-breakpoint value. */
+    top: var(--employee-header-h, 56px) !important;
+    height: calc(100vh - var(--employee-header-h, 56px)) !important;
+    max-height: calc(100vh - var(--employee-header-h, 56px)) !important;
   }
   .digit-employee-sidemenu,
   .digit-employee-sidemenu > *:first-child,
@@ -6608,7 +6665,7 @@ header.digit-header .digit-dropdown-master {
 }
 .employee .digit-working-context-mobile {
   position: sticky;
-  top: 56px;
+  top: var(--employee-header-h, 56px);
   z-index: 40;
   background: #fff;
   border-bottom: 1px solid #d6d8da;
@@ -7811,4 +7868,100 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
     flex: 1 1 auto !important;
     min-height: 0 !important;
   }
+}
+
+/* ======================================================================
+ * Employee sidebar — pin-to-open, and content that travels with it
+ * (#2038 review: "smoother animation, always open button as well for
+ * desktop, content moves with sidebar opening").
+ *
+ * Three separate complaints with one shared cause: the nav is
+ * `position: fixed`, so it has never been able to move anything. Widening
+ * it on hover painted a 240px panel straight over the page, and because
+ * SideNav was handed empty `expandedWidth`/`collapsedWidth` strings it fell
+ * through to the stylesheet's `width: auto` open state, which is not an
+ * animatable value — so the declared transition never ran and the panel
+ * simply appeared.
+ *
+ * SideNav now takes concrete widths (3rem / 15rem) so the width genuinely
+ * interpolates, plus an opt-in pin. The pinned state is published on the
+ * root element by EmployeeSideBar, which is what lets this stylesheet inset
+ * the surface by the same distance over the same duration.
+ *
+ * Pinned moves content; a hover peek deliberately does not. Reflowing a
+ * whole page because a pointer crossed a 48px rail would be worse than the
+ * overlay it replaces.
+ * ---------------------------------------------------------------------- */
+
+/* The sidebar only exists at >=768px (EmployeeSideBar renders inside
+ * `MediaQuery minWidth={768}`), so there is nothing to inset below that. */
+@media (min-width: 48rem) {
+  /* Vendor: `margin-left: 72px; width: calc(100% - 83px)` — a 48px rail plus
+   * a 24px gutter. Pinning grows the rail to 240px, so both values move by
+   * exactly that delta. Derived from the two widths handed to SideNav rather
+   * than restated, so the panel and the page cannot disagree about how far
+   * they moved. */
+  .employee .main {
+    transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-employee-sidebar-pinned="true"] .employee .main {
+    margin-left: calc(72px + (15rem - 3rem)) !important;
+    width: calc(100% - 83px - (15rem - 3rem)) !important;
+  }
+}
+
+/* A pinned rail keeps the expanded padding even while the pointer is away;
+ * without this the vendor's collapsed `padding: 0 .75rem` fights the open
+ * layout the moment the mouse leaves. */
+.digit-sidebar.pinned {
+  padding: 0;
+}
+
+/* Pin control. Sits above the nav items, right-aligned, and reads as chrome
+ * rather than as another destination in the list. */
+.digit-sidebar-pin-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 0.75rem 0.25rem;
+}
+.digit-sidebar-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.digit-sidebar-pin:hover,
+.digit-sidebar-pin:focus-visible {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.digit-sidebar-pin.pinned {
+  opacity: 1;
+}
+
+/* Logout dialog account block — the name and the identifying line are
+ * separate rows. As inline spans they ran together ("AdminADMIN"), which is
+ * worse than showing nothing: it reads as one corrupted string rather than
+ * two facts about the account. */
+.digit-logout-account {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.digit-logout-account-name {
+  font-weight: 700;
+  color: var(--color-text-primary, #363636);
+}
+.digit-logout-account-meta {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #505A5F);
 }
