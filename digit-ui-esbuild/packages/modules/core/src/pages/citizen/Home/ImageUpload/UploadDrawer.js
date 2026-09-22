@@ -7,6 +7,7 @@
 // → fileStoreId → setProfilePic), so the data flow is byte-identical.
 
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Image as ImageIcon, Trash2, X } from "lucide-react";
 
@@ -142,7 +143,23 @@ function UploadDrawer({ setProfilePic, closeDrawer, userType, removeProfilePic, 
     })();
   }, [file]);
 
-  return (
+  /**
+   * Portalled to the document body, not rendered in place.
+   *
+   * A modal rendered inside the page inherits the page's layout. This one sat
+   * as a direct child of `.v2-scope`, where
+   * `.employee .grounded-container > .v2-scope > *` caps every child at 880px
+   * and centres it — a rule meant to stop a single-column form stretching to
+   * 1360px. The overlay took the cap too, so `inset: 0` produced an 880px box
+   * offset 274px from the left: the dim covered the content column and left
+   * the topbar, the nav rail and both margins bright.
+   *
+   * A portal is the fix rather than exempting this one selector, because the
+   * same thing happens to any `position: fixed` descendant of an ancestor that
+   * caps width, clips overflow, or creates a containing block via transform.
+   * Out at the body there is no ancestor to inherit from.
+   */
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -151,7 +168,9 @@ function UploadDrawer({ setProfilePic, closeDrawer, userType, removeProfilePic, 
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9999,
+        // Above the employee topbar, which computes to 9999 — the previous
+        // value tied with it and left the stacking order to DOM position.
+        zIndex: 100000,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -279,7 +298,8 @@ function UploadDrawer({ setProfilePic, closeDrawer, userType, removeProfilePic, 
           </p>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
