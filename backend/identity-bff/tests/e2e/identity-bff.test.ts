@@ -242,6 +242,12 @@ describe("identity BFF", () => {
     );
     expect(unsafeReturn.status).toBe(400);
 
+    const normalizedUnsafeReturn = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&returnTo=${encodeURIComponent("/..//attacker.example")}`,
+      { redirect: "manual" },
+    );
+    expect(normalizedUnsafeReturn.status).toBe(400);
+
     const hostedMagic = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link&intent=signup&returnTo=%2Fclient%2Fsignup`,
       { redirect: "manual" },

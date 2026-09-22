@@ -114,6 +114,20 @@ provider/client is not enabled. Changing the attributes takes effect without a
 BFF rebuild or restart. Environment variables retain connection details and
 secrets, not the runtime authentication-method catalog.
 
+### Proxy and request-rate settings
+
+`IDENTITY_TRUST_PROXY_HOPS` must equal the number of trusted reverse-proxy
+hops between the browser and BFF. The canonical Ansible deployment uses `2`
+for host nginx -> Kong -> BFF; a standalone nginx-to-BFF deployment uses `1`.
+Leaving it at `0` behind a proxy makes IP rate limiting treat the proxy as one
+caller, while trusting too many hops allows a client-supplied forwarded address.
+
+Magic-link request throttling is independent of password setup/reset. Tune it
+with `IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS` and
+`IDENTITY_MAGIC_LINK_REQUEST_LIMIT` (defaults: 1800 seconds and 3 requests per
+IP and per email). Password recovery continues to use
+`IDENTITY_PASSWORD_SETUP_TTL_SECONDS` and `IDENTITY_PASSWORD_SETUP_LIMIT`.
+
 ## Login theme (`configurator-blue`)
 
 The Keycloak-owned screens in the sign-in journey — password entry,

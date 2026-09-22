@@ -79,6 +79,12 @@ export const config = {
   identityLoginTtlSeconds: parseInt(
     process.env.IDENTITY_LOGIN_TTL_SECONDS || "1800",
   ),
+  identityMagicLinkRequestWindowSeconds: parseInt(
+    process.env.IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS || "1800",
+  ),
+  identityMagicLinkRequestLimit: parseInt(
+    process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
+  ),
   identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",

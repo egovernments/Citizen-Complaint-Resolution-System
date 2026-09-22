@@ -36,9 +36,9 @@ async function withinLimit(bucket: string): Promise<boolean> {
      return current`,
     1,
     bucket,
-    config.identityLoginTtlSeconds,
+    config.identityMagicLinkRequestWindowSeconds,
   );
-  return Number(count) <= config.identityPasswordSetupLimit;
+  return Number(count) <= config.identityMagicLinkRequestLimit;
 }
 
 function privateEmailKey(email: string): string {
@@ -119,13 +119,16 @@ export function registerMagicLinkRoutes(app: express.Application): void {
     const email = normalizedEmail(request.body?.email);
     const firstName = normalizedName(request.body?.firstName);
     const lastName = normalizedName(request.body?.lastName);
-    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || config.identityPostLoginRedirect;
+    const requestedReturnTo = request.body?.returnTo === undefined
+      ? null
+      : safeIdentityReturnTo(request.body.returnTo);
     if (!email || !firstName || !lastName) {
       return response.status(400).json({ error: "First name, last name, and a valid email are required" });
     }
-    if (request.body?.returnTo !== undefined && !safeIdentityReturnTo(request.body.returnTo)) {
+    if (request.body?.returnTo !== undefined && !requestedReturnTo) {
       return response.status(400).json({ error: "Unsupported return destination" });
     }
+    const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
 
     let magicMethod: IdentityAuthMethod | undefined;
     try {

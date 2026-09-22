@@ -112,7 +112,13 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
 
     const signedIn = await currentSession(request.headers.cookie);
     const email = normalizedEmail(request.body?.email);
-    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || config.identityPostLoginRedirect;
+    const requestedReturnTo = request.body?.returnTo === undefined
+      ? null
+      : safeIdentityReturnTo(request.body.returnTo);
+    if (request.body?.returnTo !== undefined && !requestedReturnTo) {
+      return response.status(400).json({ error: "Unsupported return destination" });
+    }
+    const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
     if (!email && !signedIn) return response.status(202).json(ACCEPTED);
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;

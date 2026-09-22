@@ -160,10 +160,13 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     if (!intent) {
       return response.status(400).json({ error: "Unsupported authentication intent" });
     }
-    const returnTo = safeIdentityReturnTo(request.query.returnTo) || config.identityPostLoginRedirect;
-    if (request.query.returnTo !== undefined && !safeIdentityReturnTo(request.query.returnTo)) {
+    const requestedReturnTo = request.query.returnTo === undefined
+      ? null
+      : safeIdentityReturnTo(request.query.returnTo);
+    if (request.query.returnTo !== undefined && !requestedReturnTo) {
       return response.status(400).json({ error: "Unsupported return destination" });
     }
+    const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
     const requestedMethod = typeof request.query.method === "string"
       ? request.query.method
       : "password";
