@@ -67,7 +67,8 @@ describe('sign-in gate', () => {
     render(<SignupPage />);
 
     const github = await screen.findByRole('button', { name: /continue with github/i });
-    expect(github.querySelector('svg[data-icon="inline-start"]')).toHaveClass('text-foreground');
+    const mark = github.querySelector('svg[data-icon="inline-start"][data-provider="github"]');
+    expect(mark?.querySelector('path')).toHaveAttribute('fill', '#181717');
   });
 
   it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
