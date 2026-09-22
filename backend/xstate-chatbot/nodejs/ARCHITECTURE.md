@@ -82,25 +82,42 @@ orchestration and dialogue; it is emphatically not a system of record.
 
 The module is a small Express application. `src/app.js` builds the server, mounts
 one router, and listens on `SERVICE_PORT` (default `8082`) under `CONTEXT_PATH`
-(default `/xstate-chatbot`). It also installs a catch-all proxy to the DIGIT
-gateway, which matters mainly because it means unmatched paths do not 404 the way
-you would expect them to.
+(default `/xstate-chatbot`). Anything outside that path gets a 404. It does not
+listen until two gates pass: `assertRequiredConfigOrExit()` and
+`loadLocalisationOrExit()`, both described in Part 22.
+
+There is one exception to the 404, and it is worth knowing it exists before you
+meet it. `DEV_PROXY_ENABLED=true` replaces the fallback with a catch-all proxy onto
+the DIGIT services host, so the local dialog harness can call DIGIT APIs
+same-origin. On anything publicly reachable that turns the container into an open
+proxy onto internal APIs — and the Twilio webhook requires the container to be
+publicly reachable. It is off by default and logs a warning when it is not.
 
 ```js
-// src/app.js - the entire server; one router, one proxy
+// src/app.js - the entire server
 const app = express();
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true, parameterLimit: 50000 }));
 app.use(envVariables.contextPath, require('./channel/routes'));   // /xstate-chatbot/*
-app.use(createProxyMiddleware('/', { target: envVariables.egovServices.egovServicesHost }));
-app.listen(port);
+
+if (envVariables.devProxyEnabled) {                               // local development only
+  app.use(createProxyMiddleware('/', { target: envVariables.egovServices.egovServicesHost }));
+} else {
+  app.use((req, res) => res.sendStatus(404));                     // not ours
+}
+
+warnAtStartup();
+assertRequiredConfigOrExit();                                     // refuses to boot on missing credentials
+loadLocalisationOrExit().then(() => app.listen(port));
 ```
 
 There is no build step and no TypeScript. It is plain CommonJS JavaScript on Node,
-with `require` and `module.exports`. Dependencies are few: Express, `xstate`
-4.38.3, Axios, `moment-timezone`, `uuid`, and a Postgres driver. No framework layer
-sits between you and the code, and nothing is generated at build time. What you
-read is what runs.
+with `require` and `module.exports`, and `npm test` runs the suite through Node's
+own test runner. The dependencies that matter: Express with `express-rate-limit`,
+`xstate` 4.38.3, `node-fetch` and Axios, `dotenv`, `moment-timezone`, `uuid`,
+`kafka-node` for telemetry, `exifr` for stripping image metadata, and a Postgres
+driver. No framework layer sits between you and the code, and nothing is generated
+at build time. What you read is what runs.
 
 The single most important thing to understand before opening any file: **the bot
 holds no conversation in memory between messages.** Each inbound WhatsApp message
@@ -120,25 +137,35 @@ a form-encoded body to a public URL, and that URL routes to
 entry point for conversation, and every feature described here is ultimately
 triggered from it. Everything after that route is internal and unaware HTTP exists.
 
-The route does three things. It asks `resolveUploadTenantId` which tenant an
-attachment should be stored against, builds an `InboundRequestParser` around the
-request and the active channel adapter, and awaits `parseMessage()`. If that yields a
-message it hands it to `sessionManager.authenticateAndDispatch` and returns
-immediately, without awaiting the result. That is the whole route: about a dozen
-lines.
+Two pieces of middleware run before the handler. `verifySignature` asks the active
+channel adapter whether it can vouch for the request and answers 403 if it cannot,
+so an unsigned body never reaches a parser or a session. The rate limiter then keys
+on the signed sender rather than on the IP — behind an ingress every request shares
+one address, and `X-Forwarded-For` is caller-controlled, so an IP key would be both
+useless and forgeable.
+
+The handler itself builds an `InboundRequestParser` around the request and the
+adapter, resolves the upload tenant only when sandbox mode is on, and asks
+`hasValidMessage()`. If there is one, `getRequestModel()` produces it and
+`sessionManager.authenticateAndDispatch` takes it — deliberately without being
+awaited, with a `.catch` handing failures to `error-handler.js`, which answers the
+citizen rather than logging into the void.
 
 ```js
-// src/channel/routes/index.js - the entire conversation entry point
-router.post("/message", async (req, res) => {
+// src/channel/routes/index.js - the conversation entry point
+router.post("/message", verifySignature, webhookLimiter, async (req, res) => {
   try {
-    const tenantId = resolveUploadTenantId(req, config);   // sandbox only; null otherwise
-    const inboundRequestParser = InboundRequestParser.create(req, channelProvider, tenantId);
-    const inboundRequestModel = await inboundRequestParser.parseMessage();
+    const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
 
-    if (inboundRequestModel) {                             // null = not a user message
+    if (config.isSandboxMode) {                            // only sandbox needs this
+      inboundRequestParser.setTenatId(await resolveUploadTenantId(req, config));
+    }
+
+    if (await inboundRequestParser.hasValidMessage()) {    // false = not a user message
+      const inboundRequestModel = await inboundRequestParser.getRequestModel();
       sessionManager
         .authenticateAndDispatch(inboundRequestModel)      // deliberately NOT awaited
-        .catch((error) => console.error("authenticateAndDispatch failed:", error));
+        .catch((error) => handleError(error, inboundRequestModel));
     }
   } catch (e) {
     console.log(e);
@@ -155,10 +182,10 @@ unhandled rejection. `res.end()` sits in a `finally`, so the provider always get
 an answer even if the handler throws.
 
 The parser's job is narrow: hand the request to the channel adapter and return what
-comes back. It has no imports at all — the adapter and the upload tenant are both
-passed in — so parsing knows nothing about session state, user identity or
-configuration. A `null` result is a normal outcome meaning "this was not a user
-message", such as a delivery receipt.
+comes back. The adapter and the upload tenant are both passed in rather than
+imported, so parsing knows nothing about session state or user identity. A `null`
+result is a normal outcome meaning "this was not a user message", such as a
+delivery receipt.
 
 What the adapter returns is the *reformatted message*, the neutral shape everything
 downstream speaks. It carries `user` (mobile number, later a userId and locale),
@@ -226,8 +253,8 @@ There are no `@xstate/*` companion packages, no `setup()`, no actors. The idioms
 here are v4 idioms and some look dated. They are correct for 4.38.3.
 
 ```js
-// package.json pins v4; there are no @xstate/* companions
-"xstate": "4.38.3"
+// package.json allows any v4; there are no @xstate/* companions
+"xstate": "^4.13.0"        // package-lock.json resolves it to 4.38.3
 
 // and this is the only Machine() call in the module:
 //   src/machine/state-machine.js  ->  const stateMachine = Machine(config);
@@ -544,11 +571,14 @@ institution: {
 //   3. this bundle's en_IN
 ```
 
-`src/machine/util/localisation-service.js` fetches those translations once at module
-load and caches them. It queries two tenants — the state root and the deployment
-tenant — because the localisation search API returns rows from the first tenant in
-the chain that matches and then stops rather than merging. That detail has cost real
-debugging time.
+`src/machine/util/localisation-service.js` fetches those translations once and
+caches them, but not at module load — `app.js` calls `loadLocalisationOrExit()`
+before it listens, retrying five times with a backoff and exiting 1 if they never
+arrive. A pod that cannot reach the localisation service is restarted rather than
+answering citizens with untranslated codes. It queries two tenants, the state root
+and the deployment tenant, because the localisation search API returns rows from
+the first tenant in the chain that matches and then stops rather than merging. That
+detail has cost real debugging time.
 
 Which languages the menu offers is decided in `flow/offered-locales.js`. A locale is
 offered only if the platform declares it *and* every bundle in the journey has a
@@ -751,11 +781,12 @@ institution: {
 }
 ```
 
-An **event** is something that happens to the machine. This codebase uses two:
-`USER_MESSAGE` and `USER_RESET`. That is the entire alphabet. Every branch in the
-dialogue is decided not by different event types but by inspecting the text that
-arrived with the event, which is why most interesting logic lives in guards rather
-than in event names.
+An **event** is something that happens to the machine. This codebase uses three:
+`USER_MESSAGE`, `USER_RESET` and `USER_CANCEL`. That is the entire alphabet, and
+the last two exist only because they are handled at the root — a citizen must be
+able to escape from anywhere. Every other branch in the dialogue is decided not by
+the event type but by inspecting the text that arrived with it, which is why most
+interesting logic lives in guards rather than in event names.
 
 A **transition** says: on this event, in this state, go there. Written as
 `on: { USER_MESSAGE: 'process' }`. A transition may name a sibling by bare name, or
@@ -995,27 +1026,55 @@ needed, and returns a session. `SandboxLoginFlow` handles the multi-organisation
 email flow used by sandbox deployments. Either may return `null`, meaning it has
 already replied to the citizen and the turn is over.
 
-`chat-service.js` is where the machine lives. `dispatch` rotates the session id if
-the citizen has been idle, logs telemetry, loads or creates the stored state, builds
-a running service, and sends one event. `getStateMachineServiceFor` is the
-interesting half: it rehydrates, attaches the persistence listener, and handles the
-case where rehydration fails.
+`chat-service.js` is where the machine lives, and `dispatch` is the turn. Before
+anything else it asks `resumePromptVerdict` whether this message is the answer to a
+resume prompt — a citizen returning after a gap is offered their old conversation
+back, and until they answer, their reply means something different from usual. A
+reset or cancel word overrides the prompt; an expired one is abandoned; otherwise
+the answer decides whether the old state is revived or discarded. Only past that
+does the ordinary path run: load or create the state, rotate the session id, log
+telemetry, build a service, send one event.
+
+The turn does not end when the event is sent. `waitUntilSettled` waits for the
+machine to come to rest, because an invocation still running means nothing has been
+persisted yet — Part 17 explains why such a state is deliberately not written. If
+it never settles within `DISPATCH_SETTLE_TIMEOUT_MS` the interpreter is stopped and
+`abandonStalledSession` tells the citizen rather than leaving them with silence.
+`dispatch` then returns the persistence queue, so the next message cannot overtake
+the write for this one.
 
 ```js
 // src/session/chat-service.js - one turn, start to finish
 async dispatch(session, inboundRequestModel) {
   const sessionUserId = session.userId;
 
+  const verdict = await this.resumePromptVerdict(sessionUserId, inboundRequestModel);
+  if (verdict === "answer")   return this.resolveResumeChoice(session, inboundRequestModel);
+  if (verdict === "override") return this.restartSession(session, inboundRequestModel, ...);
+
+  const chatState = await this.getOrCreateChatState(sessionUserId, session.user, inboundRequestModel);
+  if (!chatState) return;                     // awaiting the citizen's resume/restart choice
+
   await chatStateRepository.updateSessionId(sessionUserId, config.avgSessionTime);  // idle -> new session id
   telemetry.log(sessionUserId, "from_user", inboundRequestModel);
 
-  const chatState = await this.getOrCreateChatState(sessionUserId, session.user);
   const stateMachineService = this.getStateMachineServiceFor(chatState, inboundRequestModel);
 
-  const event = inboundRequestModel.getMessage().isReset() ? "USER_RESET" : "USER_MESSAGE";
-  stateMachineService.send(event, inboundRequestModel);      // the whole turn is this line
+  const message = inboundRequestModel.getMessage();
+  const event = message.isCancel() ? "USER_CANCEL"
+              : message.isReset()  ? "USER_RESET"
+              : "USER_MESSAGE";
+  stateMachineService.send(event, inboundRequestModel);
+
+  if (!await waitUntilSettled(stateMachineService)) {        // invoke still running past the timeout
+    this.abandonStalledSession(session, inboundRequestModel);
+  }
+  return pendingPersist(sessionUserId);                      // the next message waits on this write
 }
 ```
+
+`getStateMachineServiceFor` is the other interesting half: it rehydrates, attaches
+the persistence listener, and handles the case where rehydration fails.
 
 `chat-state.js` is a small value wrapper around the serialised blob. It names the
 parts the rest of the layer needs — `context`, `value` — and offers
@@ -1023,9 +1082,10 @@ parts the rest of the layer needs — `context`, `value` — and offers
 locale, userId and mobile number. Callers that need the un-stripped state must clone
 first, which the method name says.
 
-`inbound-message-parser.js` has no imports at all: the channel adapter and the upload
-tenant are both passed in. That is deliberate, so parsing carries no session or
-identity dependency. The tenant decision lives in `upload-tenant.js`, which is the
+`inbound-message-parser.js` takes the channel adapter and the upload tenant from its
+caller rather than importing them, so parsing carries no session or identity
+dependency. It does reach for `env-variables` and the shared error types, but
+nothing that knows who the citizen is. The tenant decision lives in `upload-tenant.js`, which is the
 one place that knows an attachment in sandbox mode belongs to the citizen's
 registered tenant.
 
@@ -1035,11 +1095,13 @@ The neutral payload gets two thin model classes in `src/machine/util/`.
 a greeting becomes `USER_RESET`. Both are transport shapes rather than machine
 concepts, which is why they carry no dialogue logic.
 
-One caveat about `InboundMessage.create`: it validates the message type against a
-fixed list. Types the channel adapters can genuinely produce — `button`,
-`unsupported`, `unknown` — are absent from that list at the time of writing, so those
-payloads throw and the citizen gets silence instead of a retry. Worth checking
-whether that has been fixed before trusting it.
+`InboundMessage.create` checks the message type against a known list — `text`,
+`image`, `document`, `location`, `button`, plus `unsupported` and `unknown` for
+audio, stickers and bodyless webhooks. An unrecognised type is not an error: it
+degrades to `unsupported` with a warning. That matters because `getMessage()` is
+called after the chat-state row is written and the interpreter started, so a throw
+here would lose the whole turn and leave the citizen with an English error from
+`error-handler.js` instead of a re-prompt in their own language.
 
 ---
 
@@ -1050,25 +1112,33 @@ whether that has been fixed before trusting it.
 After every transition the persistence listener serialises the state, strips the user
 object down to locale, userId and mobile number, and writes it to the
 `eg_chat_state_v2` table against the citizen's id, along with telemetry describing
-the move. The write is fired without being awaited, so two transitions in one turn
-race and ordering is not guaranteed.
+the move. Two transitions in one turn would otherwise race, so writes do not go
+straight to the repository: they are queued per citizen in `persist-queue.js` and
+run in order, and `dispatch` awaits the queue before the turn ends. That is also
+what stops a message arriving straight after from reading a half-written state.
+
+A transition with an invocation still in flight is skipped entirely. Restoring such
+a state re-runs the invocation on the next message, which for `persistComplaint`
+means filing the complaint twice — Part 12's note on what `interpret().start()`
+does with a persisted state is the mechanism, and this guard is the defence.
 
 ```js
 // src/session/chat-service.js - attached to every service it builds
 stateMachineService.onTransition((state) => {
   if (!state.changed) return;
+  if (hasActiveInvoke(state)) return;          // never persist mid-invocation
 
+  const userId = state.context.user.userId;
   const active = !state.done && !state.forcedClose;
   const persistableState = ChatState.create(state).toPersistableState();  // clone + strip user
 
-  (async () => {                                       // deliberately not awaited
-    await chatStateRepository.updateState(state.context.user.userId, active,
-                                          persistableState.state, Date.now());
-    telemetry.log(..., "transition", {
+  enqueuePersist(userId, async () => {         // chained per citizen, awaited by dispatch
+    await chatStateRepository.updateState(userId, active, persistableState.state, timeStamp);
+    telemetry.log(userId, "transition", {
       source:      sourceStrings[sourceStrings.length - 1],   // from state.history.toStrings()
       destination: stateStrings[stateStrings.length - 1]      // from state.toStrings()
     });
-  })();
+  });
 });
 ```
 
@@ -1127,9 +1197,11 @@ makes that arrangement safe rather than fragile, which is why it is not optional
 
 `src/channel/index.js` picks one adapter at startup from `WHATSAPP_PROVIDER`:
 `Twilio`, `ValueFirst`, `Kaleyra`, or the console fallback. Every adapter implements
-the same two functions — `processMessageFromUser` inbound and `sendMessageToUser`
-outbound — and nothing else in the codebase knows or cares which one is active. The
-choice is made once, at require time.
+the same three functions — `processMessageFromUser` inbound, `sendMessageToUser`
+outbound, and `verifyRequest` to answer for a request's authenticity — and nothing
+else in the codebase knows or cares which one is active. The choice is made once,
+at require time, and an adapter missing `verifyRequest` throws there rather than
+being discovered later as no check at all.
 
 ```js
 // src/channel/index.js - one decision, made once at require time
@@ -1137,7 +1209,26 @@ if (config.whatsAppProvider == 'ValueFirst')   module.exports = valueFirstWhatsA
 else if (config.whatsAppProvider == 'Kaleyra') module.exports = require('./kaleyra');
 else if (config.whatsAppProvider == 'Twilio')  module.exports = require('./twilio');
 else                                           module.exports = consoleProvider;
+
+if (typeof module.exports.verifyRequest !== 'function') {   // every provider must answer
+  throw new Error(`Channel provider '${config.whatsAppProvider}' does not implement verifyRequest.`);
+}
 ```
+
+How each adapter answers differs, and the difference matters. Twilio signs its
+webhooks, so `twilio.js` recomputes the HMAC-SHA1 over the public URL and the form
+body and compares it to `X-Twilio-Signature`. ValueFirst and Kaleyra sign nothing,
+so both fall back to `channel/shared-secret.js`: a value the operator configures on
+both sides, presented as a header or a query parameter and compared in constant
+time. That is weaker — a bearer value, replayable, only as good as the TLS around
+it — but it is the difference between "anyone who finds the URL can file complaints
+as any citizen" and "you need the secret".
+
+Both schemes fail closed. An unset `TWILIO_AUTH_TOKEN` or `WEBHOOK_SHARED_SECRET`
+rejects every webhook rather than waving it through, because an unconfigured
+deployment is exactly the state an attacker benefits from. The console adapter
+verifies nothing and says so at startup, which is fine for a terminal and the
+reason `WHATSAPP_PROVIDER=console` must never reach a reachable deployment.
 
 The console adapter is how you develop. It reads from and writes to the terminal,
 needs no external account or public URL, and exercises the identical machine. If you
@@ -1193,9 +1284,18 @@ download helpers used by the attachment step. Most backend contact is here.
 
 `egov-user-profile.js` saves the citizen's name and language during onboarding.
 `user-service.js` in the session layer resolves a mobile number to a DIGIT user,
-creating one if needed. Its number normalisation is country-configurable, which
-matters because the same digits mean different things in different deployments and
-the tracker is keyed by the normalised form.
+creating one if needed. Normalising that number is its own service:
+`mobile-validation-service.js` reads `common-masters.MobileNumberValidation` from
+MDMS for the tenant, cached with a TTL, and falls back to `DEFAULT_COUNTRY_CODE`
+and `DEFAULT_MOBILE_REGEX` when no row exists or MDMS is unreachable — the bot
+keeps answering either way.
+
+Reading the rule from MDMS rather than from this module's own config is what makes
+inbound and outbound agree. egov-user, egov-hrms, digit-ui and novu-bridge all read
+the same row, so a citizen stored as `712345678` by the portal is found as
+`712345678` here. Resolution copies novu-bridge's: first active row with
+`default: true` wins, looked up at the tenant and then at its state root. Get this
+wrong and the bot creates a second user for a citizen who already exists.
 
 Requests to DIGIT need an authenticated envelope, and MDMS in particular is sensitive
 to the tenant in the query. When a lookup returns nothing, suspect the tenant before
@@ -1228,14 +1328,18 @@ One variable, four consequences, which is why changing it is never a small chang
 
 ```text
 // the same variable, reached from four different places
-standard-login-flow.js:14  userService.getUserForMobileNumber(mobile, config.rootTenantId)
-pgr-machine.js:119         pgrService.fetchBoundaryStep(context.extraInfo.tenantId, path)
-egov-pgr.js:943            tenantId = ... : config.rootTenantId          // where a complaint is filed
-localisation-service.js:18 const stateTenantId = String(config.rootTenantId).split('.')[0];
+standard-login-flow.js   extraInfo.tenantId = config.rootTenantId       // the turn's tenant
+standard-login-flow.js   userService.getUserForMobileNumber(mobile, config.rootTenantId)
+pgr-machine.js           pgrService.fetchBoundaryStep(context.extraInfo.tenantId, path)
+localisation-service.js  const stateTenantId = String(config.rootTenantId).split('.')[0];
 ```
 
-In this deployment complaints are filed at the city tenant, because that is where the
-real category tree and the real boundaries live. The state root holds only
+Filing is one step further removed. `persistComplaint` takes its tenant from the
+`city` slot, which the boundary walk fills from `context.extraInfo.tenantId` —
+itself set to `ROOT_TENANTID` by the standard login flow. So the variable still
+decides it, but through the conversation rather than directly, and a sandbox login
+can override it mid-turn. In this deployment complaints land at the city tenant,
+because that is where the real category tree and the real boundaries live. The state root holds only
 demonstration data and no boundaries at all, which would dead-end the location walk
 on its first level. The workflow definition resolves at the state root regardless.
 
@@ -1251,15 +1355,28 @@ the wrong tenant and they load without error and simply never appear in a messag
 
 
 `src/env-variables.js` is the single place environment variables are read, and every
-one has a default. There is no `.env` loading — the process expects real environment
-variables, so local runs use a shell script that exports them before starting. Read
-the file once; it is short and it is the whole contract with the environment.
+one has a default there. Its first line loads `.env` through dotenv, so a local run
+needs only a file next to `package.json`; `.env.example` shows the shape and `.env`
+itself is gitignored. A real environment variable always wins over the file, which
+is how the same image runs unchanged under Helm. Defaults in this file are not the
+whole story — Part 22 covers the ones the service refuses to boot without.
 
-Four groups matter. Identity and routing: port, context path, channel provider,
-repository provider, business number. Tenancy: root tenant and supported locales.
-Country: dialling code and national number length, plus the mobile format rules.
-Product limits: minimum description length, maximum institution name length, and the
+There are around 135 variables now, but they fall into seven groups. Identity and
+routing: port, context path, channel provider, repository provider, business
+number. Tenancy: root tenant and supported locales. Country: dialling code,
+national number length, and the MDMS fallback rules. Product limits: minimum
+description length, maximum institution name length, maximum media size, and the
 case category recorded on every complaint.
+
+The other three arrived with the service's operational surface. Credentials and
+secrets: the service account, the Twilio pair, `WEBHOOK_SHARED_SECRET`,
+`REMINDER_AUTH_TOKEN` — these are the ones Part 22 refuses to boot without.
+Timeouts: `REQUEST_TIMEOUT_MS` for a single backend call, `MEDIA_PROCESSING_TIMEOUT_MS`
+for a download-and-upload round trip, and `DISPATCH_SETTLE_TIMEOUT_MS` for a whole
+turn. The last must be the largest, or a turn is abandoned while a call it is
+waiting on is still legitimately running. And switches: `ENABLE_SANDBOX_MODE`,
+`DEV_PROXY_ENABLED`, `TWILIO_VERIFY_WEBHOOK_SIGNATURE` — each one changing what the
+service will accept, which is why none of them defaults to the permissive value.
 
 ```js
 // src/env-variables.js - every value has a default, so nothing is required
@@ -1275,11 +1392,12 @@ instituteNameMaxLength:parseInt(process.env.INSTITUTE_NAME_MAX_LENGTH || '300', 
 isSandboxMode:         process.env.ENABLE_SANDBOX_MODE === 'true',
 ```
 
-The country group exists because the code once assumed India in several places.
-Numbers are normalised, validated and formatted from configuration now. If you find a
-literal country code in the source it is a bug rather than a shortcut — at the time
-of writing one such leftover survives in the Twilio adapter's phone-number
-extraction.
+The country group exists because the code once assumed India in several places. Every
+one of those is gone: `src/phone-numbers.js` holds the one pair of conversions the
+adapters share, and the validation rule itself comes from MDMS per tenant rather than
+from this file at all — Part 19 has the detail. `COUNTRY_CODE` and
+`MOBILE_NUMBER_LENGTH` remain as the fallback when a tenant publishes no rule. A
+literal country code anywhere in the source is a bug rather than a shortcut.
 
 Product limits are read through configuration for the same reason: the minimum
 description length appears both in the validation and in the prompt text, via a
@@ -1290,6 +1408,31 @@ place guarantees they will eventually disagree, which is an unpleasant bug to re
 
 ## Part 22 — What fails at boot, and why that is good
 
+Three gates stand between `node src/app.js` and a listening port, and they run in
+that order. `warnAtStartup()` prints what is degraded but survivable.
+`assertRequiredConfigOrExit()` exits 1 on anything that cannot work at all.
+`loadLocalisationOrExit()` fetches the translations, retrying five times with a
+backoff, and exits 1 if they never arrive — so an orchestrator restarts the pod
+rather than serving a conversation with no words in it.
+
+What counts as fatal depends on the channel, because demanding Twilio credentials
+of a ValueFirst deployment would be its own kind of wrong. `src/startup-checks.js`
+holds both lists, and `test/startup-checks.test.js` pins each case.
+
+| Setting | Fatal when |
+|---|---|
+| `USER_SERVICE_ACCOUNT_USERNAME` / `_PASSWORD` | always — they default to empty strings, so the first citizen gets a blank OAuth post |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | `WHATSAPP_PROVIDER=Twilio` |
+| `TWILIO_WEBHOOK_BASE_URL` | Twilio, and signature verification is on |
+| `WEBHOOK_SHARED_SECRET` | ValueFirst or Kaleyra, and verification is on |
+
+The warnings are the other half, and each names its consequence rather than the
+setting alone: an unset `TWILIO_WHATSAPP_NUMBER` files complaints but drops every
+reply; `TWILIO_VERIFY_WEBHOOK_SIGNATURE=false` leaves the webhook forgeable by
+anyone who learns the URL; `REPO_PROVIDER=InMemory` loses conversations on restart
+and breaks outright with more than one replica. `GET /health` returns 503 with the
+same list, so a degraded deployment is visible to a probe and not only to whoever
+happened to read the startup log.
 
 Wiring is by object reference, so most mistakes are impossible to express. A step
 points at another step by naming the variable holding it; a typo is an undefined
@@ -1344,18 +1487,52 @@ assert.match(receipt, /Categoria: Saúde/);        // top-level category, not th
 assert.doesNotMatch(receipt, /FALTA_MEDICAMENTOS/);
 ```
 
-The rest of the suite covers one seam each: `twilio-signature.test.js` (webhook
-authenticity, including a tampered `From`), `telemetry-redaction.test.js` (no
-credential reaches the Kafka topic), `whitelist-gate.test.js` (a non-whitelisted
-number creates nothing), `invoke-state.test.js` (restoring an invoke-active state
-re-runs the service — the duplicate-complaint mechanism), `resume-pending-persistance.test.js`
-(the resume prompt survives a restart), `onboarding-gates.test.js` (a new citizen is
-not treated as onboarded), `question-match-reply.test.js` and
-`option-label-matching.test.js` (a reply matches the label the citizen was shown),
-`media-types.test.js` (the content types egov-filestore accepts),
-`localization-init.test.js` (startup fails rather than serving an empty locale),
-`seed-matches-messages.test.js` (the seeded copy says what the machine says),
-`session-resume.test.js` and `offered-locales.test.js`.
+The rest of the suite covers one seam each, and it is worth knowing the groups
+because a change usually lands in exactly one of them.
+
+Dialogue. `question-match-reply.test.js` and `option-label-matching.test.js` check
+that a reply matches the label the citizen was shown; `yes-no-labels.test.js` that
+the printed word works as well as the number; `error-messages.test.js` that a
+validation failure quotes the configured bound rather than a hardcoded ten;
+`delayed-prompt.test.js` that a deliberately delayed prompt still reaches the send
+queue; `seed-matches-messages.test.js` that the seeded copy says what the machine
+says; `offered-locales.test.js` and `localization-init.test.js` that a locale is
+offered only when it is complete, and that startup fails rather than serving an
+empty one.
+
+Session and persistence. `session-resume.test.js` covers save and resume including
+the brick case; `resume-pending-persistance.test.js` that the resume prompt lives
+on the row rather than in memory; `invoke-state.test.js` and
+`dispatch-stalled-invoke.test.js` the invoke-active state and the stall that
+follows it; `persist-queue.test.js` that writes for one citizen land in order;
+`dispatch-queueing.test.js` and `send-queue-key.test.js` that a message arriving
+mid-turn is queued rather than dropped, and that two citizens never queue behind
+each other; `persisted-state-redaction.test.js` that no token survives into the
+stored blob; `onboarding-gates.test.js` that a new citizen is not treated as
+onboarded; `sandbox-login-flow.test.js` and `service-account-retry.test.js` the two
+identity paths.
+
+Authenticity and operations. `twilio-signature.test.js` covers webhook authenticity
+including a tampered `From`; `provider-verification.test.js` the shared-secret
+providers; `webhook-verification-order.test.js` that verification really is the
+first middleware on every citizen-facing route — an ordering mistake would be
+invisible otherwise; `whitelist-gate.test.js` that a non-whitelisted number creates
+nothing; `telemetry-redaction.test.js` and `privacy.test.js` that no credential and
+no full mobile number reach a log or a Kafka topic; `startup-checks.test.js` what
+must be set before the service may boot; `status-route.test.js` and
+`reminder-sweep.test.js` the two non-conversation routes, the second asserting that
+a throwing sweep answers 500 rather than killing the process.
+
+Numbers, media and backends. `mobile-validation.test.js` and `phone-numbers.test.js`
+cover the per-tenant rule and the conversions built on it;
+`twilio-sender.test.js` and `twilio-media-url.test.js` the outbound address and the
+media URL it trusts; `media-types.test.js` and `media-timeout.test.js` what
+filestore accepts and what happens when a download hangs;
+`value-first-send-errors.test.js` a token endpoint answering HTML;
+`inbound-message-types.test.js` that every type the channels emit is accepted
+without throwing; `egov-pgr-city.test.js` and `boundary-hierarchy-missing.test.js`
+that cities come from the tenant list and that an unregistered hierarchy fails
+loudly instead of filing a complaint with no location.
 
 Tests work by replacing modules in Node's cache before requiring the machine, so no
 network call happens and backend responses are whatever the test says. One trap: only
@@ -1377,12 +1554,6 @@ and it is load-bearing. It proves the generated category walk sits where the
 hand-written one did, which is what keeps saved conversations resumable. Leave it
 alone; if it ever fails, a rename has happened and persisted sessions are about to be
 discarded.
-
-Five tests are skipped, each labelled with its cause: four drive the unreachable
-location flow and one asserts a menu option that no longer exists. Skipped rather
-than deleted, matching the decision to keep the code they describe. A skipped test
-with a stated reason is a note to the next reader; a deleted one is a gap nobody
-knows about.
 
 Beyond the suite, two techniques are worth knowing. A *probe* is a throwaway script
 that drives one part of the machine through many inputs and dumps the transcript,
@@ -1556,17 +1727,28 @@ state machine.
 
 | Path | What it is |
 |---|---|
-| `src/app.js` | Express server, port, context path |
+| `src/app.js` | Express server, port, context path, the boot gates |
 | `src/env-variables.js` | Every environment variable, with defaults |
+| `src/startup-checks.js` | What is fatal, what is merely degraded |
+| `src/privacy.js` | Masking, so logs carry no full mobile number |
+| `src/phone-numbers.js` | National and international conversions |
+| `src/media-types.js` | The content types filestore accepts |
 | `src/channel/index.js` | Picks the channel adapter at startup |
-| `src/channel/routes/index.js` | The webhook endpoints |
+| `src/channel/routes/index.js` | The webhook, status, reminder and health endpoints |
 | `src/channel/{twilio,console,value-first,kaleyra}.js` | Provider adapters |
+| `src/channel/twilio-signature.js` | HMAC verification of a Twilio webhook |
+| `src/channel/shared-secret.js` | Authenticity for providers that sign nothing |
 | `src/session/session-manager.js` | Orchestrates a turn; the outbound path |
 | `src/session/{standard,sandbox}-login-flow.js` | Identity, behind one contract |
 | `src/session/chat-service.js` | Builds and drives the machine; persistence |
 | `src/session/chat-state.js` | Value wrapper for the persisted blob |
-| `src/session/inbound-message-parser.js` | Request to neutral payload; no imports |
+| `src/session/persist-queue.js` | Transition writes, chained per citizen |
+| `src/session/invoke-state.js` | Is the machine still working? and the settle wait |
+| `src/session/{errors,error-handler}.js` | Typed failures, and what the citizen is told |
+| `src/session/telemetry.js` | The Kafka event stream, redacted |
+| `src/session/inbound-message-parser.js` | Request to neutral payload; the adapter is injected |
 | `src/session/upload-tenant.js` | Which tenant an attachment belongs to |
+| `src/session/sandbox-org-tracker.js` | Which organisation a sandbox citizen chose |
 | `src/session/repo/` | In-memory and Postgres state storage |
 | `src/session/user-service.js` | Mobile number to DIGIT user |
 | `src/machine/state-machine.js` | Creates the machine — read this first |
@@ -1578,15 +1760,16 @@ state machine.
 | `src/machine/flow/flow-state-compiler.js` | States to XState config |
 | `src/machine/flow/{shell,pgr}-messages.js` | Onboarding and filing copy |
 | `src/machine/flow/offered-locales.js` | Which languages the menu offers |
+| `src/machine/flow/yes-no-options.js` | The one yes/no grammar, shared |
 | `src/machine/util/dialog.js` | Prompt, grammar and send primitives |
 | `src/machine/util/inbound-*.js` | Transport models for the payload |
 | `src/machine/util/localisation-service.js` | Live translations and locales |
 | `src/machine/service/egov-pgr.js` | MDMS, boundary, filestore, complaints |
+| `src/machine/service/mobile-validation-service.js` | The tenant's mobile rule, from MDMS |
+| `src/machine/service/reminders-service.js` | The sweep behind `POST /reminder` |
+| `src/machine/service/email-tenant-service.js` | Email to tenant, for sandbox login |
 | `test/pgr-machine-flow.test.js` | The live filing flow, turn by turn |
-| `test/twilio-signature.test.js` | Inbound webhook authenticity |
-| `test/invoke-state.test.js` | Why an invoke-active state is never persisted |
-| `test/session-resume.test.js` | Save and resume, including the brick case |
-| `test/offered-locales.test.js` | Which languages are offered |
+| `test/` (39 files) | One seam each — Part 23 groups them |
 
 **Read in this order on your first day:** `state-machine.js` and
 `citizen-service-machine.js` for the assembly, then `pgr-machine.js` for the shape

@@ -26,7 +26,7 @@ If your eGov host serves an incomplete TLS chain, Node will reject it with `UNAB
 
 ### Configuration
 
-Every tenant- and country-specific value is an environment variable, so the same build serves any deployment. `.env.example` lists all of them; these are the ones you will always set:
+Every tenant- and country-specific value is an environment variable, so the same build serves any deployment. `.env.example` lists the ones a deployment actually sets — `env-variables.js` reads about twice as many, the remainder being dormant config for flows this build does not use (bills, payments, the ValueFirst notification templates). These are the ones you will always set:
 
 | Variable | What it controls |
 |---|---|
@@ -116,7 +116,7 @@ The session layer was split along the same lines: login flows are separate from 
 
 ## Localization and tenancy
 
-Nothing in the dialogue assumes a country or a tenant. The default locale comes from configuration rather than a hardcoded `en_IN`, and the language menu is built from the tenant's own MDMS `StateInfo`, so a deployment offers exactly the languages it has declared. Mobile-number validation and the outbound sender number are derived from configured country settings, and India-specific naming (`seva`, `mseva`) was renamed to generic terms.
+Nothing in the dialogue assumes a country or a tenant. The default locale comes from configuration rather than a hardcoded `en_IN`, and the language menu is built from the tenant's own MDMS `StateInfo`, so a deployment offers exactly the languages it has declared. Mobile-number validation is per tenant: the country code and the valid-number rule come from that tenant's MDMS `common-masters.MobileNumberValidation` row, cached briefly, so adding a country is an MDMS edit rather than a redeploy. `DEFAULT_COUNTRY_CODE` and `DEFAULT_MOBILE_REGEX` are the fallback when a tenant has no row — they ship as India's, so a deployment that adds neither the row nor the variables will reject every local number. The outbound sender is the Twilio account's own number and is deliberately not run through the citizen tenant's rule.
 
 Adding a language is an MDMS and localization change; it needs no code edit.
 
@@ -149,6 +149,12 @@ Verification runs *before* the rate limiter, and the limiter counts the signed s
 A configurable mobile-number whitelist then gates the welcome step, messages from numbers outside the configured country are dropped, and the reset path does not bypass the whitelist.
 
 Citizen records are provisioned through a service account, so the chatbot files complaints without a citizen ever holding credentials. That account's token is stripped from anything persisted or published — including the event history inside a serialized machine state, where it is easy to miss.
+
+### Operational endpoints
+
+`/reminder` fans a message out to every active session, so it is gated on its own secret rather than a provider signature — no cron or operator can produce one of those. Set `REMINDER_AUTH_TOKEN` and send it as `X-Reminder-Token`; while the variable is unset the route answers 404 and does nothing, which is the safe default for a route nobody has wired up yet.
+
+`/health` returns 200 only when the configuration can actually serve citizens. It returns **503** and names the problems when it cannot — a missing Twilio sender, verification switched off, sessions held in memory. Point the container healthcheck and Gatus at it, so a deployment that boots but drops every reply shows up red instead of green.
 
 ## Remote Debugging
 
