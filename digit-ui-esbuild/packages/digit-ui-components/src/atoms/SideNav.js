@@ -40,8 +40,8 @@ const SideNav = ({
    */
   const expanded = (pinnable && pinned) || hovered;
   const pinLabel = pinned
-    ? t("CORE_SIDEBAR_UNPIN", "Unlock menu")
-    : t("CORE_SIDEBAR_PIN", "Keep menu open");
+    ? t("CORE_SIDEBAR_COLLAPSE", "Collapse")
+    : t("CORE_SIDEBAR_PIN", "Keep open");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState({});
   const [expandedItems, setExpandedItems] = useState({});
@@ -328,12 +328,13 @@ const SideNav = ({
             title={pinLabel}
             onClick={() => onPinnedChange && onPinnedChange(!pinned)}
           >
-            {/* Lock, not a chevron: a chevron promises to move the panel, and
-                this holds it still. */}
+            {/* A chevron pointing the way the panel will go: left collapses it,
+                right holds it open. Every nav rail people already use does this;
+                a lock reads as permissions, not layout. */}
             {pinned ? (
-              <SVG.Lock width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
+              <SVG.ChevronLeft width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
             ) : (
-              <SVG.LockOpen width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
+              <SVG.ChevronRight width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
             )}
             <span className="digit-sidebar-pin-label">{pinLabel}</span>
           </button>

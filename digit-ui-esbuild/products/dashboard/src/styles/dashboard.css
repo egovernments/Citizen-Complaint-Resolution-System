@@ -124,8 +124,18 @@
   --card-foreground: lab(5.23127% -1.15929 -6.2068);
   --popover: lab(100% 0 0);
   --popover-foreground: lab(5.23127% -1.15929 -6.2068);
-  /* Brand / interactive */
-  --primary: lab(35.8817% -24.1734 -2.46631);
+  /* Brand / interactive.
+     *
+     * The brand entries below resolve from the tenant's own theme first, with
+     * the dashboard's historical palette kept as the final fallback. They were
+     * fixed teal, so the dashboard rendered in a palette unrelated to the
+     * chrome around it — navy on Bomet, green and yellow on naipepea.
+     *
+     * A var() chain rather than a JS read: applyTheme publishes `--color-*`
+     * from an MDMS record fetched over the network, so anything sampling them
+     * at mount races the fetch and captures DIGIT's defaults. CSS resolves
+     * them whenever they land. */
+  --primary: var(--color-primary-2, var(--color-primary-1, lab(35.8817% -24.1734 -2.46631)));
   --primary-foreground: lab(98.84% 0.0000298023 -0.0000119209);
   --secondary: lab(94.2798% -2.53278 -1.0635);
   --secondary-foreground: lab(9.71627% -6.29769 -2.60819);
@@ -136,13 +146,13 @@
   --destructive: lab(45.6933% 66.2056 47.555);
   --destructive-foreground: lab(98.84% 0.0000298023 -0.0000119209);
   /* Lines & focus */
-  --border: lab(88.4492% -2.04447 -1.97053);
-  --input: lab(88.4492% -2.04447 -1.97053);
-  --ring: lab(35.8817% -24.1734 -2.46631);
+  --border: var(--color-card-border, var(--color-border, lab(88.4492% -2.04447 -1.97053)));
+  --input: var(--color-card-border, var(--color-border, lab(88.4492% -2.04447 -1.97053)));
+  --ring: var(--color-primary-2, var(--color-primary-1, lab(35.8817% -24.1734 -2.46631)));
   /* Chrome (top bar / nav) */
-  --chrome: lab(12.1586% -9.80562 -2.97114);
+  --chrome: var(--color-primary-1, var(--color-header-bg, lab(12.1586% -9.80562 -2.97114)));
   --chrome-foreground: lab(96.5699% -1.58328 -0.665271);
-  --chrome-muted: lab(56.1186% -6.32274 -2.64311);
+  --chrome-muted: var(--color-text-secondary, lab(56.1186% -6.32274 -2.64311));
   /* Status (foreground + tinted background pairs) */
   --status-open: lab(36.6287% -20.0702 -21.1027);
   --status-open-bg: lab(94.3508% -6.32584 -6.12073);
@@ -161,7 +171,13 @@
   --status-breach: lab(37.1998% 71.0423 26.7454);
   --status-breach-bg: lab(93.7677% 13.0259 4.10725);
   /* Chart series */
-  --chart-1: lab(36.1215% -31.3433 -3.14357);
+  /* The lead series follows the tenant's brand; 2-5 stay as they are.
+     *
+     * A data-viz ramp has a different job from a brand colour — the five need
+     * to stay tellable apart — so only the dominant series is re-pointed. That
+     * is the one carrying most of the ink on this dashboard, and it is why the
+     * whole surface read teal inside navy chrome. */
+  --chart-1: var(--color-primary-2, var(--color-primary-1, lab(36.1215% -31.3433 -3.14357)));
   --chart-2: lab(48.7634% -31.2502 -12.8129);
   --chart-3: lab(60.588% -31.0205 5.71432);
   --chart-4: lab(46.0249% 56.4689 37.9874);
@@ -3839,7 +3855,27 @@
   overflow-x: clip;
   box-sizing: border-box;
   --digit-sidebar-width: 3rem;
-  --dashboard-embedded-inset: 12px;
+  /* Matches the employee app's own content inset. An internal page — Create
+   * Complaint is the honest comparison, not the landing screen — clears the
+   * nav rail by 52px before its first card begins. At 12px the dashboard read
+   * as pinned to the edges while every page around it breathed. */
+  --dashboard-embedded-inset: 52px;
+  /* Brand variables resolve from the tenant's own theme, with the dashboard's
+   * historical palette only as a last resort.
+   *
+   * These were hardcoded teal and overridable solely through DASHBOARD_BRAND_*
+   * globalConfigs keys, which almost no deployment sets — so the dashboard
+   * rendered teal inside chrome painted from an entirely different palette.
+   * Bomet's is navy `#0B1F3A`; the charts were teal.
+   *
+   * Expressed as a var() chain rather than read in JS on purpose: applyTheme
+   * publishes `--color-*` from an MDMS record fetched over the network, and
+   * anything that samples those at mount races the fetch. CSS resolves them
+   * whenever they arrive. An explicit DASHBOARD_BRAND_* override still wins,
+   * because DashboardLayout writes it inline. */
+  --brand-teal: var(--color-primary-2, var(--color-primary-1, lab(35.8817% -24.1734 -2.46631)));
+  --brand-dark: var(--color-primary-1, var(--color-header-bg, lab(12.1586% -9.80562 -2.97114)));
+  --brand-slate: var(--color-text-secondary, lab(56.1186% -6.32274 -2.64311));
 }
 
 .dashboard-root.dashboard-embedded > div {
@@ -3923,11 +3959,18 @@
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  /* Clears the fixed employee header. Read from the same custom property the
-   * header's own height is declared with (see public/vendor/overrides.css) so
-   * this cannot drift from it — the literal 56px here outlived two changes to
-   * the bar and left the dashboard title tucked 19px underneath it. */
-  padding-top: var(--employee-header-h, 56px) !important;
+  /* Clears the fixed employee header, PLUS the same breathing room every other
+   * employee page leaves under it. Read from the properties the header's own
+   * height and gap are declared with (see public/vendor/overrides.css) so this
+   * cannot drift from them — the literal 56px here outlived two changes to the
+   * bar and left the dashboard title tucked 19px underneath it.
+   *
+   * The gap matters on its own: clearing only the header height made the
+   * dashboard the one page whose content started hard against the bar while
+   * every other surface had 16px under it. */
+  padding-top: calc(
+    var(--employee-header-h, 56px) + var(--employee-header-gap, 16px)
+  ) !important;
   box-sizing: border-box !important;
 }
 
@@ -4139,6 +4182,19 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* No full-width band behind the dashboard header.
+ *
+ * `.dashboard-header` carries `tw-bg-background`, which paints a strip running
+ * the whole width of the surface while its own content is inset by 52px like
+ * everything else — so it read as a white band bleeding to both edges with the
+ * title floating inside it. Nothing depends on the fill: the page behind is
+ * already the same surface, and the header is separated by spacing, not by a
+ * block of colour. */
+
+.dashboard-root .dashboard-header {
+  background: transparent !important;
 }
 
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{

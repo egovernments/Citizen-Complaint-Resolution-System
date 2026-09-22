@@ -8102,3 +8102,42 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 .employee .digit-topbar .digit-header-action-fields {
   gap: 16px !important;
 }
+
+/* The icon column must not move when the rail opens.
+ *
+ * Vendor gives `.digit-sidebar-item` no padding while collapsed and 16px once
+ * open, so every icon jumped 4.5px right and the rows re-spaced as the panel
+ * expanded — the icons appeared to jitter under the sliding edge. One padding
+ * for both states fixes the column in place; 12px is what centres a 24px icon
+ * in the 48px collapsed rail, so the closed state is unchanged and only the
+ * open state stops moving. */
+.employee .digit-sidebar .digit-sidebar-item,
+.employee .digit-sidebar.hovered .digit-sidebar-item,
+.employee .digit-sidebar.collapsed .digit-sidebar-item {
+  padding: 8px 12px !important;
+}
+
+/* Optical alignment of the bar's right edge.
+ *
+ * Both sides sit 24px from the edge geometrically — measured, the boxes agree
+ * exactly. The right still reads wider because the last thing on it is a
+ * caret, and the caret's ink does not fill its own box: the arrow path spans
+ * 7→17 of a 24-unit viewBox, so at 18px it carries 5.25px of built-in
+ * whitespace on its right. The eGov wordmark opposite is cropped to its ink
+ * and starts at exactly 24px, so the two edges are measured the same and seen
+ * differently.
+ *
+ * Shifting the cluster out by that whitespace is what makes the INK symmetric,
+ * which is the thing the eye is actually judging.
+ *
+ * Applied to the row, not to its last field: the row's real last child is the
+ * duplicate tenant mark suppressed above, so `:last-child` selects a
+ * `display: none` element and moves nothing. The cluster's left edge is not
+ * aligned to anything, so shifting the whole thing only shows at the edge that
+ * needed correcting. */
+.employee .digit-topbar .digit-header-action-fields {
+  /* 11px, not the caret's 5.25px alone: the trailing field carries its own
+   * padding past the glyph as well. Measured from the rendered result rather
+   * than derived — left ink 24px, right ink 24px. */
+  margin-right: -11px !important;
+}
