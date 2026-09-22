@@ -161,6 +161,14 @@ docker run --rm \
 
 The source is `:ro` on purpose. This step cannot damage the original.
 
+This is the one step that needs an image the box may not have. If `alpine` is not present
+locally, Docker pulls it (~4 MB) — so on a box with restricted egress, pull it before your
+maintenance window, or substitute an image that is already there:
+
+```bash
+docker image inspect alpine >/dev/null 2>&1 && echo "alpine present" || docker pull alpine
+```
+
 ---
 
 ## 5. Point the compose file at the named volume
