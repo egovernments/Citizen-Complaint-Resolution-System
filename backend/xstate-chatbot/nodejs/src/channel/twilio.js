@@ -371,6 +371,8 @@ class TwilioWhatsAppProvider {
             {
                 responseType: 'arraybuffer',
                 cancelToken,
+                maxContentLength: config.maxMediaSizeBytes,
+                maxBodyLength: config.maxMediaSizeBytes,
                 auth: {
                     username: this.accountSid,
                     password: this.authToken
@@ -378,7 +380,6 @@ class TwilioWhatsAppProvider {
             }
         );
     }
-
 
     async uploadMediaToFileStore(fileName, fileBuffer, contentType, tenantId = null, cancelToken) {
         return await this.fileStoreAPICall(

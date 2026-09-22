@@ -58,7 +58,7 @@ class QuestionState extends State {
   matchReply(context, event) {
     const options = context[this.optionsSlot] || [];
     const input = this.normalizeReply(event.message.input);
-    const index = parseInt(input, 10);
+    const index = /^\d+$/.test(input) ? Number(input) : NaN;
     const match = options.find((option, i) => {
       const value = typeof option === 'object' ? option.value : option;
       const label = typeof option === 'object' ? option.label : option;

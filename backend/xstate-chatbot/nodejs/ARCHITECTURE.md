@@ -586,6 +586,13 @@ fallback literal for it. The platform side is weaker than it looks: the service'
 coverage check proves only that a locale has some row at that tenant, not that the
 chatbot has translations.
 
+When that intersection is empty — the platform is unreachable, or declares only
+locales no bundle can serve — the menu falls back twice rather than showing
+nothing: first to whatever the bundles *can* serve, then to `config.defaultLocale`.
+A locale reached this way is labelled with its own code, because the platform
+never supplied a label. Seeing `en_IN` in the menu instead of `ENGLISH` is
+therefore a symptom worth chasing, not a cosmetic bug.
+
 Placeholders use double braces: `{{maxLength}}`, `{{statements}}`, `{{name}}`,
 `{{options}}`, and positional `{{1}}` `{{2}}` `{{3}}` in the filing receipt. The
 generator substitutes them from the step's `fill` map, and a `choose` step gets

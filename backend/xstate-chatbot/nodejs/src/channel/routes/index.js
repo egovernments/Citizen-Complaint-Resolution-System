@@ -8,7 +8,7 @@ const express = require("express"),
   { resolveUploadTenantId } = require("../../session/upload-tenant"),
    { handleError } = require("../../session/error-handler"),
   rateLimit = require("express-rate-limit");
-const { summarizeInbound, maskMobile } = require("../../privacy");
+const { summarizeInbound, maskMobile, redactUrl} = require("../../privacy");
 const { safeEqual } = require("../shared-secret");
 const { warnings } = require("../../startup-checks");
 
@@ -26,7 +26,7 @@ const { warnings } = require("../../startup-checks");
 // limiter, a parser, or a session.
 function verifySignature(req, res, next) {
   if (!channelProvider.verifyRequest(req)) {
-    console.warn(`Rejected inbound webhook: verification failed (${req.originalUrl})`);
+    console.warn(`Rejected inbound webhook: verification failed (${redactUrl(req.originalUrl)})`);
     return res.sendStatus(403);
   }
   next();
@@ -35,14 +35,14 @@ function verifySignature(req, res, next) {
 
 // Entry point for inbound messages from the channel provider
 router.post("/message", verifySignature, webhookLimiter, async (req, res) => {
-  console.log(`Inbound ${req.originalUrl}: ${summarizeInbound(req.body)}`);
+  console.log(`Inbound ${redactUrl(req.originalUrl)}: ${summarizeInbound(req.body)}`);
 
   try {
     
     const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
     
     if (config.isSandboxMode) {
-      const tenantId = await resolveUploadTenantId(req, config);
+      const tenantId = await resolveUploadTenantId(req, config, channelProvider);
       inboundRequestParser.setTenatId(tenantId);
     }
 
@@ -85,7 +85,7 @@ router.all("/status", verifySignature, webhookLimiter, async (req, res) => {
     const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
 
     if (config.isSandboxMode) {
-      const tenantId = await resolveUploadTenantId(req, config);
+      const tenantId = await resolveUploadTenantId(req, config, channelProvider);
       inboundRequestParser.setTenatId(tenantId);
     }
 

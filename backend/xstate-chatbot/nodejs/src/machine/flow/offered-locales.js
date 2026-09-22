@@ -1,5 +1,7 @@
+const config = require('../../env-variables');
 const messages = require('./shell-messages');
 const localisationService = require('../util/localisation-service');
+
 
 const LOCALE_KEY = /^[a-z]{2}_[A-Z]{2}$/;
 
@@ -31,8 +33,31 @@ function localesWithFullFallback() {
 // intersection, and never offer nothing.
 function offeredLocales() {
   const speakable = localesWithFullFallback();
-  const offered = localisationService.getLocales().filter((l) => speakable.has(l.value));
-  return offered.length ? offered : [{ value: 'pt_PT', label: 'PORTUGUÊS' }];
+  const declared = localisationService.getLocales();
+  const offered = declared.filter((l) => speakable.has(l.value));
+  if (offered.length) return offered;
+
+  // No overlap: the platform is unreachable, or declares locales no bundle can
+  // serve. Offer what the bundles CAN serve, then the configured default — a
+  // literal here would be the language assumption this module exists to remove.
+  const labelFor = (value) => {
+    const locale = declared.find((item) => item.value === value);
+    return locale ? locale.label : value;
+  };
+
+  if (speakable.size) {
+    return [...speakable].map((value) => ({
+      value,
+      label: labelFor(value),
+    }));
+  }
+
+  const defaultLocale = config.defaultLocale;
+  return [{
+    value: defaultLocale,
+    label: labelFor(defaultLocale),
+  }];
 }
+
 
 module.exports = { offeredLocales, localesWithFullFallback };

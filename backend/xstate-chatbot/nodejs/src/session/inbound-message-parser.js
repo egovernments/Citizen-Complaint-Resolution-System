@@ -46,10 +46,10 @@ class InboundRequestParser {
   }
 
   resolveTenantId() {
-    // Use provided tenant ID, or fall back to query parameter, or use default
-    const tenantId = this.tenantId || this.req.query.tenantId || config.rootTenantId;
-    this.tenantId = tenantId;
+    // Ensure there is always a tenant ID, defaulting to the root tenant if none is set.
+    this.tenantId = this.tenantId || config.rootTenantId;
   }
+
   
   parseRequestBody() {
     this.requestBody = this.provider.extractRawMessage(this.req) || {};

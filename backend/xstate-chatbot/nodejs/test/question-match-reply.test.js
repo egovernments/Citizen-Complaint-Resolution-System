@@ -56,3 +56,12 @@ test("plain-string options match by label and by index", () => {
   assert.equal(reply("saude"), "Saúde");
   assert.equal(reply("2"), "Educação");
 });
+
+test("a reply that is only partly a number is not treated as a menu choice", () => {
+  // parseInt('2.5') is 2 and parseInt('1abc') is 1, so these used to select an
+  // option the citizen never typed instead of re-asking.
+  const reply = ask();
+  for (const input of ["1abc", "2.5", "3 4", "1)"]) {
+    assert.equal(reply(input), null, `"${input}" is not a choice`);
+  }
+});

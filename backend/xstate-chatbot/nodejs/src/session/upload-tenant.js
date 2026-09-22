@@ -12,15 +12,12 @@ const { maskMobile } = require("../privacy");
  * the root tenant. Kept out of InboundMessageParser so that parsing stays free
  * of session and user-identity dependencies.
  */
-async function resolveUploadTenantId(req, config) {
-  const body = (req && req.body) || {};
-  const isUpload = isMediaUpload(body);
+async function resolveUploadTenantId(req, config, provider) {
+  // Determine the payload to inspect for media uploads. This may come from the
+  // provider's raw message extraction or directly from the request body.
+  const payload = (provider && provider.extractRawMessage(req)) || (req && req.body) || {};
 
-  if (isUpload) {
-    return await resolveTenantForUpload(body);
-  }
-
-  return null;
+  return isMediaUpload(payload) ? await resolveTenantForUpload(payload) : null;
 }
 
 function isMediaUpload(body) {
