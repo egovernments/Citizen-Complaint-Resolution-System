@@ -31,6 +31,7 @@
         probe: "SAFE named-volume:digit_postgres_data"
         expect: PROCEED
       - name: "migrated box, fast-path off, base not yet fixed (finding 2)"
+        reason: "move a migrated box"
         base: base-old.yaml
         overlay: overlay-with.yml
         db_fast_path: false
@@ -45,6 +46,7 @@
 
       # ── the rule itself, all four quadrants ──────────────────────────────
       - name: "unmigrated box, fast-path on — dump would load over the tenant"
+        reason: "strand a database"
         base: base-old.yaml
         overlay: overlay-with.yml
         db_fast_path: true
@@ -57,6 +59,7 @@
         probe: "ANON container-volume:9c2f1ab"
         expect: PROCEED
       - name: "unmigrated box after the #2085 path fix — would come up bare"
+        reason: "strand a database"
         base: base-fixed.yaml
         overlay: overlay-without.yml
         db_fast_path: false
@@ -75,12 +78,29 @@
         probe: "SAFE no-cluster"
         expect: PROCEED
 
+      # ── the per-tenant overlay is layered last, so it wins ───────────────
+      - name: "per-tenant overlay moves the mount off PGDATA"
+        base: base-fixed.yaml
+        overlay: overlay-without.yml
+        tenant: tenant-overrides.yml
+        db_fast_path: false
+        probe: "SAFE named-volume:digit_postgres_data"
+        reason: "move a migrated box"
+        expect: ABORT
+
       # ── explicit override ────────────────────────────────────────────────
       - name: "pg_allow_data_loss lets a scratch box through"
         base: base-fixed.yaml
         overlay: overlay-without.yml
         db_fast_path: false
         probe: "ANON container-volume:9c2f1ab"
+        allow_loss: true
+        expect: PROCEED
+      - name: "pg_allow_data_loss also clears the migrated-box refusal"
+        base: base-old.yaml
+        overlay: overlay-without.yml
+        db_fast_path: false
+        probe: "SAFE named-volume:digit_postgres_data"
         allow_loss: true
         expect: PROCEED
 
@@ -121,18 +141,27 @@
     digit_dir: "{{ playbook_dir }}/fixtures/existing-stack"
     cases:
       - name: "daemon down on a box that already carries a stack"
+        reason: "refuse to guess"
         base: base-old.yaml
         overlay: overlay-with.yml
         db_fast_path: false
         probe: "SKIP no-daemon"
         expect: ABORT
       - name: "probe errored on a box that already carries a stack"
+        reason: "refuse to guess"
         base: base-old.yaml
         overlay: overlay-with.yml
         db_fast_path: false
         probe: ""
         probe_rc: 1
         expect: ABORT
+      - name: "pg_allow_data_loss also clears the inconclusive refusal"
+        base: base-old.yaml
+        overlay: overlay-with.yml
+        db_fast_path: false
+        probe: "SKIP no-daemon"
+        allow_loss: true
+        expect: PROCEED
       - name: "conclusive result on the same box still proceeds"
         base: base-old.yaml
         overlay: overlay-with.yml

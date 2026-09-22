@@ -1,0 +1,4 @@
+services:
+  postgres-db:
+    volumes:
+      - postgres_data:/var/lib/docker-postgresql/data

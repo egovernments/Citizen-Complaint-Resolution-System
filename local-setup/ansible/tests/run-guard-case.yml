@@ -1,8 +1,12 @@
 ---
-# One row of the matrix: include the real guard with the probe stubbed, and
-# translate "did it abort" into a value we can assert on. A failing assert
-# inside the guard is the expected outcome for half the rows, so it is caught
-# here rather than failing the run.
+# One row of the matrix.
+#
+# `rescue` alone is not enough: it fires for ANY failure inside the block, so an
+# ABORT row would go green on a missing fixture, a template error, an undefined
+# variable — or on the WRONG assert tripping. That is not hypothetical; it is
+# how a self-referential `set_fact` that killed every production deploy shipped
+# with a fully green matrix. So each ABORT row also names the refusal it expects,
+# and the reason is checked.
 - name: "{{ case.name }}"
   block:
     - name: "run the guard"
@@ -12,18 +16,28 @@
         pg_guard_probe_rc_override: "{{ case.probe_rc | default(0) }}"
         pg_guard_base_compose: "{{ fixtures }}/{{ case.base }}"
         pg_guard_overlay_compose: "{{ fixtures }}/{{ case.overlay }}"
+        pg_guard_tenant_compose: "{{ (fixtures ~ '/' ~ case.tenant) if case.tenant is defined else '/nonexistent-tenant-overlay.yml' }}"
         db_fast_path: "{{ case.db_fast_path }}"
         pg_allow_data_loss: "{{ case.allow_loss | default(false) }}"
     - name: "record: the guard let it through"
       ansible.builtin.set_fact:
         guard_result: PROCEED
+        guard_reason: ""
   rescue:
-    - name: "record: the guard refused"
+    - name: "record: the guard refused, and which refusal it was"
       ansible.builtin.set_fact:
         guard_result: ABORT
+        guard_reason: "{{ ansible_failed_task.name | default('(no task name)') }}"
 
 - name: "verdict — {{ case.name }}"
   ansible.builtin.assert:
-    that: guard_result == case.expect
-    fail_msg: "{{ case.name }}: guard said {{ guard_result }}, expected {{ case.expect }}"
+    that:
+      - guard_result == case.expect
+      # An ABORT row must abort for the reason it is testing. Without this a
+      # crash and a correct refusal are indistinguishable.
+      - case.expect != 'ABORT' or (case.reason in guard_reason)
+    fail_msg: >-
+      {{ case.name }}: guard said {{ guard_result }}
+      ({{ guard_reason | default('-') }}), expected {{ case.expect }}
+      {{ ('for reason containing ' ~ case.reason) if case.reason is defined else '' }}
     success_msg: "{{ case.expect }}  <-  {{ case.name }}"

@@ -45,21 +45,47 @@
   ansible.builtin.shell:
     executable: /bin/bash
     cmd: |
+      {% raw %}
+      # NOTE: the whole script is {% raw %}, because it is shell, not a
+      # template — nothing here is an Ansible variable (DIGIT_DIR arrives
+      # via `environment:`). Without it Jinja claims constructs that are
+      # ordinary bash: `${#v}` opens a Jinja COMMENT on `{#` and the task
+      # dies with a templating error, and every `{{ .Field }}` in a docker
+      # --format string would be evaluated as Ansible.
       set -o pipefail
       command -v docker >/dev/null 2>&1 || { echo "SKIP no-docker"; exit 0; }
       docker info >/dev/null 2>&1      || { echo "SKIP no-daemon"; exit 0; }
+
+      # Which volume name would THIS deploy's compose project use? A suffix
+      # match on *postgres_data is too broad in both directions: another
+      # stack's `otherstack_postgres_data` would read as ours and mask a real
+      # anonymous cluster, while a name like `digit_postgres_data_testtenant`
+      # would read as anonymous and abort a healthy box. Compare exactly.
+      #
+      # Compose derives the project from the directory it runs in, lowercased
+      # with anything outside [a-z0-9_-] dropped, unless COMPOSE_PROJECT_NAME
+      # overrides it. The container's own label is authoritative when there is
+      # a container; the directory name is the fallback when there is not.
+      proj=$(docker inspect docker-postgres \
+        --format '{{ index .Config.Labels "com.docker.compose.project" }}' 2>/dev/null || true)
+      if [ -z "$proj" ]; then
+        proj="${COMPOSE_PROJECT_NAME:-$(basename "${DIGIT_DIR:-$PWD}" \
+              | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')}"
+      fi
+      expected_volume="${proj}_postgres_data"
 
       # Preferred check: the stack's own postgres container. An anonymous
       # volume still shows up in .Mounts, carrying its 64-hex id as .Name,
       # so the named/anonymous distinction is readable straight off it.
       mount_name=$(docker inspect docker-postgres \
-        --format '{% raw %}{{ range .Mounts }}{{ if eq .Destination "/var/lib/postgresql/data" }}{{ .Name }}{{ end }}{{ end }}{% endraw %}' \
+        --format '{{ range .Mounts }}{{ if eq .Destination "/var/lib/postgresql/data" }}{{ .Name }}{{ end }}{{ end }}' \
         2>/dev/null || true)
       if [ -n "$mount_name" ]; then
-        case "$mount_name" in
-          *postgres_data) echo "SAFE named-volume:$mount_name" ;;
-          *)              echo "ANON container-volume:$mount_name" ;;
-        esac
+        if [ "$mount_name" = "$expected_volume" ]; then
+          echo "SAFE named-volume:$mount_name"
+        else
+          echo "ANON container-volume:$mount_name"
+        fi
         exit 0
       fi
 
@@ -70,17 +96,22 @@
       migrated=""
       anon=""
       for v in $(docker volume ls -q 2>/dev/null); do
-        mp=$(docker volume inspect -f '{% raw %}{{ .Mountpoint }}{% endraw %}' "$v" 2>/dev/null) || continue
+        mp=$(docker volume inspect -f '{{ .Mountpoint }}' "$v" 2>/dev/null) || continue
         [ -n "$mp" ] && [ -d "$mp" ] || continue
         probed=1
         if [ -f "$mp/PG_VERSION" ]; then
-          case "$v" in
-            # digit-mcp and Keycloak run their own postgres on their own
-            # named volumes, both already at the right path. Not this.
-            *mcp_postgres_data|*keycloak_postgres_data) ;;
-            *postgres_data) migrated="$v" ;;
-            *) anon="$v" ;;
-          esac
+          # Exact match on this project's volume. digit-mcp's and Keycloak's
+          # own databases, and any other stack's, simply are not it — no
+          # exclusion list needed once the comparison stops being a glob.
+          if [ "$v" = "$expected_volume" ]; then
+            migrated="$v"
+          else
+            case "$v" in
+              # Still not OUR anonymous cluster if it is another project's
+              # named volume; only an unnamed one (64 hex) can be.
+              [0-9a-f]*) [ ${#v} -eq 64 ] && anon="$v" ;;
+            esac
+          fi
         fi
       done
 
@@ -109,6 +140,10 @@
       else
         echo "SAFE no-cluster"
       fi
+      {% endraw %}
+    # Fallback source for the compose project name when no container exists.
+  environment:
+    DIGIT_DIR: "{{ digit_dir | default('') }}"
   register: pg_cluster_probe
   changed_when: false
   failed_when: false
@@ -134,20 +169,39 @@
   become: false
   when: db_fast_path | default(false)
 
+- name: "preflight — read the per-tenant overlay this deploy would layer"
+  ansible.builtin.slurp:
+    src: "{{ pg_guard_tenant_compose | default(playbook_dir ~ '/../docker-compose.' ~ inventory_hostname ~ '.yml') }}"
+  register: tenant_compose
+  delegate_to: localhost
+  become: false
+  failed_when: false
+
 - name: "preflight — resolve the effective postgres_data mount"
   ansible.builtin.set_fact:
     pg_effective_mount: >-
-      {{ (_overlay_mount | first) if _overlay_mount else ((_base_mount | first) if _base_mount else '') }}
+      {{ (_tenant_mount | first) if _tenant_mount
+         else ((_overlay_mount | first) if _overlay_mount
+         else ((_base_mount | first) if _base_mount else '')) }}
   vars:
+    # Precedence is compose's own: last -f wins for a given container path.
+    # playbook-deploy.yml layers base, then fast-path, then the per-tenant
+    # overlay. Reading too FEW compose files is what caused finding 1; the
+    # tenant overlay is the same gap one layer up, so it is read here even
+    # though no tracked tenant sets this entry today.
     _overlay_text: "{{ (fastpath_compose.content | default('') | b64decode) if not (fastpath_compose.skipped | default(false)) else '' }}"
-    _overlay_mount: "{{ _overlay_text | regex_findall('^\\s*-\\s*postgres_data:(\\S+)', multiline=True) }}"
-    _base_mount: "{{ (base_compose.content | b64decode) | regex_findall('^\\s*-\\s*postgres_data:(\\S+)', multiline=True) }}"
+    _tenant_text: "{{ (tenant_compose.content | default('') | b64decode) if (tenant_compose.content is defined) else '' }}"
+    # Single-quoted YAML: backslashes are literal, so this is \s not \\s.
+    _mount_re: '^\s*-\s*postgres_data:(\S+)'
+    _overlay_mount: "{{ _overlay_text | regex_findall(_mount_re, multiline=True) }}"
+    _tenant_mount: "{{ _tenant_text | regex_findall(_mount_re, multiline=True) }}"
+    _base_mount: "{{ (base_compose.content | b64decode) | regex_findall(_mount_re, multiline=True) }}"
 
 # Single source of truth for the rest of this file, so the test seam and the
 # real probe are indistinguishable downstream.
 - name: "preflight — normalise the probe result"
   ansible.builtin.set_fact:
-    pg_probe_verdict: "{{ pg_guard_probe_override | default(pg_probe_verdict) }}"
+    pg_probe_verdict: "{{ pg_guard_probe_override | default(pg_cluster_probe.stdout | default('')) }}"
     pg_probe_rc: "{{ pg_guard_probe_rc_override | default(pg_cluster_probe.rc | default(1)) }}"
 
 # Has this box been deployed to before? Used to decide how loud an
@@ -179,7 +233,8 @@
 - name: "preflight — refuse to guess on a box that already carries a stack"
   ansible.builtin.assert:
     that:
-      - not (pg_probe_inconclusive | bool and pg_existing_stack.stat.exists)
+      - not (pg_probe_inconclusive | bool and pg_existing_stack.stat.exists
+             and not (pg_allow_data_loss | default(false) | bool))
     fail_msg: |
       Could not determine where this box keeps its PostgreSQL data:
 
@@ -189,9 +244,23 @@
       hold a live database. Deploying blind risks mounting Postgres somewhere
       other than where its data actually is.
 
-      Start the Docker daemon and re-run, so the check can see the volumes.
-      If the daemon is running and this still appears, inspect by hand:
-        docker inspect docker-postgres -f '{% raw %}{{ json .Mounts }}{% endraw %}'
+      What to do depends on which line it printed:
+
+        SKIP no-daemon  the Docker daemon is not running. Start it and re-run.
+
+        UNKNOWN ...     the daemon IS running, but volume mountpoints are not
+                        readable over this connection. That is the normal case
+                        for Docker Desktop and OrbStack — the documented macOS
+                        path, `deploy_become: false` — because the volume data
+                        lives inside the VM rather than on this filesystem.
+                        Check by hand:
+                          docker inspect docker-postgres -f '{% raw %}{{ json .Mounts }}{% endraw %}'
+                          docker volume ls
+
+        (no output)     the probe itself failed. Re-run with -vvv.
+
+      If you have checked and this box's database is where it should be — or is
+      disposable — set `pg_allow_data_loss: true` to proceed.
     success_msg: "postgres storage check is conclusive"
 
 - name: "preflight — show what this deploy resolves to"
@@ -246,7 +315,7 @@
 - name: "preflight — refuse to move a migrated box off its named volume"
   ansible.builtin.assert:
     that:
-      - not (_data_is_named and not _mount_is_pgdata)
+      - not (_data_is_named and not _mount_is_pgdata and not _override)
     fail_msg: |
       This box's database is in the named postgres_data volume
       ({{ pg_probe_verdict | trim }}), but this deploy
@@ -254,18 +323,26 @@
       does not use.
 
       Postgres would take a FRESH anonymous volume for its real data
-      directory and come up bare, stranding the migrated data a second time.
+      directory and come up bare.
 
-      Nothing has been changed. Either:
-        - deploy from a branch that carries the mount-path fix (#2085), or
-        - re-apply steps 5 and 6 of
-          docs/2.12/operations/postgres-volume-migration.md
-          on this box immediately after the deploy, before anything else
-          starts.
+      This is not only the runbook-migrated case. It is the ordinary state of
+      any box that has had a `db_fast_path: true` deploy — the overlay mounts
+      postgres_data at the real PGDATA, and the data has been there ever since.
+      Turning the flag off moves Postgres back to the path the base compose
+      names, which is why this refuses.
+
+      Nothing has been changed. Pick one:
+        - keep `db_fast_path: true` on this box — it is what has been running;
+        - deploy from a branch carrying the mount-path fix (#2085), after which
+          the base compose names the real PGDATA and this flag stops deciding
+          where the data lives;
+        - if this box is scratch and the database is disposable, set
+          `pg_allow_data_loss: true`.
     success_msg: "this deploy keeps postgres on the volume that holds its data"
   vars:
     _data_is_named: "{{ pg_probe_verdict is search('^SAFE (named|migrated)-volume') }}"
     _mount_is_pgdata: "{{ pg_effective_mount | default('') == '/var/lib/postgresql/data' }}"
+    _override: "{{ pg_allow_data_loss | default(false) | bool }}"
 
 - name: "preflight — warn when the postgres probe was inconclusive"
   ansible.builtin.debug:
