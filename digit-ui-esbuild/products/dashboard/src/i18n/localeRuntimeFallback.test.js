@@ -8,7 +8,7 @@ const esbuild = require("esbuild");
 const outfile = path.join(os.tmpdir(), `dashboard-locale-runtime.${process.pid}.cjs`);
 esbuild.buildSync({
   stdin: {
-    contents: 'export { ensureMessages, exists, translate } from "./localeRuntime.js";',
+    contents: 'export { ensureMessages, exists, translate, toBcp47Locale } from "./localeRuntime.js";',
     resolveDir: __dirname,
   },
   bundle: true,
@@ -84,6 +84,25 @@ test("standalone dynamic labels resolve active locale before the en_IN pack", as
     assert.equal(api.translate("COMMON_MASTERS_DEPARTMENT_ADMIN"), "Administration");
   } finally {
     delete global.fetch;
+    delete global.window;
+  }
+});
+
+test("toBcp47Locale maps DIGIT locales and rejects doubled-region tags", () => {
+  const { toBcp47Locale } = runtime({});
+  try {
+    assert.equal(toBcp47Locale("en_IN"), "en-IN");
+    assert.equal(toBcp47Locale("en_IN_IN"), undefined);
+    assert.equal(toBcp47Locale(""), undefined);
+    assert.equal(toBcp47Locale(null), undefined);
+    // Must not throw — AdminDashboard "Last updated" used to crash the page.
+    assert.doesNotThrow(() =>
+      new Date("2026-09-14T12:00:00Z").toLocaleString(toBcp47Locale("en_IN_IN"), {
+        day: "numeric",
+        month: "short",
+      })
+    );
+  } finally {
     delete global.window;
   }
 });

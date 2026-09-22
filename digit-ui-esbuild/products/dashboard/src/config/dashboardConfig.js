@@ -67,5 +67,10 @@ export function getSubMetricStorageKey() {
 }
 
 export function getFiltersStorageKey() {
+  return `${getTenantId()}-supervisor-dashboard-filters-v5${publicSuffix()}`;
+}
+
+/** One-release read-only bridge for scalar geography/type selections. */
+export function getLegacyFiltersStorageKey() {
   return `${getTenantId()}-supervisor-dashboard-filters-v4${publicSuffix()}`;
 }

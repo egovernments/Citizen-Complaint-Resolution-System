@@ -345,8 +345,28 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_ACTIVE",
+    "message": "Active filters",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_ALL_DEPARTMENTS",
+    "message": "All departments",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
     "message": "All types",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_APPLY",
+    "message": "Apply",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_CANCEL",
+    "message": "Cancel",
     "module": "rainmaker-dashboard"
   },
   {
@@ -370,6 +390,26 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_COMPLAINT_TYPES",
+    "message": "Complaint types",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT",
+    "message": "Department",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT_FILTER",
+    "message": "Department filter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENTS",
+    "message": "Departments",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_FROM",
     "message": "From",
     "module": "rainmaker-dashboard"
@@ -382,6 +422,21 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_FILTERS_GEOGRAPHY",
     "message": "Geography",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_NO_MATCHES",
+    "message": "No matching options",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_REMOVE",
+    "message": "Remove",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_SEARCH_WARDS",
+    "message": "Search wards",
     "module": "rainmaker-dashboard"
   },
   {
@@ -402,6 +457,16 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_FILTERS_WARD_FILTER",
     "message": "Ward filter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_WARDS",
+    "message": "Wards",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
+    "message": "All in",
     "module": "rainmaker-dashboard"
   },
   {
@@ -547,11 +612,6 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Reset",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
-    "message": "Reset layout",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1999,8 +2059,28 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_ACTIVE",
+    "message": "Filtros ativos",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_ALL_DEPARTMENTS",
+    "message": "Todos os departamentos",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
     "message": "Todos os tipos",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_APPLY",
+    "message": "Aplicar",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_CANCEL",
+    "message": "Cancelar",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2024,6 +2104,26 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_COMPLAINT_TYPES",
+    "message": "Tipos de reclamação",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT",
+    "message": "Departamento",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT_FILTER",
+    "message": "Filtro de departamento",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENTS",
+    "message": "Departamentos",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_FROM",
     "message": "De",
     "module": "rainmaker-dashboard"
@@ -2036,6 +2136,21 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_FILTERS_GEOGRAPHY",
     "message": "Geografia",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_NO_MATCHES",
+    "message": "Nenhuma opção correspondente",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_REMOVE",
+    "message": "Remover",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_SEARCH_WARDS",
+    "message": "Pesquisar bairros",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2056,6 +2171,16 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_FILTERS_WARD_FILTER",
     "message": "Filtro de bairro",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_WARDS",
+    "message": "Bairros",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
+    "message": "Tudo em",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2201,11 +2326,6 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Repor",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
-    "message": "Repor disposição",
     "module": "rainmaker-dashboard"
   },
   {
