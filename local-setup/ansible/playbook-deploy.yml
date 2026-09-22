@@ -3592,7 +3592,13 @@
         - nginx_features.configurator | default(false)
         - build_configurator | default(false)
 
-    - name: "Configurator SPA — sync vendored source + build script to target"
+    # ui-shared/ comes too: configurator/src/config/featureFlags.ts imports
+    # `../../../ui-shared/featureFlags`, which resolves OUTSIDE configurator/.
+    # Syncing the app alone gets as far as 637 modules and then dies on
+    # "Could not resolve ../../../ui-shared/featureFlags". Same pairing the
+    # digit-ui-v2 sync already does. The relative path works out because
+    # configurator lands at .build/configurator and ui-shared at .build/ui-shared.
+    - name: "Configurator SPA — sync vendored source (configurator/ + ui-shared/) to target"
       ansible.posix.synchronize:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
@@ -3604,6 +3610,8 @@
       loop:
         - src: "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}/"
           dest: "{{ digit_dir }}/.build/configurator/"
+        - src: "{{ playbook_dir }}/../../ui-shared/"
+          dest: "{{ digit_dir }}/.build/ui-shared/"
         - src: "{{ playbook_dir }}/files/configurator-build.sh"
           dest: "{{ digit_dir }}/.build/configurator-build.sh"
       loop_control:
