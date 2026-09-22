@@ -8221,3 +8221,26 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   font-size: 20px !important;
   line-height: 1.35 !important;
 }
+
+/* Secondary buttons sit on the surface, they do not paint one.
+ *
+ * DIGIT's Secondary is an outline button: brand stroke, brand label, no fill.
+ * The stroke and label are already right and already themed — the record ships
+ * `--color-button-secondary-border` and `--color-button-secondary-text`, both
+ * #2563EB on this tenant. There is no matching background token, so the ground
+ * stayed a hardcoded white that neither the tenant nor the surface could
+ * influence.
+ *
+ * On a white card that is invisible. On the employee page ground (#EEEEEE),
+ * inside the dark mobile drawer, or anywhere else, it read as a white filled
+ * pill wearing a blue outline rather than as an outline button. Tertiary and
+ * link are both transparent already; this makes the family consistent.
+ *
+ * Hover takes the brand tint every other outline control in this UI uses,
+ * rather than a second opaque fill. */
+.employee .digit-button-secondary {
+  background-color: transparent !important;
+}
+.employee .digit-button-secondary:hover:not(.disabled):not(:disabled) {
+  background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08)) !important;
+}
