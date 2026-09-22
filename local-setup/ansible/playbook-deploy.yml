@@ -3636,8 +3636,12 @@
         src: "{{ configurator_dist_on_target }}/"
         dest: "{{ configurator_www_dir }}/"
         remote_src: true
-        mode: "0644"
-        directory_mode: "0755"
+        # preserve, not an explicit mode: `mode: "0644"` here is applied to the
+        # DESTINATION DIRECTORY as well as the files, leaving
+        # /var/www/configurator as drw-r--r-- — no execute bit, so nginx cannot
+        # traverse it and every request 403s while the files sit there looking
+        # correct. Caught by the play's own "configurator returns 200" check.
+        mode: preserve
       when:
         - nginx_features.configurator | default(false)
         - configurator_dist_on_target is defined
