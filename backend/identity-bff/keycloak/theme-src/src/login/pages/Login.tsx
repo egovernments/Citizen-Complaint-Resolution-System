@@ -5,6 +5,7 @@ import { useScript } from "keycloakify/login/pages/Login.useScript";
 import type { KcContext } from "../KcContext";
 import { Field, PasswordField } from "../components/Field";
 import { SocialProviders } from "../components/SocialProviders";
+import { passwordHelpUrl } from "../passwordHelp";
 
 /**
  * login.ftl — the password challenge, and the only screen in the journey that
@@ -58,7 +59,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                         redirect base, not a caller-supplied URL. */}
                     {client.baseUrl !== undefined && (
                         <p className="digit-footnote" id="kc-digit-password-help">
-                            <a className="digit-link" href={client.baseUrl}>
+                            <a className="digit-link" href={passwordHelpUrl(client.baseUrl)}>
                                 {msg("digitPasswordHelp")}
                             </a>
                         </p>
@@ -79,6 +80,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                         providers={social.providers}
                         label={msg("identity-provider-login-label")}
                         orLabel={msgStr("digitOr")}
+                        providerLabel={name => msg("digitSignInWithProvider", name)}
                     />
                 ) : null
             }
@@ -151,7 +153,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
                                 )}
                                 {realm.resetPasswordAllowed && (
                                     <a className="digit-link" href={url.loginResetCredentialsUrl}>
-                                        {msg("doForgotPassword")}
+                                        {msg("digitForgotPassword")}
                                     </a>
                                 )}
                             </div>

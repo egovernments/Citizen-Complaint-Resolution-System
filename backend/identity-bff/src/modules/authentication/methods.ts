@@ -34,10 +34,23 @@ function methodIds(value: string | undefined, attribute: string): string[] {
   return ids;
 }
 
-function providerLabel(displayName: string): string {
-  return /^continue with\b/i.test(displayName)
-    ? displayName
-    : `Continue with ${displayName}`;
+function providerName(alias: string, displayName: string): string {
+  if (alias.toLowerCase() === "github") return "GitHub";
+  if (alias.toLowerCase() === "google") return "Google";
+  const name = displayName.trim() || alias;
+  return name === alias
+    ? alias
+      .split(/[._-]+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+    : name;
+}
+
+function providerLabel(alias: string, displayName: string): string {
+  const name = providerName(alias, displayName);
+  return /^(continue with|log in with)\b/i.test(name)
+    ? name
+    : `Continue with ${name}`;
 }
 
 async function loadIdentityMethodCatalog(): Promise<IdentityMethodCatalog> {
@@ -112,7 +125,7 @@ export async function enabledIdentityMethods(
     }
     const provider = providers.get(id);
     return provider
-      ? [{ id, label: providerLabel(provider.displayName), type: "oauth", idpHint: id, intents }]
+      ? [{ id, label: providerLabel(provider.alias, provider.displayName), type: "oauth", idpHint: id, intents }]
       : [];
   });
 }

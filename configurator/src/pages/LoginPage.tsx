@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Github, KeyRound, Loader2, LogOut, Mail } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, LogOut, Mail } from 'lucide-react';
 import {
   type AuthMethod,
   type SessionUser,
@@ -23,14 +23,6 @@ import { useAuthResult } from '@/hooks/useAuthResult';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'setupRequired' | 'entering';
 
-function MethodIcon({ method }: { method: AuthMethod }) {
-  if (method.id.toLowerCase().includes('github')) return <Github aria-hidden="true" />;
-  if (method.id.toLowerCase().includes('google')) {
-    return <span aria-hidden="true" className="text-base font-semibold leading-none">G</span>;
-  }
-  return <KeyRound aria-hidden="true" />;
-}
-
 function expiredSessionMessage(): string | null {
   try {
     if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
@@ -44,6 +36,7 @@ function expiredSessionMessage(): string | null {
 }
 
 export default function LoginPage() {
+  const [searchParams] = useSearchParams();
   const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [methods, setMethods] = useState<AuthMethod[]>([]);
@@ -53,7 +46,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(expiredSessionMessage);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeTitle, setNoticeTitle] = useState('Check your email');
-  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+  const [showPasswordSetup, setShowPasswordSetup] = useState(
+    () => searchParams.get('passwordHelp') === '1',
+  );
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -282,7 +277,7 @@ export default function LoginPage() {
     );
   }
 
-  const [primary, ...alternatives] = methods;
+  const hostedSignIn = methods.find((method) => method.type === 'password');
   return (
     <AuthShell>
       <section className="space-y-5">
@@ -290,42 +285,21 @@ export default function LoginPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Welcome back</p>
           <h1 className="mt-2 text-[28px] font-semibold leading-[1.15]">Sign in to your account</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Continue with your password or an identity provider. You will choose a workspace after sign-in.
+            Continue to the secure sign-in page. You will choose a workspace after sign-in.
           </p>
         </div>
 
         {banner}
 
-        {primary ? (
-          <Button className="h-11 w-full" onClick={() => startSignIn(primary.id, 'signin')}>
-            <MethodIcon method={primary} /> {primary.label}
+        {hostedSignIn ? (
+          <Button className="h-11 w-full" onClick={() => startSignIn(hostedSignIn.id, 'signin')}>
+            Log in
+            <ArrowRight data-icon="inline-end" />
           </Button>
         ) : (
           <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-            No sign-in method is enabled on this environment.
+            Hosted sign-in is not enabled on this environment.
           </p>
-        )}
-
-        {alternatives.length > 0 && (
-          <>
-            <div className="flex items-center gap-3" aria-hidden="true">
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">OR</span>
-              <span className="h-px flex-1 bg-border" />
-            </div>
-            <div className="space-y-3">
-              {alternatives.map((method) => (
-                <Button
-                  key={method.id}
-                  variant="outline"
-                  className="h-11 w-full"
-                  onClick={() => startSignIn(method.id, 'signin')}
-                >
-                  <MethodIcon method={method} /> {method.label}
-                </Button>
-              ))}
-            </div>
-          </>
         )}
 
         {(showPasswordSetup || authResult.result?.actions.includes('SETUP_PASSWORD')) ? (

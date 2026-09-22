@@ -37,8 +37,11 @@ Browser ── DIGIT RequestInfo.authToken ────────────�
 | Business authorization | DIGIT roles/access-control data |
 
 The BFF exposes the composed result through
-`GET /identity/v1/auth-methods?intent=signin|signup`. The UI renders this API
-response and keeps no provider list. Keycloak client attributes are:
+`GET /identity/v1/auth-methods?intent=signin|signup`. Signup renders the
+available methods from this response. Sign-in uses it only to confirm that the
+hosted Keycloak entry is available, then hands method selection to Keycloak so
+password, Google and GitHub stay on one authentication screen. Neither UI keeps
+its own provider list. Keycloak client attributes are:
 
 ```text
 digit.auth.signin.methods=password,google,github

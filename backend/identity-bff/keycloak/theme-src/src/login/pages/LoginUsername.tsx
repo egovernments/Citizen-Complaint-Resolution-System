@@ -58,6 +58,7 @@ export default function LoginUsername(
                         providers={social.providers}
                         label={msg("identity-provider-login-label")}
                         orLabel={msgStr("digitOr")}
+                        providerLabel={name => msg("digitSignInWithProvider", name)}
                     />
                 ) : null
             }

@@ -28,8 +28,14 @@ export default function LoginResetPassword(
             classes={classes}
             displayMessage={!messagesPerField.existsError("username")}
             eyebrow={msg("digitAccount")}
-            headerNode={msg("emailForgotTitle")}
-            lede={realm.duplicateEmailsAllowed ? msg("emailInstructionUsername") : msg("emailInstruction")}
+            headerNode={msg("digitResetPasswordTitle")}
+            lede={
+                !realm.loginWithEmailAllowed
+                    ? msg("digitResetPasswordUsernameOnlyLede")
+                    : realm.duplicateEmailsAllowed || !realm.registrationEmailAsUsername
+                      ? msg("digitResetPasswordUsernameLede")
+                      : msg("digitResetPasswordLede")
+            }
         >
             <form
                 id="kc-reset-password-form"
@@ -43,8 +49,8 @@ export default function LoginResetPassword(
                     label={
                         !realm.loginWithEmailAllowed
                             ? msg("username")
-                            : !realm.registrationEmailAsUsername
-                              ? msg("usernameOrEmail")
+                            : realm.duplicateEmailsAllowed || !realm.registrationEmailAsUsername
+                              ? msg("digitEmailOrUsername")
                               : msg("email")
                     }
                     errorHtml={
@@ -62,7 +68,7 @@ export default function LoginResetPassword(
                 />
 
                 <button className="digit-button digit-button--primary" type="submit">
-                    {msgStr("doSubmit")}
+                    {msgStr("digitResetPasswordSubmit")}
                 </button>
 
                 <p className="digit-note">{msg("digitNonEnumerating")}</p>

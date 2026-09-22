@@ -195,6 +195,7 @@ describe("identity BFF", () => {
     expect(await methods.json()).toEqual({ methods: [
       { id: "password", label: "Email and password", type: "password", intents: ["signin"] },
       { id: "google", label: "Continue with Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
+      { id: "github", label: "Continue with GitHub", type: "oauth", idpHint: "github", intents: ["signin", "signup"] },
       { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
     ] });
     const initialAdminReads = await (
@@ -205,12 +206,12 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
     );
     expect((await signinMethods.json()).methods.map((method: { id: string }) => method.id))
-      .toEqual(["password", "google"]);
+      .toEqual(["password", "google", "github"]);
     const signupMethods = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signup`,
     );
     expect((await signupMethods.json()).methods.map((method: { id: string }) => method.id))
-      .toEqual(["magic_link", "google"]);
+      .toEqual(["magic_link", "google", "github"]);
     const cachedAdminReads = await (
       await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
     ).json() as string[];

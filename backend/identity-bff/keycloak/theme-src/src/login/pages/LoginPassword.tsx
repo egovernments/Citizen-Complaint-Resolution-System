@@ -4,6 +4,7 @@ import type { DigitPageProps } from "../pageProps";
 import { useScript } from "keycloakify/login/pages/LoginPassword.useScript";
 import type { KcContext } from "../KcContext";
 import { PasswordField } from "../components/Field";
+import { passwordHelpUrl } from "../passwordHelp";
 
 /**
  * login-password.ftl — the second step of the identity-first flow. The
@@ -13,7 +14,7 @@ export default function LoginPassword(
     props: DigitPageProps<Extract<KcContext, { pageId: "login-password.ftl" }>>
 ) {
     const { kcContext, i18n, doUseDefaultCss, Template, classes } = props;
-    const { realm, url, messagesPerField, enableWebAuthnConditionalUI, authenticators } = kcContext;
+    const { realm, url, client, messagesPerField, enableWebAuthnConditionalUI, authenticators } = kcContext;
     const { msg, msgStr } = i18n;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const webAuthnButtonId = "authenticateWebAuthnButton";
@@ -59,10 +60,17 @@ export default function LoginPassword(
                     }}
                 />
 
-                {realm.resetPasswordAllowed && (
+                {(realm.resetPasswordAllowed || client.baseUrl !== undefined) && (
                     <p className="digit-footnote">
-                        <a className="digit-link" href={url.loginResetCredentialsUrl}>
-                            {msg("doForgotPassword")}
+                        <a
+                            className="digit-link"
+                            href={realm.resetPasswordAllowed
+                                ? url.loginResetCredentialsUrl
+                                : passwordHelpUrl(client.baseUrl!)}
+                        >
+                            {realm.resetPasswordAllowed
+                                ? msg("digitForgotPassword")
+                                : msg("digitPasswordHelp")}
                         </a>
                     </p>
                 )}

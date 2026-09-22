@@ -105,13 +105,20 @@ describe("login.ftl", () => {
 
         const google = container.querySelector<HTMLAnchorElement>("#social-google")!;
         expect(google.getAttribute("href")).toBe("/auth/realms/digit/broker/google/login");
-        expect(container.querySelector("#social-github")).not.toBeNull();
+        expect(google).toHaveTextContent("Log in with Google");
+        expect(google.querySelector("svg.digit-provider-logo")).not.toBeNull();
+        const github = container.querySelector<HTMLAnchorElement>("#social-github")!;
+        expect(github).toHaveTextContent("Log in with GitHub");
+        expect(github.querySelector("svg.digit-provider-logo")).not.toBeNull();
     });
 
     it("keeps the way back to the Configurator for password help", async () => {
         const { container } = await renderPage("login.ftl");
         const help = container.querySelector<HTMLAnchorElement>("#kc-digit-password-help a")!;
-        expect(help.getAttribute("href")).toBe("https://digit.example.org/configurator/");
+        expect(help).toHaveTextContent("Set up or reset your password");
+        expect(help.getAttribute("href")).toBe(
+            "https://digit.example.org/configurator/?passwordHelp=1"
+        );
     });
 });
 
@@ -141,8 +148,14 @@ describe("login-update-password.ftl", () => {
 });
 
 describe("login-reset-password.ftl", () => {
-    it("states the non-enumerating outcome", async () => {
+    it("explains the reset and uses a specific action label without enumerating accounts", async () => {
         await renderPage("login-reset-password.ftl");
+        expect(screen.getByRole("heading", { name: "Reset your password" })).toBeInTheDocument();
+        expect(screen.getByLabelText("Email address or username")).toBeInTheDocument();
+        expect(
+            screen.getByText("Enter the email address or username associated with your account.")
+        ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Email me a reset link" })).toBeInTheDocument();
         expect(
             screen.getByText(/never reveal which sign-in methods an email uses/i)
         ).toBeInTheDocument();

@@ -20,5 +20,50 @@ export const { getKcContextMock } = createGetKcContextMock({
     overrides: {
         realm: { displayName: "DIGIT", displayNameHtml: "DIGIT" }
     },
-    overridesPerPage: {}
+    overridesPerPage: {
+        "login.ftl": {
+            social: {
+                displayInfo: true,
+                providers: [
+                    {
+                        alias: "google",
+                        displayName: "Google",
+                        loginUrl: "/auth/realms/digit/broker/google/login",
+                        providerId: "google"
+                    },
+                    {
+                        alias: "github",
+                        displayName: "GitHub",
+                        loginUrl: "/auth/realms/digit/broker/github/login",
+                        providerId: "github"
+                    }
+                ]
+            }
+        },
+        "login-username.ftl": {
+            social: {
+                displayInfo: true,
+                providers: [
+                    {
+                        alias: "google",
+                        displayName: "Google",
+                        loginUrl: "/auth/realms/digit/broker/google/login",
+                        providerId: "google"
+                    },
+                    {
+                        alias: "github",
+                        displayName: "GitHub",
+                        loginUrl: "/auth/realms/digit/broker/github/login",
+                        providerId: "github"
+                    }
+                ]
+            }
+        },
+        "login-reset-password.ftl": {
+            realm: {
+                loginWithEmailAllowed: true,
+                duplicateEmailsAllowed: false
+            }
+        }
+    }
 });

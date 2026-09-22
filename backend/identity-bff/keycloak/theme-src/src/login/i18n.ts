@@ -22,11 +22,20 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitSignInLede:
                 "Continue with your password or an identity provider. You will choose a workspace after sign-in.",
             digitContinue: "Continue",
-            digitSignInWithProvider: "Continue with {0}",
+            digitSignInWithProvider: "Log in with {0}",
             digitOr: "OR",
             digitShowPassword: "Show password",
             digitHidePassword: "Hide password",
-            digitPasswordHelp: "No password yet, or need to reset it? Return to DIGIT password help",
+            digitForgotPassword: "Forgot your password?",
+            digitPasswordHelp: "Set up or reset your password",
+            digitResetPasswordTitle: "Reset your password",
+            digitResetPasswordLede: "Enter the email address associated with your account.",
+            digitResetPasswordUsernameLede:
+                "Enter the email address or username associated with your account.",
+            digitResetPasswordUsernameOnlyLede:
+                "Enter the username associated with your account.",
+            digitEmailOrUsername: "Email address or username",
+            digitResetPasswordSubmit: "Email me a reset link",
             digitBackToDigit: "Return to DIGIT",
             digitSecurity: "Security",
             digitAccount: "Account",
@@ -45,12 +54,20 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitSignInLede:
                 "Continuez avec votre mot de passe ou un fournisseur d'identité. Vous choisirez un espace de travail après la connexion.",
             digitContinue: "Continuer",
-            digitSignInWithProvider: "Continuer avec {0}",
+            digitSignInWithProvider: "Se connecter avec {0}",
             digitOr: "OU",
             digitShowPassword: "Afficher le mot de passe",
             digitHidePassword: "Masquer le mot de passe",
-            digitPasswordHelp:
-                "Pas encore de mot de passe, ou besoin de le réinitialiser ? Revenir à l'aide DIGIT",
+            digitForgotPassword: "Mot de passe oublié ?",
+            digitPasswordHelp: "Configurer ou réinitialiser votre mot de passe",
+            digitResetPasswordTitle: "Réinitialiser votre mot de passe",
+            digitResetPasswordLede: "Saisissez l’adresse e-mail associée à votre compte.",
+            digitResetPasswordUsernameLede:
+                "Saisissez l’adresse e-mail ou le nom d’utilisateur associé à votre compte.",
+            digitResetPasswordUsernameOnlyLede:
+                "Saisissez le nom d’utilisateur associé à votre compte.",
+            digitEmailOrUsername: "Adresse e-mail ou nom d’utilisateur",
+            digitResetPasswordSubmit: "Recevoir un lien de réinitialisation",
             digitBackToDigit: "Revenir à DIGIT",
             digitSecurity: "Sécurité",
             digitAccount: "Compte",

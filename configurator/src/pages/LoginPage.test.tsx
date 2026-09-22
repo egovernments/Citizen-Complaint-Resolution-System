@@ -56,17 +56,24 @@ afterEach(() => {
 });
 
 describe('configurator sign in', () => {
-  it('renders the backend-provided sign-in methods and delegates credentials to Keycloak', async () => {
+  it('opens one hosted Keycloak login instead of duplicating its methods', async () => {
     renderPage();
 
-    expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
-    const github = screen.getByRole('button', { name: /continue with github/i });
+    const login = await screen.findByRole('button', { name: /^log in$/i });
     expect(api.authMethods).toHaveBeenCalledWith('signin');
+    expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /continue with github/i })).not.toBeInTheDocument();
     expect(document.querySelector('input[type="password"]')).toBeNull();
 
-    fireEvent.click(github);
-    expect(api.startSignIn).toHaveBeenCalledWith('github', 'signin');
+    fireEvent.click(login);
+    expect(api.startSignIn).toHaveBeenCalledWith('password', 'signin');
+  });
+
+  it('opens password help when Keycloak returns to its registered login page', async () => {
+    renderPage('/login?passwordHelp=1');
+
+    expect(await screen.findByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send password setup link/i })).toBeInTheDocument();
   });
 
   it('offers a non-enumerating password setup request', async () => {

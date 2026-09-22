@@ -646,6 +646,10 @@ export function createKcAdminMock() {
   app.get("/admin/realms/:realm/identity-provider/instances", (_req, res) => {
     res.json([
       { alias: "google", displayName: "Google", enabled: true },
+      // Keycloak can expose the alias as the display name when an IdP was
+      // created without an explicit label. The BFF must still present the
+      // provider's canonical user-facing name.
+      { alias: "github", displayName: "github", enabled: true },
       { alias: "disabled-provider", enabled: false },
     ]);
   });

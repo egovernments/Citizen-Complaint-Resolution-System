@@ -626,10 +626,10 @@ body.digit-auth-body {
     color: hsl(var(--muted-foreground));
 }
 
-.digit-provider-icon {
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1;
+.digit-provider-logo {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex: none;
 }
 
 .digit-list {

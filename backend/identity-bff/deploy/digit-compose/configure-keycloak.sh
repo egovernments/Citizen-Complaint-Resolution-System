@@ -108,7 +108,12 @@ ensure_client() {
 }
 
 ensure_social_provider() {
-  local alias=$1 provider=$2 client_id=$3 client_secret=$4
+  local alias=$1 provider=$2 client_id=$3 client_secret=$4 display_name
+  case "$alias" in
+    google) display_name=Google ;;
+    github) display_name=GitHub ;;
+    *) display_name=$alias ;;
+  esac
   [ -n "$client_id" ] || return 0
   [ -n "$client_secret" ] || {
     printf 'missing client secret for configured %s identity provider\n' "$alias" >&2
@@ -116,12 +121,12 @@ ensure_social_provider() {
   }
   if kc get "identity-provider/instances/$alias" -r "$REALM" >/dev/null 2>&1; then
     kc update "identity-provider/instances/$alias" -r "$REALM" \
-      -s enabled=true -s trustEmail=false -s storeToken=false \
+      -s enabled=true -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
       -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   else
     kc create identity-provider/instances -r "$REALM" \
-      -s "alias=$alias" -s "providerId=$provider" -s enabled=true \
+      -s "alias=$alias" -s "providerId=$provider" -s "displayName=$display_name" -s enabled=true \
       -s trustEmail=false -s storeToken=false \
       -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
