@@ -3912,6 +3912,12 @@
 
 .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
   margin-left: 0 !important;
+  /* Clears the collapsed nav rail, which is `position: fixed` and so takes no
+   * flow of its own. Only below 48rem — EmployeeSideBar renders inside
+   * `MediaQuery minWidth={768}`, so under that there is no rail to clear and
+   * this was reserving 48px for something that is not on screen. At 420px that
+   * is a ninth of the viewport, and it showed as a lopsided left gutter
+   * (60px left against 23px right). */
   padding-left: var(--digit-sidebar-width, 3rem) !important;
   width: 100% !important;
   max-width: 100% !important;
@@ -3923,6 +3929,36 @@
    * the bar and left the dashboard title tucked 19px underneath it. */
   padding-top: var(--employee-header-h, 56px) !important;
   box-sizing: border-box !important;
+}
+
+@media (max-width: 47.99rem) {
+  .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+    padding-left: 0 !important;
+  }
+}
+
+/* Header rows must grow when they wrap.
+ *
+ * `.dashboard-header-top` is `flex-wrap: wrap` but carries `tw-h-12`, a fixed
+ * 48px built for the one-line desktop arrangement. Below 48rem the title and
+ * the controls wrap onto separate lines while the box stays one row tall, and
+ * because it is `overflow: visible` the wrapped controls render outside it —
+ * "+ Add KPI" landed on top of the filters card underneath.
+ *
+ * A wrapping flex row cannot also be a fixed height. Keep 3rem as the minimum
+ * so the single-line desktop rhythm is unchanged, and let it grow from there. */
+
+@media (max-width: 47.99rem) {
+  .dashboard-root .dashboard-header,
+  .dashboard-root .dashboard-header-top {
+    height: auto !important;
+    min-height: 3rem;
+  }
+
+  .dashboard-root .dashboard-header-top {
+    row-gap: 0.5rem;
+    padding-bottom: 0.25rem;
+  }
 }
 
 /* Block digit-ui global heading colors (h2[class*="title"] etc.) inside the dashboard. */

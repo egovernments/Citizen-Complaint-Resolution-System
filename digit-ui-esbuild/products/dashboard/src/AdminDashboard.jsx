@@ -37,7 +37,7 @@ import { runKpiBatch, runPublicKpiBatch, getTenantId } from "./services/analytic
 import { errorForTile } from "./services/analyticsBatch";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import * as dashboardMetrics from "./services/dashboardMetrics";
-import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
+import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID, reflowLayout } from "./constants/layoutConfig";
 import {
   isCardKind,
   isSparklineKind,
@@ -131,6 +131,42 @@ const WidgetRemoveButton = ({ label, onClick }) => {
 
 const GridLayoutWithWidth = WidthProvider(GridLayout);
 const GRID_MARGIN = [16, 16];
+
+/**
+ * Below this the 12-column grid stops being a layout and becomes a defect: at
+ * 500px the grid measures 417px, so a w=2 KPI card is 56px and a w=4 chart is
+ * 128px. Measured on Bomet — card labels wrap to one letter per line and the
+ * right-hand column is clipped by the shell's `overflow: hidden` rather than
+ * being reachable by scrolling.
+ *
+ * Matches the breakpoint the employee sidebar already uses, so the dashboard
+ * switches presentation at the same width the chrome around it does.
+ */
+const PHONE_VIEWPORT = "(max-width: 47.99rem)";
+/**
+ * Tablet is its own case, not a wide phone or a narrow desktop. At 834px the
+ * 12-column grid gives a w=2 KPI card 112px, which breaks its label mid-word
+ * ("RESOLUT ION RATE") and collides a chart title with its own subtitle. Two
+ * columns puts cards at ~360px and charts at full width.
+ */
+const TABLET_VIEWPORT = "(min-width: 48rem) and (max-width: 63.99rem)";
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia(query).matches
+      : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return undefined;
+    const onChange = () => setMatches(mq.matches);
+    setMatches(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, kpis) {
   const { w, h } = defaultSizeForKpi(kpiId, kpis);
@@ -589,6 +625,15 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     []
   );
 
+  const isPhone = useMediaQuery(PHONE_VIEWPORT);
+  const isTablet = useMediaQuery(TABLET_VIEWPORT);
+  // Both breakpoints render a derived layout, so neither may be persisted.
+  const isDerivedLayout = isPhone || isTablet;
+  const isDerivedLayoutRef = useRef(isDerivedLayout);
+  useEffect(() => {
+    isDerivedLayoutRef.current = isDerivedLayout;
+  }, [isDerivedLayout]);
+
   const handleWrapDrop = useCallback(
     (event) => {
       event.preventDefault();
@@ -630,6 +675,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   const handleLayoutChange = useCallback(
     (next) => {
       if (draggingWidgetIdRef.current) return;
+      // The narrow layouts are derived, not authored. Persisting one would
+      // overwrite the desktop arrangement in the single slot they all share.
+      if (isDerivedLayoutRef.current) return;
       const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
       onLayoutChange(withoutPlaceholder);
     },
@@ -823,7 +871,36 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
   // viz.kind-derived constraints), so the grid layout passes items through verbatim.
-  const gridLayout = useMemo(() => layout, [layout]);
+  /**
+   * Narrow renders the same widgets through the same grid, in one column.
+   *
+   * A single column rather than react-grid-layout's responsive breakpoints,
+   * because the saved layout is ONE localStorage slot per tenant+user with no
+   * breakpoint dimension (see utils/layoutStore.js). A responsive grid would
+   * fire onLayoutChange with phone geometry and persist it over the operator's
+   * desktop arrangement — opening the dashboard on a phone would silently
+   * rearrange it on their laptop. So this is a presentation of the saved
+   * layout, never a source of one: drag and resize are off below the
+   * breakpoint and handleLayoutChange refuses to write.
+   *
+   * `y` is reassigned from reading order rather than kept, because the saved
+   * `y` values describe rows that no longer exist once everything is full
+   * width. `h` IS kept: the operator sized these, and a widget given the full
+   * width can only need less height than it had, not more.
+   */
+  const gridLayout = useMemo(
+    () => {
+      if (isPhone) return reflowLayout(layout, 1);
+      // Two columns: KPI cards pair up, everything with a chart, table or map
+      // in it takes the full width. Those need the horizontal room far more
+      // than a single number does.
+      if (isTablet) {
+        return reflowLayout(layout, 2, (item) => !isCardKind(kpis[item.i]?.viz?.kind));
+      }
+      return layout;
+    },
+    [layout, isPhone, isTablet, kpis]
+  );
 
   const renderTile = (kpiId, groupBy = null) => {
     const def = kpis[kpiId];
@@ -994,15 +1071,20 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
           key={gridSyncKey}
           className={`dashboard-grid-layout layout${showEmpty ? " dashboard-grid-layout--empty" : ""}`}
           layout={gridLayout}
-          cols={GRID_COLS}
+          // One column below the breakpoint. Same grid, same widgets, same
+          // renderers — only the column count and the interaction change.
+          cols={isPhone ? 1 : isTablet ? 2 : GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
           compactType={null}
           allowOverlap={false}
-          isDraggable
-          isResizable
-          isDroppable={isExternalDrag}
+          // Drag and resize are off on a phone for two reasons: they are poor
+          // touch interactions against a 16px grip, and every one of them would
+          // try to persist geometry into the slot holding the desktop layout.
+          isDraggable={!isDerivedLayout}
+          isResizable={!isDerivedLayout}
+          isDroppable={!isDerivedLayout && isExternalDrag}
           droppingItem={droppingItem}
           onDrop={handleGridDrop}
           onDropDragOver={handleDropDragOver}
