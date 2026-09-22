@@ -16,9 +16,9 @@ describe("identity configuration", () => {
   });
 
   it("places result ids before relative URL fragments", () => {
-    expect(safeIdentityReturnTo("/configurator/login?from=keycloak#help"))
-      .toBe("/configurator/login?from=keycloak#help");
-    expect(withAuthResult("/configurator/login?from=keycloak#help", "result-1"))
-      .toBe("/configurator/login?from=keycloak&authResult=result-1#help");
+    expect(safeIdentityReturnTo("/client/login?from=keycloak#help"))
+      .toBe("/client/login?from=keycloak#help");
+    expect(withAuthResult("/client/login?from=keycloak#help", "result-1"))
+      .toBe("/client/login?from=keycloak&authResult=result-1#help");
   });
 });

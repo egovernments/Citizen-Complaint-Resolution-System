@@ -406,7 +406,7 @@ export async function readIdentityUserProfile(userId: string): Promise<IdentityU
 }
 
 /**
- * Applies the name collected by the Configurator only after the magic-link
+ * Applies the name collected by the client application only after the magic-link
  * redemption has proved ownership of the same email address. This is profile
  * completion on Keycloak's structural user record, not tenant authorization.
  */

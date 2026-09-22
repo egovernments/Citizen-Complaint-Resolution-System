@@ -230,13 +230,13 @@ describe("identity BFF", () => {
     expect(unsafeReturn.status).toBe(400);
 
     const hostedMagic = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link&intent=signup&returnTo=%2Fconfigurator%2Fsignup`,
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link&intent=signup&returnTo=%2Fclient%2Fsignup`,
       { redirect: "manual" },
     );
     expect(hostedMagic.status).toBe(400);
 
     const magic = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/signup/magic-link-requests`,
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
       {
         method: "POST",
         headers: {
@@ -248,7 +248,7 @@ describe("identity BFF", () => {
           firstName: "Magic",
           lastName: "Founder",
           email: "person@example.com",
-          returnTo: "/configurator/signup",
+          returnTo: "/client/signup",
         }),
       },
     );
@@ -280,7 +280,7 @@ describe("identity BFF", () => {
       { redirect: "manual" },
     );
     expect(callback.status).toBe(303);
-    expect(callback.headers.get("location")).toBe("/configurator/signup");
+    expect(callback.headers.get("location")).toBe("/client/signup");
     const magicSessionCookie = callback.headers.getSetCookie()
       .find((value) => value.startsWith("digit_identity_session="))!
       .split(";", 1)[0];
@@ -304,7 +304,7 @@ describe("identity BFF", () => {
     })).status).toBe(204);
 
     const newIdentity = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/signup/magic-link-requests`,
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
       {
         method: "POST",
         headers: {
@@ -342,7 +342,7 @@ describe("identity BFF", () => {
 
   it("returns provider failures through a one-time, browser-safe result", async () => {
     const authorize = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&intent=signin&returnTo=%2Fconfigurator%2Flogin`,
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&intent=signin&returnTo=%2Fclient%2Flogin`,
       { redirect: "manual" },
     );
     const authorizeUrl = new URL(authorize.headers.get("location")!);
@@ -354,7 +354,7 @@ describe("identity BFF", () => {
     );
     expect(callback.status).toBe(303);
     const resultLocation = new URL(callback.headers.get("location")!, "http://localhost");
-    expect(resultLocation.pathname).toBe("/configurator/login");
+    expect(resultLocation.pathname).toBe("/client/login");
     const id = resultLocation.searchParams.get("authResult")!;
     const result = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(id)}`,
@@ -370,7 +370,7 @@ describe("identity BFF", () => {
     )).status).toBe(404);
 
     const conflictAuthorize = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&returnTo=%2Fconfigurator%2Flogin`,
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&returnTo=%2Fclient%2Flogin`,
       { redirect: "manual" },
     );
     const conflictUrl = new URL(conflictAuthorize.headers.get("location")!);
@@ -405,7 +405,7 @@ describe("identity BFF", () => {
         "Content-Type": "application/json",
         "X-Forwarded-For": "203.0.113.10",
       },
-      body: JSON.stringify({ email, returnTo: "/configurator/login" }),
+      body: JSON.stringify({ email, returnTo: "/client/login" }),
     });
     const accepted = await requestSetup("OAUTH.ONLY@example.com");
     expect(accepted.status).toBe(202);
@@ -440,7 +440,7 @@ describe("identity BFF", () => {
     const complete = await fetch(completionUnderTest, { redirect: "manual" });
     expect(complete.status).toBe(303);
     const completeLocation = new URL(complete.headers.get("location")!, "http://localhost");
-    expect(completeLocation.pathname).toBe("/configurator/login");
+    expect(completeLocation.pathname).toBe("/client/login");
     const resultId = completeLocation.searchParams.get("authResult")!;
     const result = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(resultId)}`,
@@ -501,7 +501,7 @@ describe("identity BFF", () => {
       },
       body: JSON.stringify({
         email: "unverified.provider@example.com",
-        returnTo: "/configurator/login",
+        returnTo: "/client/login",
       }),
     });
     expect(anonymousUnverified.status).toBe(202);
@@ -531,7 +531,7 @@ describe("identity BFF", () => {
         "Content-Type": "application/json",
         "X-Forwarded-For": "203.0.113.12",
       },
-      body: JSON.stringify({ returnTo: "/configurator/login" }),
+      body: JSON.stringify({ returnTo: "/client/login" }),
     });
     expect(authenticatedSetup.status).toBe(202);
     await expect.poll(async () => {

@@ -46,7 +46,9 @@
         </#if>
     <#elseif section = "info" >
         <div id="kc-digit-password-help">
-            <a href="/configurator/login">${msg("digitPasswordHelp")}</a>
+            <#if (client.baseUrl)?has_content>
+                <a href="${client.baseUrl}">${msg("digitPasswordHelp")}</a>
+            </#if>
         </div>
         <#if realm.password && realm.registrationAllowed && !registrationDisabled??>
             <div id="kc-registration-container">

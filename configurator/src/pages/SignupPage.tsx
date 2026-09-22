@@ -56,46 +56,22 @@ const STEPS = [
  * and egov-user validates it as a national number, so a founder who copied the
  * old `+254700000199` placeholder was being shown a shape the backend rejects.
  *
- * `nationalExample` is deliberately absent for most countries. The only
- * authoritative mobile formats in this repo are the three
- * `common-masters.MobileNumberValidation` records it ships (`+254`, `+91`,
- * `+251`), and an invented example is the same class of defect as the hardcoded
- * Kenyan one: a confident hint that happens to be wrong. Countries without one
- * get the dial code and a neutral hint instead.
- *
- * The durable home for this is that MDMS schema, which onboarding cannot read
- * because the tenant does not exist yet. Sharing it with tenant provisioning is
- * CCRS#2073 / CCRS#2076 territory.
- *
- * A caveat that matters, so the three examples are not read as safe:
- * `tenant-foundation` seeds no `common-masters.MobileNumberValidation` row for
- * a new tenant, so egov-user's per-tenant lookup misses and it falls back to
- * the HOST's default regex. The founder's country selection has no bearing on
- * what actually validates their number. On a Kenyan deployment a founder who
- * picks India is shown a correct Indian example and rejected by a Kenyan rule,
- * and per CCRS#2073 that rejection is terminal.
- *
- * So these examples only hold where the selected country matches the
- * deployment's own. Refusing to invent the other five avoided one version of
- * this defect; this note records the version that is left, which is a correct
- * example resting on a wrong premise about which rule applies. The seeding gap
- * is tracked on CCRS#2073.
+ * Every offered country has a product-owned rule in identity-bff tenant
+ * foundation. Foundation persists it for the new tenant before egov-user
+ * creates the founder's account; countries without an agreed rule are not
+ * offered here.
  */
 const COUNTRIES: {
   code: string;
   name: string;
   timeZone: string;
   dialCode: string;
-  nationalExample?: string;
+  nationalExample: string;
 }[] = [
   { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi', dialCode: '+254', nationalExample: '712345678' },
   { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata', dialCode: '+91', nationalExample: '9876543210' },
   { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa', dialCode: '+251', nationalExample: '911234567' },
-  { code: 'NG', name: 'Nigeria', timeZone: 'Africa/Lagos', dialCode: '+234' },
-  { code: 'SN', name: 'Senegal', timeZone: 'Africa/Dakar', dialCode: '+221' },
-  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo', dialCode: '+258' },
-  { code: 'ZA', name: 'South Africa', timeZone: 'Africa/Johannesburg', dialCode: '+27' },
-  { code: 'ID', name: 'Indonesia', timeZone: 'Asia/Jakarta', dialCode: '+62' },
+  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo', dialCode: '+258', nationalExample: '841234567' },
 ];
 
 const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();

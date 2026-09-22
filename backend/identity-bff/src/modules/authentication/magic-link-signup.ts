@@ -43,7 +43,7 @@ async function withinLimit(bucket: string): Promise<boolean> {
 
 function privateEmailKey(email: string): string {
   const key = createHmac("sha256", config.keycloakBffClientSecret)
-    .update("digit.identity.magic-link-signup.rate-limit.v1")
+    .update("digit.identity.magic-link.rate-limit.v1")
     .digest();
   return createHmac("sha256", key).update(email).digest("hex");
 }
@@ -110,8 +110,8 @@ async function processSignupMagicLink(input: {
   }
 }
 
-export function registerMagicLinkSignupRoutes(app: express.Application): void {
-  app.post("/identity/v1/signup/magic-link-requests", asyncRoute(async (request, response) => {
+export function registerMagicLinkRoutes(app: express.Application): void {
+  app.post("/identity/v1/authentication/magic-link-requests", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
       return response.status(403).json({ error: "Untrusted request origin" });
     }
@@ -119,7 +119,7 @@ export function registerMagicLinkSignupRoutes(app: express.Application): void {
     const email = normalizedEmail(request.body?.email);
     const firstName = normalizedName(request.body?.firstName);
     const lastName = normalizedName(request.body?.lastName);
-    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || "/configurator/signup";
+    const returnTo = safeIdentityReturnTo(request.body?.returnTo) || config.identityPostLoginRedirect;
     if (!email || !firstName || !lastName) {
       return response.status(400).json({ error: "First name, last name, and a valid email are required" });
     }
@@ -152,7 +152,7 @@ export function registerMagicLinkSignupRoutes(app: express.Application): void {
       methodId: magicMethod.id,
       returnTo,
       requiresLoginCookie: false,
-      signupIdentityDraft: { email, firstName, lastName },
+      identityProfileDraft: { email, firstName, lastName },
     });
     response.status(202).json(ACCEPTED);
     setImmediate(() => void processSignupMagicLink({

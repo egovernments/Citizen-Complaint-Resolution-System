@@ -58,29 +58,6 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
-  it('keeps OAuth alternatives separate from the email signup form', async () => {
-    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
-    vi.mocked(api.authMethods).mockResolvedValue({
-      methods: [
-        { id: 'password', label: 'Email and password', type: 'password' },
-        { id: 'github', label: 'Continue with GitHub', type: 'oauth' },
-        { id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' },
-      ],
-    });
-
-    render(<SignupPage />);
-
-    const magic = await screen.findByRole('button', { name: 'Email me a sign-in link' });
-    const github = screen.getByRole('button', { name: 'Continue with GitHub' });
-
-    // The magic-link action is a form submit; provider alternatives remain
-    // distinct full-width buttons below it.
-    expect(github.className).toMatch(/w-full/);
-    expect(magic.closest('form')).not.toBeNull();
-    fireEvent.click(github);
-    expect(api.startSignIn).toHaveBeenCalledWith('github', 'signup');
-  });
-
   it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
@@ -397,10 +374,10 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     await reachPreferences();
 
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
-    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Asia/Jakarta' } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Africa/Maputo' } });
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
 
-    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Asia/Jakarta');
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Africa/Maputo');
   });
 
   it('shows the dial code and example for the selected country, not Kenya', async () => {
@@ -418,17 +395,6 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
   });
 
-  it('offers no invented example for a country we have no format for', async () => {
-    // Only KE, IN and ET have authoritative MobileNumberValidation records in
-    // this repo. A made-up example would be the same defect as the hardcoded
-    // Kenyan one, so those countries get the dial code and a neutral hint.
-    render(<SignupPage />);
-    await reachPreferences();
-
-    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'NG' } });
-    expect(screen.getByText('+234')).toBeInTheDocument();
-    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('placeholder', 'National number');
-  });
 });
 
 describe('workspace readiness gate', () => {

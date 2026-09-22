@@ -8,7 +8,7 @@ import type {
 } from "../authentication/types.js";
 import type { IdentitySession, SelectedIdentityContext } from "./types.js";
 
-export interface SignupIdentityDraft {
+export interface IdentityProfileDraft {
   email: string;
   firstName: string;
   lastName: string;
@@ -22,7 +22,7 @@ export interface LoginAttempt {
   methodId: string;
   returnTo: string;
   requiresLoginCookie: boolean;
-  signupIdentityDraft?: SignupIdentityDraft;
+  identityProfileDraft?: IdentityProfileDraft;
 }
 
 export interface PasswordSetupAttempt {
@@ -61,7 +61,7 @@ export async function createLoginAttempt(input: {
   methodId: string;
   returnTo: string;
   requiresLoginCookie?: boolean;
-  signupIdentityDraft?: SignupIdentityDraft;
+  identityProfileDraft?: IdentityProfileDraft;
 }): Promise<{
   state: string;
   codeVerifier: string;
@@ -92,11 +92,11 @@ function parseLoginAttempt(raw: string | null): LoginAttempt | null {
   if (!raw) return null;
   try {
     const attempt = JSON.parse(raw) as LoginAttempt;
-    const signupDraft = attempt.signupIdentityDraft;
-    const validSignupDraft = signupDraft === undefined || (
-      typeof signupDraft.email === "string" &&
-      typeof signupDraft.firstName === "string" &&
-      typeof signupDraft.lastName === "string"
+    const profileDraft = attempt.identityProfileDraft;
+    const validProfileDraft = profileDraft === undefined || (
+      typeof profileDraft.email === "string" &&
+      typeof profileDraft.firstName === "string" &&
+      typeof profileDraft.lastName === "string"
     );
     return typeof attempt.codeVerifier === "string" &&
       typeof attempt.nonce === "string" &&
@@ -105,7 +105,7 @@ function parseLoginAttempt(raw: string | null): LoginAttempt | null {
       typeof attempt.methodId === "string" &&
       typeof attempt.returnTo === "string" &&
       typeof attempt.requiresLoginCookie === "boolean" &&
-      validSignupDraft ? attempt : null;
+      validProfileDraft ? attempt : null;
   } catch {
     return null;
   }

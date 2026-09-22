@@ -25,6 +25,7 @@ See [the full API and operations guide](docs/identity-bff.md).
 ```http
 GET  /identity/v1/auth-methods?intent=signin
 GET  /identity/v1/authorize?method=password&intent=signin&returnTo=/configurator/login
+POST /identity/v1/authentication/magic-link-requests
 GET  /identity/v1/callback
 GET  /identity/v1/auth-results/:id
 POST /identity/v1/password/setup-requests
@@ -40,6 +41,11 @@ POST /identity/v1/logout
 Organization memberships and active BFF-managed DIGIT accounts. Selecting a
 tenant returns the existing egov-user login shape, including `access_token` and
 `UserRequest`; existing DIGIT API calls continue unchanged.
+
+These routes are application-neutral. A caller supplies a validated `returnTo`
+path (or an absolute URL on `IDENTITY_ALLOWED_ORIGINS`), and the deployment
+configures Keycloak hosts, clients, and callbacks. Configurator is one client,
+not a route or redirect embedded in the BFF.
 
 ## Internal API
 

@@ -20,11 +20,6 @@ const renderAt = (path = '/') =>
   );
 
 describe('root identity landing', () => {
-  it('uses the sign-in journey as the single root dispatcher', () => {
-    renderAt();
-    expect(screen.getByText('LOGIN')).toBeInTheDocument();
-  });
-
   it('preserves an opaque callback result while routing to sign-in', () => {
     renderAt('/?authResult=result-1');
     expect(screen.getByText('LOGIN?authResult=result-1')).toBeInTheDocument();

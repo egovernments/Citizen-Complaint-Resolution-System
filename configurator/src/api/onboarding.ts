@@ -8,7 +8,7 @@
  *
  *  - **The browser never handles a Keycloak credential.** Password and social
  *    sign-in navigate through the BFF to Keycloak's hosted flow. Signup magic
- *    link is initiated by a Configurator form: the BFF stores the identity
+ *    link is initiated by this application's form: the BFF stores the identity
  *    draft and asks Keycloak to email a single-use link that returns directly
  *    to the callback. The frontend configures no Keycloak URL and redeems no
  *    token itself.
@@ -372,7 +372,7 @@ export function newIdempotencyKey(): string {
  * Which sign-in methods are actually enabled. Render only what comes back:
  * Google, GitHub and magic link appear here only when their Keycloak backing
  * is enabled. Social methods use `startSignIn`; signup magic link is initiated
- * with `requestMagicLinkSignup` after Configurator collects the identity draft.
+ * with `requestMagicLinkSignup` after this client collects the identity draft.
  */
 export function authMethods(intent: AuthIntent): Promise<{ methods: AuthMethod[] }> {
   return call(`${IDENTITY_BASE}/auth-methods?intent=${encodeURIComponent(intent)}`);
@@ -397,7 +397,7 @@ export function requestMagicLinkSignup(input: {
   lastName: string;
   email: string;
 }): Promise<{ message: string }> {
-  return call(`${IDENTITY_BASE}/signup/magic-link-requests`, {
+  return call(`${IDENTITY_BASE}/authentication/magic-link-requests`, {
     method: 'POST',
     body: JSON.stringify({
       ...input,

@@ -180,7 +180,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     if (!method) return response.status(400).json({ error: "Unsupported sign-in method" });
     if (method.type === "magic_link") {
       return response.status(400).json({
-        error: "Email sign-up must be started from the Configurator signup form",
+        error: "Email sign-up must be started through the magic-link request API",
       });
     }
 
@@ -256,8 +256,8 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         throw new Error("Keycloak token subjects do not match");
       }
       let sessionClaims = claims;
-      if (attempt.signupIdentityDraft) {
-        const draft = attempt.signupIdentityDraft;
+      if (attempt.identityProfileDraft) {
+        const draft = attempt.identityProfileDraft;
         if (attempt.intent !== "signup" ||
             claims.email.trim().toLowerCase() !== draft.email ||
             claims.email_verified !== true) {

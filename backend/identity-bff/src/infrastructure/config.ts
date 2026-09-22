@@ -113,7 +113,7 @@ export const config = {
     process.env.IDENTITY_REDIRECT_URI ||
     "http://localhost:18201/identity/v1/callback",
   identityPostLoginRedirect:
-    process.env.IDENTITY_POST_LOGIN_REDIRECT || "/configurator/login",
+    process.env.IDENTITY_POST_LOGIN_REDIRECT || "/",
   identityAllowedOrigins: parseAllowedOrigins(
     process.env.IDENTITY_ALLOWED_ORIGINS ||
       process.env.IDENTITY_ALLOWED_ORIGIN ||

@@ -31,7 +31,7 @@ readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
 readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete*"
-readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/configurator/login}
+readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
   'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
@@ -193,7 +193,7 @@ configure_smtp() {
 
 configure_magic_link() {
   : "${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:?set KEYCLOAK_MAGIC_LINK_CLIENT_SECRET}"
-  # Configurator collects the identity draft and the BFF calls the extension's
+  # The client application collects the identity draft and the BFF calls the extension's
   # authenticated /magic-link resource. Its action token skips browser flows,
   # so this client must not retain the old hosted email-form binding.
   local magic_uuid
