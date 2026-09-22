@@ -32,7 +32,7 @@ password.
 | `GET` | `/identity/v1/callback` | Validates the callback and creates an opaque cookie session |
 | `GET` | `/identity/v1/auth-results/:id` | Consumes a one-time, browser-safe callback result |
 | `POST` | `/identity/v1/password/setup-requests` | Sends a non-enumerating password setup/recovery email |
-| `GET` | `/identity/v1/password/setup-complete` | One-time Keycloak action completion redirect |
+| `GET` | `/identity/v1/password/setup-complete/:state` | One-time Keycloak action completion redirect |
 | `GET` | `/identity/v1/session` | Authentication state, opaque-session expiry, and selected tenant; never tokens |
 | `GET` | `/identity/v1/tenants` | Tenants in both Keycloak membership and DIGIT grants |
 | `POST` | `/identity/v1/contexts/_select` | Records the tenant and returns the normal DIGIT login response |

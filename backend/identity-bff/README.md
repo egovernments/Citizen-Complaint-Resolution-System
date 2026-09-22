@@ -29,7 +29,7 @@ POST /identity/v1/authentication/magic-link-requests
 GET  /identity/v1/callback
 GET  /identity/v1/auth-results/:id
 POST /identity/v1/password/setup-requests
-GET  /identity/v1/password/setup-complete
+GET  /identity/v1/password/setup-complete/:state
 GET  /identity/v1/session
 GET  /identity/v1/tenants
 POST /identity/v1/contexts/_select

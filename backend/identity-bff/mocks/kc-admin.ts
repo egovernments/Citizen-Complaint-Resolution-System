@@ -336,11 +336,18 @@ export function createKcAdminMock() {
     if (!Array.isArray(req.body) || !req.body.every((action) => typeof action === "string")) {
       return res.status(400).json({ error: "actions required" });
     }
-    user.requiredActions = [...new Set([...(user.requiredActions || []), ...req.body])];
-    user.activationEmails = (user.activationEmails || 0) + 1;
-    user.lastActionRedirectUri = typeof req.query.redirect_uri === "string"
+    const redirectUri = typeof req.query.redirect_uri === "string"
       ? req.query.redirect_uri
       : undefined;
+    if (redirectUri) {
+      const redirect = new URL(redirectUri);
+      if (redirect.search || !/\/password\/setup-complete\/[^/]+$/.test(redirect.pathname)) {
+        return res.status(400).json({ errorMessage: "Invalid redirect uri." });
+      }
+    }
+    user.requiredActions = [...new Set([...(user.requiredActions || []), ...req.body])];
+    user.activationEmails = (user.activationEmails || 0) + 1;
+    user.lastActionRedirectUri = redirectUri;
     return res.status(204).end();
   });
 

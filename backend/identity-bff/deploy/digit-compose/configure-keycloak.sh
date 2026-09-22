@@ -30,7 +30,9 @@ fi
 readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
-readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete*"
+# Keycloak's execute-actions redirect validation matches this path wildcard but
+# does not treat a trailing wildcard as matching a query string.
+readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete/*"
 readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \

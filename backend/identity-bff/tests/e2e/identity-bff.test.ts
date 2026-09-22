@@ -426,7 +426,8 @@ describe("identity BFF", () => {
     }).toBe(1);
     expect(user.requiredActions).toEqual(["UPDATE_PASSWORD"]);
     const completion = new URL(user.lastActionRedirectUri);
-    expect(completion.pathname).toBe("/identity/v1/password/setup-complete");
+    expect(completion.pathname).toMatch(/^\/identity\/v1\/password\/setup-complete\/[^/]+$/);
+    expect(completion.search).toBe("");
     const completionUnderTest = new URL(
       `${completion.pathname}${completion.search}`,
       `http://localhost:${getAppPort()}`,

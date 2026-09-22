@@ -33,8 +33,10 @@ function normalizedEmail(value: unknown): string | null {
 
 function completionRedirectUri(state: string): string {
   const callback = new URL(config.identityRedirectUri);
-  callback.pathname = callback.pathname.replace(/\/callback$/, "/password/setup-complete");
-  callback.search = new URLSearchParams({ state }).toString();
+  // Keycloak 26 does not apply a trailing redirect wildcard to a query string
+  // for execute-actions-email. A path segment is both allowlistable and opaque.
+  callback.pathname = `${callback.pathname.replace(/\/callback$/, "/password/setup-complete")}/${encodeURIComponent(state)}`;
+  callback.search = "";
   return callback.toString();
 }
 
@@ -135,8 +137,9 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
     }));
   }));
 
-  app.get("/identity/v1/password/setup-complete", asyncRoute(async (request, response) => {
-    const state = typeof request.query.state === "string" ? request.query.state : "";
+  app.get("/identity/v1/password/setup-complete/:state", asyncRoute(async (request, response) => {
+    const rawState = request.params.state;
+    const state = typeof rawState === "string" ? rawState : "";
     const preview = state ? await getPasswordSetupAttempt(state) : null;
     // Do not burn the one-use state during a transient Admin API outage. A
     // refresh can retry the credential check; GETDEL below still makes a
