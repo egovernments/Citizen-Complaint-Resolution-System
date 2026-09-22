@@ -154,3 +154,6 @@ charts/*.tgz
 # ─── Operator Local Testing ──────────────────────────────────────────────────
 local-testing/
 .agent/
+
+# Generated per-tenant seed-load data (rebuild: local-setup/postman/generate-seed-data.py)
+local-setup/postman/ga-upgrade-seed-load.data.*.json
