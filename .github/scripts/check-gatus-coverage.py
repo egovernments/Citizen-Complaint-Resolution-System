@@ -122,6 +122,7 @@ EXEMPT = {
     "default-data-handler": "one-shot: loads default data then exits",
     "hrms-prereq-gate": "one-shot: gate container, exits on success",
     "db-history-normalize": "one-shot: restart:no, no ports; normalises flyway history then exits",
+    "xstate-chatbot-db": "one-shot: flyway migration for the chatbot session store, then exits",
     # No listening port at all -- nothing to probe.
     "telemetry": "no port: alpine sidecar, file-based healthcheck only",
     "novu-worker": "no port: kafka/queue worker, exposes no HTTP or TCP listener",
@@ -160,6 +161,10 @@ EXEMPT = {
     "matomo": "analytics, not a serving dependency: profile-gated and off by default; the portal's shim fails soft when it is absent",
     "matomo-db": "analytics store: no published port, reachable only inside egov-network, and read by nothing the platform serves",
     "matomo-archiver": "no port: runs console core:archive on a loop, exposes no listener",
+    # Read-only variant of digit-mcp (profile mcp-readonly, off by default). Same
+    # image and /healthz as digit-mcp, which the DIGIT MCP check already covers;
+    # a public read-only instance is opt-in and not part of the default perimeter.
+    "digit-mcp-readonly": "opt-in read-only variant of digit-mcp; same /healthz, covered by the DIGIT MCP check",
 }
 
 # Suffixes that mark generated one-shot migration containers. These are created

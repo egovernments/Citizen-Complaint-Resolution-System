@@ -1,4 +1,5 @@
 const config = require('../env-variables');
+const mobileValidation = require('../machine/service/mobile-validation-service');
 const fetch = require("node-fetch");
 const axios = require('axios');
 var FormData = require("form-data");
@@ -226,14 +227,73 @@ class TwilioWhatsAppProvider {
         return false;
     }
 
-    extractPhoneNumber(twilioNumber) {
-        // Twilio format: whatsapp:+258840000002 - strip to the bare national
-        // number, mirroring toWhatsAppNumber's own use of config.countryCode
-        // (this used to hardcode stripping '91' for India, which never matched
-        // a +258 number, so context.user.mobileNumber kept its country code
-        // and never matched entries in ALLOWED_MOBILE_NUMBERS).
-        return toNationalNumber(twilioNumber);
+/**
+     * Twilio `whatsapp:+254712345678` -> the tenant's national number (`712345678`).
+     *
+     * The country code and the valid-number rule come from the tenant's
+     * common-masters.MobileNumberValidation row, not from a hardcoded `91`. Returns the
+     * bare digits when the number cannot be reconciled with the tenant rule, so the caller
+     * still has something to key a session on and the downstream login produces the real
+     * error rather than this layer silently mangling the number.
+     */
+    async extractPhoneNumber(twilioNumber, tenantId = null) {
+        const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
+        const national = mobileValidation.toNational(twilioNumber, mobileConfig);
+        if (national) return national;
+
+        const digits = mobileValidation.digitsOnly(twilioNumber);
+        console.error(
+            `Twilio - '${twilioNumber}' does not match the mobile rule for tenant ` +
+            `${tenantId || config.rootTenantId} (${mobileConfig.mobileNumberRegex}); using raw digits`
+        );
+        return digits;
     }
+
+    /**
+     * Number -> the `whatsapp:+E.164` address Twilio's To/From fields require.
+     *
+     * Uses toAddressableDigits rather than toE164 so a number that could not be reconciled
+     * to the tenant's rule is addressed as-sent instead of having the tenant's country code
+     * prepended to it. extractPhoneNumber below keeps the raw digits in exactly that case,
+     * and re-prefixing them fabricated addresses that cannot be delivered
+     * (+447700900123 under the ke rule became +254447700900123).
+     */
+    async toWhatsAppAddress(number, tenantId = null) {
+        const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
+        const digits = mobileValidation.toAddressableDigits(number, mobileConfig);
+        if (!digits) throw new Error(`Cannot build a WhatsApp address from '${number}'`);
+        return `whatsapp:+${digits}`;
+    }
+
+    /**
+     * Build Twilio's `From` address from the configured sender.
+     *
+     * TWILIO_WHATSAPP_NUMBER is fed from `twilio_whatsapp_from`, and the repo-wide
+     * convention for that variable is the ALREADY-PREFIXED form `whatsapp:+14155238886`
+     * (every host_vars example and the Novu bootstrap default use it, because Novu's Twilio
+     * integration wants it that way). Blindly re-prefixing produced
+     * `From=whatsapp:+whatsapp:+14155238886`, which Twilio rejects -- the webhook validated,
+     * the dialog ran, state was written, and the citizen never got a reply.
+     *
+     * So normalise instead of assuming: strip any `whatsapp:` prefix and any leading `+`,
+     * then rebuild exactly once. That keeps `twilio_whatsapp_from` meaning the same thing for
+     * the Novu outbound bootstrap, which also consumes it -- inbound must not redefine a
+     * variable outbound depends on.
+     */
+    senderAddress() {
+        const raw = String(this.whatsappNumber || '').trim();
+        if (!raw) {
+            // Fail loudly rather than silently sending as someone else's number.
+            throw new Error(
+                'TWILIO_WHATSAPP_NUMBER is not set. Set twilio_whatsapp_from in host_vars ' +
+                '(e.g. "whatsapp:+14155238886") so the chatbot can address replies.'
+            );
+        }
+        const digits = raw.replace(/^whatsapp:/i, '').replace(/[^0-9]/g, '');
+        return `whatsapp:+${digits}`;
+    }
+
+
 
     getInputType(requestBody) {
         if (requestBody.ButtonPayload || requestBody.ListId)
@@ -389,10 +449,12 @@ class TwilioWhatsAppProvider {
                 type: inputType
             },
             user: {
-                mobileNumber: this.extractPhoneNumber(requestBody.From)
+                mobileNumber: await this.extractPhoneNumber(requestBody.From, tenantId)
             },
             extraInfo: {
-                whatsAppBusinessNumber: this.extractPhoneNumber(requestBody.To),
+                // The Twilio ACCOUNT's number, so it is deliberately not run through the
+                // citizen tenant's rule — a sandbox sender never matches it.
+                whatsAppBusinessNumber: mobileValidation.digitsOnly(requestBody.To),
                 tenantId: config.rootTenantId
             }
         };
@@ -404,25 +466,19 @@ class TwilioWhatsAppProvider {
         return await this.getUserMessage(rawMessage, tenantId);
     }
 
-    // Twilio wants E.164. `to` may arrive national (840000002) or already
-    // prefixed (258840000002), so strip the country code before re-adding it.
-    toWhatsAppNumber(to) {
-        return `whatsapp:+${toInternationalNumber(to)}`;
-    }
-
-    async sendTextMessage(to, body) {
+    async sendTextMessage(to, body, tenantId = null) {
         const params = new URLSearchParams();
-        params.append('To', this.toWhatsAppNumber(to));
-        params.append('From', `whatsapp:${this.whatsappNumber.startsWith('+') ? this.whatsappNumber : '+' + this.whatsappNumber}`);
+        params.append('To', await this.toWhatsAppAddress(to, tenantId));
+        params.append('From', this.senderAddress());
         params.append('Body', body);
 
         return this.sendTwilioRequest(params);
     }
 
-    async sendMediaMessage(to, mediaUrl, caption = '') {
+    async sendMediaMessage(to, mediaUrl, caption = '', tenantId = null) {
         const params = new URLSearchParams();
-        params.append('To', this.toWhatsAppNumber(to));
-        params.append('From', `whatsapp:${this.whatsappNumber.startsWith('+') ? this.whatsappNumber : '+' + this.whatsappNumber}`);
+        params.append('To', await this.toWhatsAppAddress(to, tenantId));
+        params.append('From', this.senderAddress());
         params.append('MediaUrl', mediaUrl);
         if (caption) {
             params.append('Body', caption);
@@ -431,10 +487,10 @@ class TwilioWhatsAppProvider {
         return this.sendTwilioRequest(params);
     }
 
-    async sendTemplateMessage(to, contentSid, contentVariables = {}) {
+    async sendTemplateMessage(to, contentSid, contentVariables = {}, tenantId = null) {
         const params = new URLSearchParams();
-        params.append('To', this.toWhatsAppNumber(to));
-        params.append('From', `whatsapp:${this.whatsappNumber.startsWith('+') ? this.whatsappNumber : '+' + this.whatsappNumber}`);
+        params.append('To', await this.toWhatsAppAddress(to, tenantId));
+        params.append('From', this.senderAddress());
         params.append('ContentSid', contentSid);
         if (Object.keys(contentVariables).length > 0) {
             params.append('ContentVariables', JSON.stringify(contentVariables));
@@ -470,6 +526,7 @@ class TwilioWhatsAppProvider {
     }
 
     async sendMessageToUser(user, messages, extraInfo) {
+        const tenantId = (extraInfo && extraInfo.tenantId) || config.rootTenantId;
         let userMobile = user.mobileNumber;
 
         for (let i = 0; i < messages.length; i++) {
@@ -490,7 +547,7 @@ class TwilioWhatsAppProvider {
 
             try {
                 if (type === 'text') {
-                    await this.sendTextMessage(userMobile, content);
+                    await this.sendTextMessage(userMobile, content, tenantId);
                 }
                 else if (type === 'template') {
                     // For Twilio templates, we use ContentSid
@@ -505,7 +562,7 @@ class TwilioWhatsAppProvider {
                         });
                     }
 
-                    await this.sendTemplateMessage(userMobile, templateId, contentVariables);
+                    await this.sendTemplateMessage(userMobile, templateId, contentVariables, tenantId);
                 }
                 else if (type === 'image' || type === 'pdf') {
                     // For media messages, get the file URL
@@ -525,18 +582,18 @@ class TwilioWhatsAppProvider {
                         }
                         
                         let caption = extraInfo && extraInfo.fileName ? extraInfo.fileName : '';
-                        await this.sendMediaMessage(userMobile, fileURL, caption);
+                        await this.sendMediaMessage(userMobile, fileURL, caption, tenantId);
                     } catch (fileError) {
                         console.error("Twilio - Failed to send media message:", fileError.message);
                         // Send a fallback text message instead
                         let fallbackMessage = "Sorry, we couldn't load the instructional image. Please proceed with location sharing or type *1* to continue without sharing location.";
-                        await this.sendTextMessage(userMobile, fallbackMessage);
+                        await this.sendTextMessage(userMobile, fallbackMessage, tenantId);
                     }
                 }
                 else {
                     // Default to text message
                     if (content) {
-                        await this.sendTextMessage(userMobile, content.toString());
+                        await this.sendTextMessage(userMobile, content.toString(), tenantId);
                     }
                 }
             } catch (error) {

@@ -63,10 +63,16 @@ test("a national number that starts with its own country code survives", () => {
   process.env.MOBILE_NUMBER_LENGTH = "9";
 });
 
-test("the Twilio adapter routes both directions through the shared helpers", () => {
+test("the Twilio adapter resolves numbers through the tenant's mobile rule", async () => {
+  // extractPhoneNumber and toWhatsAppAddress are tenant-aware and async now:
+  // the country code and valid-number rule come from the tenant's
+  // common-masters.MobileNumberValidation row, not from COUNTRY_CODE.
+  const mv = require(p("src/machine/service/mobile-validation-service.js"));
+  mv.getConfig = async () => ({ countryCode: "+258", mobileNumberRegex: "^[0-9]{9}$" });
+
   const twilio = require(p("src/channel/twilio.js"));
 
-  assert.equal(twilio.extractPhoneNumber("whatsapp:+258840000000"), "840000000");
-  assert.equal(twilio.toWhatsAppNumber("840000000"), "whatsapp:+258840000000");
-  assert.equal(twilio.toWhatsAppNumber("258840000000"), "whatsapp:+258840000000");
+  assert.equal(await twilio.extractPhoneNumber("whatsapp:+258840000000"), "840000000");
+  assert.equal(await twilio.toWhatsAppAddress("840000000"), "whatsapp:+258840000000");
+  assert.equal(await twilio.toWhatsAppAddress("258840000000"), "whatsapp:+258840000000");
 });

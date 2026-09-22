@@ -41,6 +41,10 @@ require.cache[p("src/machine/util/localisation-service.js")] = {
 
 const config = require(p("src/env-variables.js"));
 const userService = require(p("src/session/user-service.js"));
+// sanitizeMobileNumber resolves the tenant's rule from MDMS now; pin it so this
+// test exercises onboarding, not a network lookup.
+require(p("src/machine/service/mobile-validation-service.js")).getConfig =
+  async () => ({ countryCode: "+258", mobileNumberRegex: "^[0-9]{9}$" });
 const { isOnboarded, hasProfileName } = require(p("src/machine/shell-machine.js"));
 
 test("createUser does not set a locale — locale presence is the onboarded marker", async () => {

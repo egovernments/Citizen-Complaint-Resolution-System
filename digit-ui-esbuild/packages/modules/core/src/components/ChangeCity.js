@@ -10,6 +10,64 @@ const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
   return str;
 };
 
+/**
+ * Whether the tenant switcher has a job to do.
+ *
+ * The list is built from the signed-in user's own roles, so on a deployment
+ * where they hold roles in one tenant it renders a dropdown with a single
+ * entry that switches to where you already are. That is the "Ke" control
+ * #2038 asked to hide.
+ *
+ * `SHOW_TENANT_SWITCHER` overrides in either direction for a deployment that
+ * wants to decide for itself: true keeps it even with one tenant, false hides
+ * it even where switching is possible. Unset falls back to the useful rule.
+ *
+ * Exported so the mobile drawer, which builds its own city row rather than
+ * rendering this component, cannot drift from the top bar.
+ */
+export const tenantChoiceCount = () => {
+  const roles = Digit?.SessionStorage?.get?.("citizen.userRequestObject")?.info?.roles || [];
+  return new Set(roles.map((role) => role?.tenantId).filter(Boolean)).size;
+};
+
+export const showTenantSwitcher = (tenantCount) => {
+  // globalConfigs.js is hand-edited and ansible-rendered, so the override
+  // arrives as a real boolean from one and the string "true"/"false" from the
+  // other. Reading only the boolean meant the documented escape hatch silently
+  // did nothing on a templated host.
+  const flag = window?.globalConfigs?.getConfig?.("SHOW_TENANT_SWITCHER");
+  if (typeof flag === "boolean") return flag;
+  if (typeof flag === "string" && flag.trim() !== "") {
+    const normalised = flag.trim().toLowerCase();
+    if (normalised === "true") return true;
+    if (normalised === "false") return false;
+  }
+  // Callers that already have the list pass its length; callers that do not
+  // (the top bar, which has to decide before rendering the component) let it
+  // work the count out from the same roles the list is built from.
+  const count = typeof tenantCount === "number" ? tenantCount : tenantChoiceCount();
+  return count > 1;
+};
+
+/**
+ * Whether ChangeCity will render anything at all.
+ *
+ * On a multi-root deployment with a single tenant the component renders a
+ * CardText naming the tenant. That is a label, not a control, so hiding the
+ * switcher must not take it with it: gating the call sites on
+ * `showTenantSwitcher` alone removed the only on-screen tenant indication a
+ * Maputo-style deployment has, in the header and in the static drawer.
+ *
+ * Call sites need this rather than letting the component return null, because
+ * `actionFields` drops entries with `.filter(Boolean)` and an element that
+ * renders null still takes a slot, leaving an empty 32px gap.
+ */
+export const showTenantIndicator = (tenantCount) => {
+  if (showTenantSwitcher(tenantCount)) return true;
+  const count = typeof tenantCount === "number" ? tenantCount : tenantChoiceCount();
+  return Boolean(Digit?.Utils?.getMultiRootTenant?.()) && count === 1;
+};
+
 const ChangeCity = (prop) => {
   const [dropDownData, setDropDownData] = useState(null);
   const [selectCityData, setSelectCityData] = useState([]);
@@ -51,6 +109,8 @@ const ChangeCity = (prop) => {
     selectedCities = filteredArray?.filter((select) => select.value == Digit.SessionStorage.get("Employee.tenantId"));
     setSelectCityData(filteredArray);
   }, [dropDownData]);
+
+  if (!showTenantIndicator(selectCityData?.length)) return null;
 
   // if (isDropdown) {
   return (

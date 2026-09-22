@@ -12,12 +12,12 @@ const { maskMobile } = require("../privacy");
  * the root tenant. Kept out of InboundMessageParser so that parsing stays free
  * of session and user-identity dependencies.
  */
-function resolveUploadTenantId(req, config) {
+async function resolveUploadTenantId(req, config) {
   const body = (req && req.body) || {};
   const isUpload = isMediaUpload(body);
 
   if (isUpload) {
-    return resolveTenantForUpload(body);
+    return await resolveTenantForUpload(body);
   }
 
   return null;
@@ -27,16 +27,17 @@ function isMediaUpload(body) {
   return !!(body.NumMedia && parseInt(body.NumMedia, 10) > 0);
 }
 
-function resolveTenantForUpload(body) {
-  const mobileNumber = extractAndValidateMobileNumber(body);
+async function resolveTenantForUpload(body) {
+  const mobileNumber = await extractAndValidateMobileNumber(body);
   const tenantId = sessionManager.getSandboxTenantForMobileNumber(mobileNumber);
 
   logUploadTenantResolution(mobileNumber, tenantId);
   return tenantId;
 }
 
-function extractAndValidateMobileNumber(body) {
-  const mobileNumber = userService.sanitizeMobileNumber(body.From);
+async function extractAndValidateMobileNumber(body) {
+  // No tenant yet — that is what this resolves; the sanitizer falls back to the root.
+  const mobileNumber = await userService.sanitizeMobileNumber(body.From);
 
   if (!mobileNumber) 
     throw new ValidationError("Unable to resolve mobile number from upload request");

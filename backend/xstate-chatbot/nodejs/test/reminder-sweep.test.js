@@ -16,6 +16,9 @@ stub("../../channel", routesDir, { verifyRequest: () => true });
 stub("../../session/session-manager", routesDir, { authenticateAndDispatch: async () => {} });
 stub("../../env-variables", routesDir, {
   port: 8082, contextPath: "/xstate-chatbot", isSandboxMode: false, rootTenantId: "mz",
+  // /reminder is gated on its own secret now: an ops trigger cannot produce a
+  // provider signature, and an ungated route fans out to every active session.
+  reminderAuthToken: "ops-secret",
 });
 
 const reminders = stub("../../machine/service/reminders-service", routesDir, {
@@ -32,6 +35,11 @@ function reminderHandler() {
     }
   }
   throw new Error("/reminder route not found");
+}
+
+/** A request carrying the operational token the route now requires. */
+function authed() {
+  return { get: (name) => (name === "X-Reminder-Token" ? "ops-secret" : undefined) };
 }
 
 function fakeRes() {
@@ -51,7 +59,7 @@ test("a sweep that throws answers 500 instead of killing the process", async () 
   reminders.triggerReminders = async () => { throw new TypeError("repoProvider.getUserId is not a function"); };
 
   const res = fakeRes();
-  await assert.doesNotReject(() => reminderHandler()({}, res), "the rejection is contained");
+  await assert.doesNotReject(() => reminderHandler()(authed(), res), "the rejection is contained");
   assert.equal(res.statusCode, 500);
   assert.equal(res.ended, true);
 });
@@ -61,7 +69,7 @@ test("a successful sweep answers 200", async () => {
   reminders.triggerReminders = async () => { ran = true; };
 
   const res = fakeRes();
-  await reminderHandler()({}, res);
+  await reminderHandler()(authed(), res);
 
   assert.equal(ran, true);
   assert.equal(res.statusCode, 200);

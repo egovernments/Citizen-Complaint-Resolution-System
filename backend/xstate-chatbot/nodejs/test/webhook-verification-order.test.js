@@ -85,11 +85,13 @@ async function run(chain, req) {
   return { reached, res: last.res };
 }
 
-test("verification is the first middleware on every inbound route", () => {
+test("verification is the first middleware on every citizen-facing route", () => {
   // Order is the whole fix: keyed on req.ip and running second, the limiter was
-  // a denial-of-service lever rather than a defence. /reminder had no
-  // verification at all — anyone could trigger the sweep.
-  for (const route of ["/message", "/status", "/reminder"]) {
+  // a denial-of-service lever rather than a defence.
+  //
+  // /reminder is NOT here on purpose: it is an operational trigger, so no caller
+  // can produce a provider signature. It carries its own token gate instead.
+  for (const route of ["/message", "/status"]) {
     assert.equal(chainFor(route)[0].name, "verifySignature", `${route} verifies first`);
   }
 });

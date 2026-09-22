@@ -50,6 +50,11 @@ require.cache[require.resolve("node-fetch")] = {
 
 const userService = require(p("src/session/user-service.js"));
 
+// sanitizeMobileNumber resolves the tenant's rule from MDMS now; pin it so this
+// test exercises onboarding, not a network lookup.
+require(p("src/machine/service/mobile-validation-service.js")).getConfig =
+  async () => ({ countryCode: "+258", mobileNumberRegex: "^[0-9]{9}$" });
+
 test("a 401 re-authenticates and retries once, returning the fresh token", async () => {
   calls.length = 0;
   loginCount = 0;

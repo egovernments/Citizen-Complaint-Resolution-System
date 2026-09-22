@@ -35,6 +35,71 @@ describe('default-data-handler tenant template', () => {
 describe('ansible playbook-deploy.yml', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');
 
+  // #2088, Dhruv review finding 5. The identity tier's six secrets used to be
+  // sha256(keycloak_admin_password ~ ':<label>') with `default('')`, so on a
+  // box with no admin password set they all collapsed to constants computable
+  // from this public repo, and any one of them leaked allowed an offline
+  // brute-force of the admin password.
+  describe('identity secrets are independent of the Keycloak admin password', () => {
+    const IDENTITY_SECRETS = [
+      'keycloak_bff_client_secret',
+      'keycloak_magic_link_client_secret',
+      'keycloak_admin_client_secret',
+      'identity_control_plane_token',
+      'identity_session_introspection_token',
+      'pgr_onboarding_worker_token',
+    ];
+
+    test('none of them is derived from another secret', () => {
+      expect(playbook).not.toMatch(/keycloak_admin_password[^\n]*~ ':identity-/);
+      expect(playbook).not.toMatch(/~ ':identity-[a-z-]+'\) \| hash\('sha256'\)/);
+    });
+
+    test('each is generated when absent and persisted to OpenBao', () => {
+      for (const key of IDENTITY_SECRETS) {
+        // generate-if-absent, short-circuiting `or` so a stored value is kept
+        expect(playbook).toContain(`_identity_stored.${key} | default('', true)`);
+        // and the generated value is what reaches .env
+        expect(playbook).toContain(`{{ identity_secrets.${key} }}`);
+      }
+      // one cas-guarded, merging write, so no other key of the tenant secret
+      // is dropped and a racing write is rejected rather than clobbered
+      expect(playbook).toContain(
+        "'cas': bao_secrets_identity.json.data.metadata.version | int"
+      );
+      expect(playbook).toContain(
+        'bao_secrets_identity.json.data.data | combine(identity_secrets)'
+      );
+    });
+
+    test('an empty Keycloak admin password fails the deploy closed', () => {
+      // Empty here is not neutral: compose falls back to the literal `admin`.
+      expect(playbook).toContain(
+        "(bao_secrets_identity.json.data.data.keycloak_admin_password | default('', true)) | length > 0"
+      );
+      // ...and .env takes the asserted value, not a `| default('')` of it
+      expect(playbook).toContain(
+        'KC_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.keycloak_admin_password }}'
+      );
+    });
+  });
+
+  // #2088, Dhruv review finding 6. The `/kc` route, the per-tenant realm and
+  // its `digit-ui` client are gone, so `auth_provider: keycloak` is a 404 at
+  // login until the frontend cutover onto /identity/v1 lands.
+  test('refuses to deploy a frontend still pointed at the removed Keycloak login', () => {
+    const start = playbook.indexOf('_keycloak_login_surfaces:');
+    expect(start).toBeGreaterThan(-1);
+    const task = playbook.slice(start, start + 2000);
+    // all three resolution keys are covered, including the two per-surface
+    // overrides that do not simply inherit auth_provider
+    for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider']) {
+      expect(task).toContain(`'${key}':`);
+    }
+    expect(task).toContain("selectattr('value', 'eq', 'keycloak')");
+    expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
+  });
+
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
   // must reach the MCP tenant_bootstrap on BOTH passes (root + city);
   // `default(omit)` keeps it absent — the only valid off state.

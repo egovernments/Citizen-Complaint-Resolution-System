@@ -185,6 +185,13 @@ footer_bw_logo_url: "/digit-ui/brand/digit-footer-bw.png"
 login_tenant_allowlist: []
 employee_module_denylist: []
 
+# Tenant switcher in the employee top bar and the mobile drawer.
+# null  - decided by the UI: shown only where the signed-in user holds roles
+#         in more than one tenant, which is the useful rule (CCRS#2038).
+# true  - always shown, even with a single tenant.
+# false - never shown, even where switching is possible.
+show_tenant_switcher: null
+
 # Client-side dashboard render-lag instrumentation (#1110): the supervisor
 # dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
 # ON by default (the emitter self-mutes when the route is absent). This is
@@ -229,6 +236,10 @@ nginx_features:
                             # tunnel to 127.0.0.1:13000 instead).
   api_pgr: false            # /api/pgr/ proxied to MCP for the dashboard
   mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
+  mcp_readonly: false       # /mcp + /v1/ for the PUBLIC read-only MCP instance
+                            # (digit-mcp-readonly). Basic-auth gated; mutually
+                            # exclusive with `mcp`. Needs enable_mcp_readonly and
+                            # mcp_readonly_basic_auth_password set.
   matomo: false             # /matomo/matomo.js + /matomo/matomo.php — the two
                             # tracking endpoints ONLY, as exact matches. The
                             # Matomo admin UI is deliberately NOT proxied: it
@@ -246,6 +257,7 @@ upstream_kong_port: 18000
 upstream_grafana_port: 13000
 upstream_gatus_port: 18889
 upstream_mcp_port: 13101
+upstream_mcp_readonly_port: 13102   # digit-mcp-readonly container (profile mcp-readonly)
 upstream_esbuild_port: 18080
 upstream_minio_port: 19000
 # Matomo's admin UI. Bound to 127.0.0.1 by the overlay, so this is the

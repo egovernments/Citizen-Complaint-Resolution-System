@@ -15,7 +15,11 @@ const envVariables = {
 
     repoProvider: process.env.REPO_PROVIDER || 'InMemory',
 
-    whatsAppBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER || '919880900990',
+    // No built-in default: the old '919880900990' is an eGov DEMO number, and a blank
+    // WHATSAPP_BUSINESS_NUMBER silently rendered it into citizen-facing deep links
+    // (reminders-service and pdf-service both do .slice(2) on this). Blank now means
+    // "omit", which is what host_vars documents, and a misconfiguration stays visible.
+    whatsAppBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER || '',
 
     allowedMobileNumbers: process.env.ALLOWED_MOBILE_NUMBERS || '',
 
@@ -33,6 +37,10 @@ const envVariables = {
     cancelWords: (process.env.CANCEL_WORDS || 'cancelar,cancele,cancel,parar,pare,stop').split(',').map(word => word.trim().toLowerCase()).filter(Boolean),
 
     rootTenantId: process.env.ROOT_TENANTID || 'pg',
+
+    // Boundary hierarchy this deployment files complaints against. Named per deployment
+    // (bometfeedbackhub, for one, does not use ADMIN), so it cannot stay a literal.
+    boundaryHierarchyType: process.env.BOUNDARY_HIERARCHY_TYPE || 'ADMIN',
 
     supportedLocales: process.env.SUPPORTED_LOCALES || 'en_IN',
     
@@ -53,6 +61,26 @@ const envVariables = {
     // boundary-service registers many unrelated hierarchy types per tenant
     // (other modules, QA fixtures); this picks out the one PGR actually uses.
     boundaryHierarchyType: process.env.BOUNDARY_HIERARCHY_TYPE || 'divisao_administrativa',
+
+    // Tenant-aware mobile numbers, read from common-masters.MobileNumberValidation --
+    // the same master egov-user, egov-hrms, digit-ui and novu-bridge use. The defaults
+    // below apply only when the tenant has no row or MDMS is unreachable; they preserve
+    // the previous India-only behaviour rather than inventing a new one.
+    mobileValidation: {
+        defaultCountryCode: process.env.DEFAULT_COUNTRY_CODE || '+91',
+        defaultRegex: process.env.DEFAULT_MOBILE_REGEX || '^[0-9]{10}$',
+        cacheTtlMs: parseInt(process.env.MOBILE_VALIDATION_CACHE_TTL_MS || '300000', 10),
+    },
+
+    // The dev-only catch-all reverse proxy in app.js. OFF by default: with it on, every
+    // path the chatbot does not own is forwarded to the DIGIT services host, so a publicly
+    // reachable container becomes an open proxy onto internal APIs. It exists solely so the
+    // react-app dialog harness can share an origin (see LOCALSETUP.md).
+    devProxyEnabled: process.env.DEV_PROXY_ENABLED === 'true',
+
+    // Shared secret for POST /reminder, which fans a message out to every active session.
+    // Unset means the route is disabled outright rather than left open.
+    reminderAuthToken: process.env.REMINDER_AUTH_TOKEN || '',
 
     // Sandbox mode configuration
     isSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
@@ -110,11 +138,16 @@ const envVariables = {
     twilio: {
         accountSid: process.env.TWILIO_ACCOUNT_SID || '',
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
-        whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '+919880900990',
+        // Also no default, for the same reason: silently sending as the eGov demo number is
+        // worse than a startup failure. senderAddress() raises when this is unset.
+        whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '',
         baseUrl: process.env.TWILIO_BASE_URL || '',
-        // Public base URL for Twilio webhooks. This should match the URL configured in the Twilio console.
+        // Public origin Twilio was configured to call. Pinning it stops a forged
+        // Host/X-Forwarded-Host from steering the signature check at a URL an
+        // attacker controls — twilio-signature.js never reads request headers.
         webhookBaseUrl: process.env.TWILIO_WEBHOOK_BASE_URL || process.env.EXTERNAL_HOST || '',
-        // Whether to verify the Twilio webhook signature. Set to false only for local testing.
+        // Defaults ON: the webhook is public by necessity, so the signature is the
+        // only thing separating a citizen from anyone who guessed the URL.
         verifyWebhookSignature: (process.env.TWILIO_VERIFY_WEBHOOK_SIGNATURE || 'true') !== 'false',
     },
 
@@ -168,6 +201,9 @@ const envVariables = {
 
         egovlocalizationhost: process.env.LOCALIZATION_SERVICE_HOST || 'https://sandbox.digit.org/',
         mdmsSearchPath: process.env.MDMS_SEARCH_PATH || 'egov-mdms-service/v1/_search',
+        // v2 schema-code search, used for common-masters.MobileNumberValidation. Distinct
+        // from the v1 moduleDetails search above; novu-bridge calls the same endpoint.
+        mdmsV2SearchPath: process.env.MDMS_V2_SEARCH_PATH || 'mdms-v2/v2/_search',
         localisationServiceSearchPath: process.env.LOCALISATION_SERVICE_SEARCH_PATH || 'localization/messages/v1/_search',
         billServiceSearchPath: process.env.BILL_SERVICE_SEARCH_PATH || 'billing-service/bill/v2/_fetchbill',
         egovFilestoreServiceUploadEndpoint: process.env.EGOV_FILESTORE_SERVICE_UPLOAD_ENDPOINT || "filestore/v1/files?module=chatbot",

@@ -9,6 +9,8 @@ const express = require("express"),
    { handleError } = require("../../session/error-handler"),
   rateLimit = require("express-rate-limit");
 const { summarizeInbound, maskMobile } = require("../../privacy");
+const { safeEqual } = require("../shared-secret");
+const { warnings } = require("../../startup-checks");
 
  const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -40,7 +42,7 @@ router.post("/message", verifySignature, webhookLimiter, async (req, res) => {
     const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
     
     if (config.isSandboxMode) {
-      const tenantId = resolveUploadTenantId(req, config);
+      const tenantId = await resolveUploadTenantId(req, config);
       inboundRequestParser.setTenatId(tenantId);
     }
 
@@ -83,7 +85,7 @@ router.all("/status", verifySignature, webhookLimiter, async (req, res) => {
     const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
 
     if (config.isSandboxMode) {
-      const tenantId = resolveUploadTenantId(req, config);
+      const tenantId = await resolveUploadTenantId(req, config);
       inboundRequestParser.setTenatId(tenantId);
     }
 
@@ -101,10 +103,21 @@ router.all("/status", verifySignature, webhookLimiter, async (req, res) => {
   }
 });
 
-// Operational trigger, not a citizen path: verified like the webhooks, and the
-// sweep is awaited inside a try/catch — an unhandled rejection here exits the
+// Operational trigger, not a citizen path, so it cannot carry a provider
+// signature. Gated on its own secret and disabled outright when that is unset —
+// it fans out to every active session, so an open route is an abuse amplifier.
+// The sweep is awaited inside a try/catch: an unhandled rejection here exits the
 // process on Node 23 and takes every in-memory session with it.
-router.post("/reminder", verifySignature, webhookLimiter, async (req, res) => {
+router.post("/reminder", webhookLimiter, async (req, res) => {
+  if (!config.reminderAuthToken) {
+    console.error("Rejected /reminder: REMINDER_AUTH_TOKEN is not set, route is disabled");
+    return res.status(404).json({ status: "not found" });
+  }
+  if (!safeEqual(req.get("X-Reminder-Token"), config.reminderAuthToken)) {
+    console.error("Rejected /reminder: bad or missing X-Reminder-Token");
+    return res.sendStatus(403);
+  }
+
   try {
     await remindersService.triggerReminders();
     res.sendStatus(200);
@@ -114,6 +127,11 @@ router.post("/reminder", verifySignature, webhookLimiter, async (req, res) => {
   }
 });
 
-router.get("/health", (req, res) => res.sendStatus(200));
+router.get("/health", (req, res) => {
+  const problems = warnings();
+  if (!problems.length) return res.sendStatus(200);
+  console.error("Health check failing on configuration: " + problems.join(" | "));
+  return res.status(503).json({ status: "misconfigured", problems });
+});
 
 module.exports = router;

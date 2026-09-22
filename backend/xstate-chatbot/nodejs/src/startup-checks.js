@@ -29,6 +29,48 @@ function missingConfig() {
   return missing;
 }
 
+// Settings that leave the service running but degraded. Ported from upstream's
+// config-check.js, which logged them; they are advisory, so they warn rather
+// than block — unlike missingConfig(), which is about what cannot work at all.
+function warnings() {
+  const found = [];
+
+  if (config.whatsAppProvider === 'Twilio') {
+    if (!String(config.twilio.whatsappNumber ?? '').trim()) {
+      found.push(
+        'TWILIO_WHATSAPP_NUMBER is not set: inbound messages would be accepted and ' +
+        'complaints filed, but every reply would be dropped.'
+      );
+    }
+    if (!config.twilio.verifyWebhookSignature) {
+      found.push(
+        'TWILIO_VERIFY_WEBHOOK_SIGNATURE is false: the public webhook is forgeable by ' +
+        'anyone who learns the URL. Intended for local console testing only.'
+      );
+    }
+  }
+
+  if (config.repoProvider === 'InMemory') {
+    found.push(
+      'REPO_PROVIDER is InMemory: conversations are lost on restart and break with more ' +
+      'than one replica. Set it to Postgres for any real deployment.'
+    );
+  }
+
+  return found;
+}
+
+function warnAtStartup() {
+  const found = warnings();
+  if (!found.length) {
+    console.log('Configuration check: OK');
+    return found;
+  }
+  console.warn('Configuration check: the service will run, but not fully:');
+  for (const w of found) console.warn('  * ' + w);
+  return found;
+}
+
 function assertRequiredConfigOrExit() {
   const missing = missingConfig();
   if (!missing.length) return;
@@ -40,4 +82,4 @@ function assertRequiredConfigOrExit() {
   process.exit(1);
 }
 
-module.exports = { assertRequiredConfigOrExit, missingConfig };
+module.exports = { assertRequiredConfigOrExit, missingConfig, warnAtStartup, warnings };

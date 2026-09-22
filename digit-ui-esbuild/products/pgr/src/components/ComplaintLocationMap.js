@@ -201,7 +201,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
                   <div style={{
                     fontSize: "14px",
                     fontWeight: "600",
-                    color: "#0B0C0C",
+                    // Inherit, don't hardcode: the tooltip surface is themed
+                    // (--color-tooltip-bg is navy on CMS Blue) and this
+                    // near-black pinned the label to dark-on-dark, which is
+                    // the unreadable map tooltip in the #2038 review.
+                    color: "inherit",
                     padding: "4px 8px",
                     whiteSpace: "normal",
                     textAlign: "center",
