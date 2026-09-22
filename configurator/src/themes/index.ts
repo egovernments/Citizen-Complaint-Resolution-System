@@ -191,11 +191,66 @@ const digitDark: ThemePreset = {
   },
 };
 
+/**
+ * The onboarding palette, taken from Bomet's own live theme rather than the
+ * reference build.
+ *
+ * Read off `bometfeedbackhub.digit.org` after its `common-masters.ThemeConfig`
+ * had applied, which matters: sampled before that, the page still shows the
+ * DIGIT orange defaults, and those are not what any Bomet user sees.
+ *
+ *   --color-primary-2   #2563EB   the blue
+ *   --color-secondary   #0B1F3A   the navy chrome and the panel scrim
+ *   --color-text-*      #1D2433 / #4B5563 / #6B7280
+ *   --color-border      #E5E7EB
+ *
+ * The reference build is close but not the same (#2D4FC4 and #0C184A), and
+ * matching it would put onboarding a shade away from the product a tenant
+ * enters straight afterwards. Matching Bomet keeps the two continuous.
+ */
+const cmsBlue: ThemePreset = {
+  name: 'cms-blue',
+  label: 'CMS Blue',
+  primaryHex: '#2563EB',
+  dark: false,
+  variables: {
+    '--background': '220 33% 98%',
+    '--foreground': '221 28% 16%',
+    '--card': '0 0% 100%',
+    '--card-foreground': '221 28% 16%',
+    '--popover': '0 0% 100%',
+    '--popover-foreground': '221 28% 16%',
+    '--primary': '221 83% 53%',
+    '--primary-foreground': '0 0% 100%',
+    // The navy the left panel is built on, and the scrim over the photograph.
+    '--secondary': '214 68% 14%',
+    '--secondary-foreground': '0 0% 100%',
+    '--muted': '220 20% 96%',
+    '--muted-foreground': '220 9% 46%',
+    '--accent': '220 88% 97%',
+    '--accent-foreground': '221 83% 53%',
+    '--destructive': '7 77% 47%',
+    '--destructive-foreground': '0 0% 100%',
+    '--border': '220 13% 91%',
+    '--input': '220 13% 91%',
+    '--ring': '221 83% 53%',
+    // 8px, from the reference. The DIGIT presets use 0.25rem, so this is a
+    // deliberate difference rather than a stray value.
+    '--radius': '0.5rem',
+    '--chart-1': '221 83% 53%',
+    '--chart-2': '45 93% 58%',
+    '--chart-3': '280 60% 52%',
+    '--chart-4': '28 85% 56%',
+    '--chart-5': '187 85% 53%',
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
 export const THEMES: ThemePreset[] = [
+  cmsBlue,
   digitOrange,
   materialIndigo,
   materialTeal,
@@ -211,23 +266,44 @@ export function getStoredTheme(): string {
   return localStorage.getItem(STORAGE_KEY) || 'digit-orange';
 }
 
-export function applyTheme(name: string): void {
+/**
+ * A preset's variables, for a surface that wants to scope a palette to its own
+ * subtree rather than to the document.
+ *
+ * Scoping beats setting them on `documentElement` from a child, because
+ * ThemeProvider sits above and its effect runs after any child's — so a child
+ * that paints the root gets quietly overwritten on mount. Custom properties
+ * cascade, so the nearest ancestor wins and there is nothing to restore.
+ */
+export function themeVariables(name: string): Record<string, string> {
+  return { ...(THEME_MAP.get(name)?.variables ?? {}) };
+}
+
+/**
+ * Paint a theme without remembering it.
+ *
+ * Split out from `applyTheme` for surfaces that set their own look for as long
+ * as they are mounted and hand it back afterwards — the signup flow does this,
+ * and persisting there would leave the admin console wearing the onboarding
+ * palette for every later visit.
+ */
+export function applyThemeVariables(name: string): boolean {
   const preset = THEME_MAP.get(name);
-  if (!preset) return;
+  if (!preset) return false;
 
   const root = document.documentElement;
-
-  // Apply all CSS variables
   for (const [prop, value] of Object.entries(preset.variables)) {
     root.style.setProperty(prop, value);
   }
-
-  // Toggle dark class
   if (preset.dark) {
     root.classList.add('dark');
   } else {
     root.classList.remove('dark');
   }
+  return true;
+}
 
+export function applyTheme(name: string): void {
+  if (!applyThemeVariables(name)) return;
   localStorage.setItem(STORAGE_KEY, name);
 }
