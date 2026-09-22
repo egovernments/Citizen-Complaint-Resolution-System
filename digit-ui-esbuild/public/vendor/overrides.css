@@ -8009,6 +8009,10 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   padding: 12px;
   border: 1px solid var(--color-card-border, #E5E7EB);
   border-radius: 8px;
+  /* The popup header carries a 1px rule and the body started 5px under it, so
+   * the card read as stuck to the divider. 16px is the spacing the rest of the
+   * employee app puts between a section rule and the block beneath it. */
+  margin-top: 12px;
 }
 .digit-logout-account-avatar {
   flex: 0 0 auto;
@@ -8163,4 +8167,19 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   flex-direction: column !important;
   gap: 4px !important;
   row-gap: 4px !important;
+}
+
+/* Logout dialog: no close cross.
+ *
+ * The dialog already offers Cancel, and the overlay stays dismissable, so the
+ * cross was a third way to do the same thing — and it collided with the
+ * heading, which is now a question rather than a one-word title. Measured: the
+ * heading block ran to x=952.7 while the close glyph started at x=934.5, so
+ * "log out?" sat under it.
+ *
+ * Removing it is the fix rather than padding the heading away from it: the
+ * control had no job left once Cancel existed. Scoped to this dialog — other
+ * popups have no Cancel and still need a way out. */
+.digit-logout-popup-wrapper .digit-popup-close {
+  display: none !important;
 }
