@@ -18,7 +18,24 @@ const tr = (t, key, fallback) => {
   return v === key ? fallback : v;
 };
 
+/**
+ * Both rows are DIGIT Secondary: a brand stroke and a brand label over the
+ * surface they sit on, no fill of their own. They were a neutral grey stroke
+ * with a near-black label, which is a shape the design system does not have
+ * and which gave the dialog's only real action no more weight than its own
+ * border (#2038 review).
+ *
+ * The destructive row takes the same shape in the error colour rather than a
+ * red fill — removing a photo is reversible by uploading another, so it does
+ * not warrant the weight of a filled danger button.
+ *
+ * Colours come from the tenant's own button tokens, the same family the v2
+ * Button reads, so this dialog cannot drift from the buttons around it.
+ */
 function ActionRow({ Icon, label, onClick, danger }) {
+  const accent = danger
+    ? "var(--color-error, #d4351c)"
+    : "var(--color-button-secondary-text, var(--color-primary-2, var(--color-primary-1, #2563EB)))";
   return (
     <button
       type="button"
@@ -31,12 +48,9 @@ function ActionRow({ Icon, label, onClick, danger }) {
         width: "100%",
         padding: "12px 14px",
         borderRadius: "8px",
-        border: "1px solid var(--color-border, #d6d5d4)",
-        background:
-          "var(--v2-surface-color, var(--color-surface, #ffffff))",
-        color: danger
-          ? "var(--color-error, #d4351c)"
-          : "var(--color-text-primary, #0B0C0C)",
+        border: `1px solid ${accent}`,
+        background: "transparent",
+        color: accent,
         fontSize: "0.9375rem",
         fontWeight: 500,
         textAlign: "left",
