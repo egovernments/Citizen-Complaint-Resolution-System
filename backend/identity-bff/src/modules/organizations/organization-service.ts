@@ -449,13 +449,18 @@ export async function applyVerifiedSignupIdentityProfile(input: {
   email: string;
   firstName: string;
   lastName: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const response = await request(`/users/${encodeURIComponent(input.userId)}`);
   const user = await response.json() as UserRepresentation;
   if (user.id !== input.userId || user.enabled === false ||
       user.email?.trim().toLowerCase() !== input.email || user.emailVerified !== true) {
     throw new IdentityAdminError("The verified magic-link identity does not match the signup");
   }
+  const managedDraft = user.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+  // A signup may authenticate an established account, but profile editing is
+  // a separate, authenticated flow. Only finish the provisional record that
+  // this BFF created for the same signup journey.
+  if (!managedDraft) return false;
   const attributes = { ...user.attributes };
   delete attributes[BFF_SIGNUP_USER_ATTRIBUTE];
   await request(`/users/${encodeURIComponent(input.userId)}`, {
@@ -467,6 +472,7 @@ export async function applyVerifiedSignupIdentityProfile(input: {
       attributes,
     }),
   });
+  return true;
 }
 
 /**
@@ -486,6 +492,14 @@ export async function ensureMagicLinkSignupIdentity(input: {
     }
     const managedDraft = existing.emailVerified !== true &&
       existing.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+    // A verified existing email may be proved again through the mailbox and
+    // continue into the explicit account-linking journey. An unverified
+    // provider-only record is not equivalent proof: its provider must first
+    // authenticate it. Only provisional records created by this BFF are the
+    // exception because the magic link is their original verification step.
+    if (existing.emailVerified !== true && !managedDraft) {
+      throw new IdentityAdminError("The existing identity must be verified through its provider", 409);
+    }
     if (managedDraft &&
         (existing.firstName !== input.firstName || existing.lastName !== input.lastName)) {
       await request(`/users/${encodeURIComponent(existing.id)}`, {
@@ -520,6 +534,11 @@ export async function ensureMagicLinkSignupIdentity(input: {
   const raced = await findIdentityUserByEmail(input.email);
   if (!raced?.id || raced.enabled === false) {
     throw new IdentityAdminError("Keycloak did not identify the signup user", 409);
+  }
+  const racedManagedDraft = raced.emailVerified !== true &&
+    raced.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+  if (raced.emailVerified !== true && !racedManagedDraft) {
+    throw new IdentityAdminError("The existing identity must be verified through its provider", 409);
   }
   return { id: raced.id, created: false };
 }

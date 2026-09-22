@@ -266,14 +266,16 @@ export function registerAuthenticationRoutes(app: express.Application): void {
             claims.email_verified !== true) {
           throw new Error("Magic-link identity does not match the signup draft");
         }
-        await applyVerifiedSignupIdentityProfile({
+        const profileApplied = await applyVerifiedSignupIdentityProfile({
           userId: claims.sub,
           ...draft,
         });
-        sessionClaims = {
-          ...claims,
-          name: `${draft.firstName} ${draft.lastName}`,
-        };
+        if (profileApplied) {
+          sessionClaims = {
+            ...claims,
+            name: `${draft.firstName} ${draft.lastName}`,
+          };
+        }
       }
       const { sessionId, maxAge } = await createIdentitySession(
         tokens,

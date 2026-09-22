@@ -111,8 +111,9 @@ The provisioning script writes these ordered lists to
 `digit-identity-bff` Keycloak client. The BFF reads them and Keycloak's provider
 and client state live; it omits an OAuth or magic-link method when the backing
 provider/client is not enabled. Changing the attributes takes effect without a
-BFF rebuild or restart. Environment variables retain connection details and
-secrets, not the runtime authentication-method catalog.
+BFF rebuild or restart, with a cache delay of at most ten seconds. Environment
+variables retain connection details and secrets, not the runtime
+authentication-method catalog.
 
 ### Proxy and request-rate settings
 
@@ -121,6 +122,10 @@ hops between the browser and BFF. The canonical Ansible deployment uses `2`
 for host nginx -> Kong -> BFF; a standalone nginx-to-BFF deployment uses `1`.
 Leaving it at `0` behind a proxy makes IP rate limiting treat the proxy as one
 caller, while trusting too many hops allows a client-supplied forwarded address.
+The canonical Kong deployment must also trust the private/loopback source range
+used by host nginx (`KONG_TRUSTED_IPS`) so it preserves nginx's client-address
+chain. The supplied Compose/Ansible defaults do this; narrow the CIDRs further
+when the host-to-container address is fixed.
 
 Magic-link request throttling is independent of password setup/reset. Tune it
 with `IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS` and

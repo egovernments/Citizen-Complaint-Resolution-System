@@ -8,6 +8,7 @@ import {
   createIdentitySession,
   saveSelectedIdentityContext,
 } from "../../src/modules/sessions/session-store.js";
+import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
   getIdentityAppPort as getAppPort,
   startIdentityTestApp as startTestApp,
@@ -185,6 +186,8 @@ describe("identity BFF", () => {
   });
 
   it("exposes configured methods and rejects unknown methods", async () => {
+    resetIdentityMethodCatalog();
+    await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
     const methods = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-methods`,
     );
@@ -194,6 +197,9 @@ describe("identity BFF", () => {
       { id: "google", label: "Continue with Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
       { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
     ] });
+    const initialAdminReads = await (
+      await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
+    ).json() as string[];
 
     const signinMethods = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
@@ -205,6 +211,10 @@ describe("identity BFF", () => {
     );
     expect((await signupMethods.json()).methods.map((method: { id: string }) => method.id))
       .toEqual(["magic_link", "google"]);
+    const cachedAdminReads = await (
+      await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
+    ).json() as string[];
+    expect(cachedAdminReads).toEqual(initialAdminReads);
 
     await kcUpdate("/clients/digit-identity-bff-uuid", {
       attributes: {
@@ -212,6 +222,7 @@ describe("identity BFF", () => {
         "digit.auth.signup.methods": "magic_link,google,github",
       },
     });
+    resetIdentityMethodCatalog();
     const reconfigured = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
     );
@@ -223,6 +234,7 @@ describe("identity BFF", () => {
         "digit.auth.signup.methods": "magic_link,google,github",
       },
     });
+    resetIdentityMethodCatalog();
 
     const unknown = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=unknown`,
@@ -305,22 +317,63 @@ describe("identity BFF", () => {
       .split(";", 1)[0];
     // The mock access token expires immediately. Refresh proves the session
     // retained the magic-link client instead of falling back to the password client.
-    expect((await fetch(
+    const magicSession = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/session`,
       { headers: { Cookie: magicSessionCookie } },
-    )).status).toBe(200);
+    );
+    expect(magicSession.status).toBe(200);
+    expect(await magicSession.json()).toMatchObject({
+      user: { name: "Demo Person" },
+    });
     const magicUser = await (
       await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/identity-user-1`)
     ).json();
     expect(magicUser).toMatchObject({
       email: "person@example.com",
       emailVerified: true,
-      firstName: "Magic",
-      lastName: "Founder",
+      firstName: "Demo",
+      lastName: "Person",
     });
-    expect((await kcUpdate("/users/identity-user-1", {
-      firstName: "Demo", lastName: "Person",
-    })).status).toBe(204);
+
+    await kcAdmin("/users", {
+      id: "unverified-provider-user",
+      username: "unverified.provider@example.com",
+      email: "unverified.provider@example.com",
+      firstName: "Provider",
+      lastName: "Claim",
+      enabled: true,
+      emailVerified: false,
+      federatedIdentities: [{ identityProvider: "github", userId: "github-unverified" }],
+    });
+    const linksBeforeUnverifiedAttempt = magicRequests.length;
+    await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
+    const unverifiedProviderAttempt = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.32",
+        },
+        body: JSON.stringify({
+          firstName: "Mailbox",
+          lastName: "Owner",
+          email: "unverified.provider@example.com",
+        }),
+      },
+    );
+    expect(unverifiedProviderAttempt.status).toBe(202);
+    await expect.poll(async () => {
+      const log = await (
+        await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
+      ).json() as string[];
+      return log.filter((entry) => entry.endsWith("/users")).length;
+    }).toBeGreaterThan(0);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect((await (
+      await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+    ).json() as Array<Record<string, unknown>>)).toHaveLength(linksBeforeUnverifiedAttempt);
 
     const newIdentity = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,

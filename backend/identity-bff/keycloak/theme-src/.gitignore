@@ -4,3 +4,4 @@ dist_keycloak/
 .keycloakify/
 test-results/
 playwright-report/
+*.tsbuildinfo

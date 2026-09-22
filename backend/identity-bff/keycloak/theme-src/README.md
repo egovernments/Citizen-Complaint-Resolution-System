@@ -35,8 +35,9 @@ stock Keycloak appearance.
 - **Palette** — generated, not retyped. `npm run tokens` evaluates
   `configurator/src/themes/index.ts` and writes the `cms-blue` preset to
   `src/login/styles/tokens.generated.css`. The generated file is committed so
-  the theme builds without reaching outside `backend/identity-bff`; `npm test`
-  regenerates it in memory and fails on drift.
+  the theme builds without reaching outside `backend/identity-bff`; palette
+  updates are an explicit theme-maintenance operation, not a cross-project CI
+  dependency.
 - **Layout and primitives** — `src/login/Template.tsx` is a port of the
   Configurator's `AuthShell`, and `src/login/styles/theme.css` restates only the
   utility values the auth screens use, each annotated with the Tailwind class it
@@ -57,7 +58,7 @@ stock Keycloak appearance.
 ```bash
 npm install
 npm run dev          # http://localhost:5173/dev.html?page=login.ftl
-npm test             # rendering, palette drift, page coverage
+npm test             # rendering and page coverage
 npm run build-keycloak-theme   # dist_keycloak/configurator-blue-login-theme.jar
 ```
 

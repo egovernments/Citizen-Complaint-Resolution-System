@@ -2132,6 +2132,12 @@ services:
       KONG_ADMIN_LISTEN: 127.0.0.1:8001
       KONG_ADMIN_GUI_URL: http://localhost:8002
       KONG_STATUS_LISTEN: 0.0.0.0:8100
+      # Host nginx is the only public entry point and appends the browser IP.
+      # Trust the loopback/private source ranges it can use to reach this
+      # container so Kong preserves that chain for BFF rate limiting.
+      KONG_TRUSTED_IPS: ${KONG_TRUSTED_IPS:-127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      KONG_REAL_IP_HEADER: X-Forwarded-For
+      KONG_REAL_IP_RECURSIVE: "on"
       KONG_MEM_CACHE_SIZE: 64m
       KONG_NGINX_WORKER_PROCESSES: auto
       KONG_TRACING_INSTRUMENTATIONS: all

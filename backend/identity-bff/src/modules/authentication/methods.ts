@@ -9,6 +9,19 @@ import type { IdentityAuthIntent } from "./types.js";
 
 const SIGNIN_METHODS = "digit.auth.signin.methods";
 const SIGNUP_METHODS = "digit.auth.signup.methods";
+const METHOD_CATALOG_TTL_MS = 10_000;
+
+interface IdentityMethodCatalog {
+  signin: string[];
+  signup: string[];
+  providers: Awaited<ReturnType<typeof enabledIdentityProviders>>;
+  magicLinkEnabled: boolean;
+}
+
+let catalogCache: {
+  expiresAt: number;
+  promise: Promise<IdentityMethodCatalog>;
+} | null = null;
 
 function methodIds(value: string | undefined, attribute: string): string[] {
   if (value === undefined) {
@@ -27,9 +40,7 @@ function providerLabel(displayName: string): string {
     : `Continue with ${displayName}`;
 }
 
-export async function enabledIdentityMethods(
-  intent?: IdentityAuthIntent,
-): Promise<IdentityAuthMethod[]> {
+async function loadIdentityMethodCatalog(): Promise<IdentityMethodCatalog> {
   const client = await identityClient(config.keycloakBffClientId);
   if (!client?.enabled || !client.standardFlowEnabled) {
     throw new IdentityAdminError("The Keycloak Identity BFF client is not enabled", 503);
@@ -37,18 +48,57 @@ export async function enabledIdentityMethods(
 
   const signin = methodIds(client.attributes[SIGNIN_METHODS], SIGNIN_METHODS);
   const signup = methodIds(client.attributes[SIGNUP_METHODS], SIGNUP_METHODS);
+  const configured = [...new Set([...signin, ...signup])];
+  const [providers, magicClient] = await Promise.all([
+    configured.some((id) => id !== "password" && id !== "magic_link")
+      ? enabledIdentityProviders()
+      : Promise.resolve(new Map()),
+    configured.includes("magic_link")
+      ? identityClient(config.keycloakMagicLinkClientId)
+      : Promise.resolve(null),
+  ]);
+
+  return {
+    signin,
+    signup,
+    providers,
+    magicLinkEnabled: Boolean(
+      magicClient?.enabled && magicClient.standardFlowEnabled &&
+      config.keycloakMagicLinkClientSecret,
+    ),
+  };
+}
+
+async function identityMethodCatalog(): Promise<IdentityMethodCatalog> {
+  const now = Date.now();
+  if (catalogCache && now < catalogCache.expiresAt) return catalogCache.promise;
+
+  const promise = loadIdentityMethodCatalog();
+  catalogCache = { expiresAt: now + METHOD_CATALOG_TTL_MS, promise };
+  try {
+    return await promise;
+  } catch (error) {
+    // Do not turn a transient Admin API failure into a cached outage.
+    if (catalogCache?.promise === promise) catalogCache = null;
+    throw error;
+  }
+}
+
+/** Test/control-plane hook for a known Keycloak policy update. */
+export function resetIdentityMethodCatalog(): void {
+  catalogCache = null;
+}
+
+export async function enabledIdentityMethods(
+  intent?: IdentityAuthIntent,
+): Promise<IdentityAuthMethod[]> {
+  const { signin, signup, providers, magicLinkEnabled } = await identityMethodCatalog();
   const ordered = [...new Set([...signin, ...signup])];
   const policy = new Map(ordered.map((id) => [id, ([
     ...(signin.includes(id) ? ["signin"] : []),
     ...(signup.includes(id) ? ["signup"] : []),
   ] as IdentityAuthIntent[])]));
   const requested = intent === "signin" ? signin : intent === "signup" ? signup : ordered;
-  const needsProviders = requested.some((id) => id !== "password" && id !== "magic_link");
-  const needsMagicLink = requested.includes("magic_link");
-  const [providers, magicClient] = await Promise.all([
-    needsProviders ? enabledIdentityProviders() : Promise.resolve(new Map()),
-    needsMagicLink ? identityClient(config.keycloakMagicLinkClientId) : Promise.resolve(null),
-  ]);
 
   return requested.flatMap((id): IdentityAuthMethod[] => {
     const intents = policy.get(id) || [];
@@ -56,8 +106,7 @@ export async function enabledIdentityMethods(
       return [{ id, label: "Email and password", type: "password", intents }];
     }
     if (id === "magic_link") {
-      return magicClient?.enabled && magicClient.standardFlowEnabled &&
-        Boolean(config.keycloakMagicLinkClientSecret)
+      return magicLinkEnabled
         ? [{ id, label: "Email me a sign-in link", type: "magic_link", intents }]
         : [];
     }
