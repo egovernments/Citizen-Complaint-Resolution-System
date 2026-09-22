@@ -2835,7 +2835,13 @@ services:
       # DIGIT core SMS topic (user-otp login OTPs, egov-user password resets): translated into
       # the envelope and delivered through the same pipeline — this replaces egov-notification-sms.
       NOVU_BRIDGE_CORE_SMS_TOPIC: egov.core.notification.sms
-      NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: ${STATE_LEVEL_TENANT_ID:-pg}
+      # Tenant a core SMS (login OTP) is attributed to when the producer sends none. A
+      # literal `pg`, like every other state-tenant key in this file, so the playbook's
+      # post-bootstrap rewrite turns it into state_root. `${STATE_LEVEL_TENANT_ID:-pg}`
+      # looked right but nothing puts that variable in .env: it resolved to `pg` on every
+      # box, so those OTPs were checked against a tenant with no SMS policy and dropped
+      # as SKIPPED / NB_NO_PROVIDER.
+      NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg
       NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
