@@ -9,13 +9,26 @@ import { Header as TopBarComponentMain } from "@egovernments/digit-ui-components
 import ImageComponent from "../ImageComponent";
 import { resolveProfilePhoto } from "../utils";
 
-const DEFAULT_EGOV_LOGO = "https://egov-dev-assets.s3.ap-south-1.amazonaws.com/egov-logo-2025.png";
+/**
+ * Both lockups are served from this repo, and both are cropped to the wordmark.
+ *
+ * The upstream assets are 800x800 canvases carrying a 800x200 wordmark
+ * letterboxed in the middle, so 75% of the image is transparency. The header
+ * sizes the logo by height, which meant the visible wordmark rendered at a
+ * quarter of the height it was given — 11px inside a 44px box — and read as a
+ * logo with far too much padding around it (#2038 review). Cropping the asset
+ * fixes it for every consumer at once, rather than asking each one to know the
+ * canvas geometry.
+ *
+ * The light lockup was also being fetched from a `-dev-assets` S3 bucket on
+ * every page load. Self-hosting it removes that request and that dependency.
+ */
+const DEFAULT_EGOV_LOGO = "/digit-ui/brand/egov-logo.png";
 /**
  * The shipped lockup is the dark-on-light one: an orange "e" and a navy "GOV".
  * On a tenant that paints its header navy the "GOV" is navy on navy and simply
  * disappears, so a dark header needs the reverse lockup instead. Same geometry
- * as the default — 800x800, the wordmark 800x200 letterboxed on transparency —
- * so it drops into the square slot without touching any layout.
+ * as the default, so the two are interchangeable in the slot.
  *
  * `applyTheme` publishes the header's tone from the same luminance it uses to
  * pick readable foregrounds, so this cannot disagree with the rest of the
@@ -63,6 +76,28 @@ const TopBar = ({
 }) => {
   const headerTone = useHeaderTone();
   const [profilePic, setProfilePic] = React.useState(null);
+
+  /**
+   * The header has two image slots: `img` (the tenant mark) and `ulb`, which
+   * on a tenant with no ULB grade falls back to the state mark. Plenty of
+   * deployments point both at the same asset — Bomet serves one crest for
+   * both — and below the header's own mobile breakpoint the shared component
+   * puts them side by side inside `.digit-header-img-ulb-wrapper-mobileview`,
+   * so the same crest rendered twice at two different sizes with a divider
+   * between them (#2038 review).
+   *
+   * The `ulb` slot is the one that survives: it is the only one that renders
+   * above that breakpoint, since `.digit-header-img` is present but zero width
+   * on desktop. Dropping `ulb` takes the crest off the desktop header
+   * entirely, and blanking the `img` prop is worse still — the shared header
+   * then falls back to its own default mSeva mark.
+   *
+   * So both props stay and the duplicate is hidden in CSS, which needs this
+   * flag: only here can the two URLs be compared. A tenant whose state and
+   * city marks genuinely differ keeps both images and the rule between them.
+   */
+  const ulbLogo = logoUrlWhite || stateInfo?.logoUrlWhite;
+  const ulbLogoDuplicatesHeaderImg = Boolean(ulbLogo) && ulbLogo === logoUrl;
 
   React.useEffect(async () => {
     const tenant = Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getStateId() : Digit.ULBService.getCurrentTenantId();
@@ -229,7 +264,9 @@ const TopBar = ({
         onHamburgerClick={() => {
           toggleSidebar();
         }}
-        className="digit-employee-header"
+        className={`digit-employee-header${
+          ulbLogoDuplicatesHeaderImg ? " digit-employee-header--single-mark" : ""
+        }`}
         img={logoUrl}
         logoWidth={"64px"}
         logoHeight={"48px"}
@@ -251,7 +288,7 @@ const TopBar = ({
                 {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
               </>
             ) : (
-              <ImageComponent className="state" src={logoUrlWhite || stateInfo?.logoUrlWhite} alt="State Logo" />
+              <ImageComponent className="state" src={ulbLogo} alt="State Logo" />
             )
           ) : (
             <>
