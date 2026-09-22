@@ -145,6 +145,7 @@ askDescription
 
 askForAttachments
   .setPrompt(messages.fileComplaint.imageUpload.question)
+  .setFill({ limit: config.maxMediaSizeBytes / (1024 * 1024) })
   .setAccept(['image', 'document'])
   .setOptional(true)
   .setValidate((input) => input === 'FILE_TOO_LARGE' ? messages.fileComplaint.imageUpload.tooLarge : true)

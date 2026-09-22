@@ -82,45 +82,6 @@ class EmailTenantService {
         }
     }
 
-    /**
-     * Authenticate user with tenant
-     * @param {string} mobileNumber - User's WhatsApp number
-     * @param {string} tenantId - Tenant code
-     * @returns {Promise<Object>} - Returns user details with auth token
-     */
-    async authenticateUser(mobileNumber, tenantId) {
-        try {
-            // Try to login user with mobile number and tenant
-            const user = await userService.loginUser(mobileNumber, tenantId);
-            
-            if (user && user.authToken) {
-                // User exists
-                const enrichedUser = await userService.enrichuserDetails(user);
-                return {
-                    success: true,
-                    exists: true,
-                    userId: enrichedUser.userInfo?.uuid,
-                    authToken: enrichedUser.authToken,
-                    refreshToken: enrichedUser.refreshToken,
-                    userInfo: enrichedUser.userInfo,
-                    name: enrichedUser.userInfo?.name || 'Citizen'
-                };
-            }
-            
-            // User doesn't exist - they need to register through the UI
-            return {
-                success: false,
-                exists: false,
-                requiresRegistration: true
-            };
-
-        } catch (error) {
-            return {
-                success: false,
-                error: 'Authentication failed'
-            };
-        }
-    }
 }
 
 module.exports = new EmailTenantService();

@@ -12,6 +12,7 @@ const mediaTypes = require("../../media-types");
 var geturl = require("url");
 var path = require("path");
 const userService = require('../../session/user-service');
+const { ExternalServiceError } = require("../../session/errors");
 require("url-search-params-polyfill");
 
 let pgrCreateRequestBody =
@@ -227,8 +228,11 @@ class PGRService {
   async fetchBoundaryStep(tenantId, boundaryPath = []) {
     const { hierarchyType, levels } = await this.fetchBoundaryHierarchy(tenantId);
     if (!hierarchyType) {
-      return { options: [], messageBundle: {}, levelLabel: "", isLeafLevel: true };
+      throw new ExternalServiceError(
+        `No boundary hierarchy registered for '${config.boundaryHierarchyType}' in tenant ${tenantId}`
+      );
     }
+
 
     const url =
       config.egovServices.egovServicesHost +
