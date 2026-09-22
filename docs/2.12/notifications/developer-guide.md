@@ -447,10 +447,11 @@ Then:
    `toNovuCredentials` already handles you through its default branch, which
    copies only the keys the catalog declares — an operator cannot smuggle an
    unexpected key into Novu's credential store. If they differ, add a case.
-3. **`supportsVerify`.** Say `false` unless the gateway really has a
-   credential-check call. `smscountry` and `ozeki` say false because the only way
-   to learn whether their login works is to send a message, and a "verify" that
-   always passes is worse than none.
+3. **`supportsVerify`.** Say `true` for any type backed by a Novu integration.
+   The check behind it (`POST /providers/verify`, shown as **Check status**) only
+   asks Novu whether the integration exists and is switched on — it proves no
+   credential for any type, so every type can offer it. A test send is the
+   credential proof. `false` is for a type with no Novu integration to look up.
 
 **Tests to touch:** `service/provider/ProviderCatalogTest` (the type appears,
 required credentials are enforced, the identifier round-trips through

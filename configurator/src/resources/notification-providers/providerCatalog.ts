@@ -239,7 +239,7 @@ export function groupCatalogByChannel(
  * outside DELIVERABLE_NOVU_CHANNELS. This used to fall through to the SMS
  * default below, which is how Novu's built-in Inbox integration (`in_app`)
  * appeared as an SMS provider — in the table, in the SMS dropdown, and with a
- * full row of Verify / Test / Rotate / Delete buttons behind it.
+ * full row of Check status / Test / Rotate / Delete buttons behind it.
  */
 export function rowChannel(record: {
   channel?: unknown;

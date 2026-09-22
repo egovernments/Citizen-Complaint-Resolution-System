@@ -73,13 +73,12 @@ class ProviderCatalogTest {
     }
 
     @Test
-    void gatewaysWithNoCredentialCheckCallDoNotClaimVerifySupport() {
-        // SMSCountry's and Ozeki's only "is this login good?" test is sending a real message.
-        assertFalse(catalog.require("smscountry").isSupportsVerify());
-        assertFalse(catalog.require("ozeki").isSupportsVerify());
-        assertTrue(catalog.require("twilio-sms").isSupportsVerify());
-        assertTrue(catalog.require("smtp").isSupportsVerify());
-        // Every type can be test-sent — that is the honest check.
+    void everyTypeOffersTheStatusCheckAndATestSend() {
+        // /providers/verify only asks Novu whether the integration exists and is on — it
+        // proves no credential for any type, so no type is special. Hiding it for SMSCountry
+        // and Ozeki while Twilio and SMTP showed the same check implied a difference there
+        // was not. Sending a test is the credential proof, for every type.
+        assertTrue(catalog.types().stream().allMatch(ProviderType::isSupportsVerify));
         assertTrue(catalog.types().stream().allMatch(ProviderType::isSupportsTestSend));
     }
 

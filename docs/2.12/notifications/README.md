@@ -564,7 +564,7 @@ state tenant on every dispatch (cached 60 s), falling back per tenant to the leg
 defaults precisely so a dropped overlay cannot flip them). A tenant with no rows in
 either falls back to the
 `novu_bridge_channels_enabled` env list; a tenant *with* rows is governed by them alone — a
-channel with no row is off. The **Channels** card on the Providers screen shows the effective
+channel with no row is off. The **Notifications → Channels** screen shows the effective
 state per channel and why (row present? enabled? Novu integration? workflow? sender id?).
 "Validate" on the Configure screen warns about routing rows on a channel that is off.
 
@@ -606,7 +606,7 @@ password resets), translated into the envelope by `CoreSmsTranslator`
 SMS service for OTPs any more: `enable_otp_services: true` needs `enable_novu: true`, and the
 OTP SMS obeys the tenant's channel policy, provider and dispatch log like any other event
 (`eventName CORE.SMS.OTP`). SMS disabled for the tenant ⇒ login OTPs land as
-`SKIPPED / NB_NO_PROVIDER`, and the Channels card says so. Every event, including a rejected one, leaves a dispatch-log row
+`SKIPPED / NB_NO_PROVIDER`, and the Channels screen says so. Every event, including a rejected one, leaves a dispatch-log row
 (`REJECTED` with the reason), so a producer sending the wrong shape is visible on the Logs
 screen rather than only in the DLQ.
 

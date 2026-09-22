@@ -1,6 +1,7 @@
 // Per-row actions on the Providers screen.
 //
-//   Verify / Test        — offered only where the catalog says the type supports them.
+//   Check status / Test  — offered where the catalog says the type supports them (every
+//                          type does). Check status proves no credential; Test does.
 //   Edit name            — rename only; credentials are untouched.
 //   Rotate credentials   — the same catalog-driven form as "Add provider". Stored
 //                          credentials are NEVER shown (the bridge does not return
@@ -303,14 +304,14 @@ export function ProviderRowActions({
       setVerify({ status: ok ? 'ok' : 'fail', detail: res.detail });
       notify(
         ok
-          ? t('app.providers.msg_verify_ok', { _: 'Provider verified.' })
-          : t('app.providers.msg_verify_fail', { _: 'Provider not active.' }),
+          ? t('app.providers.msg_verify_ok', { _: 'Provider is set up and switched on.' })
+          : t('app.providers.msg_verify_fail', { _: 'Provider not found, or switched off.' }),
         res.detail,
         ok ? 'default' : 'destructive',
       );
     } catch (err) {
       setVerify({ status: 'fail', detail: (err as Error)?.message });
-      notify(t('app.providers.msg_verify_fail', { _: 'Provider not active.' }), (err as Error)?.message, 'destructive');
+      notify(t('app.providers.msg_verify_fail', { _: 'Provider not found, or switched off.' }), (err as Error)?.message, 'destructive');
     }
   };
 
@@ -357,10 +358,10 @@ export function ProviderRowActions({
           className="h-7 gap-1 text-xs"
           onClick={runVerify}
           disabled={verify.status === 'loading'}
-          title={t('app.providers.verify', { _: 'Verify' })}
+          title={t('app.providers.verify_hint', { _: 'Confirms the provider exists and is switched on. It does not prove the credentials — send a test for that.' })}
         >
           {verify.status === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-          {t('app.providers.verify', { _: 'Verify' })}
+          {t('app.providers.verify', { _: 'Check status' })}
         </Button>
       )}
       {canTest && (

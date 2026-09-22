@@ -217,7 +217,7 @@ export function deriveChannelStatus(
       : `${channel} is on but its selected provider "${nameOf(selectedIntegration, provider)}" does not serve ${channel}, so every event on it is recorded SKIPPED / NB_PROVIDER_UNAVAILABLE. Select a ${channel} provider.`;
   } else if (providerState === 'none') {
     verdict = 'no-provider';
-    summary = `${channel} is on but no provider is configured for it. Add one on the Providers screen, then select it here.`;
+    summary = `${channel} is on but no provider is configured for it. Add one under Notifications → Providers, then select it here.`;
   } else if (providerState === 'unselected') {
     verdict = 'provider-unselected';
     summary = `${channel} is on but no provider is selected. Delivery currently falls back to the deployment-wide settings rather than this tenant's own choice — select a provider so it is explicit.`;

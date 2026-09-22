@@ -22,7 +22,7 @@ export const notificationsChannelDescriptor: SchemaDescriptor = {
   fields: [
     { path: 'code', required: true, label: 'Channel', help: 'SMS, WHATSAPP or EMAIL — one row per channel.' },
     { path: 'enabled', widget: 'boolean', required: true, label: 'Enabled', help: 'Off = every event on this channel is recorded SKIPPED / NB_NO_PROVIDER and never delivered.' },
-    { path: 'provider', label: 'Active provider', help: 'Identifier of the configured provider that serves this channel — exactly one, no automatic failover. Pick it on Notifications → Providers → Channels rather than typing it here.' },
+    { path: 'provider', label: 'Active provider', help: 'Identifier of the configured provider that serves this channel — exactly one, no automatic failover. Pick it on Notifications → Channels rather than typing it here.' },
     // `listWidget: 'plain'` is what keeps the LIST from rendering this enum as an
     // inline <select>: `smscountry` carries SMS only, and the list offered it on
     // the EMAIL and WHATSAPP rows, one click from a policy that cannot deliver.

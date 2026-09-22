@@ -128,9 +128,10 @@ public class ProviderCatalog {
                                 "The sender id the messages are registered against"),
                         CredentialField.text("apiUrl", "Gateway URL", false, config.getSmsCountryUrl(),
                                 "Leave blank to use the standard SMSCountry bulk endpoint")))
-                // The legacy bulk API has no credential-check call: the only way to learn whether
-                // the login works is to send a message, so there is nothing honest to verify.
-                .supportsVerify(false).supportsTestSend(true)
+                // The status check (does the integration exist, is it on) works for every Novu
+                // integration. It proves no credential for ANY type; for this one sending a test
+                // is the only proof, since the bulk API has no credential-check call.
+                .supportsVerify(true).supportsTestSend(true)
                 .build());
         types.add(ProviderType.builder()
                 .type(OZEKI).label("Ozeki SMS Gateway").channel("SMS").transport("novu-generic-sms")
@@ -142,7 +143,7 @@ public class ProviderCatalog {
                         CredentialField.password("password", "Password", true, null),
                         CredentialField.text("senderId", "Sender id", false, null,
                                 "Optional; the gateway's own default sender is used when blank")))
-                .supportsVerify(false).supportsTestSend(true)
+                .supportsVerify(true).supportsTestSend(true)
                 .build());
         return types;
     }

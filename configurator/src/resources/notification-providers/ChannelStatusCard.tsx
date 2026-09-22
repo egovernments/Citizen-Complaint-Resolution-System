@@ -1,4 +1,4 @@
-// "Channels" card on the Notification Providers screen: the EFFECTIVE delivery state of
+// The card on Notifications → Channels (NotificationChannelsPage): the EFFECTIVE delivery state of
 // each channel for this tenant, said in words, plus the one decision that drives it —
 // which provider is active for the channel.
 //
@@ -38,8 +38,8 @@ const NONE = '__none__';
 
 export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCatalogState }) {
   const t = useTranslate();
-  // The catalog is loaded once by the Providers screen and handed down, so the
-  // card and the Add dialog never hit /providers/catalog twice.
+  // The catalog is loaded once by the page and handed down, so the card never
+  // fetches /providers/catalog itself.
   const { catalog } = catalogState;
 
   const { rows, isLoading: rowsLoading, sessionTenant, stateTenant, scopedToCity, decision, readOnly: sourceReadOnly } = useChannelRows();

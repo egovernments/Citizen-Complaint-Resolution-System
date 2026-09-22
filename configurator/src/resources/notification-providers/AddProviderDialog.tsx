@@ -124,13 +124,13 @@ export function AddProviderDialog({ catalogState }: { catalogState: ProviderCata
       const ok = res.ok && res.active;
       notify(
         ok
-          ? t('app.providers.msg_verify_ok', { _: 'Provider verified.' })
-          : t('app.providers.msg_verify_fail', { _: 'Provider not active.' }),
+          ? t('app.providers.msg_verify_ok', { _: 'Provider is set up and switched on.' })
+          : t('app.providers.msg_verify_fail', { _: 'Provider not found, or switched off.' }),
         res.detail,
         ok ? 'default' : 'destructive',
       );
     } catch (err) {
-      notify(t('app.providers.msg_verify_fail', { _: 'Provider not active.' }), (err as Error)?.message, 'destructive');
+      notify(t('app.providers.msg_verify_fail', { _: 'Provider not found, or switched off.' }), (err as Error)?.message, 'destructive');
     } finally {
       setVerifying(false);
     }
@@ -170,9 +170,12 @@ export function AddProviderDialog({ catalogState }: { catalogState: ProviderCata
             </div>
             <div className="flex flex-wrap gap-2">
               {created.providerType.supportsVerify && (
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={runVerify} disabled={verifying}>
+                <Button
+                  variant="outline" size="sm" className="gap-1.5" onClick={runVerify} disabled={verifying}
+                  title={t('app.providers.verify_hint', { _: 'Confirms the provider exists and is switched on. It does not prove the credentials — send a test for that.' })}
+                >
                   {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                  {t('app.providers.verify', { _: 'Verify' })}
+                  {t('app.providers.verify', { _: 'Check status' })}
                 </Button>
               )}
               {created.providerType.supportsTestSend && (

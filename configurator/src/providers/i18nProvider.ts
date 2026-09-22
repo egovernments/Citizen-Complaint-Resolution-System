@@ -175,6 +175,11 @@ const customEnglishMessages: TranslationMessages = {
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
     },
+    channels: {
+      // Notifications → Channels screen (the channel card, moved off Providers).
+      title: 'Notification Channels',
+      subtitle_before: 'Switch each channel on and choose the provider it sends through. Add or change the accounts themselves under',
+    },
     providers: {
       // Notification Providers screen — self-service actions.
       add: 'Add Provider',
@@ -214,7 +219,8 @@ const customEnglishMessages: TranslationMessages = {
         secure: 'Use TLS (secure)',
       },
       // Row actions.
-      verify: 'Verify',
+      verify: 'Check status',
+      verify_hint: 'Confirms the provider exists and is switched on. It does not prove the credentials — send a test for that.',
       test: 'Test',
       // The row action that lists Novu's delivery workflows. NOT "Templates":
       // message text lives on Notifications → Templates and approved WhatsApp
@@ -242,8 +248,8 @@ const customEnglishMessages: TranslationMessages = {
       msg_missing: 'Fill in the name and all required credential fields.',
       msg_created: 'Provider created.',
       msg_create_failed: 'Could not create provider.',
-      msg_verify_ok: 'Provider verified.',
-      msg_verify_fail: 'Provider not active.',
+      msg_verify_ok: 'Provider is set up and switched on.',
+      msg_verify_fail: 'Provider not found, or switched off.',
       msg_no_id: 'This provider has no integration id to verify.',
       msg_test_sent: 'Test dispatched via Novu.',
       msg_test_failed: 'Test delivery failed.',

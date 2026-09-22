@@ -36,6 +36,7 @@ import {
 // @/resources barrel) so the notification surfaces stay self-contained.
 import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
 import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationChannelsPage } from '@/resources/notification-providers/NotificationChannelsPage';
 import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
@@ -183,7 +184,12 @@ function ManagementAdminResources() {
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions' && canViewResource(name)).map((name) => (
           isReadOnlyResource(name)
             ? <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} />
-            : <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
+            // Notifications → Channels: the channel card replaces the generic list, and
+            // there is no Create — the three channels are a closed, seeded set (see
+            // NotificationChannelsPage). Show/Edit stay for the legacy gateway fields.
+            : name === 'notifications-channel'
+              ? <Resource key={name} name={name} list={NotificationChannelsPage} show={MdmsResourceShow} edit={MdmsResourceEdit} />
+              : <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
         {/* Custom routes */}

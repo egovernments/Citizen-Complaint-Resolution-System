@@ -83,7 +83,7 @@ never deleted**. In the Configurator they appear under the **Advanced** section
 
 ### If your city has not been copied yet
 
-You will see a banner on Configure and on the Channels card:
+You will see a banner on Configure and on the Channels screen:
 
 > **This tenant has not been migrated yet — shown read-only**
 >
@@ -129,12 +129,12 @@ on every dispatch (cached about a minute, so a change takes effect within one).
 | Field | Meaning |
 |---|---|
 | `enabled` | Off means every message on this channel is recorded `SKIPPED / NB_NO_PROVIDER` and never sent. This is the master switch. |
-| `provider` | Which configured provider serves this channel. Set it from the **Channels** card on the Providers screen, not by typing here. |
+| `provider` | Which configured provider serves this channel. Set it on **Notifications → Channels**, not by typing here. |
 | `gateway`, `senderId` | The pre-provider direct-SMS route. Ignored once a provider is selected. |
 
 **SMS also carries login OTPs.** If the deployment uses real one-time passwords,
 switching SMS off stops people logging in with a phone number, and those OTPs land
-as `SKIPPED / NB_NO_PROVIDER`. The Channels card says so on the screen.
+as `SKIPPED / NB_NO_PROVIDER`. The Channels screen says so.
 
 **One provider per channel. No failover.** Picking a second replaces the first;
 there is no fan-out and no fallback chain. If you need a standby gateway,
@@ -192,11 +192,11 @@ anything is sent.
 the channel at another provider first. The refusal is the point: the delete would
 succeed in Novu and every message on that channel would start failing.
 
-### Verify and test-send
+### Check status and test-send
 
-- **Verify** confirms the integration exists and is active. It does **not** prove
-  the credentials work — SMSCountry and Ozeki have no credential-check call at all
-  and honestly advertise that they cannot be verified.
+- **Check status** confirms the integration exists and is switched on, for every
+  provider type. It does **not** prove the credentials work — no type's check
+  contacts the provider. Send a test for that.
 - **Test** delivers a real message. It writes one row to the Logs screen, flagged
   as a test, at your own tenant. Tests are auditable and never counted as real
   traffic; set the **Test sends** filter to *Show test sends* to see them.
@@ -421,7 +421,7 @@ Two role tiers, both configured at deploy time.
 
 | Tier | Can | Default roles |
 |---|---|---|
-| **Use** | Read the Logs, Providers and Preferences screens; verify a provider; send a test | `EMPLOYEE`, `SUPERUSER`, `GRO`, `PGR_LME`, `MDMS_ADMIN` |
+| **Use** | Read the Logs, Providers and Preferences screens; check a provider's status; send a test | `EMPLOYEE`, `SUPERUSER`, `GRO`, `PGR_LME`, `MDMS_ADMIN` |
 | **Manage** | Create a provider, rotate its credentials, delete it; dry-run an event with `/dispatch/_resolve` | `SUPERUSER`, `MDMS_ADMIN`, `ACCOUNT_ADMIN` |
 
 Without a Manage role those actions answer `403 NB_ADMIN_ROLE_REQUIRED`, even with

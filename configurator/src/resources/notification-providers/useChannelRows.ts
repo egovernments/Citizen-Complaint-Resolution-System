@@ -1,6 +1,6 @@
 // The tenant's channel-policy rows, read where novu-bridge reads them: at the
 // STATE tenant. Shared by the Providers list (to show which provider a channel
-// has selected) and the Channels card (to change that selection).
+// has selected) and the Channels page card (to change that selection).
 //
 // TWO MASTERS, ONE ANSWER. The policy moved from `RAINMAKER-PGR.NotificationChannel`
 // to `NOTIFICATIONS.Channel` — same shape, module-neutral content, different

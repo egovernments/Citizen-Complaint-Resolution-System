@@ -12,7 +12,6 @@ import {
 } from './providerApi';
 import { selectionsByProvider } from './channelStatus';
 import { SyncTwilioTemplatesDialog } from './SyncTwilioTemplatesDialog';
-import { ChannelStatusCard } from './ChannelStatusCard';
 import { AddProviderDialog } from './AddProviderDialog';
 import { ProviderRowActions } from './ProviderRowActions';
 import { useProviderCatalog } from './useProviderCatalog';
@@ -56,7 +55,7 @@ function SyncTemplatesAction() {
  * enables/disables and deletes providers without touching env files, redeploying,
  * or opening the notification vendor's own dashboard.
  *
- * Which provider a channel actually uses is chosen on the Channels card below —
+ * Which provider a channel actually uses is chosen on Notifications → Channels —
  * exactly one active provider per channel per state tenant.
  */
 export function NotificationProviderList() {
@@ -140,12 +139,12 @@ export function NotificationProviderList() {
     <DigitList
       title="Notification Providers"
       subtitle={t('app.providers.subtitle', {
-        _: 'Configure delivery providers. Credentials are stored by the notification service and never shown again.',
+        _: 'Delivery accounts. Credentials are stored by the notification service and never shown again. Choose which one each channel uses under Channels.',
       })}
       sort={{ field: 'channel', order: 'ASC' }}
       // Novu hosts integrations we do not deliver on — every workspace ships a
       // built-in "Novu Inbox" on `in_app`. They are not DIGIT providers: listing
-      // them offered Verify / Test / Rotate / Delete on something with no
+      // them offered Check status / Test / Rotate / Delete on something with no
       // credentials and no channel, and counted them in the header badge.
       recordFilter={(record) => isDeliverableIntegration(record as IntegrationRow, catalog)}
       actions={
@@ -155,7 +154,6 @@ export function NotificationProviderList() {
         </div>
       }
     >
-      <ChannelStatusCard catalogState={catalogState} />
       <DigitDatagrid
         columns={columns}
         rowActions={(record) => (

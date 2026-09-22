@@ -446,9 +446,9 @@ paths:
       description: |
         Matches by `integrationId` (Novu `_id` or `identifier`; `id` is an accepted alias), or
         by catalog `type`, or by `channel` + `providerId`. This confirms CONFIGURATION, not
-        reachability — nothing is sent. Types whose gateway has no credential-check call
-        (`smscountry`, `ozeki`) advertise `supportsVerify: false` in the catalog for exactly
-        that reason.
+        reachability, and never whether the credentials are right — nothing is sent. The
+        Configurator labels it "Check status". Every catalog type advertises
+        `supportsVerify: true`; a test send is the only credential proof.
       requestBody:
         required: true
         content:

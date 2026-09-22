@@ -65,7 +65,7 @@ Two tiers, both decided at deployment time.
 
 | You want to | You need a role from | Default roles |
 |---|---|---|
-| Read the notification screens, verify a provider, send a test | `novu_bridge_proxy_allowed_roles` | `EMPLOYEE`, `SUPERUSER`, `GRO`, `PGR_LME`, `MDMS_ADMIN` |
+| Read the notification screens, check a provider's status, send a test | `novu_bridge_proxy_allowed_roles` | `EMPLOYEE`, `SUPERUSER`, `GRO`, `PGR_LME`, `MDMS_ADMIN` |
 | **Create a provider, change its credentials, delete it** | `novu_bridge_proxy_admin_roles` | `SUPERUSER`, `MDMS_ADMIN`, `ACCOUNT_ADMIN` |
 
 Without an admin role, those three actions answer `403 NB_ADMIN_ROLE_REQUIRED`
@@ -278,15 +278,13 @@ For a gateway you run yourself.
 
 ### Check that it works
 
-The dialog offers **Verify** and **Test** as soon as the provider is created, and
+The dialog offers **Check status** and **Test** as soon as the provider is created, and
 each row on the list offers them again, alongside **Rename**, **Rotate
 credentials**, **Disable** / **Enable**, **Delete** and **Delivery workflows**.
 
-- **Verify** confirms the account exists and is switched on. It does **not** prove
-  the password is right. SMSCountry and Ozeki have no way to check a password
-  short of sending a message, so they honestly do not offer Verify at all — the
-  dialog says *"This provider type offers no connectivity check."* A check that
-  always passes would be worse than none.
+- **Check status** confirms the provider exists and is switched on. It does **not**
+  prove the password is right — for any provider type, since nothing is sent.
+  **Test** is the only way to prove the credentials.
 - **Test** sends one real message. See [step 6](#6-send-a-test-and-read-the-logs).
 - **Rotate credentials** asks for every field again, because the store overwrites
   rather than merges. **Rename** changes only the display name.
@@ -305,10 +303,11 @@ credentials**, **Disable** / **Enable**, **Delete** and **Delivery workflows**.
 A provider on its own sends nothing. The channel has to be switched on and pointed
 at it.
 
-On **Notifications → Providers**, the **Channels** card shows each
-channel's real state and lets you select its provider and switch the channel on
-with **Enable** / **Disable**. **Notifications → Channels** is the same setting on
-its own screen.
+**Notifications → Channels** shows each channel's real state and lets you select
+its provider and switch the channel on with **Enable** / **Disable**. The provider
+list for a channel only offers providers that carry it — an Email (SMTP) provider
+never appears under SMS. There is no **Create**: the three channels are fixed and
+already there; what you choose is the provider behind each.
 
 The card states the rule itself: *"One active provider per channel. A channel
 delivers when it is switched on here AND its selected provider is enabled;
