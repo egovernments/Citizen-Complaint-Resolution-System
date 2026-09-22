@@ -58,6 +58,18 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
+  it('shows the GitHub mark on the GitHub signup action', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'github', label: 'Continue with GitHub', type: 'oauth' }],
+    });
+
+    render(<SignupPage />);
+
+    const github = await screen.findByRole('button', { name: /continue with github/i });
+    expect(github.querySelector('svg[data-icon="inline-start"]')).toHaveClass('text-foreground');
+  });
+
   it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({

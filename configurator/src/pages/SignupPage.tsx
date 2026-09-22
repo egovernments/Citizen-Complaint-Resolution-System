@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, Check, Loader2, Mail, RefreshCw } from 'lucide-react';
+import { AlertCircle, Check, Github, Loader2, Mail, RefreshCw } from 'lucide-react';
 import {
   type AuthMethod,
   type AvailabilityResult,
@@ -117,6 +117,11 @@ const selectClass =
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
+
+function SignupMethodIcon({ method }: { method: AuthMethod }) {
+  if (method.id.toLowerCase() !== 'github') return null;
+  return <Github className="text-foreground" data-icon="inline-start" aria-hidden="true" />;
+}
 
 /**
  * Founder-facing names for the backend's step codes. Lower-casing the codes
@@ -729,6 +734,7 @@ function SignupFlow() {
                     className="w-full"
                     onClick={() => startSignIn(method.id, 'signup')}
                   >
+                    <SignupMethodIcon method={method} />
                     {method.label}
                   </Button>
                 ))}

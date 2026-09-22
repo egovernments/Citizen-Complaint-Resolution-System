@@ -110,6 +110,7 @@ describe("login.ftl", () => {
         const github = container.querySelector<HTMLAnchorElement>("#social-github")!;
         expect(github).toHaveTextContent("Log in with GitHub");
         expect(github.querySelector("svg.digit-provider-logo")).not.toBeNull();
+        expect(github.querySelector("path")).toHaveAttribute("fill", "#181717");
     });
 
     it("keeps the way back to the Configurator for password help", async () => {
