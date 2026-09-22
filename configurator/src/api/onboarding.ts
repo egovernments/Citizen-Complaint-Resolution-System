@@ -147,17 +147,21 @@ export interface Signup {
  * deliberately no index signature here: a stray field should fail to compile
  * rather than fail a submit. `schemaVersion` must be 1.
  *
- * `countryCode` inside `tenantAdmin` is derived by the backend from the
- * top-level `Signup.countryCode` and must not be sent.
+ * `countryCode` inside `tenantAdmin` is optional and we do not send it. The
+ * backend derives it from the number it parsed against the top-level
+ * `Signup.countryCode`; a supplied one is only compared against that and
+ * rejected when the two disagree, so sending it buys a failure mode and
+ * nothing else.
  */
 export interface TenantMetadata {
   schemaVersion: 1;
   tenantAdmin: {
     /**
-     * E.164, with the dial prefix. `_submit` requires it: the worker creates
-     * the tenant-local DIGIT employee from it, and the backend validates it
-     * against Signup.countryCode, normalises it to the national number and
-     * derives the prefix itself. A draft may be saved without it.
+     * Either form is accepted, `+254712345678` or `712345678`: the backend
+     * parses it against `Signup.countryCode`, normalises it to the national
+     * number and derives the prefix itself. `_submit` requires it, because the
+     * worker creates the tenant-local DIGIT employee from it. A draft may be
+     * saved without it.
      */
     mobileNumber: string;
   };

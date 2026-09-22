@@ -23,3 +23,11 @@ services:
   # PGR_NOTIFICATION_CONFIG_DRIVEN pin is gone, which also closes the
   # overlay-drop failure mode where a `compose up pgr-services` without this
   # file silently flipped bomet back to the legacy path.)
+  # Bomet carries the canonical state-level EscalationConfig and workflow
+  # self-loop. Keep the shared default disabled; this tenant is explicitly
+  # preflighted and opted in through its overlay.
+  pgr-services:
+    environment:
+      PGR_ESCALATION_ENABLED: "true"
+      PGR_ESCALATION_INTERVAL_MS: "300000"
+      KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: complaints.domain.events

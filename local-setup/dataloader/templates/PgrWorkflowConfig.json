@@ -195,7 +195,6 @@
               "action": "ESCALATE",
               "nextState": "PENDINGATLME",
               "roles": [
-                "GRO",
                 "PGR_LME",
                 "PGR_VIEWER",
                 "SYSTEM"

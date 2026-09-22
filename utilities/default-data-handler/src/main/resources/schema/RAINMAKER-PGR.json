@@ -81,7 +81,7 @@
           "description": "Preferred cumulative thresholds as percentages of the leaf complaint type's ComplaintHierarchy.slaHours. Values must be strictly increasing; the application enforces that rule.",
           "items": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "minimum": 1,
             "maximum": 200
           },
           "minItems": 1,
@@ -114,7 +114,7 @@
                     "type": "array",
                     "items": {
                       "type": "integer",
-                      "exclusiveMinimum": 0,
+                      "minimum": 1,
                       "maximum": 200
                     },
                     "minItems": 1,

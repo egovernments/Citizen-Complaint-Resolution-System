@@ -55,6 +55,41 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
+  it('keeps every alternative method separately clickable', async () => {
+    // With two methods `rest` held one item and nothing was visibly wrong.
+    // A third made them touch: they rendered inline with no separator, so
+    // "Continue with GitHub" and "Email me a sign-in link" ran together as one
+    // string and aiming for one hit the other.
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [
+        { id: 'password', label: 'Email and password', type: 'password' },
+        { id: 'github', label: 'Continue with GitHub', type: 'oauth' },
+        { id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' },
+      ],
+    });
+
+    render(<SignupPage />);
+
+    const magic = await screen.findByRole('button', { name: 'Email me a sign-in link' });
+    const github = screen.getByRole('button', { name: 'Continue with GitHub' });
+
+    // Worth being explicit: the defect was visual, and the DOM alone cannot see
+    // it. Both buttons resolved by accessible name before this fix too, which
+    // is exactly why it survived to production. So assert what stops them
+    // running together rather than the exact utilities, which have already
+    // changed once: each alternative is a full-width block, so two of them
+    // cannot share a line whatever the container does.
+    expect(magic.className).toMatch(/w-full/);
+    expect(github.className).toMatch(/w-full/);
+    const row = magic.parentElement as HTMLElement;
+    expect(row).toBe(github.parentElement);
+    expect(row.className).toMatch(/space-y-|gap-/);
+
+    fireEvent.click(magic);
+    expect(api.startSignIn).toHaveBeenCalledWith('magic-link');
+  });
+
   it('hands sign-in to the backend rather than collecting a credential', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
@@ -298,6 +333,70 @@ describe('provisioning', () => {
  * platform configuration, so entering on the strength of a successful sign-in
  * drops the operator into a console where every call is refused (CCRS#2073 G9).
  */
+describe('preferences follow the selected country (CCRS#2098)', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+  });
+
+  const reachPreferences = async () => {
+    await completeAccountStep();
+  };
+
+  it('re-suggests the timezone when the country changes', async () => {
+    // The old guard fired only while the field was empty, so the first pick
+    // filled it and every later country change silently kept the old zone,
+    // submitting India next to Africa/Nairobi.
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Africa/Nairobi');
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Asia/Kolkata');
+  });
+
+  it('leaves a timezone the operator picked themselves alone', async () => {
+    // The original intent, now tracked rather than inferred.
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Asia/Jakarta' } });
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
+
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Asia/Jakarta');
+  });
+
+  it('shows the dial code and example for the selected country, not Kenya', async () => {
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
+    expect(screen.getByText('+91')).toBeInTheDocument();
+    expect(screen.queryByText('+254')).not.toBeInTheDocument();
+
+    const mobile = screen.getByLabelText(/mobile number/i);
+    // National format, which is what the backend validates. The old hint was
+    // international, so copying its shape produced a validation failure.
+    expect(mobile).toHaveAttribute('placeholder', '9876543210');
+    expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
+  });
+
+  it('offers no invented example for a country we have no format for', async () => {
+    // Only KE, IN and ET have authoritative MobileNumberValidation records in
+    // this repo. A made-up example would be the same defect as the hardcoded
+    // Kenyan one, so those countries get the dial code and a neutral hint.
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'NG' } });
+    expect(screen.getByText('+234')).toBeInTheDocument();
+    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('placeholder', 'National number');
+  });
+});
+
 describe('workspace readiness gate', () => {
   const option = (readiness?: 'IDENTITY_READY' | 'PROVISIONING' | 'READY' | 'FAILED') => ({
     organizationAlias: 'kisumu-county',
