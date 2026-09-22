@@ -18,7 +18,9 @@ Keycloak access, ID, and refresh tokens never reach the frontend. The BFF is
 not in the business-API hot path and has no hard dependency on PGR. Its optional
 onboarding worker is disabled unless explicitly configured.
 
-See [the full API and operations guide](docs/identity-bff.md).
+Start with the [architecture one-pager](docs/architecture.md), then use the
+[full API and operations guide](docs/identity-bff.md) or the repository-level
+[deployment and integration setup](../../docs/identity-bff-deployment.md).
 
 ## Browser API
 

@@ -38,6 +38,9 @@ interface RealmState {
   clients: Map<string, {
     id: string;
     clientId: string;
+    enabled?: boolean;
+    standardFlowEnabled?: boolean;
+    attributes?: Record<string, string>;
     roles: Array<{ id: string; name: string }>;
   }>;
 }
@@ -87,6 +90,17 @@ function getOrCreateRealm(name: string): RealmState {
       users: [],
       organizations: new Map(),
       clients: new Map([
+        ["digit-identity-bff", {
+          id: "digit-identity-bff-uuid",
+          clientId: "digit-identity-bff",
+          enabled: true,
+          standardFlowEnabled: true,
+          attributes: {
+            "digit.auth.signin.methods": "password,google,github",
+            "digit.auth.signup.methods": "magic_link,google,github",
+          },
+          roles: [],
+        }],
         ["digit-ui", {
           id: "digit-ui-uuid",
           clientId: "digit-ui",
@@ -102,6 +116,7 @@ function getOrCreateRealm(name: string): RealmState {
           id: "digit-identity-bff-magic-link-uuid",
           clientId: "digit-identity-bff-magic-link",
           enabled: true,
+          standardFlowEnabled: true,
           roles: [],
         }],
       ]),
@@ -600,6 +615,32 @@ export function createKcAdminMock() {
     const clientId = String(req.query.clientId || "");
     const client = realm.clients.get(clientId);
     res.json(client ? [client] : []);
+  });
+
+  app.get("/admin/realms/:realm/clients/:clientUuid", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const client = Array.from(realm.clients.values()).find(
+      (candidate) => candidate.id === req.params.clientUuid,
+    );
+    return client ? res.json(client) : res.status(404).json({ error: "not found" });
+  });
+
+  app.put("/admin/realms/:realm/clients/:clientUuid", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const entry = Array.from(realm.clients.entries()).find(
+      ([, candidate]) => candidate.id === req.params.clientUuid,
+    );
+    if (!entry) return res.status(404).json({ error: "not found" });
+    const [clientId, client] = entry;
+    realm.clients.set(clientId, {
+      ...client,
+      ...req.body,
+      id: client.id,
+      clientId: client.clientId,
+      roles: client.roles,
+      attributes: { ...client.attributes, ...req.body?.attributes },
+    });
+    return res.status(204).end();
   });
 
   app.get("/admin/realms/:realm/identity-provider/instances", (_req, res) => {

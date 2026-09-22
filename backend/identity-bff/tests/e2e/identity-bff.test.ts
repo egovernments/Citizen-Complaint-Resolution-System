@@ -55,11 +55,6 @@ beforeAll(async () => {
   (config as any).identityCookieSecure = false;
   (config as any).identityCookieSameSite = "Lax";
   (config as any).identityTrustProxyHops = 2;
-  (config as any).identityAuthMethods = [
-    { id: "password", label: "Password", type: "password", intents: ["signin"] },
-    { id: "google", label: "Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
-    { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
-  ];
   Object.assign(config as any, {
     cachePrefix: `identity-e2e-${process.pid}`,
     digitUserServiceUrl: `${digitBase}/user`,
@@ -195,8 +190,8 @@ describe("identity BFF", () => {
     );
     expect(methods.status).toBe(200);
     expect(await methods.json()).toEqual({ methods: [
-      { id: "password", label: "Password", type: "password", intents: ["signin"] },
-      { id: "google", label: "Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
+      { id: "password", label: "Email and password", type: "password", intents: ["signin"] },
+      { id: "google", label: "Continue with Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
       { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
     ] });
 
@@ -209,7 +204,25 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signup`,
     );
     expect((await signupMethods.json()).methods.map((method: { id: string }) => method.id))
-      .toEqual(["google", "magic_link"]);
+      .toEqual(["magic_link", "google"]);
+
+    await kcUpdate("/clients/digit-identity-bff-uuid", {
+      attributes: {
+        "digit.auth.signin.methods": "google",
+        "digit.auth.signup.methods": "magic_link,google,github",
+      },
+    });
+    const reconfigured = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
+    );
+    expect((await reconfigured.json()).methods.map((method: { id: string }) => method.id))
+      .toEqual(["google"]);
+    await kcUpdate("/clients/digit-identity-bff-uuid", {
+      attributes: {
+        "digit.auth.signin.methods": "password,google,github",
+        "digit.auth.signup.methods": "magic_link,google,github",
+      },
+    });
 
     const unknown = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=unknown`,

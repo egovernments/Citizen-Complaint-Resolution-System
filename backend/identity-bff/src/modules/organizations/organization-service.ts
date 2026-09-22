@@ -103,31 +103,65 @@ export class IdentityAdminError extends Error {
   }
 }
 
-export async function enabledIdentityProviderAliases(): Promise<Set<string>> {
+export interface IdentityProviderSummary {
+  alias: string;
+  displayName: string;
+}
+
+export async function enabledIdentityProviders(): Promise<Map<string, IdentityProviderSummary>> {
   const response = await request(
     "/identity-provider/instances?briefRepresentation=true&max=100",
   );
   const providers = await response.json() as Array<{
     alias?: string;
+    displayName?: string;
     enabled?: boolean;
   }>;
-  return new Set(providers.flatMap((provider) =>
-    provider.enabled !== false && provider.alias ? [provider.alias] : [],
-  ));
+  return new Map(providers.flatMap((provider) => {
+    if (provider.enabled === false || !provider.alias) return [];
+    return [[provider.alias, {
+      alias: provider.alias,
+      displayName: provider.displayName?.trim() || provider.alias,
+    }]];
+  }));
 }
 
-/** Enabled OIDC clients used to hide methods whose Keycloak flow is not installed yet. */
-export async function enabledIdentityClientIds(clientIds: string[]): Promise<Set<string>> {
-  const enabled = new Set<string>();
-  await Promise.all([...new Set(clientIds)].map(async (clientId) => {
-    const query = new URLSearchParams({ clientId, search: "true" });
-    const response = await request(`/clients?${query}`);
-    const clients = await response.json() as Array<{ clientId?: string; enabled?: boolean }>;
-    if (clients.some((client) => client.clientId === clientId && client.enabled !== false)) {
-      enabled.add(clientId);
-    }
-  }));
-  return enabled;
+export interface IdentityClientSummary {
+  id: string;
+  clientId: string;
+  enabled: boolean;
+  standardFlowEnabled: boolean;
+  attributes: Record<string, string>;
+}
+
+/** Live client capability and DIGIT journey policy from Keycloak. */
+export async function identityClient(clientId: string): Promise<IdentityClientSummary | null> {
+  const query = new URLSearchParams({ clientId, search: "true" });
+  const response = await request(`/clients?${query}`);
+  const clients = await response.json() as Array<{
+    id?: string;
+    clientId?: string;
+  }>;
+  const match = clients.find((candidate) => candidate.clientId === clientId);
+  if (!match?.id) return null;
+  // The collection response may be brief on some Keycloak versions. Read the
+  // exact client so policy attributes never disappear because of list shaping.
+  const detailResponse = await request(`/clients/${encodeURIComponent(match.id)}`);
+  const client = await detailResponse.json() as {
+    id?: string;
+    clientId?: string;
+    enabled?: boolean;
+    standardFlowEnabled?: boolean;
+    attributes?: Record<string, string>;
+  };
+  if (!client?.id || !client.clientId) return null;
+  return {
+    id: client.id,
+    clientId: client.clientId,
+    enabled: client.enabled !== false,
+    standardFlowEnabled: client.standardFlowEnabled !== false,
+    attributes: client.attributes || {},
+  };
 }
 
 function realmPath(path: string): string {

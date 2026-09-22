@@ -37,6 +37,10 @@ fi
 readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
+# Journey policy belongs to the OIDC client. The BFF reads these attributes
+# live; these values are installer inputs, not BFF runtime configuration.
+readonly BFF_SIGNIN_METHODS=${KEYCLOAK_BFF_SIGNIN_METHODS:-password,google,github}
+readonly BFF_SIGNUP_METHODS=${KEYCLOAK_BFF_SIGNUP_METHODS:-magic_link,google,github}
 # Keycloak's execute-actions redirect validation matches this path wildcard but
 # does not treat a trailing wildcard as matching a query string.
 readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete/*"
@@ -278,6 +282,8 @@ kc update "clients/$bff_uuid" -r "$REALM" \
   -s 'attributes."pkce.code.challenge.method"=S256' \
   -s 'attributes."post.logout.redirect.uris"=+' \
   -s "attributes.\"login_theme\"=$LOGIN_THEME" \
+  -s "attributes.\"digit.auth.signin.methods\"=$BFF_SIGNIN_METHODS" \
+  -s "attributes.\"digit.auth.signup.methods\"=$BFF_SIGNUP_METHODS" \
   -s 'attributes."standard.token.exchange.enabled"=false' >/dev/null
 
 retired_uuid=$(client_uuid "$RETIRED_ASSERTION_AUDIENCE")
@@ -316,6 +322,11 @@ kc update "clients/$bff_uuid/optional-client-scopes/$organization_scope" -r "$RE
 
 if [ "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" = true ]; then
   configure_magic_link
+else
+  magic_uuid=$(client_uuid "$MAGIC_LINK_CLIENT")
+  if [ -n "$magic_uuid" ]; then
+    kc update "clients/$magic_uuid" -r "$REALM" -s enabled=false >/dev/null
+  fi
 fi
 
 configure_first_broker_login

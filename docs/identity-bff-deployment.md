@@ -4,6 +4,8 @@ This document is the repository-level deployment guide for the implementation
 in [`backend/identity-bff`](../backend/identity-bff/README.md). The complete API,
 flow, and failure contract is in
 [`backend/identity-bff/docs/identity-bff.md`](../backend/identity-bff/docs/identity-bff.md).
+The concise component boundary and source-of-truth map is in the
+[`architecture one-pager`](../backend/identity-bff/docs/architecture.md).
 
 ## Object mapping
 
@@ -57,8 +59,8 @@ identity_digit_admin_tenant_id: pg
 identity_smtp_host: smtp.example.org
 identity_smtp_from: no-reply@example.org
 identity_smtp_user: smtp-user
-identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password","intents":["signin"]}]
+identity_signin_methods: [password, google, github]
+identity_signup_methods: [magic_link, google, github]
 ```
 
 Store these values in `bootstrap_secrets` for a new deployment, or in the
@@ -87,8 +89,7 @@ when those settings are absent. Magic link additionally needs the custom
 
 ```yaml
 identity_magic_link_enabled: true
-identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]}]
+identity_signup_methods: [magic_link, google, github]
 ```
 
 Google and GitHub need their provider application callback set to Keycloak's
@@ -98,17 +99,20 @@ only after the provider is configured:
 ```yaml
 keycloak_google_client_id: "<id>"
 keycloak_github_client_id: "<id>"
-identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]
+identity_signin_methods: [password, google, github]
+identity_signup_methods: [magic_link, google, github]
 bootstrap_secrets:
   keycloak_google_client_secret: "<secret>"
   keycloak_github_client_secret: "<secret>"
 ```
 
-The BFF checks Keycloak live and omits a configured OAuth or magic-link method
-when its provider/client is not enabled. `intents` is the one backend-owned
-source for which methods appear on sign-in and signup; omitting it keeps the
-legacy behaviour of enabling a method for both journeys.
+The provisioning script writes these ordered lists to
+`digit.auth.signin.methods` and `digit.auth.signup.methods` attributes on the
+`digit-identity-bff` Keycloak client. The BFF reads them and Keycloak's provider
+and client state live; it omits an OAuth or magic-link method when the backing
+provider/client is not enabled. Changing the attributes takes effect without a
+BFF rebuild or restart. Environment variables retain connection details and
+secrets, not the runtime authentication-method catalog.
 
 ## Login theme (`configurator-blue`)
 

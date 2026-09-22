@@ -26,7 +26,7 @@ password.
 
 | Method | Route | Result |
 |---|---|---|
-| `GET` | `/identity/v1/auth-methods?intent=signin\|signup` | Methods configured for this journey and enabled in Keycloak |
+| `GET` | `/identity/v1/auth-methods?intent=signin\|signup` | Client journey policy intersected with live Keycloak capabilities |
 | `GET` | `/identity/v1/authorize?method=...&intent=...&returnTo=...` | Starts Authorization Code + PKCE with state and nonce |
 | `POST` | `/identity/v1/authentication/magic-link-requests` | Saves a short-lived identity profile draft and sends the non-enumerating signup verification link |
 | `GET` | `/identity/v1/callback` | Validates the callback and creates an opaque cookie session |
@@ -73,8 +73,8 @@ Frontend calls:
    ```
 
    `google` and `github` use the same endpoint when advertised for `signin`.
-   Signup asks for `intent=signup`, where the default methods are magic link,
-   Google, and GitHub. Google and GitHub use `/authorize`; the client application starts
+   Signup asks for `intent=signup`, where the provisioned policy normally orders
+   magic link, Google, and GitHub. Google and GitHub use `/authorize`; the client application starts
    email signup by posting first name, last name, and email to
    `POST /identity/v1/authentication/magic-link-requests`. The backend owns ordering
    and availability; the UI does not keep a second provider list.
@@ -136,8 +136,11 @@ Keycloak client and the extension's server-side resource, keeping the realm's
 normal password flow unchanged. The BFF stores the selected OIDC client with
 the one-time login attempt and opaque session, so callback exchange, refresh,
 and logout use the correct client without exposing either client secret. The
-method is advertised only when that Keycloak client exists, is enabled, and
-`KEYCLOAK_MAGIC_LINK_CLIENT_SECRET` is configured.
+method is advertised only when client policy includes it, that Keycloak client
+exists and is enabled, and `KEYCLOAK_MAGIC_LINK_CLIENT_SECRET` is configured.
+Password and OAuth methods are likewise derived from the BFF client policy and
+live Keycloak client/provider state; there is no BFF runtime environment catalog
+of login methods.
 
 Google and GitHub are pinned to the realm's `digit-first-broker-login` flow.
 When a provider returns an email already owned by a local account, Keycloak
@@ -432,7 +435,8 @@ Setting `enable_keycloak: true` starts the BFF, Keycloak 26.7.3 and its dedicate
 Postgres database. Ansible runs `configure-keycloak.sh` with task-scoped secrets
 after Keycloak is healthy. It creates or updates the shared Organizations realm,
 confidential clients, protocol mappers, service-account permissions, roles,
-the magic-link resource client, and configured Google/GitHub providers.
+the magic-link resource client, journey-policy client attributes, and configured
+Google/GitHub providers.
 
 Realm SMTP is mandatory for the identity stack, not only for optional magic
 links. Password setup/reset, invitation activation, and email proof in the

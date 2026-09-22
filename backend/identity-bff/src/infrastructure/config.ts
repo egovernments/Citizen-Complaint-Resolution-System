@@ -1,8 +1,3 @@
-import type {
-  IdentityAuthIntent,
-  IdentityAuthMethod,
-} from "../modules/authentication/types.js";
-
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
 const digitMdmsCreateUrl = process.env.DIGIT_MDMS_CREATE_URL || "";
@@ -34,52 +29,6 @@ function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   if (normalized === "none") return "None";
   if (normalized === "strict") return "Strict";
   throw new Error("IDENTITY_COOKIE_SAME_SITE must be Lax, None, or Strict");
-}
-
-export function parseIdentityAuthMethods(raw: string): IdentityAuthMethod[] {
-  const value: unknown = JSON.parse(raw);
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("IDENTITY_AUTH_METHODS must be a non-empty JSON array");
-  }
-
-  const seen = new Set<string>();
-  return value.map((entry, index) => {
-    if (!entry || typeof entry !== "object") {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}] must be an object`);
-    }
-    const candidate = entry as Record<string, unknown>;
-    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
-    const label = typeof candidate.label === "string" ? candidate.label.trim() : "";
-    const type = candidate.type;
-    if (!id || !/^[a-z0-9_-]+$/.test(id)) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].id is invalid`);
-    }
-    if (seen.has(id)) {
-      throw new Error(`IDENTITY_AUTH_METHODS contains duplicate id: ${id}`);
-    }
-    if (!label) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].label is required`);
-    }
-    if (type !== "password" && type !== "oauth" && type !== "magic_link") {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].type is invalid`);
-    }
-    const idpHint = typeof candidate.idpHint === "string"
-      ? candidate.idpHint.trim()
-      : undefined;
-    if (type === "oauth" && !idpHint) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].idpHint is required`);
-    }
-    const rawIntents = candidate.intents === undefined
-      ? ["signin", "signup"]
-      : candidate.intents;
-    if (!Array.isArray(rawIntents) || rawIntents.length === 0 ||
-        rawIntents.some((intent) => intent !== "signin" && intent !== "signup")) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].intents is invalid`);
-    }
-    const intents = [...new Set(rawIntents)] as IdentityAuthIntent[];
-    seen.add(id);
-    return { id, label, type, intents, ...(idpHint && { idpHint }) };
-  });
 }
 
 function keycloakIssuerRealm(): string {
@@ -121,10 +70,6 @@ export const config = {
   ),
   identityScope:
     process.env.IDENTITY_SCOPE || "openid profile email organization:*",
-  identityAuthMethods: parseIdentityAuthMethods(
-    process.env.IDENTITY_AUTH_METHODS ||
-      '[{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]',
-  ),
   identityCookieName:
     process.env.IDENTITY_COOKIE_NAME || "digit_identity_session",
   identityCookieSecure: process.env.IDENTITY_COOKIE_SECURE !== "false",

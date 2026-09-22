@@ -3129,7 +3129,6 @@ services:
       # Browser -> host nginx -> Kong -> BFF. Trust exactly those two hops.
       IDENTITY_TRUST_PROXY_HOPS: ${IDENTITY_TRUST_PROXY_HOPS:-2}
       IDENTITY_LOGIN_TTL_SECONDS: ${IDENTITY_LOGIN_TTL_SECONDS:-1800}
-      IDENTITY_AUTH_METHODS: ${IDENTITY_AUTH_METHODS:-[{"id":"password","label":"Email and password","type":"password","intents":["signin"]},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link","intents":["signup"]},{"id":"google","label":"Continue with Google","type":"oauth","idpHint":"google","intents":["signin","signup"]},{"id":"github","label":"Continue with GitHub","type":"oauth","idpHint":"github","intents":["signin","signup"]}]}
       IDENTITY_COOKIE_SECURE: ${IDENTITY_COOKIE_SECURE:-false}
       IDENTITY_COOKIE_SAME_SITE: ${IDENTITY_COOKIE_SAME_SITE:-Lax}
       IDENTITY_CONTROL_PLANE_TOKEN: ${IDENTITY_CONTROL_PLANE_TOKEN:-dev-only-change-me}

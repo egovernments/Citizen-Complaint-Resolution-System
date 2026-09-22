@@ -5314,13 +5314,14 @@
         KEYCLOAK_GOOGLE_CLIENT_SECRET: "{{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
         KEYCLOAK_GITHUB_CLIENT_ID: "{{ keycloak_github_client_id | default('') }}"
         KEYCLOAK_GITHUB_CLIENT_SECRET: "{{ bao_secrets.json.data.data.keycloak_github_client_secret | default('') }}"
+        KEYCLOAK_BFF_SIGNIN_METHODS: "{{ identity_signin_methods | default(['password', 'google', 'github']) | join(',') }}"
+        KEYCLOAK_BFF_SIGNUP_METHODS: "{{ identity_signup_methods | default(['magic_link', 'google', 'github']) | join(',') }}"
       when: enable_keycloak | default(false)
       no_log: true
       changed_when: true
 
-    # Google and GitHub are ordinary Keycloak identity providers. The BFF only
-    # advertises methods configured in IDENTITY_AUTH_METHODS; broker credentials
-    # remain an operator-owned Keycloak concern.
+    # Google and GitHub are ordinary Keycloak identity providers. Journey policy
+    # is stored on the BFF client; provider credentials remain operator-owned.
 
     - name: "validate — shared Keycloak realm reachable via /auth/"
       ansible.builtin.uri:
