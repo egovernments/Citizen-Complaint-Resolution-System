@@ -8244,3 +8244,35 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 .employee .digit-button-secondary:hover:not(.disabled):not(:disabled) {
   background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08)) !important;
 }
+
+/* Header dropdown options — a real transition, and the same highlight for the
+ * keyboard as for the pointer.
+ *
+ * Two things were off. The option declares `transition: all` with no duration,
+ * which is inert: `all` names the properties but nothing says how long, so the
+ * tint appeared and vanished between frames. Naming the two properties that
+ * actually change, with a duration, is also cheaper than animating `all`,
+ * which would happily animate layout if anything ever moved.
+ *
+ * The larger one is that nothing styled `.activeIndex`. The shared component
+ * puts that class on the option the arrow keys have moved to, and no rule
+ * picked it up — so the menu highlighted under a pointer and stayed
+ * completely flat under the keyboard. Same for `:focus-visible`. Reusing the
+ * hover treatment means the two input methods cannot drift apart. */
+html .header-dropdown-option {
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+html .header-dropdown-option.activeIndex,
+html .header-dropdown-option.activeIndex *,
+html .header-dropdown-option:focus-visible,
+html .header-dropdown-option:focus-visible * {
+  background-color: var(--color-primary-1-bg, #FFF4D7) !important;
+  color: var(--color-primary-1, #204F37) !important;
+}
+/* The keyboard position should be legible without relying on the tint alone,
+ * which is subtle at these sizes. */
+html .header-dropdown-option.activeIndex,
+html .header-dropdown-option:focus-visible {
+  box-shadow: inset 2px 0 0 var(--color-primary-1, #204F37);
+  outline: none;
+}
