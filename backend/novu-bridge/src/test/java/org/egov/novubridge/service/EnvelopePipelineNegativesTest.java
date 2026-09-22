@@ -59,7 +59,7 @@ class EnvelopePipelineNegativesTest {
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
-                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
                 new ChannelPolicyClient(null, config), dispatchLogRepository, config,
                 new ProviderAvailability(novuClient, config));
     }

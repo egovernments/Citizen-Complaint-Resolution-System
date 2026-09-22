@@ -7,15 +7,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * {@code EVENT_RECIPIENTS} — the contacts the producer put on the event itself.
- *
- * <p>The account-less path: an anonymously filed complaint, an OTP to a number that has no user
- * record yet. The whole reason this scheme exists is that some recipients cannot be named by uuid,
- * and pretending otherwise would push "look this person up somehow" into the box.
- *
- * <p>Built in, in the module-neutral package, because it does no I/O. An entry with a
- * {@code userId} and no contact is still hydrated, exactly as an actor is, so a producer can mix
- * both forms in one list.
+ * {@code EVENT_RECIPIENTS}: the contacts on the event itself, for recipients with no account. An
+ * entry with only a userId is hydrated exactly as an actor is.
  */
 public class EventRecipientsResolver implements RecipientResolver {
 

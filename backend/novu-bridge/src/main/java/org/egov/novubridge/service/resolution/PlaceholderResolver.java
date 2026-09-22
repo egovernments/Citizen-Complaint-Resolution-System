@@ -8,28 +8,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Placeholder name to the string that will replace {@code {name}} in a template.
+ * Placeholder name to substituted value, per token: the first {@code localized} code with a
+ * message, else {@code dataByLocale[locale]}, else {@code data}. A token with no value is ABSENT
+ * from the map so its braces stay literal; a blank would look like a working template.
  *
- * <p>Three sources, in this order, per token:
- * <ol>
- *   <li>the first code in {@code localized[token]} that has a message in this locale;</li>
- *   <li>{@code dataByLocale[locale][token]} — the escape hatch for a value that genuinely cannot
- *       be expressed as a localization code;</li>
- *   <li>{@code data[token]} — the literal the producer sent.</li>
- * </ol>
- * A token present in none of them is <b>absent from the returned map</b>, not present-and-empty,
- * and the renderer therefore leaves its braces literal. That distinction is the whole reason this
- * returns a map with holes rather than a map of empty strings: a blank looks like a template with
- * nothing to say, and a provider rejects a message whose variables are all blank.
- *
- * <p><b>Localization is resolved ONCE PER EVENT, not per recipient</b>, in the locale the event
- * carries ({@code localizationLocale}, else the deployment default). That is not an oversight: it
- * is what today's producer does — it builds placeholder values once, from
- * {@code RequestInfo.msgId}'s locale, and then renders per-recipient templates against that one
- * set — and a two-language fan-out therefore shares one set of substituted values while the
- * template text itself differs per recipient. Moving to per-recipient placeholder localization is
- * a real improvement and a deliberate behaviour change; it is not something to acquire by
- * accident while moving code between services.
+ * <p>Resolved once per event in the event's locale, not per recipient: that is what the
+ * producer did before the thin path, and changing it is a separate decision.
  */
 public class PlaceholderResolver {
 
@@ -39,15 +23,10 @@ public class PlaceholderResolver {
         this.localization = localization;
     }
 
-    /**
-     * @param locale the ONE locale the event's localization codes are resolved in
-     * @return an insertion-ordered map; tokens with no value anywhere are absent
-     */
     public Map<String, String> resolve(ThinEvent event, String locale, RequestInfo requestInfo) {
         Map<String, String> values = new LinkedHashMap<>();
-        // Literals first, so a localization outage can only fail to IMPROVE a value, never blank
-        // one. The ordering is load-bearing: it is what stopped a localization 400 from shipping
-        // a WhatsApp message whose contentVariables were all empty (Twilio 21656).
+        // Literals first, so a localization outage can only fail to improve a value, never blank
+        // one (an all-blank WhatsApp template is Twilio 21656).
         putAll(values, event.getData());
         putAll(values, localeOverride(event, locale));
 
@@ -73,10 +52,7 @@ public class PlaceholderResolver {
         try {
             return localization.message(tenantId, locale, modules, code, requestInfo);
         } catch (Exception e) {
-            // A provider that throws is treated exactly as one that found nothing: the ladder
-            // moves on, and a token with no message anywhere keeps its literal fallback. An
-            // outage must not blank a value that the producer already sent.
-            return null;
+            return null;   // fail-open: the token keeps its literal
         }
     }
 
@@ -97,7 +73,6 @@ public class PlaceholderResolver {
         return null;
     }
 
-    /** Null values are skipped — an absent token and a null token mean the same thing. */
     private static void putAll(Map<String, String> into, Map<String, Object> from) {
         if (from == null) {
             return;

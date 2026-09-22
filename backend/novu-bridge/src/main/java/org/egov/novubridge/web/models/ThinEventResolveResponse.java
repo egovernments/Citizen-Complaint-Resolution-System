@@ -9,12 +9,8 @@ import org.egov.common.contract.response.ResponseInfo;
 import java.util.List;
 
 /**
- * What {@code POST /dispatch/_resolve} answers: the envelopes the box WOULD mint for a thin event,
- * and the reasoning that produced them.
- *
- * <p>Nothing was sent and no ledger row was written, which is what makes the endpoint safe to
- * point at a production tenant with real config. It is the answer to "why did this event send
- * nothing", asked before the event happens rather than after.
+ * {@code POST /dispatch/_resolve}: the envelopes the box WOULD mint for a thin event, and why.
+ * Nothing is sent and no ledger row is written.
  */
 @Data
 @Builder

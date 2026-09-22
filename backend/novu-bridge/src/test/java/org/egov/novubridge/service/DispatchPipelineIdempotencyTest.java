@@ -11,6 +11,7 @@ import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
+import org.egov.novubridge.web.models.DispatchResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -28,15 +30,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * NB-3 (item 1): transactionId redelivery. Read against the CURRENT
- * {@code DispatchPipelineService.process()} — W2 did NOT add a pre-send
- * SENT-row skip, so a Kafka redelivery of the same event re-triggers Novu on
- * both passes. This is safe only because Novu itself dedupes on transactionId,
- * and because both upserts carry the identical
- * {@code (transactionId, channel, recipientValue)} key so they collapse onto a
- * single {@code nb_dispatch_log} row (the extended unique key from
- * {@code V20260701000000__extend_dispatch_unique_key.sql}, pinned separately in
- * {@link org.egov.novubridge.repository.DispatchLogRepositoryUpsertKeyTest}).
+ * transactionId redelivery (Kafka redelivery, DLQ replay): the pipeline looks the row up by the
+ * ledger's unique key {@code (transactionId, channel, recipientValue)} before sending, and a row
+ * already SENT or DELIVERED is neither re-sent nor rewritten.
  */
 class DispatchPipelineIdempotencyTest {
 
@@ -60,11 +56,11 @@ class DispatchPipelineIdempotencyTest {
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
-                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
                 new ChannelPolicyClient(null, config), dispatchLogRepository, config,
                 new ProviderAvailability(novuClient, config));
     }
@@ -87,27 +83,26 @@ class DispatchPipelineIdempotencyTest {
                 .build();
     }
 
+    private static final String TXN = "PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:SMS";
+
     @Test
-    void redelivery_sameEventTwice_retriggersNovu_andUpsertsSameKey() {
+    void redelivery_ofASentMessage_isNotResent_andTheRowIsLeftAlone() {
+        // First pass finds no row; the redelivery finds the SENT row the first pass wrote.
+        when(dispatchLogRepository.findStatus(TXN, "SMS", "ke.bomet:uuid-123")).thenReturn(null, "SENT");
         NotificationEvent event = smsEvent();
         service.process(event, true, null);
-        service.process(event, true, null);
+        DispatchResult second = service.process(event, true, null);
 
-        // Current behavior: no pre-send SENT-row dedupe in process(); both passes trigger.
-        verify(novuClient, times(2))
-                .identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any());
+        verify(novuClient, times(1))
+                .identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any());
+        assertFalse(second.getNovuTriggered());
 
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
-        verify(dispatchLogRepository, times(2)).upsert(captor.capture());
-
-        List<DispatchLogEntry> rows = captor.getAllValues();
-        assertEquals(2, rows.size());
-        // Both upserts collapse onto the same idempotency triple → one physical row.
-        for (DispatchLogEntry row : rows) {
-            assertEquals("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:SMS", row.getTransactionId());
-            assertEquals("SMS", row.getChannel());
-            assertEquals("ke.bomet:uuid-123", row.getRecipientValue());
-            assertEquals("SENT", row.getStatus());
-        }
+        verify(dispatchLogRepository, times(1)).upsert(captor.capture());
+        DispatchLogEntry row = captor.getValue();
+        assertEquals(TXN, row.getTransactionId());
+        assertEquals("SMS", row.getChannel());
+        assertEquals("ke.bomet:uuid-123", row.getRecipientValue());
+        assertEquals("SENT", row.getStatus());
     }
 }

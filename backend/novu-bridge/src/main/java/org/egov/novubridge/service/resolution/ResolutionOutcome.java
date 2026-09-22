@@ -6,14 +6,7 @@ import org.egov.novubridge.web.models.NotificationEvent;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Everything one thin event resolved to: the v1 envelopes that were minted, what the dispatch
- * pipeline made of each, the channel-less decision code when there was one, and a readable trace.
- *
- * <p>The same object serves the Kafka path and {@code POST /dispatch/_resolve}. On the dry-run
- * path the envelopes are the whole answer and no row was written; on the live path they are what
- * was handed to the pipeline, which wrote the rows itself.
- */
+/** What one thin event resolved to; shared by the Kafka path and the dry-run {@code _resolve}. */
 public final class ResolutionOutcome {
 
     private final List<NotificationEvent> envelopes = new ArrayList<>();
@@ -34,11 +27,7 @@ public final class ResolutionOutcome {
         return diagnostics;
     }
 
-    /**
-     * The {@code NB_*} code of the channel-less decision, when the box decided something before
-     * there was a channel to decide it on. Null when routing, recipients and templates all
-     * resolved.
-     */
+    /** The NB_* code of a decision taken before there was a channel; null when none was. */
     public String getTerminalCode() {
         return terminalCode;
     }

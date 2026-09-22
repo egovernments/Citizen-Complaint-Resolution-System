@@ -5,7 +5,7 @@
  * Kept as a dependency-free module so it can be unit-tested from the
  * configurator app (see src/resources/notification-logs/*.test.ts) without
  * dragging the whole data provider — and so the parameter NAMES live in exactly
- * one place. They are the ones in docs/2.12/notifications/contract/openapi.yaml:
+ * one place. They are the ones in docs/2.20/notifications/contract/openapi.yaml:
  *
  *   referenceNumber, referenceNumberPrefix, transactionId, channel, status,
  *   sourcePath, includeTest, limit, offset

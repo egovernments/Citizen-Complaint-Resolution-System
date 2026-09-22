@@ -16,7 +16,7 @@ class ReceiptParserTest {
         Map<String, Object> hook = Map.of(
                 "type", "message.delivered",
                 "payload", Map.of("message", Map.of("transactionId", "PGR-1:ASSIGN:PENDINGATLME:ke:u1:SMS", "channel", "sms")));
-        DeliveryReceipt r = parser.parse("novu", hook);
+        DeliveryReceipt r = parser.parse(hook);
         assertEquals("DELIVERED", r.getStatus());
         assertEquals("PGR-1:ASSIGN:PENDINGATLME:ke:u1:SMS", r.getTransactionId());
         assertTrue(r.isTerminal() && r.isAddressable());
@@ -24,17 +24,17 @@ class ReceiptParserTest {
 
     @Test
     void novuWebhook_sentEvent_isNotTerminal() {
-        DeliveryReceipt r = parser.parse("novu", Map.of("status", "sent", "transactionId", "t"));
+        DeliveryReceipt r = parser.parse(Map.of("status", "sent", "transactionId", "t"));
         assertNull(r.getStatus());
         assertFalse(r.isTerminal());
     }
 
     @Test
     void smscountryDeliveryReport_mapsGatewayWords() {
-        assertEquals("DELIVERED", parser.parse("smscountry", Map.of("jobno", "4689", "status", "DELIVRD")).getStatus());
-        assertEquals("FAILED", parser.parse("smscountry", Map.of("jobno", "4689", "status", "UNDELIV")).getStatus());
-        assertEquals("FAILED", parser.parse("smscountry", Map.of("JobNo", "4689", "Status", "EXPIRED")).getStatus());
-        assertEquals("4689", parser.parse("smscountry", Map.of("JobNo", "4689", "Status", "EXPIRED")).getProviderRef());
+        assertEquals("DELIVERED", parser.parse(Map.of("jobno", "4689", "status", "DELIVRD")).getStatus());
+        assertEquals("FAILED", parser.parse(Map.of("jobno", "4689", "status", "UNDELIV")).getStatus());
+        assertEquals("FAILED", parser.parse(Map.of("JobNo", "4689", "Status", "EXPIRED")).getStatus());
+        assertEquals("4689", parser.parse(Map.of("JobNo", "4689", "Status", "EXPIRED")).getProviderRef());
     }
 
     @Test
@@ -48,7 +48,7 @@ class ReceiptParserTest {
 
     @Test
     void reportWithoutAnyReference_isNotAddressable() {
-        DeliveryReceipt r = parser.parse("novu", Map.of("status", "delivered", "messages", List.of(Map.of("foo", "bar"))));
+        DeliveryReceipt r = parser.parse(Map.of("status", "delivered", "messages", List.of(Map.of("foo", "bar"))));
         assertFalse(r.isAddressable());
     }
 }

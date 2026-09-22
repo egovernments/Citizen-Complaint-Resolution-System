@@ -22,17 +22,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The one place the bridge talks to egov-user, shared by the role-pool resolver and the actor
- * hydrator so they cannot drift on the two things that are easy to get subtly wrong: the
- * internal-user context, and how a phone number gets its country code.
- *
- * <p><b>The field mapping is deliberately trimmed to the five contact fields.</b> The code this
- * replaces ran every egov-user response through a date-parsing pass that converted
- * {@code createdDate}, {@code lastModifiedDate}, {@code dob} and {@code pwdExpiryDate} from
- * strings to epoch millis — and NPE'd on a null {@code createdDate}, inside a
- * {@code catch (Exception)} that turned the crash into a silent "there is no assignee". A
- * notification needs a name, a phone and an email; parsing four dates it will never read, in a
- * way that fails closed and quietly, is not a behaviour worth porting.
+ * The one place the bridge calls egov-user, shared by the role resolver and the hydrator. Maps
+ * only the contact fields: the code this replaced also parsed dates it never read, and NPE'd on a
+ * null createdDate inside a catch that turned the crash into "there is no assignee".
  */
 @Slf4j
 public class DigitUserSearch {
@@ -50,10 +42,9 @@ public class DigitUserSearch {
     }
 
     /**
-     * POST {@code /user/_search} with the given criteria, as the internal microservice user.
+     * POST {@code /user/_search} as the internal microservice user.
      *
-     * @return the {@code user} array, or an empty list — never null, and never a throw for an
-     *         empty answer
+     * @return the {@code user} array, empty when there is none; transport failures throw
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> search(Map<String, Object> criteria, String tenantId,
@@ -83,10 +74,9 @@ public class DigitUserSearch {
     }
 
     /**
-     * A raw egov-user row to a recipient, or null when it carries neither a phone nor an email.
+     * A raw egov-user row to a recipient, or null when it has neither phone nor email.
      *
-     * @param type what to label this person as on the envelope's {@code contact.type}: the role
-     *             code for a pool member, {@code EMPLOYEE} or {@code CITIZEN} for a named actor
+     * @param type the envelope's {@code contact.type}: the role code, or EMPLOYEE/CITIZEN
      */
     public static Recipient toRecipient(Map<String, Object> raw, String type) {
         if (raw == null) {
@@ -100,10 +90,7 @@ public class DigitUserSearch {
         return new Recipient(text(raw.get("uuid")), type, text(raw.get("name")), phone, email, null);
     }
 
-    /**
-     * {@code countryCode + mobileNumber}, unless the number already carries a {@code +} — a
-     * tenant whose user records are already E.164 must not end up with {@code +254+254712…}.
-     */
+    /** {@code countryCode + mobileNumber}, unless the number is already E.164 ({@code +...}). */
     public static String withCountryCode(String mobileNumber, String countryCode) {
         if (!StringUtils.hasText(mobileNumber)) {
             return null;
@@ -114,12 +101,7 @@ public class DigitUserSearch {
         return StringUtils.hasText(countryCode) ? countryCode + mobileNumber : mobileNumber;
     }
 
-    /**
-     * The bridge's own identity for a directory read. egov-user refuses a tenant-wide search
-     * from an ordinary caller, and there is no end user behind a Kafka message to borrow one
-     * from, so the call is made as {@code INTERNAL_MICROSERVICE_ROLE} — the same identity the
-     * producer used for the same searches.
-     */
+    /** egov-user refuses a tenant-wide search without a user, and a Kafka message has none. */
     private RequestInfo internalUser(RequestInfo requestInfo, String tenantId) {
         RequestInfo copy = requestInfo != null ? requestInfo : new RequestInfo();
         RequestInfo out = new RequestInfo();

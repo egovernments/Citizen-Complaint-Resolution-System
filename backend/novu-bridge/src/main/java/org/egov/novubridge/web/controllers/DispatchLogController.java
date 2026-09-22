@@ -16,19 +16,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Read-only proxy over the {@code nb_dispatch_log} delivery-log table for the
- * configurator's Notification Logs screen. Sits alongside {@code DispatchController}
- * under the same {@code /novu-adapter/v1} namespace.
- *
- * <p><b>Observability:</b> every event consumed from the domain topic lands here with an
- * explicit terminal status — SENT, SKIPPED (preference denied / no provider / unsupported
- * channel) or FAILED. Channels without an enabled provider (e.g. WHATSAPP before a legitimate
- * provider is onboarded) appear as SKIPPED/NB_NO_PROVIDER rather than being invisible.
- *
- * <p>Strictly read-only: no create/update/delete, parameterized SQL only (see
- * {@link DispatchLogRepository}), and the response carries no provider secrets
- * (the provider response echoed on each row is the delivery receipt, not the
- * provider's API credentials).
+ * Read-only Notification Logs screen over {@code nb_dispatch_log}: parameterized SQL only, and
+ * recipient PII masked server-side.
  */
 @RestController
 @RequestMapping("/novu-adapter/v1")
@@ -43,17 +32,7 @@ public class DispatchLogController {
         this.dispatchLogRepository = dispatchLogRepository;
     }
 
-    /**
-     * List delivery-log rows for a tenant, newest first. {@code tenantId} is
-     * required; a state-level tenant also returns its city tenants' rows. Optional filters: {@code referenceNumber} (complaint number —
-     * exact, or prefix when {@code referenceNumberPrefix=true}), {@code transactionId},
-     * {@code channel} (including {@code NONE} for the channel-less rows),
-     * {@code status}, {@code sourcePath} ({@code PRERENDERED} | {@code RESOLVED} — which
-     * inbound kind produced the row). Paged via {@code limit}/{@code offset}.
-     *
-     * @return {@code {data:[DispatchLogEntry...], total}} where total is the
-     *         unpaged count for the same filters.
-     */
+    /** Newest first; {@code total} is the unpaged count for the same filters. */
     @GetMapping("/logs")
     public ResponseEntity<DispatchLogListResponse> logs(
             @RequestParam(name = "tenantId", required = false) String tenantId,
@@ -81,12 +60,8 @@ public class DispatchLogController {
                 tenantId, referenceNumber, referenceNumberPrefix, transactionId, channel, status, sourcePath,
                 includeTest);
 
-        // Mask recipient PII server-side so the full value never crosses the wire.
-        // recipient_value is the subscriberId (tenantId:userUuid, or tenantId:mobile
-        // when the uuid was missing) and transaction_id embeds the same subscriberId.
-        // providerResponse (the Novu delivery receipt) echoes the RAW transactionId —
-        // and thus a raw phone for uuid-less recipients — so it is deep-masked at
-        // read time (stored rows stay untouched; only this projection is masked).
+        // recipient_value and transaction_id can embed a raw phone (tenantId:mobile), and the stored
+        // provider response echoes the raw transactionId, so all three are masked on the way out.
         List<DispatchLogEntry> masked = data.stream()
                 .map(e -> e.toBuilder()
                         .recipientValue(PiiMask.mask(e.getRecipientValue()))

@@ -9,11 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Refuses to start on configuration that is guaranteed to fail every dispatch, and warns
- * loudly on combinations that usually mean a mistake. Before this, each of these was
- * discovered one FAILED/SKIPPED row at a time in production.
- */
+/** Refuses to start on config guaranteed to fail every dispatch; warns on likely mistakes. */
 @Slf4j
 @Component
 public class ConfigurationSanityCheck {
@@ -41,9 +37,6 @@ public class ConfigurationSanityCheck {
         if (Boolean.TRUE.equals(config.getChannelPolicyEnabled()) && !StringUtils.hasText(config.getMdmsHost())) {
             fatal.add("novu.bridge.channel.policy.enabled=true but novu.bridge.mdms.host is blank");
         }
-        // The resolution stage reads all four config masters over MDMS v2. With no host, every
-        // thin event resolves to no routing and is SKIPPED — a tenant-wide silent outage that
-        // looks like missing config rather than missing configuration.
         if (!StringUtils.hasText(config.getMdmsHost()) || !StringUtils.hasText(config.getMdmsSearchPath())) {
             fatal.add("novu.bridge.mdms.host/search.path is blank — the resolution stage could read no "
                     + "routing, template or catalogue row, and EVERY thin event would be SKIPPED/NB_NO_ROUTING");

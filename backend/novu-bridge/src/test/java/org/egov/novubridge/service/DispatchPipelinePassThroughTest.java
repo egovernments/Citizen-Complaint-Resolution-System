@@ -62,11 +62,11 @@ class DispatchPipelinePassThroughTest {
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
-                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
                 new ChannelPolicyClient(null, config), dispatchLogRepository, config,
                 new ProviderAvailability(novuClient, config));
     }
@@ -107,7 +107,7 @@ class DispatchPipelinePassThroughTest {
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> txn = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(subId.capture(), contact.capture(), eq("SMS"),
-                body.capture(), any(), txn.capture(), any(), any(), any());
+                body.capture(), any(), txn.capture(), any(), any(), any(), any(), any());
 
         // subscriberId, contact profile, renderedBody, transactionId all come straight from the event.
         assertEquals("ke.bomet:uuid-123", subId.getValue());
@@ -155,7 +155,7 @@ class DispatchPipelinePassThroughTest {
 
         assertFalse(result.getNovuTriggered());
         // No Novu trigger at all — in particular NOT the SMS workflow.
-        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         // Explicit SKIPPED/NB_NO_PROVIDER dispatch row.
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(captor.capture());
@@ -173,7 +173,7 @@ class DispatchPipelinePassThroughTest {
         DispatchResult result = service.process(event, true, null);
 
         assertFalse(result.getNovuTriggered());
-        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(captor.capture());
         assertEquals("SKIPPED", captor.getValue().getStatus());
@@ -192,13 +192,13 @@ class DispatchPipelinePassThroughTest {
         assertTrue(result.getNovuTriggered());
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("EMAIL"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL"), any(), any(), any());
+                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL"), any(), any(), any(), any(), any());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
     }
 
     @Test
     void novuTriggerThrows_persistsFailed_thenRethrows() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenThrow(new CustomException("NB_NOVU_TRIGGER_FAILED", "boom"));
 
         assertThrows(CustomException.class, () -> service.process(smsEvent(), true, null));
@@ -223,7 +223,7 @@ class DispatchPipelinePassThroughTest {
         DispatchResult result = service.process(event, true, null);
 
         assertFalse(result.getNovuTriggered());
-        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(captor.capture());
         assertEquals("SKIPPED", captor.getValue().getStatus());
@@ -239,7 +239,7 @@ class DispatchPipelinePassThroughTest {
 
         assertEquals(Boolean.FALSE, result.getPreferenceAllowed());
         assertEquals(Boolean.FALSE, result.getNovuTriggered());
-        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any());
     }
 
 }

@@ -18,42 +18,20 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Preferred language per user, from {@code digit-user-preferences-service}.
- *
- * <p><b>One paged call per STATE tenant per cache window, and failures and empties are cached
- * too.</b> That last part is the point: a forty-person role pool must not become forty lookups,
- * and a preference service that is absent — which is the normal state of most deployments — must
- * cost one call per window rather than one per recipient forever. The fallback is silent and
- * total: everyone renders in the deployment default, which is what happened before anyone could
- * express a preference at all.
- *
- * <p>Preferences are held at the state tenant because that is where the preference service keeps
- * them; a city tenant's users are found under its state root.
+ * Preferred language per user, from {@code digit-user-preferences-service}, at the state tenant.
+ * One call per state tenant per cache window, and empty or failed answers are cached too: most
+ * deployments do not run the service, and it must not cost a call per recipient.
  */
 @Slf4j
 public class DigitLocaleProvider implements LocaleProvider {
 
     private static final int PAGE_LIMIT = 1000;
 
-    private static final class Timed {
-        final Map<String, String> byUuid;
-        final long fetchedAt = System.currentTimeMillis();
-
-        Timed(Map<String, String> byUuid) {
-            this.byUuid = byUuid;
-        }
-
-        boolean fresh(long ttl) {
-            return System.currentTimeMillis() - fetchedAt < ttl;
-        }
-    }
-
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
-    private final Map<String, Timed> cache = new ConcurrentHashMap<>();
+    private final TtlCache<String, Map<String, String>> cache = new TtlCache<>();
 
     public DigitLocaleProvider(@Nullable RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -72,9 +50,9 @@ public class DigitLocaleProvider implements LocaleProvider {
         }
         long ttl = config.getNotificationConfigCacheTtlMs() != null
                 ? config.getNotificationConfigCacheTtlMs() : 60_000L;
-        Timed cached = cache.get(tenant);
-        if (cached != null && cached.fresh(ttl)) {
-            return cached.byUuid;
+        Map<String, String> cached = cache.fresh(tenant, ttl);
+        if (cached != null) {
+            return cached;
         }
 
         Map<String, String> out = new HashMap<>();
@@ -113,10 +91,7 @@ public class DigitLocaleProvider implements LocaleProvider {
             log.warn("Preferred-language lookup unavailable for tenant {} ({}); rendering in the "
                     + "default locale", tenant, e.getMessage());
         }
-        // Cached even when empty or failed: see the class javadoc. The cost of being wrong for
-        // one TTL window is a message in the wrong language; the cost of not caching is a
-        // per-recipient call to a service most deployments do not run.
-        cache.put(tenant, new Timed(out));
+        cache.put(tenant, out);
         return out;
     }
 }

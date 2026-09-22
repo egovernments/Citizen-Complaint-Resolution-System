@@ -5,13 +5,8 @@ import lombok.Builder;
 import lombok.Value;
 
 /**
- * One operator-entered field on a provider's credential form. The configurator renders the
- * form straight from this — there is no second, hand-maintained field list in the SPA, so a
- * provider gained or a field renamed here is immediately correct in the UI.
- *
- * <p>{@code key} is the key the operator's value arrives under in {@code POST /providers}
- * {@code credentials}; it is NOT necessarily the Novu credential key (see
- * {@link ProviderCatalog#toNovuCredentials}). Values are never echoed back.
+ * One field of a provider's credential form; the configurator renders the form from these.
+ * {@code key} is the operator-side key, not necessarily Novu's (see {@link ProviderCatalog#toNovuCredentials}).
  */
 @Value
 @Builder

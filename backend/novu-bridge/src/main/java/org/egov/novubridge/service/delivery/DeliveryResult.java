@@ -5,12 +5,7 @@ import lombok.Value;
 
 import java.util.Map;
 
-/**
- * What a {@link DeliveryProvider} reports back. {@code accepted} means the transport took the
- * message (queued) — never that it was delivered. {@code providerCode} is the provider's own
- * failure code (NB_NOVU_*, NB_SMSCOUNTRY_*); the pipeline persists it verbatim so the dispatch
- * log never attributes one provider's failure to another.
- */
+/** {@code accepted} means queued, never delivered. {@code providerCode} is persisted verbatim. */
 @Value
 @Builder
 public class DeliveryResult {

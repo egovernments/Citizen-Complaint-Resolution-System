@@ -2948,6 +2948,9 @@ services:
       NOVU_BRIDGE_SMSCOUNTRY_URL: ${NOVU_BRIDGE_SMSCOUNTRY_URL:-http://api.smscountry.com/SMSCwebservice_bulk.aspx}
       NOVU_BRIDGE_SMSCOUNTRY_USER: ${NOVU_BRIDGE_SMSCOUNTRY_USER:-}
       NOVU_BRIDGE_SMSCOUNTRY_PASSWORD: ${NOVU_BRIDGE_SMSCOUNTRY_PASSWORD:-}
+      # Hosts the SMSCountry adapter may post to via its apiUrl parameter (the
+      # SMSCOUNTRY_URL host is always allowed). Add a local mock's host here.
+      NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS: ${NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS:-api.smscountry.com,www.smscountry.com}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Per-tenant channel policy: the bridge reads RAINMAKER-PGR.NotificationChannel

@@ -13,24 +13,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * The published contract, served by the service that implements it. Three read-only documents:
- * the JSON Schema of each inbound Kafka kind — the pre-rendered envelope and the thin domain
- * event, told apart by the {@code kind} discriminator — and the OpenAPI description of every
- * {@code /novu-adapter/v1} endpoint. All are the byte-identical copies packaged in this jar
- * under {@code contract/}, so what a consumer fetches is what this build actually enforces —
- * never a wiki page that drifted.
- *
- * <p><b>Why these two are unauthenticated.</b> They are descriptions of an interface: no tenant
- * data, no recipient, no credential, nothing about any deployment. The existing auth model
- * already works this way — {@link org.egov.novubridge.web.filters.ProxyAuthFilter} gates an
- * explicit list of namespaces (logs, integrations, preferences, providers, dispatch) and lets
- * everything else through, which is how the actuator endpoints and the machine callbacks are
- * reached. {@code /novu-adapter/v1/contract/**} is deliberately outside that list. It adds no
- * new auth concept and no new exception: a caller learns the shape of the API, which the
- * published docs state anyway.
- *
- * <p>GET only. There is no write path here and no per-tenant variation — the contract is a
- * property of the build, not of the deployment.
+ * The published contract (envelope and thin-event JSON Schemas, OpenAPI), served from the copies
+ * packaged in this jar so a consumer fetches what this build enforces. Unauthenticated on purpose:
+ * they describe the interface and carry no tenant data, recipient or credential.
  */
 @RestController
 @RequestMapping("/novu-adapter/v1/contract")
@@ -46,10 +31,7 @@ public class ContractController {
         return serve(ENVELOPE_SCHEMA, MediaType.APPLICATION_JSON);
     }
 
-    /**
-     * JSON Schema (2020-12) of the inbound Kafka thin domain event, schema version 1 —
-     * {@code kind: "THIN"}. The kind a new module should produce.
-     */
+    /** JSON Schema (2020-12) of the thin domain event ({@code kind: "THIN"}), schema version 1. */
     @GetMapping(value = "/thin-event", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> thinEvent() {
         return serve(THIN_EVENT_SCHEMA, MediaType.APPLICATION_JSON);
@@ -61,11 +43,7 @@ public class ContractController {
         return serve(OPENAPI, MediaType.parseMediaType("application/yaml"));
     }
 
-    /**
-     * Read a packaged document. A missing resource answers 404 rather than 500: it can only
-     * mean the jar was built without the contract, which is a packaging fault to be seen, not
-     * an error to be attributed to the caller's request.
-     */
+    /** A missing resource is a packaging fault, not the caller's: 404, not 500. */
     private static ResponseEntity<String> serve(String resource, MediaType type) {
         ClassPathResource classPathResource = new ClassPathResource(resource);
         if (!classPathResource.exists()) {

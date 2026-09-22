@@ -122,7 +122,7 @@ public class PGRConstants {
     public static final String MDMS_UI_CONSTANTS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.UIConstants";
     public static final String MDMS_REOPEN_SLA_KEYWORD = "REOPENSLA";
 
-    // --- Thin notification events (docs/2.12/notifications/contract/thin-event-v1.schema.json) ---
+    // --- Thin notification events (docs/2.20/notifications/contract/thin-event-v1.schema.json) ---
     // The four RAINMAKER-PGR.Notification* masters are novu-bridge's now, not this service's: the
     // producer names no audience, picks no channel and reads no routing row. What is left is the
     // vocabulary that goes ON the event.

@@ -10,33 +10,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.springframework.util.StringUtils.hasText;
+
 /**
- * The bridge's SECOND inbound kind (schema version 1): a thin domain event. The producer says
- * only <i>this happened to this entity</i>; the box decides who to tell, on which channel, in
- * which language, and what the words are.
+ * The thin domain event (schema version 1): the producer says only what happened to which entity;
+ * the box decides who to tell, on which channel, in which language, with which words. The
+ * complement of {@link NotificationEvent}, told apart by {@code kind}. Channel, subscriber and
+ * rendered text are absent on purpose.
  *
- * <p>The exact complement of {@link NotificationEvent}, which carries a finished message for one
- * recipient on one channel. Neither replaces the other: the pre-rendered envelope is a public
- * interface forever, and CORE-SMS and any external producer keep using it. The two are told apart
- * by {@code kind} — {@code "THIN"} here, absent or {@code "RENDERED"} there — read off the raw
- * map before binding, never inferred from which fields happen to be set.
- *
- * <p>Required: kind, eventId, eventType, module, eventName, tenantId. Note what is <b>absent on
- * purpose</b>: {@code channel}, {@code subscriberId}, {@code renderedBody}, {@code subject},
- * {@code templateKey}, {@code templateId}, {@code contentVariables}. The box produces all of
- * those. A producer that filled them in would be re-implementing the thing this removes.
- *
- * <p>One thin event becomes N ledger rows — one per recipient x channel the routing config
- * resolves to — plus, where the box decides there is nothing to deliver, a channel-less row
- * ({@code channel = "NONE"}) carrying the reason. The v1 envelopes the resolution stage mints are
- * in-process objects handed straight to the dispatch pipeline; they are never published back onto
- * Kafka.
- *
- * <p><b>Published contract.</b> The wire form of this class is
- * {@code contract/thin-event-v1.schema.json} (packaged in this jar, and published at
- * {@code docs/2.12/notifications/contract/}). Keep them in step by hand: every field below
- * appears in the schema, and the schema's required set is exactly what
- * {@code ThinEventValidator} enforces.
+ * <p>Wire form: {@code contract/thin-event-v1.schema.json} (packaged in this jar, published at
+ * {@code docs/2.20/notifications/contract/}). Keep them in step by hand; the schema's required set
+ * is exactly what {@code ThinEventValidator} enforces.
  */
 @Data
 @Builder
@@ -62,17 +46,10 @@ public class ThinEvent {
     /** Service that emitted the event, for tracing. */
     private String producer;
 
-    /**
-     * Producing module. REQUIRED here, unlike the envelope: it is the catalogue's owner key, it
-     * is recorded verbatim in the ledger, and it is how the Configurator groups rows.
-     */
+    /** Producing module. REQUIRED here, unlike the envelope: the catalogue's owner key. */
     private String module;
 
-    /**
-     * The EVENT KEY: dotted, module-prefixed, globally unique. Replaces the
-     * {@code (businessService, action, toState)} triple, and must distinguish outcomes that need
-     * different words — {@code RATE.CLOSEDAFTERRESOLUTION} is not {@code RATE.CLOSEDAFTERREJECTION}.
-     */
+    /** The EVENT KEY: dotted, module-prefixed, unique; distinguishes outcomes needing different words. */
     private String eventName;
 
     /** What {@code entityId} names, in the producer's own vocabulary. */
@@ -84,20 +61,10 @@ public class ThinEvent {
     /** DIGIT tenant. Decides routing, templates, channel policy and provider. */
     private String tenantId;
 
-    /**
-     * IDEMPOTENCY SEED. The box completes it rather than inventing one:
-     * {@code transactionId = <transactionSeed>:<subscriberId>:<channel>}. A producer setting
-     * {@code <entityId>:<ACTION>:<TOSTATE>} gets transaction ids byte-identical to the
-     * pre-rendered path, so a mid-flight redeploy cannot double-send.
-     */
+    /** IDEMPOTENCY SEED: {@code transactionId = <transactionSeed>:<subscriberId>:<channel>}. */
     private String transactionSeed;
 
-    /**
-     * The named people this event is ABOUT, keyed by the name routing config refers to as
-     * {@code ACTOR:<name>}. The only recipient knowledge a producer supplies — and the only
-     * knowledge the box cannot reconstruct. Producers do not name audiences and do not expand
-     * role pools.
-     */
+    /** The people this event is ABOUT, keyed by the name routing refers to as {@code ACTOR:<name>}. */
     private Map<String, ActorRef> actors;
 
     /** Explicit contact overrides for account-less flows; reached by the audience {@code EVENT_RECIPIENTS}. */
@@ -106,12 +73,7 @@ public class ThinEvent {
     /** Placeholder name to literal value — the words that plug into a template's {@code {tokens}}. */
     private Map<String, Object> data;
 
-    /**
-     * Placeholder name to localization CODE, or to an ordered array of codes to try. Resolved by
-     * the box once per recipient locale, which the producer cannot do: it builds placeholders
-     * once per event but the box renders once per locale. Use {@link #localizationCodes(String)}
-     * rather than reading this map directly — both wire forms are legal.
-     */
+    /** Placeholder name to a localization code or ordered array of codes; read via {@link #localizationCodes}. */
     private Map<String, Object> localized;
 
     /** Which egov-localization modules to search, IN ORDER. */
@@ -121,43 +83,20 @@ public class ThinEvent {
     private Map<String, Map<String, Object>> dataByLocale;
 
     /**
-     * The ONE locale the event's {@code localized} codes are resolved in, for the WHOLE event.
-     * Absent means {@code novu.bridge.default.locale}.
-     *
-     * <p>Deliberately per-event and not per-recipient, because that is what the behaviour being
-     * replaced does: a producer builds its placeholder values once, in the locale its inbound
-     * request asked for, and then renders per-recipient templates against that one set. So in a
-     * two-language fan-out both recipients get the template text in their own language and the
-     * SAME substituted values. Reproducing that is what makes the cutover a move rather than a
-     * change; localizing per recipient is a real improvement and a separate, deliberate decision.
-     *
-     * <p>A producer migrating from the pre-rendered path sets this to the locale it used to build
-     * its values with, and its messages come out byte-identical.
+     * The ONE locale {@code localized} codes are resolved in, for the whole event; absent means
+     * {@code novu.bridge.default.locale}. Per event, not per recipient, to match what producers did.
      */
     private String localizationLocale;
 
     /**
-     * The event name stamped on the minted envelopes and on every ledger row. Absent means
-     * {@link #eventName}.
-     *
-     * <p>It exists because the two names are two different things. {@link #eventName} is the CONFIG
-     * KEY — it must distinguish outcomes that need different words, so it carries the target state
-     * ({@code …ASSIGN.PENDINGATLME}). The ledger's {@code event_name} is an OPERATOR-FACING LABEL
-     * that a deployment has been filtering and reporting on for releases. A producer cutting over
-     * from the pre-rendered path sets this to whatever it used to send, and its Logs screen,
-     * saved filters and dashboards keep working across the release; a producer starting fresh
-     * leaves it out and gets the config key, which is the more informative of the two.
+     * The event name stamped on envelopes and ledger rows; absent means {@link #eventName}. Lets a
+     * migrating producer keep the operator-facing label its Logs filters already use.
      */
     private String ledgerEventName;
 
     /**
-     * Free-form structured payload echoed onto every minted envelope's {@code data} block.
-     *
-     * <p>NOT the same thing as {@link #data}. {@code data} is placeholder values — the words that
-     * go into the message, which never leave the box. This is the producer's own vocabulary for
-     * the row: the v1 envelope has always carried such a block, the ledger reads
-     * {@code referenceNumber}, {@code action} and {@code toState} out of it as fallbacks, and a
-     * producer moving to the thin event would otherwise lose it.
+     * Free-form payload echoed onto every envelope's {@code data} block (the ledger reads
+     * referenceNumber/action/toState from it). Not placeholder values: those are {@link #data}.
      */
     private Map<String, Object> payload;
 
@@ -165,15 +104,8 @@ public class ThinEvent {
     public static final String KIND = "THIN";
 
     /**
-     * The idempotency seed this event actually carries, falling back exactly as the published
-     * contract says: {@code transactionSeed}, else {@code <entityId>:<eventName>}, else
-     * {@code <eventId>}. The box completes it into a transaction id per recipient x channel —
-     * {@code <seed>:<subscriberId>:<channel>} — and stamps {@code <seed>:NONE} on a channel-less
-     * row, which keeps the ledger's unique key intact for a decision taken before any channel
-     * existed.
-     *
-     * <p>The last fallback is why this never returns null for a validated event: {@code eventId}
-     * is required.
+     * {@code transactionSeed}, else {@code <entityId>:<eventName>}, else {@code eventId}, as the
+     * contract says. Never null for a validated event. A channel-less row uses {@code <seed>:NONE}.
      */
     public String resolvedTransactionSeed() {
         if (hasText(transactionSeed)) {
@@ -185,26 +117,14 @@ public class ThinEvent {
         return eventId == null ? null : eventId.trim();
     }
 
-    /**
-     * The name this event is recorded under: {@link #ledgerEventName} when the producer named one,
-     * else {@link #eventName}. Never null for a validated event.
-     */
+    /** {@link #ledgerEventName} when set, else {@link #eventName}. */
     public String resolvedLedgerEventName() {
         return hasText(ledgerEventName) ? ledgerEventName.trim() : eventName;
     }
 
-    private static boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
     /**
-     * The localization codes to try for one placeholder, in order, normalising the two legal wire
-     * forms — a bare string and an array of strings — into one list. Anything else (a number, an
-     * object, a null element) is ignored rather than guessed at: an un-resolvable token is left
-     * unsubstituted, which is the documented behaviour, and inventing a code would silently
-     * render the wrong words.
-     *
-     * @return never null; empty when the token has no codes
+     * The codes to try for one placeholder, from either wire form (a string or an array). Anything
+     * else is ignored rather than guessed at, so the token stays unsubstituted.
      */
     public List<String> localizationCodes(String token) {
         Object raw = localized == null ? null : localized.get(token);

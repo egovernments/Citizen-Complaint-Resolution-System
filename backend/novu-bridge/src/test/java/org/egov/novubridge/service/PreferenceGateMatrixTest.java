@@ -174,7 +174,7 @@ class PreferenceGateMatrixTest {
         pipelineConfig.setChannelsEnabled(List.of("SMS", "EMAIL"));
 
         DispatchPipelineService service = new DispatchPipelineService(new EnvelopeValidator(), denying,
-                new DeliveryProviderRegistry(pipelineConfig, new ChannelPolicyClient(null, pipelineConfig), new NovuDeliveryProvider(novuClient, pipelineConfig), null),
+                new DeliveryProviderRegistry(pipelineConfig, new ChannelPolicyClient(null, pipelineConfig), new NovuDeliveryProvider(novuClient), null),
                 new ChannelPolicyClient(null, pipelineConfig), dispatchLogRepository, pipelineConfig,
                 new ProviderAvailability(novuClient, pipelineConfig));
 

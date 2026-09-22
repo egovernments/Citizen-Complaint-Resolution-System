@@ -8,20 +8,12 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * The bridge's ONE inbound envelope (schema version 1): a fully-rendered message for a single
- * recipient on a single channel. Module-neutral by construction — nothing here names a domain.
- * Producers (pgr-services, otp-publisher, any other module) declare themselves with
- * {@code eventType}; the bridge accepts the types listed in {@code novu.bridge.event.types} and
- * never infers the shape from which fields happen to be set.
+ * The pre-rendered inbound envelope (schema version 1): one finished message for one recipient on
+ * one channel. Producers declare themselves with {@code eventType} (allowlisted by
+ * {@code novu.bridge.event.types}); the shape is never sniffed.
  *
- * <p>Required: eventId, eventType, eventName, tenantId, channel, subscriberId, renderedBody.
- *
- * <p><b>Published contract.</b> The wire form of this class is
- * {@code contract/envelope-v1.schema.json} (packaged in this jar, and published at
- * {@code docs/2.12/notifications/contract/}). Keep them in step by hand: every field below
- * appears in the schema, and the schema's required set is exactly what
- * {@link org.egov.novubridge.service.EnvelopeValidator} enforces. Renaming a JSON field here is a schema-version change,
- * not a refactor — the Java type name is free to change, the wire names are not.
+ * <p>Published contract: {@code contract/envelope-v1.schema.json}, kept in step by hand. Renaming a
+ * JSON field here is a schema-version change, not a refactor.
  */
 @Data
 @Builder
@@ -49,18 +41,10 @@ public class NotificationEvent {
     private String transactionId;    // producer-stable idempotency key
     private String templateKey;      // producer-side template identity (PGR sends the MDMS NotificationTemplate uid)
 
-    // ---- Provider-template delivery (WHATSAPP only) ----
-    // Set by the producer when an approved provider template exists for this message. When
-    // present, the provider sends the template id + positional variables instead of the
-    // free-form renderedBody. Null for SMS/EMAIL.
+    // WHATSAPP only: an approved provider template, sent instead of the free-form renderedBody.
     private String templateId;                     // e.g. Twilio WhatsApp Content SID (HX…)
     private Map<String, Object> contentVariables;  // positional 1-based ({"1":.., "2":..})
 
-    /**
-     * Free-form structured payload echoed alongside the body. The bridge reads only three keys,
-     * all optional: {@code referenceNumber} (the ledger's reference when {@code entityId} is
-     * absent) and {@code action}/{@code toState} (used to reconstruct a template key when the
-     * producer sends none). PGR fills it with {@code complaintNo, status, action, toState}.
-     */
+    /** Echoed alongside the body. The bridge reads only referenceNumber, complaintNo and action/toState. */
     private Map<String, Object> data;
 }

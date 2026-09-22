@@ -50,7 +50,7 @@ import static org.egov.pgr.util.PGRConstants.PGR_MODULE;
  * </ul>
  *
  * <p><b>The wire form is the published contract</b>
- * {@code docs/2.12/notifications/contract/thin-event-v1.schema.json} (examples under
+ * {@code docs/2.20/notifications/contract/thin-event-v1.schema.json} (examples under
  * {@code examples/thin/}). Null values are OMITTED rather than
  * written as {@code null}: the bridge binds the event to its {@code ThinEvent} POJO, where an
  * absent field and a null field are the same thing, and omitting keeps contact PII that PGR does

@@ -1,6 +1,5 @@
 package org.egov.novubridge.service.resolution.digit;
 
-import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.service.resolution.config.NotificationConfigRows.ProviderTemplateRow;
 import org.egov.novubridge.service.resolution.config.NotificationConfigRows.RoutingRow;
 import org.egov.novubridge.service.resolution.config.NotificationConfigRows.TemplateRow;
@@ -15,44 +14,22 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Reads a legacy {@code RAINMAKER-PGR.Notification*} row and presents it in the new
- * {@code NOTIFICATIONS.*} shape. Pure: no I/O, no Spring, no state.
+ * Presents a legacy {@code RAINMAKER-PGR.Notification*} row in the {@code NOTIFICATIONS.*} shape.
+ * Pure: no I/O, no state. Every function is idempotent (an already-converted row passes through).
  *
- * <p><b>This is the day-one safety net.</b> A live server runs real data in the old masters, MDMS
- * SQL migrations do not run on deployed boxes, and an operator who upgrades the images without
- * running the playbook must still have working notifications. So a tenant with <b>zero</b>
- * {@code NOTIFICATIONS.Routing} rows is served its legacy rows, adapted on the way in, per tenant
- * and all-or-nothing — never per row, because per-row precedence between two namespaces is the
- * kind of thing nobody can reason about at 2am.
- *
- * <p><b>The mapping is the same one {@code local-setup/scripts/notifications_convert.py} applies
- * offline</b>, and it has to stay the same one: the seeder converts a tenant's live rows once, and
- * from then on the tenant is served from the new namespace. If these two mappings ever disagreed,
- * a tenant's messages would change the moment the copy ran, which is precisely the kind of
- * invisible break a migration must not have. Change it together with
- * {@code local-setup/scripts/notifications_convert.py}, and check that the legacy seed still
- * converts to the committed {@code NOTIFICATIONS.*} default files.
- *
+ * <p>The mapping MUST stay identical to {@code local-setup/scripts/notifications_convert.py}, or a
+ * tenant's messages change the moment the seeder's copy runs:
  * <pre>
- *   businessService + action + toState  ->  eventName  "COMPLAINTS.WORKFLOW.&lt;ACTION&gt;.&lt;TOSTATE&gt;"
- *   audience (bare) + assigneeOnly      ->  an audience reference with a scheme
- *   fromState                           ->  dropped (documentation-only, never matched at runtime)
- *   businessService                     ->  dropped (subsumed by eventName)
- *   assigneeOnly                        ->  dropped (expressed by the ACTOR:assignee|ROLE:x chain)
- *   module                              ->  added ("Complaints"), a required non-key column
+ *   businessService + action + toState  ->  eventName "COMPLAINTS.WORKFLOW.&lt;ACTION&gt;.&lt;TOSTATE&gt;"
+ *   audience (bare) + assigneeOnly      ->  audience reference with a scheme
+ *   fromState, businessService, assigneeOnly -> dropped;  module -> "Complaints"
  * </pre>
  *
- * <h2>The one join hazard</h2>
- * pgr-services looks a template up by the audience string of the ROUTING row that matched, so the
- * two must end up with the SAME audience string. A routing row with {@code audience=GRO,
- * assigneeOnly=true} becomes {@code ACTOR:assignee|ROLE:GRO} — but its template row carries no
- * {@code assigneeOnly} column at all and would map to a bare {@code ROLE:GRO}, and the join would
- * break silently: the routing row would find no template and nobody would be told. So templates
- * are converted WITH the routing rows as context ({@link #buildAudienceIndex}) and reuse exactly
- * the audience string routing produced. Resolution order: the channel-qualified key, then the
- * channel-independent one when every channel agreed, then the bare mapping for an orphan template.
+ * <p>Join hazard: routing {@code audience=GRO, assigneeOnly=true} becomes
+ * {@code ACTOR:assignee|ROLE:GRO}, but its template row has no assigneeOnly column and would map
+ * to {@code ROLE:GRO}, silently breaking the template lookup. So templates reuse the audience
+ * string routing produced ({@link #buildAudienceIndex}).
  */
-@Slf4j
 public final class LegacyMasterAdapter {
 
     /** Locale a row with a blank locale falls back to; locale is a required key in the new schema. */
@@ -62,13 +39,7 @@ public final class LegacyMasterAdapter {
     private static final Map<String, String> BARE_ACTORS =
             Map.of("CITIZEN", "ACTOR:citizen", "EMPLOYEE", "ACTOR:assignee");
 
-    /**
-     * businessService to (module, eventName prefix). {@code businessService} has exactly one value
-     * in production — {@code NotificationRouter.route} has one caller and it passes the PGR
-     * constant — but an unknown one is CONVERTED rather than dropped, so a tenant that invented a
-     * business service keeps its rows under a prefix derived from the code. Dropping them would
-     * delete an operator's data during an upgrade.
-     */
+    /** An unknown businessService is converted under a derived prefix, never dropped. */
     private static final Map<String, String[]> BUSINESS_SERVICE_MODULES =
             Map.of("PGR", new String[]{"Complaints", "COMPLAINTS.WORKFLOW"});
 
@@ -81,8 +52,6 @@ public final class LegacyMasterAdapter {
             super(message);
         }
     }
-
-    // ---- the pieces --------------------------------------------------------
 
     public static String moduleFor(Object businessService) {
         String bs = text(businessService).isEmpty() ? "PGR" : text(businessService);
@@ -104,10 +73,7 @@ public final class LegacyMasterAdapter {
         return prefix + "." + act + "." + state;
     }
 
-    /**
-     * True when the audience is ALREADY a scheme reference and must be left exactly as it is.
-     * This is what makes re-conversion a no-op, which is what makes the live copy safe to re-run.
-     */
+    /** True when the audience is already a scheme reference; left exactly as it is. */
     public static boolean isSchemeRef(Object audience) {
         String value = text(audience);
         if (value.isEmpty()) {
@@ -158,8 +124,6 @@ public final class LegacyMasterAdapter {
         }
         return true;
     }
-
-    // ---- per-master conversion ---------------------------------------------
 
     /** @return the converted row, or null when the audience is not notifiable */
     public static RoutingRow convertRouting(Map<String, Object> row) {
@@ -266,8 +230,6 @@ public final class LegacyMasterAdapter {
                 isActive(row));
     }
 
-    // ---- internals ---------------------------------------------------------
-
     /** The audience string the matching routing row produced, else the bare mapping. */
     private static String joinedAudience(Map<String, Object> row, Map<String, String> audienceIndex) {
         String legacy = text(row.get("audience")).toUpperCase(Locale.ROOT);
@@ -287,11 +249,7 @@ public final class LegacyMasterAdapter {
         return audienceRef(row.get("audience"), null);
     }
 
-    /**
-     * A row that has already been converted — it has an {@code eventName} and no {@code action} —
-     * is returned unchanged. Every function here is idempotent for exactly this reason: the live
-     * copy step has to be safe to re-run.
-     */
+    /** Has an eventName and no action: already converted, so passed through unchanged. */
     private static boolean alreadyConverted(Map<String, Object> row) {
         return row.containsKey("eventName") && !row.containsKey("action");
     }

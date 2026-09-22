@@ -202,7 +202,7 @@ export const PROVIDER_TEMPLATE_PROVIDER = 'twilio';
 
 /**
  * Every rule this checker can emit, with the severity it emits at and a one-line
- * description. The operator doc (docs/2.12/notifications/message-templates.md)
+ * description. The operator doc (docs/2.20/notifications/setup-guide.md, §5.4)
  * is written from this table, and a unit test asserts no rule escapes it — so a
  * new rule cannot ship undocumented.
  *

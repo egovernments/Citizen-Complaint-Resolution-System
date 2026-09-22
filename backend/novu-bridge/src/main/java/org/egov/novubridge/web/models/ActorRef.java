@@ -6,21 +6,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * A person a {@link ThinEvent} names: an entry in its {@code actors} map, or an element of its
- * {@code recipients} array. The two are the same shape on the wire and the same class here.
- *
- * <p><b>{@code userId} alone is the form to prefer.</b> The box hydrates name, phone, email and
- * preferred locale from egov-user, which is what keeps contact PII off the broker — a role
- * notification to a forty-person pool now puts zero phone numbers on a Kafka topic. The other
- * fields exist for recipients who have <b>no account</b>: an anonymously filed complaint, an OTP
- * target. Whatever is supplied here is used as-is and not looked up.
- *
- * <p>Deliberately NOT {@link Contact}, although the field sets coincide today. {@code Contact} is
- * part of the pre-rendered envelope v1, where it means "the recipient the producer already
- * resolved"; this means "a handle the box will resolve". Sharing a class would make a change to
- * either contract a change to both, and envelope v1 is frozen on purpose.
- *
- * <p><b>Published contract.</b> The wire form is the {@code actorRef} definition in
+ * A person a {@link ThinEvent} names (an {@code actors} entry or a {@code recipients} element).
+ * Prefer {@code userId} alone: the box hydrates the contact, keeping PII off the broker. The
+ * contact fields are for recipients with no account and are used as-is. Deliberately not
+ * {@link Contact}, which belongs to the frozen v1 envelope. Wire form: {@code actorRef} in
  * {@code contract/thin-event-v1.schema.json}; a field added here must be described there.
  */
 @Data

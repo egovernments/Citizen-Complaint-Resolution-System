@@ -17,19 +17,15 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Delivery receipts: the write-back path that lets a dispatch-log row move past SENT.
- * {@code POST|GET /novu-adapter/v1/receipts/{provider}} — Novu's delivery webhook, a direct
- * gateway's DR callback. Authenticated by a shared secret ({@code novu.bridge.receipts.secret},
- * header {@code X-Receipt-Secret} or query {@code secret}); the endpoint is OFF (403) while the
- * secret is blank, and it sits outside the employee-token {@code ProxyAuthFilter} because the
- * caller is a machine, not an operator.
- *
- * <p>Only {@code SENT} rows move (to DELIVERED / BOUNCED / FAILED); a late or duplicate report
- * cannot regress a row. Non-terminal reports (queued/sent) are acknowledged and ignored.
+ * Delivery receipts (Novu webhook, gateway DR callbacks): move a SENT row to DELIVERED / BOUNCED /
+ * FAILED. A machine caller, so outside ProxyAuthFilter and authenticated by a shared secret
+ * ({@code X-Receipt-Secret} or {@code ?secret=}); blank secret = endpoint off (403).
  */
 @RestController
 @RequestMapping("/novu-adapter/v1")
@@ -57,7 +53,9 @@ public class ReceiptController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "receipts are disabled (novu.bridge.receipts.secret is blank)"));
         }
         String presented = StringUtils.hasText(headerSecret) ? headerSecret : querySecret;
-        if (!expected.equals(presented)) {
+        // Constant-time: the secret is the only authentication on this path.
+        if (presented == null || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
+                presented.getBytes(StandardCharsets.UTF_8))) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "bad receipt secret"));
         }
 
@@ -65,7 +63,7 @@ public class ReceiptController {
         if (params != null) params.forEach((k, v) -> { if (!"secret".equals(k)) payload.put(k, v); });
         if (body != null) payload.putAll(body);
 
-        DeliveryReceipt receipt = parser.parse(provider, payload);
+        DeliveryReceipt receipt = parser.parse(payload);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("provider", provider);
         out.put("providerStatus", receipt.getProviderStatus());

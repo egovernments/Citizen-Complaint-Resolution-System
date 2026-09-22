@@ -56,7 +56,7 @@ class ProviderControllerTest {
         config.setSmsCountryUrl("http://api.smscountry.com/SMSCwebservice_bulk.aspx");
         config.setSmsCountryAdapterUrl("http://novu-bridge:8080/novu-bridge/novu-adapter/v1/gateways/smscountry/send");
         controller = new ProviderController(novuClient,
-                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
                 dispatchLogRepository, twilioTemplateSyncService,
                 new ProviderCatalog(config), new ChannelPolicyClient(null, config),
                 new ProviderAvailability(novuClient, config));
@@ -235,7 +235,7 @@ class ProviderControllerTest {
     @Test
     void testSend_sms_triggersSmsWorkflow_writesTestLog() {
         when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
-                nullable(String.class), anyMap(), anyString()))
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -250,7 +250,7 @@ class ProviderControllerTest {
 
         ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
         verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(),
-                nullable(String.class), anyMap(), anyString());
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class));
         assertEquals("+15550100", phone.getValue());
 
         ArgumentCaptor<DispatchLogEntry> logged = ArgumentCaptor.forClass(DispatchLogEntry.class);
@@ -266,8 +266,8 @@ class ProviderControllerTest {
 
     @Test
     void testSend_whatsapp_prefixesPhone_andBuildsTwilioContentOverrides() {
-        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
-                anyString(), nullable(Map.class), nullable(String.class)))
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), nullable(String.class),
+                anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -281,8 +281,8 @@ class ProviderControllerTest {
 
         ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
-        verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(), anyMap(),
-                anyString(), overrides.capture(), isNull());
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(), nullable(String.class),
+                anyMap(), anyString(), overrides.capture());
 
         assertEquals("whatsapp:+14155550123", phone.getValue());
 
@@ -310,8 +310,8 @@ class ProviderControllerTest {
                     merged.put("sms", Map.of("integrationIdentifier", "twilio-whatsapp"));
                     return merged;
                 });
-        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
-                anyString(), nullable(Map.class), nullable(String.class)))
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), nullable(String.class),
+                anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -322,8 +322,8 @@ class ProviderControllerTest {
         controller.testSend(req);
 
         ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
-        verify(novuClient).trigger(eq("complaints-sms"), anyString(), anyString(), anyMap(),
-                anyString(), overrides.capture(), isNull());
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), anyString(), nullable(String.class),
+                anyMap(), anyString(), overrides.capture());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> sms = (Map<String, Object>) overrides.getValue().get("sms");
@@ -337,7 +337,7 @@ class ProviderControllerTest {
     @Test
     void testSend_subscriberIdIsStable_reproducibleAcrossCalls() {
         when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
-                nullable(String.class), anyMap(), anyString()))
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of()));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -352,7 +352,7 @@ class ProviderControllerTest {
     @Test
     void testSend_email_passesRecipientEmailToNovu() {
         when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
-                nullable(String.class), anyMap(), anyString()))
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -368,7 +368,7 @@ class ProviderControllerTest {
         // stored email, so dropping it makes the email step silently deliver nothing.
         ArgumentCaptor<String> email = ArgumentCaptor.forClass(String.class);
         verify(novuClient).trigger(eq("complaints-email"), anyString(), nullable(String.class),
-                email.capture(), anyMap(), anyString());
+                email.capture(), anyMap(), anyString(), nullable(Map.class));
         assertEquals("operator@example.com", email.getValue());
     }
 }

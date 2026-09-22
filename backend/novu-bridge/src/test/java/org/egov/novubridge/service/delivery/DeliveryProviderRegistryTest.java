@@ -13,7 +13,7 @@ import static org.mockito.Mockito.mock;
 class DeliveryProviderRegistryTest {
 
     private final NovuBridgeConfiguration config = new NovuBridgeConfiguration();
-    private final NovuDeliveryProvider novu = new NovuDeliveryProvider(mock(NovuClient.class), config);
+    private final NovuDeliveryProvider novu = new NovuDeliveryProvider(mock(NovuClient.class));
     private final ChannelPolicyClient policy = new ChannelPolicyClient(null, config);
     private final SmsCountryDeliveryProvider smsCountry = new SmsCountryDeliveryProvider(mock(SmsCountryClient.class), policy);
 

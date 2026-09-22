@@ -1,10 +1,11 @@
 # Every NB_* error code this build can emit, one per line.
-# Machine-readable twin of docs/2.12/notifications/contract/error-codes.md, which has the
+# Machine-readable twin of docs/2.20/notifications/contract/error-codes.md, which has the
 # meaning, surface, retryability and operator action for each. Add a code here, and to
 # that page, in the same change that first emits it.
 NB_ADAPTER_BAD_REQUEST
 NB_ADAPTER_UNAUTHENTICATED
 NB_ADMIN_ROLE_REQUIRED
+NB_CONFIG_UNAVAILABLE
 NB_CONTACT_MISSING
 NB_CONTRACT_NOT_PACKAGED
 NB_CONTRACT_UNREADABLE
@@ -34,6 +35,7 @@ NB_PROVIDER_IN_USE
 NB_PROVIDER_NOT_FOUND
 NB_PROVIDER_UNAVAILABLE
 NB_RECIPIENT_LIMIT_EXCEEDED
+NB_RESOLUTION_INCOMPLETE
 NB_SMSCOUNTRY_REJECTED
 NB_SMSCOUNTRY_UNREACHABLE
 NB_TEMPLATE_NOT_APPROVED

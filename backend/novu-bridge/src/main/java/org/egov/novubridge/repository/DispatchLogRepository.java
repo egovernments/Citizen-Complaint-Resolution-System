@@ -35,9 +35,7 @@ public class DispatchLogRepository {
             return;
         }
 
-        // Idempotency key is (transaction_id, channel, recipient_value) — PGR emits
-        // one event per recipient x channel with a stable transactionId, so Kafka
-        // redelivery upserts the same row instead of duplicating a send.
+        // Unique key (transaction_id, channel, recipient_value): a redelivery upserts the same row.
         String sql = "INSERT INTO nb_dispatch_log(id, event_id, transaction_id, reference_number, module, event_name, tenant_id, channel, recipient_value, " +
                 "template_key, template_version, status, attempt_count, last_error_code, last_error_message, provider_response_jsonb, " +
                 "created_time, last_modified_time, is_test, provider_ref, source_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?, ?, ?, ?) " +
@@ -76,15 +74,7 @@ public class DispatchLogRepository {
         }
     }
 
-    /**
-     * The path a row came in on, defaulting to {@code PRERENDERED}.
-     *
-     * <p>The default lives HERE rather than at every call site, because the pre-rendered pipeline
-     * predates the column and must keep writing byte-identical rows without being edited in eight
-     * places to say what it has always been. A bind of NULL would not do — an explicit NULL beats
-     * a column DEFAULT and would fail the NOT NULL — so the value is written, not omitted, and
-     * there is never a row whose path a reader has to infer.
-     */
+    /** Defaults to PRERENDERED here: an explicit NULL bind beats the column DEFAULT and fails NOT NULL. */
     private static String sourcePathOf(DispatchLogEntry entry) {
         return StringUtils.hasText(entry.getSourcePath())
                 ? entry.getSourcePath()
@@ -92,25 +82,28 @@ public class DispatchLogRepository {
     }
 
     /**
-     * List dispatch log rows for a tenant with optional, parameterized filters,
-     * ordered newest-first. tenantId is mandatory (the caller enforces it); every
-     * other predicate is appended only when supplied and always via bind
-     * parameters — no value is concatenated into the SQL, so this is injection-safe.
-     *
-     * <p>Observability: every event consumed from the domain topic lands here with
-     * an explicit terminal status — SENT, SKIPPED (preference denied / no provider /
-     * unsupported channel) or FAILED. Channels without an enabled provider (e.g.
-     * WHATSAPP before a legitimate provider is onboarded) appear as
-     * SKIPPED/NB_NO_PROVIDER rather than being invisible.
-     *
-     * @param referenceNumber when {@code referenceNumberPrefix} is true, matches
-     *                        rows whose reference_number starts with this value;
-     *                        otherwise an exact match.
+     * Status of the row with this unique key, or null when there is none (or the log is off, or
+     * the read failed: a replay guard that cannot see must not block delivery).
      */
+    public String findStatus(String transactionId, String channel, String recipientValue) {
+        if (Boolean.FALSE.equals(config.getDispatchLogEnabled())
+                || transactionId == null || channel == null || recipientValue == null) {
+            return null;
+        }
+        try {
+            List<String> rows = jdbcTemplate.queryForList(
+                    "SELECT status FROM nb_dispatch_log WHERE transaction_id = ? AND channel = ? AND recipient_value = ?",
+                    String.class, transactionId, channel, recipientValue);
+            return rows.isEmpty() ? null : rows.get(0);
+        } catch (Exception e) {
+            log.warn("Dispatch log lookup failed for txn={} channel={}: {}", transactionId, channel, e.getMessage());
+            return null;
+        }
+    }
+
     /**
-     * Receipt write-back: move a SENT row to DELIVERED / BOUNCED / FAILED. Matches by
-     * transaction_id or provider_ref (whichever the provider reported). Only SENT rows move,
-     * so a late or duplicate report can never regress a row.
+     * Receipt write-back: move a SENT row to DELIVERED / BOUNCED / FAILED, matched by transaction_id
+     * or provider_ref. Only SENT rows move, so a late or duplicate report can never regress a row.
      *
      * @return rows updated (0 = nothing matched or already past SENT)
      */
@@ -144,6 +137,7 @@ public class DispatchLogRepository {
         }
     }
 
+    /** Newest-first page for a tenant. Every filter is a bind parameter; nothing is concatenated into SQL. */
     public List<DispatchLogEntry> list(String tenantId, String referenceNumber, boolean referenceNumberPrefix,
                                        String transactionId, String channel, String status, String sourcePath,
                                        boolean includeTest, int limit, int offset) {
@@ -162,11 +156,7 @@ public class DispatchLogRepository {
         return jdbcTemplate.query(sql.toString(), rowMapper(), args.toArray());
     }
 
-    /**
-     * COUNT of dispatch log rows matching the same tenant + filters as
-     * {@link #list}, so a caller can page without re-scanning. Parameterized;
-     * see {@link #list} for the observability-boundary caveat.
-     */
+    /** COUNT over the same tenant scope and filters as {@link #list}. */
     public long count(String tenantId, String referenceNumber, boolean referenceNumberPrefix,
                       String transactionId, String channel, String status, String sourcePath, boolean includeTest) {
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM nb_dispatch_log WHERE ");
@@ -177,11 +167,7 @@ public class DispatchLogRepository {
         return total != null ? total : 0L;
     }
 
-    /**
-     * A state-level tenant ("mz") also sees its city tenants ("mz.maputo"): complaints are
-     * raised at city level, so an operator signed in at the state would otherwise read an
-     * empty log as "nothing was sent". A city tenant still matches only itself.
-     */
+    /** A state tenant ("mz") also sees its cities ("mz.maputo"), where complaints are raised; a city sees only itself. */
     private void appendTenantScope(StringBuilder sql, List<Object> args, String tenantId) {
         if (tenantId.contains(".")) {
             sql.append("tenant_id = ?");

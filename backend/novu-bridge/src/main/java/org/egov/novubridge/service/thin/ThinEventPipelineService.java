@@ -7,21 +7,12 @@ import org.egov.novubridge.web.models.ThinEvent;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
 
+import static org.springframework.util.StringUtils.hasText;
+
 /**
- * The thin-event counterpart of {@code DispatchPipelineService}: validate, write the rejection
- * down if it fails, otherwise hand the event to the {@link ThinEventHandler}.
- *
- * <p>Deliberately a separate class rather than a branch inside the pre-rendered pipeline. That
- * pipeline is a public interface's implementation — CORE-SMS and any external producer depend on
- * it byte for byte — and the surest way to keep it unchanged is not to open it. Nothing here
- * touches it, and the two paths meet only downstream, where the resolution stage hands it
- * finished envelopes exactly as a producer would.
- *
- * <p><b>A rejection is persisted before it is thrown</b>, the same rule the envelope path has
- * kept since rejections stopped disappearing into the DLQ. The row is channel-less — a thin event
- * refused at validation never reached a channel, and inventing {@code UNKNOWN} for one would put
- * a value in the column that means nothing. The consumer still DLQs the event afterwards, so the
- * payload survives and the operator sees the refusal on the Logs screen.
+ * Validate a thin event, then hand it to the {@link ThinEventHandler}. Kept apart from the
+ * pre-rendered pipeline so that public path is never opened. A rejection is persisted as a
+ * channel-less REJECTED row before it is rethrown for the consumer to DLQ.
  */
 @Service
 @Slf4j
@@ -39,7 +30,7 @@ public class ThinEventPipelineService {
         this.dispatchLogRepository = dispatchLogRepository;
     }
 
-    public ThinEventResult process(ThinEvent event) {
+    public void process(ThinEvent event) {
         log.info("Processing thin domain event: eventId={}, eventName={}, module={}, tenant={}",
                 event == null ? null : event.getEventId(),
                 event == null ? null : event.getEventName(),
@@ -52,16 +43,10 @@ public class ThinEventPipelineService {
             persistRejected(event, ce.getCode(), ce.getMessage());
             throw ce;
         }
-
-        return handler.handle(event);
+        handler.handle(event);
     }
 
-    /**
-     * A {@code REJECTED} channel-less row for an event that failed validation. Every NOT NULL
-     * column gets an honest fallback so even a malformed event is written down; nothing is
-     * invented beyond the literal {@code unknown} markers, which is the same bargain
-     * {@code DispatchPipelineService.persistRejected} makes.
-     */
+    /** Every NOT NULL column gets an honest fallback so even a malformed event is written down. */
     private void persistRejected(ThinEvent event, String errorCode, String errorMessage) {
         String eventId = firstNonBlank(event == null ? null : event.getEventId(), "unknown");
         String seed = event == null ? null : event.resolvedTransactionSeed();
@@ -77,12 +62,7 @@ public class ThinEventPipelineService {
                 .build());
     }
 
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.trim().isEmpty()) {
-                return value.trim();
-            }
-        }
-        return null;
+    private static String firstNonBlank(String value, String fallback) {
+        return hasText(value) ? value.trim() : fallback;
     }
 }

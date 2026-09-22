@@ -129,7 +129,7 @@ class NovuClientTest {
 
         novuClient.identifyThenTrigger("ke.bomet:uuid-1", whatsappContact(), "WHATSAPP",
                 "Dear Jane, your complaint is assigned.", null, "txn-1", Map.of(),
-                "HX00000000000000000000000000000000", null);
+                "HX00000000000000000000000000000000", null, null, null);
 
         ArgumentCaptor<HttpEntity> ent = ArgumentCaptor.forClass(HttpEntity.class);
         // Two POSTs: /v1/subscribers (identify) then /v1/events/trigger — the trigger is the last one.
@@ -156,7 +156,7 @@ class NovuClientTest {
 
         novuClient.identifyThenTrigger("ke.bomet:uuid-1", whatsappContact(), "WHATSAPP",
                 "Dear Jane, your complaint is assigned.", null, "txn-1", Map.of(),
-                "HX00000000000000000000000000000000", null);
+                "HX00000000000000000000000000000000", null, null, null);
 
         ArgumentCaptor<HttpEntity> ent = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate, org.mockito.Mockito.times(2))
@@ -181,7 +181,7 @@ class NovuClientTest {
 
         novuClient.identifyThenTrigger("ke.bomet:uuid-1", whatsappContact(), "WHATSAPP",
                 "Dear Jane, your complaint is assigned.", null, "txn-1", Map.of(),
-                null, null);
+                null, null, null, null);
 
         ArgumentCaptor<HttpEntity> ent = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate, org.mockito.Mockito.times(2))

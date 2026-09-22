@@ -2,6 +2,7 @@ package org.egov.novubridge.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.tracer.model.CustomException;
+import org.egov.novubridge.util.Values;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -14,17 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * Pulls the linked Twilio account's WhatsApp Content templates
- * ({@code content.twilio.com/v1/ContentAndApprovals}) and returns them as provider
- * metadata — SID, friendly name, language, approval status, and the name's tokens.
- *
- * <p>Deliberately domain-dumb: the bridge does NOT decide which PGR routing key a
- * template belongs to. That matching (audience, action, toState, locale, ordered
- * variables) is done in the configurator against the tenant's own NotificationRouting
- * and NotificationTemplate rows, which is where that knowledge lives.
- *
- * <p><b>Secrets stay server-side.</b> The Twilio Account SID / Auth Token are read from
- * the Novu integration and used only to call Twilio here; they are never returned or logged.
+ * The linked Twilio account's WhatsApp Content templates as metadata. Matching them to routing keys
+ * is the configurator's job. The Twilio credentials, read from the Novu integration, are never
+ * returned or logged.
  */
 @Service
 @Slf4j
@@ -59,11 +52,11 @@ public class TwilioTemplateSyncService {
                 if (!(o instanceof Map)) continue;
                 Map<String, Object> c = (Map<String, Object>) o;
                 Map<String, Object> row = new LinkedHashMap<>();
-                row.put("templateId", str(c.get("sid")));
-                row.put("templateName", str(c.get("friendly_name")));
-                row.put("language", str(c.get("language")));
+                row.put("templateId", Values.str(c.get("sid")));
+                row.put("templateName", Values.str(c.get("friendly_name")));
+                row.put("language", Values.str(c.get("language")));
                 row.put("approvalStatus", whatsappApprovalStatus(c));
-                row.put("tokens", tokens(str(c.get("friendly_name"))));
+                row.put("tokens", tokens(Values.str(c.get("friendly_name"))));
                 templates.add(row);
             }
             url = nextPageUrl(page);
@@ -90,12 +83,12 @@ public class TwilioTemplateSyncService {
             for (Object o : (List<Object>) data) {
                 if (!(o instanceof Map)) continue;
                 Map<String, Object> i = (Map<String, Object>) o;
-                if (!"twilio".equalsIgnoreCase(str(i.get("providerId")))) continue;
+                if (!"twilio".equalsIgnoreCase(Values.str(i.get("providerId")))) continue;
                 Map<String, Object> cred = (Map<String, Object>) i.get("credentials");
                 if (cred == null) continue;
-                String sid = str(cred.get("accountSid"));
-                String token = str(cred.get("token"));
-                if (token == null) token = str(cred.get("authToken"));
+                String sid = Values.str(cred.get("accountSid"));
+                String token = Values.str(cred.get("token"));
+                if (token == null) token = Values.str(cred.get("authToken"));
                 if (StringUtils.hasText(sid) && StringUtils.hasText(token)) {
                     return new String[]{sid, token};
                 }
@@ -133,8 +126,8 @@ public class TwilioTemplateSyncService {
             for (Object o : (List<Object>) ar) {
                 if (o instanceof Map) {
                     Map<String, Object> req = (Map<String, Object>) o;
-                    if ("whatsapp".equalsIgnoreCase(str(req.get("channel"))) || req.containsKey("status")) {
-                        return str(req.get("status"));
+                    if ("whatsapp".equalsIgnoreCase(Values.str(req.get("channel"))) || req.containsKey("status")) {
+                        return Values.str(req.get("status"));
                     }
                 }
             }
@@ -152,7 +145,4 @@ public class TwilioTemplateSyncService {
         return null;
     }
 
-    private static String str(Object o) {
-        return o == null ? null : o.toString();
-    }
 }

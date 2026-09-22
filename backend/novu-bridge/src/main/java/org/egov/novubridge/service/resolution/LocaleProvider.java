@@ -4,22 +4,13 @@ import org.egov.common.contract.request.RequestInfo;
 
 import java.util.Map;
 
-/**
- * <b>SPI 2 of 4.</b> Which language each person wants to be written to in.
- *
- * <p>One call per tenant per fan-out, not one per recipient: the DIGIT implementation reads the
- * whole tenant's preferences once and caches them, because a forty-person role pool would
- * otherwise be forty lookups for a value most people have never set.
- */
+/** SPI: which language each person wants to be written to in. Called once per tenant per event. */
 public interface LocaleProvider {
 
     /**
-     * User uuid to preferred language for one tenant.
-     *
-     * @return never null. An <b>empty map is the normal answer</b> for a tenant where nobody has
-     *         set a preference, and means "everyone gets the deployment default". A provider that
-     *         cannot reach its source returns empty rather than throwing: a preference service
-     *         being down must not stop a notification, it must only stop it being translated.
+     * @return user uuid to preferred locale; never null. Empty is the normal answer. An
+     *         unreachable source returns empty rather than throwing: a preference outage must only
+     *         stop a message being translated, never stop it being sent.
      */
     Map<String, String> preferredLocales(String tenantId, RequestInfo requestInfo);
 }

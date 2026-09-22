@@ -17,43 +17,21 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Localization code to message, from egov-localization.
+ * Localization code to message, from egov-localization at the state tenant. Caches a whole
+ * (tenant, locale, module) per call, since that is what the upstream answers.
  *
- * <p>Reads one (tenant, locale, module) at a time and caches the whole module's messages, because
- * that is the shape of the upstream call — it answers a module, not a code — and because a
- * thirteen-placeholder event would otherwise be thirteen HTTP round trips.
- *
- * <p><b>Fail-open, and open means RAW.</b> A module that cannot be fetched is cached as an empty
- * map for the window and every code in it misses, so the caller falls back to the literal value
- * the producer sent — a raw status code instead of "Pending at LME" — or leaves the token's braces
- * literal when there is no literal either. That is what the code being replaced does, and it is
- * the right failure: a raw value is ugly and true, whereas blanking the token produces a message
- * with a hole in it, and an all-blank WhatsApp template is what a provider rejects outright.
- *
- * <p>Messages are held at the STATE tenant. A city tenant's messages are its state's.
+ * <p>Fail-open to the RAW value: a module that cannot be fetched is cached empty for the window,
+ * so tokens fall back to the producer's literal. Raw is ugly but true; blank is a hole in the
+ * message, and an all-blank WhatsApp template is rejected outright.
  */
 @Slf4j
 public class DigitLocalizationProvider implements LocalizationProvider {
 
-    private static final class Timed {
-        final Map<String, String> messages;
-        final long fetchedAt = System.currentTimeMillis();
-
-        Timed(Map<String, String> messages) {
-            this.messages = messages;
-        }
-
-        boolean fresh(long ttl) {
-            return System.currentTimeMillis() - fetchedAt < ttl;
-        }
-    }
-
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
-    private final Map<String, Timed> cache = new ConcurrentHashMap<>();
+    private final TtlCache<String, Map<String, String>> cache = new TtlCache<>();
 
     public DigitLocalizationProvider(@Nullable RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -86,9 +64,9 @@ public class DigitLocalizationProvider implements LocalizationProvider {
     private Map<String, String> messages(String tenant, String locale, String module, RequestInfo requestInfo) {
         String key = tenant + "|" + locale + "|" + module;
         long ttl = config.getLocalizationCacheTtlMs() != null ? config.getLocalizationCacheTtlMs() : 300_000L;
-        Timed cached = cache.get(key);
-        if (cached != null && cached.fresh(ttl)) {
-            return cached.messages;
+        Map<String, String> cached = cache.fresh(key, ttl);
+        if (cached != null) {
+            return cached;
         }
         Map<String, String> out = new LinkedHashMap<>();
         try {
@@ -117,10 +95,8 @@ public class DigitLocalizationProvider implements LocalizationProvider {
         } catch (Exception e) {
             log.warn("Localization unavailable for tenant {} locale {} module {} ({}); placeholder values "
                     + "fall back to the raw literals the producer sent", tenant, locale, module, e.getMessage());
-            // Cached empty for the window, deliberately: an outage costs one call per window,
-            // not one per code per recipient.
         }
-        cache.put(key, new Timed(out.isEmpty() ? Collections.emptyMap() : out));
+        cache.put(key, out.isEmpty() ? Collections.emptyMap() : out);
         return out;
     }
 }

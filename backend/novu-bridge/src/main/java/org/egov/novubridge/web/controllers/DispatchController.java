@@ -55,18 +55,8 @@ public class DispatchController {
     }
 
     /**
-     * Resolve a thin domain event and return the envelopes it WOULD produce, without sending
-     * anything and without writing a ledger row.
-     *
-     * <p>This is the answer to the question an operator actually asks — "why did this event send
-     * nothing?" — asked <b>before</b> the event happens rather than forensically afterwards. It
-     * runs the real resolver against the tenant's real config: the same routing rows, the same
-     * templates, the same role pools, the same locale preferences. The only thing it does not do
-     * is dispatch, which is what makes it safe to point at a production tenant.
-     *
-     * <p>Admin-only ({@code ProxyAuthFilter.ADMIN_ONLY_PATHS}). It expands role pools and returns
-     * rendered bodies with their contact blocks filled in — that is recipient PII for every holder
-     * of a role, which is a narrower thing than the Logs screen's read tier should hand out.
+     * The envelopes a thin event WOULD produce against the tenant's real config: nothing sent, no
+     * ledger row. Admin-only: the answer carries recipient PII for every holder of a role.
      */
     @PostMapping("/_resolve")
     public ResponseEntity<ThinEventResolveResponse> resolve(@Valid @RequestBody ThinEventResolveRequest request) {

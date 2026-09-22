@@ -18,27 +18,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * One consumer, two inbound kinds, one topic per producer ({@code novu.bridge.kafka.input.topics}).
- *
- * <p>The topic never decides how a message is handled — the {@code eventType} decides which
- * producer it is, and the {@code kind} discriminator decides which contract it speaks:
- *
- * <ul>
- *   <li>{@code kind} absent, or {@code RENDERED} — a pre-rendered {@link NotificationEvent}: the
- *       producer resolved the recipient, picked the template and filled it, and the bridge gates,
- *       delivers and records. Absent is the historical form and stays the default forever, which
- *       is what lets every v1 producer written before the thin event existed keep working
- *       untouched.</li>
- *   <li>{@code kind = THIN} — a {@link ThinEvent}: the producer said what happened and the box
- *       decides the rest.</li>
- * </ul>
- *
- * <p><b>Read, not sniffed.</b> The discriminator is taken off the raw map before binding, because
- * binding first would mean choosing a model before knowing which contract applies — and guessing
- * a contract from which fields happen to be set is exactly what the {@code eventType} allowlist
- * exists to avoid. An unrecognised {@code kind} is not guessed at either: it binds as an envelope
- * and is refused by the envelope validator, so it lands in the ledger and the DLQ with a code, not
- * in a log line.
+ * One consumer for every producer topic ({@code novu.bridge.kafka.input.topics}). The {@code kind}
+ * discriminator, read off the raw map before binding, picks the contract: absent or
+ * {@code RENDERED} = a pre-rendered {@link NotificationEvent} (the historical default, forever),
+ * {@code THIN} = a {@link ThinEvent}. Anything else binds as an envelope and is refused by the
+ * envelope validator, so it lands in the ledger and the DLQ with a code.
  */
 @Component
 @Slf4j
@@ -74,13 +58,7 @@ public class DomainEventConsumer {
         handle(mapper.convertValue(record, NotificationEvent.class), topic);
     }
 
-    /**
-     * Whether the raw record declares itself a thin event. Case-insensitive and trimmed, because
-     * a producer that shouts its discriminator is not making a different claim; anything other
-     * than {@code THIN} — including the explicit {@code RENDERED}, a blank, and a value nobody
-     * has ever defined — takes the envelope path, where the envelope validator is the one that
-     * gets to refuse it.
-     */
+    /** Case-insensitive and trimmed; anything but THIN takes the envelope path. */
     private static boolean isThin(Map<String, Object> record) {
         Object kind = record == null ? null : record.get(KIND);
         return kind != null && ThinEvent.KIND.equalsIgnoreCase(kind.toString().trim());
@@ -99,12 +77,7 @@ public class DomainEventConsumer {
         }
     }
 
-    /**
-     * Run one thin event through the resolution path. Identical failure handling to the envelope
-     * path, and deliberately so: the DLQ message shape is part of the published contract and does
-     * not vary by kind. What differs is only what {@code event} holds — the thin event as
-     * received, so a replay is possible once the cause is fixed.
-     */
+    /** Same failure handling as the envelope path: the DLQ shape is published contract. {@code event} is the thin event as received, so it can be replayed. */
     public void handleThin(ThinEvent event, String topic) {
         try {
             thinEventPipelineService.process(event);

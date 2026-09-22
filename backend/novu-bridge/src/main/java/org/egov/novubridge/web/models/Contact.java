@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
  * novu-bridge only upserts this into Novu (identify) and delivers.
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class Contact {

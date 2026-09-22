@@ -1,7 +1,5 @@
 package org.egov.novubridge.service.delivery;
 
-import lombok.extern.slf4j.Slf4j;
-import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.service.NovuClient;
 import org.egov.novubridge.web.models.Contact;
 import org.springframework.stereotype.Component;
@@ -11,11 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Delivery through Novu. Owns the Novu-and-Twilio specifics the rest of the bridge must not
- * know about: WhatsApp rides the Twilio {@code sms} integration with a {@code whatsapp:+E164}
- * recipient, an explicit integration override, and an approved Content-template envelope.
+ * Delivery through Novu. Owns the Novu/Twilio specifics: WhatsApp rides the Twilio {@code sms}
+ * integration with a {@code whatsapp:+E164} recipient, an integration override and an approved
+ * Content-template envelope.
  */
-@Slf4j
 @Component
 public class NovuDeliveryProvider implements DeliveryProvider {
 
@@ -23,11 +20,9 @@ public class NovuDeliveryProvider implements DeliveryProvider {
     private static final String NOVU_TRIGGER_FAILED = "NB_NOVU_TRIGGER_FAILED";
 
     private final NovuClient novuClient;
-    private final NovuBridgeConfiguration config;
 
-    public NovuDeliveryProvider(NovuClient novuClient, NovuBridgeConfiguration config) {
+    public NovuDeliveryProvider(NovuClient novuClient) {
         this.novuClient = novuClient;
-        this.config = config;
     }
 
     @Override
@@ -36,49 +31,24 @@ public class NovuDeliveryProvider implements DeliveryProvider {
     }
 
     @Override
-    public boolean supports(String channel) {
-        return channel != null && (channel.equalsIgnoreCase("SMS")
-                || channel.equalsIgnoreCase("WHATSAPP") || channel.equalsIgnoreCase("EMAIL"));
-    }
-
-    @Override
     public DeliveryResult send(Dispatch d) {
         if (d.isTest()) {
             return sendTest(d);
         }
-        // Twilio requires the WhatsApp recipient as `whatsapp:+<E164 digits>`; PGR emits the bare
-        // country-coded number. digitsOnly strips any pre-existing prefix, so this is idempotent.
         Contact contact = d.getContact();
         if (isWhatsapp(d.getChannel()) && contact != null && StringUtils.hasText(contact.getPhone())) {
-            contact = Contact.builder()
-                    .userId(contact.getUserId()).type(contact.getType()).name(contact.getName())
-                    .phone("whatsapp:+" + digitsOnly(contact.getPhone()))
-                    .email(contact.getEmail()).locale(contact.getLocale())
-                    .build();
+            contact = contact.toBuilder().phone(whatsappAddress(contact.getPhone())).build();
         }
-        // Two call shapes on purpose. With no tenant-chosen provider the ORIGINAL overload runs
-        // untouched, so every deployment without a `provider` on its NotificationChannel row
-        // (bomet today) keeps byte-for-byte the behaviour it has now.
-        NovuClient.NovuResponse r = StringUtils.hasText(d.getIntegrationIdentifier())
-                ? novuClient.identifyThenTrigger(
-                        d.getSubscriberId(), contact, d.getChannel(),
-                        d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
-                        d.getTemplateId(), d.getContentVariables(),
-                        d.getIntegrationIdentifier(), d.getProviderType())
-                : novuClient.identifyThenTrigger(
-                        d.getSubscriberId(), contact, d.getChannel(),
-                        d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
-                        d.getTemplateId(), d.getContentVariables());
+        NovuClient.NovuResponse r = novuClient.identifyThenTrigger(
+                d.getSubscriberId(), contact, d.getChannel(),
+                d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
+                d.getTemplateId(), d.getContentVariables(),
+                d.getIntegrationIdentifier(), d.getProviderType());
         return toResult(r, d.getIntegrationIdentifier());
     }
 
-    /**
-     * Operator test-send: no subscriber upsert, caller-chosen workflow, same WhatsApp
-     * envelope + integration override as the live path so the test proves the real route.
-     */
+    /** Operator test-send: no subscriber upsert, caller-chosen workflow, otherwise the live route. */
     private DeliveryResult sendTest(Dispatch d) {
-        String workflow = StringUtils.hasText(d.getWorkflowOverride())
-                ? d.getWorkflowOverride() : config.getNovuWorkflowId(d.getChannel());
         Map<String, Object> payload = new HashMap<>();
         if (d.getData() != null) payload.putAll(d.getData());
         if (d.getBody() != null) payload.put("body", d.getBody());
@@ -87,36 +57,24 @@ public class NovuDeliveryProvider implements DeliveryProvider {
         String phone = c != null ? c.getPhone() : null;
         String email = c != null ? c.getEmail() : null;
 
-        NovuClient.NovuResponse r;
-        if (isWhatsapp(d.getChannel())) {
-            Map<String, Object> overrides = StringUtils.hasText(d.getTemplateId())
-                    ? NovuClient.buildProviderTemplateOverrides(d.getTemplateId(), d.getContentVariables())
-                    : null;
-            overrides = novuClient.applyWhatsappIntegrationOverride(overrides, d.getChannel());
-            overrides = NovuClient.applyIntegrationOverride(overrides, d.getChannel(), d.getIntegrationIdentifier());
-            r = novuClient.trigger(workflow, d.getSubscriberId(), "whatsapp:+" + digitsOnly(phone),
-                    payload, d.getTransactionId(), overrides, null);
-        } else if (StringUtils.hasText(d.getIntegrationIdentifier())) {
-            // The operator asked to test ONE configured provider; pin it, exactly as live
-            // dispatch does, so the test proves that provider and not whatever is primary.
-            Map<String, Object> overrides =
-                    NovuClient.applyIntegrationOverride(null, d.getChannel(), d.getIntegrationIdentifier());
+        boolean whatsapp = isWhatsapp(d.getChannel());
+        Map<String, Object> overrides = whatsapp && StringUtils.hasText(d.getTemplateId())
+                ? NovuClient.buildProviderTemplateOverrides(d.getTemplateId(), d.getContentVariables())
+                : null;
+        overrides = novuClient.applyWhatsappIntegrationOverride(overrides, d.getChannel());
+        overrides = NovuClient.applyIntegrationOverride(overrides, d.getChannel(), d.getIntegrationIdentifier());
+        if (!whatsapp) {
             overrides = NovuClient.applyGatewayBody(overrides, d.getProviderType(),
                     d.getTransactionId(), phone, d.getBody());
-            r = novuClient.trigger(workflow, d.getSubscriberId(), phone, payload,
-                    d.getTransactionId(), overrides, null);
-        } else {
-            r = novuClient.trigger(workflow, d.getSubscriberId(), phone, email, payload, d.getTransactionId());
         }
+        NovuClient.NovuResponse r = novuClient.trigger(d.getWorkflowOverride(), d.getSubscriberId(),
+                whatsapp ? whatsappAddress(phone) : phone, email, payload, d.getTransactionId(), overrides);
         return toResult(r, d.getIntegrationIdentifier());
     }
 
     /**
-     * @param integrationIdentifier the integration the trigger was pinned to, recorded on the
-     *                              accepted result so the dispatch-log row says WHICH provider
-     *                              carried the message — otherwise a per-tenant provider switch
-     *                              is invisible afterwards. No new column: it rides in the
-     *                              provider response that is already persisted as JSON.
+     * The pinned integration is recorded on the result so the dispatch-log row says which provider
+     * carried the message; it rides in the already-persisted provider response.
      */
     private static DeliveryResult toResult(NovuClient.NovuResponse r, String integrationIdentifier) {
         Integer sc = r != null ? r.getStatusCode() : null;
@@ -137,7 +95,8 @@ public class NovuDeliveryProvider implements DeliveryProvider {
         return "WHATSAPP".equalsIgnoreCase(channel);
     }
 
-    private static String digitsOnly(String value) {
-        return value == null ? "" : value.replaceAll("\\D", "");
+    /** Twilio wants {@code whatsapp:+<digits>}; stripping non-digits first makes this idempotent. */
+    private static String whatsappAddress(String phone) {
+        return "whatsapp:+" + (phone == null ? "" : phone.replaceAll("\\D", ""));
     }
 }

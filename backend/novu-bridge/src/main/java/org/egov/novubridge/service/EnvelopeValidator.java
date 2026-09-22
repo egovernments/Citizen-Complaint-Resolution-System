@@ -11,15 +11,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The inbound contract, stated rather than sniffed. An event is accepted only if it
- * <ol>
- *   <li>carries a known {@code eventType} ({@code novu.bridge.event.types}),</li>
- *   <li>is schema version {@value #SCHEMA_VERSION} (or omits the version),</li>
- *   <li>has the identity fields, and</li>
- *   <li>is a complete pre-rendered message: channel + subscriberId + renderedBody.</li>
- * </ol>
- * Anything else is rejected with a specific code; the pipeline writes the rejection down
- * before the consumer DLQs it.
+ * The inbound contract, stated rather than sniffed: a known {@code eventType}, schema version 1 (or
+ * none), the identity fields, and a complete pre-rendered message. Anything else is rejected with
+ * a specific code.
  */
 @Service
 public class EnvelopeValidator {

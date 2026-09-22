@@ -8,10 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-/**
- * SMS straight to SMSCountry's legacy bulk API, bypassing Novu. SMS only. The same route is
- * used for live dispatches and operator test-sends, so a test exercises production's path.
- */
+/** SMS straight to SMSCountry's legacy bulk API, bypassing Novu; live and test-send alike. */
 @Component
 public class SmsCountryDeliveryProvider implements DeliveryProvider {
 
@@ -30,7 +27,6 @@ public class SmsCountryDeliveryProvider implements DeliveryProvider {
         return ID;
     }
 
-    @Override
     public boolean supports(String channel) {
         return "SMS".equalsIgnoreCase(channel);
     }

@@ -1,13 +1,12 @@
 package org.egov.novubridge.service.provider;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.util.Values;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,21 +14,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Single source of truth for the out-of-the-box notification providers: which types exist,
- * what the operator must type in for each, which Novu provider backs it, and how an
- * operator's credential form maps onto Novu's credential keys.
+ * The out-of-the-box provider types: what the operator enters, which Novu provider backs each, and
+ * how the credential form maps onto Novu's credential keys.
  *
- * <p>"Out of the box" means the operator only enters credentials in the configurator — no env
- * edits, no redeploy. Everything a type needs beyond those credentials (the Novu provider id,
- * the adapter URL, the response paths Novu parses) is filled in here.
- *
- * <p><b>Type round-trip.</b> Novu's integration object has no field for "which catalog type is
- * this" and credentials are never read back, so the type is encoded in the integration
- * {@code identifier} as a {@code <type>-<stableId(name)>} prefix — the same trick the
- * pre-catalog WhatsApp path used with its {@code whatsapp-} marker, which
- * {@link #typeFromIdentifier} still understands. That makes {@code GET /integrations} able to
- * say what each integration is, and lets the dispatch path know an identifier is an Ozeki one
- * (and therefore needs the passthrough envelope) without an extra Novu round trip.
+ * <p>Novu's integration has no "catalog type" field and credentials are never read back, so the
+ * type is encoded in the integration {@code identifier} as {@code <type>-<stableId(name)>}. That
+ * lets the dispatch path tell an Ozeki integration (which needs its own request body) from the
+ * identifier alone, with no extra Novu call.
  */
 @Component
 public class ProviderCatalog {
@@ -45,24 +36,15 @@ public class ProviderCatalog {
     public static final String NOVU_PROVIDER_NODEMAILER = "nodemailer";
     public static final String NOVU_PROVIDER_GENERIC_SMS = "generic-sms";
 
-    /**
-     * Header names the SMSCountry adapter reads its per-call credentials from. They are
-     * stored in the generic-sms integration as {@code apiKeyRequestHeader} /
-     * {@code secretKeyRequestHeader}; Novu then sends the matching {@code apiKey} /
-     * {@code secretKey} values under exactly these names.
-     */
+    /** Stored as generic-sms {@code apiKeyRequestHeader}/{@code secretKeyRequestHeader}; Novu sends the credentials under these names. */
     public static final String SMSCOUNTRY_USER_HEADER = "X-SMSCountry-User";
     public static final String SMSCOUNTRY_PASSWORD_HEADER = "X-SMSCountry-Password";
     /** Same mechanism for Ozeki, except the gateway itself reads them, not this service. */
     public static final String OZEKI_USERNAME_HEADER = "X-Ozeki-Username";
     public static final String OZEKI_PASSWORD_HEADER = "X-Ozeki-Password";
     /**
-     * Query parameter carrying the per-integration upstream gateway URL to the adapter.
-     * generic-sms has no credential slot for "a second URL" ({@code domain} is the token-auth
-     * URL and is only read when {@code authenticateByToken} is on), and it POSTs at
-     * {@code baseUrl} verbatim with no path appended — so a query string on {@code baseUrl}
-     * is the one place a non-secret per-integration setting can ride. The sender id does not
-     * need this: it goes in the {@code from} credential, which generic-sms puts in the body.
+     * The per-integration gateway URL, as a query parameter on the adapter URL: generic-sms has no
+     * slot for a second URL and POSTs at {@code baseUrl} verbatim, so this is where it can ride.
      */
     public static final String ADAPTER_PARAM_API_URL = "apiUrl";
 
@@ -75,8 +57,6 @@ public class ProviderCatalog {
     public ProviderCatalog(NovuBridgeConfiguration config) {
         this.config = config;
     }
-
-    // ---- catalog ---------------------------------------------------------
 
     /** The catalog, in the order the configurator should offer it. */
     public List<ProviderType> types() {
@@ -106,8 +86,7 @@ public class ProviderCatalog {
                 .novuProviderId(NOVU_PROVIDER_NODEMAILER)
                 .credentialFields(List.of(
                         CredentialField.text("host", "SMTP host", true, "smtp.example.org", null),
-                        // Novu's nodemailer credential store is a string map; a numeric port is
-                        // rejected. The SPA sends and shows it as text.
+                        // Novu's nodemailer credential store is a string map; a numeric port is rejected.
                         CredentialField.text("port", "SMTP port", true, "587", "Sent as text, not a number"),
                         CredentialField.text("user", "Username", true, null, null),
                         CredentialField.password("password", "Password", true, null),
@@ -128,9 +107,6 @@ public class ProviderCatalog {
                                 "The sender id the messages are registered against"),
                         CredentialField.text("apiUrl", "Gateway URL", false, config.getSmsCountryUrl(),
                                 "Leave blank to use the standard SMSCountry bulk endpoint")))
-                // The status check (does the integration exist, is it on) works for every Novu
-                // integration. It proves no credential for ANY type; for this one sending a test
-                // is the only proof, since the bulk API has no credential-check call.
                 .supportsVerify(true).supportsTestSend(true)
                 .build());
         types.add(ProviderType.builder()
@@ -162,17 +138,12 @@ public class ProviderCatalog {
         throw new CustomException("NB_UNKNOWN_PROVIDER_TYPE", "Unknown provider type: " + type);
     }
 
-    // ---- identifier <-> type round trip -----------------------------------
-
     /** Deterministic, round-trippable identifier: {@code <type>-<sha256(name)[0:16]>}. */
     public static String identifierFor(String type, String name) {
-        return type + "-" + stableId(StringUtils.hasText(name) ? name : type);
+        return type + "-" + Values.stableId(StringUtils.hasText(name) ? name : type);
     }
 
-    /**
-     * The catalog type an integration identifier was minted for, or {@code null} when the
-     * identifier carries no marker (hand-created integrations, pre-catalog deployments).
-     */
+    /** The catalog type an identifier was minted for, or null (hand-created, pre-catalog). */
     public static String typeFromIdentifier(String identifier) {
         if (!StringUtils.hasText(identifier)) {
             return null;
@@ -191,21 +162,19 @@ public class ProviderCatalog {
     }
 
     /**
-     * Best-effort type for an existing integration: the identifier marker first, then the
-     * unambiguous {@code providerId}+{@code channel} pairs. {@code generic-sms} without a
-     * marker stays {@code null} — SMSCountry and Ozeki are indistinguishable from outside,
-     * and guessing one would route the dispatch path through the wrong envelope.
+     * Identifier marker first, then the unambiguous providerId+channel pairs. Unmarked generic-sms
+     * stays null: SMSCountry and Ozeki look identical and a guess would pick the wrong envelope.
      */
     public static String deriveType(Map<String, Object> integration) {
         if (integration == null) {
             return null;
         }
-        String marked = typeFromIdentifier(asString(integration.get("identifier")));
+        String marked = typeFromIdentifier(Values.str(integration.get("identifier")));
         if (marked != null) {
             return marked;
         }
-        String providerId = lower(asString(integration.get("providerId")));
-        String channel = lower(asString(integration.get("channel")));
+        String providerId = Values.lower(Values.str(integration.get("providerId")));
+        String channel = Values.lower(Values.str(integration.get("channel")));
         if (NOVU_PROVIDER_TWILIO.equals(providerId) && "sms".equals(channel)) {
             return TWILIO_SMS;
         }
@@ -215,13 +184,7 @@ public class ProviderCatalog {
         return null;
     }
 
-    // ---- credential mapping ----------------------------------------------
-
-    /**
-     * Reject a credential set missing a required field before anything is sent to Novu — a
-     * half-configured integration is accepted by Novu and then fails every single send.
-     * Only key NAMES are ever named in the error.
-     */
+    /** Novu stores a half-filled integration and then fails every send, so check first. Names keys only. */
     public void validateRequired(ProviderType type, Map<String, Object> credentials) {
         List<String> missing = new ArrayList<>();
         for (CredentialField field : type.getCredentialFields()) {
@@ -240,19 +203,9 @@ public class ProviderCatalog {
     }
 
     /**
-     * Translate the operator's form into the credential map Novu stores. Twilio and SMTP are
-     * 1:1 (the form keys ARE Novu's keys); the two generic-sms types are where the work is:
-     *
-     * <ul>
-     *   <li><b>Ozeki</b> posts at its own JSON API, so {@code baseUrl} is the gateway and the
-     *       username/password ride as headers.</li>
-     *   <li><b>SMSCountry</b> cannot be a Novu provider at all — its legacy API is
-     *       form-encoded with a plain-text reply. Novu is pointed at this service's adapter
-     *       instead, with the panel login travelling as {@code apiKey}/{@code secretKey}
-     *       under the header names the adapter reads. The two settings that are NOT secret
-     *       (sender id, gateway URL) ride as query parameters on the adapter URL, so the
-     *       adapter gets them whatever body shape Novu sends.</li>
-     * </ul>
+     * The operator's form as Novu's credential map. Twilio and SMTP are 1:1. Ozeki is generic-sms
+     * at its own API. SMSCountry is generic-sms pointed at this service's adapter, the panel login
+     * travelling as headers.
      */
     public Map<String, Object> toNovuCredentials(ProviderType type, Map<String, Object> credentials) {
         Map<String, Object> in = credentials == null ? Map.of() : credentials;
@@ -262,14 +215,13 @@ public class ProviderCatalog {
             case OZEKI:
                 return ozekiCredentials(in);
             default:
-                // Twilio + nodemailer: copy only the keys the catalog declares, so an
-                // operator cannot smuggle an unexpected key into the Novu credential store.
+                // Only declared keys: nothing unexpected reaches the Novu credential store.
                 Map<String, Object> out = new LinkedHashMap<>();
                 for (CredentialField field : type.getCredentialFields()) {
                     Object value = in.get(field.getKey());
                     if (value != null) {
                         out.put(field.getKey(), "checkbox".equals(field.getType())
-                                ? Boolean.valueOf(truthy(value)) : value.toString());
+                                ? Boolean.valueOf(Values.truthy(value)) : value.toString());
                     }
                 }
                 return out;
@@ -288,12 +240,9 @@ public class ProviderCatalog {
         out.put("apiKeyRequestHeader", SMSCOUNTRY_USER_HEADER);
         out.put("secretKey", text(in.get("password")));
         out.put("secretKeyRequestHeader", SMSCOUNTRY_PASSWORD_HEADER);
-        // generic-sms puts `from` (and a duplicate `sender`) in the JSON body, so the
-        // registered sender id reaches the adapter without a second transport.
+        // generic-sms puts `from` in the JSON body: that is how the sender id reaches the adapter.
         out.put("from", text(in.get("senderId")));
-        // The adapter answers {"id":"<jobid>","date":"<iso>"}. idPath is a required credential
-        // and generic-sms reads it with a bare reduce — a body missing it throws inside the
-        // provider and the step is recorded failed, so the adapter must always send both.
+        // generic-sms reads idPath with a bare reduce and fails the step without it.
         out.put("idPath", "id");
         out.put("datePath", "date");
         return out;
@@ -307,43 +256,13 @@ public class ProviderCatalog {
         out.put("secretKey", text(in.get("password")));
         out.put("secretKeyRequestHeader", OZEKI_PASSWORD_HEADER);
         out.put("from", text(in.get("senderId")));
-        // Ozeki's reply nests the accepted message under data[0]; Novu reads the correlation
-        // id from here for its activity feed. Wrong paths only cost observability, not delivery.
+        // Wrong paths only cost Novu's activity-feed correlation, not delivery.
         out.put("idPath", "data.0.message_id");
         out.put("datePath", "data.0.submit_date");
         return out;
     }
 
-    // ---- helpers ---------------------------------------------------------
-
-    /** First 16 hex chars of SHA-256(seed) — deterministic, no clock/random. */
-    static String stableId(String seed) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(seed.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 8 && i < digest.length; i++) {
-                sb.append(String.format("%02x", digest[i]));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return Integer.toHexString(seed.hashCode());
-        }
-    }
-
-    private static boolean truthy(Object value) {
-        return value instanceof Boolean ? (Boolean) value : Boolean.parseBoolean(String.valueOf(value).trim());
-    }
-
     private static String text(Object value) {
         return value == null ? "" : value.toString().trim();
-    }
-
-    private static String asString(Object value) {
-        return value == null ? null : value.toString();
-    }
-
-    private static String lower(String value) {
-        return value == null ? null : value.trim().toLowerCase(Locale.ROOT);
     }
 }

@@ -10,17 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * Which namespace is serving a tenant's notification config, and how many rows it found.
- *
- * <p><b>This exists because there is no setting to read.</b> The choice between the new
- * {@code NOTIFICATIONS.*} masters and the legacy {@code RAINMAKER-PGR.Notification*} ones is made
- * by the data — a tenant with zero rows in the new namespace is served the old one, per tenant and
- * all-or-nothing — precisely so that no compose overlay can flip it. The cost of that is that two
- * tenants on the same build can legitimately be served differently, and an operator needs a way to
- * see which. This is that way.
- *
- * <p>Read-only and tenant-scoped: it reports row counts and schema codes, never row content, so it
- * sits on the broad read allowlist alongside the Logs screen rather than the admin tier.
+ * Which namespace ({@code NOTIFICATIONS.*} or legacy {@code RAINMAKER-PGR.*}) serves a tenant's
+ * notification config, with row counts. The data chooses per tenant (no setting can flip it), so
+ * this is the only way to see it. Counts and schema codes only, never row content.
  */
 @Controller
 @RequestMapping("/novu-adapter/v1/config")

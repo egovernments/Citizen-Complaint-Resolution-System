@@ -32,7 +32,7 @@ public class ReceiptParser {
     private static final List<String> STATUS_KEYS = List.of("status", "Status", "event", "type", "eventType", "deliveryStatus", "MessageStatus");
     private static final List<String> ERROR_KEYS = List.of("error", "errorMessage", "reason", "ErrorMessage", "errorCode");
 
-    public DeliveryReceipt parse(String provider, Map<String, Object> payload) {
+    public DeliveryReceipt parse(Map<String, Object> payload) {
         Map<String, Object> raw = payload != null ? payload : Map.of();
         String txn = findString(raw, ID_KEYS, 0);
         String ref = findString(raw, REF_KEYS, 0);

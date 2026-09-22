@@ -93,9 +93,6 @@ public class PreferenceServiceClient {
                 log.warn("Preference check denied: status is not GRANTED. status={}", status);
                 return false;
             }
-//            if ("TENANT".equalsIgnoreCase(scope)) {
-//                return tenantId.equalsIgnoreCase(scopeTenant);
-//            }
             log.info("Preference check allowed for userId={}, tenantId={}, channel={}", userId, tenantId, channelKey);
             return true;
         } catch (Exception e) {
@@ -103,12 +100,7 @@ public class PreferenceServiceClient {
         }
     }
 
-    /**
-     * The preference service is unreachable or broken (as opposed to answering "no consent").
-     * {@code novu.bridge.preference.fail.open} decides whether that outage silences every
-     * notification (closed) or lets them through (open, the default): a consent check that
-     * cannot be performed is an infrastructure fault, not a citizen's decision.
-     */
+    /** An unreachable service is an infrastructure fault, not a citizen's decision: fail.open decides. */
     private boolean onServiceFailure(String reason, String tenantId, String userId, String channelKey) {
         boolean open = !Boolean.FALSE.equals(config.getPreferenceFailOpen());
         log.warn("Preference check could not be performed ({}) for tenantId={} userId={} channel={} — {}",
@@ -116,14 +108,7 @@ public class PreferenceServiceClient {
         return open;
     }
 
-    /**
-     * List the raw user notification preference records for a tenant (or all
-     * tenants when {@code tenantId} is blank), paged via {@code limit}/{@code offset}.
-     * Returns the raw {@code preferences} list from the preference service search
-     * response; the caller is responsible for allowlist-projecting each record
-     * before it leaves the service. Returns an empty list on any error or when no
-     * records are found, mirroring the defensive style of the other search calls.
-     */
+    /** Raw preference records (blank tenant = all), empty on any error. Callers must allowlist-project them. */
     public List<Map<String, Object>> listPreferences(String tenantId, int limit, int offset) {
         log.info("Listing preferences: tenantId={}, limit={}, offset={}, preferenceEnabled={}",
                 tenantId, limit, offset, config.getPreferenceEnabled());

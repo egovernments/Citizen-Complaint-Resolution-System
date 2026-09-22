@@ -23,12 +23,7 @@ public class DispatchLogEntry {
     /** SMS | WHATSAPP | EMAIL, or {@link #CHANNEL_NONE} for a decision taken before a channel existed. */
     private String channel;
     private String recipientValue;
-    /**
-     * Which inbound kind produced this row: {@link #SOURCE_PATH_PRERENDERED} or
-     * {@link #SOURCE_PATH_RESOLVED}. Null here means PRERENDERED — the repository writes that
-     * value rather than a NULL, so the column is never ambiguous and never needs a reader to know
-     * what an absence meant.
-     */
+    /** {@link #SOURCE_PATH_PRERENDERED} (also what null is written as) or {@link #SOURCE_PATH_RESOLVED}. */
     private String sourcePath;
     private String templateKey;
     private String templateVersion;
@@ -46,25 +41,13 @@ public class DispatchLogEntry {
     private Long createdTime;
     private Long lastModifiedTime;
 
-    /**
-     * The producer sent a finished v1 envelope; the bridge only gated and delivered it. The
-     * default for every row, including every row written before the column existed — which is
-     * what those rows were.
-     */
+    /** A finished v1 envelope the bridge only gated and delivered; the default, including pre-column rows. */
     public static final String SOURCE_PATH_PRERENDERED = "PRERENDERED";
 
-    /**
-     * The producer sent a thin domain event and the box took responsibility for it. Written on
-     * EVERY row born of a thin event, including the channel-less ones where resolution produced
-     * nothing to send — a row that came in on the thin path must not claim to be pre-rendered.
-     */
+    /** Every row born of a thin event, including the channel-less ones. */
     public static final String SOURCE_PATH_RESOLVED = "RESOLVED";
 
-    /**
-     * The channel of a row for a decision the box took BEFORE there was a channel: no routing
-     * matched, no audience resolved to anyone, the fan-out was refused. "Every outcome is a row"
-     * has to cover those too, and they have no channel to name.
-     */
+    /** Channel of a row for a decision taken before there was a channel (no routing, no audience, cap refused). */
     public static final String CHANNEL_NONE = "NONE";
 
     /** The recipient of a channel-less row. Lower case, so it cannot be mistaken for a subscriber. */

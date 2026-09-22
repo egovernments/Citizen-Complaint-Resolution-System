@@ -6,12 +6,7 @@ import org.egov.novubridge.service.policy.ChannelPolicyClient;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
-/**
- * Picks the {@link DeliveryProvider} for a (tenant, channel) from the tenant's channel policy
- * ({@code gateway} on the MDMS NotificationChannel row; env {@code novu.bridge.sms.provider}
- * as the fallback). Unknown or unwired gateways fall back to Novu with a warning — never to
- * silence.
- */
+/** Picks the transport for a (tenant, channel). Unknown or unwired gateways fall back to Novu, never to silence. */
 @Slf4j
 @Component
 public class DeliveryProviderRegistry {
@@ -31,20 +26,14 @@ public class DeliveryProviderRegistry {
         this.smsCountry = smsCountry;
     }
 
-    /**
-     * The Novu transport, bypassing policy selection. For callers that have already named one
-     * Novu integration explicitly (the configurator's test-send): a direct gateway would
-     * ignore that choice and quietly test something else.
-     */
+    /** Bypasses policy: for a caller that named a Novu integration, which a direct gateway would ignore. */
     public DeliveryProvider novu() {
         return novu;
     }
 
     public DeliveryProvider select(@Nullable String tenantId, String channel) {
-        // A provider chosen in the configurator is a Novu integration by construction — even
-        // the SMSCountry one, which is a generic-sms integration pointing back at this
-        // service's adapter. It therefore outranks `gateway`, which only ever named a
-        // bridge-internal transport. No provider chosen → the original gateway logic, verbatim.
+        // A pinned provider is a Novu integration by construction (even SMSCountry, via our adapter),
+        // so it outranks `gateway`.
         String provider = policy.provider(tenantId, channel);
         if (provider != null) {
             return novu;

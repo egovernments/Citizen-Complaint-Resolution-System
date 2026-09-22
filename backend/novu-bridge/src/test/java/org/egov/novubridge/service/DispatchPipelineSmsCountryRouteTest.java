@@ -50,7 +50,7 @@ class DispatchPipelineSmsCountryRouteTest {
         ChannelPolicyClient policy = new ChannelPolicyClient(null, config);
 
         DeliveryProviderRegistry registry = new DeliveryProviderRegistry(config, policy,
-                new NovuDeliveryProvider(novuClient, config), new SmsCountryDeliveryProvider(smsCountryClient, policy));
+                new NovuDeliveryProvider(novuClient), new SmsCountryDeliveryProvider(smsCountryClient, policy));
         service = new DispatchPipelineService(new EnvelopeValidator(), preferences, registry, policy, dispatchLogRepository, config,
                 new ProviderAvailability(novuClient, config));
     }

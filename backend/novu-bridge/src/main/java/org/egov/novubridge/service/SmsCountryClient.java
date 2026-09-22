@@ -7,40 +7,29 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Delivers an SMS straight to SMSCountry's legacy bulk API, bypassing Novu.
+ * SMSCountry's legacy bulk API: form-encoded request, plain-text reply. No Novu provider can
+ * express that, hence a direct client.
  *
- * <p>SMSCountry runs two APIs. The legacy one — the API eGov accounts are
- * provisioned on — takes <b>form-encoded parameters</b> and answers in <b>plain
- * text</b>. No Novu provider can express that: the closest, {@code generic-sms},
- * injects a JSON body. Hence a direct client. The newer REST v0.1 JSON API is not
- * supported.
- *
- * <p>Two behaviours of this gateway drive the design:
- * <ul>
- *   <li><b>HTTP 200 is not success.</b> Malformed requests return 200 carrying an
- *       ASP.NET stack trace. Only a body starting {@code OK:} means accepted.</li>
- *   <li><b>Accepted is not delivered.</b> A message the operator later drops — an
- *       unregistered DLT template, most often — still gets {@code OK:<jobid>} here.
- *       So a 2xx from this client means queued, and the gateway's delivery report
- *       is the only proof of delivery. Nothing downstream can infer more.</li>
- * </ul>
- *
- * <p>Returns {@link NovuClient.NovuResponse} so {@code DispatchPipelineService}
- * handles direct and Novu-routed sends identically.
+ * <p>HTTP 200 is not success (malformed requests get 200 plus an ASP.NET stack trace); only a body
+ * starting {@code OK:} is. And accepted is not delivered: an unregistered DLT template still gets
+ * {@code OK:<jobid>}, so a 2xx here means queued and only the delivery report proves delivery.
  */
 @Service
 @Slf4j
 public class SmsCountryClient {
+
+    private static final int LOG_SNIPPET_CHARS = 200;
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
@@ -50,18 +39,6 @@ public class SmsCountryClient {
         this.config = config;
     }
 
-    /**
-     * @param phone         recipient; the gateway wants plain digits with country
-     *                      code, while the pipeline carries +E164
-     * @param text          final localized body. It must match a template registered
-     *                      against the sender id, or the operator silently drops it.
-     * @param transactionId dispatch correlation id, logged only — the legacy send
-     *                      body has no caller-supplied correlator field
-     */
-    public NovuClient.NovuResponse send(String phone, String text, String transactionId) {
-        return send(phone, text, transactionId, config.getSmsSenderId());
-    }
-
     /** @param senderId registered sender id for THIS send (per-tenant policy may override the env default) */
     public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId) {
         return send(phone, text, transactionId, senderId,
@@ -69,74 +46,65 @@ public class SmsCountryClient {
     }
 
     /**
-     * Send with credentials supplied per call rather than from the deployment env. The provider
-     * catalog stores an operator's SMSCountry login in Novu, not here, so the adapter endpoint
-     * ({@code POST /novu-adapter/v1/gateways/smscountry/send}) receives them on the request and
-     * passes them straight through — one code path, one response parser, for both routes.
+     * Send with per-call credentials (the adapter endpoint receives them from Novu).
      *
-     * @param user     SMSCountry panel username for THIS send
-     * @param password SMSCountry panel password for THIS send
-     * @param apiUrl   gateway endpoint for THIS send; blank falls back to the configured one
+     * @param apiUrl gateway endpoint for THIS send; blank = the configured one. Callers must have
+     *               vetted it: this client posts credentials to whatever it is given.
      */
     public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId,
                                         String user, String password, String apiUrl) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("User", user);
         form.add("passwd", password);
-        form.add("mobilenumber", toNationalDigits(phone));
+        form.add("mobilenumber", phone == null ? null : phone.replaceAll("[^0-9]", ""));
         form.add("message", text);
         form.add("sid", senderId);
         form.add("mtype", "N");
         form.add("DR", "Y");
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-        String url = (apiUrl == null || apiUrl.isBlank()) ? config.getSmsCountryUrl() : apiUrl.trim();
+        String url = StringUtils.hasText(apiUrl) ? apiUrl.trim() : config.getSmsCountryUrl();
         String body;
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.POST,
-                    new HttpEntity<>(form, headers), String.class);
-            body = response.getBody();
+            body = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(form, headers), String.class).getBody();
         } catch (Exception e) {
-            log.error("SMSCountry send failed for txn={} to={}: {}",
-                    transactionId, PiiMask.mask(phone), e.getMessage());
-            return error("NB_SMSCOUNTRY_UNREACHABLE", e.getMessage());
+            // Never surface e.getMessage(): RestTemplate puts the upstream response body in it.
+            String cause = e instanceof RestClientResponseException re
+                    ? "HTTP " + re.getStatusCode().value() : e.getClass().getSimpleName();
+            log.error("SMSCountry send failed for txn={} to={}: {}", transactionId, PiiMask.mask(phone), cause);
+            return error("NB_SMSCOUNTRY_UNREACHABLE", "SMSCountry gateway call failed (" + cause + ")");
         }
-        return parse(body, transactionId, phone);
+        return parse(body, transactionId, phone, user, password);
     }
 
     /**
-     * {@code OK:<jobid>} is the only accepted response. Anything else — an error
-     * string, an HTML error page, an empty body — is a failure regardless of the
-     * HTTP status, which this gateway reports as 200 either way.
+     * {@code OK:<jobid>} is the only accepted response. The upstream body is never returned
+     * (the adapter's caller would read it back); a redacted snippet is logged instead.
      */
-    NovuClient.NovuResponse parse(String body, String transactionId, String phone) {
+    NovuClient.NovuResponse parse(String body, String transactionId, String phone, String... secrets) {
         String trimmed = body == null ? "" : body.trim();
         if (!trimmed.startsWith("OK:")) {
-            log.error("SMSCountry rejected txn={} to={}: {}",
-                    transactionId, PiiMask.mask(phone), abbreviate(trimmed));
-            return error("NB_SMSCOUNTRY_REJECTED", abbreviate(trimmed));
+            log.error("SMSCountry rejected txn={} to={}: {}", transactionId, PiiMask.mask(phone), snippet(trimmed, secrets));
+            return error("NB_SMSCOUNTRY_REJECTED", "SMSCountry did not answer OK:<jobid>; see the bridge log for txn "
+                    + transactionId);
         }
         String jobId = trimmed.substring(3).trim();
-        // Queued, NOT delivered. An unregistered DLT template is accepted here and
-        // dropped by the operator; only the delivery report distinguishes them.
-        log.info("SMSCountry queued txn={} to={} jobId={}",
-                transactionId, PiiMask.mask(phone), jobId);
+        log.info("SMSCountry queued txn={} to={} jobId={}", transactionId, PiiMask.mask(phone), jobId);
         Map<String, Object> payload = new HashMap<>();
         payload.put("jobId", jobId);
         payload.put("accepted", true);
         return build(200, payload);
     }
 
-    /** The gateway wants the country code with no leading {@code +}. */
-    private static String toNationalDigits(String phone) {
-        return phone == null ? null : phone.replaceAll("[^0-9]", "");
-    }
-
-    private static String abbreviate(String s) {
-        return s.length() <= 200 ? s : s.substring(0, 200) + "…";
+    private static String snippet(String s, String... secrets) {
+        String out = s.length() <= LOG_SNIPPET_CHARS ? s : s.substring(0, LOG_SNIPPET_CHARS) + "…";
+        for (String secret : secrets) {
+            if (StringUtils.hasText(secret)) {
+                out = out.replace(secret, "***");
+            }
+        }
+        return out;
     }
 
     private static NovuClient.NovuResponse error(String code, String message) {
@@ -147,9 +115,6 @@ public class SmsCountryClient {
     }
 
     private static NovuClient.NovuResponse build(int status, Map<String, Object> payload) {
-        NovuClient.NovuResponse r = new NovuClient.NovuResponse();
-        r.setStatusCode(status);
-        r.setResponse(payload);
-        return r;
+        return NovuClient.NovuResponse.builder().statusCode(status).response(payload).build();
     }
 }

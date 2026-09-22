@@ -13,21 +13,10 @@ import org.springframework.lang.Nullable;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * The DIGIT half of the resolution stage, wired.
- *
- * <p><b>Every bean here is {@code @ConditionalOnMissingBean} on its INTERFACE.</b> That is the
- * entire swap mechanism and it is worth being precise about what it buys: a consuming product
- * registers its own {@link RecipientResolver} with {@code scheme() == "ROLE"}, or its own
- * {@link LocaleProvider}, or its own {@link NotificationConfigRepository}, and the DIGIT one
- * simply is not created. It needs no flag, no profile and no edit to this file.
- *
- * <p>The condition is declared on {@code @Bean} methods rather than as annotations on the classes
- * because that is where Spring evaluates it reliably; on a component scan it holds only
- * incidentally, and "incidentally" is not a property to build a seam on.
- *
- * <p>{@code RestTemplate} is {@code @Nullable} throughout for the same reason the existing DIGIT
- * clients take it that way: a slice test that builds none must still get a working bean, and each
- * client degrades to "this source is unavailable" rather than failing to start.
+ * The DIGIT implementations of the resolution SPIs. Each is {@code @ConditionalOnMissingBean} on
+ * its interface (declared on the {@code @Bean} method, where Spring evaluates it reliably), so a
+ * product swaps one in by declaring its own bean. {@code RestTemplate} is nullable: each client
+ * then degrades to "source unavailable" instead of failing startup.
  */
 @Configuration
 public class DigitResolutionConfiguration {
@@ -52,13 +41,9 @@ public class DigitResolutionConfiguration {
     }
 
     /**
-     * Note the condition: on {@code DigitRoleRecipientResolver}, not on {@code RecipientResolver}.
-     * Resolvers are a collection — the box always has {@code ACTOR} and
-     * {@code EVENT_RECIPIENTS} too — so conditioning on the interface would mean the first
-     * resolver registered anywhere suppressed all the others. A product replacing the role pool
-     * declares a bean of this type, or names its scheme {@code ROLE} on a bean of its own and
-     * accepts that the later registration wins in
-     * {@code NotificationResolver}'s scheme map.
+     * Conditioned on the concrete class, not {@code RecipientResolver}: resolvers are a collection,
+     * so conditioning on the interface would let any resolver suppress this one. A product
+     * replacing ROLE declares a bean of this type, or a later-registered bean with scheme ROLE.
      */
     @Bean
     @ConditionalOnMissingBean(DigitRoleRecipientResolver.class)

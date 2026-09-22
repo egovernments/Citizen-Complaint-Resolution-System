@@ -19,21 +19,9 @@ import org.springframework.context.annotation.Configuration;
 import java.util.List;
 
 /**
- * The module-neutral half of the resolution stage, wired.
- *
- * <p>It lives OUTSIDE {@code org.egov.novubridge.service.resolution} on purpose, and that is the
- * one structural decision in this file. The core package must reference no DIGIT client and
- * no deployment configuration; a {@code @Configuration} class inside it would have to read
- * {@link NovuBridgeConfiguration} to know the default locale and the fan-out cap, and the
- * isolation rule would immediately need its first exception. Keeping the wiring here means the
- * rule has none: the core takes its settings as constructor arguments, from whoever builds it,
- * which is also what makes it straightforward to construct in a test with no Spring at all.
- *
- * <p>{@link NotificationResolver} IS the build's {@link ThinEventHandler}, and it is the only
- * one. There is no flag and no alternative implementation: {@code ThinEventPipelineService}
- * requires a handler in its constructor, so a build that somehow lost this bean would fail to
- * start and say why, rather than accept thin events and record them as undeliverable. A path
- * that can be switched off by omission is the failure mode this design refuses.
+ * Wires the module-neutral resolution core. It lives outside {@code service.resolution} so the
+ * core stays free of DIGIT clients and deployment config: it takes its settings as constructor
+ * arguments. {@link NotificationResolver} is the only {@link ThinEventHandler}; there is no flag.
  */
 @Configuration
 public class ResolutionWiring {

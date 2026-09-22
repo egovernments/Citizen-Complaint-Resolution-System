@@ -761,7 +761,8 @@ paths:
           schema: { type: string, format: uri }
           description: |
             Per-integration upstream gateway URL, carried on the integration's `baseUrl` query
-            string. Only an absolute http(s) URL is honoured; anything else falls back to
+            string. Honoured only when it is http(s) and its host is the configured gateway's
+            or listed in `novu.bridge.smscountry.allowed.hosts`; anything else falls back to
             `novu.bridge.smscountry.url`.
       requestBody:
         required: false
