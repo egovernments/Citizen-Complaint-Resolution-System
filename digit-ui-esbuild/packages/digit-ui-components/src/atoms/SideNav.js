@@ -40,7 +40,7 @@ const SideNav = ({
    */
   const expanded = (pinnable && pinned) || hovered;
   const pinLabel = pinned
-    ? t("CORE_SIDEBAR_UNPIN", "Unpin menu")
+    ? t("CORE_SIDEBAR_UNPIN", "Unlock menu")
     : t("CORE_SIDEBAR_PIN", "Keep menu open");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState({});
@@ -299,26 +299,6 @@ const SideNav = ({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Only rendered once open, so the collapsed rail keeps its icon-only
-          silhouette and gains no new affordance at 3rem wide. */}
-      {pinnable && expanded && (
-        <div className={`digit-sidebar-pin-row ${theme || ""}`}>
-          <button
-            type="button"
-            className={`digit-sidebar-pin ${pinned ? "pinned" : ""}`}
-            aria-pressed={pinned}
-            aria-label={pinLabel}
-            title={pinLabel}
-            onClick={() => onPinnedChange && onPinnedChange(!pinned)}
-          >
-            {pinned ? (
-              <SVG.FirstPage width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
-            ) : (
-              <SVG.LastPage width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
-            )}
-          </button>
-        </div>
-      )}
       {enableSearch && renderSearch()}
       <div
         className={`digit-sidebar-items-container ${theme || ""} ${
@@ -331,6 +311,34 @@ const SideNav = ({
           expanded && <div className="digit-msb-no-results">{t("No Results Found")}</div>
         )}
       </div>
+      {/* Foot of the rail, after the items. Placing it above them meant every
+          expand shoved the whole nav list down by a row, which is a worse
+          thing to watch than the control is worth. As the last flex child with
+          `margin-top: auto` it settles at the bottom and the items never move.
+
+          Only rendered once open: at 3rem the rail is an icon strip and has no
+          room for an affordance whose whole purpose is to keep it wide. */}
+      {pinnable && expanded && (
+        <div className={`digit-sidebar-pin-row ${theme || ""}`}>
+          <button
+            type="button"
+            className={`digit-sidebar-pin ${pinned ? "pinned" : ""}`}
+            aria-pressed={pinned}
+            aria-label={pinLabel}
+            title={pinLabel}
+            onClick={() => onPinnedChange && onPinnedChange(!pinned)}
+          >
+            {/* Lock, not a chevron: a chevron promises to move the panel, and
+                this holds it still. */}
+            {pinned ? (
+              <SVG.Lock width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
+            ) : (
+              <SVG.LockOpen width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
+            )}
+            <span className="digit-sidebar-pin-label">{pinLabel}</span>
+          </button>
+        </div>
+      )}
       {expanded && !hideAccessbilityTools && (
         <div className={`digit-sidebar-bottom ${theme || ""} ${variant || ""}`}>
           <div>

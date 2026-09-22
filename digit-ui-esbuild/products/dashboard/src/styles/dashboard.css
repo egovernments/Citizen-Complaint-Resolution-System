@@ -3937,28 +3937,56 @@
   }
 }
 
-/* Header rows must grow when they wrap.
+/* A pinned nav rail has to move the dashboard too.
  *
- * `.dashboard-header-top` is `flex-wrap: wrap` but carries `tw-h-12`, a fixed
- * 48px built for the one-line desktop arrangement. Below 48rem the title and
- * the controls wrap onto separate lines while the box stays one row tall, and
- * because it is `overflow: visible` the wrapped controls render outside it —
- * "+ Add KPI" landed on top of the filters card underneath.
+ * The rule above pins this surface to `margin-left: 0` and insets it with
+ * padding instead, so the employee chrome's pinned rule — which moves
+ * `.employee .main` by its margin — cannot reach it. The dashboard would sit
+ * still while every other employee page slid across.
  *
- * A wrapping flex row cannot also be a fixed height. Keep 3rem as the minimum
- * so the single-line desktop rhythm is unchanged, and let it grow from there. */
+ * Distance and easing are taken from the same 3rem/15rem pair SideNav
+ * animates between, so the surface and the panel travel together. */
 
-@media (max-width: 47.99rem) {
-  .dashboard-root .dashboard-header,
-  .dashboard-root .dashboard-header-top {
-    height: auto !important;
-    min-height: 3rem;
+@media (min-width: 48rem) {
+  .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .dashboard-root .dashboard-header-top {
-    row-gap: 0.5rem;
-    padding-bottom: 0.25rem;
+  html[data-employee-sidebar-pinned="true"]
+    .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+    padding-left: 15rem !important;
   }
+}
+
+/* The header row must grow to its content, at every width.
+ *
+ * `.dashboard-header-top` carries `tw-h-12` — a fixed 48px built for the
+ * one-line desktop arrangement — while being a flex row with `align-items:
+ * center` and `overflow: visible`. Both of its children can exceed 48px: the
+ * title block wraps its title and date range onto two lines, and the controls
+ * wrap "+ Add KPI / Reset / Export" onto two rows. A taller child centred in a
+ * short box overflows EQUALLY above and below, and the header sits directly
+ * under the fixed topbar, so the overflow above slides underneath it. Measured
+ * at 962px: a 75.5px title block in a 48px box put the title at y=62 against a
+ * topbar bottom edge of 76, clipping it.
+ *
+ * This is not a phone case. It happens at any width where either child wraps,
+ * which is why scoping the first fix to `max-width: 47.99rem` left it broken
+ * through the whole tablet-to-small-desktop range. A flex row that may wrap
+ * cannot also be a fixed height.
+ *
+ * `min-height` keeps the single-line desktop rhythm identical: where the
+ * content fits one row, auto resolves to the same 3rem it had before. */
+
+.dashboard-root .dashboard-header,
+.dashboard-root .dashboard-header-top {
+  height: auto !important;
+  min-height: 3rem;
+}
+
+.dashboard-root .dashboard-header-top {
+  row-gap: 0.5rem;
+  padding-bottom: 0.25rem;
 }
 
 /* Block digit-ui global heading colors (h2[class*="title"] etc.) inside the dashboard. */
