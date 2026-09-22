@@ -1069,6 +1069,15 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
         ) : null}
         <GridLayoutWithWidth
           key={gridSyncKey}
+          // Measure the container before the first paint.
+          //
+          // WidthProvider initialises its state to a hardcoded `width: 1280`
+          // and only measures after mounting, so the first frame lays every
+          // widget out against 1280px whatever the real column is. With the
+          // surface inset 52px each side that is visibly wrong, and the cards
+          // appeared outside the padded area before snapping into it. This
+          // costs one frame of empty grid and removes the jump.
+          measureBeforeMount
           className={`dashboard-grid-layout layout${showEmpty ? " dashboard-grid-layout--empty" : ""}`}
           layout={gridLayout}
           // One column below the breakpoint. Same grid, same widgets, same
