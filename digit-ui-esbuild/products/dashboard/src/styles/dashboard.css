@@ -4240,7 +4240,10 @@
   padding: 0 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #ffffff;
+  /* The label follows the theme's own button-text token, like the v2 Button
+   * does, so a tenant whose brand surface is light does not end up with white
+   * on near-white. White is only the fallback. */
+  color: var(--color-button-primary-text, #ffffff);
   border: 1px solid var(--color-primary-2, var(--color-primary-1, var(--primary)));
   background: var(--color-primary-2, var(--color-primary-1, var(--primary)));
 }
@@ -4248,7 +4251,7 @@
 .dashboard-root .dashboard-header-controls .dashboard-header-btn:hover {
   background: var(--color-primary-1, var(--primary));
   border-color: var(--color-primary-1, var(--primary));
-  color: #ffffff;
+  color: var(--color-button-primary-text, #ffffff);
 }
 
 /* Add KPI: same stroke, no fill. A solid border, not a dashed one — the dash
