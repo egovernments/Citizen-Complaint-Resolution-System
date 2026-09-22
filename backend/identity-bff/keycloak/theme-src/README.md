@@ -1,4 +1,4 @@
-# DIGIT Keycloak login theme
+# Configurator Blue — Keycloak login theme
 
 A [Keycloakify](https://keycloakify.dev) login theme so that the screens
 Keycloak owns look like the Configurator. It exists because password sign-in
@@ -58,7 +58,7 @@ stock Keycloak appearance.
 npm install
 npm run dev          # http://localhost:5173/dev.html?page=login.ftl
 npm test             # rendering, palette drift, page coverage
-npm run build-keycloak-theme   # dist_keycloak/digit-login-theme.jar
+npm run build-keycloak-theme   # dist_keycloak/configurator-blue-login-theme.jar
 ```
 
 `dev.html` takes `?page=<pageId>` and an optional `&state=invalid-credentials`
@@ -73,7 +73,8 @@ npm run smoke
 ```
 
 Builds the `identity-keycloak` image, starts it, seeds a realm and a client with
-`login_theme=digit`, and drives the resulting authorization URL in a browser:
+`login_theme=configurator-blue`, and drives the resulting authorization URL in a
+browser:
 the theme is selected and loads, Keycloak's form and hidden `credentialId`
 survive underneath it, the password posts to Keycloak's own origin, and a wrong
 password produces the themed error without naming which half failed. CI runs the
@@ -95,7 +96,7 @@ stands alone.
 
 The theme is built into the Keycloak image by
 `backend/identity-bff/keycloak/Dockerfile.magic-link` and lands as
-`/opt/keycloak/providers/digit-login-theme.jar`. It is selected **per client**
+`/opt/keycloak/providers/configurator-blue-login-theme.jar`. It is selected **per client**
 by `deploy/digit-compose/configure-keycloak.sh` (`attributes.login_theme`) on
 the identity BFF and magic-link clients; the shared realm's `loginTheme` is left
 empty so unrelated clients keep their own.

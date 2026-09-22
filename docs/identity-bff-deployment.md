@@ -110,20 +110,23 @@ when its provider/client is not enabled. `intents` is the one backend-owned
 source for which methods appear on sign-in and signup; omitting it keeps the
 legacy behaviour of enabling a method for both journeys.
 
-## Login theme
+## Login theme (`configurator-blue`)
 
 The Keycloak-owned screens in the sign-in journey — password entry,
 invalid-credential errors, password setup/reset, email verification,
 account-linking conflicts, expired sessions and generic errors — render in the
-DIGIT login theme, a Keycloakify build of the Configurator's auth shell
-(`backend/identity-bff/keycloak/theme-src`, CCRS #2108). The theme is built into
+`configurator-blue` login theme, a Keycloakify build of the Configurator's auth
+shell (`backend/identity-bff/keycloak/theme-src`, CCRS #2108). It is built into
 the `identity-keycloak` image, so the custom image is what a deployment needs
 for a coherent password journey, not only for magic link.
 
-`configure-keycloak.sh` selects the theme **per client** (`login_theme` on the
-identity BFF and magic-link clients) and leaves the shared realm's `loginTheme`
-empty, so unrelated clients in the realm keep their own theme. An environment
-that must pin a different theme can set `KEYCLOAK_LOGIN_THEME`.
+`configure-keycloak.sh` selects the theme **per client**
+(`login_theme=configurator-blue` on the identity BFF and magic-link clients) and
+leaves the shared realm's `loginTheme` empty, so unrelated clients in the realm
+keep their own theme. An environment that must pin a different theme can set
+`KEYCLOAK_LOGIN_THEME`. A realm still carrying the pre-rename `digit` value from
+an earlier revision is cleared on converge; any other realm-level theme an
+operator chose is left alone.
 
 The theme fetches the shared brand assets from `/configurator/brand/` on the
 same origin, which is where nginx already serves the Configurator. If Keycloak

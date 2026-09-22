@@ -7,7 +7,7 @@ test.skip(
     "Set KEYCLOAK_LOGIN_URL, or run scripts/keycloak-smoke.sh"
 );
 
-test("Keycloak serves the DIGIT theme for the identity client", async ({ page }) => {
+test("Keycloak serves the configurator-blue theme for the identity client", async ({ page }) => {
     const failedRequests: string[] = [];
     page.on("requestfailed", request => failedRequests.push(request.url()));
 

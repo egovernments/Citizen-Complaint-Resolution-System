@@ -20,7 +20,10 @@ readonly FIRST_BROKER_FLOW=digit-first-broker-login
 # The Keycloakify login theme shipped in the Keycloak image
 # (keycloak/theme-src, built by keycloak/Dockerfile.magic-link). Selected per
 # client rather than on the shared realm.
-readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-digit}
+readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-configurator-blue}
+# Realm-level theme names this deployment set itself and may therefore clear.
+# `digit` is the name earlier revisions used before the theme was renamed.
+readonly OWNED_REALM_THEMES="$LOGIN_THEME digit"
 
 # Standalone installs keep these values in identity-bff.env. Ansible deployments
 # pass them as task-scoped environment variables so no second secrets file has
@@ -247,11 +250,15 @@ kc update "realms/$REALM" -s organizationsEnabled=true \
 # undo exactly that: a realm-level theme an operator chose is left alone.
 #
 # kcadm drops an empty `-s` value, so clearing has to go through the JSON body.
-if [ "$(kc get "realms/$REALM" | jq -r '.loginTheme // ""')" = "$LOGIN_THEME" ]; then
-  kc get "realms/$REALM" | jq '.loginTheme = ""' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-      update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
-fi
+realm_theme=$(kc get "realms/$REALM" | jq -r '.loginTheme // ""')
+for owned_theme in $OWNED_REALM_THEMES; do
+  if [ "$realm_theme" = "$owned_theme" ]; then
+    kc get "realms/$REALM" | jq '.loginTheme = ""' |
+      docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+        update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
+    break
+  fi
+done
 configure_smtp
 
 # Organization-group client roles are published under this client and filtered

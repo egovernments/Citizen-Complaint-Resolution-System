@@ -47,7 +47,7 @@ export default defineConfig({
         react(),
         serveConfiguratorBrand(),
         keycloakify({
-            themeName: "digit",
+            themeName: "configurator-blue",
             accountThemeImplementation: "none",
             // The deployed Keycloak is 26.7.3 (keycloak/Dockerfile.magic-link).
             // Emitting only the modern jar keeps one artifact to reason about
@@ -55,7 +55,7 @@ export default defineConfig({
             // failure rather than a silently mismatched FreeMarker contract.
             keycloakVersionTargets: {
                 "22-to-25": false,
-                "all-other-versions": "digit-login-theme.jar"
+                "all-other-versions": "configurator-blue-login-theme.jar"
             },
             // Read at runtime by the theme (see src/login/brand.ts). Set per
             // deployment through Keycloak's theme environment variables so a

@@ -2,7 +2,7 @@
 # Browser-level smoke test of the built theme on the supported Keycloak.
 #
 # Builds the identity-keycloak image (which builds this theme), starts it,
-# seeds a realm and a client with `login_theme=digit`, and drives the resulting
+# seeds a realm and a client with `login_theme=configurator-blue`, and drives the
 # authorization URL in a real browser. Everything runs on one docker network so
 # no host ports or host browsers are needed.
 set -euo pipefail
@@ -17,6 +17,7 @@ network=digit-theme-smoke-$$
 container=keycloak-theme-smoke-$$
 realm=digit
 client=digit-identity-bff
+theme=${KEYCLOAK_LOGIN_THEME:-configurator-blue}
 playwright_image="mcr.microsoft.com/playwright:v$(node -p "require('./scripts/playwright-version.cjs')")-noble"
 
 cleanup() {
@@ -26,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-    docker build -f keycloak/Dockerfile.magic-link -t "$image" "$identity_dir"
+    docker build -f "$identity_dir/keycloak/Dockerfile.magic-link" -t "$image" "$identity_dir"
 fi
 
 docker network create "$network" >/dev/null
@@ -52,7 +53,7 @@ kcadm create clients -r "$realm" -s "clientId=$client" -s enabled=true \
     -s publicClient=true -s standardFlowEnabled=true \
     -s 'redirectUris=["http://localhost/*"]' \
     -s baseUrl=http://localhost/configurator/ \
-    -s 'attributes."login_theme"=digit' >/dev/null
+    -s "attributes.\"login_theme\"=$theme" >/dev/null
 
 login_url="http://$container:8080/realms/$realm/protocol/openid-connect/auth"
 login_url="$login_url?client_id=$client&redirect_uri=http%3A%2F%2Flocalhost%2Fcb&response_type=code&scope=openid"

@@ -23,11 +23,11 @@ COPY keycloak/theme-src/package.json keycloak/theme-src/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY keycloak/theme-src/ ./
 RUN npm run build-keycloak-theme \
-    && test -f dist_keycloak/digit-login-theme.jar
+    && test -f dist_keycloak/configurator-blue-login-theme.jar
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION} AS builder
 COPY --from=extension --chown=keycloak:keycloak /keycloak-magic-link.jar /opt/keycloak/providers/keycloak-magic-link.jar
-COPY --from=theme --chown=keycloak:keycloak /theme/dist_keycloak/digit-login-theme.jar /opt/keycloak/providers/digit-login-theme.jar
+COPY --from=theme --chown=keycloak:keycloak /theme/dist_keycloak/configurator-blue-login-theme.jar /opt/keycloak/providers/configurator-blue-login-theme.jar
 RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}

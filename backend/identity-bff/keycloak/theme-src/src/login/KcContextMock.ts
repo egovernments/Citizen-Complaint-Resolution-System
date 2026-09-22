@@ -7,7 +7,7 @@ import type { KcContextExtension, KcContextExtensionPerPage } from "./KcContext"
  * the screenshot baselines. It is never bundled into the theme itself.
  */
 const kcContextExtension: KcContextExtension = {
-    themeName: "digit",
+    themeName: "configurator-blue",
     properties: { ...kcEnvDefaults },
     client: { baseUrl: "https://digit.example.org/configurator/" }
 };
