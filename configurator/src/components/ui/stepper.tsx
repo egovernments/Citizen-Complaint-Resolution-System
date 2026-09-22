@@ -35,14 +35,18 @@ export function Stepper({ steps, current, className }: StepperProps) {
         return (
           <li key={step.id} className="flex-1" aria-current={isCurrent ? 'step' : undefined}>
             <div
+              // 3px, per the reference. At the shadcn-ish 2px the rail reads as
+              // a hairline rule rather than as progress.
               className={cn(
-                'h-0.5 w-full rounded-full transition-colors',
+                'h-[3px] w-full rounded-full transition-colors',
                 isCurrent || isComplete ? 'bg-primary' : 'bg-border',
               )}
             />
             <p
               className={cn(
-                'mt-2 text-xs font-medium uppercase tracking-wide transition-colors',
+                // 11px/600 with wider tracking, as the reference sets it. At
+                // 12px/500 the labels competed with the field labels below.
+                'mt-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
                 isCurrent ? 'text-primary' : 'text-muted-foreground',
               )}
             >

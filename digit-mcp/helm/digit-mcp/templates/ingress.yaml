@@ -1,0 +1,60 @@
+{{- if .Values.ingress.enabled }}
+{{- if and (not .Values.ingress.basicAuthSecret) (not .Values.ingress.allowSourceRange) }}
+{{- fail "digit-mcp: ingress.enabled requires ingress.basicAuthSecret and/or ingress.allowSourceRange as an edge gate — a read-only instance still serves data-returning reads (user_search, pgr_search) to any valid caller, and a public ingress with neither would leave those open to unauthenticated scanners." }}
+{{- end }}
+{{- if or (not .Values.ingress.host) (contains "REPLACE" .Values.ingress.host) }}
+{{- fail "digit-mcp: ingress.enabled requires ingress.host set to your real hostname. Empty renders a catch-all Ingress that becomes the controller's default backend for every unmatched host; the shipped 'mcp-readonly.REPLACE-your-domain' placeholder drives failing, rate-limited cert-manager ACME orders." }}
+{{- end }}
+{{- $fullName := include "digit-mcp.fullname" . -}}
+# Public ingress for digit-mcp. The MCP is a platform-admin surface, so this is
+# OPT-IN (ingress.enabled=false by default) and is meant to front a READ-ONLY
+# instance (env.MCP_READ_ONLY=1). Edge auth — HTTP basic auth
+# (ingress.basicAuthSecret) and/or an IP allowlist (ingress.allowSourceRange) —
+# is REQUIRED as defence in depth: with MCP_AUTH_MODE=token (the http default)
+# /mcp and /v1 already require a validated bearer token, but a read-only instance
+# still returns data (user_search, pgr_search) to any valid caller, so the edge
+# gate keeps unauthenticated scanners off the public route. TLS comes from the
+# cert-manager cluster-issuer.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "digit-mcp.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    {{- end }}
+    {{- if .Values.ingress.basicAuthSecret }}
+    # htpasswd Secret the operator creates out of band, e.g.:
+    #   htpasswd -c auth mcp && kubectl -n <ns> create secret generic <name> --from-file=auth
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ .Values.ingress.basicAuthSecret | quote }}
+    nginx.ingress.kubernetes.io/auth-realm: "digit-mcp (read-only)"
+    {{- end }}
+    {{- if .Values.ingress.allowSourceRange }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.ingress.allowSourceRange | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path | default "/" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ .Values.service.port }}
+  {{- if .Values.ingress.tlsSecret }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecret | quote }}
+  {{- end }}
+{{- end }}

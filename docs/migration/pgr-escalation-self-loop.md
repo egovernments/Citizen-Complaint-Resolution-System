@@ -45,11 +45,11 @@ Do not remove a legacy state while an active complaint still occupies it.
    - `utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json`
    - `utilities/crs_dataloader/templates/PgrWorkflowConfig.json`
    - `local-setup/dataloader/templates/PgrWorkflowConfig.json`
-4. Confirm the `PENDINGATLME` `ESCALATE` action points to its own current-state UUID and authorizes `SYSTEM`.
+4. Confirm the `PENDINGATLME` `ESCALATE` action points to its own current-state UUID, authorizes `SYSTEM`, and does not authorize `GRO`. An already-provisioned tenant keeps its old role list until the BusinessService is reinstalled or its `eg_wf_action.roles` row is updated.
 5. Confirm `FORWARD`, `ASSIGNEDBYAUTOESCALATION`, `RESOLVEBYSUPERVISOR`, `PENDINGATSUPERVISOR`, and `RESOLVEDBYSUPERVISOR` are absent from the active BusinessService.
 
 Keep legacy localization strings so historical timelines remain readable.
-Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive non-notifiable-audience handling: they are shared access-control vocabulary. The active PGR workflow no longer grants either role an escalation action; the scheduler acts as `SYSTEM`. Canonical `PENDINGATLME` actions also authorize `GRO`, so a typical `reportingTo` target can act on the complaint without acquiring a literal supervisor role.
+Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive non-notifiable-audience handling: they are shared access-control vocabulary. The active PGR workflow no longer grants either role an escalation action; the scheduler acts as `SYSTEM`. Canonical `PENDINGATLME` still authorizes `GRO` for `RESOLVE` and `REASSIGN`, so a typical `reportingTo` target can act on the complaint without acquiring a literal supervisor role, but `ESCALATE` is restricted to `PGR_LME`, `PGR_VIEWER`, and `SYSTEM`: escalation follows the resolver's own `reportingTo` chain, and lateral movement by the grievance officer is `REASSIGN`.
 
 ## Deploy and validate
 
