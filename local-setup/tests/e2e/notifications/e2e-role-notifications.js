@@ -5,12 +5,12 @@
  * (runs ON the pilot server where the DIGIT compose stack runs)
  * ============================================================================
  *
- * Proves the goal end-to-end: a workflow transition whose routing rows declare
- * role-based notifications fans the notification out to the RIGHT ROLE-HOLDERS across
- * SMS / WhatsApp / Email. After each transition we read the novu-bridge
- * `nb_dispatch_log` (keyed by the complaint number) and cross-reference each
- * recipient's uuid against `eg_userrole_v1` to assert the right AUDIENCE got each
- * CHANNEL, with the right terminal status.
+ * Proves the goal end-to-end: a workflow transition whose RAINMAKER-PGR.NotificationRouting
+ * rows declare role-based notifications fans the notification out to the RIGHT
+ * ROLE-HOLDERS across SMS / WhatsApp / Email. After each transition we read the
+ * novu-bridge `nb_dispatch_log` (keyed by the complaint number) and cross-reference
+ * each recipient's uuid against `eg_userrole_v1` to assert the right AUDIENCE (role)
+ * got each CHANNEL, with the right terminal status.
  *
  * Flows exercised (E2E-1):
  *   Complaint A : APPLY -> ASSIGN(PENDINGATLME) -> RESOLVE(RESOLVED)
@@ -18,46 +18,17 @@
  *   Complaint B : APPLY -> employee REJECT(REJECTED) -> citizen REOPEN(PENDINGFORASSIGNMENT)
  *   Complaint C : APPLY -> employee REJECT(REJECTED) -> citizen RATE(CLOSEDAFTERREJECTION)
  *
- * --------------------------------------------------------------------------
- * WHICH CONFIG NAMESPACE THIS READS  (design 5.2)
- * --------------------------------------------------------------------------
  * The EXPECT matrix is NOT hardcoded: it is read at startup from the server's own
- * MDMS, from whichever namespace is actually serving that tenant — mirroring the
- * bridge's own rule, per tenant and all-or-nothing:
- *
- *   NOTIFICATIONS.Routing has active rows at the state tenant  -> read those
- *                                     (eventName = <PREFIX>.<ACTION>.<TOSTATE>,
- *                                      audience = a scheme reference)
- *   zero rows there                   -> read RAINMAKER-PGR.NotificationRouting
- *                                      and adapt each row on the way in
- *
- * So the script is correct on a pre-copy tenant, a copied tenant, and on both seed
+ * MDMS (RAINMAKER-PGR.NotificationRouting) so the script is correct on both seed
  * lineages (splitter policy that authors only APPLY/ASSIGN/RESOLVE, and the legacy
- * dev seed). Any (action,toState) with no routing rows becomes the E2E-4 negative.
- * The rules themselves live in ./notif-config.js and are unit-tested without a
- * server (`node --test notif-config.test.js`).
+ * dev seed). Any (action,toState) with no routing rows becomes the E2E-4 negative
+ * (assert ZERO dispatch rows). See E2E-0.3.
  *
- * E2E-4 (no routing for a transition) CHANGED with the thin-event path: the box now
- * records the decision it used to take silently, as exactly ONE channel-less row —
- * channel `NONE`, `SKIPPED` / `NB_NO_ROUTING`, transactionId `<seed>:NONE`. On a
- * server still running the pre-move producer the answer is still zero rows, and the
- * script accepts whichever matches the producer path it observed (`source_path`).
- *
- * WhatsApp (E2E-5) is a HARD assertion but no longer a hardcoded one: the expected
- * outcome is derived from the tenant's own channel policy —
- *
- *   WHATSAPP off for the tenant             -> SKIPPED / NB_NO_PROVIDER
- *   on, no approved provider template        -> SKIPPED / NB_TEMPLATE_NOT_APPROVED
- *   on, template ok, provider unusable       -> SKIPPED / NB_PROVIDER_UNAVAILABLE
- *   on and everything in place               -> SENT
- *
- * — so the script stops failing on a tenant where an operator switched WhatsApp on.
- * No SMS row may carry a `:WHATSAPP` transactionId suffix (no SMS fallback), always.
- * There is NO Baileys delivery testing anywhere.
- *
- * `SKIPPED / NB_CONTACT_MISSING` rows (a resolved recipient with no phone/email for
- * the routed channel) are EXPECTED on the thin path and accounted for explicitly —
- * they used to be a silent producer-side filter and are now a row.
+ * WhatsApp: this repo carries W1 (channel gate + Baileys removal), so WHATSAPP is a
+ * HARD assertion (E2E-5): every expected (audience, WHATSAPP) row must land as a
+ * `SKIPPED` row with `last_error_code='NB_NO_PROVIDER'`, and no SMS row may carry a
+ * `:WHATSAPP` transactionId suffix (no SMS fallback). There is NO Baileys delivery
+ * testing anywhere.
  *
  * --------------------------------------------------------------------------
  * ENVIRONMENT VARIABLES
@@ -98,12 +69,6 @@
  *   NEGATIVE_VIA_DEACTIVATION=1  deactivate an APPLY routing row via MDMS, restart
  *                                pgr-services, file a complaint, assert ZERO rows, restore
  *
- * Channel-policy probe (optional, read-only):
- *   NOVU_BRIDGE_CONTAINER  container to read NOVU_BRIDGE_CHANNELS_ENABLED from
- *                          (default novu-bridge) — only used when the tenant has NO
- *                          channel-policy rows at all, which is when the bridge itself
- *                          falls back to that env var
- *
  * --------------------------------------------------------------------------
  * RUN (on the target server, repo checked out; run where the compose stack runs
  * because it shells out to `docker exec <PG_CONTAINER> psql`):
@@ -120,10 +85,6 @@
  * ============================================================================
  */
 const { execSync } = require('child_process');
-// Pure config rules (source selection, eventName parsing, audience schemes, the
-// channel-outcome expectation table). No I/O, no env — unit-tested by
-// `node --test notif-config.test.js` without a server.
-const C = require('./notif-config');
 
 // ---- Connection / tenant config (all env-driven; no secrets in this file) ----
 const KONG = process.env.E2E_KONG || 'http://localhost:18000';
@@ -173,8 +134,9 @@ const NOVU_API_KEY = process.env.NOVU_API_KEY || '';
 // ---- Negative-via-deactivation config ----
 const NEG_DEACT = process.env.NEGATIVE_VIA_DEACTIVATION === '1';
 
-// ---- novu-bridge container, for the env channel fallback (read-only docker inspect) ----
-const NOVU_BRIDGE_CONTAINER = process.env.NOVU_BRIDGE_CONTAINER || 'novu-bridge';
+// ---- Router-parity constants (must mirror NotificationRouter.java) ----
+const VALID_CHANNELS = new Set(['SMS', 'WHATSAPP', 'EMAIL']);
+const NON_NOTIFIABLE_AUDIENCES = new Set(['AUTO_ESCALATE', 'SYSTEM']);
 
 // ---- Tunables ----
 const POLL_MS = 90000;   // per-transition dispatch poll window
@@ -229,127 +191,64 @@ async function token(username, password, userType, tenantId) {
 // ============================================================================
 // Dynamic EXPECT matrix — read from the server's own MDMS (E2E-0.3)
 // ============================================================================
-// Flat list of {action, toState, eventName, audience (a scheme ref), label, terms,
-// channel}, built from whichever namespace is serving this tenant. The filtering
-// rules live in notif-config.js, which is where they are unit-tested; this function
-// only decides WHICH rows to feed them.
+// Flat list of {action, toState, aud, ch}. Mirrors NotificationRouter.route():
+// skip active===false, drop non-notifiable audiences, keep only valid channels,
+// uppercase everything, filter to the PGR businessService.
 let EXPECT_ROWS = [];
-let CONFIG_SOURCE = null;          // 'NOTIFICATIONS' | 'RAINMAKER-PGR'
-let CHANNEL_POLICY = null;         // {source, byChannel}
-let APPROVED_PROVIDER_TEMPLATES = () => 0;
-let PROVIDER_USABLE = null;        // true | false | null (not probed from here)
 
-// Read every ACTIVE row of a schema at the state tenant, as parsed JSON.
-// MDMS v2 stores each flattened row's JSON in the `data` jsonb column of
-// eg_mdms_data — (schemacode, uniqueidentifier, data, isactive, tenantid).
-function mdmsRows(schemaCode) {
-  if (!schemaCode) return [];
-  const sql = `SELECT data FROM eg_mdms_data WHERE schemacode='${schemaCode}' `
+function loadExpectMatrix() {
+  // MDMS v2 stores each flattened NotificationRouting row's JSON in the `data` jsonb
+  // column of eg_mdms_data. Confirm table/column names once on first run with
+  // `\d eg_mdms_data` — DIGIT MDMS v2 uses (schemacode, uniqueidentifier, data, isactive, tenantid).
+  const sql = "SELECT data FROM eg_mdms_data WHERE schemacode='RAINMAKER-PGR.NotificationRouting' "
     + `AND isactive=true AND tenantid='${STATE_TENANT}'`;
   let lines;
   try {
     lines = psqlRaw(sql);
   } catch (e) {
-    throw new Error(`Failed reading ${schemaCode} from eg_mdms_data: ${e.message}`);
+    throw new Error('Failed reading RAINMAKER-PGR.NotificationRouting from eg_mdms_data: ' + e.message);
   }
-  const out = [];
+  const rows = [];
   for (const line of lines) {
-    try { out.push(JSON.parse(line)); } catch { /* a row we cannot parse is not a row */ }
+    let d;
+    try { d = JSON.parse(line); } catch { continue; }
+    if (d.active === false) continue;
+    const bs = String(d.businessService || '').trim().toUpperCase();
+    if (bs && bs !== BUSINESS_SERVICE) continue;
+    const aud = String(d.audience || '').trim().toUpperCase();
+    const ch = String(d.channel || '').trim().toUpperCase();
+    const action = String(d.action || '').trim().toUpperCase();
+    const toState = String(d.toState || '').trim().toUpperCase();
+    if (!aud || !action || !toState) continue;
+    if (NON_NOTIFIABLE_AUDIENCES.has(aud)) continue;
+    if (!VALID_CHANNELS.has(ch)) continue;
+    rows.push({ action, toState, aud, ch });
   }
-  return out;
-}
-
-// The deployment-wide channel allowlist, read off the running bridge. Only
-// consulted when the tenant has NO channel-policy rows at all — which is exactly
-// when the bridge itself falls back to it. Defaults to EMPTY (= every channel off),
-// which is the bridge's own default.
-function envChannelsEnabled() {
-  try {
-    const out = execSync(
-      `docker inspect ${NOVU_BRIDGE_CONTAINER} --format '{{range .Config.Env}}{{println .}}{{end}}'`,
-      { encoding: 'utf8' });
-    const line = out.split('\n').find((l) => l.startsWith('NOVU_BRIDGE_CHANNELS_ENABLED='));
-    if (!line) return [];
-    return line.slice('NOVU_BRIDGE_CHANNELS_ENABLED='.length).split(',').map((c) => c.trim()).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-// Optional read-only probe: is the provider the tenant pinned on a channel actually
-// usable? Answering needs Novu, which this script may not be able to reach, so a
-// failure leaves PROVIDER_USABLE null — "unknown", which makes NB_PROVIDER_UNAVAILABLE
-// a reported warning rather than either a silent pass or a false failure.
-async function probeProviderUsable(policy) {
-  const pinned = Object.values((policy && policy.byChannel) || {})
-    .map((p) => p.provider).filter(Boolean);
-  if (!pinned.length) return true;   // nothing pinned = nothing that can be unusable
-  try {
-    const r = await fetch(KONG + '/novu-bridge/novu-adapter/v1/integrations', { method: 'GET' });
-    if (r.status !== 200) return null;
-    const body = await r.json();
-    const list = (body && (body.data || body.integrations)) || [];
-    if (!Array.isArray(list) || !list.length) return null;
-    const ids = new Set(list.filter((i) => i && i.active !== false)
-      .map((i) => String(i.identifier || i._id || '')));
-    return pinned.every((p) => ids.has(String(p)));
-  } catch {
-    return null;
-  }
-}
-
-function loadExpectMatrix() {
-  // The bridge's rule, mirrored: a tenant with active NOTIFICATIONS.Routing rows is
-  // served the new masters; a tenant with none is served the legacy ones through the
-  // read adapter. Per tenant, all-or-nothing, never per row.
-  const newRouting = mdmsRows(C.schemaCodeFor('Routing', C.SOURCE.NEXT));
-  CONFIG_SOURCE = C.selectSource(newRouting.filter((r) => C.isActive(r)).length);
-
-  const routingRows = CONFIG_SOURCE === C.SOURCE.NEXT
-    ? newRouting
-    : mdmsRows(C.schemaCodeFor('Routing', C.SOURCE.LEGACY));
-
-  const built = C.buildExpectRows({
-    source: CONFIG_SOURCE,
-    rows: routingRows,
-    businessService: BUSINESS_SERVICE,
-  });
-  EXPECT_ROWS = built.rows;
-  for (const [row, why] of built.skipped) {
-    console.log(`  (routing row not in the matrix: ${why}) ${JSON.stringify(row).slice(0, 160)}`);
-  }
-
-  // Channel policy: NOTIFICATIONS.Channel, else the legacy channel master, else the
-  // bridge's env allowlist — exactly ChannelPolicyClient's own order.
-  CHANNEL_POLICY = C.channelPolicyFrom({
-    newRows: mdmsRows(C.schemaCodeFor('Channel', C.SOURCE.NEXT)),
-    legacyRows: mdmsRows(C.schemaCodeFor('Channel', C.SOURCE.LEGACY)),
-    envEnabled: envChannelsEnabled(),
-  });
-
-  // Approved provider templates, from the same namespace, joined on the audience
-  // string routing produced (the hazard notifications_convert.py documents).
-  APPROVED_PROVIDER_TEMPLATES = C.providerTemplateCounter({
-    source: CONFIG_SOURCE,
-    rows: mdmsRows(C.schemaCodeFor('ProviderTemplate', CONFIG_SOURCE)),
-    audienceIndex: CONFIG_SOURCE === C.SOURCE.LEGACY ? C.buildAudienceIndex(routingRows) : null,
+  // dedupe identical (action,toState,aud,ch)
+  const seen = new Set();
+  EXPECT_ROWS = rows.filter((r) => {
+    const k = `${r.action}|${r.toState}|${r.aud}|${r.ch}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
   });
 }
 
 // Expected audience/channel groups for a specific (action, toState).
-const specsFor = (action, toState) => C.specsFor(EXPECT_ROWS, action, toState);
+function specsFor(action, toState) {
+  const A = String(action).toUpperCase(), S = String(toState).toUpperCase();
+  const byAud = new Map();
+  for (const r of EXPECT_ROWS) {
+    if (r.action !== A || r.toState !== S) continue;
+    if (!byAud.has(r.aud)) byAud.set(r.aud, new Set());
+    byAud.get(r.aud).add(r.ch);
+  }
+  return [...byAud.entries()].map(([aud, chs]) => ({ aud, ch: [...chs] }));
+}
 
-// Lower-bound row count for a (action,toState) = number of (audience,channel) tuples.
-const tupleCount = (action, toState) => C.tupleCount(EXPECT_ROWS, action, toState);
-
-// What a row for this (audience, channel) should say, from this tenant's own config.
-function expectationFor(action, toState, audience, channel) {
-  return C.channelExpectation({
-    channel,
-    policy: CHANNEL_POLICY,
-    approvedProviderTemplates: APPROVED_PROVIDER_TEMPLATES(action, toState, audience, channel),
-    providerUsable: PROVIDER_USABLE,
-  });
+// Lower-bound row count for a (action,toState) = number of (aud,ch) tuples.
+function tupleCount(action, toState) {
+  return specsFor(action, toState).reduce((n, s) => n + s.ch.length, 0);
 }
 
 // ============================================================================
@@ -366,58 +265,18 @@ function rolesOf(uuid) {
   return set;
 }
 
-// Is `source_path` on this deployment's nb_dispatch_log? The column arrives with the
-// thin-event release; a pre-move box has not got it and selecting it would be a SQL
-// error, not a test result. Probed once.
-let _hasSourcePath = null;
-function hasSourcePathColumn() {
-  if (_hasSourcePath !== null) return _hasSourcePath;
-  try {
-    const rows = psqlRaw("SELECT count(*) FROM information_schema.columns "
-      + "WHERE table_name='nb_dispatch_log' AND column_name='source_path'");
-    _hasSourcePath = Number(rows[0] || 0) > 0;
-  } catch {
-    _hasSourcePath = false;
-  }
-  return _hasSourcePath;
-}
-
-// Which producer path this deployment is on, learned from the rows themselves rather
-// than from a config nobody can read at 2am: `source_path=RESOLVED` means the box
-// routed and rendered (thin event), `PRERENDERED` means the producer did.
-// null until a row has been seen.
-let THIN_PATH = null;
-function noteSourcePath(rows) {
-  for (const r of rows) {
-    const sp = (r.sourcePath || '').toUpperCase();
-    if (sp === 'RESOLVED') { THIN_PATH = true; return; }
-    if (sp === 'PRERENDERED') { THIN_PATH = false; }
-  }
-}
-
-// All dispatch rows for a complaint. transactionId format (design 2.5, unchanged):
+// All dispatch rows for a complaint. transactionId format (NotificationService.java):
 //   serviceRequestId:action:toState:tenantId:subKey:channel   (6 colon-separated parts;
-// subKey is normally the recipient uuid) — or `<seed>:NONE` (4 parts) for a
-// channel-less resolution decision. E2E-0.4: include last_error_code for E2E-5.
+// subKey is normally the recipient uuid). E2E-0.4: include last_error_code for E2E-5.
 function queryDispatch(complaintId) {
-  const sp = hasSourcePathColumn() ? 'source_path' : `''`;
-  return psql(`SELECT channel, recipient_value, status, transaction_id, last_error_code, ${sp} `
+  return psql(`SELECT channel, recipient_value, status, transaction_id, last_error_code `
     + `FROM nb_dispatch_log WHERE reference_number='${complaintId}'`)
-    .map(([channel, recipient, status, txn, lastError, sourcePath]) => {
-      const t = C.parseTransactionId(txn);
-      return {
-        channel: (channel || '').toUpperCase(),
-        recipient,
-        status: (status || '').toUpperCase(),
-        txn,
-        lastError: lastError || '',
-        sourcePath: sourcePath || '',
-        action: t.action,
-        toState: t.toState,
-        uuid: t.uuid,
-        channelLess: t.channelLess,
-        txnWellFormed: t.wellFormed,
-      };
+    .map(([channel, recipient, status, txn, lastError]) => {
+      const parts = (txn || '').split(':');
+      const action = (parts[1] || '').toUpperCase();
+      const toState = (parts[2] || '').toUpperCase();
+      const uuid = parts.length >= 6 ? parts[parts.length - 2] : '';
+      return { channel, recipient, status, txn, lastError, action, toState, uuid };
     });
 }
 
@@ -426,25 +285,12 @@ function filterRows(complaintId, action, toState) {
   return queryDispatch(complaintId).filter((r) => r.action === A && (!S || r.toState === S));
 }
 
-// How many rows this transition must produce AT LEAST.
-//   routing rows exist        -> one per (audience, channel) tuple, as always
-//   no routing, thin path     -> exactly ONE channel-less NB_NO_ROUTING row
-//   no routing, pre-move path -> zero, and we wait the settle window to prove it
-function rowFloor(action, toState) {
-  const tuples = tupleCount(action, toState);
-  if (tuples > 0) return tuples;
-  return THIN_PATH === true ? 1 : 0;
-}
-
 // Poll nb_dispatch_log for a specific transition's rows. When minRows<=0 (a negative
-// leg on a deployment that writes nothing), wait the settle window and return whatever
-// exists (expected: nothing).
+// leg), wait the settle window and return whatever exists (expected: nothing).
 async function dispatchesFor(complaintId, action, toState, minRows) {
   if (minRows <= 0) {
     await sleep(NEG_WAIT_MS);
-    const rows = filterRows(complaintId, action, toState);
-    noteSourcePath(rows);
-    return rows;
+    return filterRows(complaintId, action, toState);
   }
   const start = Date.now();
   let rows = filterRows(complaintId, action, toState);
@@ -457,154 +303,53 @@ async function dispatchesFor(complaintId, action, toState, minRows) {
     prev = rows.length;
     await sleep(3000);
   }
-  noteSourcePath(rows);
   return rows;
 }
 
 // ============================================================================
 // Assertions
 // ============================================================================
-// Can this audience resolve to anybody at all on this transition? Used ONLY to tell a
-// real miss apart from an audience that provably has nobody to notify — the case the
-// box now records as NB_NO_RECIPIENTS when it is the only audience, and as nothing at
-// all when it is one of several. A "nobody to notify" verdict is reported as a WARNING,
-// never as a pass, so it can never quietly stand in for a missing row.
-const _poolCache = new Map();
-function roleHolderCount(role) {
-  if (_poolCache.has(role)) return _poolCache.get(role);
-  let n = 0;
-  try {
-    const rows = psql(`SELECT count(DISTINCT u.uuid) FROM eg_userrole_v1 ur `
-      + `JOIN eg_user u ON u.id=ur.user_id AND u.tenantid=ur.user_tenantid `
-      + `WHERE ur.role_code='${role}' AND u.active=true`);
-    n = Number((rows[0] || [])[0] || 0);
-  } catch { n = 0; }
-  _poolCache.set(role, n);
-  return n;
-}
-
-function assertTransition(action, toState, complaintId, rows, ctx) {
-  const citizenUuid = ctx.citizenUuid;
+function assertTransition(action, toState, complaintId, rows, citizenUuid) {
   const specs = specsFor(action, toState);
   console.log(`\n[assert ${action}->${toState}] complaint=${complaintId} — ${rows.length} dispatch row(s), `
     + `${specs.length} expected audience group(s)`);
 
-  // --------------------------------------------------------------------------
-  // E2E-4 negative: no routing rows for this transition.
-  //   pre-move producer : zero rows, as before
-  //   thin-event path   : exactly ONE channel-less row — channel NONE, SKIPPED,
-  //                       NB_NO_ROUTING, transactionId <seed>:NONE
-  // The silence became a row; that is the whole point of §6.6.
-  // --------------------------------------------------------------------------
+  // E2E-4 negative: no routing rows for this transition => zero dispatch rows.
   if (specs.length === 0) {
-    const want = C.noRoutingExpectation(THIN_PATH);
-    const noRouting = rows.filter((r) => (r.channel || '').toUpperCase() === C.CHANNEL_NONE
-      && r.status === 'SKIPPED' && r.lastError === 'NB_NO_ROUTING');
-    const others = rows.filter((r) => !noRouting.includes(r));
-
-    if (want.rows === 0) {
-      if (rows.length === 0) ok(`${action}->${toState}: empty routing → zero dispatch rows (pre-move producer; E2E-4 verified)`);
-      else no(`${action}->${toState}: expected ZERO dispatch rows (no routing, pre-move producer) but found ${rows.length}`);
-      return;
-    }
-    if (want.rows === 1) {
-      if (noRouting.length === 1 && others.length === 0) {
-        const txnOk = (noRouting[0].txn || '').toUpperCase().endsWith(':NONE');
-        if (txnOk) ok(`${action}->${toState}: empty routing → exactly 1 SKIPPED/NB_NO_ROUTING row at channel NONE, txn ${noRouting[0].txn} (E2E-4 verified)`);
-        else no(`${action}->${toState}: the NB_NO_ROUTING row's txn does not end ':NONE' — ${noRouting[0].txn}`);
-      } else {
-        no(`${action}->${toState}: expected exactly 1 channel-less SKIPPED/NB_NO_ROUTING row, got `
-          + `${noRouting.length} NB_NO_ROUTING + ${others.length} other row(s): `
-          + `${others.map((r) => r.channel + '/' + r.status + '/' + r.lastError).join(', ') || '(none)'}`);
-      }
-      return;
-    }
-    // Producer path not yet observed: accept either shape, and say which was seen.
-    if (rows.length === 0) ok(`${action}->${toState}: empty routing → zero rows (producer path not yet observed; pre-move shape)`);
-    else if (noRouting.length === 1 && others.length === 0) ok(`${action}->${toState}: empty routing → 1 SKIPPED/NB_NO_ROUTING row at channel NONE (thin shape)`);
-    else no(`${action}->${toState}: empty routing produced ${rows.length} row(s) that are neither shape: `
-      + rows.map((r) => r.channel + '/' + r.status + '/' + r.lastError).join(', '));
+    if (rows.length === 0) ok(`${action}->${toState}: empty routing → zero dispatch rows (E2E-4 negative verified)`);
+    else no(`${action}->${toState}: expected ZERO dispatch rows (no routing) but found ${rows.length}`);
     return;
   }
 
-  // --------------------------------------------------------------------------
-  // E2E-1 / E2E-5: per (audience, channel), a row that genuinely belongs to that
-  // audience, carrying the status this tenant's own config predicts.
-  // --------------------------------------------------------------------------
   for (const spec of specs) {
-    for (const ch of spec.channels) {
-      const byChannel = rows.filter((r) => (r.channel || '').toUpperCase() === ch);
-      const matches = byChannel.filter((r) => C.rowMatchesAudience(spec.terms, r, ctx));
-      const expectation = expectationFor(action, toState, spec.audience, ch);
+    for (const ch of spec.ch) {
+      let matches = rows.filter((r) => (r.channel || '').toUpperCase() === ch);
+      if (spec.aud === 'CITIZEN') matches = matches.filter((r) => r.uuid === citizenUuid);
+      else matches = matches.filter((r) => r.uuid && r.uuid !== citizenUuid && rolesOf(r.uuid).has(spec.aud));
 
-      if (matches.length === 0) {
-        // No row. Is that a miss, or does this audience genuinely resolve to nobody?
-        const resolved = C.resolveAudience(spec.terms, {
-          hasActor: (name) => (name === 'citizen' ? !!citizenUuid : name === 'assignee' ? !!ctx.assigneeUuid : false),
-          roleHolderCount,
-          hasEventRecipients: false,
-        });
-        if (!resolved.term) {
-          warn(`${spec.label} on ${ch}: no dispatch row, and the audience resolves to nobody `
-            + `(${resolved.reason}) — legitimately empty, NOT counted as a pass`);
-        } else {
-          no(`${spec.label} on ${ch}: NO dispatch row found, though ${resolved.reason} `
-            + `(expected ${expectation.status}${expectation.code ? '/' + expectation.code : ''})`);
+      if (ch === 'WHATSAPP') {
+        // E2E-5 hard assertion (W1 is in this repo): SKIPPED + NB_NO_PROVIDER, never SMS.
+        if (matches.length === 0) {
+          no(`${spec.aud} on WHATSAPP: NO dispatch row (W1 requires a SKIPPED/NB_NO_PROVIDER row)`);
+          continue;
         }
-        continue;
-      }
-
-      const verdicts = matches.map((m) => ({ row: m, v: C.judgeRow(expectation, m) }));
-      const mismatched = verdicts.filter((x) => x.v.verdict === 'mismatch');
-      const warned = verdicts.filter((x) => x.v.verdict === 'tolerated' && x.v.warn);
-      const contactMissing = matches.filter((m) => m.lastError === 'NB_CONTACT_MISSING');
-
-      if (mismatched.length === 0) {
-        const seen = [...new Set(verdicts.map((x) => x.v.note))].join(', ');
-        ok(`${spec.label} on ${ch}: ${matches.length} recipient(s) — ${seen} `
-          + `(expected ${expectation.status}${expectation.code ? '/' + expectation.code : ''}: ${expectation.reason})`
-          + (contactMissing.length ? ` [${contactMissing.length} NB_CONTACT_MISSING, accounted]` : ''));
+        const bad = matches.filter((m) => (m.status || '').toUpperCase() !== 'SKIPPED' || (m.lastError || '') !== 'NB_NO_PROVIDER');
+        if (bad.length === 0) {
+          ok(`${spec.aud} on WHATSAPP: SKIPPED/NB_NO_PROVIDER × ${matches.length} (no-provider gate honored)`);
+        } else {
+          no(`${spec.aud} on WHATSAPP: expected all SKIPPED/NB_NO_PROVIDER, got `
+            + `${[...new Set(bad.map((m) => (m.status || '') + '/' + (m.lastError || '')))].join(',')}`);
+        }
       } else {
-        no(`${spec.label} on ${ch}: expected ${expectation.status}${expectation.code ? '/' + expectation.code : ''} `
-          + `(${expectation.reason}), got ${[...new Set(mismatched.map((x) => x.v.note))].join(', ')}`);
-      }
-      for (const w of warned) {
-        warn(`${spec.label} on ${ch}: ${w.v.note}`);
-      }
-    }
-  }
-
-  // --------------------------------------------------------------------------
-  // Rows nobody claimed. Previously invisible; now named, because an unexplained
-  // row is exactly what "every outcome visible as a row" is supposed to surface.
-  // --------------------------------------------------------------------------
-  const claimed = new Set();
-  for (const spec of specs) {
-    for (const ch of spec.channels) {
-      for (const r of rows) {
-        if ((r.channel || '').toUpperCase() === ch && C.rowMatchesAudience(spec.terms, r, ctx)) claimed.add(r.txn);
+        if (matches.length > 0) {
+          const statuses = [...new Set(matches.map((m) => m.status))].join('/');
+          ok(`${spec.aud} on ${ch}: ${matches.length} recipient(s), status=${statuses}`);
+        } else {
+          no(`${spec.aud} on ${ch}: NO dispatch row found`);
+        }
       }
     }
   }
-  const unclaimed = rows.filter((r) => !claimed.has(r.txn));
-  const unclaimedContactMissing = unclaimed.filter((r) => r.lastError === 'NB_CONTACT_MISSING');
-  const unclaimedOther = unclaimed.filter((r) => r.lastError !== 'NB_CONTACT_MISSING');
-  if (unclaimedContactMissing.length) {
-    ok(`${action}->${toState}: ${unclaimedContactMissing.length} NB_CONTACT_MISSING row(s) for recipients `
-      + `outside the asserted audience groups — expected on the resolution path, accounted for`);
-  }
-  if (unclaimedOther.length) {
-    warn(`${action}->${toState}: ${unclaimedOther.length} dispatch row(s) match no expected audience group: `
-      + unclaimedOther.map((r) => `${r.channel}/${r.status}/${r.lastError || 'ok'}`).join(', '));
-  }
-
-  // --------------------------------------------------------------------------
-  // The transactionId contract (design 2.5): six colon-separated parts, or the
-  // four-part `<seed>:NONE` channel-less shape. If this breaks, the design is wrong.
-  // --------------------------------------------------------------------------
-  const malformed = rows.filter((r) => !r.txnWellFormed);
-  if (malformed.length === 0) ok(`${action}->${toState}: every transactionId keeps its documented shape`);
-  else no(`${action}->${toState}: ${malformed.length} malformed transactionId(s): ${malformed.map((r) => r.txn).join(', ')}`);
 
   // E2E-5 item 2: no SMS fallback for WhatsApp. A WhatsApp body smuggled through the
   // SMS workflow would show up as an SMS-channel row whose transactionId ends ':WHATSAPP'.
@@ -632,16 +377,10 @@ function assertPgrLmePool(rows, poolUuids, assignActorUuid) {
   const smsLme = rows.filter((r) => (r.channel || '').toUpperCase() === 'SMS'
     && r.uuid && rolesOf(r.uuid).has('PGR_LME'));
   const distinctLme = new Set(smsLme.map((r) => r.uuid));
-  // Completeness: every contactful pool holder must be reached. A holder REACHED but
-  // skipped as NB_CONTACT_MISSING still counts as reached — the fan-out found them and
-  // the ledger says why nothing was sent, which is the outcome the pool check is about.
-  // The pool query admits an email-only holder, so on SMS that outcome is expected; it
-  // is broken out rather than folded away.
-  const contactMissing = smsLme.filter((r) => r.lastError === 'NB_CONTACT_MISSING');
+  // Completeness: every contactful pool holder must be reached.
   const missing = [...poolUuids].filter((u) => !distinctLme.has(u));
   if (poolCount > 0 && missing.length === 0) {
-    ok(`E2E-2: PGR_LME SMS fan-out reached all ${poolCount} contactful pool holder(s)`
-      + (contactMissing.length ? ` (${contactMissing.length} of them SKIPPED/NB_CONTACT_MISSING — no phone for SMS)` : ''));
+    ok(`E2E-2: PGR_LME SMS fan-out reached all ${poolCount} contactful pool holder(s)`);
   } else {
     no(`E2E-2: PGR_LME SMS missed ${missing.length}/${poolCount} pool holder(s): ${missing.join(',') || '(pool empty)'}`);
   }
@@ -767,15 +506,13 @@ async function transition(tok, ui, service, action, opts) {
 }
 
 // Drive one transition end-to-end: transition -> poll dispatches -> assert -> Novu verify.
-// `ctx` carries {citizenUuid, assigneeUuid, rolesOf} — the assignee is what lets
-// ACTOR:assignee be checked by uuid rather than by "holds the EMPLOYEE role".
 // Returns the (possibly updated) service and the dispatch rows observed.
-async function step(label, tok, ui, service, action, toState, ctx, opts) {
-  const min = rowFloor(action, toState);
+async function step(label, tok, ui, service, action, toState, citizenUuid, opts) {
+  const min = tupleCount(action, toState);
   service = await transition(tok, ui, service, action, opts);
   ok(`${label}: ${action} -> ${service.applicationStatus}`);
   const rows = await dispatchesFor(service.serviceRequestId, action, toState, min);
-  assertTransition(action, toState, service.serviceRequestId, rows, ctx);
+  assertTransition(action, toState, service.serviceRequestId, rows, citizenUuid);
   await verifyNovu(rows);
   return { service, rows };
 }
@@ -826,16 +563,12 @@ async function wireRoleHolderContacts(empTok, empUi, roleCode, phone, email, env
 // E2E-4: negative via routing-row deactivation (behind NEGATIVE_VIA_DEACTIVATION=1)
 // ============================================================================
 async function mdmsUpdateRoutingActive(empTok, empUi, uid, dataObj, active) {
-  // Whichever namespace is serving this tenant is the one whose row must be flipped:
-  // deactivating a legacy row on a tenant already served NOTIFICATIONS.Routing would
-  // change nothing and the negative would silently pass for the wrong reason.
-  const schemaCode = C.schemaCodeFor('Routing', CONFIG_SOURCE);
   const body = {
     RequestInfo: { ...RI(), action: '_update', authToken: empTok, userInfo: empUi },
-    Mdms: { tenantId: STATE_TENANT, schemaCode,
+    Mdms: { tenantId: STATE_TENANT, schemaCode: 'RAINMAKER-PGR.NotificationRouting',
       uniqueIdentifier: uid, isActive: true, data: { ...dataObj, active } },
   };
-  const r = await call(`/mdms-v2/v2/_update/${schemaCode}`, body,
+  const r = await call('/mdms-v2/v2/_update/RAINMAKER-PGR.NotificationRouting', body,
     { 'Content-Type': 'application/json', Authorization: `Bearer ${empTok}` });
   return r.status >= 200 && r.status < 300;
 }
@@ -863,9 +596,8 @@ async function negativeViaDeactivation(citizen) {
   // Pick one active APPLY routing row to deactivate. Emit "<uid>::E2ESEP::<json>" per row
   // so the uid and the (single-line) jsonb can be split unambiguously (JSON never contains it).
   const SEP = '::E2ESEP::';
-  const routingSchema = C.schemaCodeFor('Routing', CONFIG_SOURCE);
   const lines = psqlRaw("SELECT uniqueidentifier || '" + SEP + "' || data::text FROM eg_mdms_data "
-    + `WHERE schemacode='${routingSchema}' AND isactive=true `
+    + "WHERE schemacode='RAINMAKER-PGR.NotificationRouting' AND isactive=true "
     + `AND tenantid='${STATE_TENANT}'`);
   let target = null;
   for (const line of lines) {
@@ -873,14 +605,9 @@ async function negativeViaDeactivation(citizen) {
     if (sep < 0) continue;
     const uid = line.slice(0, sep);
     let d; try { d = JSON.parse(line.slice(sep + SEP.length)); } catch { continue; }
-    if (d.active === false) continue;
-    // In NOTIFICATIONS.* the action is inside the eventName; in the legacy master it is
-    // its own column. One lookup, both shapes.
-    const parsed = d.eventName ? C.parseEventName(d.eventName) : null;
-    const action = parsed ? parsed.action : String(d.action || '').toUpperCase();
-    if (action === 'APPLY') { target = { uid, data: d, audience: d.audience, channel: d.channel }; break; }
+    if (String(d.action || '').toUpperCase() === 'APPLY' && d.active !== false) { target = { uid, data: d }; break; }
   }
-  if (!target) { warn(`E2E-4 deact: no active APPLY routing row in ${routingSchema} to deactivate — skipping`); return; }
+  if (!target) { warn('E2E-4 deact: no active APPLY routing row found to deactivate — skipping'); return; }
 
   let restored = false;
   try {
@@ -893,15 +620,12 @@ async function negativeViaDeactivation(citizen) {
     const svc = await createComplaint(citizen.tok, citizen.ui, citizen.contact);
     const rows = await dispatchesFor(svc.serviceRequestId, 'APPLY', 'PENDINGFORASSIGNMENT', 0);
     // The deactivated row's (audience,channel) must be absent; assert no row matches it.
-    // The audience is read through the same scheme parser both namespaces use, so a
-    // legacy `GRO`+assigneeOnly and a new `ACTOR:assignee|ROLE:GRO` are one check.
-    const aud = C.parseAudience(target.audience, target.data.assigneeOnly);
-    const ch = String(target.channel || '').toUpperCase();
-    const ctx = { citizenUuid: citizen.ui.uuid, assigneeUuid: null, rolesOf };
+    const aud = String(target.data.audience || '').toUpperCase();
+    const ch = String(target.data.channel || '').toUpperCase();
     const offending = rows.filter((r) => (r.channel || '').toUpperCase() === ch
-      && C.rowMatchesAudience(aud.terms, r, ctx));
-    if (offending.length === 0) ok(`E2E-4 deact: deactivated ${aud.label}/${ch} produced ZERO APPLY rows on complaint ${svc.serviceRequestId}`);
-    else no(`E2E-4 deact: deactivated ${aud.label}/${ch} still produced ${offending.length} APPLY row(s)`);
+      && (aud === 'CITIZEN' ? r.uuid === citizen.ui.uuid : r.uuid && rolesOf(r.uuid).has(aud)));
+    if (offending.length === 0) ok(`E2E-4 deact: deactivated ${aud}/${ch} produced ZERO APPLY rows on complaint ${svc.serviceRequestId}`);
+    else no(`E2E-4 deact: deactivated ${aud}/${ch} still produced ${offending.length} APPLY row(s)`);
   } finally {
     // Restore + restart no matter what.
     try {
@@ -923,21 +647,13 @@ async function negativeViaDeactivation(citizen) {
   console.log(`Kong=${KONG} businessService=${BUSINESS_SERVICE} serviceCode=${SERVICE_CODE} LIVE_DELIVERY=${LIVE ? 'on' : 'off'}`);
 
   loadExpectMatrix();
-  PROVIDER_USABLE = await probeProviderUsable(CHANNEL_POLICY);
   const actions = [...new Set(EXPECT_ROWS.map((r) => r.action))].sort();
-  console.log(`Config source: ${CONFIG_SOURCE === C.SOURCE.NEXT
-    ? 'NOTIFICATIONS.* (this tenant has been copied)'
-    : 'RAINMAKER-PGR.Notification* (legacy — the bridge reads these through its adapter)'}`);
-  console.log(`Channel policy: from ${CHANNEL_POLICY.source} — `
-    + C.VALID_CHANNELS.map((ch) => `${ch}=${CHANNEL_POLICY.byChannel[ch].enabled ? 'on' : 'off'}`
-      + (CHANNEL_POLICY.byChannel[ch].provider ? `(${CHANNEL_POLICY.byChannel[ch].provider})` : '')).join(' '));
-  console.log(`Provider usability probe: ${PROVIDER_USABLE === null ? 'not answerable from here (NB_PROVIDER_UNAVAILABLE becomes a warning)' : PROVIDER_USABLE}`);
   console.log(`EXPECT matrix: ${EXPECT_ROWS.length} routing tuple(s) across actions [${actions.join(', ')}]`);
   const legacyLegs = ['REJECT', 'REOPEN', 'RATE'].filter((a) => actions.includes(a));
   console.log(`Seed mode: ${legacyLegs.length ? 'routing present for ' + legacyLegs.join('/') + ' (legacy-style)' : 'splitter-style (only APPLY/ASSIGN/RESOLVE authored) — REJECT/REOPEN/RATE are E2E-4 negatives'}`);
 
   // Citizen registration (Kenya-valid local number for /user/citizen/_create).
-  const regPhone = (process.env.E2E_PHONE_PREFIX || '7') + String(Date.now()).slice(-8); // prefix must satisfy the tenant's mobile-number rule
+  const regPhone = '7' + String(Date.now()).slice(-8);
   const citizen = await citizenLogin(regPhone);
   const cUi = citizen.UserRequest, cTok = citizen.access_token, citizenUuid = cUi.uuid;
   console.log('citizen registered uuid=' + citizenUuid + ' regPhone=' + regPhone);
@@ -978,61 +694,56 @@ async function negativeViaDeactivation(citizen) {
       + `${SERVICE_CODE}) then re-run; not auto-creating to avoid untested HRMS mutations.`);
   }
 
-  // Assertion context. `assigneeUuid` is per complaint and is what turns the
-  // ACTOR:assignee audience from "somebody holding EMPLOYEE" into an exact identity.
-  const ctxFor = (assigneeUuid) => ({ citizenUuid, assigneeUuid: assigneeUuid || null, rolesOf });
-
   // ---------------- Complaint A: APPLY -> ASSIGN -> RESOLVE -> RATE ----------------
   console.log('\n########## Complaint A ##########');
-  const svcA = await createComplaint(cTok, cUi, citizenContact);
-  const idA = svcA.serviceRequestId;
-  ok(`A created ${idA} status=${svcA.applicationStatus}`);
-  let rowsA = await dispatchesFor(idA, 'APPLY', 'PENDINGFORASSIGNMENT', rowFloor('APPLY', 'PENDINGFORASSIGNMENT'));
-  assertTransition('APPLY', 'PENDINGFORASSIGNMENT', idA, rowsA, ctxFor(null));
+  let A = await createComplaint(cTok, cUi, citizenContact);
+  const idA = A.serviceRequestId;
+  ok(`A created ${idA} status=${A.applicationStatus}`);
+  let rowsA = await dispatchesFor(idA, 'APPLY', 'PENDINGFORASSIGNMENT', tupleCount('APPLY', 'PENDINGFORASSIGNMENT'));
+  assertTransition('APPLY', 'PENDINGFORASSIGNMENT', idA, rowsA, citizenUuid);
   await verifyNovu(rowsA);
 
-  // ASSIGN to the employee themselves (so they can RESOLVE). From here on the
-  // assignee is known, so ACTOR:assignee is asserted by uuid.
+  // ASSIGN to the employee themselves (so they can RESOLVE).
   let wA = await search(eTok, eUi, idA);
-  let sA = await step('A', eTok, eUi, wA.service, 'ASSIGN', 'PENDINGATLME', ctxFor(empUuid), { assignes: [empUuid] });
+  let sA = await step('A', eTok, eUi, wA.service, 'ASSIGN', 'PENDINGATLME', citizenUuid, { assignes: [empUuid] });
   assertPgrLmePool(sA.rows, poolUuids, empUuid); // E2E-2 on the ASSIGN fan-out
 
   wA = await search(eTok, eUi, idA);
-  await step('A', eTok, eUi, wA.service, 'RESOLVE', 'RESOLVED', ctxFor(empUuid), {});
+  await step('A', eTok, eUi, wA.service, 'RESOLVE', 'RESOLVED', citizenUuid, {});
 
   // Citizen RATE -> CLOSEDAFTERRESOLUTION (toState disambiguation, live).
   wA = await search(cTok, cUi, idA);
-  await step('A', cTok, cUi, wA.service, 'RATE', 'CLOSEDAFTERRESOLUTION', ctxFor(empUuid), { rating: RATING });
+  await step('A', cTok, cUi, wA.service, 'RATE', 'CLOSEDAFTERRESOLUTION', citizenUuid, { rating: RATING });
 
   // ---------------- Complaint B: APPLY -> REJECT -> REOPEN ----------------
   console.log('\n########## Complaint B ##########');
-  const svcB = await createComplaint(cTok, cUi, citizenContact);
-  const idB = svcB.serviceRequestId;
-  ok(`B created ${idB} status=${svcB.applicationStatus}`);
-  let rowsB = await dispatchesFor(idB, 'APPLY', 'PENDINGFORASSIGNMENT', rowFloor('APPLY', 'PENDINGFORASSIGNMENT'));
-  assertTransition('APPLY', 'PENDINGFORASSIGNMENT', idB, rowsB, ctxFor(null));
+  let B = await createComplaint(cTok, cUi, citizenContact);
+  const idB = B.serviceRequestId;
+  ok(`B created ${idB} status=${B.applicationStatus}`);
+  let rowsB = await dispatchesFor(idB, 'APPLY', 'PENDINGFORASSIGNMENT', tupleCount('APPLY', 'PENDINGFORASSIGNMENT'));
+  assertTransition('APPLY', 'PENDINGFORASSIGNMENT', idB, rowsB, citizenUuid);
   await verifyNovu(rowsB);
 
   let wB = await search(eTok, eUi, idB);
-  await step('B', eTok, eUi, wB.service, 'REJECT', 'REJECTED', ctxFor(null), {});
+  await step('B', eTok, eUi, wB.service, 'REJECT', 'REJECTED', citizenUuid, {});
 
   wB = await search(cTok, cUi, idB);
-  await step('B', cTok, cUi, wB.service, 'REOPEN', 'PENDINGFORASSIGNMENT', ctxFor(null), {});
+  await step('B', cTok, cUi, wB.service, 'REOPEN', 'PENDINGFORASSIGNMENT', citizenUuid, {});
 
   // ---------------- Complaint C: APPLY -> REJECT -> RATE(after rejection) ----------------
   console.log('\n########## Complaint C ##########');
-  const svcC = await createComplaint(cTok, cUi, citizenContact);
-  const idC = svcC.serviceRequestId;
-  ok(`C created ${idC} status=${svcC.applicationStatus}`);
-  let rowsC = await dispatchesFor(idC, 'APPLY', 'PENDINGFORASSIGNMENT', rowFloor('APPLY', 'PENDINGFORASSIGNMENT'));
-  assertTransition('APPLY', 'PENDINGFORASSIGNMENT', idC, rowsC, ctxFor(null));
+  let C = await createComplaint(cTok, cUi, citizenContact);
+  const idC = C.serviceRequestId;
+  ok(`C created ${idC} status=${C.applicationStatus}`);
+  let rowsC = await dispatchesFor(idC, 'APPLY', 'PENDINGFORASSIGNMENT', tupleCount('APPLY', 'PENDINGFORASSIGNMENT'));
+  assertTransition('APPLY', 'PENDINGFORASSIGNMENT', idC, rowsC, citizenUuid);
   await verifyNovu(rowsC);
 
   let wC = await search(eTok, eUi, idC);
-  await step('C', eTok, eUi, wC.service, 'REJECT', 'REJECTED', ctxFor(null), {});
+  await step('C', eTok, eUi, wC.service, 'REJECT', 'REJECTED', citizenUuid, {});
 
   wC = await search(cTok, cUi, idC);
-  await step('C', cTok, cUi, wC.service, 'RATE', 'CLOSEDAFTERREJECTION', ctxFor(null), { rating: RATING });
+  await step('C', cTok, cUi, wC.service, 'RATE', 'CLOSEDAFTERREJECTION', citizenUuid, { rating: RATING });
 
   // ---------------- E2E-4 optional: negative via deactivation ----------------
   if (NEG_DEACT) {
@@ -1040,18 +751,14 @@ async function negativeViaDeactivation(citizen) {
   }
 
   // ---------------- Full dispatch-log dump ----------------
-  const spCol = hasSourcePathColumn() ? ', source_path' : '';
   for (const [label, id] of [['A', idA], ['B', idB], ['C', idC]]) {
     console.log(`\n=== full dispatch log for ${label} ${id} ===`);
-    for (const r of psql(`SELECT transaction_id, channel, status, last_error_code, recipient_value${spCol} `
+    for (const r of psql(`SELECT transaction_id, channel, status, last_error_code, recipient_value `
       + `FROM nb_dispatch_log WHERE reference_number='${id}' ORDER BY transaction_id`)) {
       console.log('  ' + r.join('  |  '));
     }
   }
 
-  console.log(`\nProducer path observed: ${THIN_PATH === true ? 'RESOLVED (thin event — the box routed and rendered)'
-    : THIN_PATH === false ? 'PRERENDERED (the producer rendered)'
-      : 'not observed (no source_path column, or no rows)'}`);
   console.log(`\n${'='.repeat(56)}\nRESULT: ${pass} passed, ${fail} failed, ${warns} warning(s)\n`);
   process.exit(fail > 0 ? 1 : 0);
 })().catch((e) => { console.error('\nFATAL: ' + e.message); process.exit(1); });

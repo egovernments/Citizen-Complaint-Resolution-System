@@ -551,7 +551,7 @@ production.
 | Routing, recipients, language and rendering | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/NotificationResolver.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/NotificationResolver.java) |
 | Where the masters come from, and the legacy fallback | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/MdmsNotificationConfigRepository.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/digit/MdmsNotificationConfigRepository.java) |
 | Bridge dispatch | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) |
-| What PGR sends, as an executable spec | [`backend/novu-bridge/src/test/java/org/egov/novubridge/service/resolution/golden/ScenarioThinEventBuilder.java`](../../../backend/novu-bridge/src/test/java/org/egov/novubridge/service/resolution/golden/ScenarioThinEventBuilder.java) |
+| What PGR sends | [`backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java`](../../../backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java) |
 
 ## Channels, receipts and per-recipient language
 

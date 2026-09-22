@@ -5,11 +5,9 @@ package org.egov.novubridge.service.thin;
  *
  * <p><b>Why a constants class at all</b>, when the rest of the service writes its codes as
  * literals at the point of use. Two of these are emitted today; the rest belong to the
- * resolution stage, which does not exist yet. {@code ErrorCodeCatalogTest} asserts in BOTH
- * directions — an emitted code must be catalogued, and a catalogued code must appear in the main
- * source — so a code documented ahead of its emitter would fail the build, and a code left
- * undocumented until its emitter lands would leave the operator-facing page describing only half
- * the path. Naming them here, referenced from the code that already uses them and from the code
+ * resolution stage. Keep {@code contract/error-codes.txt} and the published
+ * {@code error-codes.md} in step with this class by hand: an emitted code that is not catalogued
+ * leaves the operator-facing page describing only half the path. Naming them here, referenced from the code that already uses them and from the code
  * that soon will, keeps the catalogue honest without inventing a fake emitter for any of them.
  *
  * <p>Each constant says where it will be written and what row it produces. The row shapes are the

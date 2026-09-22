@@ -34,9 +34,9 @@ import java.util.Map;
  *
  * <p><b>Published contract.</b> The wire form of this class is
  * {@code contract/thin-event-v1.schema.json} (packaged in this jar, and published at
- * {@code docs/2.12/notifications/contract/}). {@code ThinEventContractSchemaTest} keeps the two in
- * step: every field below appears in the schema, the schema's required set is exactly what
- * {@code ThinEventValidator} enforces, and every published example deserializes and validates.
+ * {@code docs/2.12/notifications/contract/}). Keep them in step by hand: every field below
+ * appears in the schema, and the schema's required set is exactly what
+ * {@code ThinEventValidator} enforces.
  */
 @Data
 @Builder

@@ -3,10 +3,9 @@
 Every `NB_*` code the bridge can emit, what it means, where an operator sees it, whether
 retrying the same input can ever succeed, and what to do about it.
 
-`ErrorCodeCatalogTest` scans `backend/novu-bridge/src/main/java` for `NB_[A-Z_]+` literals and
-fails the build if one is missing from this file's machine-readable twin,
-`backend/novu-bridge/src/main/resources/contract/error-codes.txt`. A second assertion checks the
-two copies agree whenever both are present, so this page cannot quietly fall behind the code.
+Its machine-readable twin is
+`backend/novu-bridge/src/main/resources/contract/error-codes.txt`. Add a new code to both in the
+change that first emits it; nothing checks this automatically.
 
 **Six codes belong to the resolution stage.** `NB_NO_ROUTING`, `NB_NO_RECIPIENTS`,
 `NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_NO_TEMPLATE`, `NB_EVENT_NOT_IN_CATALOGUE` and

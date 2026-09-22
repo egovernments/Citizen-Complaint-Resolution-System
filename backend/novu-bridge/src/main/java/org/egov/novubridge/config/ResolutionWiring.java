@@ -22,9 +22,8 @@ import java.util.List;
  * The module-neutral half of the resolution stage, wired.
  *
  * <p>It lives OUTSIDE {@code org.egov.novubridge.service.resolution} on purpose, and that is the
- * one structural decision in this file. The core package is asserted by
- * {@code ResolutionPackageIsolationTest} to reference no DIGIT client and no deployment
- * configuration; a {@code @Configuration} class inside it would have to read
+ * one structural decision in this file. The core package must reference no DIGIT client and
+ * no deployment configuration; a {@code @Configuration} class inside it would have to read
  * {@link NovuBridgeConfiguration} to know the default locale and the fan-out cap, and the
  * isolation rule would immediately need its first exception. Keeping the wiring here means the
  * rule has none: the core takes its settings as constructor arguments, from whoever builds it,

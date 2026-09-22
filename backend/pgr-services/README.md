@@ -132,10 +132,8 @@ subsystem fits together, and for adding a *second* producer module (which needs 
 at all), see the
 [notifications developer guide](../../docs/2.12/notifications/developer-guide.md).
 
-The producer is pinned from the test side by
-`src/test/resources/golden/golden-thin-events.json` — 26 scenarios, one event each, checked both
-against the real service and against a mirror of novu-bridge's own executable spec. See that
-folder's `README.md` before touching anything in the notification path.
+The event this service emits must stay valid against that schema; a change to its fields is a
+contract change for every consumer, not a refactor.
 
 
 ### Configurable properties

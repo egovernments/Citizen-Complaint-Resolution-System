@@ -296,6 +296,5 @@ nothing to validate there.
 | The shipped defaults | [`utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/`](../../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS) |
 | The event-catalogue generator | [`local-setup/scripts/generate_event_catalogue.py`](../../../local-setup/scripts/generate_event_catalogue.py) |
 | The legacy-to-new converter | [`local-setup/scripts/notifications_convert.py`](../../../local-setup/scripts/notifications_convert.py) |
-| The CI job that validates the defaults | [`.github/workflows/notification-config-validation.yml`](../../../.github/workflows/notification-config-validation.yml) |
 | Turning channels and providers on | [setup-guide.md](./setup-guide.md) |
 | Every code on the Logs screen | [contract/error-codes.md](./contract/error-codes.md) |

@@ -22,8 +22,7 @@
 // Consumed by WorkflowServiceShow's "Validate notifications" button, by the
 // Configure tab's Validate panel, and — through notificationSaveGuard.ts — by
 // every save path that writes notification configuration. Kept pure and
-// well-typed so it is unit-testable in isolation and so the SEED data we ship
-// can be run through it in CI (defaultSeeds.test.ts).
+// well-typed so it is unit-testable in isolation.
 
 import {
   measureSms,

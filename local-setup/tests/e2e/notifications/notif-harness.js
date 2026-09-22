@@ -17,21 +17,8 @@
  *   - proxy reads       GET /integrations, /preferences, /logs
  *   - novu direct       list/delete integrations, fetch rendered messages
  *   - mdms v1 search    /mdms-v2/v1/_search (moduleDetails shape)
- *   - config source     ONE shared per-tenant namespace rule (see below)
- *   - thin-event API    GET /config/source, POST /dispatch/_resolve
  *   - dispatch log      nb_dispatch_log query + parse
  *   - complaint fixture ONE shared PGR complaint (APPLY) reused by B/C/E/F
- *
- * THE PER-TENANT NAMESPACE RULE (design 5.2) lives in exactly one place here —
- * `notificationSource()` — and every area that reads a notification master goes
- * through `notifMaster()` / `notifSchemaCode()`. A tenant whose
- * NOTIFICATIONS.Routing has rows is served the new masters for ALL of them; a
- * tenant with none is served the legacy RAINMAKER-PGR.Notification* rows. Per
- * tenant, all-or-nothing. Four areas each deciding for themselves is the per-row
- * precedence between two namespaces that nobody can reason about at 2am.
- *
- * The rules themselves are pure functions in ./notif-config.js and are unit-tested
- * without a server (`node --test notif-config.test.js`).
  *
  * Everything is env-driven. Designed to run ON the DIGIT host (it shells out to
  * `docker exec <PG_CONTAINER> psql` and reaches Kong at localhost:18000).
@@ -42,7 +29,6 @@
  * ============================================================================
  */
 const { execSync } = require('child_process');
-const C = require('./notif-config');
 
 // ---------------------------------------------------------------------------
 // Config (all env-driven)
@@ -220,123 +206,21 @@ async function mdmsSearch(moduleName, masterName, tenantId) {
 }
 
 // ---------------------------------------------------------------------------
-// THE per-tenant config-source rule — one implementation, used by every area
-// ---------------------------------------------------------------------------
-let _source = null;
-
-/** Active rows of a schema at a tenant, straight out of eg_mdms_data. */
-function mdmsRowCount(schemaCode, tenantId) {
-  if (!schemaCode) return 0;
-  try {
-    const out = psqlRaw(`SELECT count(*) FROM eg_mdms_data WHERE schemacode='${schemaCode}' `
-      + `AND isactive=true AND tenantid='${tenantId || STATE_TENANT}'`);
-    return Number(out[0] || 0);
-  } catch {
-    return 0;
-  }
-}
-
-/** Every ACTIVE row of a schema at a tenant, as parsed JSON `data` objects. */
-function mdmsDataRows(schemaCode, tenantId) {
-  if (!schemaCode) return [];
-  let lines = [];
-  try {
-    lines = psqlRaw(`SELECT data FROM eg_mdms_data WHERE schemacode='${schemaCode}' `
-      + `AND isactive=true AND tenantid='${tenantId || STATE_TENANT}'`);
-  } catch {
-    return [];
-  }
-  const rows = [];
-  for (const line of lines) {
-    try { rows.push(JSON.parse(line)); } catch { /* an unparseable row is not a row */ }
-  }
-  return rows;
-}
-
-/**
- * Which namespace serves this tenant's notification config. Computed ONCE and
- * memoized, because it must not be able to differ between two areas of one run.
- *
- * @returns {{source:string, routingRows:number, legacyRoutingRows:number, label:string}}
- */
-function notificationSource() {
-  if (_source) return _source;
-  const routingRows = mdmsRowCount(C.schemaCodeFor('Routing', C.SOURCE.NEXT));
-  const legacyRoutingRows = mdmsRowCount(C.schemaCodeFor('Routing', C.SOURCE.LEGACY));
-  const source = C.selectSource(routingRows);
-  _source = {
-    source,
-    routingRows,
-    legacyRoutingRows,
-    label: source === C.SOURCE.NEXT
-      ? `NOTIFICATIONS.* (${routingRows} routing rows)`
-      : `RAINMAKER-PGR.Notification* (legacy adapter; ${legacyRoutingRows} routing rows)`,
-  };
-  return _source;
-}
-
-/** The MDMS schema code for a master, in whichever namespace serves this tenant. */
-function notifSchemaCode(master) {
-  return C.schemaCodeFor(master, notificationSource().source);
-}
-
-/**
- * mdms-v2 `_search` of a notification master, in whichever namespace serves this
- * tenant. Same return shape as `mdmsSearch`, plus the code it actually read.
- */
-async function notifMaster(master, tenantId) {
-  const src = notificationSource().source;
-  const mm = C.mdmsModuleMaster(master, src);
-  if (!mm) {
-    return { status: 0, rows: null, schemaCode: null, source: src,
-      reason: `${master} has no equivalent in the ${src} namespace` };
-  }
-  const r = await mdmsSearch(mm.moduleName, mm.masterName, tenantId);
-  return { ...r, schemaCode: `${mm.moduleName}.${mm.masterName}`, source: src };
-}
-
-// ---------------------------------------------------------------------------
-// Thin-event endpoints (present only on a bridge that carries the resolution stage)
-// ---------------------------------------------------------------------------
-const configSource = (tenantId, auth) =>
-  get(`${NB_PREFIX}/config/source?tenantId=${encodeURIComponent(tenantId)}`, auth ? bearer(auth) : {});
-
-const resolveThinEvent = (body, auth) =>
-  post(`${NB_PREFIX}/dispatch/_resolve`, body, jsonHeaders(auth));
-
-// ---------------------------------------------------------------------------
 // nb_dispatch_log
 // ---------------------------------------------------------------------------
-// transactionId: reqId:action:toState:tenantId:subKey:channel — or `<seed>:NONE`
-// for a channel-less resolution decision (NB_NO_ROUTING and friends).
-let _hasSourcePath = null;
-function hasSourcePathColumn() {
-  if (_hasSourcePath !== null) return _hasSourcePath;
-  try {
-    const rows = psqlRaw("SELECT count(*) FROM information_schema.columns "
-      + "WHERE table_name='nb_dispatch_log' AND column_name='source_path'");
-    _hasSourcePath = Number(rows[0] || 0) > 0;
-  } catch {
-    _hasSourcePath = false;
-  }
-  return _hasSourcePath;
-}
-
+// transactionId format: reqId:action:toState:tenantId:subKey:channel
 function queryDispatch(complaintId) {
-  const sp = hasSourcePathColumn() ? 'source_path' : `''`;
-  return psql(`SELECT channel, recipient_value, status, transaction_id, last_error_code, ${sp} `
+  return psql(`SELECT channel, recipient_value, status, transaction_id, last_error_code `
     + `FROM nb_dispatch_log WHERE reference_number='${complaintId}'`)
-    .map(([channel, recipient, status, txn, lastError, sourcePath]) => {
-      const t = C.parseTransactionId(txn);
+    .map(([channel, recipient, status, txn, lastError]) => {
+      const parts = (txn || '').split(':');
       return {
         channel: (channel || '').toUpperCase(),
         recipient, status: (status || '').toUpperCase(),
-        txn, lastError: lastError || '',
-        sourcePath: (sourcePath || '').toUpperCase(),
-        action: t.action,
-        toState: t.toState,
-        uuid: t.uuid,
-        channelLess: t.channelLess,
+        txn, lastError,
+        action: (parts[1] || '').toUpperCase(),
+        toState: (parts[2] || '').toUpperCase(),
+        uuid: parts.length >= 6 ? parts[parts.length - 2] : '',
       };
     });
 }
@@ -402,7 +286,7 @@ async function ensureComplaint(ctx) {
   if (ctx._complaint) return ctx._complaint;
   if (ctx._complaintErr) throw ctx._complaintErr;
   try {
-    const regPhone = (process.env.E2E_PHONE_PREFIX || '7') + String(Date.now()).slice(-8); // prefix must satisfy the tenant's mobile-number rule
+    const regPhone = '7' + String(Date.now()).slice(-8);
     const citizen = await citizenLogin(regPhone, 'zz-e2e Notif Citizen');
     const cUi = citizen.UserRequest, cTok = citizen.access_token;
     const contact = { name: 'zz-e2e Notif Citizen', mobileNumber: regPhone, countryCode: null, emailId: TEST_EMAIL };
@@ -443,23 +327,17 @@ module.exports = {
   // config
   BASE, TENANT, STATE_TENANT, ROOT, BUSINESS_SERVICE, SERVICE_CODE, SERVICE_NAME, LOCALITY,
   TEST_PHONE, TEST_EMAIL, EMP_USER, EMP_PASS, NB_PREFIX, NOVU_API_URL, NOVU_API_KEY,
-  // the pure config rules (source selection, audiences, expectations)
-  C,
   // primitives
   sleep, psql, psqlRaw, post, get, RI, token,
   // provider api
   providerCreate, providerTemplates, providerVerify, providerTestSend,
   integrationsList, preferencesList, logsList,
-  // thin-event endpoints
-  configSource, resolveThinEvent,
   // novu direct
   novuReq, novuListIntegrations, novuDeleteIntegration, messagesForComplaint,
   // mdms
-  mdmsSearch, mdmsRowCount, mdmsDataRows,
-  // THE per-tenant namespace rule
-  notificationSource, notifSchemaCode, notifMaster,
+  mdmsSearch,
   // dispatch
-  queryDispatch, rolesOf, hasSourcePathColumn,
+  queryDispatch, rolesOf,
   // complaint fixture
   citizenLogin, createComplaint, pollDispatch, ensureComplaint,
   // results

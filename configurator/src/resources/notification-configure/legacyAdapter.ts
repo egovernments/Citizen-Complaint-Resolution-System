@@ -41,8 +41,8 @@ export const LEGACY_EVENT_PREFIX = 'COMPLAINTS.WORKFLOW.';
  * (`NotificationService.buildPlaceholderValues`). This is the FALLBACK
  * vocabulary for a tenant whose catalogue has not been seeded yet; once the
  * catalogue is in place the vocabulary is per event and comes from there.
- * Kept in parity with the Java side by placeholderParity.test.ts, and deleted
- * with the rest of this file.
+ * Keep it in parity with the Java side by hand; it is deleted with the rest
+ * of this file.
  */
 export const PLACEHOLDER_VOCABULARY = [
   'id', 'complaint_type', 'status', 'date', 'additional_comments', 'rating', 'citizen_name',

@@ -29,9 +29,9 @@ import java.util.Set;
  * offline</b>, and it has to stay the same one: the seeder converts a tenant's live rows once, and
  * from then on the tenant is served from the new namespace. If these two mappings ever disagreed,
  * a tenant's messages would change the moment the copy ran, which is precisely the kind of
- * invisible break a migration must not have. {@code LegacyMasterAdapterConversionTest} pins it by
- * feeding this class the same legacy seed the Python converter reads and asserting the result
- * equals the committed {@code NOTIFICATIONS.*} default files.
+ * invisible break a migration must not have. Change it together with
+ * {@code local-setup/scripts/notifications_convert.py}, and check that the legacy seed still
+ * converts to the committed {@code NOTIFICATIONS.*} default files.
  *
  * <pre>
  *   businessService + action + toState  ->  eventName  "COMPLAINTS.WORKFLOW.&lt;ACTION&gt;.&lt;TOSTATE&gt;"

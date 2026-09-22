@@ -111,7 +111,7 @@ there would break the no-manual-migration promise.
 
 PGR does not hand-write its rows. `local-setup/scripts/generate_event_catalogue.py`
 walks the workflow definition and emits one row per reachable `(action, toState)`;
-a CI job re-runs the generator and fails on a diff. Do the same if your events are
+re-run it with `--check` after changing the workflow. Do the same if your events are
 derivable from something you already own.
 
 ### Step 2 — add routing rows and templates
@@ -381,21 +381,14 @@ template lookup with locale fallback, placeholder substitution, provider-templat
 resolution, fan-out, dedupe, the contact gate, minting the envelope — now happens
 in the box.
 
-Two files are worth reading before you write your own producer:
+Two things are worth reading before you write your own producer:
 
 - `backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java`
   — the real thing. Pure assembly: every value it needs has already been fetched,
   and it names no audience, expands no role pool, looks up no localization
   message, picks no template and mints no envelope.
-- `backend/novu-bridge/src/test/java/org/egov/novubridge/service/resolution/golden/ScenarioThinEventBuilder.java`
-  — the same event built independently, inside the bridge's own tests, as the
-  definition of what PGR *must* emit. Every line has a comment saying which
-  producer behaviour it corresponds to. A mirrored copy lives in pgr-services'
-  tests (`golden/BridgeThinEventSpec.java`) because the test runner mounts one
-  module at a time.
-
-Having the definition written twice, independently, is the point: the recorded
-fixture cannot quietly drift into "whatever the producer happens to do".
+- `docs/2.12/notifications/contract/examples/thin/` — worked examples of the same
+  event, one per complaint transition, valid against the published schema.
 
 ---
 
@@ -453,10 +446,9 @@ Then:
    credential for any type, so every type can offer it. A test send is the
    credential proof. `false` is for a type with no Novu integration to look up.
 
-**Tests to touch:** `service/provider/ProviderCatalogTest` (the type appears,
-required credentials are enforced, the identifier round-trips through
-`typeFromIdentifier`) and `web/controllers/ProviderCatalogControllerTest` (the
-catalog endpoint serves it).
+**Check before you ship:** the type appears in `GET /providers/catalog`, missing
+required credentials are refused, and a created integration's identifier maps back
+to the type through `typeFromIdentifier`.
 
 ### Tier 2 — Novu does not support it, but it speaks JSON (worked example: Ozeki)
 
@@ -481,7 +473,7 @@ gateway needs that is **not** a secret and has no credential slot can ride as a
 query parameter on `baseUrl` — that is exactly what `ADAPTER_PARAM_API_URL` does
 for SMSCountry.
 
-**Tests to touch:** `ProviderCatalogTest` — assert the credential map, key by key.
+**Check before you ship:** the credential map, key by key, then a real Test send.
 That mapping is the entire integration; if it is wrong, every send fails at the
 gateway with no local symptom.
 
@@ -539,11 +531,10 @@ What to write, in order:
 5. **A receipt shape**, if the gateway sends delivery reports — see
    [Delivery receipts](#delivery-receipts-optional-but-do-it) below.
 
-**Tests to touch:** `service/SmsCountryClientTest` (every reply shape the gateway
-really produces — the OK case, an error string, an HTML error page, an empty
-body), `web/controllers/SmsCountryAdapterControllerTest` (missing headers → 401,
-missing recipient → 400, gateway rejection → 502 not 200, success → non-empty
-`id`), `ProviderCatalogTest` for the mapping.
+**Check before you ship:** every reply shape the gateway really produces (the OK
+case, an error string, an HTML error page, an empty body); missing headers → 401,
+missing recipient → 400, gateway rejection → 502 not 200, success → non-empty `id`;
+and the credential mapping. `SmsCountryClientTest` is the model for the client.
 
 #### Is a `DeliveryProvider` ever the answer?
 
@@ -656,16 +647,11 @@ directory.
 Routing, templates, fan-out, dedupe, gating, the ledger and the provider catalog
 are untouched by any of this.
 
-### The package boundary is enforced, not asserted
+### The package boundary
 
-`ResolutionPackageIsolationTest` fails the build if anything under
-`service.resolution` outside `.digit` imports an egov client. That is what keeps
+Nothing under `service.resolution` outside `.digit` may import an egov client.
+Nothing checks this automatically; keep it in review, because it is what keeps
 the seam real rather than aspirational.
-
-`StaticRecipientResolverTest` runs the whole resolution stage with a hand-written
-resolver and no DIGIT services reachable, and asserts a full envelope set comes
-out. If that test were hard to write, the seam would be fake — so it is the test
-to read first if you are porting this somewhere else.
 
 ### Where the configuration comes from
 
@@ -787,68 +773,26 @@ alongside `from`.
 
 ## 5. Testing your integration
 
-### The golden-master approach, and how to copy it
+### Checking that a producer change changed no message
 
-Moving PGR's notification logic into the box was a refactor of something live,
-which means "the tests pass" had to mean "the messages did not change". The
-pattern that made that checkable is worth reusing whenever you change a producer.
+When you change a producer, the question to answer is "did any message change?",
+not "do the tests pass". The bridge can answer it for you without sending anything:
 
-1. **Record what is published today, verbatim.** One shared input matrix
-   (`backend/pgr-services/src/test/resources/golden/inputs/scenarios.json`, 26
-   scenarios) and two generated fixtures, one per side of the move:
-   `golden-envelopes.json` — the 57 pre-rendered envelopes PGR published *before*
-   the cutover, now frozen as the bridge's acceptance criterion — and
-   `golden-thin-events.json` — the 26 thin events it publishes *after*. Both are
-   compared field for field, including `transactionId`, `renderedBody`,
-   `subject`, `templateKey`, `contentVariables` and the whole contact block. Only
-   two fields are normalised (a random uuid and a wall clock), and each is
-   shape-checked before being replaced.
-2. **Cover the shapes that break, not the happy path.** The 26 scenarios include
-   both locales, a role pool with a holder who has no uuid, a localization
-   outage, a URL-shortener outage, an unapproved WhatsApp template and an email
-   with no subject.
-3. **Never regenerate to make a red test green.** A failure means the observable
-   contract changed: a different body, a different transaction id, a recipient
-   gained or lost. Regenerate only when the change is intended, and say so in the
-   commit message.
-4. **Write the intended differences down as data, not as a judgement call.**
-   `ThinEventParityTest.INTENDED_DIFFERENCES` is a table of
-   `(scenario, field, old, new, reason)` applied to the expected value before
-   comparison. Anything else that differs is a failure. That is the property worth
-   having: *"we changed only what we said we would"* becomes checkable, and "the
-   test passes" stops meaning "someone decided the difference was fine".
-5. **Do not stub the parts most likely to regress.** The parity test runs the real
-   legacy adapter, the real renderer, the real role-pool resolver with its paging
-   and its uuid-less handling, the real placeholder resolver and the real fan-out
-   loop. Only four network seams are in-memory. A test that stubbed the resolvers
-   would prove the loop and nothing about role-pool ordering or the legacy
-   audience join.
-6. **Assert emission order.** The order the producer was called in — routing-row
-   order crossed with recipient order — is a real observable, and a port must not
-   reorder it silently.
+1. **Record what the producer publishes today.** Capture its events for a set of
+   real flows — cover both locales, a role pool, a missing contact and an email
+   with no subject, not only the happy path.
+2. **Build the event your changed producer will emit** for the same flows.
+3. **POST each one to `/dispatch/_resolve`** (admin-only) against the same
+   configuration. It returns the recipients, channels, locales and rendered text
+   the bridge would send, and sends nothing.
+4. **Diff the two lists.** Write down every intended difference before you look;
+   anything else that differs is a regression.
 
-7. **Write the expectation independently of the code that satisfies it.** The
-   thin-event fixture is *generated* from the real producer and then *checked*
-   against a restatement of what the bridge expects, written from the bridge's
-   side. Generate-and-commit alone would only record whatever the producer
-   happens to do.
+Two scripts keep the shipped defaults honest; run them after editing the legacy
+seed or the PGR workflow:
 
-To copy this for your module: record your producer's output before you change it,
-build the thin event your producer *will* emit, POST it to `/dispatch/_resolve`
-against the same configuration, and diff the two lists.
-
-### The other tests worth knowing about
-
-| Test | What it would catch |
+| Command | What it catches |
 |---|---|
-| `ThinEventContractSchemaTest` | A field on `ThinEvent` that is not in the published schema; the schema's `required` set drifting from what `ThinEventValidator` enforces, in either direction; a published example that stopped validating |
-| `EnvelopeV1FrozenTest` | Any edit at all to `envelope-v1.schema.json` — it holds a hash, so changing the pre-rendered contract is a deliberate two-file act |
-| `ContractResourceSyncTest` | `docs/2.12/notifications/contract/` drifting from the copy packaged in the jar. **Edit both, or the build says so** |
-| `ErrorCodeCatalogTest` | An `NB_*` code introduced in the main source and never documented, or documented and never introduced |
-| `ResolutionPackageIsolationTest` | A DIGIT client imported into the module-neutral resolution package |
-| `LegacyMasterAdapterConversionTest` | The Java read adapter and `notifications_convert.py` disagreeing about how a legacy row converts |
-| `NotificationResolverEdgeCasesTest` | The fan-out semantics above — dedupe keys, the cap, unmemoized failures |
-| `defaultSeeds.test.ts` (configurator) | The shipped seed data failing its own validator |
 | `generate_event_catalogue.py --check` | The shipped PGR catalogue drifting from the workflow it is generated from |
 | `notifications_convert.py --check` | The shipped `NOTIFICATIONS.*` defaults drifting from the legacy seed they are converted from |
 

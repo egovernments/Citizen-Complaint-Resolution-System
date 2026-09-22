@@ -5,21 +5,9 @@ management, MDMS routing/templates, per-recipient fan-out, consent, and delivery
 through Novu. Each case is API/DB-driven against a **live** DIGIT stack and maps
 to the production code it exercises (linked below).
 
-- **Harness:** [`notif-harness.js`](./notif-harness.js) — shared primitives (Kong HTTP, `psql`, DIGIT auth, provider API, `nb_dispatch_log`, MDMS search, the per-tenant config-source rule, one shared complaint fixture).
-- **Config rules:** [`notif-config.js`](./notif-config.js) — the pure functions behind those decisions (source selection, `eventName` parsing, audience schemes, the channel-outcome expectation table). No I/O, no env, so they are unit-tested without a server: `node --test notif-config.test.js`.
+- **Harness:** [`notif-harness.js`](./notif-harness.js) — shared primitives (Kong HTTP, `psql`, DIGIT auth, provider API, `nb_dispatch_log`, MDMS search, one shared complaint fixture).
 - **Runner:** [`run-notif-suite.js`](./run-notif-suite.js) / [`run-notif-suite.sh`](./run-notif-suite.sh) — runs `cases/area-*.js` and prints a PASS/FAIL/SKIP matrix keyed by case id. Exits non-zero on any **FAIL** (SKIP is not a failure).
 - **Cases:** one file per area under [`cases/`](./cases/).
-
-### Which config namespace the suite reads
-
-Notification config is moving from the PGR-specific `RAINMAKER-PGR.Notification*` masters to the
-module-neutral `NOTIFICATIONS.*` ones. The suite does not pick a side and is not configured to: it
-mirrors the bridge's own rule, **per tenant and all-or-nothing** — a tenant with active rows in
-`NOTIFICATIONS.Routing` is served the new masters for every master; a tenant with none is served
-its legacy rows through the read adapter. That decision is made in exactly one place
-(`H.notificationSource()`), printed in the run header, and every area reads its masters through
-`H.notifMaster()` / `H.notifSchemaCode()`. Area **H** asserts the endpoint that makes the same
-answer readable in production, `GET /novu-adapter/v1/config/source`.
 
 Setting up the feature? Use the single [Novu notifications guide](../../../../docs/2.12/notifications/README.md).
 
@@ -42,7 +30,6 @@ Env (full list in [`notif-harness.js`](./notif-harness.js)): `BASE`, `DIGIT_TENA
 - **Test** links the case file; the anchor (e.g. `guard('A1'`) is the grep target inside it.
 - **Exercises** links the production code each case drives (repo-root-relative). Line anchors are approximate.
 - Latest full run on the pilot: **40 cases — 27 ✅ / 0 ❌ / 13 ⏭.** The 13 SKIPs fall into three buckets: (1) a deployment gate is off on Bomet (proxy-auth, preference/consent, WhatsApp channel), (2) the case mutates config or injects a fault (needs a throwaway stack), or (3) it's a Configurator UI check (Playwright, out of this API suite's scope). Most are unlockable on a fresh stack; behavior is also covered by the unit tests linked at the bottom.
-- **The four cases added with the thin-event move — F1b, H1, H2, H3 — have NOT been run on the pilot yet** (44 cases total). They need a deployment carrying the resolution stage; against the pre-move producer every one of them SKIPs with the reason, which is the intended answer and not a pass.
 
 ---
 
@@ -66,20 +53,18 @@ Novu integrations via the novu-bridge `ProviderController`. **Test file:** [`cas
 
 ## Area B — Routing & channels
 
-The **Routing** master — `NOTIFICATIONS.Routing` or `RAINMAKER-PGR.NotificationRouting`, whichever
-serves the tenant — plus the channel gate. **Test file:** [`cases/area-b-routing.js`](./cases/area-b-routing.js).
+MDMS `NotificationRouting` + the channel gate. **Test file:** [`cases/area-b-routing.js`](./cases/area-b-routing.js).
 
 | Case | What it verifies | Test | Exercises | Bomet |
 |---|---|---|---|---|
-| **B1** | City has no routing → falls back to state rows (complaint still dispatches). Reads whichever Routing master serves the tenant. | `guard('B1'` | [`ChannelPolicyClient`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/policy/ChannelPolicyClient.java) per-tenant namespace fallback · [`NotificationRouter#L62`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/NotificationRouter.java#L62) route · [`NOTIFICATIONS.Routing.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json) · [`NotificationRouting.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json) | ✅ |
-| **B2** | Disable a channel (routing `active=false`) → no dispatch. | `SKIP('B2'` | [`NotificationRouter#L66`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/NotificationRouter.java#L66) honors `active=false` | ⏭ mutates MDMS + needs a pgr-services restart on the pre-move path (fresh stack) |
-| **B3** | Per-audience × channel fan-out, against the tenant's **own** routing rows rather than a hardcoded CITIZEN/GRO pair — audiences are matched through the scheme parser, so `CITIZEN` and `ACTOR:citizen` are one check. | `guard('B3'` | [`NotificationService#L877`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L877) fan-out loop · [`notif-config.js`](./notif-config.js) `buildExpectRows` / `rowMatchesAudience` · [`DispatchLogRepository#L33`](/backend/novu-bridge/src/main/java/org/egov/novubridge/repository/DispatchLogRepository.java#L33) | ✅ |
-| **B4** | WhatsApp rows carry the outcome the tenant's **own channel policy** predicts — off → `NB_NO_PROVIDER`, on with no approved template → `NB_TEMPLATE_NOT_APPROVED`, on with an unusable provider → `NB_PROVIDER_UNAVAILABLE`, otherwise `SENT` — and **no SMS fallback**, always. | `guard('B4'` | [`DispatchPipelineService#L146`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java#L146) gates 2–3 · [`ChannelPolicyClient`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/policy/ChannelPolicyClient.java) · [`notif-config.js`](./notif-config.js) `channelExpectation` | ✅ |
+| **B1** | City has no routing → falls back to state rows (complaint still dispatches). | `guard('B1'` | [`NotificationRouter#L62`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/NotificationRouter.java#L62) route · [`MDMSUtils#L113`](/backend/pgr-services/src/main/java/org/egov/pgr/util/MDMSUtils.java#L113) getNotificationRouting · [`NotificationRouting.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json) | ✅ |
+| **B2** | Disable a channel (routing `active=false`) → no dispatch. | `SKIP('B2'` | [`NotificationRouter#L66`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/NotificationRouter.java#L66) honors `active=false` | ⏭ mutates MDMS + needs pgr-services restart (fresh stack) |
+| **B3** | Per-audience × channel fan-out — CITIZEN over SMS+EMAIL, GRO over SMS. | `guard('B3'` | [`NotificationService#L877`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L877) fan-out loop · [`NotificationRouter#L101`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/NotificationRouter.java#L101) one match per (audience,channel) · [`DispatchLogRepository#L33`](/backend/novu-bridge/src/main/java/org/egov/novubridge/repository/DispatchLogRepository.java#L33) | ✅ |
+| **B4** | WhatsApp gated off → WA rows `SKIPPED`/`NB_NO_PROVIDER`, **no SMS fallback**. | `guard('B4'` | [`DispatchPipelineService#L116`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java#L116) Gate 2 · [`NovuBridgeConfiguration#L117`](/backend/novu-bridge/src/main/java/org/egov/novubridge/config/NovuBridgeConfiguration.java#L117) channels.enabled · [`NotificationService#L877`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L877) distinct WA event | ✅ |
 
 ## Area C — Templates
 
-The **Template** + **ProviderTemplate** masters, in whichever namespace serves the tenant.
-**Test file:** [`cases/area-c-templates.js`](./cases/area-c-templates.js).
+`NotificationTemplate` + `NotificationProviderTemplate`. **Test file:** [`cases/area-c-templates.js`](./cases/area-c-templates.js).
 
 | Case | What it verifies | Test | Exercises | Bomet |
 |---|---|---|---|---|
@@ -89,7 +74,7 @@ The **Template** + **ProviderTemplate** masters, in whichever namespace serves t
 | **C4** | Missing-locale template → default-locale fallback. | `SKIP('C4'` | [`TemplateRenderer#L55`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L55) default-locale retry · [`PGRConfiguration#L253`](/backend/pgr-services/src/main/java/org/egov/pgr/config/PGRConfiguration.java#L253) | ⏭ needs controlled missing-locale seed (unit-covered) |
 | **C5** | Positional variables substituted in the template's declared order (complaint_type → id → date). | `guard('C5'` | [`TemplateRenderer#L85`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L85) substitute · [`NotificationService#L1120`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L1120) buildPlaceholderValues · [`NotificationTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json) | ✅ |
 | **C6** | `complaint_type` renders the localized **name** (not the code); status localized too. | `guard('C6'` | [`NotificationService#L1129`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L1129) localize category · [`NotificationService#L1136`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L1136) localize status · [`TemplateRenderer#L85`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L85) | ✅ |
-| **C7** | The APPLY/WHATSAPP ProviderTemplate row resolves a valid Twilio ContentSid (`HX…`) — keyed off `eventName` in the new namespace and off `action`+`toState` in the legacy one. | `guard('C7'` | [`NotificationProviderTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json) · [`RAINMAKER-PGR.json#L376`](/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json#L376) schema · [`TwilioProviderStrategy#L87`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/provider/TwilioProviderStrategy.java#L87) | ✅ |
+| **C7** | APPLY/WHATSAPP `NotificationProviderTemplate` resolves a valid Twilio ContentSid (`HX…`). | `guard('C7'` | [`NotificationProviderTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json) · [`RAINMAKER-PGR.json#L376`](/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json#L376) schema · [`TwilioProviderStrategy#L87`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/provider/TwilioProviderStrategy.java#L87) | ✅ |
 | **C8** | Param removed from declared order → placeholder handling. | `SKIP('C8'` | [`NotificationProviderTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json) `variables` · [`ProviderController#L328`](/backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java#L328) toContentVariables | ⏭ needs controlled ProviderTemplate edit (unit-covered) |
 | **C9** | Delivery workflows (`complaints-sms`/`complaints-email`) are valid Novu workflows; fixture produced SENT rows. | `guard('C9'` | [`ProviderController#L113`](/backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java#L113) · [`NovuClient#L405`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/NovuClient.java#L405) · [`NovuBridgeConfiguration#L99`](/backend/novu-bridge/src/main/java/org/egov/novubridge/config/NovuBridgeConfiguration.java#L99) workflow-id map | ✅ |
 
@@ -120,16 +105,14 @@ Novu → provider, plus regression guards. **Test file:** [`cases/area-e-deliver
 
 ## Area F — MDMS master lifecycle & resolution
 
-The masters via mdms-v2 + the resolver, in whichever namespace serves the tenant.
-**Test file:** [`cases/area-f-mdms.js`](./cases/area-f-mdms.js).
+The 3 masters via mdms-v2 + the emitter's resolver. **Test file:** [`cases/area-f-mdms.js`](./cases/area-f-mdms.js).
 
 | Case | What it verifies | Test | Exercises | Bomet |
 |---|---|---|---|---|
-| **F1** | mdms-v2 `_search` returns non-empty rows for Routing + Template + ProviderTemplate at the state tenant, under the serving namespace. | `guard('F1'` | [`NOTIFICATIONS.json`](/utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json) · [`RAINMAKER-PGR.json`](/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json) schemas · [`NOTIFICATIONS.Routing.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json) | ✅ |
-| **F1b** | On a copied tenant, `NOTIFICATIONS.EventCatalogue` has rows and every `eventName` splits into `(action, toState)`. An uncatalogued name is `REJECTED`/`NB_EVENT_NOT_IN_CATALOGUE`, so an empty catalogue on the new namespace is a silent outage. | `guard('F1b'` | [`error-codes.md`](/docs/2.12/notifications/contract/error-codes.md) `NB_EVENT_NOT_IN_CATALOGUE` · [`generate_event_catalogue.py`](/local-setup/scripts/generate_event_catalogue.py) | new — SKIPs on a tenant still served the legacy namespace |
-| **F2** | Uniqueness — no duplicate template keys. The key is per namespace: `(eventName,audience,channel,locale)` for `NOTIFICATIONS.Template`, `(audience,action,toState,channel,locale)` for the legacy master (`eventName` subsumes action+toState). | `guard('F2'` | [`NOTIFICATIONS.json`](/utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json) x-unique · [`RAINMAKER-PGR.json#L318`](/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json#L318) x-unique | ✅ |
-| **F3** | Resolve by (transition, audience, channel, locale) → exactly one row, and the live SMS body starts with that template's prefix. Audience matched through the scheme parser. | `guard('F3'` | [`TemplateRenderer#L69`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L69) findField · [`notif-config.js`](./notif-config.js) `parseAudience` | ✅ |
-| **F4** | No-template-resolved → skip + honest log. On the thin path it is no longer only a log line: a routed recipient with no template is a `SKIPPED` row on the **real** channel with `NB_NO_TEMPLATE`. | `SKIP('F4'` | [`error-codes.md`](/docs/2.12/notifications/contract/error-codes.md) `NB_NO_TEMPLATE` · [`TemplateRenderer#L60`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L60) | ⏭ needs orphan key (unit: `NotificationResolverEdgeCasesTest`) |
+| **F1** | mdms-v2 `_search` returns non-empty rows for all three masters at the state tenant. | `guard('F1'` | [`RAINMAKER-PGR.json`](/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json) schemas · [`NotificationTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json) · [`NotificationRouting.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json) | ✅ |
+| **F2** | Uniqueness — no duplicate `(audience,action,toState,channel,locale)` template rows. | `guard('F2'` | [`RAINMAKER-PGR.json#L318`](/utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json#L318) x-unique · [`NotificationTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json) | ✅ |
+| **F3** | Resolve by (action,toState,audience,channel,locale) → the live SMS body starts with that template's prefix. | `guard('F3'` | [`TemplateRenderer#L69`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L69) findField · [`NotificationService#L857`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L857) processConfigDriven · [`NotificationTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json) | ✅ |
+| **F4** | No-template-resolved → skip + honest log (no crash). | `SKIP('F4'` | [`TemplateRenderer#L60`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L60) returns null+logs · [`NotificationService#L946`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L946) skip on null | ⏭ needs orphan key (unit: `NotificationResolverEdgeCasesTest`) |
 | **F5** | Rendered body carries live token data — complaint id + dd/mm/yyyy date substituted. | `guard('F5'` | [`NotificationService#L1127`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L1127) buildPlaceholderValues · [`TemplateRenderer#L85`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L85) · [`DispatchPipelineService#L147`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java#L147) | ✅ |
 
 ---
@@ -145,23 +128,6 @@ Login OTPs are DIGIT-core `SMSRequest`s on `egov.core.notification.sms`; novu-br
 
 ---
 
-## Area H — Thin-event path
-
-The move itself: notification decisions leaving `pgr-services` and landing in the box. Areas A–G
-assert notification *behaviour* and are deliberately blind to which half produced it; these three
-assert **which half did**. **Test file:** [`cases/area-h-thin.js`](./cases/area-h-thin.js).
-
-Every case SKIPs cleanly, with the reason, on a server still running the pre-move producer — a 404
-from the endpoint or a missing `source_path` column is a deployment fact, not a test failure.
-
-| Case | What it verifies | Test | Exercises | Bomet |
-|---|---|---|---|---|
-| **H1** | `GET /novu-adapter/v1/config/source?tenantId=` reports which namespace serves each master, with **non-zero** row counts, and agrees with what `eg_mdms_data` says on this host. There is no setting to read — the data chooses — so this endpoint *is* the observability, and an endpoint that reports nothing is the failure mode. | `guard('H1'` | [`ConfigSourceController`](/backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ConfigSourceController.java) · [`ConfigSourceReport`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/resolution/config/ConfigSourceReport.java) | new — needs a bridge with the resolution stage |
-| **H2** | `POST /novu-adapter/v1/dispatch/_resolve` on an APPLY-shaped thin event returns the **would-be** envelopes (complete v1 fields, well-formed `transactionId`s) or a `terminalCode` saying why there are none — and writes **no ledger row**: the total from `/logs` is identical before and after. A dry run that quietly wrote rows would be worse than none, because operators point it at production. | `guard('H2'` | [`DispatchController#_resolve`](/backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/DispatchController.java) · [`ThinEventResolveResponse`](/backend/novu-bridge/src/main/java/org/egov/novubridge/web/models/ThinEventResolveResponse.java) · [`thin-event-v1.schema.json`](/docs/2.12/notifications/contract/thin-event-v1.schema.json) | new — admin-only; needs `E2E_EMP_USER`/`E2E_EMP_PASS` when the proxy-auth gate is on |
-| **H3** | A real complaint's ledger rows all carry `source_path=RESOLVED`. A complaint producing **both** `RESOLVED` and `PRERENDERED` rows FAILS: two producers are live at once, which is the rolling-cutover double-send risk (design R1), and the ledger cannot show it any other way because both paths mint the same `transaction_id`. | `guard('H3'` | [`outputs.md`](/docs/2.12/notifications/contract/outputs.md) `source_path` · [`V20260921130000__add_source_path.sql`](/backend/novu-bridge/src/main/resources/db/migration/main/V20260921130000__add_source_path.sql) | new — SKIPs when the column is absent or every row is `PRERENDERED` |
-
----
-
 ## Related unit/component tests
 
 The SKIP-only behaviors (fault injection, locale/orphan fallback, config mutation) are pinned by these fast tests:
@@ -170,4 +136,3 @@ The SKIP-only behaviors (fault injection, locale/orphan fallback, config mutatio
 - **novu-bridge** — provider endpoints, `ProxyAuthFilter` auth gate, dispatch FAILED-row persistence (`DispatchPipelineFailureRowTest`).
 - **default-data-handler** — [`PgrWorkflowConfigSplitterTest`](/utilities/default-data-handler/src/test/java/org/egov/handler/service/PgrWorkflowConfigSplitterTest.java) (BusinessService split + malformed-config skip).
 - **Configurator** — `validateNotifications.test.ts` (notification config vs. workflow BusinessService state machine, rules R1–R6).
-- **This suite's own rules** — [`notif-config.test.js`](./notif-config.test.js), run with `node --test` and no server at all. It pins source selection, `eventName` parsing, the audience-scheme table (including chains and legacy bare names), the audience-index join, the channel-outcome expectation table and the E2E-4 no-routing expectation. CI runs it from [`notification-e2e-helpers.yml`](/.github/workflows/notification-e2e-helpers.yml).

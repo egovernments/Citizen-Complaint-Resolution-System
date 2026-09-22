@@ -18,10 +18,9 @@ import java.util.Map;
  *
  * <p><b>Published contract.</b> The wire form of this class is
  * {@code contract/envelope-v1.schema.json} (packaged in this jar, and published at
- * {@code docs/2.12/notifications/contract/}). The two are kept in step by
- * {@code EnvelopeContractSchemaTest}: every field below appears in the schema, the schema's
- * required set is exactly what {@link org.egov.novubridge.service.EnvelopeValidator} enforces,
- * and the published examples validate. Renaming a JSON field here is a schema-version change,
+ * {@code docs/2.12/notifications/contract/}). Keep them in step by hand: every field below
+ * appears in the schema, and the schema's required set is exactly what
+ * {@link org.egov.novubridge.service.EnvelopeValidator} enforces. Renaming a JSON field here is a schema-version change,
  * not a refactor — the Java type name is free to change, the wire names are not.
  */
 @Data

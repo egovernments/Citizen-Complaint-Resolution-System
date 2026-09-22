@@ -18,12 +18,10 @@ import lombok.NoArgsConstructor;
  * <p>Deliberately NOT {@link Contact}, although the field sets coincide today. {@code Contact} is
  * part of the pre-rendered envelope v1, where it means "the recipient the producer already
  * resolved"; this means "a handle the box will resolve". Sharing a class would make a change to
- * either contract a change to both, and envelope v1 is frozen by
- * {@code EnvelopeV1FrozenTest} on purpose.
+ * either contract a change to both, and envelope v1 is frozen on purpose.
  *
  * <p><b>Published contract.</b> The wire form is the {@code actorRef} definition in
- * {@code contract/thin-event-v1.schema.json}; {@code ThinEventContractSchemaTest} fails the build
- * if a field here is not described there.
+ * {@code contract/thin-event-v1.schema.json}; a field added here must be described there.
  */
 @Data
 @Builder

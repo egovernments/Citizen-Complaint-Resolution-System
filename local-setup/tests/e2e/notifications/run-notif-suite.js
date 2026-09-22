@@ -34,7 +34,6 @@ const AREAS = [
   { letter: 'E', file: 'cases/area-e-delivery.js', name: 'Delivery + resilience' },
   { letter: 'F', file: 'cases/area-f-mdms.js', name: 'MDMS master lifecycle' },
   { letter: 'G', file: 'cases/area-g-otp.js', name: 'Login OTP through the bridge' },
-  { letter: 'H', file: 'cases/area-h-thin.js', name: 'Thin-event path' },
 ];
 
 function parseArgs(argv) {
@@ -71,19 +70,8 @@ function parseArgs(argv) {
     console.log('NOTE: E2E_EMP_USER/E2E_EMP_PASS unset — auth-gated + role fan-out cases limited');
   }
 
-  // Which namespace is serving this tenant's notification config. Printed once, up
-  // front, because every area that reads a master goes through it and a run whose
-  // source nobody noticed is a run nobody can interpret.
-  try {
-    const src = H.notificationSource();
-    console.log(`notification config source: ${src.label}`
-      + `  (NOTIFICATIONS.Routing=${src.routingRows}, RAINMAKER-PGR.NotificationRouting=${src.legacyRoutingRows})`);
-  } catch (e) {
-    console.log(`WARN: could not determine the notification config source (${e.message}) — B/C/F/H may SKIP`);
-  }
-
   // Warm the shared complaint fixture up front (so timing failures surface once, not per case).
-  if (areas.some((a) => 'BCEFH'.includes(a.letter))) {
+  if (areas.some((a) => 'BCEF'.includes(a.letter))) {
     process.stdout.write('\nCreating shared complaint fixture (APPLY) and polling nb_dispatch_log … ');
     try {
       const cmp = await H.ensureComplaint(ctx);

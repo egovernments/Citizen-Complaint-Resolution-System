@@ -6,8 +6,8 @@ of that type has ever been seen (thin-event design section 6.3), so it has to li
 transition the workflow can actually take. Hand-writing it would let it drift from the
 workflow the moment someone adds a state -- which is exactly the drift the existing
 placeholder-parity test was built to prevent, one file over. So PGR's rows are
-GENERATED from local-setup/dataloader/templates/PgrWorkflowConfig.json and a CI job
-re-runs this generator and fails on a diff.
+GENERATED from local-setup/dataloader/templates/PgrWorkflowConfig.json; run it with
+--check after changing the workflow to catch a stale catalogue.
 
 WHAT IT DOES
 ------------

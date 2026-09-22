@@ -62,20 +62,17 @@ version independently.
 Java type names are free to change — `ComplaintsDomainEvent` became `NotificationEvent` with no
 wire change at all. The JSON field names are not.
 
-## How this stays honest
+## Keeping it honest
 
-The tests in `backend/novu-bridge/src/test/java/org/egov/novubridge/contract/` run on every
-build:
+Nothing checks these files automatically; the discipline is manual:
 
-| Test | What it would catch |
-|---|---|
-| `EnvelopeContractSchemaTest` | An example that stopped validating; a field added to `NotificationEvent` but not to the schema; the schema's `required` set drifting from what `EnvelopeValidator` actually enforces, in either direction |
-| `ThinEventContractSchemaTest` | The same four properties for the thin event and `ThinEventValidator`, plus: every published thin example deserializes into `ThinEvent`, and an unknown field is tolerated |
-| `EnvelopeV1FrozenTest` | Any edit at all to `envelope-v1.schema.json` — it holds a SHA-256 of the file, so changing the pre-rendered contract is a deliberate two-file act — and, separately, that every published envelope example and the legacy no-`kind` shape are still accepted |
-| `ErrorCodeCatalogTest` | An `NB_*` code introduced in the main source and never documented, or documented and never introduced |
-| `ContractResourceSyncTest` | This published folder drifting from the copy packaged in the jar — both schemas, the OpenAPI document, and both example folders |
-
-The jar's copy under `src/main/resources/contract/` is the one the build tests against, because
-the Docker test runner mounts only `backend/novu-bridge/`. When this folder is present too, the
-tests assert the two are byte-identical; when it is not, they skip that one assertion rather
-than fail. **Edit both, or the build says so.**
+- **Two copies.** `backend/novu-bridge/src/main/resources/contract/` is packaged in the jar
+  (the bridge serves it) and this folder is the published copy. Edit both in the same change
+  and keep them byte-identical.
+- **Schemas match the validators.** A field added to `NotificationEvent` or `ThinEvent` goes
+  into the schema too, and each schema's `required` set is exactly what `EnvelopeValidator` /
+  `ThinEventValidator` enforces.
+- **`envelope-v1.schema.json` is frozen.** Changing the pre-rendered contract is a new schema
+  version, not an edit.
+- **Error codes.** An `NB_*` code is added to `error-codes.md` and `error-codes.txt` in the
+  change that first emits it.

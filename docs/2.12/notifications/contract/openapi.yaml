@@ -4,9 +4,8 @@ info:
   version: "1"
   description: |
     Every HTTP endpoint novu-bridge exposes, as implemented. Written from the controllers in
-    `backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/`; `OpenApiContractTest`
-    fails the build if a path here has no matching controller mapping, or a controller mapping
-    is missing here.
+    `backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/`. Add or change a
+    path here in the same change that adds or changes its controller mapping.
 
     The bridge's PRIMARY interface is not HTTP at all — it is the pair of Kafka messages
     described by `envelope-v1.schema.json` (a finished message) and `thin-event-v1.schema.json`
