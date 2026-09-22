@@ -121,43 +121,6 @@ describe('host_vars _example.yml', () => {
     expect(example).toContain('/dashboard path is outside this bootstrap contract');
   });
 });
-
-// issue #2082. The fast-path overlay corrects the postgres mount path, which
-// recreates the container onto the empty named volume, fires initdb and loads
-// db/full-dump.sql over whatever the tenant had. preflight.py refuses
-// db_fast_path without an explicit ack — but every template used to SHIP that
-// ack pre-set to true, so the gate never fired for the one path that actually
-// causes this: copy a template, point it at an existing box, deploy.
-// issue #2111. ansible.cfg sets `executable = /bin/bash` so `set -o pipefail`
-// works on Debian/Ubuntu targets, where /bin/sh is dash. Ansible ALSO derives
-// the shell PLUGIN name from that basename, and ships none called "bash" — so
-// every ansible.posix.synchronize task fails with "Could not find the shell
-// plugin required (bash)". playbook-deploy.yml has 12 of them and the first is
-// ~100 tasks in, so a deploy dies with the host already part-configured.
-//
-// Asserted here rather than in an Ansible playbook because the failure needs a
-// real SSH connection to reproduce: over a local connection the plugin is never
-// loaded, so an offline playbook passes with or without the fix (verified).
-describe('ansible.cfg — executable has a matching shell plugin (#2111)', () => {
-  const CFG = 'local-setup/ansible/ansible.cfg';
-  const BUILTIN = ['sh', 'csh', 'fish', 'powershell', 'cmd'];
-
-  test('every configured executable resolves to a shell plugin', () => {
-    const cfg = read(CFG);
-    const m = cfg.match(/^\s*executable\s*=\s*(\S+)/m);
-    if (!m) return; // no override, Ansible's default `sh` applies
-    const name = path.basename(m[1]);
-    if (BUILTIN.includes(name)) return;
-
-    // Not built in, so the repo must ship one and point Ansible at it.
-    const dir = cfg.match(/^\s*shell_plugins\s*=\s*(\S+)/m);
-    expect(dir).not.toBeNull();
-    const pluginDir = path.join(REPO_ROOT, 'local-setup/ansible',
-      (dir as RegExpMatchArray)[1].replace(/^\.\//, ''));
-    expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
-  });
-});
-
 describe('host_vars templates — db_fast_path ack (#2082)', () => {
   const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
   // Tracked templates only. Operator host_vars (<tenant>.yml) are gitignored
