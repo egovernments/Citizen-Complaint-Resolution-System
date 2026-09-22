@@ -1,5 +1,3 @@
-import type { IdentityAuthMethod } from "../modules/authentication/types.js";
-
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
 const digitMdmsCreateUrl = process.env.DIGIT_MDMS_CREATE_URL || "";
@@ -8,50 +6,29 @@ function csv(value: string): string[] {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
 }
 
+export function parseAllowedOrigins(value: string): string[] {
+  return [...new Set(csv(value).map((candidate) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      throw new Error(`IDENTITY_ALLOWED_ORIGINS contains an invalid URL: ${candidate}`);
+    }
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+        parsed.username || parsed.password || parsed.pathname !== "/" ||
+        parsed.search || parsed.hash) {
+      throw new Error(`IDENTITY_ALLOWED_ORIGINS must contain origins only: ${candidate}`);
+    }
+    return parsed.origin;
+  }))];
+}
+
 function cookieSameSite(value: string): "Lax" | "None" | "Strict" {
   const normalized = value.trim().toLowerCase();
   if (normalized === "lax") return "Lax";
   if (normalized === "none") return "None";
   if (normalized === "strict") return "Strict";
   throw new Error("IDENTITY_COOKIE_SAME_SITE must be Lax, None, or Strict");
-}
-
-export function parseIdentityAuthMethods(raw: string): IdentityAuthMethod[] {
-  const value: unknown = JSON.parse(raw);
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("IDENTITY_AUTH_METHODS must be a non-empty JSON array");
-  }
-
-  const seen = new Set<string>();
-  return value.map((entry, index) => {
-    if (!entry || typeof entry !== "object") {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}] must be an object`);
-    }
-    const candidate = entry as Record<string, unknown>;
-    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
-    const label = typeof candidate.label === "string" ? candidate.label.trim() : "";
-    const type = candidate.type;
-    if (!id || !/^[a-z0-9_-]+$/.test(id)) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].id is invalid`);
-    }
-    if (seen.has(id)) {
-      throw new Error(`IDENTITY_AUTH_METHODS contains duplicate id: ${id}`);
-    }
-    if (!label) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].label is required`);
-    }
-    if (type !== "password" && type !== "oauth" && type !== "magic_link") {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].type is invalid`);
-    }
-    const idpHint = typeof candidate.idpHint === "string"
-      ? candidate.idpHint.trim()
-      : undefined;
-    if (type === "oauth" && !idpHint) {
-      throw new Error(`IDENTITY_AUTH_METHODS[${index}].idpHint is required`);
-    }
-    seen.add(id);
-    return { id, label, type, ...(idpHint && { idpHint }) };
-  });
 }
 
 function keycloakIssuerRealm(): string {
@@ -86,17 +63,13 @@ export const config = {
     "http://localhost:18201/identity/v1/callback",
   identityPostLoginRedirect:
     process.env.IDENTITY_POST_LOGIN_REDIRECT || "/",
-  identityAllowedOrigins: csv(
+  identityAllowedOrigins: parseAllowedOrigins(
     process.env.IDENTITY_ALLOWED_ORIGINS ||
       process.env.IDENTITY_ALLOWED_ORIGIN ||
       "http://localhost:3000",
   ),
   identityScope:
     process.env.IDENTITY_SCOPE || "openid profile email organization:*",
-  identityAuthMethods: parseIdentityAuthMethods(
-    process.env.IDENTITY_AUTH_METHODS ||
-      '[{"id":"password","label":"Password","type":"password"}]',
-  ),
   identityCookieName:
     process.env.IDENTITY_COOKIE_NAME || "digit_identity_session",
   identityCookieSecure: process.env.IDENTITY_COOKIE_SECURE !== "false",
@@ -104,7 +77,23 @@ export const config = {
     process.env.IDENTITY_COOKIE_SAME_SITE || "Lax",
   ),
   identityLoginTtlSeconds: parseInt(
-    process.env.IDENTITY_LOGIN_TTL_SECONDS || "300",
+    process.env.IDENTITY_LOGIN_TTL_SECONDS || "1800",
+  ),
+  identityMagicLinkRequestWindowSeconds: parseInt(
+    process.env.IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS || "1800",
+  ),
+  identityMagicLinkRequestLimit: parseInt(
+    process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
+  ),
+  identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
+  identityAuthResultTtlSeconds: parseInt(
+    process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
+  ),
+  identityPasswordSetupTtlSeconds: parseInt(
+    process.env.IDENTITY_PASSWORD_SETUP_TTL_SECONDS || "900",
+  ),
+  identityPasswordSetupLimit: parseInt(
+    process.env.IDENTITY_PASSWORD_SETUP_LIMIT || "3",
   ),
   identitySessionTtlSeconds: parseInt(
     process.env.IDENTITY_SESSION_TTL_SECONDS || "604800",

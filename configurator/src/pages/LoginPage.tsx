@@ -1,277 +1,345 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useApp, SESSION_EXPIRED_KEY } from '../App';
-import { Eye, EyeOff, Loader2, Database, AlertCircle, HelpCircle, Rocket, Settings } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, LogOut, Mail } from 'lucide-react';
+import {
+  type AuthMethod,
+  type SessionUser,
+  type TenantOption,
+  authMethods,
+  logout,
+  requestPasswordSetup,
+  selectContext,
+  session,
+  startSignIn,
+  tenantReadiness,
+  tenants,
+} from '@/api/onboarding';
+import { AuthShell } from '@/components/signup/AuthPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { DigitCard, DigitCardHeader, DigitCardSubHeader } from '@/components/digit/DigitCard';
-import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
-import { SubmitBar } from '@/components/digit/SubmitBar';
-import { apiClient, getApiBaseUrl, getConfiguredRootTenant, ApiClientError } from '@/api';
-import { DigitFooter } from '@/components/DigitFooter';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { clearLocalSession, installDigitContext, SESSION_EXPIRED_KEY } from '@/lib/session';
+import { useAuthResult } from '@/hooks/useAuthResult';
 
-type AppMode = 'onboarding' | 'management';
+type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'setupRequired' | 'entering';
+
+function expiredSessionMessage(): string | null {
+  try {
+    if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+      sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      return 'Your session expired. Sign in again to continue.';
+    }
+  } catch {
+    // Storage can be unavailable; authentication itself does not depend on it.
+  }
+  return null;
+}
 
 export default function LoginPage() {
-  const { login } = useApp();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const authResult = useAuthResult();
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [methods, setMethods] = useState<AuthMethod[]>([]);
+  const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [identityUser, setIdentityUser] = useState<SessionUser | null>(null);
+  const [gatedTenant, setGatedTenant] = useState<TenantOption | null>(null);
+  const [error, setError] = useState<string | null>(expiredSessionMessage);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTitle, setNoticeTitle] = useState('Check your email');
+  const [showPasswordSetup, setShowPasswordSetup] = useState(
+    () => searchParams.get('passwordHelp') === '1',
+  );
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
 
-  // Root (state-level) tenant this deployment authenticates against, derived
-  // from the build-time VITE_STATE_TENANT_ID (rendered by the ansible deploy
-  // from host_vars `state_tenant_id`) — never a hardcoded country code.
-  //
-  // Used as the form's actual initial VALUE (not just a placeholder): a
-  // placeholder-only "prefill" is never registered in form state, so submitting
-  // with it untouched silently sends an empty tenantId and no
-  // /user/oauth/token call succeeds. Empty when the build wasn't given one
-  // (dev/standalone) — then the neutral placeholder guides the operator and the
-  // required field forces an explicit entry. Keep in sync with App.tsx's
-  // getConfiguredTenantDefault().
-  const configuredTenantCode = getConfiguredRootTenant();
-  const tenantPlaceholder = configuredTenantCode || 'tenant code';
-
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    tenantCode: configuredTenantCode,
-  });
-  const [mode, setMode] = useState<AppMode>('onboarding');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Explain the bounce when an expired session sent the operator back here.
-  useEffect(() => {
+  const load = useCallback(async () => {
     try {
-      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
-        setError('Your session expired. Please log in again to continue.');
-        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
-      }
-    } catch { /* sessionStorage unavailable — skip the banner */ }
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      // Auto-detect environment from current origin
-      const environment = getApiBaseUrl();
-      apiClient.setEnvironment(environment);
-
-      // Attempt real login
-      const response = await apiClient.login({
-        username: formData.username,
-        password: formData.password,
-        tenantId: formData.tenantCode,
-        userType: 'EMPLOYEE',
-      });
-
-      // Extract roles from response
-      const roles = response.UserRequest.roles?.map(r => r.code) || [];
-
-      // Check for required roles
-      const hasRequiredRole = roles.some(r =>
-        ['MDMS_ADMIN', 'SUPERUSER', 'LOC_ADMIN', 'EMPLOYEE'].includes(r)
-      );
-
-      if (!hasRequiredRole) {
-        setError('User does not have required roles (MDMS_ADMIN, SUPERUSER, or LOC_ADMIN)');
-        setLoading(false);
+      const current = await session();
+      if (current.authenticated && current.user) {
+        setIdentityUser(current.user);
+        const available = await tenants();
+        setTenantOptions(available.tenants);
+        setPhase(available.tenants.length ? 'tenants' : 'noAccess');
         return;
       }
+      const available = await authMethods('signin');
+      setMethods(available.methods);
+      setPhase('methods');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Sign-in is temporarily unavailable.');
+      setPhase('methods');
+    }
+  }, []);
 
-      // Update app state — persist full user identity for session restore
-      login(
-        {
-          name: response.UserRequest.name,
-          email: response.UserRequest.emailId || `${response.UserRequest.userName}@digit.org`,
-          roles: roles,
-          id: response.UserRequest.id,
-          uuid: response.UserRequest.uuid,
-          mobileNumber: response.UserRequest.mobileNumber,
-        },
-        environment,
-        formData.tenantCode,
-        mode
-      );
+  useEffect(() => {
+    // `load` only updates state after its session request settles. The rule
+    // follows the function call but does not model that async boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
 
-      // Navigate based on mode
-      navigate(mode === 'onboarding' ? '/phase/1' : '/manage');
-    } catch (err) {
-      console.error('Login error:', err);
-
-      if (err instanceof ApiClientError) {
-        setError(err.firstError);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Login failed. Please check your credentials.');
-      }
-      setLoading(false);
+  const enter = async (option: TenantOption) => {
+    setError(null);
+    const readiness = tenantReadiness(option);
+    if (readiness && readiness !== 'READY') {
+      setGatedTenant(option);
+      setPhase('setupRequired');
+      return;
+    }
+    setPhase('entering');
+    try {
+      const context = await selectContext(option.tenantId);
+      installDigitContext(context, identityUser);
+      window.location.assign('/configurator/manage');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not open that workspace.');
+      setPhase('tenants');
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        {/* Logo - DIGIT style */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-4">
-            <div className="w-1 h-12 bg-primary mr-3" />
-            <Database className="w-10 h-10 text-primary" />
+  const submitPasswordSetup = async (event: FormEvent) => {
+    event.preventDefault();
+    // A consumed callback result describes the previous attempt. Once the user
+    // starts recovery it must not mask this request's success or failure.
+    authResult.clear();
+    setShowPasswordSetup(true);
+    setSending(true);
+    setError(null);
+    try {
+      const response = await requestPasswordSetup(email);
+      setNoticeTitle('Check your email');
+      setNotice(response.message);
+      setShowPasswordSetup(false);
+      setEmail('');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not request a password setup link.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const requestSignedInPasswordSetup = async () => {
+    authResult.clear();
+    setSending(true);
+    setError(null);
+    try {
+      const response = await requestPasswordSetup();
+      setNoticeTitle('Check your email');
+      setNotice(response.message);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not request a password setup link.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const signOut = async () => {
+    clearLocalSession();
+    await logout().catch(() => undefined);
+    setIdentityUser(null);
+    setError(null);
+    setNotice(null);
+    setShowPasswordSetup(false);
+    setPhase('loading');
+    await load();
+  };
+
+  const resultError = authResult.result?.status === 'failed' ? authResult.result.message : null;
+  const resultNotice = authResult.result?.status === 'complete' ? authResult.result.message : null;
+  const bannerError = authResult.error || resultError || error;
+  const bannerNotice = resultNotice || notice;
+  const banner = bannerError ? (
+    <Alert variant="destructive">
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Could not sign in</AlertTitle>
+      <AlertDescription>{bannerError}</AlertDescription>
+    </Alert>
+  ) : bannerNotice ? (
+    <Alert>
+      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+      <AlertTitle>{resultNotice && authResult.result?.code === 'PASSWORD_SETUP_COMPLETE' ? 'Password ready' : noticeTitle}</AlertTitle>
+      <AlertDescription>{bannerNotice}</AlertDescription>
+    </Alert>
+  ) : null;
+
+  if (phase === 'loading' || phase === 'entering') {
+    return (
+      <AuthShell>
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          {phase === 'entering' ? 'Opening your workspace…' : 'Loading sign-in…'}
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (phase === 'tenants') {
+    return (
+      <AuthShell>
+        <section className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Signed in</p>
+            <h1 className="mt-2 text-[28px] font-semibold leading-[1.15]">Choose a workspace</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {identityUser?.email ? `Signed in as ${identityUser.email}. ` : ''}
+              Select the tenant you want to manage.
+            </p>
           </div>
-          <h1 className="text-2xl font-condensed font-bold text-foreground">DIGIT Complaints Management</h1>
-          <p className="text-muted-foreground mt-1">Admin Console</p>
+          {banner}
+          <div className="space-y-3">
+            {tenantOptions.map((option) => (
+              <Button
+                key={option.tenantId}
+                variant="outline"
+                className="h-auto min-h-11 w-full justify-between px-4 py-3 text-left"
+                onClick={() => void enter(option)}
+              >
+                <span>
+                  <span className="block font-semibold text-foreground">{option.name}</span>
+                  <span className="block text-xs font-normal text-muted-foreground">{option.tenantId}</span>
+                </span>
+                <span aria-hidden="true">→</span>
+              </Button>
+            ))}
+          </div>
+          <Button
+            variant="link"
+            className="h-auto w-full p-0"
+            disabled={sending}
+            onClick={() => void requestSignedInPasswordSetup()}
+          >
+            {sending && <Loader2 className="mr-2 animate-spin" />}
+            Set up or reset your password
+          </Button>
+          <Button variant="tertiary" className="w-full" onClick={() => void signOut()}>
+            <LogOut className="mr-2" /> Sign out
+          </Button>
+        </section>
+      </AuthShell>
+    );
+  }
+
+  if (phase === 'setupRequired' && gatedTenant) {
+    return (
+      <AuthShell>
+        <section className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Workspace</p>
+            <h1 className="mt-2 text-[28px] font-semibold leading-[1.15]">Workspace setup required</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your identity and membership are ready, but {gatedTenant.name} is not ready for management yet.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+            <div className="font-semibold">{gatedTenant.name}</div>
+            <div className="text-xs text-muted-foreground">{gatedTenant.tenantId}</div>
+          </div>
+          <Button variant="outline" className="h-11 w-full" onClick={() => setPhase('tenants')}>
+            Choose another workspace
+          </Button>
+          <Button variant="tertiary" className="w-full" onClick={() => void signOut()}>
+            Sign out
+          </Button>
+        </section>
+      </AuthShell>
+    );
+  }
+
+  if (phase === 'noAccess') {
+    return (
+      <AuthShell>
+        <section className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Signed in</p>
+            <h1 className="mt-2 text-[28px] font-semibold leading-[1.15]">No workspace access yet</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This identity is valid, but it does not belong to a tenant you can manage.
+            </p>
+          </div>
+          {banner}
+          <Button asChild className="h-11 w-full">
+            <Link to="/signup">Create a new account</Link>
+          </Button>
+          <Button
+            variant="link"
+            className="h-auto w-full p-0"
+            disabled={sending}
+            onClick={() => void requestSignedInPasswordSetup()}
+          >
+            {sending && <Loader2 className="mr-2 animate-spin" />}
+            Set up or reset your password
+          </Button>
+          <Button variant="outline" className="h-11 w-full" onClick={() => void signOut()}>
+            Sign in another way
+          </Button>
+        </section>
+      </AuthShell>
+    );
+  }
+
+  const hostedSignIn = methods.find((method) => method.type === 'password');
+  return (
+    <AuthShell>
+      <section className="space-y-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Welcome back</p>
+          <h1 className="mt-2 text-[28px] font-semibold leading-[1.15]">Sign in to your account</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Continue to the secure sign-in page. You will choose a workspace after sign-in.
+          </p>
         </div>
 
-        {/* Login form - DIGIT Card */}
-        <DigitCard>
-          <DigitCardHeader>Sign In</DigitCardHeader>
-          <DigitCardSubHeader>Enter your credentials to continue</DigitCardSubHeader>
+        {banner}
 
-          <form onSubmit={handleSubmit} className="space-y-6 mt-6" autoComplete="off">
-            {/* Mode Toggle */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Mode</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMode('onboarding')}
-                  className={`
-                    flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all
-                    ${mode === 'onboarding'
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
-                    }
-                  `}
-                >
-                  <Rocket className="w-5 h-5" />
-                  <span className="font-medium text-sm">Onboarding</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('management')}
-                  className={`
-                    flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all
-                    ${mode === 'management'
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
-                    }
-                  `}
-                >
-                  <Settings className="w-5 h-5" />
-                  <span className="font-medium text-sm">Management</span>
-                </button>
-              </div>
-            </div>
+        {hostedSignIn ? (
+          <Button className="h-11 w-full" onClick={() => startSignIn(hostedSignIn.id, 'signin')}>
+            Log in
+            <ArrowRight data-icon="inline-end" />
+          </Button>
+        ) : (
+          <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            Hosted sign-in is not enabled on this environment.
+          </p>
+        )}
 
-            {/* Error message */}
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>
-                  {error}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Username */}
-            <LabelFieldPair>
-              <CardLabel required>Username</CardLabel>
-              <Field>
-                <Input
-                  id="username"
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  placeholder="Enter username"
-                  className="border-input-border focus:border-primary focus:ring-primary"
-                  autoComplete="off"
-                  required
-                />
-              </Field>
-            </LabelFieldPair>
-
-            {/* Password */}
-            <LabelFieldPair>
-              <CardLabel required>Password</CardLabel>
-              <Field>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="pr-10 border-input-border focus:border-primary focus:ring-primary"
-                    placeholder="Enter password"
-                    autoComplete="new-password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </Field>
-            </LabelFieldPair>
-
-            {/* Tenant Code */}
-            <LabelFieldPair>
-              <CardLabel className="flex items-center gap-1" required>
-                Tenant Code
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-primary"
-                  title="Root (state-level) tenant code for your deployment (the top-level state/country tenant, e.g. the part before the first dot in a city tenant code)."
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                </button>
-              </CardLabel>
-              <Field>
-                <Input
-                  id="tenantCode"
-                  type="text"
-                  value={formData.tenantCode}
-                  onChange={(e) => setFormData({ ...formData, tenantCode: e.target.value })}
-                  placeholder={tenantPlaceholder}
-                  className="border-input-border focus:border-primary focus:ring-primary"
-                  autoComplete="off"
-                  required
-                />
-                <p className="text-xs text-muted-foreground mt-1">Root tenant for authentication</p>
-              </Field>
-            </LabelFieldPair>
-
-            {/* Submit button - DIGIT SubmitBar */}
-            <div className="flex justify-center pt-4">
-              <SubmitBar
-                label={loading ? 'Signing In...' : 'Sign In'}
-                onSubmit={() => {}}
-                disabled={loading}
-                type="submit"
-                icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+        {(showPasswordSetup || authResult.result?.actions.includes('SETUP_PASSWORD')) ? (
+          <form className="space-y-3 rounded-lg border bg-muted/30 p-4" onSubmit={submitPasswordSetup}>
+            <div>
+              <label htmlFor="password-setup-email" className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Email address
+              </label>
+              <Input
+                id="password-setup-email"
+                type="email"
+                autoComplete="email"
+                className="mt-1 h-11 bg-card"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.org"
+                required
               />
             </div>
+            <Button type="submit" className="h-11 w-full" disabled={sending}>
+              {sending ? <Loader2 className="mr-2 animate-spin" /> : <Mail className="mr-2" />}
+              Send password setup link
+            </Button>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              If an eligible account exists, we will email a secure one-use link. We never reveal which sign-in methods an email uses.
+            </p>
           </form>
-        </DigitCard>
+        ) : (
+          <Button variant="link" className="h-auto w-full p-0" onClick={() => setShowPasswordSetup(true)}>
+            Set up or reset your password
+          </Button>
+        )}
 
-        {/* Help text */}
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          Requires MDMS_ADMIN or SUPERUSER role
+        <p className="text-center text-sm text-muted-foreground">
+          New to DIGIT?{' '}
+          <Link to="/signup" className="font-medium text-primary underline underline-offset-4">
+            Create an account
+          </Link>
         </p>
-
-        {/* Powered by DIGIT (CCRS#1841) */}
-        <div className="flex justify-center mt-8">
-          <DigitFooter />
-        </div>
-      </div>
-    </div>
+      </section>
+    </AuthShell>
   );
 }

@@ -2132,6 +2132,12 @@ services:
       KONG_ADMIN_LISTEN: 127.0.0.1:8001
       KONG_ADMIN_GUI_URL: http://localhost:8002
       KONG_STATUS_LISTEN: 0.0.0.0:8100
+      # Host nginx is the only public entry point and appends the browser IP.
+      # Trust the loopback/private source ranges it can use to reach this
+      # container so Kong preserves that chain for BFF rate limiting.
+      KONG_TRUSTED_IPS: ${KONG_TRUSTED_IPS:-127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      KONG_REAL_IP_HEADER: X-Forwarded-For
+      KONG_REAL_IP_RECURSIVE: "on"
       KONG_MEM_CACHE_SIZE: 64m
       KONG_NGINX_WORKER_PROCESSES: auto
       KONG_TRACING_INSTRUMENTATIONS: all
@@ -3190,9 +3196,13 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-dev-only-change-me}
       KEYCLOAK_ALLOWED_ORG_ROLE_CLIENTS: digit-ui
       IDENTITY_REDIRECT_URI: ${IDENTITY_REDIRECT_URI:-http://localhost:5173/identity/v1/callback}
-      IDENTITY_POST_LOGIN_REDIRECT: ${IDENTITY_POST_LOGIN_REDIRECT:-http://localhost:5173/}
+      IDENTITY_POST_LOGIN_REDIRECT: ${IDENTITY_POST_LOGIN_REDIRECT:-http://localhost:5173/configurator/login}
       IDENTITY_ALLOWED_ORIGINS: ${IDENTITY_ALLOWED_ORIGINS:-http://localhost:5173}
-      IDENTITY_AUTH_METHODS: ${IDENTITY_AUTH_METHODS:-[{"id":"password","label":"Email and password","type":"password"}]}
+      # Browser -> host nginx -> Kong -> BFF. Trust exactly those two hops.
+      IDENTITY_TRUST_PROXY_HOPS: ${IDENTITY_TRUST_PROXY_HOPS:-2}
+      IDENTITY_LOGIN_TTL_SECONDS: ${IDENTITY_LOGIN_TTL_SECONDS:-1800}
+      IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS: ${IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS:-1800}
+      IDENTITY_MAGIC_LINK_REQUEST_LIMIT: ${IDENTITY_MAGIC_LINK_REQUEST_LIMIT:-3}
       IDENTITY_COOKIE_SECURE: ${IDENTITY_COOKIE_SECURE:-false}
       IDENTITY_COOKIE_SAME_SITE: ${IDENTITY_COOKIE_SAME_SITE:-Lax}
       IDENTITY_CONTROL_PLANE_TOKEN: ${IDENTITY_CONTROL_PLANE_TOKEN:-dev-only-change-me}

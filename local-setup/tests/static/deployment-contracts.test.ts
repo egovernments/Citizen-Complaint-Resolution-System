@@ -189,6 +189,7 @@ describe('host_vars _example.yml', () => {
 
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
+  const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
 
   test('digit-mcp falls back to the image this repo publishes', () => {
     // egovio/digit-mcp is what build/build-config.yml builds from
@@ -205,6 +206,13 @@ describe('docker-compose.egov-digit.yaml', () => {
     // would therefore publish an anonymous ADMIN surface.
     expect(compose).not.toMatch(/MCP_AUTH_MODE:\s*\$\{MCP_AUTH_MODE:-ambient\}/);
     expect(compose).not.toMatch(/MCP_AUTH_MODE:\s*ambient/);
+  });
+
+  test('Kong preserves host nginx client addresses for BFF rate limiting', () => {
+    expect(compose).toContain('KONG_TRUSTED_IPS: ${KONG_TRUSTED_IPS:-');
+    expect(compose).toContain('KONG_REAL_IP_HEADER: X-Forwarded-For');
+    expect(compose).toContain('KONG_REAL_IP_RECURSIVE: "on"');
+    expect(composeEnv).toContain('KONG_TRUSTED_IPS={{ kong_trusted_ips | default(');
   });
 });
 

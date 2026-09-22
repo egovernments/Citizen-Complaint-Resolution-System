@@ -11,6 +11,7 @@ export default defineConfig({
       "tests/unit/keycloak-admin-session.test.ts",
       "tests/unit/token-verifier.test.ts",
       "tests/unit/managed-digit-users.test.ts",
+      "tests/unit/config.test.ts",
       "tests/e2e/identity-bff.test.ts",
       "tests/e2e/onboarding-worker.test.ts",
     ],

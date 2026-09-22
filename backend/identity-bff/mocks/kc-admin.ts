@@ -12,6 +12,9 @@ interface MockUser {
   attributes?: Record<string, string[]>;
   requiredActions?: string[];
   activationEmails?: number;
+  lastActionRedirectUri?: string;
+  credentials?: Array<{ id: string; type: string }>;
+  federatedIdentities?: Array<{ identityProvider: string; userId: string; userName?: string }>;
 }
 
 interface RealmState {
@@ -35,6 +38,9 @@ interface RealmState {
   clients: Map<string, {
     id: string;
     clientId: string;
+    enabled?: boolean;
+    standardFlowEnabled?: boolean;
+    attributes?: Record<string, string>;
     roles: Array<{ id: string; name: string }>;
   }>;
 }
@@ -43,11 +49,13 @@ let realms: Map<string, RealmState>;
 let lastAdminGrantType: string | undefined;
 /** "METHOD /path" of every Admin API call, so tests can assert read scope. */
 let adminRequests: string[];
+let magicLinkRequests: Array<Record<string, unknown>>;
 
 function initState() {
   realms = new Map();
   lastAdminGrantType = undefined;
   adminRequests = [];
+  magicLinkRequests = [];
 }
 
 export function getLastAdminGrantType(): string | undefined {
@@ -82,6 +90,17 @@ function getOrCreateRealm(name: string): RealmState {
       users: [],
       organizations: new Map(),
       clients: new Map([
+        ["digit-identity-bff", {
+          id: "digit-identity-bff-uuid",
+          clientId: "digit-identity-bff",
+          enabled: true,
+          standardFlowEnabled: true,
+          attributes: {
+            "digit.auth.signin.methods": "password,google,github",
+            "digit.auth.signup.methods": "magic_link,google,github",
+          },
+          roles: [],
+        }],
         ["digit-ui", {
           id: "digit-ui-uuid",
           clientId: "digit-ui",
@@ -97,6 +116,7 @@ function getOrCreateRealm(name: string): RealmState {
           id: "digit-identity-bff-magic-link-uuid",
           clientId: "digit-identity-bff-magic-link",
           enabled: true,
+          standardFlowEnabled: true,
           roles: [],
         }],
       ]),
@@ -121,7 +141,39 @@ export function createKcAdminMock() {
     resetAdminRequestLog();
     res.status(204).end();
   });
+  app.get("/__test/magic-links", (_req, res) => res.json(magicLinkRequests));
   app.use(express.json({ limit: "10mb", strict: false }));
+
+  app.post("/realms/:realm/magic-link", (req, res) => {
+    if (req.get("authorization") !== "Bearer mock-kc-admin-token") {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    const realm = getOrCreateRealm(req.params.realm);
+    const email = typeof req.body?.email === "string" ? req.body.email : "";
+    if (!email || req.body?.send_email !== true) {
+      return res.status(400).json({ error: "email and send_email are required" });
+    }
+    let user = realm.users.find((candidate) => candidate.email === email);
+    if (!user && req.body?.force_create === true) {
+      user = {
+        id: crypto.randomUUID(),
+        username: email,
+        email,
+        enabled: true,
+        emailVerified: false,
+        credentials: [],
+        federatedIdentities: [],
+      };
+      realm.users.push(user);
+    }
+    if (!user) return res.status(404).json({ error: "user not found" });
+    magicLinkRequests.push({ ...req.body, user_id: user.id });
+    return res.json({
+      user_id: user.id,
+      link: `http://localhost/action-token/${magicLinkRequests.length}`,
+      sent: true,
+    });
+  });
 
   // POST /realms/master/protocol/openid-connect/token — admin auth
   app.post(
@@ -251,6 +303,8 @@ export function createKcAdminMock() {
     const {
       id, username, email, firstName, lastName, enabled, emailVerified, attributes,
       requiredActions,
+      credentials,
+      federatedIdentities,
     } = req.body;
     // Check for duplicate by email or username
     const exists = realm.users.some(
@@ -269,6 +323,8 @@ export function createKcAdminMock() {
       emailVerified: emailVerified ?? false,
       attributes,
       requiredActions,
+      credentials: Array.isArray(credentials) ? credentials : [],
+      federatedIdentities: Array.isArray(federatedIdentities) ? federatedIdentities : [],
     };
     realm.users.push(user);
     res.status(201).set("Location", `/admin/realms/${req.params.realm}/users/${user.id}`).end();
@@ -295,9 +351,35 @@ export function createKcAdminMock() {
     if (!Array.isArray(req.body) || !req.body.every((action) => typeof action === "string")) {
       return res.status(400).json({ error: "actions required" });
     }
+    const redirectUri = typeof req.query.redirect_uri === "string"
+      ? req.query.redirect_uri
+      : undefined;
+    if (redirectUri) {
+      const redirect = new URL(redirectUri);
+      if (redirect.search || !/\/password\/setup-complete\/[^/]+$/.test(redirect.pathname)) {
+        return res.status(400).json({ errorMessage: "Invalid redirect uri." });
+      }
+    }
     user.requiredActions = [...new Set([...(user.requiredActions || []), ...req.body])];
     user.activationEmails = (user.activationEmails || 0) + 1;
+    user.lastActionRedirectUri = redirectUri;
     return res.status(204).end();
+  });
+
+  app.get("/admin/realms/:realm/users/:userId/credentials", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const user = realm.users.find((candidate) => candidate.id === req.params.userId);
+    return user
+      ? res.json(user.credentials || [])
+      : res.status(404).json({ error: "User not found" });
+  });
+
+  app.get("/admin/realms/:realm/users/:userId/federated-identity", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const user = realm.users.find((candidate) => candidate.id === req.params.userId);
+    return user
+      ? res.json(user.federatedIdentities || [])
+      : res.status(404).json({ error: "User not found" });
   });
 
   // PUT /admin/realms/:realm/users/:userId/groups/:groupId — add user to group
@@ -535,9 +617,39 @@ export function createKcAdminMock() {
     res.json(client ? [client] : []);
   });
 
+  app.get("/admin/realms/:realm/clients/:clientUuid", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const client = Array.from(realm.clients.values()).find(
+      (candidate) => candidate.id === req.params.clientUuid,
+    );
+    return client ? res.json(client) : res.status(404).json({ error: "not found" });
+  });
+
+  app.put("/admin/realms/:realm/clients/:clientUuid", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const entry = Array.from(realm.clients.entries()).find(
+      ([, candidate]) => candidate.id === req.params.clientUuid,
+    );
+    if (!entry) return res.status(404).json({ error: "not found" });
+    const [clientId, client] = entry;
+    realm.clients.set(clientId, {
+      ...client,
+      ...req.body,
+      id: client.id,
+      clientId: client.clientId,
+      roles: client.roles,
+      attributes: { ...client.attributes, ...req.body?.attributes },
+    });
+    return res.status(204).end();
+  });
+
   app.get("/admin/realms/:realm/identity-provider/instances", (_req, res) => {
     res.json([
       { alias: "google", displayName: "Google", enabled: true },
+      // Keycloak can expose the alias as the display name when an IdP was
+      // created without an explicit label. The BFF must still present the
+      // provider's canonical user-facing name.
+      { alias: "github", displayName: "github", enabled: true },
       { alias: "disabled-provider", enabled: false },
     ]);
   });
