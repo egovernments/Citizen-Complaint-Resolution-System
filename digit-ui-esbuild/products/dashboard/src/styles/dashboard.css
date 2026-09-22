@@ -115,7 +115,19 @@
      * resolves to one of these variables. Update colors here only.
      * ============================================================ */
   /* Surfaces & text */
-  --background: lab(98.2586% -0.2231 -0.716782);
+  /* The employee app paints its page `#EEEEEE` and floats white cards on it.
+     * The dashboard used a near-white of its own, which showed as a seam: the
+     * 16px of page visible between the fixed header and the dashboard surface
+     * was a different colour from the surface below it. Matching the app makes
+     * the surface continuous, and gives the white cards the same contrast they
+     * have on every other page.
+     *
+     * Not `--color-page-bg`: the tenant theme does define that, but as
+     * `#FFFFFF` — it names the card/page surface, not the ground those cards
+     * sit on. Chaining to it painted the dashboard white and left the seam
+     * exactly where it was. The value below is the one `.body-container`
+     * actually paints. */
+  --background: #EEEEEE;
   --foreground: lab(5.23127% -1.15929 -6.2068);
   --surface: lab(100% 0 0);
   --surface-2: lab(97.097% -0.443935 -1.43216);
@@ -171,13 +183,16 @@
   --status-breach: lab(37.1998% 71.0423 26.7454);
   --status-breach-bg: lab(93.7677% 13.0259 4.10725);
   /* Chart series */
-  /* The lead series follows the tenant's brand; 2-5 stay as they are.
+  /* The series ramp stays as authored, deliberately.
      *
-     * A data-viz ramp has a different job from a brand colour — the five need
-     * to stay tellable apart — so only the dominant series is re-pointed. That
-     * is the one carrying most of the ink on this dashboard, and it is why the
-     * whole surface read teal inside navy chrome. */
-  --chart-1: var(--color-primary-2, var(--color-primary-1, lab(36.1215% -31.3433 -3.14357)));
+     * Chart colours encode data, not brand: these five have to stay tellable
+     * apart from each other, and inside a stacked bar they are the only thing
+     * saying which segment is which. Re-pointing the lead series at the tenant
+     * brand made the surface match its chrome, and made two segments of the
+     * same bar harder to separate — the wrong trade. The brand now reaches the
+     * dashboard through --primary, --chrome and --border instead, which is
+     * chrome rather than data. */
+  --chart-1: lab(36.1215% -31.3433 -3.14357);
   --chart-2: lab(48.7634% -31.2502 -12.8129);
   --chart-3: lab(60.588% -31.0205 5.71432);
   --chart-4: lab(46.0249% 56.4689 37.9874);
@@ -4147,9 +4162,11 @@
 }
 
 .dashboard-root .dashboard-header-controls .dashboard-header-btn {
-  height: 2rem !important;
-  min-height: 2rem !important;
-  max-height: 2rem !important;
+  /* 36px. At 32 these read as toolbar affordances beside a 28px page title,
+   * and the app's own controls sit at 40. */
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
   box-sizing: border-box !important;
 }
 
@@ -4186,15 +4203,88 @@
 
 /* No full-width band behind the dashboard header.
  *
- * `.dashboard-header` carries `tw-bg-background`, which paints a strip running
- * the whole width of the surface while its own content is inset by 52px like
- * everything else — so it read as a white band bleeding to both edges with the
- * title floating inside it. Nothing depends on the fill: the page behind is
- * already the same surface, and the header is separated by spacing, not by a
- * block of colour. */
+ * Two elements paint it, which is why clearing one left the band in place:
+ * `.dashboard-header` carries `tw-bg-background`, and the `.dashboard-header-top`
+ * row inside it paints pure white over that. Both run the whole width of the
+ * surface while their content is inset by 52px like everything else, so the
+ * result read as a white strip bleeding to both edges with the title floating
+ * in it.
+ *
+ * Nothing depends on the fill: the page behind is already the dashboard
+ * surface, and the header is separated from the content by spacing rather
+ * than by a block of colour. */
 
-.dashboard-root .dashboard-header {
+.dashboard-root .dashboard-header,
+.dashboard-root .dashboard-header-top {
   background: transparent !important;
+  /* The rule underneath goes with the fill. Once the band was gone it was the
+   * only thing left drawing the header as a separate slab, running the full
+   * width while its content sat 52px in — the same mismatch, one pixel tall.
+   * The header is already separated from the filters card by spacing. */
+  border-bottom: 0 !important;
+}
+
+/* Header controls, on DIGIT's button scale.
+ *
+ * They were all one shape: a neutral grey stroke with near-black text, which
+ * the design system does not have and which gave three buttons of different
+ * consequence the same weight.
+ *
+ * Reset and Export are DIGIT Primary — filled, white label. Add KPI is
+ * Secondary — primary stroke, primary label, transparent ground — because it
+ * only opens a picker; the act of adding happens inside the panel. All of it
+ * reads from the tenant theme rather than restating a hex.
+ */
+
+.dashboard-root .dashboard-header-controls .dashboard-header-btn {
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  border: 1px solid var(--color-primary-2, var(--color-primary-1, var(--primary)));
+  background: var(--color-primary-2, var(--color-primary-1, var(--primary)));
+}
+
+.dashboard-root .dashboard-header-controls .dashboard-header-btn:hover {
+  background: var(--color-primary-1, var(--primary));
+  border-color: var(--color-primary-1, var(--primary));
+  color: #ffffff;
+}
+
+/* Add KPI: same stroke, no fill. A solid border, not a dashed one — the dash
+   was doing no work the label was not already doing. */
+
+.dashboard-root .dashboard-header-controls .dashboard-add-kpi-trigger,
+.dashboard-root .dashboard-header-controls .dashboard-add-kpi-trigger:hover {
+  border-style: solid;
+  border-color: var(--color-primary-2, var(--color-primary-1, var(--primary)));
+  color: var(--color-primary-2, var(--color-primary-1, var(--primary)));
+  background: transparent;
+}
+
+.dashboard-root .dashboard-header-controls .dashboard-add-kpi-trigger:hover {
+  background: var(--color-primary-1-bg, transparent);
+}
+
+/* Add-KPI panel — room for the longest label, and a radius that belongs to the
+ * same family as the app's cards.
+ *
+ * "Department-wise resolution rate" needed 201px inside a 176px slot and was
+ * ellipsised, which hides exactly the words that distinguish one KPI from
+ * another. Widening the panel is the honest fix; wrapping is kept as the
+ * backstop for whatever the next catalog adds. */
+
+.dashboard-root .dashboard-add-kpi-panel {
+  width: 360px;
+  border-radius: 8px;
+  border-color: var(--color-card-border, var(--border));
+}
+
+.dashboard-root .dashboard-add-kpi-panel .dashboard-add-kpi-label,
+.dashboard-root .dashboard-add-kpi-panel button > span:first-child {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{
