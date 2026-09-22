@@ -78,9 +78,24 @@
         probe: "SAFE no-cluster"
         expect: PROCEED
 
-      # ── the per-tenant overlay is layered last, so it wins ───────────────
-      - name: "per-tenant overlay moves the mount off PGDATA"
+      # ── the per-tenant overlay is read, but does not "win" ───────────────
+      # Compose merges service volumes by CONTAINER PATH, so a tenant overlay
+      # adding an unrelated mount does not remove the base's PGDATA mount.
+      # This row previously expected ABORT, encoding a first-match-wins model
+      # that does not match Compose — verified on a live fast-path box, where
+      # docker inspect shows the named volume at BOTH paths at once.
+      - name: "per-tenant overlay adds a mount without removing PGDATA"
         base: base-fixed.yaml
+        overlay: overlay-without.yml
+        tenant: tenant-overrides.yml
+        db_fast_path: false
+        probe: "SAFE named-volume:digit_postgres_data"
+        expect: PROCEED
+
+      # and the inverse: when NO layer mounts at PGDATA, a migrated box is
+      # genuinely about to be moved off its volume.
+      - name: "no layer mounts at PGDATA — migrated box would be moved"
+        base: base-old.yaml
         overlay: overlay-without.yml
         tenant: tenant-overrides.yml
         db_fast_path: false

@@ -1,4 +1,7 @@
 services:
   postgres-db:
     volumes:
-      - postgres_data:/var/lib/docker-postgresql/data
+      # a tenant overlay that adds an unrelated mount. Compose MERGES by
+      # container path, so the base PGDATA mount is still there — a healthy
+      # migrated box must NOT be refused because of this.
+      - postgres_data:/srv/extra-copy

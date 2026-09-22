@@ -19,6 +19,7 @@
         pg_guard_tenant_compose: "{{ (fixtures ~ '/' ~ case.tenant) if case.tenant is defined else '/nonexistent-tenant-overlay.yml' }}"
         db_fast_path: "{{ case.db_fast_path }}"
         pg_allow_data_loss: "{{ case.allow_loss | default(false) }}"
+        force_clean: "{{ case.force_clean | default(false) }}"
     - name: "record: the guard let it through"
       ansible.builtin.set_fact:
         guard_result: PROCEED

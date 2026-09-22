@@ -28,6 +28,13 @@ cp inventory/host_vars/maputo.yml.example inventory/host_vars/maputo.yml
 # Set db_fast_path_ack_data_wipe: true in maputo.yml — preflight stops without
 # it, because the DB loader replaces any database already on this machine.
 # Everything else is validated; edit only if you want to.
+#
+# One Mac-specific case: if you have run DIGIT here before and the postgres
+# container is currently DOWN, the deploy stops with "Could not determine where
+# this box keeps its PostgreSQL data". OrbStack and Docker Desktop keep volume
+# data inside a VM, so the check cannot see it while no container is running.
+# Either start the stack first, or uncomment pg_allow_data_loss: true in
+# maputo.yml once you are satisfied there is nothing on this machine to keep.
 
 ./deploy.sh maputo
 ```

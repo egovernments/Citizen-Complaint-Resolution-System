@@ -69,10 +69,21 @@ NAMED=$(docker inspect docker-postgres \
   --format '{{ range .Mounts }}{{ if eq .Destination "/var/lib/docker-postgresql/data" }}{{ .Name }}{{ end }}{{ end }}')
 echo "anonymous: $ANON"
 echo "named    : $NAMED"
+
+# The -f list this stack was actually brought up with. The deploy layers
+# several files (fast-path, migrations, monitoring, matomo, sometimes a
+# per-tenant overlay); a bare `-f docker-compose.egov-digit.yaml` would
+# recreate services from their BASE definitions and silently drop whatever
+# those overlays set. Take it from the container rather than retyping it.
+COMPOSE_FILES=$(docker inspect docker-postgres \
+  --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' \
+  | tr ',' '\n' | sed 's/^/-f /' | tr '\n' ' ')
+echo "compose  : $COMPOSE_FILES"
 ```
 
-**Expect** the same two values you just read. Do not type these by hand anywhere below —
-use the variables, and keep this shell open for the whole procedure.
+**Expect** the same two values, and a `compose` line naming every file the deploy layered —
+on a normal box that is five or six, not one. Do not type any of these by hand below: use the
+variables, and keep this shell open for the whole procedure.
 
 ---
 
@@ -134,7 +145,7 @@ docker exec docker-postgres psql -U egov -d egov -tAc \
 ## 3. Stop the stack
 
 ```bash
-docker compose -f docker-compose.egov-digit.yaml stop
+docker compose $COMPOSE_FILES stop
 docker ps --filter "name=docker-postgres" --format '{{.Names}} {{.Status}}'
 ```
 
@@ -194,7 +205,7 @@ digit-mcp's and Keycloak's own databases and are not what you are editing.
 ## 6. Bring it back up
 
 ```bash
-docker compose -f docker-compose.egov-digit.yaml up -d postgres-db
+docker compose $COMPOSE_FILES up -d postgres-db
 sleep 15
 docker logs docker-postgres 2>&1 | tail -20
 ```
@@ -227,7 +238,7 @@ Then start everything else and check the application actually works — log in, 
 complaint, confirm the data is the tenant's own:
 
 ```bash
-docker compose -f docker-compose.egov-digit.yaml up -d
+docker compose $COMPOSE_FILES up -d
 ```
 
 ---
@@ -250,9 +261,9 @@ Nothing destructive has happened at any point, so rollback is just pointing the 
 back:
 
 ```bash
-docker compose -f docker-compose.egov-digit.yaml stop
+docker compose $COMPOSE_FILES stop
 # revert the volume line in docker-compose.egov-digit.yaml
-docker compose -f docker-compose.egov-digit.yaml up -d
+docker compose $COMPOSE_FILES up -d
 ```
 
 The original anonymous volume is untouched and re-attaches by name. Confirm with the

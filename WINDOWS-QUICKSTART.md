@@ -127,6 +127,12 @@ enabling the DB fast path on a machine that already holds a database replaces it
 shipped snapshot — on a laptop doing a first bring-up there is nothing to lose, so this is
 a one-line confirmation.
 
+If you have run DIGIT on this machine before and the postgres container is
+currently stopped, the deploy may stop with "Could not determine where this box
+keeps its PostgreSQL data" — Docker Desktop keeps volume data inside a VM, so
+the check cannot see it while nothing is running. Start the stack first, or set
+`pg_allow_data_loss: true` once you are sure there is nothing here to keep.
+
 The filename (`mybox`) is just your tenant handle for `deploy.sh`.
 
 ## 5. Deploy (as root)
