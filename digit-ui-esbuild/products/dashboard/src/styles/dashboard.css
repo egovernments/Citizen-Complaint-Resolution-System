@@ -627,18 +627,51 @@
 
 .dashboard-add-kpi-header{
   flex-shrink: 0;
-  border-bottom-width: 1px;
-  border-color: var(--border);
   padding-left: 1rem;
   padding-right: 1rem;
   padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
+  padding-bottom: 0.25rem;
   font-size: 10px;
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted-foreground, #6b6860);
   background-color: #ffffff;
+}
+
+.dashboard-add-kpi-search-wrap {
+  flex-shrink: 0;
+  padding: 0.25rem 0.75rem 0.5rem;
+  background-color: #ffffff;
+}
+
+.dashboard-add-kpi-search {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 1.5rem;
+  margin: 0;
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 4px;
+  padding: 0 0.5rem;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--foreground, #1a1917);
+  background-color: #ffffff;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-add-kpi-search::placeholder {
+  color: var(--muted-foreground, #6b6860);
+}
+
+.dashboard-add-kpi-search:focus {
+  outline: none;
+  border-color: var(--foreground, #1a1917);
 }
 
 .dashboard-add-kpi-list {

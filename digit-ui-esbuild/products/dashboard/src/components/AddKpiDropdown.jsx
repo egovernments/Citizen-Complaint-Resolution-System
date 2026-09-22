@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import AddKpiPreview from "./AddKpiPreview";
 import useDashboardT from "../i18n/useDashboardT";
+import { buildAvailableKpis } from "../utils/addKpiPicker";
 
 const PANEL_WIDTH_PX = 320; // ~tw-w-80
 
@@ -90,22 +91,41 @@ const AddKpiDropdown = ({
 }) => {
   const { t } = useDashboardT();
   const panelRef = useRef(null);
+  const searchRef = useRef(null);
+  const titleId = "dashboard-add-kpi-dialog-title";
   const [panelPosition, setPanelPosition] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [hoverRect, setHoverRect] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const availableItems = useMemo(() => {
-    // Offer every role-visible catalog tile not already on the grid. The catalog
-    // is role-filtered server-side, so no extra allowedWidgetIds gate is needed.
-    // Each item is { id:kpiId, metric:title, type:viz.kind, itemType }.
-    return (catalogItems || []).filter((it) => !visibleLayoutIds.includes(it.id));
-  }, [visibleLayoutIds, catalogItems]);
+  // Offer every role-visible catalog tile not already on the grid, sorted A→Z
+  // and filtered by the search box (#1755). Catalog is role-filtered server-side.
+  // Each item is { id:kpiId, metric:title, type:viz.kind, itemType }.
+  const availableItems = useMemo(
+    () => buildAvailableKpis(catalogItems, visibleLayoutIds, searchQuery),
+    [visibleLayoutIds, catalogItems, searchQuery]
+  );
+  const unplacedCount = useMemo(
+    () => buildAvailableKpis(catalogItems, visibleLayoutIds, "").length,
+    [visibleLayoutIds, catalogItems]
+  );
+
+  // Close the picker and return focus to the + Add KPI trigger so keyboard
+  // users do not land on <body> after Escape / add / drag-end / outside click.
+  const closePicker = () => {
+    onOpenChange(false);
+    requestAnimationFrame(() => {
+      const trigger = containerRef?.current;
+      if (trigger && typeof trigger.focus === "function") trigger.focus();
+    });
+  };
 
   useLayoutEffect(() => {
     if (!open) {
       setPanelPosition(null);
       setHoveredItem(null);
       setHoverRect(null);
+      setSearchQuery("");
       return undefined;
     }
 
@@ -120,6 +140,8 @@ const AddKpiDropdown = ({
     };
 
     syncPosition();
+    // Focus search so users can type immediately when the picker opens.
+    requestAnimationFrame(() => searchRef.current?.focus());
     window.addEventListener("resize", syncPosition);
     window.addEventListener("scroll", syncPosition, true);
     return () => {
@@ -135,10 +157,13 @@ const AddKpiDropdown = ({
         containerRef?.current && containerRef.current.contains(event.target);
       const insidePanel = panelRef.current && panelRef.current.contains(event.target);
       if (insideTrigger || insidePanel) return;
-      onOpenChange(false);
+      closePicker();
     };
     const handleKey = (event) => {
-      if (event.key === "Escape") onOpenChange(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePicker();
+      }
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -146,6 +171,8 @@ const AddKpiDropdown = ({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
+    // closePicker closes over the latest onOpenChange/containerRef via the effect deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onOpenChange, containerRef]);
 
   const handleDragStart = (event, widgetId) => {
@@ -163,10 +190,12 @@ const AddKpiDropdown = ({
   const handleDragEnd = () => {
     panelRef.current?.classList.remove("dashboard-add-kpi-panel--dragging");
     onDragWidgetEnd?.();
-    onOpenChange(false);
+    closePicker();
   };
 
   if (!open || !panelPosition) return null;
+
+  const availableLabel = t("DASHBOARD_HEADER_AVAILABLE_KPIS", "Available KPIs");
 
   const panel = (
     <div
@@ -175,6 +204,10 @@ const AddKpiDropdown = ({
       // subtree — the class re-applies the scoped font/palette variables there.
       // Without it the standalone/public page (no vendor CSS on <body>) renders
       // the panel in the browser's default serif.
+      // Non-modal dialog (not menu/listbox): search + per-row Add buttons are
+      // valid here. listbox/option was wrong because options must not contain
+      // interactive descendants, and aria-selected on hover is not selection.
+      // Omit aria-modal — focus is not trapped and the page is not inert.
       className="dashboard-root dashboard-add-kpi-panel tw-flex tw-max-h-[min(24rem,70vh)] tw-flex-col tw-overflow-hidden"
       style={{
         position: "fixed",
@@ -183,21 +216,47 @@ const AddKpiDropdown = ({
         width: PANEL_WIDTH_PX,
         zIndex: 9999,
       }}
-      role="menu"
+      role="dialog"
+      aria-labelledby={titleId}
     >
-      <p className="dashboard-add-kpi-header">{t("DASHBOARD_HEADER_AVAILABLE_KPIS", "Available KPIs")}</p>
-      <ul className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain">
+      <p id={titleId} className="dashboard-add-kpi-header">
+        {availableLabel}
+      </p>
+      <div className="dashboard-add-kpi-search-wrap">
+        <input
+          ref={searchRef}
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          onKeyDown={(event) => {
+            // Keep Escape for the panel-level close handler; stop other keys
+            // from bubbling into grid shortcuts.
+            if (event.key !== "Escape") event.stopPropagation();
+          }}
+          placeholder={t("DASHBOARD_HEADER_SEARCH_KPIS", "Search KPIs")}
+          aria-label={t("DASHBOARD_HEADER_SEARCH_KPIS", "Search KPIs")}
+          className="dashboard-add-kpi-search"
+          autoComplete="off"
+        />
+      </div>
+      <ul
+        className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain"
+        aria-label={availableLabel}
+      >
         {availableItems.length === 0 ? (
           <li className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground">
             {(catalogItems || []).length === 0
               ? // Role-filtered catalog is empty — nothing this user could ever add.
                 t("DASHBOARD_HEADER_NO_KPIS_FOR_ROLE", "No KPIs available for your role")
-              : // Catalog has tiles but every one is already placed — not a bug,
-                // but indistinguishable from one without saying so.
-                t(
-                  "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
-                  "All available KPIs are already on your dashboard"
-                )}
+              : unplacedCount === 0
+                ? // Catalog has tiles but every one is already placed — not a bug,
+                  // but indistinguishable from one without saying so.
+                  t(
+                    "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
+                    "All available KPIs are already on your dashboard"
+                  )
+                : // Search narrowed the list to nothing.
+                  t("DASHBOARD_HEADER_NO_KPI_MATCHES", "No KPIs match your search")}
           </li>
         ) : (
           availableItems.map((item) => (
@@ -230,7 +289,7 @@ const AddKpiDropdown = ({
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={() => {
                       onAddWidget(item.id);
-                      onOpenChange(false);
+                      closePicker();
                     }}
                     className="dashboard-add-kpi-add-btn"
                     aria-label={`${t("DASHBOARD_HEADER_ADD", "Add")} ${item.metric}`}

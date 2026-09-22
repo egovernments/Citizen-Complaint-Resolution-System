@@ -226,7 +226,7 @@ const DashboardHeader = ({
               type="button"
               onClick={() => setAddKpiOpen((v) => !v)}
               aria-expanded={addKpiOpen}
-              aria-haspopup="menu"
+              aria-haspopup="dialog"
               className="dashboard-header-btn dashboard-add-kpi-trigger"
             >
               + {t("DASHBOARD_HEADER_ADD_KPI", "Add KPI")}
