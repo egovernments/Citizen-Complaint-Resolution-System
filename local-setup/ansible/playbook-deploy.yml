@@ -3555,10 +3555,47 @@
         - build_configurator | default(false)
         - ansible_system != "Darwin"
 
+    - name: "Configurator SPA — ensure build workspace on target"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.build/configurator"
+        state: directory
+        mode: "0755"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+
+    # ui-shared/ comes too: configurator/src/config/featureFlags.ts imports
+    # `../../../ui-shared/featureFlags`, which resolves OUTSIDE configurator/.
+    # Syncing the app alone gets as far as 637 modules and then dies on
+    # "Could not resolve ../../../ui-shared/featureFlags". Same pairing the
+    # digit-ui-v2 sync already does. The relative path works out because
+    # configurator lands at .build/configurator and ui-shared at .build/ui-shared.
+    - name: "Configurator SPA — sync vendored source (configurator/ + ui-shared/) to target"
+      ansible.posix.synchronize:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+          - "--exclude=node_modules"
+          - "--exclude=dist"
+      loop:
+        - src: "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}/"
+          dest: "{{ digit_dir }}/.build/configurator/"
+        - src: "{{ playbook_dir }}/../../ui-shared/"
+          dest: "{{ digit_dir }}/.build/ui-shared/"
+        - src: "{{ playbook_dir }}/files/configurator-build.sh"
+          dest: "{{ digit_dir }}/.build/configurator-build.sh"
+      loop_control:
+        label: "{{ item.dest }}"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+
     - name: "Configurator SPA — build dist (when build_configurator)"
       ansible.builtin.command: >-
-        bash {{ playbook_dir }}/files/configurator-build.sh
-        "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}"
+        bash {{ digit_dir }}/.build/configurator-build.sh
+        "{{ digit_dir }}/.build/configurator"
         "{{ configurator_repo_url | default('-') }}"
         "{{ configurator_ref | default('') }}"
       # When the box self-hosts Overpass, bake the same-origin endpoint into the
@@ -3581,14 +3618,29 @@
         - nginx_features.configurator | default(false)
         - build_configurator | default(false)
 
-    - name: "Configurator SPA — use freshly-built dist path"
+    # Deliberately NOT `configurator_build`: that variable is the operator's
+    # escape hatch and means a path on the CONTROLLER, which the synchronize
+    # below still pushes. This one is on the target, so it is placed with a
+    # remote copy instead. Keeping them separate preserves both contracts.
+    - name: "Configurator SPA — record the dist built on the target"
       ansible.builtin.set_fact:
-        configurator_build: "{{ configurator_build_run.stdout_lines | last }}"
+        configurator_dist_on_target: "{{ configurator_build_run.stdout_lines | last }}"
       when:
         - nginx_features.configurator | default(false)
         - build_configurator | default(false)
         - configurator_build_run is defined
         - configurator_build_run.stdout_lines | default([]) | length > 0
+
+    - name: "Configurator SPA — place the target-built dist"
+      ansible.builtin.copy:
+        src: "{{ configurator_dist_on_target }}/"
+        dest: "{{ configurator_www_dir }}/"
+        remote_src: true
+        mode: "0644"
+        directory_mode: "0755"
+      when:
+        - nginx_features.configurator | default(false)
+        - configurator_dist_on_target is defined
 
     # Fires when the configurator location is enabled AND `configurator_build`
     # is set — either from the build step above, or pointed at a pre-built
@@ -3600,6 +3652,7 @@
       when:
         - nginx_features.configurator | default(false)
         - configurator_build is defined
+        - configurator_dist_on_target is not defined
 
     # ---- Turbopass search-api (opt-in: enable_turbopass) ----
     # OSM place-name autocomplete for the configurator's Phase 2 boundary
