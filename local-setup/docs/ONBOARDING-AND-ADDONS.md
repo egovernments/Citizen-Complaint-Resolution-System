@@ -844,10 +844,8 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   WhatsApp specifics: Content templates must be authored and approved at the
   provider **first**, then synced to Content-SIDs (configurator UI or headless
   CLI). Full walkthrough:
-  [`../../docs/2.12/notifications/README.md`](../../docs/2.12/notifications/README.md)
-  (§5 covers templates → SIDs → test-send → drive a real complaint), with
-  `TUTORIAL.md`, `install-fresh.md`, `install-upgrade.md` and the
-  provider-onboarding runbook alongside it.
+  [`../../docs/2.20/notifications/setup-guide.md`](../../docs/2.20/notifications/setup-guide.md)
+  (§5.5 covers templates → SIDs; §6 test-send and the Logs screen).
 
 - **Supervisor dashboard (KPI catalog + packs)** — `enable-dashboard.sh`.
   Seven steps: register the `dss.*` schemas, seed the KPI definitions +

@@ -37,10 +37,7 @@ This lists every config key, master data change, and infra change in this releas
 
 #### Notifications
 
-* `NOTIFICATIONS.EventCatalogue` / `.Routing` / `.Template` / `.ProviderTemplate` / `.Channel` *(new)* — the module-neutral notification masters, held at the state tenant. They supersede the four `RAINMAKER-PGR.Notification*` masters: `(businessService, action, toState)` collapses into one `eventName`, and `audience` becomes a scheme reference (`ACTOR:citizen`, `ROLE:GRO`, `EVENT_RECIPIENTS`, or a `A|B` fallback chain) rather than a bare role name. `EventCatalogue` is new with no legacy counterpart — PGR's 14 rows are **generated** from the workflow definition by `local-setup/scripts/generate_event_catalogue.py`, not hand-written. Ten new access-control actions (`_create`/`_update` per master) and their role-actions ship with them.
-* `RAINMAKER-PGR.NotificationRouting` / `.NotificationTemplate` / `.NotificationProviderTemplate` / `.NotificationChannel` *(now read-only)* — **rows are never deleted.** `./deploy.sh <tenant> --tags notifications` copies the rows the tenant actually has (read live over `/mdms-v2/v2/_search`, not the repo defaults) into the new namespace; the copy is additive and idempotent. Until it runs, a tenant is served its legacy rows through a read adapter, per tenant and all-or-nothing, so an image upgraded before the playbook ran keeps notifying. There is no setting that chooses — `GET /novu-bridge/novu-adapter/v1/config/source?tenantId=…` reports which namespace answered.
-
-> 💡 **Watch out for:** in the Admin Console the legacy four move out of the Notifications menu into **Advanced**, labelled "Legacy (PGR) …" and read-only. A tenant whose copy has not run sees a banner and the notification screens refuse to save — that is deliberate, because a tenant edited in both namespaces has two answers to "what is configured" and the create-only copy would keep the pre-edit values.
+* `RAINMAKER-PGR.NotificationRouting` / `.NotificationTemplate` / `.NotificationProviderTemplate` *(new)* — config-driven notification routing/templates, replacing hardcoded SMS localization keys. Takes over once `pgr.notification.config.driven=true`.
 * `common-masters.MobileNumberValidation` *(changed)* — replaces `common-masters.UserValidation`; reshaped to `{ countryCode, mobileNumberRegex, default }`, keyed on `countryCode`. Shipped record ships with `default: false`.
 * `common-masters.FormValidations` *(new)* — postal code / name / email patterns, one row per `fieldType`. Outranks the deployment-file fallback.
 * `RAINMAKER-PGR.UIConstants.REOPENSLA` *(new)* — the complaint reopen window in milliseconds. New-tenant default `259200000` (72 hours); existing tenants keep whatever value they already had.
@@ -57,7 +54,7 @@ This lists every config key, master data change, and infra change in this releas
 
 | Key | What it controls | Default |
 |---|---|---|
-| ~~`pgr.notification.config.driven`~~ | Introduced during this release to turn on MDMS-driven notification routing, then **removed before release** — see *Removed keys*. Configuration-driven notifications are now always on and there is no flag | — |
+| `pgr.notification.config.driven` | Turns on MDMS-driven notification routing | `false` |
 | `pgr.escalation.enabled` / `.interval.ms` / `.batch.size` / `.default.sla.ms` / `.max.depth` | Automatic escalation scheduler | `pgr.escalation.enabled=false` |
 | `pgr.escalation.kafka.topic` | Escalation event topic | `pgr-escalation-events` |
 | `pgr.dashboard.refresh.enabled` / `.interval.ms` | Dashboard reporting-table refresh | `true` |
@@ -68,22 +65,6 @@ This lists every config key, master data change, and infra change in this releas
 | `novu.bridge.integration.id.whatsapp` (env `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP`, ansible `novu_bridge_integration_id_whatsapp`) *(landed after 2026-08-25)* | Which Novu provider integration a WhatsApp dispatch actually uses. Without it, WhatsApp — modeled in Novu as an "sms"-channel step — silently resolves to the primary (non-WhatsApp) SMS integration and Twilio rejects it | blank — must be set to your WhatsApp integration's ID (e.g. `twilio-whatsapp`) before WhatsApp delivery works |
 | `pgr.employee.context.resolver-role-codes` / `.citizen-role-codes` / `.admin-role-codes` (env `PGR_EMPLOYEE_CONTEXT_*`) *(landed after 2026-08-25)* | Which roles the new employee working-context switcher treats as resolver / citizen-facing / admin | `PGR_LME,GRO,DGRO` / `CITIZEN` / `PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR` |
 
-**novu-bridge, added with the provider catalog and the thin-event work** *(all new; leave them unset unless the row says otherwise — they are defaults precisely so that a dropped Compose overlay cannot change behaviour)*
-
-| Key (env) | What it controls | Default |
-|---|---|---|
-| `NOVU_BRIDGE_PROXY_ADMIN_ROLES` | The narrower role tier required to create, rotate or delete a provider, and to call `POST /dispatch/_resolve`. Without one the service answers `403 NB_ADMIN_ROLE_REQUIRED`; reading the screens and verify/test-send stay on the broad `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` list | `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN` |
-| `NOVU_BRIDGE_CHANNEL_POLICY_LEGACY_SCHEMA` | The channel master to fall back to when the new one has no rows for a tenant | `RAINMAKER-PGR.NotificationChannel` |
-| `NOVU_BRIDGE_PROVIDER_AVAILABILITY_CACHE_TTL_MS` | How long the cached view of the provider list stays fresh when checking that a channel's chosen provider exists and is active | `60000` |
-| `NOVU_BRIDGE_SMSCOUNTRY_ADAPTER_URL` | Where Novu's `generic-sms` provider POSTs for an SMSCountry provider added from the Admin Console. Must be reachable **from the Novu worker**, so an in-cluster address, never the public gateway | `http://novu-bridge:8080/novu-bridge/novu-adapter/v1/gateways/smscountry/send` |
-| `NOVU_BRIDGE_NOTIFICATIONS_NAMESPACE` | The MDMS namespace holding Routing / Template / ProviderTemplate / EventCatalogue | `NOTIFICATIONS` |
-| `NOVU_BRIDGE_NOTIFICATIONS_CACHE_TTL_MS` | Config cache lifetime. An empty fetch is never cached; a stale non-empty entry is served through an MDMS outage | `60000` |
-| `NOVU_BRIDGE_NOTIFICATIONS_PAGE_SIZE` / `_MAX_PAGES` | Their product is the most rows one master can hold before the read is truncated (with a warning naming the master) | `200` / `50` |
-| `NOVU_BRIDGE_NOTIFICATIONS_RECIPIENT_CAP` | Hard ceiling on one event's fan-out. Over it **nothing** is delivered and the event is `SKIPPED / NB_RECIPIENT_LIMIT_EXCEEDED` — half a fan-out is worse than none | `1000` |
-| `NOVU_BRIDGE_ROLE_POOL_PAGE_SIZE` / `_MAX_PAGES` | Their product is the most holders one `ROLE:` audience can notify | `100` / `10` |
-| `NOVU_BRIDGE_INTERNAL_USER_UUID` | The internal microservice user the role-pool and hydration searches run as | blank |
-| `NOVU_BRIDGE_LOCALIZATION_HOST` / `_SEARCH_PATH` / `_CACHE_TTL_MS` / `_MODULES` | Localization code → message lookup for the placeholder values a producer sends as codes. Fails open to the producer's **raw literal**, never to a blank — an all-blank message is what a provider rejects | `http://egov-localization-service:8080` / `/localization/messages/v1/_search` / `300000` / `rainmaker-pgr,rainmaker-common` |
-
 #### Changed defaults
 
 ⚠️ These changed behaviour — check if you rely on the old default.
@@ -92,14 +73,11 @@ This lists every config key, master data change, and infra change in this releas
 |---|---|---|
 | `novu.bridge.channel` | `WHATSAPP` | `SMS` |
 | `novu.bridge.channels.enabled` | (not present) | `SMS,EMAIL` — WhatsApp now needs explicit opt-in |
-| `novu.bridge.channel.policy.schema` (`NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA`) | `RAINMAKER-PGR.NotificationChannel` | `NOTIFICATIONS.Channel` — a tenant with no rows there falls back to the legacy master automatically. **Leave this unset in deployments** |
-| `novu.bridge.kafka.input.topics` (`NOVU_BRIDGE_KAFKA_INPUT_TOPICS`) | `complaints.domain.events` | `complaints.domain.events,notifications.events` — the second is the module-neutral topic any producer should use |
 | `egov.boundary.host` | `http://localhost:8081` | `http://boundary-service.egov:8080/` |
 | `core_postal_configs` (host_vars) | had `postalCodeLength` / `postalCodeErrorMessage` | those two keys removed — `postalCodePattern` is the only knob |
 
 #### Removed keys
 
-* `pgr.notification.config.driven` / `pgr_notification_config_driven` — **removed, not defaulted.** Configuration-driven notifications are now the only path, decided by which image you run rather than by a setting. The flag was deleted because a dropped Compose overlay could flip it and silently stop every notification on a live server; remove it from your deployment values.
 * `novu.bridge.max.retries` — no longer used; retries are handled elsewhere.
 * `novu.bridge.config.host` / `.resolve.path` / `.search.path` — routing moved to MDMS-driven config in pgr-services.
 * `core_postal_configs.postalCodeLength` / `.postalCodeErrorMessage` (host_vars) — replaced by `postalCodePattern` alone; the translated error message is now derived from the pattern.
@@ -138,8 +116,8 @@ These must run in order — several rebuild the same reporting tables from scrat
 
 | Service | What it does | How it's turned on |
 |---|---|---|
-| Notifications stack (Novu: bridge, dashboard) | Sends/tracks SMS, WhatsApp, Email — including login OTP SMS | `enable_novu` |
-| OTP services (egov-otp, user-otp) | Real one-time passwords for login; the SMS is delivered by novu-bridge | `enable_otp_services` (requires `enable_novu`) |
+| Notifications stack (Novu: bridge, bridge-endpoint, dashboard) | Sends/tracks SMS, WhatsApp, Email | `enable_novu` |
+| OTP service (otp-publisher) | Real one-time passwords for login | `enable_otp_services` |
 | WhatsApp chatbot (xstate-chatbot) | Citizens file/track complaints on WhatsApp | Kubernetes only (pilot) |
 | Location search (turbopass) | Address/place auto-complete for boundary setup | `enable_turbopass` (off by default) |
 | Audit service | Tamper-evident complaint/workflow log | Always on |
@@ -169,6 +147,7 @@ These must run in order — several rebuild the same reporting tables from scrat
 | `enable_search_stack` | Faster, Elasticsearch-backed inbox (~3GB extra RAM) |
 | `enable_digit_ui_v2` | The newer citizen web app, at `/citizen/` |
 | `enable_mcp` (+ `nginx_features.mcp`) | City-onboarding automation tools |
+| `pgr_notification_config_driven` | Config-driven PGR notifications |
 | `pgr.visibility.enabled` (env `PGR_VISIBILITY_ENABLED`) | "My/All" inbox visibility tabs |
 | `dashboard_metrics_enabled: false` | Turns **off** dashboard client-side loading-speed telemetry (on by default) |
 
@@ -211,8 +190,6 @@ Not a complete, validated deployment path for this release. Docker Compose and t
 * [ ] Seed the new RBAC role, PII-visibility, and escalation/extended-attribute records yourself — confirmed to have no row in the actual seed data for **any** tenant, new or existing, as of this validation (Section 1).
 * [ ] Mark exactly one `MobileNumberValidation` record as `default: true` for each tenant, and update the User Service to its 2.12 build (Section 1).
 * [ ] Review your `novu.bridge.channel`/`.channels.enabled` overrides if you already use notifications (Section 2).
-* [ ] **Notifications: run the seed step** — `./deploy.sh <tenant> --tags notifications` — on every tenant, to install the `NOTIFICATIONS.*` masters and copy that tenant's existing rows into them. Additive and idempotent; **existing rows are copied, never deleted** (Section 1). Confirm with `GET /novu-bridge/novu-adapter/v1/config/source?tenantId=…`.
-* [ ] **Notifications: never run the old and the new complaints-service simultaneously.** The notification service deliberately does not suppress replays, so two versions running at once send every message twice. Compose recreate already stops the old container first; on Kubernetes keep `strategy.type: Recreate` for `pgr-services` (it is pinned in the chart for this reason, and must not also carry a `rollingUpdate` block). See [notifications/README.md](notifications/README.md#upgrading-an-existing-deployment).
 * [ ] Download the OpenTelemetry agent before first startup (Section 5).
 * [ ] Review the *Known Issues* in the Migration Guide before turning on the new dashboard access-control policy for admin-level roles.
 
@@ -230,7 +207,7 @@ Not a complete, validated deployment path for this release. Docker Compose and t
 | Encryption Service dependency | Always on | n/a — mandatory |
 | Observability stack (traces/metrics/logs) | Off by default | `obs-traces` / `obs-metrics` / `obs-logs` Compose profiles |
 | Notifications stack | Off by default | `enable_novu` |
-| Configuration-driven notifications | **Always on** | n/a — the flag was removed; the path is decided by the image |
+| Config-driven notifications | Off by default | `pgr_notification_config_driven` / `pgr.notification.config.driven` |
 | Real OTP delivery | Off by default | `enable_otp_services` |
 | "My/All" inbox visibility | Off by default | `pgr.visibility.enabled` |
 | Faster search-backed inbox | Off by default | `enable_search_stack` |
