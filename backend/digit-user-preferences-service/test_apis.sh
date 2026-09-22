@@ -160,7 +160,7 @@ expect_json '.pagination | has("offset")' "false" "a zero offset is omitted"
 section "4. Upsert — update on the same key"
 call POST "${API}/_upsert" "$(cat <<JSON
 {
-  "RequestInfo": { "msgId": "e2e-003", "userInfo": { "uuid": "e2e-editor-${SUFFIX}", "roles": [ { "code": "EMPLOYEE" } ] } },
+  "RequestInfo": { "msgId": "e2e-003", "userInfo": { "uuid": "e2e-editor-${SUFFIX}", "roles": [ { "code": "SUPERUSER", "tenantId": "${TENANT}" } ] } },
   "preference": {
     "userId": "${USER_A}", "tenantId": "${TENANT}", "preferenceCode": "${CODE}",
     "payload": {
@@ -436,7 +436,7 @@ expect_status 200 "unknown fields are ignored rather than rejected"
 call POST "${API}/_upsert" "$(cat <<JSON
 {
   "RequestInfo": { "userInfo": { "id": 4242 } },
-  "preference": { "userId": "e2e-numeric-${SUFFIX}", "preferenceCode": "USER_PROFILE", "payload": { "k": "v" } }
+  "preference": { "userId": "4242", "preferenceCode": "USER_PROFILE", "payload": { "k": "v" } }
 }
 JSON
 )"
@@ -456,6 +456,12 @@ expect_json '.preferences[0].auditDetails.createdBy' "system" "an unidentified c
 section "10. Identifier and payload casing"
 call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"id\":\"not-a-uuid\",\"userId\":\"e2e-badid-${SUFFIX}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
 expect_status 400 "a caller-supplied id that is not a uuid is a 400, not a 500"
+expect_json '.Errors[0].code' "INVALID_ID" "  INVALID_ID"
+
+# UUID.fromString zero-pads these, so a parse-based check accepted them and
+# PostgreSQL then rejected the raw string with a 500.
+call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"id\":\"1-2-3-4-5\",\"userId\":\"e2e-short-${SUFFIX}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
+expect_status 400 "a short-group id is a 400, not a 500"
 expect_json '.Errors[0].code' "INVALID_ID" "  INVALID_ID"
 
 call POST "${API}/_upsert" "{\"RequestInfo\":{},\"preference\":{\"userId\":\"e2e-lower-${SUFFIX}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"consent\":{\"sms\":{\"status\":\"MAYBE\",\"scope\":\"REGIONAL\"}}}}}"
@@ -510,8 +516,24 @@ call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"${OWNER}\
 expect_status 200 "a citizen reads their own record"
 expect_json '.preferences | length' "1" "  and gets it"
 
-call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"emp-${SUFFIX}\",\"roles\":[{\"code\":\"EMPLOYEE\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
-expect_status 200 "an employee reads across the tenant"
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"adm-${SUFFIX}\",\"roles\":[{\"code\":\"SUPERUSER\",\"tenantId\":\"${TENANT}\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 200 "an admin reads across its own tenant"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"adm-${SUFFIX}\",\"roles\":[{\"code\":\"SUPERUSER\",\"tenantId\":\"pg\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 200 "a state-level admin reaches a descendant tenant"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"adm-${SUFFIX}\",\"roles\":[{\"code\":\"SUPERUSER\",\"tenantId\":\"pg.cityb\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 403 "an admin from another tenant is refused"
+expect_json '.Errors[0].code' "NOT_AUTHORIZED" "  NOT_AUTHORIZED"
+
+call POST "${API}/_search" "{\"RequestInfo\":{\"userInfo\":{\"uuid\":\"emp-${SUFFIX}\",\"roles\":[{\"code\":\"EMPLOYEE\",\"tenantId\":\"${TENANT}\"}]}},\"criteria\":{\"tenantId\":\"${TENANT}\"}}"
+expect_status 403 "EMPLOYEE is not privileged by default"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{\"id\":42,\"roles\":[{\"code\":\"CITIZEN\"}]}},\"preference\":{\"userId\":\"${VICTIM}\",\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\",\"payload\":{\"preferredLanguage\":\"en_IN\"}}}"
+expect_status 403 "a caller identified only by a numeric id cannot write another record"
+
+call POST "${API}/_upsert" "{\"RequestInfo\":{\"userInfo\":{}},\"preference\":{\"userId\":\"${VICTIM}\",\"preferenceCode\":\"USER_PROFILE\",\"payload\":{\"k\":\"v\"}}}"
+expect_status 403 "a present but unidentifiable caller fails closed"
 
 call POST "${API}/_search" "{\"requestInfo\":{},\"criteria\":{\"tenantId\":\"${TENANT}\",\"preferenceCode\":\"${CODE}\"}}"
 expect_status 200 "novu-bridge's principal-less call still lists the tenant"

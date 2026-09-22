@@ -87,20 +87,128 @@ class OwnershipApiTest extends ApiTestBase {
     }
 
     @Test
-    void letsAnEmployeeActAcrossTheTenant() throws Exception {
+    void letsAnAdminActWithinItsOwnTenant() throws Exception {
         upsert(citizenUpsert(OWNER, OWNER)).andExpect(status().isOk());
 
-        String employeeSearch = """
+        search(privilegedSearch("SUPERUSER", "pg.citya", "{ \"tenantId\": \"pg.citya\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferences", hasSize(1)));
+    }
+
+    @Test
+    void letsAStateLevelAdminReachADescendantTenant() throws Exception {
+        // Tenant ids are hierarchical, so a role granted at pg covers pg.citya.
+        upsert(citizenUpsert(OWNER, OWNER)).andExpect(status().isOk());
+
+        search(privilegedSearch("SUPERUSER", "pg", "{ \"tenantId\": \"pg.citya\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferences", hasSize(1)));
+    }
+
+    @Test
+    void refusesAnAdminFromAnotherTenant() throws Exception {
+        // A pg.cityb admin must not reach a pg.citya record.
+        search(privilegedSearch("SUPERUSER", "pg.cityb", "{ \"tenantId\": \"pg.citya\" }"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.Errors[0].code").value("NOT_AUTHORIZED"));
+
+        String crossTenantUpsert = """
                 {
-                  "RequestInfo": { "userInfo": { "uuid": "33333333-3333-3333-3333-333333333333",
-                                                 "roles": [ { "code": "EMPLOYEE" } ] } },
-                  "criteria": { "tenantId": "pg.citya" }
+                  "RequestInfo": { "userInfo": { "uuid": "admin-uuid",
+                                                 "roles": [ { "code": "SUPERUSER", "tenantId": "pg.cityb" } ] } },
+                  "preference": {
+                    "userId": "%s",
+                    "tenantId": "pg.citya",
+                    "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
+                    "payload": { "preferredLanguage": "en_IN" }
+                  }
+                }
+                """.formatted(VICTIM);
+
+        upsert(crossTenantUpsert)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.Errors[0].code").value("NOT_AUTHORIZED"));
+    }
+
+    @Test
+    void doesNotTreatEmployeeAsPrivilegedByDefault() throws Exception {
+        // HRMS forces EMPLOYEE onto every employee it creates, so it must not
+        // carry tenant-wide read/write over citizens' consent.
+        search(privilegedSearch("EMPLOYEE", "pg.citya", "{ \"tenantId\": \"pg.citya\" }"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.Errors[0].code").value("NOT_AUTHORIZED"));
+    }
+
+    @Test
+    void refusesACallerIdentifiedOnlyByANumericIdActingOnAnotherRecord() throws Exception {
+        // userInfo present but no uuid used to resolve to "service-to-service"
+        // and skip the check, even though the enricher could identify the
+        // caller well enough to stamp it into createdBy.
+        String body = """
+                {
+                  "RequestInfo": { "userInfo": { "id": 42, "userName": "attacker", "type": "CITIZEN",
+                                                 "roles": [ { "code": "CITIZEN", "tenantId": "pg.citya" } ] } },
+                  "preference": {
+                    "userId": "%s",
+                    "tenantId": "pg.citya",
+                    "preferenceCode": "USER_NOTIFICATION_PREFERENCES",
+                    "payload": { "preferredLanguage": "en_IN" }
+                  }
+                }
+                """.formatted(VICTIM);
+
+        upsert(body)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.Errors[0].code").value("NOT_AUTHORIZED"));
+    }
+
+    @Test
+    void refusesAPresentButUnidentifiableCaller() throws Exception {
+        // An authenticated caller we cannot name fails closed rather than
+        // falling through the service-to-service branch.
+        String body = """
+                {
+                  "RequestInfo": { "userInfo": {} },
+                  "preference": {
+                    "userId": "%s",
+                    "tenantId": "pg.citya",
+                    "preferenceCode": "USER_PROFILE",
+                    "payload": { "k": "v" }
+                  }
+                }
+                """.formatted(VICTIM);
+
+        upsert(body)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.Errors[0].code").value("NOT_AUTHORIZED"));
+    }
+
+    @Test
+    void letsACallerIdentifiedByANumericIdActOnItsOwnRecord() throws Exception {
+        String body = """
+                {
+                  "RequestInfo": { "userInfo": { "id": 42, "roles": [ { "code": "CITIZEN" } ] } },
+                  "preference": {
+                    "userId": "42",
+                    "preferenceCode": "USER_PROFILE",
+                    "payload": { "k": "v" }
+                  }
                 }
                 """;
 
-        search(employeeSearch)
+        upsert(body)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.preferences", hasSize(1)));
+                .andExpect(jsonPath("$.preferences[0].auditDetails.createdBy").value("42"));
+    }
+
+    private String privilegedSearch(String role, String roleTenant, String criteria) {
+        return """
+                {
+                  "RequestInfo": { "userInfo": { "uuid": "admin-uuid",
+                                                 "roles": [ { "code": "%s", "tenantId": "%s" } ] } },
+                  "criteria": %s
+                }
+                """.formatted(role, roleTenant, criteria);
     }
 
     @Test
@@ -142,17 +250,19 @@ class OwnershipApiTest extends ApiTestBase {
 
     @Test
     void ignoresRoleCasingWhenDecidingPrivilege() throws Exception {
-        String employeeUpsert = """
+        String adminUpsert = """
                 {
-                  "RequestInfo": { "userInfo": { "uuid": "%s", "roles": [ { "code": "employee" } ] } },
+                  "RequestInfo": { "userInfo": { "uuid": "%s",
+                                                 "roles": [ { "code": "superuser", "tenantId": "pg.citya" } ] } },
                   "preference": {
                     "userId": "%s",
+                    "tenantId": "pg.citya",
                     "preferenceCode": "USER_PROFILE",
                     "payload": { "k": "v" }
                   }
                 }
                 """.formatted(OWNER, VICTIM);
 
-        upsert(employeeUpsert).andExpect(status().isOk());
+        upsert(adminUpsert).andExpect(status().isOk());
     }
 }

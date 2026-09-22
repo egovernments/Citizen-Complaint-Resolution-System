@@ -18,6 +18,14 @@ All notable changes to this module will be documented in this file.
 - The language allowlist, the paging defaults and the pool knobs are configuration rather than constants buried in Java. The language list in particular is tenant data: the citizen profile screen offers whatever MDMS `StateInfo.languages` carries
 - The test resources no longer shadow `application.properties` with a second copy, so the shipped defaults are what the suite exercises
 
+### Fixed (review round 2, PR #2081)
+- The UUID check is a canonical-format match, not `UUID.fromString`, which zero-pads short groups and so accepted `1-2-3-4-5` for PostgreSQL to reject with the 500 the check exists to prevent
+- The ownership principal is resolved by the same method that stamps the audit columns (uuid, then id, then requesterId). A `userInfo` carrying only a numeric id was being read as service-to-service and skipping the check, while the enricher happily recorded that id as the author; a present-but-unidentifiable caller now fails closed
+- Privileged roles are tenant-scoped: a role only lifts the check for its own tenant or a descendant, so an admin in one tenant can no longer rewrite another tenant's citizens
+- `EMPLOYEE` dropped from the default privileged roles. HRMS forces it onto every employee, so it covered every field worker and CSR rather than administrators
+- Database TLS restored. `appType: java-spring` makes the common chart inject `SPRING_DATASOURCE_URL` from `egov-config`, which carries no `sslmode` and silently overrode `db-ssl-mode: require`; the chart never injected that block while this was a Go service, so the switch to a JVM workload had turned TLS off. `sslmode` is now a driver property that survives the injected URL
+- Actuator pinned to `/actuator` in the chart. The same injected block sets the base path to `/`, where actuator answers `/health` ahead of `HealthController`, replacing the documented response shape and the `isReachable()` check with `DataSourceHealthIndicator`
+
 ### Preserved
 - HTTP contract byte for byte: endpoint paths, request envelopes (including the case-insensitive `RequestInfo`/`requestInfo` both callers rely on), response key casing, which keys are omitted when empty, error codes, messages and statuses
 - `/health` remains at the container root rather than under the API context path, so the compose healthcheck, both Kubernetes probes and both Gatus catalogues keep working

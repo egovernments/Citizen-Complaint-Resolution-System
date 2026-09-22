@@ -72,33 +72,29 @@ env: |
     value: "false"
   # Both endpoints key on the userId in the request body, and this route is
   # exposed through the gateway, so the service holds a citizen principal to
-  # its own record. Roles listed here may act across the tenant.
+  # its own record. Roles listed here may act on someone else's record within
+  # their own tenant. EMPLOYEE is excluded on purpose: HRMS forces it onto
+  # every employee, so it would cover every field worker and CSR.
   - name: ENFORCE_OWNERSHIP
     value: "true"
   - name: PRIVILEGED_ROLES
-    value: "EMPLOYEE,SUPERUSER,ACCOUNT_ADMIN,SYSTEM"
-  - name: DB_HOST
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: db-host
-  - name: DB_PORT
-    value: "5432"
-  - name: DB_NAME
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: db-name
-  - name: DB_USER
-    valueFrom:
-      secretKeyRef:
-        name: db
-        key: username
-  - name: DB_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: db
-        key: password
+    value: "SUPERUSER,ACCOUNT_ADMIN,SYSTEM"
+  # appType: java-spring makes the common chart inject its extraEnv.java block
+  # AHEAD of this one (charts/common/templates/_deployment.yaml), and that
+  # block sets MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/. At that base path
+  # actuator's health endpoint is mapped on /health and, being ordered before
+  # the controller mapping, it answers instead of HealthController: the probe
+  # then returns actuator's {"status":"UP"} rather than this service's
+  # {"status":...,"components":{"database":{"status":...}}}, and liveness
+  # starts reflecting DataSourceHealthIndicator instead of isReachable().
+  # A duplicate later in the list wins, so this puts actuator back.
+  - name: MANAGEMENT_ENDPOINTS_WEB_BASE_PATH
+    value: "/actuator"
+  # The datasource url, username and password all arrive from extraEnv.java
+  # (egov-config's db-url plus the db secret), as they do for every sibling
+  # Java service, so this chart does not restate them. DB_SSL_MODE is the
+  # exception: nothing upstream carries it, and application.properties applies
+  # it as a driver property so it survives the injected url.
   - name: DB_SSL_MODE
     value: {{ index .Values "db-ssl-mode" | quote }}
 

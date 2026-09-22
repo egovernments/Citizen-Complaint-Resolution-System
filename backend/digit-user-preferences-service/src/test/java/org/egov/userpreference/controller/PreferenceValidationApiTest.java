@@ -495,6 +495,31 @@ class PreferenceValidationApiTest extends ApiTestBase {
     }
 
     @Test
+    void rejectsAShortGroupIdThatJavaWouldAcceptButPostgresWouldNot() throws Exception {
+        // UUID.fromString zero-pads short groups, so "1-2-3-4-5" parses to
+        // 00000001-0002-0003-0004-000000000005. PostgreSQL rejects that
+        // spelling, so a parse-based check let it through to CAST(? AS uuid)
+        // and the 500 came back anyway.
+        for (String id : new String[]{"1-2-3-4-5", "abc-def-1-2-3"}) {
+            String body = """
+                    {
+                      "RequestInfo": {},
+                      "preference": {
+                        "id": "%s",
+                        "userId": "u-short-group",
+                        "preferenceCode": "USER_PROFILE",
+                        "payload": { "k": "v" }
+                      }
+                    }
+                    """.formatted(id);
+
+            upsert(body)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.Errors[0].code").value("INVALID_ID"));
+        }
+    }
+
+    @Test
     void acceptsAWellFormedCallerSuppliedId() throws Exception {
         String body = """
                 {

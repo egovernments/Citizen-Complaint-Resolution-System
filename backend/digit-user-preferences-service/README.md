@@ -156,7 +156,7 @@ Failures return the DIGIT error envelope with a capital-`Errors` list. All valid
 | `INVALID_JSON` | 400 | The body is missing, truncated or not JSON |
 | `INVALID_REQUEST_INFO` | 400 | No `RequestInfo` block |
 | `INVALID_REQUEST` | 400 | No `preference` (upsert) or `criteria` (search) |
-| `INVALID_ID` | 400 | A caller-supplied `id` that is not a UUID |
+| `INVALID_ID` | 400 | A caller-supplied `id` that is not a canonical 8-4-4-4-12 UUID |
 | `INVALID_USER_ID` | 400 | `userId` missing, or longer than 64 characters |
 | `INVALID_TENANT_ID` | 400 | `tenantId` present but not 2–64 characters |
 | `INVALID_PREFERENCE_CODE` | 400 | `preferenceCode` missing, or not 2–128 characters |
@@ -181,9 +181,12 @@ The envelope key is `RequestInfo` per the DIGIT standard, but `requestInfo` is a
 
 Both endpoints key on the `userId` in the request body, not on the authenticated principal, so the service enforces ownership itself:
 
-- A caller whose `RequestInfo.userInfo.uuid` is set may only `_upsert` their own record, and must narrow `_search` to their own `userId`. A tenant-only search is refused, since that is what turns "read one record" into "enumerate every citizen's consent".
-- A caller holding one of `user.preference.security.privileged-roles` (default `EMPLOYEE,SUPERUSER,ACCOUNT_ADMIN,SYSTEM`) may act across the tenant.
-- A call with **no** `userInfo` is service-to-service and passes through. novu-bridge posts an empty `requestInfo` for both the consent gate and the configurator listing, and the gateway is the authN boundary: it populates `userInfo` for anything arriving with a citizen token.
+- The caller is identified exactly as the audit columns are, by `PreferenceEnricher.userIdFrom`: `userInfo.uuid`, then `userInfo.id`, then `requesterId`. Anything narrower lets the two disagree, so a caller identifiable enough to be recorded as the author could still skip the check.
+- A caller so identified may only `_upsert` their own record, and must narrow `_search` to their own `userId`. A tenant-only search is refused, since that is what turns "read one record" into "enumerate every citizen's consent".
+- A `userInfo` that is present but yields no principal is an authenticated caller we cannot name, and is denied rather than waved through.
+- A caller holding one of `user.preference.security.privileged-roles` (default `SUPERUSER,ACCOUNT_ADMIN,SYSTEM`) may act on someone else's record, but **only within its own tenant**: the role's `tenantId` must equal the record's or be an ancestor of it, so a role at `pg` reaches `pg.citya` while one at `pg.cityb` does not. A role with no `tenantId`, or a target with no tenant, cannot be scoped and so confers no privilege.
+- `EMPLOYEE` is deliberately **not** a default privileged role. HRMS forces it onto every employee it creates, so listing it would grant tenant-wide read and write over citizens' consent to every field worker and CSR rather than to administrators.
+- A call with **no `userInfo` at all** is service-to-service and passes through. novu-bridge posts an empty `requestInfo` for both the consent gate and the configurator listing, and the gateway is the authN boundary: it populates `userInfo` for anything arriving with a citizen token.
 
 Set `ENFORCE_OWNERSHIP=false` to restore the Go service's behaviour while a caller is adjusted. The Go service had no such check, so any caller who could reach the route could read or overwrite another citizen's consent (CWE-639).
 
@@ -250,7 +253,7 @@ The `DB_*` and `SERVER_*` variables are the ones the Helm chart and the compose 
 | `SEARCH_MAX_LIMIT` | `100` | Ceiling an oversized `limit` is clamped to |
 | `VALID_LANGUAGES` | `en_IN,hi_IN,fr_IN,pt_IN` | Locales a notification payload may carry; empty disables the check |
 | `ENFORCE_OWNERSHIP` | `true` | Hold a citizen principal to their own record |
-| `PRIVILEGED_ROLES` | `EMPLOYEE,SUPERUSER,ACCOUNT_ADMIN,SYSTEM` | Roles that may act across the tenant |
+| `PRIVILEGED_ROLES` | `SUPERUSER,ACCOUNT_ADMIN,SYSTEM` | Roles that may act on another user's record within their own tenant |
 | `SPRING_DATASOURCE_URL` | derived from `DB_*` | Full JDBC URL, overriding the `DB_*` parts |
 | `SPRING_FLYWAY_ENABLED` | `true` | Set `false` where a migration init container owns the schema |
 | `SPRING_FLYWAY_TABLE` | `digit_user_preferences_service_schema` | Flyway history table |
@@ -262,11 +265,20 @@ Deployments share one `egov` database, so the Flyway history table is namespaced
 
 Location: [`devops/deploy-as-code/charts/common-services/digit-user-preferences-service`](../../devops/deploy-as-code/charts/common-services/digit-user-preferences-service)
 
+## Deployment notes
+
+`appType: java-spring` makes the common Helm chart inject its `extraEnv.java` block into the deployment, and an environment variable outranks `application.properties`. Two of those injected values would otherwise change this service's behaviour, so the chart overrides both (its own `env` renders after `extraEnv.java`, and a later duplicate wins):
+
+- **`MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/`** maps actuator's health endpoint onto `/health`, where it is ordered ahead of the controller and answers instead. The probe then gets `{"status":"UP"}` rather than the documented `components.database.status` shape, and liveness starts reflecting `DataSourceHealthIndicator` instead of the repository check. The chart pins it back to `/actuator`; `ActuatorBasePathTest` covers both halves.
+- **`SPRING_DATASOURCE_URL`** comes from `egov-config`'s `db-url`, which carries no `sslmode`, so it replaces the URL composed from `DB_*` and drops TLS. `sslmode` is therefore applied as a driver property (`spring.datasource.hikari.data-source-properties.sslmode`), which survives whatever URL is injected. An explicit `sslmode` in the URL still wins, so local and compose runs are unaffected.
+
+The datasource url, username and password otherwise come from the platform, as they do for every sibling Java service, so the chart does not restate them.
+
 ## Migration notes: from Go to Java
 
 The rewrite is behaviour-preserving. Worth knowing:
 
-- **Schema unchanged.** The same `V20260205120000__create_user_preference.sql` migration is now applied by Flyway instead of GORM's `AutoMigrate`. On a database the Go service created, Flyway baselines the existing schema and the migration's `IF NOT EXISTS` statements add the indexes AutoMigrate never created — including the unique index on `(user_id, COALESCE(tenant_id, ''), preference_code)`. Because AutoMigrate declared no such index, duplicates under that key are possible there and would make the index creation fail, so the migration collapses them first, keeping the lowest `id` (the row GORM's `First()` returned, i.e. the one the Go service was actually serving).
+- **Schema unchanged.** The same `V20260205120000__create_user_preference.sql` migration is now applied by Flyway instead of GORM's `AutoMigrate`. On a database the Go service created, Flyway baselines the existing schema and the migration's `IF NOT EXISTS` statements add the indexes AutoMigrate never created — including the unique index on `(user_id, COALESCE(tenant_id, ''), preference_code)`. Because AutoMigrate declared no such index, duplicates under that key are possible there and would make the index creation fail, so the migration collapses them first, keeping the lowest `id` (the row GORM's `First()` returned, i.e. the one the Go service was actually serving). The dedupe was added to that migration after this branch was first pushed, which changes its Flyway checksum; nothing has applied the version yet so it is safe, but an environment that deployed an earlier build of this branch needs a `flyway repair` before migrating.
 - **Wire contract unchanged**, down to which keys are omitted: `responseInfo` is lower-camel, the error list is capital-`Errors`, `resMsgId` is never sent, and a zero `offset`/`totalCount` is omitted from `pagination`. `WireContractTest` pins the serialized JSON byte for byte.
 - **Pool durations still accept Go spellings.** `DB_MAX_CONN_LIFETIME=1h` would be rejected by Hikari's own millisecond-typed property, so these are bound to `Duration` in `DataSourceConfig`.
 - **`userInfo.id` still accepts a number or a string** (`FlexibleStringDeserializer`), as Go's `FlexibleString` did.

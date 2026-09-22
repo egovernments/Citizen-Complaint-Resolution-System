@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Input validation for the two preference endpoints.
@@ -57,6 +57,9 @@ public class PreferenceValidator {
     private static final int PREFERENCE_CODE_MAX_LENGTH = 128;
     private static final int TENANT_ID_MIN_LENGTH = 2;
     private static final int TENANT_ID_MAX_LENGTH = 64;
+
+    private static final Pattern CANONICAL_UUID = Pattern.compile(
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final ApplicationConfig applicationConfig;
 
@@ -217,13 +220,18 @@ public class PreferenceValidator {
         return errors;
     }
 
+    /**
+     * True unless the value is a canonical 8-4-4-4-12 UUID.
+     *
+     * <p>{@code UUID.fromString} is not usable as the test: it zero-pads short
+     * groups, so it accepts {@code 1-2-3-4-5} and hands back
+     * {@code 00000001-0002-0003-0004-000000000005}. PostgreSQL rejects that
+     * spelling outright, so the lenient check let the value through to
+     * {@code CAST(? AS uuid)} and the 500 this validation exists to prevent
+     * came back anyway.
+     */
     private static boolean isNotUuid(String value) {
-        try {
-            UUID.fromString(value);
-            return false;
-        } catch (IllegalArgumentException e) {
-            return true;
-        }
+        return !CANONICAL_UUID.matcher(value).matches();
     }
 
     private List<ErrorResponse.Error> validatePolicy(Channel channel, ConsentPolicy policy) {

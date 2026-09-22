@@ -1,6 +1,7 @@
 package org.egov.userpreference.service.validator;
 
 import lombok.extern.slf4j.Slf4j;
+import org.egov.userpreference.service.enrichment.PreferenceEnricher;
 import org.egov.userpreference.utils.CustomException;
 import org.egov.userpreference.utils.ErrorCodes;
 import org.egov.userpreference.utils.StringUtil;
@@ -24,19 +25,25 @@ import java.util.stream.Collectors;
  * accepts {@code tenantId} alone, which hands over the uuids to aim at. That
  * is BOLA (CWE-639), and it is the shape the Go service shipped with.
  *
- * <p>The rule deliberately keys off the caller's roles rather than simply
- * demanding a match, because three legitimate callers are not citizens acting
- * on themselves:
+ * <p>Three rules, each chosen to fail closed:
  *
  * <ul>
- *   <li>novu-bridge posts an <em>empty</em> {@code requestInfo} when it checks
- *       consent before a dispatch and when it lists a tenant's preferences for
- *       the configurator. No principal means a service-to-service call, which
- *       is allowed through: the gateway is the authN boundary and populates
- *       {@code userInfo} for anything arriving with a citizen token.</li>
- *   <li>Employees and admins legitimately read across a tenant.</li>
- *   <li>The citizen profile screen already sends its own uuid on both calls
- *       ({@code UserProfile.js}), so it is unaffected.</li>
+ *   <li><b>Who is calling</b> is resolved by {@link PreferenceEnricher#userIdFrom},
+ *       the same method that stamps the audit columns. Anything else lets the
+ *       two disagree, which is how a caller identified well enough to be
+ *       recorded as the author can still skip the check.</li>
+ *   <li><b>Only a wholly absent {@code userInfo}</b> counts as
+ *       service-to-service. novu-bridge posts an empty {@code requestInfo}
+ *       for the consent gate and the configurator listing; the gateway is the
+ *       authN boundary and populates {@code userInfo} for anything carrying a
+ *       citizen token. A {@code userInfo} that is present but yields no
+ *       principal is an authenticated caller we cannot identify, so it is
+ *       denied rather than waved through.</li>
+ *   <li><b>Privilege is tenant-scoped.</b> A role only lifts the check for
+ *       records in its own tenant or a descendant of it, so an admin in one
+ *       tenant cannot rewrite another tenant's citizens. A role with no
+ *       tenant, or a target with no tenant, cannot be scoped and so does not
+ *       confer privilege.</li>
  * </ul>
  *
  * <p>Enforcement can be switched off with
@@ -50,14 +57,22 @@ public class OwnershipValidator {
     @Value("${user.preference.security.enforce-ownership}")
     private boolean enforceOwnership;
 
-    /** Roles that may act on a preference belonging to someone else. */
+    /**
+     * Roles that may act on a preference belonging to someone else, within
+     * their own tenant.
+     *
+     * <p>{@code EMPLOYEE} is deliberately not a default: HRMS forces that role
+     * onto every employee it creates, so including it would hand tenant-wide
+     * read and write over citizens' consent to every field worker and CSR
+     * rather than to administrators.
+     */
     @Value("${user.preference.security.privileged-roles}")
     private List<String> privilegedRoles;
 
     /** An upsert may only write the caller's own record. */
     public void validateUpsert(Preference preference, RequestInfo requestInfo) {
-        String principal = principalUuid(requestInfo);
-        if (principal == null || isPrivileged(requestInfo)) {
+        String principal = principal(requestInfo);
+        if (principal == null || isPrivilegedFor(requestInfo, preference.getTenantId())) {
             return;
         }
         if (!principal.equals(StringUtil.trimToEmpty(preference.getUserId()))) {
@@ -75,8 +90,8 @@ public class OwnershipValidator {
      * rejected rather than silently scoped.
      */
     public void validateSearch(PreferenceCriteria criteria, RequestInfo requestInfo) {
-        String principal = principalUuid(requestInfo);
-        if (principal == null || isPrivileged(requestInfo)) {
+        String principal = principal(requestInfo);
+        if (principal == null || isPrivilegedFor(requestInfo, criteria.getTenantId())) {
             return;
         }
         if (!principal.equals(StringUtil.trimToEmpty(criteria.getUserId()))) {
@@ -87,27 +102,47 @@ public class OwnershipValidator {
         }
     }
 
-    /** The authenticated uuid, or null when the call carries no principal. */
-    private String principalUuid(RequestInfo requestInfo) {
+    /**
+     * The caller's identity, or null when the request carries no
+     * {@code userInfo} at all and is therefore service-to-service. An empty
+     * string means "authenticated but unidentifiable", which matches no
+     * {@code userId} and so denies.
+     */
+    private String principal(RequestInfo requestInfo) {
         if (!enforceOwnership || requestInfo == null || requestInfo.getUserInfo() == null) {
             return null;
         }
-        String uuid = requestInfo.getUserInfo().getUuid();
-        return StringUtil.isEmpty(uuid) ? null : uuid;
+        return PreferenceEnricher.userIdFrom(requestInfo);
     }
 
-    private boolean isPrivileged(RequestInfo requestInfo) {
+    /** True when the caller holds a privileged role covering {@code targetTenantId}. */
+    private boolean isPrivilegedFor(RequestInfo requestInfo, String targetTenantId) {
         List<RequestInfo.Role> roles = requestInfo.getUserInfo().getRoles();
-        if (roles == null || roles.isEmpty()) {
+        if (roles == null || roles.isEmpty() || StringUtil.isEmpty(targetTenantId)) {
             return false;
         }
         Set<String> allowed = privilegedRoles.stream()
                 .map(role -> role.trim().toUpperCase())
                 .filter(role -> !role.isEmpty())
                 .collect(Collectors.toSet());
-        return roles.stream()
-                .map(RequestInfo.Role::getCode)
-                .filter(StringUtil::isNotEmpty)
-                .anyMatch(code -> allowed.contains(code.toUpperCase()));
+
+        return roles.stream().anyMatch(role ->
+                StringUtil.isNotEmpty(role.getCode())
+                        && allowed.contains(role.getCode().toUpperCase())
+                        && covers(role.getTenantId(), targetTenantId.trim()));
+    }
+
+    /**
+     * Whether a role granted in {@code roleTenantId} reaches
+     * {@code targetTenantId}. Tenant ids are dot-separated and hierarchical,
+     * so a role at {@code pg} covers {@code pg.citya} but one at
+     * {@code pg.cityb} does not.
+     */
+    private boolean covers(String roleTenantId, String targetTenantId) {
+        if (StringUtil.isEmpty(roleTenantId)) {
+            return false;
+        }
+        String roleTenant = roleTenantId.trim();
+        return targetTenantId.equals(roleTenant) || targetTenantId.startsWith(roleTenant + ".");
     }
 }

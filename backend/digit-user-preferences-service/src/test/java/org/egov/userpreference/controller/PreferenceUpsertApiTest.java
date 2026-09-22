@@ -89,9 +89,9 @@ class PreferenceUpsertApiTest extends ApiTestBase {
         String createdId = createdPreference.get("id").asText();
         long createdTime = createdPreference.at("/auditDetails/createdTime").asLong();
 
-        // An employee editing a citizen's record: the audit records the
-        // editor, not the owner. A citizen principal could not do this, which
-        // OwnershipApiTest covers.
+        // An admin editing a citizen's record within its own tenant: the
+        // audit records the editor, not the owner. Neither a citizen nor an
+        // out-of-tenant admin could do this, which OwnershipApiTest covers.
         String updateBody = """
                 {
                   "RequestInfo": {
@@ -99,7 +99,7 @@ class PreferenceUpsertApiTest extends ApiTestBase {
                     "userInfo": {
                       "uuid": "editor-uuid",
                       "tenantId": "pg.citya",
-                      "roles": [ { "code": "EMPLOYEE" } ]
+                      "roles": [ { "code": "SUPERUSER", "tenantId": "pg.citya" } ]
                     }
                   },
                   "preference": {
@@ -267,7 +267,7 @@ class PreferenceUpsertApiTest extends ApiTestBase {
                 {
                   "RequestInfo": { "userInfo": { "id": 4242, "userName": "gro" } },
                   "preference": {
-                    "userId": "user-uuid-6",
+                    "userId": "4242",
                     "preferenceCode": "USER_PROFILE",
                     "payload": { "k": "v" }
                   }
@@ -285,7 +285,7 @@ class PreferenceUpsertApiTest extends ApiTestBase {
                 {
                   "RequestInfo": { "userInfo": { "id": "4243" } },
                   "preference": {
-                    "userId": "user-uuid-7",
+                    "userId": "4243",
                     "preferenceCode": "USER_PROFILE",
                     "payload": { "k": "v" }
                   }
