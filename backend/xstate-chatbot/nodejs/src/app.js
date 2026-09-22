@@ -1,8 +1,8 @@
 const express = require('express'),
-bodyParser = require('body-parser'),
-envVariables = require('./env-variables'),
-port = envVariables.port,
-{ loadLocalisationOrExit } = require('./machine/util/localisation-service');
+  bodyParser = require('body-parser'),
+  envVariables = require('./env-variables'),
+  port = envVariables.port,
+  { loadLocalisationOrExit } = require('./machine/util/localisation-service');
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { assertRequiredConfigOrExit } = require('./startup-checks');
