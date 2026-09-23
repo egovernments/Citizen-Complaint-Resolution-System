@@ -152,7 +152,12 @@ their own. End-to-end:
 
    For a fresh install, **`db_fast_path: true`** is effectively required
    — there's no SQL-based slow path any more, so without it the DB
-   would come up empty. The example file has it on by default.
+   would come up empty. The example file has it on by default, but
+   ships **`db_fast_path_ack_data_wipe: false`** so the first
+   `./deploy.sh` stops and makes you confirm the wipe (issue #2082).
+   Set the ack to `true` once you have checked the target box holds no
+   database you want to keep. If it does, migrate it first —
+   `docs/2.12/operations/postgres-volume-migration.md`.
 
 3. **No inventory edit needed.** `deploy.sh` regenerates
    `inventory/hosts.yml` from `host_vars/*.yml` on every run, so

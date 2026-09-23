@@ -187,7 +187,12 @@ build_mcp: true
 # On a first-ever deploy it always is. On a machine that already ran DIGIT,
 # check before you set it.
 db_fast_path: true
-db_fast_path_ack_data_wipe: true
+# Ships as `false` on purpose (issue #2082). preflight.py refuses
+# db_fast_path without this ack, so every install is stopped once and must
+# confirm the wipe deliberately before it proceeds. Flip to true only after
+# confirming this box has NO postgres data in an anonymous volume. If it does,
+# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+db_fast_path_ack_data_wipe: false
 
 # Off by default, and each one costs real memory:
 enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)

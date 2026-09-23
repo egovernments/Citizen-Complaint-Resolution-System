@@ -110,10 +110,12 @@ enable_mcp: true                   # kit: false — needed locally to bootstrap 
 build_mcp: true                    # kit: false — build digit-mcp:local like the mz bring-up did
 enable_novu: true                  # config-driven notifications target: Novu
 db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md / DB section
-# New in _example.yml: scripts/preflight.py refuses db_fast_path: true without this
-# explicit ack (deploy.sh would fail preflight otherwise). Set only after confirming
-# this box has no anonymous-volume postgres data worth keeping.
-db_fast_path_ack_data_wipe: true
+# Ships as `false` on purpose (issue #2082). preflight.py refuses
+# db_fast_path without this ack, so every install is stopped once and must
+# confirm the wipe deliberately before it proceeds. Flip to true only after
+# confirming this box has NO postgres data in an anonymous volume. If it does,
+# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+db_fast_path_ack_data_wipe: false
 build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
                                    # the notifications profile needs it, so build it here
 build_digit_ui: true

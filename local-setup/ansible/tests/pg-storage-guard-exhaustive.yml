@@ -1,0 +1,42 @@
+---
+# EVERY combination of the guard's inputs, generated rather than hand-picked.
+#
+# The hand-written rows in pg-storage-guard-test.yml document the incidents they
+# came from, which is worth keeping — but they were chosen by narrative, and a
+# coverage count over the input space showed they reached 14 of 56 tuples. Rows
+# chosen that way cover the cases someone thought of, which is the same habit
+# that left the production path untested.
+#
+# Inputs: 7 probe verdicts x 2 effective mounts x 2 stack states x 2 override
+# states. Expected outcome is DERIVED from the rule below, not typed per row, so
+# adding a probe verdict or a refusal extends the matrix automatically.
+#
+# The rule, in precedence order (the asserts are mutually exclusive by input,
+# but the guard evaluates them in this order):
+#   1. probe inconclusive AND the box already carries a stack  -> refuse to guess
+#   2. data in an anonymous volume AND the mount lands on PGDATA -> strand
+#   3. data in the named volume AND the mount lands elsewhere    -> move
+#   ... any of which `pg_allow_data_loss` overrides.
+#
+# `SKIP no-docker` is deliberately NOT inconclusive: no docker binary means
+# nothing has ever run on the box, which is a finding, not an absence of one.
+
+- name: guard — exhaustive, box carries no stack
+  hosts: localhost
+  gather_facts: false
+  vars:
+    fixtures: "{{ playbook_dir }}/fixtures/compose"
+    digit_dir: /nonexistent-for-tests
+    has_stack: false
+  tasks:
+    - ansible.builtin.include_tasks: exhaustive-cases.yml
+
+- name: guard — exhaustive, box already carries a stack
+  hosts: localhost
+  gather_facts: false
+  vars:
+    fixtures: "{{ playbook_dir }}/fixtures/compose"
+    digit_dir: "{{ playbook_dir }}/fixtures/existing-stack"
+    has_stack: true
+  tasks:
+    - ansible.builtin.include_tasks: exhaustive-cases.yml

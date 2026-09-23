@@ -73,6 +73,12 @@
       delegate_to: localhost
       become: false
 
+    # Refuses a deploy that would move Postgres off the volume holding its data
+    # (#2082, #2085). Its own file so tests/pg-storage-guard-test.yml can drive
+    # the real tasks; see that file's header for the rule.
+    - name: "preflight — postgres storage guard"
+      ansible.builtin.include_tasks: tasks/pg-storage-guard.yml
+
     # ── Force-clean teardown ───────────────────────────────────────────────
     # Opt-in via `force_clean: true` in host_vars. Tears down all running
     # containers and removes orphaned networks before re-deploying, so a
@@ -83,9 +89,15 @@
     # stack without intent. Only flip this on for dev/CI boxes or tenants
     # where you intentionally want a full redeploy from scratch.
     #
-    # NOTE: volumes are deliberately preserved (`--remove-orphans` only,
-    # no `-v`). Postgres + Minio data survives the teardown; only containers
-    # and compose-managed networks are removed.
+    # NOTE: NAMED volumes are preserved (`--remove-orphans` only, no `-v`), so
+    # Minio objects and a migrated Postgres survive the teardown.
+    #
+    # An ANONYMOUS volume does not, in the sense that matters: `down` removes
+    # the container it hangs off, orphaning it, and the next `up` provisions a
+    # fresh one — so the stack returns BARE while the old data sits on disk
+    # unreferenced. Every box deployed before #2085 keeps Postgres exactly
+    # there. The storage guard in pre_tasks refuses this combination outright;
+    # this note is here so the comment stops promising something it cannot.
     - name: "force-clean — check if stack directory exists"
       ansible.builtin.stat:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"

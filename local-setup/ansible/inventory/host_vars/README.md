@@ -63,6 +63,15 @@ override what's actually different for your tenant.
   start (no MDMS data → enc-service can't find DataSecurity records →
   egov-user can't auth).
 
+- **It ships with `db_fast_path_ack_data_wipe: false`, so the first
+  deploy stops.** That is deliberate (issue #2082). The fast-path
+  overlay corrects the postgres mount path, which recreates the
+  container onto an empty volume and loads the shipped dump over
+  whatever was there. Preflight refuses to proceed until you set the
+  ack, and the playbook additionally checks the box itself for an
+  existing cluster. On a box that has one, migrate it first:
+  `docs/2.12/operations/postgres-volume-migration.md`.
+
 - **Master password lock-in when fast-path is on.** The dump's
   `eg_enc_*_keys` were generated with `MASTER_PASSWORD=asd@#$@$!132123`.
   Setting `elasticsearch_master_password` to anything else breaks

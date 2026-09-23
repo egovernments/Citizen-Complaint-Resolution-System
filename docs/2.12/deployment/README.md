@@ -39,6 +39,12 @@ cp inventory/host_vars/quickstart.yml.example inventory/host_vars/mycity.yml
 
 ### Update the variables listed below for deployment (rest are best defaults)
 
+`db_fast_path_ack_data_wipe` is not in the table below but must be set to `true` before the
+first deploy — preflight refuses to run until it is. It confirms the target holds no database
+you want to keep, because the DB fast path loads the shipped dump over whatever is there. If
+the box does hold a live database, see
+[postgres-volume-migration.md](../operations/postgres-volume-migration.md) first.
+
  Setting | What it is | Example |
 |---|---|---|
 | `state_root` | Your top-level tenant: the country or state. Lowercase, no dots. Creating it is what the deploy does. | `kenya` |

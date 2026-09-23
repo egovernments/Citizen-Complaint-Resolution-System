@@ -91,6 +91,21 @@ enable_search_stack: false
 enable_novu: false
 requires_nairobi_mdms: false
 db_fast_path: true
+# Ships as `false` on purpose (issue #2082). preflight.py refuses
+# db_fast_path without this ack, so every install is stopped once and must
+# confirm the wipe deliberately before it proceeds. Flip to true only after
+# confirming this box has NO postgres data in an anonymous volume. If it does,
+# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+db_fast_path_ack_data_wipe: false
+
+# On macOS (OrbStack / Docker Desktop) volume mountpoints live inside the VM and
+# are not visible to Ansible's connection. When the postgres container is absent
+# — after `docker compose down`, or a first run that aborted before postgres
+# started — the storage guard cannot classify the volumes, sees a stack
+# directory, and refuses rather than guessing. Uncomment this to say "I have
+# checked; proceed anyway". Leave it commented while the stack is up: the guard
+# reads the container directly then and needs no help.
+# pg_allow_data_loss: true
 run_ci_tests: false
 install_claude_code: false
 

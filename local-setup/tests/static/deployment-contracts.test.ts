@@ -121,6 +121,43 @@ describe('host_vars _example.yml', () => {
     expect(example).toContain('/dashboard path is outside this bootstrap contract');
   });
 });
+describe('host_vars templates — db_fast_path ack (#2082)', () => {
+  const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
+  // Tracked templates only. Operator host_vars (<tenant>.yml) are gitignored
+  // and SHOULD carry ack: true once that box has been checked — asserting on
+  // them would fail on the deploying engineer's own machine.
+  const templates = fs
+    .readdirSync(path.join(REPO_ROOT, HOST_VARS))
+    .filter((f) => f.endsWith('.yml.example') || f === '_example.yml');
+
+  test.each(templates)('%s never ships a pre-set data-wipe ack', (file) => {
+    const body = read(path.join(HOST_VARS, file));
+    if (!/^db_fast_path:\s*true/m.test(body)) return; // flag off: ack is moot
+    expect(body).toMatch(/^db_fast_path_ack_data_wipe:\s*false\s*$/m);
+    expect(body).not.toMatch(/^db_fast_path_ack_data_wipe:\s*true/m);
+  });
+
+  test('preflight still fails _example.yml for exactly that reason', () => {
+    // preflight exits non-zero here by design, so execFileSync always throws and
+    // the output arrives on the error. Record whether it exited 0 rather than
+    // throwing from inside the try, which would land in this same catch and be
+    // reported as a confusing assertion failure instead of the real message.
+    let out = '';
+    let exitedZero = false;
+    try {
+      out = execFileSync('python3',
+        ['local-setup/scripts/preflight.py', `${HOST_VARS}/_example.yml`],
+        { cwd: REPO_ROOT, encoding: 'utf8' });
+      exitedZero = true;
+    } catch (e: any) {
+      out = e.stdout ?? '';
+    }
+    expect(exitedZero).toBe(false); // _example.yml must NOT pass preflight
+    const fails = out.split('\n').filter((l) => l.startsWith('[FAIL]'));
+    expect(fails).toHaveLength(1);
+    expect(fails[0]).toContain('fastpath-data-wipe-ack');
+  });
+});
 
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
