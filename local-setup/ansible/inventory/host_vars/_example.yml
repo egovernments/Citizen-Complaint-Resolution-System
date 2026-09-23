@@ -859,20 +859,25 @@ grafana_anonymous_enabled: false
 # back to off.
 
 # ==================== Gatus status board auth ====================
-# /status/ is served behind HTTP basic auth. The board lists every internal
-# component, its endpoint and its live health, which is a ready-made recon map
-# of the deployment — it used to be world-readable on every tenant that had
-# `nginx_features.status: true`, which every shipped template set. The feature
-# now defaults to false and the board is never served without a password.
+# /status/ is served behind HTTP basic auth, always. The board lists every
+# internal component, its endpoint and its live health, which is a ready-made
+# recon map of the deployment — it was once world-readable on every tenant that
+# set `nginx_features.status: true`. Its nginx location now emits auth_basic
+# unconditionally, so there is no configuration in which the board is open.
 #
-# The playbook ASSERTS on this: enabling the feature without a password fails
-# the deploy rather than rendering a board nobody realises is public. Set the
-# password, or set nginx_features.status to false to stop publishing it.
+# You do NOT have to set a password. The deploy resolves one in this order:
+# whatever you uncomment below, else whatever OpenBao already holds for this
+# tenant, else a generated 24-character password that it stores in OpenBao. Read
+# a generated one back with:
+#   bao kv get -field=status_basic_auth_password <secrets_path>
+# Pin one here instead if you want to choose it — the deploy then leaves OpenBao
+# alone, so that `bao kv get` returns nothing and this file is the record.
 status_basic_auth_user: digit-status
-# status_basic_auth_password: ""      # REQUIRED when nginx_features.status is true
+# status_basic_auth_password: ""      # optional — generated into OpenBao if unset
 #
-# Rotate by deleting /etc/nginx/.htpasswd-status on the box and re-running the
-# deploy (the task is idempotent via `creates`).
+# Rotate by editing the value (here, or with `bao kv put`) and re-running the
+# deploy: the htpasswd task compares against the stored hash, so a changed
+# password is rewritten rather than skipped.
 
 # ==================== Kong CORS origins ====================
 # The repo's kong/kong.yml ships `origins: ['*']` so a local `docker compose up`
@@ -965,10 +970,11 @@ nginx_features:
   brand_assets: false        # /brand/ — local logo/banner mirror
   configurator: false        # /configurator/ — DIGIT Studio SPA
   configurator_caching: false  # asset-level cache headers for above
-  status: false              # /status/ — Gatus health dashboard. OFF by default:
-                             # the board maps every internal component and its
-                             # health. To publish it, set this true AND set
-                             # status_basic_auth_password (the deploy asserts).
+  status: true               # /status/ — Gatus health dashboard. Always behind
+                             # basic auth: the password is generated into
+                             # OpenBao unless you pin status_basic_auth_password
+                             # above. Read it back with:
+                             #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true

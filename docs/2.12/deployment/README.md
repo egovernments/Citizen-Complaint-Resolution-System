@@ -75,7 +75,7 @@ It takes around 60 minutes, use `tail -f /opt/digit/digit-stack-up.mycity.progre
 | Employee app | http://localhost/digit-ui/employee | Admin Username, Admin Password |
 | Citizen app | http://localhost/digit-ui/citizen | Mobile Number with OTP (default otp 123456 if unchanged) |
 | Configurator | http://localhost/configurator/ | Admin Username, Admin Password, State Tenant ID |
-| Health dashboard | http://localhost/status/ | Username - digit-status, for password use `sudo docker exec -e BAO_TOKEN="$(sudo jq -r .root_token /opt/digit/.openbao/init.json)" openbao bao kv get -field=status_basic_auth_password kv/digit/mycity` |
+| Health dashboard | http://localhost/status/ | Username - digit-status, for password use `sudo docker exec -e BAO_TOKEN="$(sudo jq -r .root_token /opt/digit/.openbao/init.json)" openbao bao kv get -field=status_basic_auth_password kv/digit/mycity`, or the `status_basic_auth_password` you set in `mycity.yml` |
 | Dashboards (Grafana) | http://localhost/grafana/ | Username - admin, for password use `sudo docker exec -e BAO_TOKEN="$(sudo jq -r .root_token /opt/digit/.openbao/init.json)" openbao bao kv get -field=grafana_admin_password kv/digit/mycity` |
 
 Use domain name instead of localhost, if used one during configuration.

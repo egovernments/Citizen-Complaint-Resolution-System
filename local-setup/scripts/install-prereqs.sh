@@ -158,6 +158,12 @@ Install these by hand, then run ./deploy.sh directly:
   Node.js ${NODE_MAJOR}.x and npm
   ansible, ansible-lint, yamllint  (a virtualenv avoids PEP 668 problems)
   ansible-galaxy install -r local-setup/ansible/requirements.yml
+  passlib and bcrypt, importable by /usr/bin/python3 -- NOT by the virtualenv.
+    Ansible runs modules under the target's interpreter, and
+    community.general.htpasswd imports both; without them the basic-auth
+    endpoints (/status/, integration tests, read-only MCP) fail to deploy.
+    Use your distro's packages: pip into system python is refused by PEP 668,
+    and pip's own passlib+bcrypt pairing is incompatible.
 EOF
       exit 2 ;;
   esac
@@ -284,6 +290,14 @@ install_python() {
 #
 # Needed by: nginx_features.status, enable_integration_tests,
 # enable_mcp_readonly -- each writes an .htpasswd via that module.
+#
+# This is a convenience, not the guarantee (Vinoth review). It only reaches the
+# target when the target IS the controller -- ansible_connection: local, which
+# every shipped template uses but which the templates also document swapping out
+# for a remote ansible_host. The playbook installs the same packages on the
+# target itself, right before the htpasswd tasks, and that is the load-bearing
+# copy. Keeping it here means the local case fails at a named step with a clear
+# message rather than 145 tasks in.
 
 install_module_deps() {
   step "Ansible module dependencies (passlib, bcrypt)"
