@@ -103,6 +103,7 @@ public class ServiceRequestValidator {
                     "serviceRequestId does not match the complaint id");
         }
         validateReOpen(request, persistedService);
+        validateAssignee(request);
 
         // TO DO
 
@@ -166,6 +167,27 @@ public class ServiceRequestValidator {
 
     }
 
+
+    /**
+     * ASSIGN is the only transition that hands a complaint to a named owner, and
+     * PENDINGATLME has no queue behind it. An ASSIGN carrying no assignee therefore
+     * produces a complaint that is nobody's: it leaves the unassigned queue, so no GRO
+     * sees it to assign, and automatic escalation skips it forever because there is no
+     * assignee whose reportingTo could be resolved (#2132). Bomet accumulated 160 such
+     * complaints before this was caught.
+     */
+    private void validateAssignee(ServiceRequest request) {
+        if (request.getWorkflow() == null
+                || !ASSIGN.equalsIgnoreCase(request.getWorkflow().getAction())) {
+            return;
+        }
+        List<String> assignes = request.getWorkflow().getAssignes();
+        if (CollectionUtils.isEmpty(assignes)
+                || assignes.stream().allMatch(a -> a == null || a.isBlank())) {
+            throw new CustomException("ASSIGNEE_REQUIRED",
+                    "ASSIGN must name the employee the complaint is being assigned to");
+        }
+    }
 
     /**
      *
