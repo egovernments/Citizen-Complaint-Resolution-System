@@ -36,6 +36,8 @@ import static org.egov.pgr.util.PGRConstants.ESCALATE;
 @Slf4j
 public class EscalationService {
 
+    private static final String REOPEN = "REOPEN";
+
     public static final String ASSIGNMENT_CHANGED_AT = "assignmentChangedAt";
     public static final String ASSIGNMENT_CHANGE_SOURCE = "assignmentChangeSource";
     public static final String ESCALATION_LEVEL = "escalationLevel";
@@ -103,7 +105,7 @@ public class EscalationService {
         String action = request.getWorkflow().getAction();
         if (action != null && ESCALATE.equalsIgnoreCase(action)) {
             prepareEscalation(request, persistedService, incoming, automatic);
-        } else if ("REOPEN".equalsIgnoreCase(action)) {
+        } else if (REOPEN.equalsIgnoreCase(action)) {
             // A reopened complaint starts a fresh cumulative escalation cycle. Using the
             // original creation time would make an old complaint immediately consume rungs.
             incoming.put(ESCALATION_LEVEL, 0);
@@ -128,9 +130,8 @@ public class EscalationService {
         String tenantId = persistedService.getTenantId();
         String complaintId = persistedService.getServiceRequestId();
         RequestInfo requestInfo = request.getRequestInfo();
-        int currentLevel = Math.max(escalationLevel(persistedService),
-                workflowEscalationCount(complaintId, tenantId, requestInfo,
-                        escalationWindowStartedAt(persistedService)));
+        ReconciledEscalation reconciled = reconcile(persistedService, requestInfo);
+        int currentLevel = reconciled.level();
         EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
                 configurationService.resolve(requestInfo, tenantId);
         int maxDepth = escalationConfig.effectiveMaxDepth(persistedService.getServiceCode());
@@ -141,7 +142,8 @@ public class EscalationService {
         }
 
         if (automatic) {
-            validateAutomaticThreshold(persistedService, currentLevel, escalationConfig);
+            validateAutomaticThreshold(persistedService, currentLevel,
+                    reconciled.windowStartedAt(), escalationConfig);
         }
 
         List<String> currentAssignees = getCurrentAssignees(complaintId, tenantId, requestInfo);
@@ -211,14 +213,38 @@ public class EscalationService {
         return level instanceof Number number ? Math.max(number.intValue(), 0) : 0;
     }
 
-    /** Reconciles metadata with workflow history so lagging metadata cannot repeat a rung forever. */
-    public int reconciledEscalationLevel(Service complaint, RequestInfo requestInfo) {
-        return Math.max(escalationLevel(complaint), workflowEscalationCount(
-                complaint.getServiceRequestId(), complaint.getTenantId(), requestInfo,
-                escalationWindowStartedAt(complaint)));
+    /** The escalation ladder position and cycle start, reconciled against workflow history. */
+    public record ReconciledEscalation(int level, long windowStartedAt) {
     }
 
-    private void validateAutomaticThreshold(Service complaint, int currentLevel,
+    /**
+     * Reconciles metadata with workflow history for two independent failure modes.
+     *
+     * <p>Lagging metadata must not let a rung repeat forever, so the ladder position is
+     * never lower than the number of ESCALATE transitions actually recorded.</p>
+     *
+     * <p>A REOPEN starts a fresh cycle. {@code prepareUpdate} writes that reset into
+     * {@code additionalDetails}, but a complaint whose reset did not survive would
+     * otherwise keep counting the rungs it consumed before being reopened and stay
+     * pinned at maximum depth for good (#2126). Workflow history always retains the
+     * REOPEN, so a reopen newer than the recorded window is authoritative: the cycle
+     * restarts there and pre-reopen metadata is discarded rather than merged.</p>
+     */
+    public ReconciledEscalation reconcile(Service complaint, RequestInfo requestInfo) {
+        long metadataWindow = escalationWindowStartedAt(complaint);
+        EscalationHistory history = readEscalationHistory(
+                complaint.getServiceRequestId(), complaint.getTenantId(), requestInfo);
+
+        if (history.lastReopenAt() > metadataWindow) {
+            return new ReconciledEscalation(
+                    history.escalationsSince(history.lastReopenAt()), history.lastReopenAt());
+        }
+        return new ReconciledEscalation(
+                Math.max(escalationLevel(complaint), history.escalationsSince(metadataWindow)),
+                metadataWindow);
+    }
+
+    private void validateAutomaticThreshold(Service complaint, int currentLevel, long windowStartedAt,
             EscalationConfigurationService.ResolvedEscalationConfig escalationConfig) {
         String status = complaint.getApplicationStatus();
         if (status == null || !escalationConfig.getEligibleStatuses().contains(status.toUpperCase(Locale.ROOT))) {
@@ -229,7 +255,7 @@ public class EscalationService {
             throw new CustomException("ESCALATION_LEVEL_DISABLED",
                     "Automatic escalation is disabled at the current level");
         }
-        long createdAt = escalationWindowStartedAt(complaint);
+        long createdAt = windowStartedAt;
         long threshold = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
         if (createdAt <= 0 || System.currentTimeMillis() - createdAt < threshold) {
             throw new CustomException("ESCALATION_NOT_DUE",
@@ -272,8 +298,19 @@ public class EscalationService {
         return nextAssignee != null && !assignees.contains(nextAssignee);
     }
 
-    private int workflowEscalationCount(String serviceRequestId, String tenantId,
-                                        RequestInfo requestInfo, long windowStartedAt) {
+    /** ESCALATE timestamps and the latest REOPEN, read from workflow history in one request. */
+    private record EscalationHistory(List<Long> escalatedAt, long lastReopenAt) {
+
+        int escalationsSince(long cutoff) {
+            if (cutoff <= 0) {
+                return escalatedAt.size();
+            }
+            return (int) escalatedAt.stream().filter(at -> at >= cutoff).count();
+        }
+    }
+
+    private EscalationHistory readEscalationHistory(String serviceRequestId, String tenantId,
+                                                    RequestInfo requestInfo) {
         StringBuilder url = workflowService.getprocessInstanceSearchURL(tenantId, serviceRequestId);
         url.append("&history=true");
         RequestInfoWrapper wrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
@@ -281,15 +318,23 @@ public class EscalationService {
         try {
             ProcessInstanceResponse response = mapper.convertValue(result, ProcessInstanceResponse.class);
             if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
-                return 0;
+                return new EscalationHistory(Collections.emptyList(), 0L);
             }
-            return (int) response.getProcessInstances().stream()
-                    .filter(instance -> ESCALATE.equalsIgnoreCase(instance.getAction()))
-                    .filter(instance -> windowStartedAt <= 0
-                            || (instance.getAuditDetails() != null
-                            && instance.getAuditDetails().getCreatedTime() != null
-                            && instance.getAuditDetails().getCreatedTime() >= windowStartedAt))
-                    .count();
+            List<Long> escalatedAt = new ArrayList<>();
+            long lastReopenAt = 0L;
+            for (ProcessInstance instance : response.getProcessInstances()) {
+                Long at = instance.getAuditDetails() == null
+                        ? null : instance.getAuditDetails().getCreatedTime();
+                if (at == null) {
+                    continue;
+                }
+                if (ESCALATE.equalsIgnoreCase(instance.getAction())) {
+                    escalatedAt.add(at);
+                } else if (REOPEN.equalsIgnoreCase(instance.getAction())) {
+                    lastReopenAt = Math.max(lastReopenAt, at);
+                }
+            }
+            return new EscalationHistory(escalatedAt, lastReopenAt);
         } catch (Exception e) {
             throw new CustomException("ESCALATION_HISTORY_ERROR",
                     "Failed to reconcile escalation history for complaint " + serviceRequestId);

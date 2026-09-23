@@ -146,11 +146,17 @@ public class EscalationScheduler {
                     // Consult workflow history only once metadata says the complaint is due.
                     // This recovers from a workflow-success/persistence-lag split without adding
                     // a history request for every not-yet-due complaint on every scan.
-                    currentLevel = escalationService.reconciledEscalationLevel(
-                            complaint, systemRequestInfo);
-                    if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
+                    // The reconciled window can be later than the metadata one when a REOPEN
+                    // restarted the cycle, so re-derive the clock here rather than reusing the
+                    // preflight value: a reopened complaint owes a fresh SLA, not the original.
+                    EscalationService.ReconciledEscalation reconciled =
+                            escalationService.reconcile(complaint, systemRequestInfo);
+                    currentLevel = reconciled.level();
+                    long windowStartedAt = reconciled.windowStartedAt();
+                    if (windowStartedAt <= 0
+                            || currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
                             || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)
-                            || System.currentTimeMillis() - complaintCreatedAt
+                            || System.currentTimeMillis() - windowStartedAt
                             < escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel)) {
                         result.skipped++;
                         continue;

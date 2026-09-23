@@ -27,6 +27,12 @@ fallback. Manual escalation consumes a rung, so automation next evaluates the
 following cumulative threshold. `ASSIGN` and `REASSIGN` do not reset the clock
 or the escalation level. `REOPEN` resets both for a fresh complaint cycle.
 
+The reopen boundary is taken from workflow history, not from the metadata reset alone:
+a `REOPEN` recorded after `escalationWindowStartedAt` starts the new cycle and the rungs
+consumed before it are not counted against it. A complaint whose reset did not survive
+therefore still escalates again after being reopened, instead of staying pinned at
+maximum depth.
+
 Runtime fallbacks and scheduling are configured with `PGR_ESCALATION_*`; the
 state root used for tenant discovery is `STATE_LEVEL_TENANT_ID`. For configuration
 locations, migration prerequisites, and validation steps, see
