@@ -15,6 +15,7 @@ import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
 import { trackEvent } from "../../utils/analytics";
+import { isCurrentAssignee } from "./escalationVisibility";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -564,7 +565,14 @@ const PGRDetails = () => {
     return matchingState.actions
       ? matchingState.actions
         .filter((action) => action.roles.some((role) => userRoles.includes(role)))
-        .filter((action) => action.action !== "ESCALATE" || currentAssignees.length > 0)
+        // ESCALATE moves the work up the CURRENT assignee's own reportingTo chain, and
+        // the server picks the target — the caller never chooses it. The transition is
+        // role-gated, so without this every PGR_LME in the tenant was offered Escalate on
+        // every PENDINGATLME complaint, including ones that had already moved past them,
+        // and clicking it advanced somebody else's ladder (#2129). Offer it only to the
+        // person actually holding the complaint.
+        .filter((action) => action.action !== "ESCALATE"
+          || isCurrentAssignee(currentAssignees, userInfo?.info?.uuid))
         .map((action) => ({
           action: action.action,
           roles: action.roles,
