@@ -2,12 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { redactUrl } = require("../src/privacy");
 
-test("a webhook secret in the query never survives into a log line", () => {
-  const url = "/xstate-chatbot/message?webhookSecret=s3cret-live-value&From=849904390";
+test("no query value survives into a log line, whatever it is", () => {
+  // The shared secret is header-only now, but a provider can still put
+  // anything in the query, so every value goes rather than a named list.
+  const url = "/xstate-chatbot/message?token=s3cret-live-value&From=849904390";
   const redacted = redactUrl(url);
 
-  assert.doesNotMatch(redacted, /s3cret-live-value/, "the secret is gone");
-  assert.match(redacted, /webhookSecret=<redacted>/, "but we can still see it was presented");
+  assert.doesNotMatch(redacted, /s3cret-live-value/, "the value is gone");
+  assert.match(redacted, /token=<redacted>/, "but we can still see it was presented");
   assert.match(redacted, /^\/xstate-chatbot\/message\?/, "the path is untouched");
 });
 

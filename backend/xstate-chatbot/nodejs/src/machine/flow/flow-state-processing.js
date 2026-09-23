@@ -42,15 +42,16 @@ class ProcessingState extends State {
         onDone: this.branches.map((branch) => ({
           target: '#' + branch.state.key,
           cond: branch.cond || undefined,
-          actions: assign((context, event) => {
-            if (branch.message) {
+          actions: [
+            (context, event) => {
+              if (!branch.message) return;
               const text = typeof branch.message === 'function'
                 ? branch.message(context, event)
                 : this.renderText(branch.message, branch.fill, context, event);
               dialog.sendMessage(context, text);
-            }
-            if (branch.set) branch.set(context, event);
-          })
+            },
+            assign((context, event) => { if (branch.set) branch.set(context, event); })
+          ]
         })),
         onError: { target: this.onError ? '#' + this.onError.key : '#system_error' }
       }

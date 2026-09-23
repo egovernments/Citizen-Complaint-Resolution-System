@@ -154,8 +154,15 @@ class PGRService {
     const level =
       levels.find((candidate) => candidate.levelCode === children[0]?.levelCode) ??
       levels[hierarchyPath.length];
+    
+    const hasChildren = (code) =>
+      hierarchyRows.some(
+        (row) => (!hierarchyType || row.hierarchyType === hierarchyType) && row.parentCode === code
+      );
+      
+    const isLeaf = (row) => !hasChildren(row.code);
     const isLeafLevel = level
-      ? level.isLeafServiceCode === true
+      ? level.isLeafServiceCode === true || (children.length > 0 && children.every(isLeaf))
       : children.every((row) => row.department !== undefined || row.slaHours !== undefined);
 
     const options = children.map((row) => row.code);
@@ -164,8 +171,22 @@ class PGRService {
       messageBundle: this.hierarchyMessageBundle(options),
       trailBundle: this.hierarchyMessageBundle(hierarchyPath),
       levelLabel: level?.label ?? "",
-      isLeafLevel
+      isLeafLevel,
+      leafByCode: this.leafExceptions(children.map((row) => [row.code, isLeaf(row)]), isLeafLevel)
     };
+  }
+
+  /**
+   * Codes whose leafness disagrees with the level default. Empty on a uniform
+   * level, so the walk's context — JSON-serialised into eg_chat_state_v2 on
+   * every transition — only grows for tenants with genuinely ragged branches.
+   */
+  leafExceptions(pairs, isLeafLevel) {
+    const exceptions = {};
+    for (const [code, leaf] of pairs) {
+      if (leaf !== isLeafLevel) exceptions[code] = leaf;
+    }
+    return exceptions;
   }
 
   hierarchyMessageBundle(codes) {
@@ -264,13 +285,18 @@ class PGRService {
       .map((node) => node.code)
       .sort((a, b) => String(a).localeCompare(String(b)));
 
+    const isLeaf = (node) => (node.children ?? []).length === 0;
+    const isLeafLevel = nodes.every(isLeaf);
+
     return {
       options,
       messageBundle: this.boundaryMessageBundle(options),
       levelLabel:
         nodes[0]?.boundaryType ?? levels[boundaryPath.length]?.boundaryType ?? "",
-      isLeafLevel: nodes.every((node) => (node.children ?? []).length === 0),
+      isLeafLevel,
+      leafByCode: this.leafExceptions(nodes.map((node) => [node.code, isLeaf(node)]), isLeafLevel),
     };
+
   }
 
   boundaryMessageBundle(codes) {

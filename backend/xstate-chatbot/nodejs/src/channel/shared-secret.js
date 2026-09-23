@@ -2,17 +2,17 @@ const crypto = require("crypto");
 const config = require("../env-variables");
 
 /**
- * Request authenticity for providers with no signing scheme of their own.
- *
- * ValueFirst and Kaleyra sign nothing, so the only thing available is a secret
- * the operator configures on both sides. Weaker than Twilio's HMAC — it is a
- * bearer value, replayable, and only as good as the TLS around it — but it is
- * the difference between "anyone who finds the URL can file complaints as any
- * citizen" and "you need the secret".
+ * Header only. The query form used to be accepted too, for providers that can
+ * only be given a URL — but a query secret is copied verbatim into every proxy
+ * and ingress access log upstream of this service, which its own log redaction
+ * cannot reach. A replayable bearer credential sitting in nginx and Kong logs
+ * outweighed the convenience, so a provider that cannot send a header now needs
+ * its own verifyRequest rather than a weaker shared path.
  */
 function presentedSecret(req) {
-  return req.get?.("X-Webhook-Secret") || req.query?.webhookSecret || "";
+  return req.get?.("X-Webhook-Secret") || "";
 }
+
 
 /** Constant-time compare — a length-safe wrapper around timingSafeEqual. */
 function safeEqual(a, b) {

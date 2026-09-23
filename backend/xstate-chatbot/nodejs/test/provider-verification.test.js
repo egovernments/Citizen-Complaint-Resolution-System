@@ -36,11 +36,14 @@ function req({ header, query } = {}) {
   };
 }
 
-test("the configured secret is accepted from either the header or the query", () => {
-  // Some providers can only be configured with a URL, not custom headers.
+test("the configured secret is accepted from the header, and only the header", () => {
+  // The query form was dropped: a secret in a url is written into every proxy
+  // and ingress access log upstream of this service, where its own redaction
+  // cannot reach. A provider that can only be given a url needs its own
+  // verifyRequest, not a weaker shared path.
   config.webhook = { sharedSecret: SECRET, verify: true };
   assert.equal(verifySharedSecret(req({ header: SECRET }), "ValueFirst"), true);
-  assert.equal(verifySharedSecret(req({ query: SECRET }), "ValueFirst"), true);
+  assert.equal(verifySharedSecret(req({ query: SECRET }), "ValueFirst"), false, "query is no longer a way in");
 });
 
 test("a wrong, absent or truncated secret is refused", () => {

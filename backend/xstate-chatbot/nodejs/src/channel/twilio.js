@@ -4,7 +4,6 @@ const fetch = require("node-fetch");
 const axios = require('axios');
 var FormData = require("form-data");
 const mediaTypes = require('../media-types');
-const { toNationalNumber, toInternationalNumber } = require('../phone-numbers');
 const { maskMobile, summarizeInbound } = require('../privacy');
 const { isValidTwilioSignature } = require('./twilio-signature');
 

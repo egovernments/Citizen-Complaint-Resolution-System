@@ -152,7 +152,7 @@ const envVariables = {
     },
 
     // Providers with no signing scheme of their own (ValueFirst, Kaleyra) verify
-    // a shared secret instead, sent as X-Webhook-Secret or ?webhookSecret=.
+    // a shared secret instead, sent as the X-Webhook-Secret header.
     webhook: {
         sharedSecret: process.env.WEBHOOK_SHARED_SECRET || '',
         // Mirrors TWILIO_VERIFY_WEBHOOK_SIGNATURE: the only way to run unverified.

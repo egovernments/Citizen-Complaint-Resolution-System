@@ -3,8 +3,6 @@ const express = require('express'),
   envVariables = require('./env-variables'),
   port = envVariables.port,
   { loadLocalisationOrExit } = require('./machine/util/localisation-service');
-
-const { createProxyMiddleware } = require('http-proxy-middleware');
 const { assertRequiredConfigOrExit, warnAtStartup } = require('./startup-checks');
 const createAppServer = () => {
 

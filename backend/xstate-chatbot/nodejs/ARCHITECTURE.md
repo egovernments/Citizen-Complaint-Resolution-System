@@ -1226,7 +1226,7 @@ How each adapter answers differs, and the difference matters. Twilio signs its
 webhooks, so `twilio.js` recomputes the HMAC-SHA1 over the public URL and the form
 body and compares it to `X-Twilio-Signature`. ValueFirst and Kaleyra sign nothing,
 so both fall back to `channel/shared-secret.js`: a value the operator configures on
-both sides, presented as a header or a query parameter and compared in constant
+both sides, presented as the `X-Webhook-Secret` header and compared in constant
 time. That is weaker — a bearer value, replayable, only as good as the TLS around
 it — but it is the difference between "anyone who finds the URL can file complaints
 as any citizen" and "you need the secret".

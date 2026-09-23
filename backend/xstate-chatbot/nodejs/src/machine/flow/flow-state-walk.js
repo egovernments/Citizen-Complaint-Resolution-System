@@ -15,7 +15,6 @@ function normalizeOutcome(state, options) {
 }
 
 class WalkState extends State {
-  // async fn(context, path) -> {options, messageBundle, trailBundle, levelLabel, isLeafLevel}
   setFetch(fn) {
     this.fetch = fn;
     return this;
@@ -112,14 +111,17 @@ class WalkState extends State {
           ] : [{ target: 'question' }]
         },
         question: {
-          entry: assign((context) => {
-            const { options, messageBundle } = context[this.stepSlot] || {};
-            const goback = this.getPath(context).length > 0;
-            const list = dialog.constructListPromptAndGrammer(options || [], messageBundle || {}, context.user.locale, false, goback);
-            context[this.grammerSlot] = list.grammer;
-            context.lastPrompt = this.renderPreamble(context) + list.prompt;
-            dialog.sendMessage(context, context.lastPrompt);
-          }),
+          entry: [
+            assign((context) => {
+              const { options, messageBundle } = context[this.stepSlot] || {};
+              const goback = this.getPath(context).length > 0;
+              const list = dialog.constructListPromptAndGrammer(options || [], messageBundle || {}, context.user.locale, false, goback);
+              context[this.grammerSlot] = list.grammer;
+              context.lastPrompt = this.renderPreamble(context) + list.prompt;
+            }),
+            (context) => dialog.sendMessage(context, context.lastPrompt)
+          ],
+
           on: { USER_MESSAGE: 'process' }
         },
         process: {
@@ -134,7 +136,13 @@ class WalkState extends State {
             },
             {
               target: '#' + this.onLeaf.state.key,
-              cond: (context) => context.intention !== dialog.INTENTION_UNKOWN && (context[this.stepSlot] || {}).isLeafLevel,
+              cond: (context) => {
+                if (context.intention === dialog.INTENTION_UNKOWN) return false;
+                const step = context[this.stepSlot] || {};
+                // The picked node decides, falling back to the level default —
+                // a branch can bottom out above the declared leaf depth.
+                return step.leafByCode?.[context.intention] ?? step.isLeafLevel;
+              },
               actions: assign((context) => {
                 if (this.onLeaf.slot) context.slots.pgr[this.onLeaf.slot] = context.intention;
                 context[this.pathSlot] = [...this.getPath(context), context.intention];

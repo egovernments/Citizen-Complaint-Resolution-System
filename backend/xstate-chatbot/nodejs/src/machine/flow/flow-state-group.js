@@ -33,9 +33,12 @@ class Group {
   compileNode() {
     const config = { id: this.key, initial: this.initialKey, states: {} };
     if (this.onEntry) config.entry = assign(this.onEntry);
+    
     for (const state of this.states) {
+      if (config.states[state.key]) throw new Error(`duplicate state key in group '${this.key}': ${state.key}`);
       config.states[state.key] = state.compileNode();
     }
+
     return config;
   }
 }

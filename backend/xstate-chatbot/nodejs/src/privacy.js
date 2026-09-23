@@ -17,10 +17,13 @@ function maskMobile(mobileNumber) {
 /**
  * A request url with its query values replaced by `<redacted>`.
  *
- * ValueFirst and Kaleyra can present the webhook secret as `?webhookSecret=`,
- * so logging a raw url writes a live bearer credential to the container log —
- * on accepted requests as well as rejected ones. Keys are kept: which
- * parameters arrived is useful, what they held is not.
+ * A url reaches the log on every inbound request, accepted or rejected, and
+ * its query can carry a citizen's number or anything else a provider chooses
+ * to put there. Keys are kept, values are not: which parameters arrived is
+ * useful for debugging, what they held is not ours to write down.
+ *
+ * Every value goes, rather than an allowlist of secret-looking names — such a
+ * list is one somebody forgets to update.
  */
 function redactUrl(url) {
   const raw = String(url ?? '');
