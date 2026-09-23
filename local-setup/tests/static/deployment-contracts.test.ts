@@ -159,6 +159,41 @@ describe('host_vars templates — db_fast_path ack (#2082)', () => {
   });
 });
 
+// issue #2111. ansible.cfg sets `executable = /bin/bash` so `set -o pipefail`
+// works on Debian/Ubuntu targets, where /bin/sh is dash. Ansible ALSO derives
+// the shell PLUGIN name from that basename, and ships none called "bash" — so
+// every ansible.posix.synchronize task fails with "Could not find the shell
+// plugin required (bash)". playbook-deploy.yml has 12 of them and the first is
+// ~100 tasks in, so a deploy dies with the host already part-configured.
+//
+// Asserted here rather than in an Ansible playbook because the failure needs a
+// real SSH connection to reproduce: over a local connection the plugin is never
+// loaded, so an offline playbook passes with or without the fix (verified).
+describe('ansible.cfg — executable has a matching shell plugin (#2111)', () => {
+  const CFG = 'local-setup/ansible/ansible.cfg';
+  const BUILTIN = ['sh', 'csh', 'fish', 'powershell', 'cmd'];
+
+  test('every configured executable resolves to a shell plugin', () => {
+    const cfg = read(CFG);
+    const m = cfg.match(/^\s*executable\s*=\s*(\S+)/m);
+    if (!m) return; // no override, Ansible's default `sh` applies
+    const name = path.basename(m[1]);
+    if (BUILTIN.includes(name)) return;
+
+    // Not built in, so the repo must ship one — NEXT TO THE PLAYBOOK.
+    //
+    // Asserted against the playbook directory, not a config key: `shell_plugins`
+    // is not an Ansible setting (no such entry in `ansible-config list`, and
+    // shell_loader.config is the hardcoded literal ['shell_plugins'] resolved
+    // against the process CWD). ansible-playbook calls
+    // add_all_plugin_dirs(playbook_dir), so <playbook_dir>/shell_plugins is what
+    // is actually searched. Keying this test on a cfg line would let someone
+    // move the directory, update that line, and keep a green build while every
+    // synchronize task broke again.
+    const pluginDir = path.join(path.dirname(path.join(REPO_ROOT, CFG)), 'shell_plugins');
+    expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
+  });
+});
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
 
