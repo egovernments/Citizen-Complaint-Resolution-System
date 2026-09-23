@@ -9,6 +9,9 @@
   ansible.builtin.set_fact:
     generated: []
 
+# Expected outcome and refusal are DERIVED from the rule, not typed per row.
+# The reason precedence follows the order the asserts appear in the task file:
+# guess -> strand -> force_clean -> move.
 - name: "build the case list"
   ansible.builtin.set_fact:
     generated: >-
@@ -37,9 +40,10 @@
           if ((item.0.key in ['unknown', 'skip-daemon', 'probe-error']
                or item.1.key == 'none') and has_stack)
           else ('strand a database'
-                if (item.0.key == 'data-in-anon'
-                    and (item.1.key == 'PGDATA' or item.3))
-                else 'move a migrated box'))
+                if (item.0.key == 'data-in-anon' and item.1.key == 'PGDATA')
+                else ('force_clean while the database'
+                      if (item.0.key == 'data-in-anon' and item.3)
+                      else 'move a migrated box')))
       }] }}
   loop: "{{ probes | product(mounts) | product(overrides) | product(force_cleans) | map('flatten') | list }}"
   vars:

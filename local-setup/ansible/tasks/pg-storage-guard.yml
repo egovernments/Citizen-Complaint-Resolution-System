@@ -294,14 +294,6 @@
   ansible.builtin.assert:
     that:
       - not (_mount_known and _data_is_anon and _mount_is_pgdata and not _override)
-      # force_clean runs `docker compose down --remove-orphans` immediately
-      # after this guard. An anonymous volume is reachable only through its
-      # container, so `down` orphans it and the following `up` provisions a
-      # FRESH one — initdb fires and the stack returns bare. No mount path
-      # changed, so the check above cannot see it. `up -d` alone is fine:
-      # Compose carries an anonymous volume across a container recreate. It is
-      # specifically the teardown that breaks the chain.
-      - not (_data_is_anon and (force_clean | default(false)) and not _override)
     fail_msg: |
       This box holds a PostgreSQL cluster OUTSIDE the named postgres_data
       volume:
@@ -334,6 +326,46 @@
     _mount_known: "{{ (pg_mount_targets | default([]) | length) > 0 }}"
     _data_is_anon: "{{ pg_probe_verdict is search('^ANON') }}"
     _mount_is_pgdata: "{{ '/var/lib/postgresql/data' in (pg_mount_targets | default([])) }}"
+    _override: "{{ pg_allow_data_loss | default(false) | bool }}"
+
+# Deliberately its own assert rather than a second condition on the one above:
+# they fail for different reasons and need different remedies. Sharing a
+# fail_msg told an operator whose mount was NOT at PGDATA that "this deploy
+# mounts postgres_data at Postgres' data directory", named the wrong path, never
+# mentioned force_clean, and offered pg_allow_data_loss — which would let the
+# teardown orphan the volume and bring the stack up bare.
+- name: "preflight — refuse force_clean while the database is in an anonymous volume"
+  ansible.builtin.assert:
+    that:
+      - not (_data_is_anon and (force_clean | default(false)) and not _override)
+    fail_msg: |
+      force_clean is true, and this box keeps its database in an ANONYMOUS
+      volume:
+
+        {{ pg_probe_verdict }}
+
+      force_clean runs `docker compose down --remove-orphans` immediately after
+      this check. An anonymous volume is reachable only through its container,
+      so `down` orphans it, the next `up` provisions a fresh one, initdb fires
+      and the stack comes back EMPTY. Nothing about the mount path changes,
+      which is why this needs its own check.
+
+      Nothing has been changed, and the data is not deleted — it would be left
+      in that volume, unreferenced.
+
+      The cheap fix is `force_clean: false`. A plain `up -d` is safe here:
+      Compose carries an anonymous volume across a container RECREATE, and it
+      is specifically the teardown that breaks the chain. So you lose only the
+      clean-slate teardown, not the deploy.
+
+      To keep force_clean, migrate the database onto the named volume first:
+        docs/2.12/operations/postgres-volume-migration.md
+
+      `pg_allow_data_loss: true` also bypasses this, but read it literally —
+      on this box it means letting the teardown strand the database.
+    success_msg: "force_clean is safe here, or not requested"
+  vars:
+    _data_is_anon: "{{ pg_probe_verdict is search('^ANON') }}"
     _override: "{{ pg_allow_data_loss | default(false) | bool }}"
 
 - name: "preflight — refuse to move a migrated box off its named volume"

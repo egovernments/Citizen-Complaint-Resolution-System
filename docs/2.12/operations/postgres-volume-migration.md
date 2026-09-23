@@ -266,8 +266,26 @@ docker compose $COMPOSE_FILES stop
 docker compose $COMPOSE_FILES up -d
 ```
 
-The original anonymous volume is untouched and re-attaches by name. Confirm with the
-step 7 counts, then escalate with what you saw.
+The original anonymous volume is untouched. Compose carries the previous container's
+mount at `/var/lib/postgresql/data` across the recreate, so reverting the line puts Postgres
+back on the data it had — measured, not assumed.
+
+**That depends on the container still existing.** Step 3 says `stop`, not `down`, for exactly
+this reason. If the container has since been removed — you ran `down`, or `force_clean` — there
+is nothing to carry over and Postgres will come up on a fresh empty volume. In that case mount
+the old volume explicitly by its id instead of relying on the carry-over: put
+
+```yaml
+services:
+  postgres-db:
+    volumes:
+      - <the $ANON id from step 1>:/var/lib/postgresql/data
+```
+
+in a small override file and add it to the `-f` list.
+
+Either way, confirm with the step 7 counts before you believe it, then escalate with what you
+saw.
 
 If the anonymous volume has somehow been lost, restore the step 2 backup into a fresh
 cluster instead — which is why that backup is not optional:
