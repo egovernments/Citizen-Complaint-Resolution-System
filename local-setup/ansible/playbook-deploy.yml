@@ -2289,7 +2289,55 @@
              or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
       no_log: true
 
-    - name: "OpenBao — persist generated Grafana admin password"
+    # Status-board basic-auth password. Same shape, and for the same reason, as
+    # the Grafana resolve above: /status/ now ships ENABLED, so the deploy has to
+    # be able to protect it without the operator configuring anything. An
+    # explicit `status_basic_auth_password` in host_vars still wins; otherwise
+    # reuse what OpenBao holds, and generate only when there is nothing there.
+    # Operators read it back with:
+    #   bao kv get -field=status_basic_auth_password {{ secrets_path }}
+    - name: "OpenBao — resolve status-board basic-auth password (generate if absent)"
+      ansible.builtin.set_fact:
+        status_basic_auth_pw: >-
+          {{ status_basic_auth_password | default('', true)
+             or bao_secrets.json.data.data.status_basic_auth_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      no_log: true
+
+    # ONE write for every password this deploy generated, not one write per
+    # password (Vinoth review). Each persist has to send `cas` — see the note on
+    # the task below for why — and every one of them reads that version from the
+    # single `bao_secrets` register captured by the read above. So two sequential
+    # persists both send `cas: <v>`: the first succeeds and bumps the secret to
+    # v+1, and OpenBao rejects the second with a 400 because its cas no longer
+    # matches the current version. On a fresh box neither password is in the
+    # bootstrap seed, so BOTH fire and the second — the status board's — aborted
+    # the deploy, with `no_log` censoring the reason to a bare FAILED!.
+    #
+    # Collecting the keys and writing once removes that hazard structurally,
+    # including for whatever key is added here next. The alternative (re-read
+    # `bao_secrets` between the two persists, as the Matomo block below does)
+    # fixes today's pair and leaves the trap armed for the third one.
+    #
+    # The status board's key is collected only when OpenBao has nothing AND the
+    # operator did not pin one in host_vars — a host_vars password is the
+    # operator's to manage, and copying it into OpenBao would quietly create a
+    # second source of truth. (That is also why `docs/2.12/deployment/README.md`
+    # points at the host_vars value as well as the `bao kv get`.)
+    - name: "OpenBao — collect the passwords this deploy generated"
+      ansible.builtin.set_fact:
+        _bao_generated_secrets: >-
+          {{ {}
+             | combine({'grafana_admin_password': grafana_admin_pw}
+                       if (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+                       else {})
+             | combine({'status_basic_auth_password': status_basic_auth_pw}
+                       if ((bao_secrets.json.data.data.status_basic_auth_password | default('', true)) | length == 0
+                           and (status_basic_auth_password | default('', true)) | length == 0)
+                       else {}) }}
+      no_log: true
+
+    - name: "OpenBao — persist the generated passwords"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
         method: POST
@@ -2315,9 +2363,9 @@
         body: >-
           {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
               'data': bao_secrets.json.data.data
-                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
+                      | combine(_bao_generated_secrets)} }}
         status_code: [200]
-      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+      when: _bao_generated_secrets | length > 0
       no_log: true
 
     - name: "OpenBao — write secrets into compose .env (idempotent block)"
@@ -2449,7 +2497,7 @@
       when: enable_matomo | default(false)
       no_log: true
 
-    - name: "OpenBao — re-read tenant secrets (Grafana may have bumped the version)"
+    - name: "OpenBao — re-read tenant secrets (the persist above may have bumped the version)"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
         headers:
@@ -3889,70 +3937,94 @@
         - enable_integration_tests | default(false)
         - integration_tests_dir is defined
 
-    - name: "nginx — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
+    # Everything the three community.general.htpasswd tasks below need, ON THE
+    # TARGET (Vinoth review). Three separate reasons, one package list:
+    #
+    #   apache2-utils / httpd-tools — the htpasswd CLI. Not used by the module,
+    #     but operators rotate and inspect these files by hand.
+    #
+    #   python3-passlib / python3-bcrypt — community.general.htpasswd imports
+    #     BOTH, and Ansible runs modules under the TARGET's discovered
+    #     interpreter (/usr/bin/python3), not under the controller venv that
+    #     install-prereqs.sh builds. With `ansible_connection: local` those are
+    #     the same machine and still different interpreters; on a REMOTE target
+    #     (quickstart.yml.example documents swapping to one) the controller-side
+    #     install never touches the box at all. Either way the module dies with
+    #     "Failed to import the required Python library (passlib)" — under
+    #     no_log, so the operator sees a bare FAILED!. Distro packages rather
+    #     than pip: PEP 668 refuses pip into system python on Ubuntu 24.04 /
+    #     Debian 12+ / Fedora 38+, and the packaged passlib+bcrypt pair is
+    #     mutually compatible (passlib 1.7.4 against bcrypt >= 4.1 fails its
+    #     backend self-test and misreports it as an import error).
+    #     NB on RHEL/Rocky 9, python3-passlib lives in EPEL; Fedora ships it in
+    #     the main repo. A box without EPEL fails HERE, with dnf naming the
+    #     missing package, instead of 200 tasks later behind no_log.
+    #
+    #   nginx — not needed to write the files, needed for the `group:` on them.
+    #     The htpasswd tasks set group www-data/nginx so the nginx worker can
+    #     read a 0640 file, but "Host nginx — install if missing" is ~200 tasks
+    #     further down. www-data exists in base Debian; the `nginx` group is
+    #     created by the nginx package, so on a fresh RHEL/Fedora target the
+    #     module would fail looking up an unknown group. Installing the package
+    #     here is a reorder, not a new dependency — the later task is
+    #     unconditional for Linux and stays (idempotent).
+    - name: "nginx — ensure basic-auth prerequisites on the target (Debian/Ubuntu)"
       ansible.builtin.apt:
-        name: apache2-utils
+        name:
+          - apache2-utils
+          - python3-passlib
+          - python3-bcrypt
+          - nginx
         state: present
       when:
-        # Two consumers now: the integration-tests dashboards and the Gatus
-        # status board. Either one needs htpasswd present.
         - (enable_integration_tests | default(false) and integration_tests_basic_auth_password is defined)
-          or (nginx_features.status | default(false) and status_basic_auth_password is defined)
+          or (enable_mcp_readonly | default(false) and mcp_readonly_basic_auth_password is defined)
+          or (nginx_features.status | default(true))
         - ansible_facts['os_family'] == 'Debian'
 
-    - name: "nginx — ensure htpasswd tooling for basic-auth (RHEL family)"
+    - name: "nginx — ensure basic-auth prerequisites on the target (RHEL family)"
       ansible.builtin.dnf:
-        name: httpd-tools
+        name:
+          - httpd-tools
+          - python3-passlib
+          - python3-bcrypt
+          - nginx
         state: present
       when:
-        # Two consumers now: the integration-tests dashboards and the Gatus
-        # status board. Either one needs htpasswd present.
         - (enable_integration_tests | default(false) and integration_tests_basic_auth_password is defined)
-          or (nginx_features.status | default(false) and status_basic_auth_password is defined)
+          or (enable_mcp_readonly | default(false) and mcp_readonly_basic_auth_password is defined)
+          or (nginx_features.status | default(true))
         - ansible_facts['os_family'] == 'RedHat'
 
-    # Idempotent via `creates`: rotate the password by deleting the file and
-    # re-running. Password comes from vault/host_vars; the task skips entirely
-    # if unset (dashboards would then 401 with no valid user — set it).
     # ---- Gatus status board basic auth (nginx_features.status) ----
-    # Same fresh-vs-existing split as the dev-secret assert above (operator
-    # decision, 2026-09-15): a FRESH box that enables /status/ without a password
-    # fails closed; an ALREADY-DEPLOYED box gets a WARNING and the deploy
-    # continues. The nginx template always emits auth_basic for /status/, so a
-    # box with the feature on but no password simply serves 403 (missing
-    # .htpasswd-status) — closed, not exposed — until the operator sets one; that
-    # is not worth aborting the whole play (and every later fix-up task) on an
-    # existing tenant. @dhruv-1001 hit this as the next domino after the ES
-    # assert on bomet, which enables the board without a password.
-    - name: "status board — require a basic-auth password when /status/ is enabled (fresh boxes fail closed)"
+    # A TRIPWIRE, not a gate on operator input (Vinoth review). The old assert
+    # here caught "feature on, operator set no password"; that state no longer
+    # exists, because "OpenBao — resolve status-board basic-auth password" runs
+    # unconditionally and its last `or` branch generates 24 characters, so
+    # status_basic_auth_pw is always defined and non-empty by the time we get
+    # here — including when host_vars sets it to "". The genuine failures it used
+    # to describe (OpenBao unreachable, the read not completing) abort earlier,
+    # at the OpenBao read itself.
+    #
+    # What it still guards is a refactor: gate that resolve task behind a `when`,
+    # or move it after this point, and every htpasswd task below writes an empty
+    # password instead of failing. Cheap to keep, so keep it — but say what it
+    # actually means rather than asking the operator for a variable the deploy
+    # no longer wants.
+    - name: "status board — basic-auth password must have resolved (internal invariant)"
       ansible.builtin.assert:
         that:
-          - status_basic_auth_password is defined
-          - status_basic_auth_password | length > 0
+          - status_basic_auth_pw is defined
+          - status_basic_auth_pw | length > 0
         fail_msg: >-
-          nginx_features.status is true but `status_basic_auth_password` is not set.
-          The Gatus board enumerates the internal service topology, so it is no
-          longer served unauthenticated. Set status_basic_auth_password (and
-          optionally status_basic_auth_user, default 'digit-status') in
-          host_vars/{{ inventory_hostname }}.yml, or set nginx_features.status
-          to false to stop publishing the board.
-      when:
-        - nginx_features.status | default(false)
-        - not (_existing_box | default(false) | bool)
-
-    - name: "status board — WARN (do not abort) when an already-deployed box enables /status/ without a password"
-      ansible.builtin.debug:
-        msg: >-
-          WARNING: nginx_features.status is true but `status_basic_auth_password`
-          is not set on this already-deployed box. The Gatus board will return
-          403 (its nginx location requires auth and no .htpasswd-status exists)
-          rather than be exposed — set status_basic_auth_password in
-          host_vars/{{ inventory_hostname }}.yml to publish it, or set
-          nginx_features.status to false. Fresh deploys fail closed on this.
-      when:
-        - nginx_features.status | default(false)
-        - _existing_box | default(false) | bool
-        - not (status_basic_auth_password is defined and (status_basic_auth_password | length > 0))
+          INTERNAL: nginx_features.status is true but status_basic_auth_pw is
+          unset. This is not an operator misconfiguration — the resolve task
+          earlier in this play always produces a value (host_vars, then OpenBao,
+          then a generated 24-character password), so reaching this means that
+          task was gated away or reordered. Fix the playbook, not the inventory.
+          Nothing is exposed meanwhile: the /status/ location always emits
+          auth_basic, so with no .htpasswd-status nginx fails closed.
+      when: nginx_features.status | default(true)
 
     # community.general.htpasswd, not `htpasswd -bBc … <pw>` (Vinoth review):
     #   - idempotent against the STORED HASH, so "edit host_vars + redeploy"
@@ -3962,17 +4034,23 @@
     #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
     #     so `-b` defeats no_log for the lifetime of the exec — the same reason
     #     the Grafana reset uses --password-from-stdin).
+    # `group:` is load-bearing. Without it the file lands 0640 root:root and the
+    # nginx WORKER (www-data on Debian, nginx on RHEL) cannot open it, so nginx
+    # logs "open() ... failed (13: Permission denied)" and every /status/ request
+    # is a 500 instead of a 401 — and the deploy's own "validate — gatus /status/
+    # returns 200" then fails. Same reasoning as the Mac-container note below,
+    # different cause: there the file is invisible, here it is unreadable.
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
       community.general.htpasswd:
         path: /etc/nginx/.htpasswd-status
         name: "{{ status_basic_auth_user | default('digit-status') }}"
-        password: "{{ status_basic_auth_password }}"
+        password: "{{ status_basic_auth_pw }}"
         crypt_scheme: bcrypt
+        group: "{{ 'www-data' if ansible_facts['os_family'] == 'Debian' else 'nginx' }}"
         mode: '0640'
       no_log: true
       when:
-        - nginx_features.status | default(false)
-        - status_basic_auth_password is defined
+        - nginx_features.status | default(true)
         - ansible_system != "Darwin"
 
     # macOS thin path: nginx runs as a CONTAINER and only gets the files that
@@ -3981,17 +4059,30 @@
     # container task below mounts it at the path the vhost expects. Without
     # this, auth_basic_user_file points at a file nginx cannot open and every
     # /status/ request is a 500 rather than a 401.
+    #
+    # NO `group:` here, unlike the Linux task above, and 0640 is deliberate.
+    # The concern (Vinoth review) is that the container's worker runs as uid 101
+    # and this file is written root-owned, so a 0640 file would be unreadable
+    # the same way the Linux one was. It is not: macOS bind mounts do not carry
+    # host uid/gid semantics into the container. Measured on OrbStack 29.4.0,
+    # 2026-09-23 — a 0640 host file bind-mounted :ro into nginx:1.27-alpine
+    # showed as root:root inside and was still readable by uid 101, and a real
+    # auth_basic location served 401 / 401 / 200 for no, wrong and correct
+    # credentials with no permission-denied line in the error log. There is also
+    # no host group that would help: gid 101 on the Mac is not the container's
+    # nginx group. So the mode stays tight, and the deploy's own
+    # "validate — gatus /status/ returns 200" is the backstop if some other Mac
+    # container runtime does enforce the bits.
     - name: "status board — basic-auth user for the Mac nginx container"
       community.general.htpasswd:
         path: "{{ digit_dir }}/nginx/.htpasswd-status"
         name: "{{ status_basic_auth_user | default('digit-status') }}"
-        password: "{{ status_basic_auth_password }}"
+        password: "{{ status_basic_auth_pw }}"
         crypt_scheme: bcrypt
         mode: '0640'
       no_log: true
       when:
-        - nginx_features.status | default(false)
-        - status_basic_auth_password is defined
+        - nginx_features.status | default(true)
         - ansible_system == "Darwin"
 
     - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
@@ -4000,6 +4091,7 @@
         name: "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
         password: "{{ integration_tests_basic_auth_password }}"
         crypt_scheme: bcrypt
+        group: "{{ 'www-data' if ansible_facts['os_family'] == 'Debian' else 'nginx' }}"
         mode: '0640'
       no_log: true
       when:
@@ -4025,6 +4117,7 @@
         name: "{{ mcp_readonly_basic_auth_user | default('digit-mcp') }}"
         password: "{{ mcp_readonly_basic_auth_password }}"
         crypt_scheme: bcrypt
+        group: "{{ 'www-data' if ansible_facts['os_family'] == 'Debian' else 'nginx' }}"
         mode: '0640'
       no_log: true
       when:
@@ -4285,7 +4378,7 @@
               -p {{ nginx_host_port | default(80) }}:80 \
               -v {{ digit_dir }}/nginx/site.conf:/etc/nginx/conf.d/default.conf:ro \
               -v {{ configurator_www_dir }}:/var/www/configurator:ro \
-              {{ ('-v ' ~ digit_dir ~ '/nginx/.htpasswd-status:/etc/nginx/.htpasswd-status:ro \\') if (nginx_features.status | default(false)) else '\\' }}
+              {{ ('-v ' ~ digit_dir ~ '/nginx/.htpasswd-status:/etc/nginx/.htpasswd-status:ro \\') if (nginx_features.status | default(true)) else '\\' }}
               nginx:1.27-alpine
           register: mac_nginx
           changed_when: true
@@ -4403,19 +4496,17 @@
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
         url_username: "{{ status_basic_auth_user | default('digit-status') }}"
-        url_password: "{{ status_basic_auth_password | default('') }}"
+        url_password: "{{ status_basic_auth_pw | default('') }}"
         force_basic_auth: true
       no_log: true
-      # Only validate the board actually serves 200 when it is BOTH enabled and
-      # has a password. On an already-deployed box that enables /status/ without
-      # a password, the assert above intentionally warns-and-continues and the
-      # board serves 403 by design — so probing it for 200 here would just
-      # re-abort the play for the same reason. Skip it in that case (the warning
-      # already told the operator to set a password to publish the board).
+      # The board always has a password now (generated into OpenBao when the
+      # operator does not pin one), so the old "enabled but passwordless" skip
+      # cannot arise. Still guard on the resolved value: if OpenBao did not
+      # complete, the assert above has already failed and this would only
+      # repeat it.
       when:
-        - nginx_features.status | default(false)
-        - status_basic_auth_password is defined
-        - (status_basic_auth_password | default('') | length) > 0
+        - nginx_features.status | default(true)
+        - (status_basic_auth_pw | default('') | length) > 0
 
     # An unauthenticated HEAD /mcp now returns 401 (token required — the MCP
     # auth hardening), or 405 on an older image that only rejects the method.
@@ -5597,7 +5688,7 @@
           - "All containers:        HEALTHY"
           - "Public UI:             200 OK"
           - "Configurator:          {{ '200 OK' if nginx_features.configurator | default(false) else 'SKIPPED (disabled)' }}"
-          - "Gatus /status/:        {{ '200 OK' if nginx_features.status | default(false) else 'SKIPPED (disabled)' }}"
+          - "Gatus /status/:        {{ '200 OK' if nginx_features.status | default(true) else 'SKIPPED (disabled)' }}"
           - "MCP /mcp:              {{ '200 OK' if nginx_features.mcp | default(false) else 'SKIPPED (disabled)' }}"
           - "Auth flow:             access_token minted"
           - "MDMS StateInfo:        non-empty"
