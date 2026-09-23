@@ -166,7 +166,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen w-full bg-background text-foreground" style={AUTH_THEME}>
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[45fr_55fr] xl:grid-cols-2">
-        <div className="relative hidden min-h-[320px] flex-col justify-between overflow-hidden p-10 text-white lg:flex">
+        {/* The narrative block sits at the bottom of the panel rather than
+            floating in the middle of it: `mt-auto` on that block absorbs the
+            free space, so the headline, the lede and the strap-line read as one
+            group resting just above the copyright line. `justify-between` used
+            to spread all three children apart, which left the narrative
+            stranded mid-panel on tall viewports. */}
+        <div className="relative hidden min-h-[320px] flex-col overflow-hidden p-10 text-white lg:flex">
           <AuthBackdrop />
 
           <div className="relative z-[1] flex flex-col gap-6">
@@ -186,7 +192,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <div className="relative z-[1]">
+          <div className="relative z-[1] mt-auto">
             <h1 className="text-5xl font-semibold leading-[1.1] tracking-[-0.01em]">
               Manage complaints from intake to closure.
             </h1>
@@ -198,7 +204,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             <RotatingNarrative />
           </div>
 
-          <p className="relative z-[1] text-xs text-white/50">
+          <p className="relative z-[1] mt-10 text-xs text-white/50">
             © 2026 eGovernments Foundation · DIGIT
           </p>
         </div>
