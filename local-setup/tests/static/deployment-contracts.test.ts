@@ -186,7 +186,79 @@ describe('host_vars _example.yml', () => {
     expect(example).toContain('/dashboard path is outside this bootstrap contract');
   });
 });
+describe('host_vars templates — db_fast_path ack (#2082)', () => {
+  const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
+  // Tracked templates only. Operator host_vars (<tenant>.yml) are gitignored
+  // and SHOULD carry ack: true once that box has been checked — asserting on
+  // them would fail on the deploying engineer's own machine.
+  const templates = fs
+    .readdirSync(path.join(REPO_ROOT, HOST_VARS))
+    .filter((f) => f.endsWith('.yml.example') || f === '_example.yml');
 
+  test.each(templates)('%s never ships a pre-set data-wipe ack', (file) => {
+    const body = read(path.join(HOST_VARS, file));
+    if (!/^db_fast_path:\s*true/m.test(body)) return; // flag off: ack is moot
+    expect(body).toMatch(/^db_fast_path_ack_data_wipe:\s*false\s*$/m);
+    expect(body).not.toMatch(/^db_fast_path_ack_data_wipe:\s*true/m);
+  });
+
+  test('preflight still fails _example.yml for exactly that reason', () => {
+    // preflight exits non-zero here by design, so execFileSync always throws and
+    // the output arrives on the error. Record whether it exited 0 rather than
+    // throwing from inside the try, which would land in this same catch and be
+    // reported as a confusing assertion failure instead of the real message.
+    let out = '';
+    let exitedZero = false;
+    try {
+      out = execFileSync('python3',
+        ['local-setup/scripts/preflight.py', `${HOST_VARS}/_example.yml`],
+        { cwd: REPO_ROOT, encoding: 'utf8' });
+      exitedZero = true;
+    } catch (e: any) {
+      out = e.stdout ?? '';
+    }
+    expect(exitedZero).toBe(false); // _example.yml must NOT pass preflight
+    const fails = out.split('\n').filter((l) => l.startsWith('[FAIL]'));
+    expect(fails).toHaveLength(1);
+    expect(fails[0]).toContain('fastpath-data-wipe-ack');
+  });
+});
+
+// issue #2111. ansible.cfg sets `executable = /bin/bash` so `set -o pipefail`
+// works on Debian/Ubuntu targets, where /bin/sh is dash. Ansible ALSO derives
+// the shell PLUGIN name from that basename, and ships none called "bash" — so
+// every ansible.posix.synchronize task fails with "Could not find the shell
+// plugin required (bash)". playbook-deploy.yml has 12 of them and the first is
+// ~100 tasks in, so a deploy dies with the host already part-configured.
+//
+// Asserted here rather than in an Ansible playbook because the failure needs a
+// real SSH connection to reproduce: over a local connection the plugin is never
+// loaded, so an offline playbook passes with or without the fix (verified).
+describe('ansible.cfg — executable has a matching shell plugin (#2111)', () => {
+  const CFG = 'local-setup/ansible/ansible.cfg';
+  const BUILTIN = ['sh', 'csh', 'fish', 'powershell', 'cmd'];
+
+  test('every configured executable resolves to a shell plugin', () => {
+    const cfg = read(CFG);
+    const m = cfg.match(/^\s*executable\s*=\s*(\S+)/m);
+    if (!m) return; // no override, Ansible's default `sh` applies
+    const name = path.basename(m[1]);
+    if (BUILTIN.includes(name)) return;
+
+    // Not built in, so the repo must ship one — NEXT TO THE PLAYBOOK.
+    //
+    // Asserted against the playbook directory, not a config key: `shell_plugins`
+    // is not an Ansible setting (no such entry in `ansible-config list`, and
+    // shell_loader.config is the hardcoded literal ['shell_plugins'] resolved
+    // against the process CWD). ansible-playbook calls
+    // add_all_plugin_dirs(playbook_dir), so <playbook_dir>/shell_plugins is what
+    // is actually searched. Keying this test on a cfg line would let someone
+    // move the directory, update that line, and keep a green build while every
+    // synchronize task broke again.
+    const pluginDir = path.join(path.dirname(path.join(REPO_ROOT, CFG)), 'shell_plugins');
+    expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
+  });
+});
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');

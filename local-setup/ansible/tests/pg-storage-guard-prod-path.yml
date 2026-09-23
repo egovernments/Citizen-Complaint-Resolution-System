@@ -1,0 +1,46 @@
+---
+# The combination pg-storage-guard-test.yml structurally cannot cover: no
+# `pg_guard_probe_override`, i.e. the real probe runs. That gap is why a
+# `set_fact` defaulting to itself — fatal in pre_tasks on every production
+# deploy — passed a fully green matrix.
+#
+# A SEPARATE playbook on purpose. set_fact values persist across plays for the
+# same host and `meta: clear_facts` does not remove them, so as an extra play in
+# that file the self-reference would resolve against a leftover value from an
+# earlier row and pass. Only a separate `ansible-playbook` run starts clean.
+#
+#   ansible-playbook -i localhost, -c local tests/pg-storage-guard-prod-path.yml
+#
+# The box's docker state is not fixed here, so the verdict is not asserted. What
+# IS asserted: the guard renders and runs to a DECISION rather than dying on a
+# template error or an undefined variable.
+- name: pg storage guard — production shape, real probe
+  hosts: localhost
+  gather_facts: false
+  vars:
+    fixtures: "{{ playbook_dir }}/fixtures/compose"
+    digit_dir: /nonexistent-for-tests
+  tasks:
+    - name: "run the guard with no probe override"
+      block:
+        - ansible.builtin.include_tasks: ../tasks/pg-storage-guard.yml
+          vars:
+            pg_guard_base_compose: "{{ fixtures }}/base-old.yaml"
+            pg_guard_overlay_compose: "{{ fixtures }}/overlay-with.yml"
+            pg_guard_tenant_compose: /nonexistent-tenant-overlay.yml
+            db_fast_path: false
+        - ansible.builtin.set_fact:
+            prod_outcome: "reached a decision: proceed"
+      rescue:
+        - ansible.builtin.set_fact:
+            prod_outcome: "{{ ansible_failed_task.name | default('(no task name)') }}"
+
+    - name: "the guard must decide, not crash"
+      ansible.builtin.assert:
+        that:
+          - prod_outcome is search('reached a decision|refuse to guess|strand a database|move a migrated box')
+        fail_msg: >-
+          The guard did not reach a decision on the production path — it failed
+          at "{{ prod_outcome }}". A template error or undefined variable here
+          breaks every `./deploy.sh` run, in pre_tasks, on every host.
+        success_msg: "production path OK ({{ prod_outcome }})"

@@ -1,0 +1,75 @@
+---
+# Cross every probe verdict with every mount, stack and override state, derive
+# the expected outcome from the rule, and run the real guard for each.
+# `generated` is a fact, so without this the second play starts with the first
+# play's rows and re-runs them under ITS digit_dir — labelled no-stack while
+# executing against a stack. Same leak that made the production-path check need
+# its own playbook.
+- name: "start from an empty case list"
+  ansible.builtin.set_fact:
+    generated: []
+
+# Expected outcome and refusal are DERIVED from the rule, not typed per row.
+# The reason precedence follows the order the asserts appear in the task file:
+# guess -> strand -> force_clean -> move.
+- name: "build the case list"
+  ansible.builtin.set_fact:
+    generated: >-
+      {{ generated | default([]) + [{
+        'name': item.0.key ~ ' / mount=' ~ item.1.key
+                ~ ' / ' ~ ('stack' if has_stack else 'no-stack')
+                ~ ' / ' ~ ('override' if item.2 else 'no-override')
+                ~ ' / ' ~ ('force_clean' if item.3 else 'no-force-clean'),
+        'probe': item.0.probe,
+        'probe_rc': item.0.rc,
+        'base': item.1.base,
+        'overlay': 'overlay-without.yml',
+        'db_fast_path': false,
+        'allow_loss': item.2,
+        'force_clean': item.3,
+        'expect': ('PROCEED' if item.2 else (
+                     'ABORT' if (
+                       ((item.0.key in ['unknown', 'skip-daemon', 'probe-error']
+                         or item.1.key == 'none') and has_stack)
+                       or (item.0.key == 'data-in-anon'
+                           and (item.1.key == 'PGDATA' or item.3))
+                       or (item.0.key == 'data-in-named' and item.1.key == 'other')
+                     ) else 'PROCEED')),
+        'reason': (
+          'refuse to guess'
+          if ((item.0.key in ['unknown', 'skip-daemon', 'probe-error']
+               or item.1.key == 'none') and has_stack)
+          else ('strand a database'
+                if (item.0.key == 'data-in-anon' and item.1.key == 'PGDATA')
+                else ('force_clean while the database'
+                      if (item.0.key == 'data-in-anon' and item.3)
+                      else 'move a migrated box')))
+      }] }}
+  loop: "{{ probes | product(mounts) | product(overrides) | product(force_cleans) | map('flatten') | list }}"
+  vars:
+    probes:
+      - {key: data-in-named, probe: "SAFE named-volume:digit_postgres_data", rc: 0}
+      - {key: data-in-anon,  probe: "ANON container-volume:9c2f1ab", rc: 0}
+      - {key: no-data,       probe: "SAFE no-cluster", rc: 0}
+      - {key: unknown,       probe: "UNKNOWN mountpoints-not-readable", rc: 0}
+      - {key: skip-daemon,   probe: "SKIP no-daemon", rc: 0}
+      - {key: skip-docker,   probe: "SKIP no-docker", rc: 0}
+      - {key: probe-error,   probe: "", rc: 1}
+    mounts:
+      - {key: PGDATA, base: base-fixed.yaml}
+      - {key: other,  base: base-old.yaml}
+      # no postgres_data entry in ANY layer: must read as inconclusive, not as
+      # "not PGDATA" — otherwise assert 1 can never fire and an unmigrated box
+      # loads the dump over the tenant.
+      - {key: none,   base: base-nomount.yaml}
+    overrides: [false, true]
+    # force_clean tears the stack down right after this guard. An anonymous
+    # volume only survives a container RECREATE, not a `down`.
+    force_cleans: [false, true]
+
+- name: "run every generated case"
+  ansible.builtin.include_tasks: run-guard-case.yml
+  loop: "{{ generated }}"
+  loop_control:
+    loop_var: case
+    label: "{{ case.name }} -> {{ case.expect }}"
