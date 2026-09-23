@@ -107,11 +107,19 @@ body.digit-auth-body {
     }
 }
 
+/*
+ * The narrative block sits at the bottom of the panel rather than floating in
+ * the middle of it: `margin-top: auto` on `__body` absorbs the free space, so
+ * the headline, the lede and the strap-line read as one group resting just
+ * above the copyright line. `justify-content: space-between` used to spread all
+ * three children apart, which left the narrative stranded mid-panel on tall
+ * viewports. Mirrors AuthShell in
+ * configurator/src/components/signup/AuthPanel.tsx.
+ */
 .digit-brand {
     position: relative;
     display: none;
     flex-direction: column;
-    justify-content: space-between;
     min-height: 320px;
     overflow: hidden;
     padding: 2.5rem; /* p-10 */
@@ -173,6 +181,10 @@ body.digit-auth-body {
 .digit-brand__foot {
     position: relative;
     z-index: 1;
+}
+
+.digit-brand__body {
+    margin-top: auto; /* mt-auto */
 }
 
 .digit-brand__top {
@@ -266,7 +278,7 @@ body.digit-auth-body {
 }
 
 .digit-brand__foot {
-    margin: 0;
+    margin: 2.5rem 0 0; /* mt-10 */
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.5);
 }
