@@ -8,6 +8,7 @@ import {
   createIdentitySession,
   saveSelectedIdentityContext,
 } from "../../src/modules/sessions/session-store.js";
+import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
   getIdentityAppPort as getAppPort,
   startIdentityTestApp as startTestApp,
@@ -22,6 +23,14 @@ let nakuruOrganizationId = "";
 async function kcAdmin(path: string, body: unknown): Promise<Response> {
   return fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}${path}`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function kcUpdate(path: string, body: unknown): Promise<Response> {
+  return fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}${path}`, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -46,11 +55,7 @@ beforeAll(async () => {
   (config as any).identityAllowedOrigins = ["http://localhost:3000", "http://localhost:5173"];
   (config as any).identityCookieSecure = false;
   (config as any).identityCookieSameSite = "Lax";
-  (config as any).identityAuthMethods = [
-    { id: "password", label: "Password", type: "password" },
-    { id: "google", label: "Google", type: "oauth", idpHint: "google" },
-    { id: "magic_link", label: "Email me a sign-in link", type: "magic_link" },
-  ];
+  (config as any).identityTrustProxyHops = 2;
   Object.assign(config as any, {
     cachePrefix: `identity-e2e-${process.pid}`,
     digitUserServiceUrl: `${digitBase}/user`,
@@ -181,15 +186,56 @@ describe("identity BFF", () => {
   });
 
   it("exposes configured methods and rejects unknown methods", async () => {
+    resetIdentityMethodCatalog();
+    await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
     const methods = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/auth-methods`,
     );
     expect(methods.status).toBe(200);
     expect(await methods.json()).toEqual({ methods: [
-      { id: "password", label: "Password", type: "password" },
-      { id: "google", label: "Google", type: "oauth", idpHint: "google" },
-      { id: "magic_link", label: "Email me a sign-in link", type: "magic_link" },
+      { id: "password", label: "Email and password", type: "password", intents: ["signin"] },
+      { id: "google", label: "Continue with Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
+      { id: "github", label: "Continue with GitHub", type: "oauth", idpHint: "github", intents: ["signin", "signup"] },
+      { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
     ] });
+    const initialAdminReads = await (
+      await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
+    ).json() as string[];
+
+    const signinMethods = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
+    );
+    expect((await signinMethods.json()).methods.map((method: { id: string }) => method.id))
+      .toEqual(["password", "google", "github"]);
+    const signupMethods = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signup`,
+    );
+    expect((await signupMethods.json()).methods.map((method: { id: string }) => method.id))
+      .toEqual(["magic_link", "google", "github"]);
+    const cachedAdminReads = await (
+      await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
+    ).json() as string[];
+    expect(cachedAdminReads).toEqual(initialAdminReads);
+
+    await kcUpdate("/clients/digit-identity-bff-uuid", {
+      attributes: {
+        "digit.auth.signin.methods": "google",
+        "digit.auth.signup.methods": "magic_link,google,github",
+      },
+    });
+    resetIdentityMethodCatalog();
+    const reconfigured = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-methods?intent=signin`,
+    );
+    expect((await reconfigured.json()).methods.map((method: { id: string }) => method.id))
+      .toEqual(["google"]);
+    await kcUpdate("/clients/digit-identity-bff-uuid", {
+      attributes: {
+        "digit.auth.signin.methods": "password,google,github",
+        "digit.auth.signup.methods": "magic_link,google,github",
+      },
+    });
+    resetIdentityMethodCatalog();
 
     const unknown = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/authorize?method=unknown`,
@@ -197,34 +243,377 @@ describe("identity BFF", () => {
     );
     expect(unknown.status).toBe(400);
 
-    const magic = await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link`,
+    const invalidIntent = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&intent=register`,
       { redirect: "manual" },
     );
-    expect(magic.status).toBe(302);
-    const magicUrl = new URL(magic.headers.get("location")!);
-    expect(magicUrl.searchParams.get("client_id")).toBe(
-      "digit-identity-bff-magic-link",
+    expect(invalidIntent.status).toBe(400);
+
+    const unsafeReturn = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&returnTo=${encodeURIComponent("/\\attacker.example")}`,
+      { redirect: "manual" },
     );
-    expect(magicUrl.searchParams.has("client_secret")).toBe(false);
-    expect(magicUrl.searchParams.has("kc_idp_hint")).toBe(false);
-    const magicState = magicUrl.searchParams.get("state")!;
-    const magicNonce = magicUrl.searchParams.get("nonce")!;
-    const magicLoginCookie = magic.headers.get("set-cookie")!.split(";", 1)[0];
+    expect(unsafeReturn.status).toBe(400);
+
+    const normalizedUnsafeReturn = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=password&returnTo=${encodeURIComponent("/..//attacker.example")}`,
+      { redirect: "manual" },
+    );
+    expect(normalizedUnsafeReturn.status).toBe(400);
+
+    const hostedMagic = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=magic_link&intent=signup&returnTo=%2Fclient%2Fsignup`,
+      { redirect: "manual" },
+    );
+    expect(hostedMagic.status).toBe(400);
+
+    const magic = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.30",
+        },
+        body: JSON.stringify({
+          firstName: "Magic",
+          lastName: "Founder",
+          email: "person@example.com",
+          returnTo: "/client/signup",
+        }),
+      },
+    );
+    expect(magic.status).toBe(202);
+    expect(await magic.json()).toEqual({
+      message: "Check your email for a link to continue creating your account.",
+    });
+    let magicRequests: Array<Record<string, unknown>> = [];
+    await expect.poll(async () => {
+      magicRequests = await (
+        await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+      ).json() as Array<Record<string, unknown>>;
+      return magicRequests.length;
+    }).toBeGreaterThan(0);
+    const magicRequest = magicRequests.at(-1)!;
+    expect(magicRequest).toMatchObject({
+      email: "person@example.com",
+      client_id: "digit-identity-bff-magic-link",
+      redirect_uri: config.identityRedirectUri,
+      force_create: false,
+      send_email: true,
+      reusable: false,
+      response_mode: "query",
+    });
+    const magicState = String(magicRequest.state);
+    const magicNonce = String(magicRequest.nonce);
     const callback = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(magicNonce)}&state=${encodeURIComponent(magicState)}`,
-      { redirect: "manual", headers: { Cookie: magicLoginCookie } },
+      { redirect: "manual" },
     );
     expect(callback.status).toBe(303);
+    expect(callback.headers.get("location")).toBe("/client/signup");
     const magicSessionCookie = callback.headers.getSetCookie()
       .find((value) => value.startsWith("digit_identity_session="))!
       .split(";", 1)[0];
     // The mock access token expires immediately. Refresh proves the session
     // retained the magic-link client instead of falling back to the password client.
-    expect((await fetch(
+    const magicSession = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/session`,
       { headers: { Cookie: magicSessionCookie } },
-    )).status).toBe(200);
+    );
+    expect(magicSession.status).toBe(200);
+    expect(await magicSession.json()).toMatchObject({
+      user: { name: "Demo Person" },
+    });
+    const magicUser = await (
+      await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/identity-user-1`)
+    ).json();
+    expect(magicUser).toMatchObject({
+      email: "person@example.com",
+      emailVerified: true,
+      firstName: "Demo",
+      lastName: "Person",
+    });
+
+    await kcAdmin("/users", {
+      id: "unverified-provider-user",
+      username: "unverified.provider@example.com",
+      email: "unverified.provider@example.com",
+      firstName: "Provider",
+      lastName: "Claim",
+      enabled: true,
+      emailVerified: false,
+      federatedIdentities: [{ identityProvider: "github", userId: "github-unverified" }],
+    });
+    const linksBeforeUnverifiedAttempt = magicRequests.length;
+    await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
+    const unverifiedProviderAttempt = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.32",
+        },
+        body: JSON.stringify({
+          firstName: "Mailbox",
+          lastName: "Owner",
+          email: "unverified.provider@example.com",
+        }),
+      },
+    );
+    expect(unverifiedProviderAttempt.status).toBe(202);
+    await expect.poll(async () => {
+      const log = await (
+        await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
+      ).json() as string[];
+      return log.filter((entry) => entry.endsWith("/users")).length;
+    }).toBeGreaterThan(0);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect((await (
+      await fetch(`${config.keycloakAdminUrl}/__test/magic-links`)
+    ).json() as Array<Record<string, unknown>>)).toHaveLength(linksBeforeUnverifiedAttempt);
+
+    const newIdentity = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authentication/magic-link-requests`,
+      {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.31",
+        },
+        body: JSON.stringify({
+          firstName: "New",
+          lastName: "Founder",
+          email: "new.founder@example.com",
+        }),
+      },
+    );
+    expect(newIdentity.status).toBe(202);
+    let createdUsers: Array<Record<string, unknown>> = [];
+    await expect.poll(async () => {
+      createdUsers = await (
+        await fetch(
+          `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?email=new.founder%40example.com&exact=true`,
+        )
+      ).json() as Array<Record<string, unknown>>;
+      return createdUsers.length;
+    }).toBe(1);
+    expect(createdUsers).toHaveLength(1);
+    expect(createdUsers[0]).toMatchObject({
+      email: "new.founder@example.com",
+      firstName: "New",
+      lastName: "Founder",
+      emailVerified: false,
+      enabled: true,
+      attributes: { "digit.identityBffSignup": ["true"] },
+    });
+  });
+
+  it("returns provider failures through a one-time, browser-safe result", async () => {
+    const authorize = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&intent=signin&returnTo=%2Fclient%2Flogin`,
+      { redirect: "manual" },
+    );
+    const authorizeUrl = new URL(authorize.headers.get("location")!);
+    const state = authorizeUrl.searchParams.get("state")!;
+    const loginCookie = authorize.headers.get("set-cookie")!.split(";", 1)[0];
+    const callback = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+      { redirect: "manual", headers: { Cookie: loginCookie } },
+    );
+    expect(callback.status).toBe(303);
+    const resultLocation = new URL(callback.headers.get("location")!, "http://localhost");
+    expect(resultLocation.pathname).toBe("/client/login");
+    const id = resultLocation.searchParams.get("authResult")!;
+    const result = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(id)}`,
+    );
+    expect(await result.json()).toEqual({
+      status: "failed",
+      code: "AUTH_CANCELLED",
+      message: "Sign-in was cancelled. No changes were made to your account.",
+      actions: ["TRY_AGAIN"],
+    });
+    expect((await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(id)}`,
+    )).status).toBe(404);
+
+    const conflictAuthorize = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/authorize?method=google&returnTo=%2Fclient%2Flogin`,
+      { redirect: "manual" },
+    );
+    const conflictUrl = new URL(conflictAuthorize.headers.get("location")!);
+    const conflictState = conflictUrl.searchParams.get("state")!;
+    const conflictCookie = conflictAuthorize.headers.get("set-cookie")!.split(";", 1)[0];
+    const conflict = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/callback?error=account_exists&error_description=existing%20account&state=${encodeURIComponent(conflictState)}`,
+      { redirect: "manual", headers: { Cookie: conflictCookie } },
+    );
+    const conflictLocation = new URL(conflict.headers.get("location")!, "http://localhost");
+    const conflictResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(conflictLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await conflictResult.json()).toMatchObject({
+      code: "ACCOUNT_LINK_REQUIRED",
+      actions: ["TRY_EXISTING_METHOD", "SETUP_PASSWORD"],
+    });
+  });
+
+  it("offers non-enumerating, one-time password setup for OAuth accounts", async () => {
+    await kcAdmin("/users", {
+      id: "oauth-only-user", username: "oauth.only@example.com", email: "oauth.only@example.com",
+      firstName: "OAuth", lastName: "Only", enabled: true, emailVerified: true,
+      credentials: [],
+      federatedIdentities: [{ identityProvider: "google", userId: "google-user-1" }],
+    });
+    const endpoint = `http://localhost:${getAppPort()}/identity/v1/password/setup-requests`;
+    const requestSetup = (email: string) => fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.10",
+      },
+      body: JSON.stringify({ email, returnTo: "/client/login" }),
+    });
+    const accepted = await requestSetup("OAUTH.ONLY@example.com");
+    expect(accepted.status).toBe(202);
+    const genericBody = await accepted.json();
+    expect(genericBody).toEqual({
+      message: "If an eligible account exists, a password setup email has been sent.",
+    });
+    const absent = await requestSetup("nobody@example.com");
+    expect(absent.status).toBe(202);
+    expect(await absent.json()).toEqual(genericBody);
+
+    let user: any;
+    await expect.poll(async () => {
+      user = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
+      )).json();
+      return user.activationEmails;
+    }).toBe(1);
+    expect(user.requiredActions).toEqual(["UPDATE_PASSWORD"]);
+    const completion = new URL(user.lastActionRedirectUri);
+    expect(completion.pathname).toMatch(/^\/identity\/v1\/password\/setup-complete\/[^/]+$/);
+    expect(completion.search).toBe("");
+    const completionUnderTest = new URL(
+      `${completion.pathname}${completion.search}`,
+      `http://localhost:${getAppPort()}`,
+    );
+    // Keycloak's execute-actions flow does not append a success flag. The
+    // callback proves completion for resets, while a first password is also
+    // checked against the credential Admin API.
+    expect((await kcUpdate("/users/oauth-only-user", {
+      credentials: [{ id: "password-1", type: "password" }],
+    })).status).toBe(204);
+    const complete = await fetch(completionUnderTest, { redirect: "manual" });
+    expect(complete.status).toBe(303);
+    const completeLocation = new URL(complete.headers.get("location")!, "http://localhost");
+    expect(completeLocation.pathname).toBe("/client/login");
+    const resultId = completeLocation.searchParams.get("authResult")!;
+    const result = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(resultId)}`,
+    );
+    expect(await result.json()).toMatchObject({
+      status: "complete",
+      code: "PASSWORD_SETUP_COMPLETE",
+    });
+
+    const replay = await fetch(completionUnderTest, { redirect: "manual" });
+    expect(replay.status).toBe(303);
+    const replayLocation = new URL(replay.headers.get("location")!, "http://localhost");
+    const replayResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(replayLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await replayResult.json()).toMatchObject({ code: "AUTH_ATTEMPT_EXPIRED" });
+
+    expect((await kcUpdate("/users/oauth-only-user", { credentials: [] })).status).toBe(204);
+    expect((await requestSetup("oauth.only@example.com")).status).toBe(202);
+    let retryUser: any;
+    await expect.poll(async () => {
+      retryUser = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/oauth-only-user`,
+      )).json();
+      return retryUser.activationEmails;
+    }).toBe(2);
+    const cancelledCompletion = new URL(retryUser.lastActionRedirectUri);
+    const cancelledUnderTest = new URL(
+      `${cancelledCompletion.pathname}${cancelledCompletion.search}`,
+      `http://localhost:${getAppPort()}`,
+    );
+    const cancelled = await fetch(cancelledUnderTest, { redirect: "manual" });
+    const cancelledLocation = new URL(cancelled.headers.get("location")!, "http://localhost");
+    const cancelledResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(cancelledLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await cancelledResult.json()).toMatchObject({
+      status: "failed",
+      code: "PASSWORD_SETUP_FAILED",
+      actions: ["SETUP_PASSWORD"],
+    });
+
+    await kcAdmin("/users", {
+      id: "unverified-provider-user",
+      username: "unverified.provider@example.com",
+      email: "unverified.provider@example.com",
+      enabled: true,
+      emailVerified: false,
+      credentials: [],
+      federatedIdentities: [{ identityProvider: "github", userId: "github-user-1" }],
+    });
+    const anonymousUnverified = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.11",
+      },
+      body: JSON.stringify({
+        email: "unverified.provider@example.com",
+        returnTo: "/client/login",
+      }),
+    });
+    expect(anonymousUnverified.status).toBe(202);
+    await expect.poll(async () => {
+      const log = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json() as string[];
+      return log.some((entry) => entry ===
+        `GET /admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user/federated-identity`);
+    }).toBe(true);
+    const unverifiedBeforeAuthentication = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user`,
+    )).json();
+    expect(unverifiedBeforeAuthentication.activationEmails).toBeUndefined();
+
+    const { sessionId } = await createIdentitySession({
+      accessToken: "unverified-provider-session",
+      accessExpiresIn: 3600,
+    }, {
+      sub: "unverified-provider-user",
+      email: "unverified.provider@example.com",
+      email_verified: false,
+    }, "digit-identity-bff");
+    const authenticatedSetup = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Cookie: `${config.identityCookieName}=${sessionId}`,
+        Origin: "http://localhost:3000",
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.12",
+      },
+      body: JSON.stringify({ returnTo: "/client/login" }),
+    });
+    expect(authenticatedSetup.status).toBe(202);
+    await expect.poll(async () => {
+      const authenticatedUser = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/unverified-provider-user`,
+      )).json();
+      return authenticatedUser.activationEmails;
+    }).toBe(1);
   });
 
   it("does not accept a browser-supplied Keycloak token as a session", async () => {
@@ -294,7 +683,13 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(authorizeUrl.searchParams.get("nonce")!)}&state=${encodeURIComponent(state)}`,
       { redirect: "manual" },
     );
-    expect(unboundCallback.status).toBe(400);
+    expect(unboundCallback.status).toBe(303);
+    const unboundLocation = new URL(unboundCallback.headers.get("location")!, "http://localhost");
+    expect(unboundLocation.pathname).toBe("/after-login");
+    const unboundResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(unboundLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await unboundResult.json()).toMatchObject({ code: "SIGN_IN_FAILED" });
 
     const callback = await fetch(
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(authorizeUrl.searchParams.get("nonce")!)}&state=${encodeURIComponent(state)}`,
@@ -315,7 +710,12 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/callback?code=valid-code:${encodeURIComponent(authorizeUrl.searchParams.get("nonce")!)}&state=${encodeURIComponent(state)}`,
       { redirect: "manual", headers: { Cookie: loginCookie } },
     );
-    expect(replay.status).toBe(400);
+    expect(replay.status).toBe(303);
+    const replayLocation = new URL(replay.headers.get("location")!, "http://localhost");
+    const replayResult = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/auth-results/${encodeURIComponent(replayLocation.searchParams.get("authResult")!)}`,
+    );
+    expect(await replayResult.json()).toMatchObject({ code: "AUTH_ATTEMPT_EXPIRED" });
 
     // The first token expires immediately in the mock. Reading the session
     // exercises refresh without exposing either Keycloak token to the browser.

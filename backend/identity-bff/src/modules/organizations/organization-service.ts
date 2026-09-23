@@ -31,8 +31,19 @@ interface UserRepresentation {
   requiredActions?: string[];
 }
 
+interface CredentialRepresentation {
+  id?: string;
+  type?: string;
+}
+
+interface FederatedIdentityRepresentation {
+  identityProvider?: string;
+  userId?: string;
+}
+
 const MANAGED_TENANTS_ATTRIBUTE = "digit.managedTenants";
 const BFF_INVITED_USER_ATTRIBUTE = "digit.identityBffInvited";
+const BFF_SIGNUP_USER_ATTRIBUTE = "digit.identityBffSignup";
 
 export async function managedTenantsFromIdentity(userId: string): Promise<string[]> {
   const response = await request(`/users/${encodeURIComponent(userId)}`);
@@ -92,31 +103,65 @@ export class IdentityAdminError extends Error {
   }
 }
 
-export async function enabledIdentityProviderAliases(): Promise<Set<string>> {
+export interface IdentityProviderSummary {
+  alias: string;
+  displayName: string;
+}
+
+export async function enabledIdentityProviders(): Promise<Map<string, IdentityProviderSummary>> {
   const response = await request(
     "/identity-provider/instances?briefRepresentation=true&max=100",
   );
   const providers = await response.json() as Array<{
     alias?: string;
+    displayName?: string;
     enabled?: boolean;
   }>;
-  return new Set(providers.flatMap((provider) =>
-    provider.enabled !== false && provider.alias ? [provider.alias] : [],
-  ));
+  return new Map(providers.flatMap((provider) => {
+    if (provider.enabled === false || !provider.alias) return [];
+    return [[provider.alias, {
+      alias: provider.alias,
+      displayName: provider.displayName?.trim() || provider.alias,
+    }]];
+  }));
 }
 
-/** Enabled OIDC clients used to hide methods whose Keycloak flow is not installed yet. */
-export async function enabledIdentityClientIds(clientIds: string[]): Promise<Set<string>> {
-  const enabled = new Set<string>();
-  await Promise.all([...new Set(clientIds)].map(async (clientId) => {
-    const query = new URLSearchParams({ clientId, search: "true" });
-    const response = await request(`/clients?${query}`);
-    const clients = await response.json() as Array<{ clientId?: string; enabled?: boolean }>;
-    if (clients.some((client) => client.clientId === clientId && client.enabled !== false)) {
-      enabled.add(clientId);
-    }
-  }));
-  return enabled;
+export interface IdentityClientSummary {
+  id: string;
+  clientId: string;
+  enabled: boolean;
+  standardFlowEnabled: boolean;
+  attributes: Record<string, string>;
+}
+
+/** Live client capability and DIGIT journey policy from Keycloak. */
+export async function identityClient(clientId: string): Promise<IdentityClientSummary | null> {
+  const query = new URLSearchParams({ clientId, search: "true" });
+  const response = await request(`/clients?${query}`);
+  const clients = await response.json() as Array<{
+    id?: string;
+    clientId?: string;
+  }>;
+  const match = clients.find((candidate) => candidate.clientId === clientId);
+  if (!match?.id) return null;
+  // The collection response may be brief on some Keycloak versions. Read the
+  // exact client so policy attributes never disappear because of list shaping.
+  const detailResponse = await request(`/clients/${encodeURIComponent(match.id)}`);
+  const client = await detailResponse.json() as {
+    id?: string;
+    clientId?: string;
+    enabled?: boolean;
+    standardFlowEnabled?: boolean;
+    attributes?: Record<string, string>;
+  };
+  if (!client?.id || !client.clientId) return null;
+  return {
+    id: client.id,
+    clientId: client.clientId,
+    enabled: client.enabled !== false,
+    standardFlowEnabled: client.standardFlowEnabled !== false,
+    attributes: client.attributes || {},
+  };
 }
 
 function realmPath(path: string): string {
@@ -394,6 +439,110 @@ export async function readIdentityUserProfile(userId: string): Promise<IdentityU
   };
 }
 
+/**
+ * Applies the name collected by the client application only after the magic-link
+ * redemption has proved ownership of the same email address. This is profile
+ * completion on Keycloak's structural user record, not tenant authorization.
+ */
+export async function applyVerifiedSignupIdentityProfile(input: {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<boolean> {
+  const response = await request(`/users/${encodeURIComponent(input.userId)}`);
+  const user = await response.json() as UserRepresentation;
+  if (user.id !== input.userId || user.enabled === false ||
+      user.email?.trim().toLowerCase() !== input.email || user.emailVerified !== true) {
+    throw new IdentityAdminError("The verified magic-link identity does not match the signup");
+  }
+  const managedDraft = user.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+  // A signup may authenticate an established account, but profile editing is
+  // a separate, authenticated flow. Only finish the provisional record that
+  // this BFF created for the same signup journey.
+  if (!managedDraft) return false;
+  const attributes = { ...user.attributes };
+  delete attributes[BFF_SIGNUP_USER_ATTRIBUTE];
+  await request(`/users/${encodeURIComponent(input.userId)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ...user,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      attributes,
+    }),
+  });
+  return true;
+}
+
+/**
+ * Creates the structural Keycloak record before email verification so its
+ * profile is complete when the action token is redeemed. It grants no tenant
+ * membership or role and deliberately leaves `emailVerified` false.
+ */
+export async function ensureMagicLinkSignupIdentity(input: {
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<{ id: string; created: boolean }> {
+  const existing = await findIdentityUserByEmail(input.email);
+  if (existing) {
+    if (!existing.id || existing.enabled === false) {
+      throw new IdentityAdminError("The Keycloak user is not available for signup", 409);
+    }
+    const managedDraft = existing.emailVerified !== true &&
+      existing.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+    // A verified existing email may be proved again through the mailbox and
+    // continue into the explicit account-linking journey. An unverified
+    // provider-only record is not equivalent proof: its provider must first
+    // authenticate it. Only provisional records created by this BFF are the
+    // exception because the magic link is their original verification step.
+    if (existing.emailVerified !== true && !managedDraft) {
+      throw new IdentityAdminError("The existing identity must be verified through its provider", 409);
+    }
+    if (managedDraft &&
+        (existing.firstName !== input.firstName || existing.lastName !== input.lastName)) {
+      await request(`/users/${encodeURIComponent(existing.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...existing,
+          firstName: input.firstName,
+          lastName: input.lastName,
+        }),
+      });
+    }
+    return { id: existing.id, created: false };
+  }
+
+  const response = await request("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      username: input.email,
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      enabled: true,
+      emailVerified: false,
+      attributes: { [BFF_SIGNUP_USER_ATTRIBUTE]: ["true"] },
+    }),
+  }, [201, 409]);
+  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  if (response.status === 201 && id) return { id, created: true };
+
+  // A concurrent request may have won the create. Resolve the same unique
+  // email record rather than treating the idempotent retry as a new identity.
+  const raced = await findIdentityUserByEmail(input.email);
+  if (!raced?.id || raced.enabled === false) {
+    throw new IdentityAdminError("Keycloak did not identify the signup user", 409);
+  }
+  const racedManagedDraft = raced.emailVerified !== true &&
+    raced.attributes?.[BFF_SIGNUP_USER_ATTRIBUTE]?.includes("true") === true;
+  if (raced.emailVerified !== true && !racedManagedDraft) {
+    throw new IdentityAdminError("The existing identity must be verified through its provider", 409);
+  }
+  return { id: raced.id, created: false };
+}
+
 function invitedUser(user: UserRepresentation, email: string, created: boolean): InvitedIdentityUser {
   if (!user.id || user.enabled === false || user.email?.toLowerCase() !== email) {
     throw new IdentityAdminError("The Keycloak user is not available for invitation", 409);
@@ -427,6 +576,75 @@ async function findIdentityUserByEmail(email: string): Promise<UserRepresentatio
     throw new IdentityAdminError("Multiple Keycloak users use this email address", 409);
   }
   return matches[0] || null;
+}
+
+export interface PasswordSetupInspection {
+  userId: string;
+  hasPassword: boolean;
+  federatedProviders: string[];
+  emailVerified: boolean;
+}
+
+/**
+ * Exact, non-public account inspection used only by password recovery. The
+ * route deliberately never returns this shape: credential/provider presence
+ * would otherwise be an account-enumeration oracle.
+ */
+export async function inspectPasswordSetupAccount(
+  email: string,
+): Promise<PasswordSetupInspection | null> {
+  const user = await findIdentityUserByEmail(email.trim().toLowerCase());
+  if (!user?.id || user.enabled === false) return null;
+  return inspectPasswordSetupAccountById(user.id);
+}
+
+export async function inspectPasswordSetupAccountById(
+  userId: string,
+): Promise<PasswordSetupInspection | null> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  if (!user.id || user.enabled === false) return null;
+  const [credentialsResponse, identitiesResponse] = await Promise.all([
+    request(`/users/${encodeURIComponent(user.id)}/credentials`),
+    request(`/users/${encodeURIComponent(user.id)}/federated-identity`),
+  ]);
+  const credentials = await credentialsResponse.json() as CredentialRepresentation[];
+  const identities = await identitiesResponse.json() as FederatedIdentityRepresentation[];
+  return {
+    userId: user.id,
+    hasPassword: credentials.some((credential) => credential.type === "password"),
+    federatedProviders: identities.flatMap((identity) =>
+      identity.identityProvider ? [identity.identityProvider] : []
+    ),
+    emailVerified: user.emailVerified === true,
+  };
+}
+
+export async function hasPasswordCredential(userId: string): Promise<boolean> {
+  const response = await request(`/users/${encodeURIComponent(userId)}/credentials`);
+  const credentials = await response.json() as CredentialRepresentation[];
+  return credentials.some((credential) => credential.type === "password");
+}
+
+export async function sendPasswordSetupEmail(input: {
+  userId: string;
+  emailVerified: boolean;
+  redirectUri: string;
+}): Promise<void> {
+  const query = new URLSearchParams({
+    client_id: config.keycloakBffClientId,
+    lifespan: String(config.identityPasswordSetupTtlSeconds),
+    redirect_uri: input.redirectUri,
+  });
+  await request(
+    `/users/${encodeURIComponent(input.userId)}/execute-actions-email?${query}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input.emailVerified
+        ? ["UPDATE_PASSWORD"]
+        : ["VERIFY_EMAIL", "UPDATE_PASSWORD"]),
+    },
+  );
 }
 
 /** Creates the passwordless Keycloak identity used by an employee invitation. */

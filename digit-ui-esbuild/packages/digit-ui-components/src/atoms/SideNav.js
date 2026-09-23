@@ -20,13 +20,28 @@ const SideNav = ({
   collapsedWidth,
   onSelect,
   onBottomItemClick,
-  enableSearch
+  enableSearch,
+  // Opt-in, default off: every existing consumer keeps the hover-only
+  // behaviour untouched. `pinned` is owned by the caller so it can be
+  // persisted per user rather than reset on every mount.
+  pinnable = false,
+  pinned = false,
+  onPinnedChange,
 }) => {
   const { t } = useTranslation();
   const location = useLocation();
   const isMultiRootTenant = Digit?.Utils?.getMultiRootTenant();
   const tenantId = Digit?.ULBService?.getStateId();
   const [hovered, setHovered] = useState(false);
+  /**
+   * Every layout decision below keys off this, not off `hovered` directly:
+   * pinning has to hold the wide presentation open after the pointer leaves.
+   * `hovered` keeps its original meaning and still only tracks the pointer.
+   */
+  const expanded = (pinnable && pinned) || hovered;
+  const pinLabel = pinned
+    ? t("CORE_SIDEBAR_COLLAPSE", "Collapse")
+    : t("CORE_SIDEBAR_PIN", "Keep open");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState({});
   const [expandedItems, setExpandedItems] = useState({});
@@ -90,11 +105,11 @@ const SideNav = ({
       iconReq,
       iconFill ||
         (theme === "dark" ||
-        (theme === "light" && variant === "primary" && isSelected && hovered) ||
+        (theme === "light" && variant === "primary" && isSelected && expanded) ||
         (theme === "light" &&
           variant === "primary" &&
           (isSelected || isParentOfSelectedItem) &&
-          !hovered)
+          !expanded)
           ? darkThemeColor
           : lightThemeColor),
       width,
@@ -129,7 +144,7 @@ const SideNav = ({
   const renderSearch = () => {
     return (
       <>
-        {hovered ? (
+        {expanded ? (
           <div
             className={`digit-sidebar-search-container ${theme || ""} ${
               variant || ""
@@ -177,11 +192,11 @@ const SideNav = ({
               selectedItem.item === item ? "selected" : ""
             } ${parentIndex === -1 ? "parentLevel" : ""} ${
               isParentOfSelectedItem(currentIndex) ? "selectedAsParent" : ""
-            } ${hovered ? "hovered" : "collapsed"}`}
+            } ${expanded ? "hovered" : "collapsed"}`}
             onClick={() => handleItemClick(item, currentIndex, parentIndex)}
             tabIndex={0}
           >
-            {(isTopLevel || hovered) && (
+            {(isTopLevel || expanded) && (
               <span className="icon">
                 {(isSelected || isParentOfSelectedItem(currentIndex)) &&
                 item?.selectedIcon
@@ -203,8 +218,8 @@ const SideNav = ({
                     )}
               </span>
             )}
-            {hovered && <span className="item-label">{item.label}</span>}
-            {item.children && hovered && (
+            {expanded && <span className="item-label">{item.label}</span>}
+            {item.children && expanded && (
               <span
                 className="expand-icon"
                 onClick={(e) => {
@@ -239,7 +254,7 @@ const SideNav = ({
               </span>
             )}
           </div>
-          {item.children && isExpanded && hovered && (
+          {item.children && isExpanded && expanded && (
             <div className="digit-sidebar-children">
               {renderItems(item.children, currentIndex)}
             </div>
@@ -261,17 +276,24 @@ const SideNav = ({
 
   return (
     <div
-      className={`digit-sidebar ${hovered ? "hovered" : "collapsed"} ${
-        theme || ""
-      } ${variant || ""} ${enableSearch ? "" :"searchDisabled"} ${className || ""}`}
+      className={`digit-sidebar ${expanded ? "hovered" : "collapsed"} ${
+        pinnable && pinned ? "pinned" : ""
+      } ${theme || ""} ${variant || ""} ${enableSearch ? "" :"searchDisabled"} ${className || ""}`}
       style={{
         width:
-          hovered && expandedWidth
+          expanded && expandedWidth
             ? expandedWidth
-            : !hovered && collapsedWidth
+            : !expanded && collapsedWidth
             ? collapsedWidth
             : undefined,
-        transition: `width ${transitionDuration || 0.5}s`,
+        // The width only animates when BOTH ends are concrete lengths. Given
+        // no expandedWidth/collapsedWidth the element falls through to the
+        // stylesheet, whose open state is `width:auto; min-width:15rem`, and
+        // `auto` is not an animatable value — so the transition declared here
+        // never ran and the panel jumped open. Callers passing both widths
+        // get a real animation. The curve is stated rather than left to the
+        // default `ease`, which reads slack over this distance.
+        transition: `width ${transitionDuration || 0.5}s cubic-bezier(0.4, 0, 0.2, 1)`,
         ...styles,
       }}
       onMouseEnter={() => setHovered(true)}
@@ -286,10 +308,39 @@ const SideNav = ({
         {filteredItems.length > 0 ? (
           renderItems(filteredItems)
         ) : (
-          hovered && <div className="digit-msb-no-results">{t("No Results Found")}</div>
+          expanded && <div className="digit-msb-no-results">{t("No Results Found")}</div>
         )}
       </div>
-      {hovered && !hideAccessbilityTools && (
+      {/* Foot of the rail, after the items. Placing it above them meant every
+          expand shoved the whole nav list down by a row, which is a worse
+          thing to watch than the control is worth. As the last flex child with
+          `margin-top: auto` it settles at the bottom and the items never move.
+
+          Only rendered once open: at 3rem the rail is an icon strip and has no
+          room for an affordance whose whole purpose is to keep it wide. */}
+      {pinnable && expanded && (
+        <div className={`digit-sidebar-pin-row ${theme || ""}`}>
+          <button
+            type="button"
+            className={`digit-sidebar-pin ${pinned ? "pinned" : ""}`}
+            aria-pressed={pinned}
+            aria-label={pinLabel}
+            title={pinLabel}
+            onClick={() => onPinnedChange && onPinnedChange(!pinned)}
+          >
+            {/* A chevron pointing the way the panel will go: left collapses it,
+                right holds it open. Every nav rail people already use does this;
+                a lock reads as permissions, not layout. */}
+            {pinned ? (
+              <SVG.ChevronLeft width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
+            ) : (
+              <SVG.ChevronRight width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
+            )}
+            <span className="digit-sidebar-pin-label">{pinLabel}</span>
+          </button>
+        </div>
+      )}
+      {expanded && !hideAccessbilityTools && (
         <div className={`digit-sidebar-bottom ${theme || ""} ${variant || ""}`}>
           <div>
             <div className="digit-sidebar-bottom-item" onClick={()=> onBottomItemClick && onBottomItemClick("Help")}>
@@ -341,6 +392,9 @@ SideNav.propTypes = {
   theme: PropTypes.oneOf(["dark", "light"]),
   variant: PropTypes.oneOf(["primary", "secondary"]),
   collapsedWidth: PropTypes.string,
+  pinnable: PropTypes.bool,
+  pinned: PropTypes.bool,
+  onPinnedChange: PropTypes.func,
   expandedWidth: PropTypes.string,
   transitionDuration: PropTypes.number,
   styles: PropTypes.object,

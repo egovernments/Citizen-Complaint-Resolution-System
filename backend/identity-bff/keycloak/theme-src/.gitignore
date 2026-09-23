@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist_keycloak/
+.keycloakify/
+test-results/
+playwright-report/
+*.tsbuildinfo

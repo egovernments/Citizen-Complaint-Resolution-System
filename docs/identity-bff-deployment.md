@@ -4,6 +4,8 @@ This document is the repository-level deployment guide for the implementation
 in [`backend/identity-bff`](../backend/identity-bff/README.md). The complete API,
 flow, and failure contract is in
 [`backend/identity-bff/docs/identity-bff.md`](../backend/identity-bff/docs/identity-bff.md).
+The concise component boundary and source-of-truth map is in the
+[`architecture one-pager`](../backend/identity-bff/docs/architecture.md).
 
 ## Object mapping
 
@@ -24,8 +26,10 @@ egov-user account.
 ## Runtime flow
 
 1. The browser asks the BFF for enabled authentication methods.
-2. The BFF starts Keycloak Authorization Code + PKCE for password, magic link,
-   Google, or GitHub.
+2. The BFF starts Keycloak Authorization Code + PKCE for password, Google, or
+   GitHub. For signup magic link, Configurator posts name/email to the BFF; the
+   BFF stores that interim draft and asks Keycloak to email a single-use action
+   token without rendering a hosted screen.
 3. Keycloak returns the code to the BFF callback. The BFF stores Keycloak tokens
    in Redis and gives the browser an opaque HttpOnly cookie.
 4. The browser loads eligible tenants. The BFF checks live Organization
@@ -52,8 +56,11 @@ identity_bff_image: egovio/identity-bff:nightly-develop
 identity_keycloak_image: egovio/identity-keycloak:nightly-develop
 identity_digit_admin_username: IDENTITY_ACCOUNT_ADMIN
 identity_digit_admin_tenant_id: pg
-identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password"}]
+identity_smtp_host: smtp.example.org
+identity_smtp_from: no-reply@example.org
+identity_smtp_user: smtp-user
+identity_signin_methods: [password, google, github]
+identity_signup_methods: [magic_link, google, github]
 ```
 
 Store these values in `bootstrap_secrets` for a new deployment, or in the
@@ -64,6 +71,7 @@ bootstrap_secrets:
   keycloak_admin_password: "<strong password>"
   keycloak_db_password: "<strong password>"
   identity_digit_admin_password: "<DIGIT ACCOUNT_ADMIN password>"
+  identity_smtp_password: "<SMTP password>"
 ```
 
 The deploy derives separate stable BFF-client and workload secrets from the
@@ -73,17 +81,15 @@ the next converge.
 
 ### Optional authentication methods
 
-Magic link needs the custom `identity-keycloak` image, SMTP, and:
+SMTP is required for the identity stack even when magic link is disabled:
+password setup/reset, invitation activation, and first-broker email proof all
+send through the realm mail server. Deployment fails before changing Keycloak
+when those settings are absent. Magic link additionally needs the custom
+`identity-keycloak` image and:
 
 ```yaml
 identity_magic_link_enabled: true
-identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password"},{"id":"magic_link","label":"Email me a sign-in link","type":"magic_link"}]
-identity_smtp_host: smtp.example.org
-identity_smtp_from: no-reply@example.org
-identity_smtp_user: smtp-user
-bootstrap_secrets:
-  identity_smtp_password: "<SMTP password>"
+identity_signup_methods: [magic_link, google, github]
 ```
 
 Google and GitHub need their provider application callback set to Keycloak's
@@ -93,15 +99,63 @@ only after the provider is configured:
 ```yaml
 keycloak_google_client_id: "<id>"
 keycloak_github_client_id: "<id>"
-identity_auth_methods: >-
-  [{"id":"password","label":"Email and password","type":"password"},{"id":"google","label":"Google","type":"oauth","idpHint":"google"},{"id":"github","label":"GitHub","type":"oauth","idpHint":"github"}]
+identity_signin_methods: [password, google, github]
+identity_signup_methods: [magic_link, google, github]
 bootstrap_secrets:
   keycloak_google_client_secret: "<secret>"
   keycloak_github_client_secret: "<secret>"
 ```
 
-The BFF checks Keycloak live and omits a configured OAuth or magic-link method
-when its provider/client is not enabled.
+The provisioning script writes these ordered lists to
+`digit.auth.signin.methods` and `digit.auth.signup.methods` attributes on the
+`digit-identity-bff` Keycloak client. The BFF reads them and Keycloak's provider
+and client state live; it omits an OAuth or magic-link method when the backing
+provider/client is not enabled. Changing the attributes takes effect without a
+BFF rebuild or restart, with a cache delay of at most ten seconds. Environment
+variables retain connection details and secrets, not the runtime
+authentication-method catalog.
+
+### Proxy and request-rate settings
+
+`IDENTITY_TRUST_PROXY_HOPS` must equal the number of trusted reverse-proxy
+hops between the browser and BFF. The canonical Ansible deployment uses `2`
+for host nginx -> Kong -> BFF; a standalone nginx-to-BFF deployment uses `1`.
+Leaving it at `0` behind a proxy makes IP rate limiting treat the proxy as one
+caller, while trusting too many hops allows a client-supplied forwarded address.
+The canonical Kong deployment must also trust the private/loopback source range
+used by host nginx (`KONG_TRUSTED_IPS`) so it preserves nginx's client-address
+chain. The supplied Compose/Ansible defaults do this; narrow the CIDRs further
+when the host-to-container address is fixed.
+
+Magic-link request throttling is independent of password setup/reset. Tune it
+with `IDENTITY_MAGIC_LINK_REQUEST_WINDOW_SECONDS` and
+`IDENTITY_MAGIC_LINK_REQUEST_LIMIT` (defaults: 1800 seconds and 3 requests per
+IP and per email). Password recovery continues to use
+`IDENTITY_PASSWORD_SETUP_TTL_SECONDS` and `IDENTITY_PASSWORD_SETUP_LIMIT`.
+
+## Login theme (`configurator-blue`)
+
+The Keycloak-owned screens in the sign-in journey — password entry,
+invalid-credential errors, password setup/reset, email verification,
+account-linking conflicts, expired sessions and generic errors — render in the
+`configurator-blue` login theme, a Keycloakify build of the Configurator's auth
+shell (`backend/identity-bff/keycloak/theme-src`, CCRS #2108). It is built into
+the `identity-keycloak` image, so the custom image is what a deployment needs
+for a coherent password journey, not only for magic link.
+
+`configure-keycloak.sh` selects the theme **per client**
+(`login_theme=configurator-blue` on the identity BFF and magic-link clients) and
+leaves the shared realm's `loginTheme` empty, so unrelated clients in the realm
+keep their own theme. An environment that must pin a different theme can set
+`KEYCLOAK_LOGIN_THEME`. A realm still carrying the pre-rename `digit` value from
+an earlier revision is cleared on converge; any other realm-level theme an
+operator chose is left alone.
+
+The theme fetches the shared brand assets from `/configurator/brand/` on the
+same origin, which is where nginx already serves the Configurator. If Keycloak
+is deployed on its own host, set `DIGIT_BRAND_BASE_URL` (a Keycloak theme
+environment variable) to an absolute URL; otherwise the brand panel falls back
+to its gradient, which is the same navy as the theme's secondary colour.
 
 ## Onboarding integration
 
@@ -128,7 +182,8 @@ Before enabling the profile in an existing environment:
 1. Build/publish `identity-bff` and `identity-keycloak` from the same CCRS commit.
 2. Add the new OpenBao values and use a real `ACCOUNT_ADMIN` employee.
 3. Verify `/auth/realms/digit/.well-known/openid-configuration` and
-   `/identity/v1/auth-methods`.
+   `/identity/v1/auth-methods?intent=signin` and
+   `/identity/v1/auth-methods?intent=signup`.
 4. Reconcile or provision Organization memberships and managed accounts.
 5. Point the onboarding/employee frontend at `/identity/v1`; do not enable the
    legacy Keycloak auth adapter that expects `/kc`.
@@ -137,7 +192,8 @@ Before enabling the profile in an existing environment:
 
 ```bash
 curl -fsS https://example.org/auth/realms/digit/.well-known/openid-configuration
-curl -fsS https://example.org/identity/v1/auth-methods
+curl -fsS 'https://example.org/identity/v1/auth-methods?intent=signin'
+curl -fsS 'https://example.org/identity/v1/auth-methods?intent=signup'
 docker exec identity-bff wget -qO- http://127.0.0.1:3000/readyz
 docker compose --profile keycloak ps keycloak identity-bff
 

@@ -1,6 +1,7 @@
 package org.egov.pgr.web.controllers;
 
 import org.egov.pgr.onboarding.IdentitySessionClient;
+import org.egov.pgr.onboarding.OnboardingIdentifierService;
 import org.egov.pgr.onboarding.OnboardingOperation;
 import org.egov.pgr.onboarding.OnboardingPrincipal;
 import org.egov.pgr.onboarding.OnboardingService;
@@ -41,7 +42,7 @@ public class OnboardingApiControllerTest {
         principal = new OnboardingPrincipal("https://issuer", "subject-1", "person@example.com", "Person");
         when(identitySessionClient.introspect("digit_identity_session=session-1")).thenReturn(principal);
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new OnboardingApiController(identitySessionClient, service)).build();
+                new OnboardingApiController(identitySessionClient, new OnboardingIdentifierService(), service)).build();
     }
 
     @Test
@@ -78,6 +79,7 @@ public class OnboardingApiControllerTest {
         when(service.checkIdentifier(eq(principal), any())).thenReturn(
                 Map.of("type", "URL_SLUG", "value", "bomet", "available", true));
         when(identitySessionClient.identifierAvailable("URL_SLUG", "bomet")).thenReturn(true);
+        when(identitySessionClient.identifierAvailable("TENANT_ID", "bomet")).thenReturn(true);
 
         request("/v2/onboarding/signups/_update", "{\"Signup\":{\"id\":\"" + id + "\"}}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.Signup.id").value(id.toString()));

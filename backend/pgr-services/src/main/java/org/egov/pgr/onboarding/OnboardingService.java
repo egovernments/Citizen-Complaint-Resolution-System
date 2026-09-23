@@ -19,31 +19,25 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 public class OnboardingService {
 
-    private static final Pattern ACCOUNT_CODE = Pattern.compile("^[A-Z0-9][A-Z0-9-]{1,31}$");
-    private static final Pattern SLUG = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
     private static final int TENANT_METADATA_SCHEMA_VERSION = 1;
     private static final Set<String> TENANT_METADATA_FIELDS = Set.of("schemaVersion", "tenantAdmin");
     private static final Set<String> TENANT_ADMIN_FIELDS = Set.of("mobileNumber", "countryCode");
     private static final PhoneNumberUtil PHONE_NUMBERS = PhoneNumberUtil.getInstance();
-    // Normal onboarding creates an independent root. Dotted ids are reserved
-    // for a separate, explicit subtenant operation and are never derived here.
-    private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,63}$");
-    // Both are the same user-typed value, and both derive the same tenant id.
-    private static final Set<String> DERIVES_TENANT_ID = Set.of("URL_SLUG", "ORGANIZATION_ALIAS");
     // Mobile lines only. Fixed-line, toll-free and VoIP numbers are valid for a
     // region but egov-user rejects them at DIGIT_ACCOUNT, well after submit.
     private static final Set<PhoneNumberType> MOBILE_TYPES =
             Set.of(PhoneNumberType.MOBILE, PhoneNumberType.FIXED_LINE_OR_MOBILE);
 
     private final OnboardingRepository repository;
+    private final OnboardingIdentifierService identifiers;
 
-    public OnboardingService(OnboardingRepository repository) {
+    public OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers) {
         this.repository = repository;
+        this.identifiers = identifiers;
     }
 
     @Transactional
@@ -97,25 +91,22 @@ public class OnboardingService {
     }
 
     public Map<String, Object> checkIdentifier(OnboardingPrincipal principal, Map<String, Object> values) {
-        String type = requiredString(values.get("type"), "Identifier.type").toUpperCase(Locale.ROOT);
-        String value = normalizeIdentifier(type, requiredString(values.get("value"), "Identifier.value"));
+        List<OnboardingIdentifierService.Identifier> candidates = identifiers.forInput(
+                requiredString(values.get("type"), "Identifier.type"),
+                requiredString(values.get("value"), "Identifier.value"));
+        OnboardingIdentifierService.Identifier requested = candidates.get(0);
         UUID signupId = values.get("signupId") == null ? null : requiredUuid(values.get("signupId"), "Identifier.signupId");
         if (signupId != null) ownedSignup(signupId, principal);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("type", type);
-        result.put("value", value);
-        boolean available = repository.identifierAvailable(type, value, signupId);
-        result.put("available", available);
-        if (!available) result.put("conflictingType", type);
-        // "bomet-county" and "bometcounty" derive the same tenant id, and so do
-        // "bomet-2" and "bomet-3". Answer for the derived id here, or submit fails
-        // on TENANT_ID: a field the tenant admin never typed.
-        if (DERIVES_TENANT_ID.contains(type)) {
-            String derived = tenantSegment(value);
-            result.put("derivedTenantId", derived);
-            if (available && !repository.identifierAvailable("TENANT_ID", derived, signupId)) {
+        result.put("type", requested.type());
+        result.put("value", requested.value());
+        if (candidates.size() > 1) result.put("derivedTenantId", candidates.get(1).value());
+        result.put("available", true);
+        for (OnboardingIdentifierService.Identifier candidate : candidates) {
+            if (!repository.identifierAvailable(candidate.type(), candidate.value(), signupId)) {
                 result.put("available", false);
-                result.put("conflictingType", "TENANT_ID");
+                result.put("conflictingType", candidate.type());
+                break;
             }
         }
         return result;
@@ -139,11 +130,9 @@ public class OnboardingService {
         }
         validateComplete(signup);
         long now = System.currentTimeMillis();
-        repository.reserveIdentifier("ACCOUNT_CODE", signup.getAccountCode(), signup.getId(), now);
-        repository.reserveIdentifier("ORGANIZATION_NAME", normalizeOrganizationName(signup.getAccountName()), signup.getId(), now);
-        repository.reserveIdentifier("TENANT_ID", signup.getRequestedTenantId(), signup.getId(), now);
-        repository.reserveIdentifier("ORGANIZATION_ALIAS", signup.getOrganizationAlias(), signup.getId(), now);
-        repository.reserveIdentifier("URL_SLUG", signup.getUrlSlug(), signup.getId(), now);
+        for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
+            repository.reserveIdentifier(identifier.type(), identifier.value(), signup.getId(), now);
+        }
         return existing == null
                 ? repository.submit(signup, idempotencyKey.trim(), now)
                 : repository.resubmit(existing, idempotencyKey.trim(), now);
@@ -189,13 +178,12 @@ public class OnboardingService {
     private void apply(OnboardingSignup signup, Map<String, Object> values) {
         if (values.containsKey("accountName")) signup.setAccountName(clean(values.get("accountName")));
         if (values.containsKey("accountCode")) {
-            String code = requiredString(values.get("accountCode"), "Signup.accountCode").toUpperCase(Locale.ROOT);
-            if (!ACCOUNT_CODE.matcher(code).matches()) invalid("Signup.accountCode");
-            signup.setAccountCode(code);
+            signup.setAccountCode(identifiers.accountCode(
+                    requiredString(values.get("accountCode"), "Signup.accountCode"), "Signup.accountCode"));
         }
         if (values.containsKey("urlSlug")) {
-            String slug = requiredString(values.get("urlSlug"), "Signup.urlSlug").toLowerCase(Locale.ROOT);
-            if (!SLUG.matcher(slug).matches() || tenantSegment(slug).length() < 2) invalid("Signup.urlSlug");
+            String slug = identifiers.urlSlug(
+                    requiredString(values.get("urlSlug"), "Signup.urlSlug"), "Signup.urlSlug");
             signup.setUrlSlug(slug);
             signup.setOrganizationAlias(slug);
         }
@@ -242,7 +230,7 @@ public class OnboardingService {
         signup.setOrganizationAlias(signup.getUrlSlug());
         signup.setRequestedTenantId(signup.getUrlSlug() == null
                 ? null
-                : tenantSegment(signup.getUrlSlug()));
+                : identifiers.tenantIdForSlug(signup.getUrlSlug()));
     }
 
     private void applyKeepingProvisionedIdentifiers(OnboardingSignup signup, Map<String, Object> values) {
@@ -258,11 +246,6 @@ public class OnboardingService {
             throw new CustomException("ONBOARDING_PROVISIONED_FIELD_LOCKED",
                     "Provisioned identifiers cannot change after a failed submission");
         }
-    }
-
-    /** The slug's letters only: DIGIT tenant codes cannot carry digits or hyphens. */
-    private static String tenantSegment(String slug) {
-        return slug.replaceAll("[^a-z]", "");
     }
 
     private void validateComplete(OnboardingSignup signup) {
@@ -337,36 +320,6 @@ public class OnboardingService {
             invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
             return Collections.emptyMap(); // unreachable: invalid always throws
         }
-    }
-
-    private String normalizeIdentifier(String type, String value) {
-        switch (type) {
-            case "ACCOUNT_CODE":
-                value = value.toUpperCase(Locale.ROOT);
-                if (!ACCOUNT_CODE.matcher(value).matches()) invalid("Identifier.value");
-                return value;
-            case "ORGANIZATION_NAME":
-                return normalizeOrganizationName(value);
-            case "TENANT_ID":
-                value = value.toLowerCase(Locale.ROOT);
-                if (!TENANT_ID.matcher(value).matches()) invalid("Identifier.value");
-                return value;
-            case "ORGANIZATION_ALIAS":
-            case "URL_SLUG":
-                value = value.toLowerCase(Locale.ROOT);
-                // Same bar as apply(): a slug that cannot derive a tenant id is not a
-                // free slug, it is an unusable one. Say so here rather than at submit.
-                if (!SLUG.matcher(value).matches() || tenantSegment(value).length() < 2) {
-                    invalid("Identifier.value");
-                }
-                return value;
-            default:
-                throw new CustomException("ONBOARDING_IDENTIFIER_TYPE_INVALID", "Unsupported identifier type");
-        }
-    }
-
-    public static String normalizeOrganizationName(String value) {
-        return value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     private void requireIdempotencyKey(String value) {

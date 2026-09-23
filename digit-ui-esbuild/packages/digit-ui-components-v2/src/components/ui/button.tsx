@@ -12,14 +12,25 @@ const buttonVariants = cva(
       variant: {
         primary:
           "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 shadow-sm",
-        secondary:
-          "bg-muted text-foreground hover:bg-muted/80 active:bg-muted",
-        outline:
-          "border border-input bg-background text-foreground hover:bg-muted hover:text-foreground",
-        ghost: "text-foreground hover:bg-muted",
+        // DIGIT Secondary: brand stroke, brand label, no fill. `outline` is
+        // the same thing under its shadcn name — both call sites mean "the
+        // quieter action next to the CTA", and having them render differently
+        // was how Cancel ended up grey while Save was brand.
+        //
+        // Colour is applied inline from the tenant's button tokens rather than
+        // through `border-primary`/`text-primary`: the Tailwind `primary`
+        // token is a generic v2 orange, which is exactly why the `primary`
+        // variant already bypasses it. Using it here would paint a Kenyan
+        // deployment's Cancel button orange.
+        secondary: "border bg-transparent",
+        outline: "border bg-transparent",
+        // DIGIT Tertiary: brand label, no fill, no stroke.
+        ghost: "bg-transparent",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
-        link: "text-primary underline-offset-4 hover:underline px-0 py-0 h-auto",
+        // Underlined at rest, not only on hover — a link that only looks like
+        // one under the pointer is not discoverable.
+        link: "underline underline-offset-4 px-0 py-0 h-auto",
       },
       size: {
         sm: "h-9 px-3 text-sm",
@@ -83,6 +94,31 @@ const PRIMARY_INLINE_STYLE: React.CSSProperties = {
 const PRIMARY_HOVER_BG =
   "var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800))";
 
+/**
+ * DIGIT Secondary and Tertiary, from the same token family as PRIMARY above.
+ *
+ * The theme record already ships `--color-button-secondary-border` and
+ * `--color-button-secondary-text` — measured #2563EB on Bomet — and nothing
+ * consumed them, so these buttons rendered from Tailwind's neutral palette
+ * instead: a grey stroke with a near-black label sitting beside a brand CTA.
+ *
+ * There is no `--color-button-secondary-bg` in the record, which is the point:
+ * an outline button has no fill of its own and should show whatever surface it
+ * is placed on.
+ */
+const SECONDARY_BORDER =
+  "var(--color-button-secondary-border, var(--color-primary-2, var(--color-primary-1, #2563EB)))";
+const SECONDARY_TEXT =
+  "var(--color-button-secondary-text, var(--color-primary-2, var(--color-primary-1, #2563EB)))";
+const SECONDARY_INLINE_STYLE: React.CSSProperties = {
+  borderColor: SECONDARY_BORDER,
+  color: SECONDARY_TEXT,
+};
+const TERTIARY_INLINE_STYLE: React.CSSProperties = { color: SECONDARY_TEXT };
+/** A tint of the brand, not a second opaque fill. */
+const SECONDARY_HOVER_BG =
+  "var(--color-primary-1-bg, rgba(37, 99, 235, 0.08))";
+
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -103,10 +139,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const isPrimary = (variant ?? "primary") === "primary";
+    const resolved = variant ?? "primary";
+    const isPrimary = resolved === "primary";
+    const isSecondary = resolved === "secondary" || resolved === "outline";
+    const isTertiary = resolved === "ghost" || resolved === "link";
     const mergedStyle: React.CSSProperties = isPrimary
       ? { ...PRIMARY_INLINE_STYLE, ...style }
-      : style ?? {};
+      : isSecondary
+        ? { ...SECONDARY_INLINE_STYLE, ...style }
+        : isTertiary
+          ? { ...TERTIARY_INLINE_STYLE, ...style }
+          : style ?? {};
     return (
       <button
         ref={ref}
@@ -117,16 +160,21 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
         style={mergedStyle}
         onMouseEnter={(e) => {
-          if (isPrimary && !disabled && !loading) {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-              PRIMARY_HOVER_BG;
+          if (!disabled && !loading) {
+            const el = e.currentTarget as HTMLButtonElement;
+            if (isPrimary) el.style.backgroundColor = PRIMARY_HOVER_BG;
+            // Secondary and tertiary take a tint of the brand rather than a
+            // fill, so the outline still reads as an outline while hovered.
+            else if (isSecondary || isTertiary) el.style.backgroundColor = SECONDARY_HOVER_BG;
           }
           onMouseEnter?.(e);
         }}
         onMouseLeave={(e) => {
+          const el = e.currentTarget as HTMLButtonElement;
           if (isPrimary) {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-              PRIMARY_INLINE_STYLE.backgroundColor as string;
+            el.style.backgroundColor = PRIMARY_INLINE_STYLE.backgroundColor as string;
+          } else if (isSecondary || isTertiary) {
+            el.style.backgroundColor = "transparent";
           }
           onMouseLeave?.(e);
         }}
