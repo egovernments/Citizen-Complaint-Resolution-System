@@ -1,0 +1,625 @@
+{
+ "meta": {
+  "repo": "egovernments/Citizen-Complaint-Resolution-System",
+  "branch": "master",
+  "sha": "46dc4209022f28c1b1475900762875d6e763708f",
+  "shaShort": "46dc420",
+  "runId": "20260923-152513",
+  "runUrl": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/tree/46dc4209022f28c1b1475900762875d6e763708f",
+  "pr": null,
+  "scope": "Ansible Deployment \u2014 Remote Server",
+  "scanners": [
+   "Claude deep scan (claude-opus-5)"
+  ],
+  "engine": "Claude (claude-opus-5)",
+  "executive_summary": "The Ansible single-host deployment (setup path C) is far better hardened than its own threat model suggests: the premise that ~33 container ports bind 0.0.0.0 does not hold on Linux \u2014 every `ports:` entry resolves through `${BIND_IP:-127.0.0.1}` and `templates/digit.env.j2` pins `BIND_IP=127.0.0.1` / `PROXY_BIND_IP=127.0.0.1`, so Postgres, Redis, Redpanda, MinIO, Elasticsearch, OpenBao, Prometheus, Grafana, the Kong Admin API and all JVM services are loopback-only; the playbook additionally installs and enables ufw (default-deny) / firewalld, drops all Linux capabilities and sets no-new-privileges on every service, enforces Kong authn+RBAC fail-closed, pins host-key checking, and ships nginx with HSTS/nosniff/CSP/server_tokens off. What remains is concentrated almost entirely in identity and data confidentiality, not network exposure. Three things are internet-reachable and broken by default: Kong rubber-stamps every OTP send and validation with a `request-termination` mock so any citizen account can be logged into with the published OTP 123456; `seeds/user-seed.sh` creates a full-superuser `ADMIN`/`eGov@123` (plus `GRO`/`eGov@123`, `INTERNAL_USER`/`System@123`) on every seed tenant even when the operator overrides `bootstrap_password`; and `minio-init` sets the `egov-rainmaker` bucket to anonymous download while nginx proxies `/file-store/` straight at it, making every citizen grievance attachment world-readable. Behind those, the egov-enc-service PII master key is a committed public constant (`asd@#$@$!132123`) that `db_fast_path` makes mandatory, OpenBao runs with `tls_disable: true` and a single unseal share stored beside its own data, the default `insecure_registries` points Docker at a plain-HTTP registry with mutable git refs (`mcp_ref: main`) built on the target, and live session tokens travel in Kong's `?access_token=` query string into an unauthenticated Loki. Fix the OTP mock, the seeded default credentials and the anonymous MinIO bucket before any real citizen data lands on the box; then rotate the encryption master key off the public dump value.",
+  "priority_actions": [
+   "Remove the two `request-termination` mocks from local-setup/kong/kong.yml (user-otp-route and otp-validate-route) and set `enable_otp_services: true` (or the Novu OTP path) before the box is internet-reachable; set `CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=false` in /opt/digit/.env. Until then any citizen account is logged into with OTP 123456.",
+   "Stop seeding stock credentials: in local-setup/seeds/user-seed.sh drop the unconditional `create_user \"ADMIN\" ... eGov@123` at line 156, give GRO (line 160) and INTERNAL_USER (line 179) generated passwords sourced from OpenBao, and make the deploy fail when `bootstrap_password` is still `eGov@123`. Rotate ADMIN/GRO/INTERNAL_USER and every HRMS employee created with `egov_hrms_default_password` on existing boxes.",
+   "Remove `mc --config-dir /tmp/.mc anonymous set download myminio/egov-rainmaker` (docker-compose.egov-digit.yaml:491) together with a presigned-URL change in egov-filestore, and require auth on the nginx `/file-store/` passthrough (nginx-site.conf.j2:646, :715) so grievance attachments are not world-readable.",
+   "Rotate the egov-enc-service master key off the committed `asd@#$@$!132123` (host_vars `bootstrap_secrets.elasticsearch_master_password`) \u2014 that means not using `db_fast_path`'s public dump for a tenant holding real data, or re-keying eg_enc_*_keys after load. Add it to the playbook's `_optin_secret_checks` list so a deploy refuses the published value.",
+   "Set `insecure_registries: []` and `docker_registry` to a TLS registry in every real tenant's host_vars (group_vars/digit.yml:305 defaults to the plain-HTTP 10.0.0.4:5000); pin `mcp_ref` and `digit_ui_esbuild_branch` to a tag or commit SHA instead of `main`, and prefer the digest-pinned `digit_ui_bundle_image` over an on-host build.",
+   "Stop putting the session token in a URL: change kong/kong.yml's two `/user/_details?access_token=` introspection calls to send the token in a header/body, and set `auth_enabled: true` (or a tenant header + network ACL) on Loki so container logs holding tokens are not readable by every container on egov-network.",
+   "Front OpenBao with TLS and move the seal key off the box (KMS auto-unseal or operator-held Shamir shares); today `/opt/digit/.openbao/init.json` holds the root token and the single unseal share next to the encrypted store.",
+   "Add `keycloak_db_password` (and `token_exchange_system_password`, `mcp_password`) to the playbook's `_optin_secret_checks`, and make the already-deployed-box path fail rather than warn once operators have had a rotation window; the shipped `_example.yml` leaves `keycloak_db_password: \"\"`, which compose resolves to the literal `keycloak`.",
+   "Run Keycloak with `start` (production mode) plus real hostname/HTTPS settings rather than `start-dev` before enabling `enable_keycloak` on any public tenant.",
+   "Keep the good controls under test: the loopback `BIND_IP` pin, the ufw/firewalld block, `cap_drop: [ALL]`, `security_opt: no-new-privileges`, Kong `ENFORCE_UNAUTH`/`ENFORCE_RBAC`, the Kong CORS wildcard assert and the OTEL-agent checksum pin are all load-bearing \u2014 the static contract tests in local-setup/tests/static/ should assert each of them so a regression fails CI."
+  ],
+  "enriched": true,
+  "date": "2026-09-23 09:55 UTC",
+  "ts": "2026-09-23T09:55:13.631917+00:00"
+ },
+ "summary": {
+  "types": 11,
+  "occurrences": 60,
+  "typesBySeverity": {
+   "CRITICAL": 3,
+   "HIGH": 7,
+   "MEDIUM": 0,
+   "LOW": 1
+  },
+  "occBySeverity": {
+   "CRITICAL": 23,
+   "HIGH": 35,
+   "MEDIUM": 0,
+   "LOW": 2
+  }
+ },
+ "findings": [
+  {
+   "severity": "CRITICAL",
+   "source": "Claude",
+   "area": "seeds",
+   "id": "seeded-default-credentials",
+   "title": "user-seed.sh creates a stock ADMIN/eGov@123 superuser (plus GRO/eGov@123 and INTERNAL_USER/System@123) on every tenant, even when bootstrap_password is overridden",
+   "category": "Secrets Management",
+   "guide": "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/",
+   "cvss": null,
+   "cwe": "CWE-1392",
+   "count": 11,
+   "locations": [
+    {
+     "path": "local-setup/seeds/user-seed.sh",
+     "line": 156,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/seeds/user-seed.sh#L156"
+    },
+    {
+     "path": "local-setup/seeds/user-seed.sh",
+     "line": 160,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/seeds/user-seed.sh#L160"
+    },
+    {
+     "path": "local-setup/seeds/user-seed.sh",
+     "line": 179,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/seeds/user-seed.sh#L179"
+    },
+    {
+     "path": "local-setup/seeds/user-seed.sh",
+     "line": 38,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/seeds/user-seed.sh#L38"
+    },
+    {
+     "path": "local-setup/seeds/user-seed.sh",
+     "line": 69,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/seeds/user-seed.sh#L69"
+    },
+    {
+     "path": "local-setup/ansible/templates/digit.env.j2",
+     "line": 247,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/templates/digit.env.j2#L247"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/quickstart.yml.example",
+     "line": 256,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/quickstart.yml.example#L256"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/localhost-full.yml.example",
+     "line": 415,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/localhost-full.yml.example#L415"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2310,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2310"
+    },
+    {
+     "path": "local-setup/ansible/playbook-deploy.yml",
+     "line": 4455,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/playbook-deploy.yml#L4455"
+    },
+    {
+     "path": "local-setup/ansible/README.md",
+     "line": 261,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/README.md#L261"
+    }
+   ],
+   "why": "The employee app, the configurator wizard and the MCP tenant-bootstrap REST shim are all published by the nginx vhost, and this ADMIN holds SUPERUSER/ACCOUNT_ADMIN/MDMS_ADMIN/GRO/PGR_LME on every seed tenant \u2014 so a published, unchangeable-by-config password gives a remote attacker full administrative control over the grievance platform and its citizen records.",
+   "fix": "In local-setup/seeds/user-seed.sh remove the unconditional `create_user \"ADMIN\" ...` at line 156, pass explicit generated passwords (from OpenBao) to the GRO and INTERNAL_USER creates, and change the `create_user` fallback at line 69 to fail rather than default. Add a playbook assert that `bootstrap_password` and `bootstrap_secrets.egov_hrms_default_password` are not `eGov@123`, and write MCP_USERNAME/MCP_PASSWORD into /opt/digit/.env from OpenBao instead of letting docker-compose.egov-digit.yaml:2310 fall back to eGov@123.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P0",
+    "exposure": "public",
+    "confidence": 0.97,
+    "reason": "seeds/user-seed.sh:156 creates ADMIN with the create_user default password (line 69: eGov@123) even on the SEED_ADMIN_USER != ADMIN branch; GRO (160) and INTERNAL_USER/System@123 (179) are unconditional."
+   }
+  },
+  {
+   "severity": "CRITICAL",
+   "source": "Claude",
+   "area": "kong",
+   "id": "otp-fixed-or-mocked",
+   "title": "Kong short-circuits every /user-otp and /otp/v1/_validate call with a canned success, so citizen login accepts the published OTP 123456",
+   "category": "Access Control",
+   "guide": "https://cwe.mitre.org/data/definitions/287.html",
+   "cvss": null,
+   "cwe": "CWE-287",
+   "count": 5,
+   "locations": [
+    {
+     "path": "local-setup/kong/kong.yml",
+     "line": 577,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/kong/kong.yml#L577"
+    },
+    {
+     "path": "local-setup/kong/kong.yml",
+     "line": 1101,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/kong/kong.yml#L1101"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 989,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L989"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 990,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L990"
+    },
+    {
+     "path": "local-setup/ansible/templates/digit.env.j2",
+     "line": 10,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/templates/digit.env.j2#L10"
+    }
+   ],
+   "why": "nginx `location /` proxies to Kong, and /user-otp/v1/_send, /otp/v1/_validate and /user/oauth/token are all auth-optional, so anyone on the internet who knows or guesses a citizen mobile number logs in as that citizen and reads their grievance history \u2014 the OTP is never generated, never sent and never checked.",
+   "fix": "In local-setup/kong/kong.yml delete the `plugins:` block under `user-otp-route` (lines 576-581) and under `otp-validate-route` (lines 1100-1105), set `enable_otp_services: true` in the tenant host_vars so the `otp` profile starts egov-otp/user-otp/egov-notification-sms, and confirm /opt/digit/.env renders `CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=false` (digit.env.j2:10 already derives this from the flag).",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P0",
+    "exposure": "public",
+    "confidence": 0.97,
+    "reason": "kong.yml ships request-termination on /user-otp (status 200 canned body) and on /otp (isValidationSuccessful:true); compose sets CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED default true, value '123456'."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "docker-compose",
+   "id": "minio-anonymous-access",
+   "title": "minio-init sets the egov-rainmaker bucket to anonymous download and nginx proxies /file-store/ straight to MinIO, so every grievance attachment is world-readable",
+   "category": "Access Control",
+   "guide": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+   "cvss": null,
+   "cwe": "CWE-284",
+   "count": 4,
+   "locations": [
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 491,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L491"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 455,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L455"
+    },
+    {
+     "path": "local-setup/ansible/templates/nginx-site.conf.j2",
+     "line": 646,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/templates/nginx-site.conf.j2#L646"
+    },
+    {
+     "path": "local-setup/ansible/templates/nginx-site.conf.j2",
+     "line": 715,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/templates/nginx-site.conf.j2#L715"
+    }
+   ],
+   "why": "Citizen complaint photos and documents \u2014 confidential grievance data \u2014 are retrievable by anyone who has, guesses or scrapes an object URL, with no token and no rate limit, straight through the public TLS vhost.",
+   "fix": "Remove the `mc ... anonymous set download myminio/egov-rainmaker` line from the minio-init entrypoint in local-setup/docker-compose.egov-digit.yaml and land the egov-filestore presigned-URL support it is waiting on; in the meantime require auth on the `/file-store/` locations in local-setup/ansible/templates/nginx-site.conf.j2 (e.g. route attachment reads through Kong's authenticated /filestore/v1/files/id instead of the raw MinIO passthrough).",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P0",
+    "exposure": "public",
+    "confidence": 0.95,
+    "reason": "docker-compose.egov-digit.yaml:491 runs `mc anonymous set download myminio/egov-rainmaker`; nginx-site.conf.j2:646 and :715 proxy /file-store/ to upstream_minio_port with no auth. The file's own comment at :455 records this as still open."
+   }
+  },
+  {
+   "severity": "CRITICAL",
+   "source": "Claude",
+   "area": "ansible",
+   "id": "insecure-http-registry",
+   "title": "Default insecure_registries points Docker at a plain-HTTP registry, and the MCP / digit-ui sources are built on the target from mutable git refs (main)",
+   "category": "Supply Chain & Integrity",
+   "guide": "https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/",
+   "cvss": null,
+   "cwe": "CWE-494",
+   "count": 7,
+   "locations": [
+    {
+     "path": "local-setup/ansible/inventory/group_vars/digit.yml",
+     "line": 305,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/group_vars/digit.yml#L305"
+    },
+    {
+     "path": "local-setup/ansible/inventory/group_vars/digit.yml",
+     "line": 280,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/group_vars/digit.yml#L280"
+    },
+    {
+     "path": "local-setup/ansible/inventory/group_vars/digit.yml",
+     "line": 362,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/group_vars/digit.yml#L362"
+    },
+    {
+     "path": "local-setup/ansible/inventory/group_vars/digit.yml",
+     "line": 376,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/group_vars/digit.yml#L376"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/localhost-full.yml.example",
+     "line": 61,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/localhost-full.yml.example#L61"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/localhost-slim.yml.example",
+     "line": 65,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/localhost-slim.yml.example#L65"
+    },
+    {
+     "path": "local-setup/ansible/playbook-deploy.yml",
+     "line": 1202,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/playbook-deploy.yml#L1202"
+    }
+   ],
+   "why": "Any host_vars that does not override these (the canonical `_example.yml` does not) writes a plain-HTTP registry into /etc/docker/daemon.json, and the two shipped localhost presets name a public DNS host \u2014 an attacker on the path can serve arbitrary image layers. Separately, `mcp_ref: main` / `digit_ui_esbuild_branch: main` mean whatever landed upstream at deploy time is cloned and built on the box, so an upstream push executes on the server with no review and no reproducible record.",
+   "fix": "Set `insecure_registries: []` in local-setup/ansible/inventory/group_vars/digit.yml:305 (and in every tenant host_vars) and point `docker_registry` at a TLS registry; add `insecure_registries` to `_example.yml` with an explicit `[]`. Replace `mcp_ref: main` and `digit_ui_esbuild_branch: main` with a tag or commit SHA, and prefer the digest-pinned `digit_ui_bundle_image` so no source is built on the target.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P1",
+    "exposure": "internal",
+    "confidence": 0.9,
+    "reason": "group_vars/digit.yml:305 defaults insecure_registries to docker_registry (10.0.0.4:5000, line 280); playbook-deploy.yml:1202 writes it into daemon.json; mcp_ref: main (362) and digit_ui_esbuild_branch: main (376) are mutable; localhost-*.yml.example:61/65 list a PUBLIC hostname as insecure."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "docker-compose",
+   "id": "optin-stack-dev-secrets",
+   "title": "Opt-in stacks ship published dev-default secrets in compose, and two of them (keycloak_db_password, token_exchange_system_password) are not covered by the playbook's fail-closed check (only when the stack is enabled, default off)",
+   "category": "Secrets Management",
+   "guide": "https://cwe.mitre.org/data/definitions/1392.html",
+   "cvss": null,
+   "cwe": "CWE-1392",
+   "count": 9,
+   "locations": [
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2984,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2984"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 3023,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L3023"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 3116,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L3116"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2543,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2543"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2506,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2506"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2927,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2927"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2262,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2262"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/_example.yml",
+     "line": 1082,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/_example.yml#L1082"
+    },
+    {
+     "path": "local-setup/ansible/playbook-deploy.yml",
+     "line": 2222,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/playbook-deploy.yml#L2222"
+    }
+   ],
+   "why": "Turning on Keycloak SSO or the notifications stack brings up services on credentials that are published in this public repository; the Keycloak Postgres password in particular has no guard at all, so a tenant that follows `_example.yml` runs its identity database on the string `keycloak`, reachable from every container on egov-network.",
+   "fix": "Add `{ var: 'keycloak_db_password', bad: 'keycloak' }` and `{ var: 'token_exchange_system_password', bad: 'eGov@123' }` to `_optin_secret_checks` in local-setup/ansible/playbook-deploy.yml:2222, change `_example.yml`'s keycloak secrets from `\"\"` to `\"CHANGE_ME\"`, and set an end date on the existing-box warn-and-continue branch (playbook-deploy.yml:2252) so it fails closed after the rotation window.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P1",
+    "exposure": "internal",
+    "confidence": 0.9,
+    "reason": "compose defaults: KC_DB_PASSWORD:-keycloak (2984/3012), KC_ADMIN_PASSWORD:-admin (3023/3092), NOVU_MONGO_PASSWORD:-secret (2506), NOVU_JWT_SECRET/STORE_ENCRYPTION_KEY/NOVU_SECRET_KEY (2543-2545), NOVU_API_KEY:-changeme (2927), MCP_DB_PASSWORD:-mcp123 (2262), TOKEN_EXCHANGE_SYSTEM_PASSWORD:-eGov@123 (3116). playbook _optin_secret_checks (2222-2229) omits keycloak_db_password and token_exchange_system_password, and _example.yml:1082 ships keycloak_db_password: \"\" \u2014 which compose's `${VAR:-default}` resolves to the literal `keycloak`."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "ansible",
+   "id": "enc-or-jwt-dev-secret",
+   "title": "The egov-enc-service PII master key is a committed public constant (asd@#$@$!132123) that db_fast_path makes mandatory",
+   "category": "Secrets Management",
+   "guide": "https://cwe.mitre.org/data/definitions/798.html",
+   "cvss": null,
+   "cwe": "CWE-798",
+   "count": 5,
+   "locations": [
+    {
+     "path": "local-setup/ansible/inventory/host_vars/_example.yml",
+     "line": 1064,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/_example.yml#L1064"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/quickstart.yml.example",
+     "line": 255,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/quickstart.yml.example#L255"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/localhost-full.yml.example",
+     "line": 414,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/localhost-full.yml.example#L414"
+    },
+    {
+     "path": "local-setup/ansible/inventory/host_vars/localhost-slim.yml.example",
+     "line": 425,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/inventory/host_vars/localhost-slim.yml.example#L425"
+    },
+    {
+     "path": "local-setup/ansible/playbook-deploy.yml",
+     "line": 2345,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/playbook-deploy.yml#L2345"
+    }
+   ],
+   "why": "That value is the master key egov-enc-service derives tenant keys from, so every encrypted column in the complaint database (citizen names, mobile numbers, emails, addresses) is decryptable by anyone holding a dump or a Postgres copy \u2014 and it is published in a public repository, with the README telling operators not to change it.",
+   "fix": "For any tenant holding real citizen data, do not seed the public dump: set `db_fast_path: false` (or re-key `eg_enc_*_keys` after load) and put a generated value in `bootstrap_secrets.elasticsearch_master_password`. Add `{ var: 'elasticsearch_master_password', bad: 'asd@#$@$!132123' }` to `_optin_secret_checks` in local-setup/ansible/playbook-deploy.yml:2222 so a fresh deploy fails closed on the published key.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P1",
+    "exposure": "local",
+    "confidence": 0.94,
+    "reason": "_example.yml:1064 and quickstart.yml.example:255 ship elasticsearch_master_password='asd@#$@$!132123' and state it MUST stay that value while db_fast_path is true; playbook-deploy.yml:2345 writes it into .env."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "docker-compose",
+   "id": "openbao-vault-tls-disabled",
+   "title": "OpenBao listener runs with tls_disable: true, and the single unseal share plus root token are stored on the same host at /opt/digit/.openbao/init.json",
+   "category": "Secrets Management",
+   "guide": "https://cwe.mitre.org/data/definitions/319.html",
+   "cvss": null,
+   "cwe": "CWE-319",
+   "count": 5,
+   "locations": [
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2441,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2441"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2464,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2464"
+    },
+    {
+     "path": "local-setup/ansible/playbook-deploy.yml",
+     "line": 2088,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/playbook-deploy.yml#L2088"
+    },
+    {
+     "path": "local-setup/ansible/playbook-deploy.yml",
+     "line": 2096,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/playbook-deploy.yml#L2096"
+    },
+    {
+     "path": "local-setup/ansible/runbooks/01-openbao.md",
+     "line": 28,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/runbooks/01-openbao.md#L28"
+    }
+   ],
+   "why": "Anyone who reaches root on the box (or reads that one file) gets the root token and the unseal share together, which is every tenant secret \u2014 Postgres, MinIO, Grafana, HRMS, Keycloak \u2014 so the vault adds audit and git hygiene but no data-at-rest protection. All playbook traffic to it is plaintext HTTP on loopback.",
+   "fix": "Give the OpenBao listener a certificate (`tls_cert_file`/`tls_key_file` in BAO_LOCAL_CONFIG in local-setup/docker-compose.egov-digit.yaml) and move the seal off-box: add a `seal \"awskms\"`/`\"gcpckms\"` stanza, or raise secret_shares/threshold in the playbook's `OpenBao \u2014 operator init` task and hand the shares to operators instead of writing init.json.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P1",
+    "exposure": "local",
+    "confidence": 0.96,
+    "reason": "docker-compose.egov-digit.yaml:2441 sets `\"tls_disable\": true`; playbook-deploy.yml:2088 inits with secret_shares/threshold 1 and :2096 writes init.json (0600); runbook 01-openbao.md:28 documents root token + unseal key there."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "otel",
+   "id": "extra-session-tokens-logged-to-unauthenticated-loki",
+   "title": "Kong introspects tokens via a ?access_token= query string, so live session tokens land in container access logs that promtail ships into an unauthenticated Loki",
+   "category": "Secrets Management",
+   "guide": "https://cwe.mitre.org/data/definitions/532.html",
+   "cvss": null,
+   "cwe": "CWE-532",
+   "count": 5,
+   "locations": [
+    {
+     "path": "local-setup/kong/kong.yml",
+     "line": 273,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/kong/kong.yml#L273"
+    },
+    {
+     "path": "local-setup/kong/kong.yml",
+     "line": 425,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/kong/kong.yml#L425"
+    },
+    {
+     "path": "local-setup/otel/loki-config.yaml",
+     "line": 1,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/otel/loki-config.yaml#L1"
+    },
+    {
+     "path": "local-setup/otel/promtail-config.yaml",
+     "line": 25,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/otel/promtail-config.yaml#L25"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 188,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L188"
+    }
+   ],
+   "why": "Every authenticated DIGIT request causes a live bearer token to be written to a log line, and Loki accepts unauthenticated reads from any of the ~50 containers on egov-network \u2014 so one compromised container (or any Grafana Viewer) can harvest valid admin and citizen sessions for the whole retention window instead of needing to phish or crack a password.",
+   "fix": "Change both introspection calls in local-setup/kong/kong.yml to pass the token in a header or POST body rather than the URL query string (e.g. `headers = { [\"auth-token\"] = ntoken }`), and set `auth_enabled: true` in local-setup/otel/loki-config.yaml with an X-Scope-OrgID on the promtail client. As a stopgap add a promtail `replace` stage that redacts `access_token=[^& ]*` before the push.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P1",
+    "exposure": "internal",
+    "confidence": 0.88,
+    "reason": "kong.yml:273 and :425 call egov-user-proxy /user/_details?access_token=<token>; nginx/user-proxy.conf logs to the image default (stdout); promtail-config.yaml:23-32 tails every container's json.log; loki-config.yaml:1 sets auth_enabled: false. docker-compose.egov-digit.yaml:188 records this as measured."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "keycloak",
+   "id": "extra-keycloak-start-dev-in-production",
+   "title": "Keycloak is started with `start-dev` and hostname/HTTPS strictness disabled (only when enable_keycloak is set, default off)",
+   "category": "Host & Service Hardening",
+   "guide": "https://www.keycloak.org/server/configuration-production",
+   "cvss": null,
+   "cwe": "CWE-16",
+   "count": 4,
+   "locations": [
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 3004,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L3004"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 3013,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L3013"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 3014,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L3014"
+    },
+    {
+     "path": "local-setup/ansible/templates/keycloak-realm.json.j2",
+     "line": 28,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/ansible/templates/keycloak-realm.json.j2#L28"
+    }
+   ],
+   "why": "Keycloak's dev mode disables the production hostname and HTTPS checks that stop an attacker from poisoning the Host header of an identity server that is proxied publicly at /auth/ \u2014 poisoned absolute URLs end up in broker callbacks, the OIDC discovery issuer and password-reset mails, which is an account-takeover primitive on the SSO that fronts the grievance platform.",
+   "fix": "Change the keycloak service in local-setup/docker-compose.egov-digit.yaml to `command: [\"start\", \"--optimized\", \"--import-realm\"]`, set KC_HOSTNAME to the tenant's public /auth URL with KC_HOSTNAME_STRICT: 'true' and KC_HOSTNAME_STRICT_HTTPS: 'true', keep KC_PROXY_HEADERS=xforwarded, and require tls_enabled: true (sslRequired: external) on any tenant that sets enable_keycloak.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P1",
+    "exposure": "public",
+    "confidence": 0.89,
+    "reason": "docker-compose.egov-digit.yaml:3004 `command: [\"start-dev\", \"--import-realm\"]` with KC_HOSTNAME_STRICT: 'false' (:3013), KC_HOSTNAME_STRICT_HTTPS: 'false' (:3014) and KC_HTTP_ENABLED: 'true' (:3015); keycloak-realm.json.j2:28 also renders sslRequired: none whenever tls_enabled is false."
+   }
+  },
+  {
+   "severity": "HIGH",
+   "source": "Claude",
+   "area": "docker-compose",
+   "id": "docker-socket-mount",
+   "title": "/var/run/docker.sock is bind-mounted into the docker-socket-proxy container (read-only file, full daemon API behind it) so promtail can do container discovery",
+   "category": "Container Isolation & Escape",
+   "guide": "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
+   "cvss": null,
+   "cwe": "CWE-250",
+   "count": 3,
+   "locations": [
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2201,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2201"
+    },
+    {
+     "path": "local-setup/docker-compose.egov-digit.yaml",
+     "line": 2165,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.egov-digit.yaml#L2165"
+    },
+    {
+     "path": "local-setup/otel/promtail-config.yaml",
+     "line": 31,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/otel/promtail-config.yaml#L31"
+    }
+   ],
+   "why": "The proxy is the one container still holding the daemon socket, and `:ro` only makes the socket file read-only \u2014 the API behind it is full host root. The deployment does constrain it (POST/EXEC/IMAGES/VOLUMES=0, CONTAINERS/NETWORKS=1, cap_drop ALL, no-new-privileges, 32M), so a compromised promtail can only enumerate containers; but a flaw in or misconfiguration of the proxy itself converts to host root and container escape on the box that holds every tenant secret.",
+   "fix": "Prefer removing the socket entirely: drop `docker_sd_configs` from local-setup/otel/promtail-config.yaml and use `static_configs` over the already-mounted /var/lib/docker/containers path with filename-derived labels, then delete the docker-socket-proxy service and its `/var/run/docker.sock` volume from local-setup/docker-compose.egov-digit.yaml. If the proxy stays, add `read_only: true` and a `tmpfs` for its runtime dir, and pin the image by digest.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "action_required",
+    "priority": "P3",
+    "exposure": "internal",
+    "confidence": 0.93,
+    "reason": "docker-compose.egov-digit.yaml:2201 mounts /var/run/docker.sock:ro into tecnativa/docker-socket-proxy:0.3.0 (profile obs-logs, active at the default observability_level: traces). Promtail itself no longer mounts it (2223) and reaches it over tcp (promtail-config.yaml:31)."
+   }
+  },
+  {
+   "severity": "LOW",
+   "source": "Claude",
+   "area": "otel",
+   "id": "monitoring-host-namespace",
+   "title": "node-exporter uses pid: host with read-only /proc, /sys and / mounts (benign by design)",
+   "category": "Container Isolation & Escape",
+   "guide": "https://github.com/prometheus/node_exporter#docker",
+   "cvss": null,
+   "cwe": "CWE-653",
+   "count": 2,
+   "locations": [
+    {
+     "path": "local-setup/docker-compose.monitoring.yml",
+     "line": 45,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.monitoring.yml#L45"
+    },
+    {
+     "path": "local-setup/docker-compose.monitoring.yml",
+     "line": 54,
+     "url": "https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/46dc4209022f28c1b1475900762875d6e763708f/local-setup/docker-compose.monitoring.yml#L54"
+    }
+   ],
+   "why": "This is the documented way to give a containerised node_exporter a true host view; the mounts are read-only, no capabilities are held, and the metrics port is only reachable by Prometheus over egov-network. Acceptable as designed \u2014 noted for completeness, not as a defect.",
+   "fix": "No change needed. If you want to tighten further, `--collector.disable-defaults` plus an explicit collector list reduces what is read from the host namespaces.",
+   "curated": true,
+   "enriched": true,
+   "triage": {
+    "status": "acceptable",
+    "priority": "",
+    "exposure": "local",
+    "confidence": 0.98,
+    "reason": "docker-compose.monitoring.yml:45 sets `pid: host`; volumes at 47/48/54 are /proc:ro, /sys:ro and /:/rootfs:ro,rslave, with cap_drop [ALL] and no-new-privileges at 26-27 and no published port."
+   }
+  }
+ ]
+}
