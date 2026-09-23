@@ -2603,6 +2603,14 @@
   .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
     padding-left: 0 !important;
   }
+
+  /* The 52px inset exists to clear the desktop nav rail, and a phone has no
+   * rail. Left at 52px it took about a quarter of a 390px screen as dead margin.
+   * 16px lines the dashboard up with the topbar's own gutter below 48rem and
+   * with Create Complaint's card. */
+  .dashboard-root.dashboard-embedded {
+    --dashboard-embedded-inset: 16px;
+  }
 }
 
 /* A pinned nav rail has to move the dashboard too.
