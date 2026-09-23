@@ -95,6 +95,7 @@ import {
 import { GuardBanner, FindingList } from './NotificationFindings';
 import { useNotificationConfig, type Ided } from './useNotificationGuard';
 import { canWrite } from './notificationSource';
+import { OtpWordingSection } from './OtpWordingSection';
 
 // ---------------------------------------------------------------------------
 // Constants — mirror the checker + schema enums.
@@ -837,7 +838,8 @@ export function NotificationConfigure() {
         <h1 className="text-2xl font-condensed font-bold text-foreground">Configure Notifications</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Per-event notification setup. Each row is an event a module can notify about; add
-          SMS / WhatsApp / Email notifications inline.
+          SMS / WhatsApp / Email notifications inline. The wording of the login and registration
+          OTP SMS has its own section at the end.
         </p>
       </div>
 
@@ -909,6 +911,10 @@ export function NotificationConfigure() {
           </Table>
         </FieldSection>
       )}
+
+      {/* Not an event: the OTP SMS is written by user-otp from localization, so
+          it sits outside the module picker and the namespace decision. */}
+      <OtpWordingSection />
     </div>
   );
 }

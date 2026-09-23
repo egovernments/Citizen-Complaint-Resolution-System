@@ -9,6 +9,11 @@ placeholder-parity test was built to prevent, one file over. So PGR's rows are
 GENERATED from local-setup/dataloader/templates/PgrWorkflowConfig.json; run it with
 --check after changing the workflow to catch a stale catalogue.
 
+A running tenant's catalogue is generated the same way from the BusinessService it
+actually runs (build_live_catalogue / --live-tenant), read from egov-workflow-v2:
+migrate-notifications.py and the deploy's fresh-tenant seed use that, and fall back to
+the committed file only when the workflow service cannot answer.
+
 WHAT IT DOES
 ------------
 One row per DISTINCT (action, toState) reachable transition:
@@ -209,6 +214,72 @@ def build_catalogue(workflow, business_service=BUSINESS_SERVICE):
     return rows
 
 
+# ── the LIVE workflow: a tenant's own BusinessService from egov-workflow-v2 ────
+# The committed template above is what a NEW tenant starts from; a tenant that has run
+# for a while may have added or retired transitions. The catalogue decides which events
+# the bridge accepts (an uncatalogued eventName is REJECTED), so a migration writes the
+# catalogue of the workflow the tenant RUNS, not of the repo. build_catalogue already
+# resolves a persisted BusinessService (uuid state references), so the live answer only
+# has to be fetched.
+
+WORKFLOW_SEARCH_PATH = "/egov-workflow-v2/egov-wf/businessservice/_search"
+
+
+class WorkflowUnavailable(RuntimeError):
+    """The live BusinessService could not be read (the caller falls back to the file)."""
+
+
+def fetch_business_service(base_url, token, tenant, business_service=BUSINESS_SERVICE,
+                           post=None, timeout=40):
+    """{"BusinessServices": [...]} for `business_service` at `tenant`, read from the running
+    egov-workflow-v2 (POST .../businessservice/_search?tenantId=&businessServices=).
+
+    `post(url, body) -> dict` may be injected (tests); the default is urllib. Raises
+    WorkflowUnavailable when the service answers with an error or no matching definition.
+    """
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    query = urllib.parse.urlencode({"tenantId": tenant, "businessServices": business_service})
+    url = base_url.rstrip("/") + WORKFLOW_SEARCH_PATH + "?" + query
+    body = {"RequestInfo": {"apiId": "notif-catalogue", "authToken": token}}
+    try:
+        if post is not None:
+            answer = post(url, body)
+        else:
+            req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                         headers={"Content-Type": "application/json"})
+            answer = json.load(urllib.request.urlopen(req, timeout=timeout))
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        raise WorkflowUnavailable("workflow search at %s failed: %s" % (tenant, exc))
+    services = [s for s in (answer or {}).get("BusinessServices") or []
+                if str(s.get("businessService", "")).upper() == business_service.upper()]
+    if not services:
+        raise WorkflowUnavailable("no %s BusinessService at tenant %s" % (business_service, tenant))
+    return {"BusinessServices": services[:1]}
+
+
+def build_live_catalogue(base_url, token, tenant, business_service=BUSINESS_SERVICE, post=None):
+    """The catalogue rows for the workflow `tenant` actually runs."""
+    return build_catalogue(fetch_business_service(base_url, token, tenant, business_service, post),
+                           business_service)
+
+
+def _token_from_env(base_url):
+    import urllib.parse
+    import urllib.request
+    tenant = os.environ.get("DIGIT_LOGIN_TENANT") or os.environ.get("NOTIF_TENANT", "")
+    data = urllib.parse.urlencode({
+        "grant_type": "password", "username": os.environ.get("DIGIT_USERNAME", "ADMIN"),
+        "password": os.environ.get("DIGIT_PASSWORD", "eGov@123"), "tenantId": tenant,
+        "scope": "read", "userType": "EMPLOYEE"}).encode()
+    req = urllib.request.Request(base_url.rstrip("/") + "/user/oauth/token", data=data, headers={
+        "Authorization": "Basic ZWdvdi11c2VyLWNsaWVudDo=",
+        "Content-Type": "application/x-www-form-urlencoded"})
+    return json.load(urllib.request.urlopen(req, timeout=40))["access_token"]
+
+
 def _default_paths():
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.abspath(os.path.join(here, "..", ".."))
@@ -220,31 +291,63 @@ def _default_paths():
 def main(argv=None):
     workflow_default, out_default = _default_paths()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--workflow", default=workflow_default)
-    ap.add_argument("--out", default=out_default)
+    ap.add_argument("--workflow", default=workflow_default,
+                    help="workflow definition file (the repo template by default)")
+    ap.add_argument("--live-tenant", metavar="TENANT",
+                    help="read the PGR BusinessService from the running egov-workflow-v2 at "
+                         "TENANT instead of --workflow (DIGIT_URL, DIGIT_USERNAME, "
+                         "DIGIT_PASSWORD, DIGIT_LOGIN_TENANT from the env); prints the rows "
+                         "unless --out is given explicitly")
+    ap.add_argument("--out", default=None,
+                    help="file to write / --check against (default: the committed catalogue; "
+                         "'-' = stdout)")
     ap.add_argument("--check", action="store_true",
-                    help="do not write; exit 1 if the committed file differs")
+                    help="do not write; exit 1 if --out differs")
     args = ap.parse_args(argv)
 
-    with open(args.workflow, encoding="utf-8") as fh:
-        workflow = json.load(fh)
-    text = render(build_catalogue(workflow))
+    if args.live_tenant:
+        base_url = os.environ.get("DIGIT_URL", "")
+        if not base_url:
+            print("ERROR: --live-tenant needs DIGIT_URL", file=sys.stderr)
+            return 2
+        os.environ.setdefault("DIGIT_LOGIN_TENANT", args.live_tenant.split(".")[0])
+        try:
+            rows = build_live_catalogue(base_url, _token_from_env(base_url), args.live_tenant)
+        except WorkflowUnavailable as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return 2
+        text = render(rows)
+        if args.out is None:
+            args.out = "-"
+    else:
+        with open(args.workflow, encoding="utf-8") as fh:
+            workflow = json.load(fh)
+        text = render(build_catalogue(workflow))
+    if args.out is None:
+        args.out = out_default
+    if args.out == "-":
+        if args.check:
+            print("ERROR: --check needs a file to compare with (--out)", file=sys.stderr)
+            return 2
+        sys.stdout.write(text)
+        return 0
 
     if args.check:
         current = None
         if os.path.exists(args.out):
             with open(args.out, encoding="utf-8") as fh:
                 current = fh.read()
+        source = ("the live workflow at %s" % args.live_tenant) if args.live_tenant else args.workflow
         if current != text:
             print("STALE: %s does not match the workflow definition at %s\n"
                   "Regenerate with: python3 local-setup/scripts/generate_event_catalogue.py"
-                  % (args.out, args.workflow), file=sys.stderr)
+                  % (args.out, source), file=sys.stderr)
             return 1
         print("OK: the event catalogue matches the workflow definition "
               "(%d events)." % len(json.loads(text)))
         return 0
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(text)
     print("wrote %s (%d events)" % (args.out, len(json.loads(text))))

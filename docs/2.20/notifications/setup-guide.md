@@ -150,7 +150,7 @@ missing becomes a `SKIPPED` row on Logs with the reason.
 |---|---|---|
 | Providers | Gateway accounts and credentials | Novu |
 | Channels | On/off and selected provider per channel | `NOTIFICATIONS.Channel` |
-| Configure | Guided editor: pick a **Module**, edit routing + templates per event, **Validate** | — |
+| Configure | Guided editor: pick a **Module**, edit routing + templates per event, **Validate**; OTP wording ([§5.6](#56-changing-the-otp-wording)) | — (OTP wording: localization) |
 | Events | Events, their actors, placeholders and allowed channels. **Read-only** | `NOTIFICATIONS.EventCatalogue` |
 | Templates | Message text per event × audience × channel × locale | `NOTIFICATIONS.Template` |
 | Routing | Who is told, per event × audience × channel | `NOTIFICATIONS.Routing` |
@@ -253,7 +253,7 @@ other rows do not. Removing the last template of an active routing row is refuse
 | `placeholder-braces` | error | `{{id}}`, unclosed `{`, stray `}` → exactly `{id}` |
 | `template-needs-body` | error | Active template with empty body |
 | `whatsapp-variable-unmapped` | error | Body placeholder missing from the provider template's **Variables (ordered)** → add it in the approved position or remove it |
-| `namespace-switch` | error | A raw `NOTIFICATIONS.Routing` or `NOTIFICATIONS.Channel` create while the tenant is still served from its legacy masters: the first such row would stop every legacy route (or the legacy channel policy) at once → move the tenant with `./deploy.sh <tenant> --tags notifications` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
+| `namespace-switch` | error | A raw `NOTIFICATIONS.Routing` or `NOTIFICATIONS.Channel` create while the tenant is still served from its legacy masters: the first such row would stop every legacy route (or the legacy channel policy) at once → move the tenant with `migrate-notifications.py` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | `channel-in-event` | warn | Channel not declared on the event's catalogue row → usually fix the routing row |
 | `no-orphan-template` | warn | Template with no active routing row → harmless |
 | `non-notifiable-audience` | warn | `AUTO_ESCALATE` / `SYSTEM` never send |
@@ -280,6 +280,41 @@ body. Without one the message is `SKIPPED / NB_TEMPLATE_NOT_APPROVED`.
 2. **Providers → Sync WhatsApp templates**: it matches approved templates to routing rows;
    review and save the rows you want. They land on **Provider Templates (WhatsApp)**.
 3. Check routing and templates on **Configure**, then trigger a real complaint transition.
+
+### 5.6 Changing the OTP wording
+
+**Configure → Login and registration OTP (SMS)**, at the end of the page, edits the text of
+the OTP SMS. It changes the wording only: the OTP service (`user-otp`) builds the SMS itself
+and novu-bridge delivers it, so on/off and provider stay on **Channels** (SMS, [§4](#4-switch-the-channel-on)).
+The OTP has no event, routing or template row.
+
+The text is three localization messages in module `egov-user`:
+
+| Code | OTP type | Built-in text, used when the language has no `egov-user` message |
+|---|---|---|
+| `sms.login.otp.msg` | login | `Dear Citizen, Your Login OTP is %s.` |
+| `sms.register.otp.msg` | register | `Dear Citizen, Your OTP to complete your DIGIT Registration is %s.` |
+| `sms.pwd.reset.otp.msg` | password reset | `Dear Citizen, Your OTP for recovering password is %s.` |
+
+- **`%s` is the code** and must appear exactly once. Without it the SMS goes out with no
+  code; with two the OTP request fails. Write `%%` for a literal `%`. The screen refuses
+  those saves (`otp-code-slot`, `otp-format`, `otp-needs-text`) and warns, without blocking,
+  when the SMS with a 6-digit code is over one segment (`otp-sms-length`) or the language is
+  not in the tenant's language list (`otp-locale-unused`).
+- **Tenant and language.** The OTP service looks the text up at the request's tenant minus
+  its last segment (`mz.maputo` → `mz`; a state tenant `mz` stays `mz`), in the language the
+  citizen's app is set to, `en_IN` when the request names none.
+- **All three or none.** The built-in text is used only while the language has *no*
+  `egov-user` message at all. Once it has one, a missing code makes that OTP type fail, so a
+  save always writes all three codes. **Reset to default** deletes them when the other two
+  are at their built-in text and nothing else in `egov-user` exists for that language;
+  otherwise it stores the built-in text.
+- **When it applies.** The next OTP. The OTP service reads localization for every OTP and
+  keeps no copy. Saving here also calls `POST /localization/messages/cache-bust`: an upsert
+  alone does not replace a cached *empty* answer, so the first custom wording for a language
+  would otherwise go unseen. Do the same after writing these codes any other way.
+- **Who can save.** A role with `/localization/messages/v1/_upsert` (on the shipped seed
+  `LOC_ADMIN`, `ACCOUNT_ADMIN`, `SUPERUSER`); everyone else sees the section read-only.
 
 ## 6. Send a test and read the logs
 
@@ -343,7 +378,8 @@ Checklist:
 | `SENT` but nothing arrives | Gateway dropped it later | Gateway's own delivery report: sender id, DLT template, barred number; email: spam, SPF/DKIM |
 | 403 saving in Configurator | Missing MDMS role, or access-control rows never seeded | Hold `MDMS_ADMIN`/`ACCOUNT_ADMIN`/`SUPERUSER`; if everyone gets 403: `./deploy.sh mycity --tags notifications` |
 | "Managing notification providers requires one of these roles…" | No admin role | Ask an admin, or be granted one |
-| Banner "not been migrated yet" / "No notification configuration on this tenant" | Tenant not copied / never seeded | `./deploy.sh mycity --tags notifications` ([migration.md](./migration.md)) |
+| Banner "not been migrated yet" | Tenant still on its 2.12 configuration | `migrate-notifications.py plan --tenant mycity`, review, then `apply` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
+| Banner "No notification configuration on this tenant" | Defaults never installed | `./deploy.sh mycity` installs them on a tenant with no configuration |
 | OTP login stopped | SMS off or its provider broke | [§4](#4-switch-the-channel-on); look for `CORE.SMS.OTP` rows |
 | `{emp_name}` in a message | Placeholder has no value for that event | Use tokens the Events screen lists for it |
 | `SKIPPED / NB_NO_ROUTING` for a complaint in `pg.citya` | Configuration written at a different root than the complaint's | Log in at the complaint's state root and configure there; re-seed that root ([§8.2](#82-whatsapp-server-side)) |

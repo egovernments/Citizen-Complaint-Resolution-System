@@ -14,7 +14,8 @@ text, from the `NOTIFICATIONS.*` MDMS masters that operators edit in the Configu
 | Integrate against the published interface | [contract/](./contract/README.md) — schemas, OpenAPI, [error codes](./contract/error-codes.md), [outputs](./contract/outputs.md) |
 
 Code: `backend/novu-bridge/` (the bridge), `configurator/src/resources/notification-*`
-(screens), `local-setup/scripts/seed-notifications.py` (seed and legacy copy),
+(screens), `local-setup/scripts/seed-notifications.py` (deploy-time seed),
+`local-setup/scripts/migrate-notifications.py` (per-tenant 2.12 → 2.20 migration),
 `backend/pgr-services/src/main/java/org/egov/pgr/service/notification/ThinEventBuilder.java`
 (the complaint producer).
 

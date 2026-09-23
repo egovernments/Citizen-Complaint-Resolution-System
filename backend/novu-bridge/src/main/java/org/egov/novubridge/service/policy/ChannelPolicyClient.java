@@ -159,7 +159,7 @@ public class ChannelPolicyClient {
             fetched = fetch(stateTenant, config.getChannelPolicyLegacySchema());
             if (!fetched.isEmpty() && legacyLogged.add(stateTenant)) {
                 log.info("Tenant {} has no {} rows — serving channel policy from the legacy {} master. "
-                                + "Run `./deploy.sh <tenant> --tags notifications` to copy them.",
+                                + "Move the tenant with `migrate-notifications.py` (plan, then apply).",
                         stateTenant, config.getChannelPolicySchema(), config.getChannelPolicyLegacySchema());
             }
         }

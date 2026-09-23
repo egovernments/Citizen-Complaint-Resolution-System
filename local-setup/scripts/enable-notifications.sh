@@ -592,15 +592,16 @@ EOF
 #         module-neutral NOTIFICATIONS.* schema + data files into a notification-seed/
 #         dir, then run seed-notifications.py twice: the access phase (access-control
 #         rows; egov-accesscontrol is restarted when it created any), then the data
-#         phase (masters, channel rows, copy into NOTIFICATIONS.*), retried once after
-#         another restart if it hit a 403. Channel rows for a tenant that has none are
-#         decided by the bridge's NOVU_BRIDGE_CHANNELS_ENABLED (the gate step 4 opened):
-#         listed = on. Rows a tenant already has are never changed.
-#   post: MDMS _search shows Routing/Template/ProviderTemplate rows (expect
-#         24/42/14; assert each >= 1 and log the actual counts) AND the new namespace
-#         has at least as many Routing/Template rows as the legacy one, because the
-#         copy is a superset of it — that is the assertion that catches a copy which
-#         silently converted nothing.
+#         phase (schemas, channel rows, and the shipped defaults into NOTIFICATIONS.*
+#         for a tenant with NO configuration), retried once after another restart if it
+#         hit a 403. Channel rows for a tenant that has none are decided by the bridge's
+#         NOVU_BRIDGE_CHANNELS_ENABLED (the gate step 4 opened): listed = on. Rows a
+#         tenant already has are never changed, and a tenant with 2.12 configuration is
+#         NOT migrated (that is migrate-notifications.py, per tenant, after its plan).
+#   post: the tenant is on NOTIFICATIONS.* with Routing/Template/EventCatalogue rows
+#         (a fresh tenant: 24/42/14 defaults; assert each >= 1 and log the counts), OR
+#         it still holds its 2.12 legacy configuration — reported, with the migration
+#         command, not failed: the seed leaves it on purpose.
 # =============================================================================
 do_step6() {
   step step6 "$(step_title step6)"
@@ -675,42 +676,38 @@ do_step6() {
     return 0
   fi
   local tok; tok="$(mint_token)"
-  local nr nt np
+  local nr nt np nc xe xr xt xp xc
   nr="$(mdms_count RAINMAKER-PGR.NotificationRouting "$tok")"
   nt="$(mdms_count RAINMAKER-PGR.NotificationTemplate "$tok")"
   np="$(mdms_count RAINMAKER-PGR.NotificationProviderTemplate "$tok")"
-  log "MDMS row counts — Routing=${nr} (expect 24), Template=${nt} (expect 42), ProviderTemplate=${np} (expect 14)"
-  verify "NotificationRouting has >= 1 row (got ${nr})"          "[[ '${nr:-0}' -ge 1 ]]"
-  verify "NotificationTemplate has >= 1 row (got ${nt})"         "[[ '${nt:-0}' -ge 1 ]]"
-  # WhatsApp is a HARD gate. seed-notifications.py treats a NotificationProviderTemplate
-  # data failure as NON-fatal, so the run could "succeed" with WhatsApp unconfigured.
-  # When WHATSAPP is enabled, fail the step if the ProviderTemplate master is empty.
-  if _wa_enabled; then
-    verify "WHATSAPP enabled → NotificationProviderTemplate has >= 1 row (got ${np})" "[[ '${np:-0}' -ge 1 ]]"
-  else
-    note "WHATSAPP not enabled — NotificationProviderTemplate rows are informational (got ${np})"
-  fi
-
-  # The module-neutral namespace. The copy is a SUPERSET of the legacy rows minus the
-  # non-notifiable audiences (AUTO_ESCALATE/SYSTEM), which the shipped seed does not
-  # use — so ">= legacy" is the right assertion, not "== legacy": a tenant may already
-  # have new-namespace rows for events no legacy row covers. A zero here is the
-  # failure this step exists to catch: the seeder printed DONE but the copy converted
-  # nothing, and the Configurator would open on an empty Notifications screen.
-  local xe xr xt xp xc
+  nc="$(mdms_count RAINMAKER-PGR.NotificationChannel "$tok")"
   xe="$(mdms_count NOTIFICATIONS.EventCatalogue "$tok")"
   xr="$(mdms_count NOTIFICATIONS.Routing "$tok")"
   xt="$(mdms_count NOTIFICATIONS.Template "$tok")"
   xp="$(mdms_count NOTIFICATIONS.ProviderTemplate "$tok")"
   xc="$(mdms_count NOTIFICATIONS.Channel "$tok")"
-  log "NOTIFICATIONS.* row counts — EventCatalogue=${xe} (expect 14), Routing=${xr}, Template=${xt}, ProviderTemplate=${xp}, Channel=${xc}"
+  log "legacy RAINMAKER-PGR.* row counts — Routing=${nr}, Template=${nt}, ProviderTemplate=${np}"
+  log "NOTIFICATIONS.* row counts — EventCatalogue=${xe}, Routing=${xr}, Template=${xt}, ProviderTemplate=${xp}, Channel=${xc} (a fresh tenant: 14/24/42/14)"
+
+  # A tenant that still holds its 2.12 configuration is served from it, unchanged, until
+  # an operator migrates it — the seed does not. That is a finished step, not a failure.
+  if [[ "${xr:-0}" -eq 0 && $(( ${nr:-0} + ${nt:-0} + ${np:-0} )) -gt 0 ]]; then
+    note "${NOTIF_TENANT} still runs on its 2.12 notification configuration (legacy rows ${nr}/${nt}/${np}); nothing was migrated."
+    note "Review, then migrate it (one-way): cd '$scripts' && DIGIT_URL='$PUBLIC_URL' python3 migrate-notifications.py plan --tenant ${NOTIF_TENANT}"
+    verify "legacy NotificationRouting still has its rows (got ${nr})" "[[ '${nr:-0}' -ge 1 ]]"
+    return 0
+  fi
+
+  verify "NOTIFICATIONS.Routing has >= 1 row (got ${xr})"         "[[ '${xr:-0}' -ge 1 ]]"
+  verify "NOTIFICATIONS.Template has >= 1 row (got ${xt})"        "[[ '${xt:-0}' -ge 1 ]]"
   verify "NOTIFICATIONS.EventCatalogue has >= 1 row (got ${xe})"  "[[ '${xe:-0}' -ge 1 ]]"
-  verify "NOTIFICATIONS.Routing covers the legacy rows (${xr} >= ${nr})"   "[[ '${xr:-0}' -ge '${nr:-0}' ]]"
-  verify "NOTIFICATIONS.Template covers the legacy rows (${xt} >= ${nt})"  "[[ '${xt:-0}' -ge '${nt:-0}' ]]"
-  verify "NOTIFICATIONS.Channel has >= 1 row (got ${xc})"        "[[ '${xc:-0}' -ge 1 ]]"
+  # Channel rows may sit in either master (a tenant whose rows predate NOTIFICATIONS.*
+  # keeps them in the legacy one until it is migrated; the bridge reads both).
+  verify "channel rows exist (NOTIFICATIONS ${xc}, legacy ${nc})" "[[ $(( ${xc:-0} + ${nc:-0} )) -ge 1 ]]"
+  # WhatsApp is a HARD gate: without provider templates every WhatsApp message is
+  # SKIPPED NB_TEMPLATE_NOT_APPROVED, and the seed would still have "succeeded".
   if _wa_enabled; then
-    verify "WHATSAPP enabled → NOTIFICATIONS.ProviderTemplate covers the legacy rows (${xp} >= ${np})" \
-      "[[ '${xp:-0}' -ge '${np:-0}' ]]"
+    verify "WHATSAPP enabled → NOTIFICATIONS.ProviderTemplate has >= 1 row (got ${xp})" "[[ '${xp:-0}' -ge 1 ]]"
   else
     note "WHATSAPP not enabled — NOTIFICATIONS.ProviderTemplate rows are informational (got ${xp})"
   fi

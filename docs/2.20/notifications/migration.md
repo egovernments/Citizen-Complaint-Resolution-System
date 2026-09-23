@@ -28,6 +28,8 @@ Read this before deploying 2.20 over a 2.12 deployment. First-time setup is
       `enable_otp_services: true` without it).
 - [ ] Kubernetes: keep `deploymentStrategy.type: Recreate` on `pgr-services` and upgrade
       novu-bridge first ([step 2](#2-new-novu-bridge-before-new-pgr-services)).
+- [ ] Book a quiet period per tenant for moving its notification configuration
+      ([step 3](#3-copy-each-tenants-configuration)): the deploy does not move it.
 
 ## 1. Take all four images from one build
 
@@ -87,48 +89,139 @@ rejects it with `Recreate`).
 
 ## 3. Copy each tenant's configuration
 
-A stock `./deploy.sh <tenant>` runs the notification seed step. To run only that step:
+**The deploy upgrades software only.** `./deploy.sh <tenant>` (or `--tags notifications`)
+creates the notification schemas and access-control rows, gives a tenant with **no** channel
+rows rows that say what `NOVU_BRIDGE_CHANNELS_ENABLED` says
+([below](#channel-rows-what-happens-to-an-existing-tenant)), and — only for a tenant with no
+notification configuration at all — writes the shipped defaults straight into
+`NOTIFICATIONS.*`. It never copies a tenant's 2.12 rows and never adds a default row to a
+configured tenant. A 2.12 tenant keeps being served from its legacy masters, unchanged; the
+deploy says so (`notif-seed — ACTION: this tenant's notification configuration is not migrated`).
+Until it is migrated, the Configure and Channels screens show it read-only (*"This tenant has not
+been migrated yet — shown read-only"*) and refuse a raw first `NOTIFICATIONS.Routing` /
+`NOTIFICATIONS.Channel` row (`namespace-switch`): that row alone would switch the tenant over.
+
+Moving a tenant is a separate step, per tenant, with
+`local-setup/scripts/migrate-notifications.py` (the deploy stages it as
+`/opt/digit/notification-seed/migrate-notifications.py`). **It is one-way.** novu-bridge serves
+a tenant from `NOTIFICATIONS.*` from its first `NOTIFICATIONS.Routing` row on (active or not —
+MDMS has no delete), and no command or setting moves it back. The legacy rows are never modified.
 
 ```bash
-cd local-setup/ansible
-./deploy.sh mycity --tags notifications
+cd /opt/digit/notification-seed                 # or local-setup/scripts in a checkout
+export DIGIT_URL=http://127.0.0.1:18000         # Kong; DIGIT_USERNAME / DIGIT_PASSWORD default ADMIN / eGov@123
+python3 migrate-notifications.py plan  --all --report plan.json
+python3 migrate-notifications.py apply --all --only defaults --yes --report apply.json
+python3 migrate-notifications.py apply --tenant mycity --yes --report apply-mycity.json
 ```
 
-It is idempotent and additive, and converges when re-run. In order it:
+### Plan (read-only)
 
-1. adds the access-control actions and role-actions for the new masters, screens and provider
-   endpoints, and restarts `egov-accesscontrol` when it created any (it caches role-actions).
-   This comes first because every write below needs them; a write refused with 403 later (an
-   earlier run that stopped before the restart) triggers one more restart and a second pass;
-2. creates the five `NOTIFICATIONS.*` schemas (an existing schema that lacks a property is only
-   reported: mdms-v2 cannot update a schema in place);
-3. writes the legacy masters' missing default rows, and the tenant's **channel rows** by the rule
-   [below](#channel-rows-what-happens-to-an-existing-tenant);
-4. **copies the tenant's own rows** — read live over `/mdms-v2/v2/_search`, not the repository
-   defaults — from `RAINMAKER-PGR.Notification*` into `NOTIFICATIONS.*`, plus the generated
-   event catalogue. Routing is copied **last**, and only when every template and provider
-   template made it: the bridge serves a tenant from `NOTIFICATIONS.*` the moment it has one
-   `NOTIFICATIONS.Routing` row, so routing without its templates would send nothing. A held-back
-   routing copy prints `NOTIFICATIONS-ROUTING-HELD`; the tenant stays on its legacy masters and
-   keeps delivering until a re-run finishes it.
+`--all` takes every state tenant listed in `tenant.tenants` at the root(s): `--roots a,b`, else
+`STATE_ROOT`, else the running bridge's `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` (the deploy sets it
+to `state_root`). City codes are skipped (configuration lives at the state tenant), and so is test
+junk (`--exclude`, default `(?i)^(PW_|pwt)`). `--tenant X` (repeatable) names tenants instead.
 
-**Existing rows are never modified or deleted**, in either namespace. In the Configurator the
-legacy masters become read-only ("Legacy (PGR) …" under **Advanced**).
+| Category | Meaning | `apply` does |
+|---|---|---|
+| `none` | no configuration in either namespace | nothing, unless `--adopt-defaults` (then the shipped defaults) |
+| `defaults` | legacy rows equal the shipped defaults, after conversion | copies the tenant's rows |
+| `customised` | legacy rows differ; the plan lists rows only in the tenant, rows only in the defaults (**not** added) and every changed field | copies the tenant's rows, exactly |
+| `migrated` | already served from `NOTIFICATIONS.*` | adds missing catalogue rows, channel rows that are still only in the legacy master, and provider pins; nothing else |
+| `partial` | `NOTIFICATIONS.*` rows but no Routing, a copy that did not finish, no event catalogue, or an interrupted default seed | finishes the copy with the tenant's own rows (`--adopt-defaults` for an interrupted default seed) |
 
-Until the copy runs for a tenant, novu-bridge serves that tenant's legacy rows through a read
-adapter — per tenant, all or nothing, decided by whether the tenant has any
-`NOTIFICATIONS.Routing` rows (active or not). The Configurator decides "which namespace is live"
-the same way: from `NOTIFICATIONS.Routing` rows for routing and templates, and from channel rows
-for channel policy. Delivery keeps working; the Configure and Channels screens are read-only with
-the banner *"This tenant has not been migrated yet — shown read-only"*, and the raw
-`NOTIFICATIONS.Routing` / `NOTIFICATIONS.Channel` create forms are refused (`namespace-switch`):
-the first such row would silently switch the tenant off every legacy route or legacy channel
-setting. Move a tenant with this step, not by hand.
+For each tenant the plan also shows the rows `apply` would create, after conversion
+(`--show-rows full` prints them whole); the event catalogue, generated from the tenant's
+**live** PGR workflow in egov-workflow-v2 (the repository template, with a warning, when that
+cannot answer); channel policy now and after; the provider decision per channel; and warnings:
+routing for events the live workflow cannot produce, routed audiences with no template or none
+in the default locale, WhatsApp routes without an approved provider template, and rows the
+conversion drops (`AUTO_ESCALATE` / `SYSTEM` — the bridge drops them today too).
 
-If the copy could not finish, the deploy prints
-`notif-seed — WARNING: the NOTIFICATIONS.* copy did not complete`. Legacy rows are untouched;
-re-run the step once MDMS is healthy. Without the step at all the Channels screen saves nothing
-and provider edit/delete return 403.
+### Review
+
+Read every `customised` and `partial` tenant. The copy is the tenant's own rows through the
+conversion the bridge already applies to them (`notifications_convert.py` mirrors
+`LegacyMasterAdapter`), so what it sends today is what it sends after. Inactive rows stay
+inactive. Default rows it never had are not added.
+
+### Apply
+
+- `apply` needs `--yes`; without it, it prints the plan and exits `4`.
+- With `--all` it needs `--only <categories>`. `customised` and `partial` tenants are applied only
+  when listed there or named with `--tenant`: do `--only defaults` first, then the customised
+  tenants one at a time.
+- Write order: event catalogue, templates, provider templates, channel rows, **routing last**.
+  Routing is held back when any catalogue, template or provider-template write fails; the tenant
+  then stays on its legacy masters. Re-run to finish.
+- **Apply in a quiet period.** The bridge rejects an event whose name is missing from a
+  non-empty event catalogue — whichever namespace serves the tenant — dead-letters it, and caches
+  the catalogue for 60 s. MDMS creates one row per call, so a tenant's first catalogue appears
+  row by row (well under a second), and an event arriving in that window can be rejected
+  (`NB_EVENT_NOT_IN_CATALOGUE`) for up to 60 s. `apply` prints the window; check Logs for
+  `REJECTED` rows in it. A catalogue left incomplete fails the tenant
+  (`EVENT CATALOGUE INCOMPLETE`): re-run at once. The catalogue lists PGR's workflow transitions;
+  a thin event with any other name is rejected for a tenant that has one.
+- Before and after writing, `apply` resolves one synthetic thin event per catalogued event and
+  locale through `POST /novu-bridge/novu-adapter/v1/dispatch/_resolve` (nothing is sent, no
+  ledger row is written), with made-up citizen and assignee contacts and the tenant's real role
+  pools, and compares recipient, channel, locale and text. Any difference is listed and makes the
+  tenant `WARN`. When the bridge cannot answer, the preview is skipped and the output says so.
+- It then re-reads every master and reports counts and any row that is missing or reads back
+  different.
+- Re-running skips rows already there and reports them as present. A failed tenant does not
+  stop the others.
+
+Exit codes: `0` ok · `1` warnings · `2` a tenant failed · `3` a write was refused with 403
+(restart `egov-accesscontrol`; a tenant that never had the deploy's notification step also lacks
+its access-control rows — run `NOTIF_TENANT=<tenant> NOTIF_SEED_PHASE=access python3
+seed-notifications.py` first) · `4` refused to start.
+
+### Providers
+
+Novu integrations belong to the whole deployment; `NOTIFICATIONS.Channel.provider` pins one per
+channel per tenant. A pin outranks the channel's `gateway` and `NOVU_BRIDGE_SMS_PROVIDER`. For
+each channel that is on:
+
+| Situation | `apply` |
+|---|---|
+| exactly one active integration of that channel (Novu's in-app inbox ignored) | pins it |
+| several | lists them and leaves the channel unpinned (Novu keeps using its primary); choose with `--provider SMS=<identifier>` |
+| none | operator action — the channel cannot deliver; the tenant ends `WARN` |
+| SMS on the direct SMSCountry route (`gateway: smscountry`, or `NOVU_BRIDGE_SMS_PROVIDER=smscountry`) | kept as it is: a pin would move SMS onto a Novu integration. Move it on purpose with `--create-smscountry-provider` or `--provider SMS=…` |
+| on through `NOVU_BRIDGE_CHANNELS_ENABLED`, no channel row | no pin (nowhere to store one) |
+
+`--create-smscountry-provider` (or `--create-provider <type>`, for `twilio-sms`,
+`twilio-whatsapp`, `smtp`, `ozeki`, `smscountry`) creates a catalog provider through
+`POST /novu-bridge/novu-adapter/v1/providers` and pins it for the tenants in the run.
+Credentials are read only from `--credentials-file`, a JSON object keyed by type:
+
+```json
+{"smscountry": {"name": "SMSCountry", "credentials": {"user": "…", "password": "…", "senderId": "…"}}}
+```
+
+The file must be mode `0600` or stricter, or it is refused. Values are never printed or written
+to the report. The identifier is derived from the name, so a re-run finds the provider rather
+than creating a second one. Integrations created before the catalog are listed as working but
+not rotatable from the Configurator; re-create them from the catalog when convenient.
+
+### The report
+
+`--report <file>` writes JSON: `mode`, `roots`, `excluded`, `bridgeEnv`, `providers`
+(`integrations` as the bridge lists them, `preCatalog`, `created` — credential key names only),
+and per tenant `category`, `reasons`, `counts`, `defaultsDiff` (`onlyInTenant`, `onlyInDefaults`,
+`changed` with the default and tenant values), `planned` (full rows per master), `catalogue`,
+`channels` (`now`, `after`), `providers` (the decision per channel), `warnings`,
+`operatorActions`, `notes`. After `apply`: `apply.write` (created / present / failed per master),
+`apply.catalogue` (the write window, `COMPLETE` or `PARTIAL`), `apply.verify`,
+`apply.mismatches`, `apply.preview` (`differences`, and both previews) and `result` — `OK`,
+`WARN`, `FAILED` or `SKIPPED`.
+
+### Verify
+
+Run `plan --all` again: every tenant you applied is `migrated` with nothing to create, and
+`/config/source` ([below](#where-is-a-tenant)) reports `NOTIFICATIONS.Routing` for it. Then send
+one real complaint transition per migrated tenant and check Logs.
 
 ### Channel rows: what happens to an existing tenant
 
@@ -140,16 +233,17 @@ the allowlist the **running** `novu-bridge` container has and decides per tenant
 
 | The tenant today | The seed writes | Effect |
 |---|---|---|
-| No channel rows; allowlist e.g. `SMS` | One row per channel, `enabled` = listed (SMS on, EMAIL/WHATSAPP off), no `gateway` | None: the rows say what the env said. `NOVU_BRIDGE_SMS_PROVIDER` still picks the SMS transport |
+| No channel rows; allowlist e.g. `SMS` | One row per channel, `enabled` = listed (SMS on, EMAIL/WHATSAPP off), no `gateway` — in the legacy master for a 2.12 tenant, else in `NOTIFICATIONS.Channel` | None: the rows say what the env said. `NOVU_BRIDGE_SMS_PROVIDER` still picks the SMS transport |
 | No channel rows; empty allowlist (a new deployment) | All three rows, off | None: nothing was enabled. The out-of-box default |
-| Has channel rows | Only the missing channels, off | None: a missing row already meant off. A channel on the allowlist but without a row is reported (it has been off since the tenant got rows) |
+| Has channel rows | Nothing | None. A channel on the allowlist without a row is reported: it has been off since the tenant got rows |
 | Only inactive rows, one of them for an allowlisted channel | Nothing (`mode=conflict`) | None; decide that channel on the Channels screen |
 | Seed run by hand without `NOTIF_CHANNELS_ALLOWLIST` | Nothing (`mode=unknown`) | None; the tenant stays on the env allowlist |
 
-The seed prints its decision — `CHANNEL-POLICY: tenant=… mode=… allowlist=…` and one line per
-channel — and the deploy shows it under `notif-seed — result`. A run that dies half way is
-finished by the next one with the same rule. The bridge caches channel policy for 60 s, so a
-change takes up to a minute to apply.
+The seed prints its decision — `CHANNEL-POLICY: tenant=… mode=… allowlist=… target=…` and one
+line per channel — and the deploy shows it under `notif-seed — result`. A run that dies half way
+is finished by the next one with the same rule. The migration copies a 2.12 tenant's channel rows
+into `NOTIFICATIONS.Channel` as they are (plus provider pins). The bridge caches channel policy
+for 60 s, so a change takes up to a minute to apply.
 
 A tenant created by `default-data-handler` (a new tenant, or a Helm bootstrap) starts with the
 committed all-off rows whatever the allowlist says; the Helm tier runs no seed and sets no
@@ -159,6 +253,7 @@ committed all-off rows whatever the allowlist says; the Helm tier runs no seed a
 
 There is no setting that chooses old or new — the data does. Check with any of:
 
+- `migrate-notifications.py plan --tenant mycity`: the category.
 - **Configurator → Notifications → Configure**: no banner = on `NOTIFICATIONS.*`.
 - `GET /novu-bridge/novu-adapter/v1/config/source?tenantId=mycity` (employee token): one entry
   per master with the schema read, row count, `legacy` and `stale` flags.
@@ -213,8 +308,10 @@ on the next deploy:
   come back with the 2.12 compose files.
 - The database needs no down-migration: 2.20's bridge migrations only add columns with defaults,
   which the 2.12 bridge ignores.
-- **Configurator edits made after the upgrade are lost.** They were written to `NOTIFICATIONS.*`
-  only; 2.12 reads `RAINMAKER-PGR.*`, which still holds the configuration as it was at the copy.
+- **Configurator edits made after a tenant's migration are lost.** They were written to
+  `NOTIFICATIONS.*` only; 2.12 reads `RAINMAKER-PGR.*`, which still holds the configuration as
+  it was when the tenant was migrated. (Under 2.20 there is no way back: migration is one-way
+  per tenant.)
 - The 2.12 bridge ignores channel rows and goes back to `NOVU_BRIDGE_CHANNELS_ENABLED`.
 - Thin events dead-lettered while the versions were mixed cannot be replayed by a 2.12 bridge.
 
@@ -240,8 +337,11 @@ Changed defaults worth checking: `NOVU_BRIDGE_CHANNEL_POLICY_SCHEMA` is `NOTIFIC
       you chose, and the `novu-bridge-migration` / `pgr-services-migration` containers (init
       containers on Helm) exited 0 from the same tag.
 - [ ] No `egov-notification-sms`, `otp-publisher` or `novu-bridge-endpoint` container is running.
-- [ ] `./deploy.sh <tenant>` (or `--tags notifications`) ran for **every** tenant with
-      `failed=0` and no `notif-seed — WARNING` task.
+- [ ] `./deploy.sh <tenant>` (or `--tags notifications`) ran with `failed=0` and no
+      `notif-seed — WARNING` task.
+- [ ] `migrate-notifications.py plan --all` leaves no tenant `defaults`, `customised` or
+      `partial` that you meant to migrate, and every `apply` ended `OK` (or its `WARN` lines are
+      understood).
 - [ ] The `CHANNEL-POLICY` lines show every channel you use today as `ON` or as an existing
       enabled row.
 - [ ] `/config/source` shows no `legacy: true` for any tenant you expect to edit.

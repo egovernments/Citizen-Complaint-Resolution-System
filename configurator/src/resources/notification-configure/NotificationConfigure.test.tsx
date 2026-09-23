@@ -205,7 +205,7 @@ describe('NotificationConfigure (Configure tab)', () => {
 
     // The banner names the tenant's state and what to run — never just "read-only".
     await screen.findByText(/has not been migrated yet/i, undefined, { timeout: 5000 });
-    expect(screen.getByText(/--tags notifications/)).toBeTruthy();
+    expect(screen.getByText(/migrate-notifications\.py plan --tenant/)).toBeTruthy();
 
     // The legacy row is shown, translated into the new vocabulary...
     await screen.findByText(/citizen \(actor\) · SMS/i);

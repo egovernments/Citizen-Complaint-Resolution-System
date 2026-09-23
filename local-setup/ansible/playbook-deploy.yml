@@ -6440,19 +6440,27 @@
           `tolerate_bootstrap_failures: true` to continue past this.
 
     # ─────────── Config-driven notification MDMS seed ───────────
-    # Seeds the notification masters at the state root — the legacy
-    # RAINMAKER-PGR.Notification* ones and the module-neutral NOTIFICATIONS.* ones —
-    # COPIES a tenant's existing legacy rows into the new namespace (thin-event design
-    # §5.2), and grants the access-control rows the Channels screen, the new masters and
-    # the novu-bridge endpoints need. Because MDMS SQL migrations never run on a deployed
-    # box, this is the ONLY way a seed change reaches an existing install.
+    # A DEPLOY UPGRADES SOFTWARE ONLY. This step creates the notification schemas (both
+    # namespaces), grants the access-control rows the Channels screen, the new masters
+    # and the novu-bridge endpoints need, and gives a tenant WITHOUT channel rows rows
+    # that say what NOVU_BRIDGE_CHANNELS_ENABLED says. Because MDMS SQL migrations never
+    # run on a deployed box, this is the ONLY way those reach an existing install.
+    #
+    # It never moves a tenant's notification CONFIGURATION (see seed-notifications.py):
+    #   • 2.12 configuration (RAINMAKER-PGR.Notification* rows, no NOTIFICATIONS.Routing):
+    #     left exactly as it is — novu-bridge keeps serving it through its legacy
+    #     adapter. It is reported (NOTIFICATIONS-MIGRATION-PENDING) and migrated by an
+    #     operator, per tenant, after reviewing `migrate-notifications.py plan`
+    #     (docs/2.20/notifications/migration.md). No row is copied, no default merged.
+    #   • already on NOTIFICATIONS.*: left exactly as it is.
+    #   • no configuration at all (fresh install): the shipped defaults, written straight
+    #     into NOTIFICATIONS.* (routing last, held back if a template write failed), the
+    #     event catalogue generated from the tenant's live workflow.
     #
     # This is NOT inert: novu-bridge reads these rows. A tenant is served from
     # NOTIFICATIONS.* as soon as it has one NOTIFICATIONS.Routing row, and its channels
     # are decided by its channel rows as soon as it has one (only a tenant with none
-    # follows NOVU_BRIDGE_CHANNELS_ENABLED). So the seeder copies Routing last and only
-    # after the templates made it, and seeds channel rows from the allowlist the running
-    # bridge actually uses — see seed-notifications.py.
+    # follows NOVU_BRIDGE_CHANNELS_ENABLED) — hence the rules above.
     #
     # Order, and why it converges on a re-run:
     #   1. access phase: the access-control rows, FIRST — every write below needs them.
@@ -6466,7 +6474,7 @@
     #   • On its own:  ./deploy.sh <tenant> --tags notifications
     #     (state_root / digit_dir / upstream_kong_port are group/host vars and
     #     compose_files is computed by an `always` task, so all resolve under --tags).
-    - name: "notif-seed — stage schema + data + seeder on target"
+    - name: "notif-seed — stage schemas, defaults, seeder and migration script on target"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.copy:
@@ -6474,31 +6482,37 @@
         dest: "{{ digit_dir }}/notification-seed/"
       loop:
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json"
-        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
-        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
-        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
         # The row shapes for the channel decision (see seed-notifications.py): the
         # seeder takes code/gateway/senderId/provider from here but decides `enabled`
         # from the bridge's NOVU_BRIDGE_CHANNELS_ENABLED for a tenant with no rows.
+        # The legacy Routing/Template/ProviderTemplate defaults are NOT staged: the
+        # deploy never writes default rows into the legacy masters any more.
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationChannel.json"
-        # The module-neutral NOTIFICATIONS.* namespace (thin-event design §5). The five
-        # schemas, the generated EventCatalogue, and the converted defaults — the last
-        # are only used for a tenant that has NO legacy rows to copy; a tenant that has
-        # them gets its OWN rows converted, read live over _search, because a deployed
-        # box has drifted from these defaults and a staged file would overwrite that.
+        # The module-neutral NOTIFICATIONS.* namespace (thin-event design §5): the five
+        # schemas and the shipped defaults. The deploy writes the defaults only for a
+        # tenant with no configuration at all; migrate-notifications.py compares a
+        # tenant's legacy rows against them (category defaults / customised) and writes
+        # them only with --adopt-defaults. The catalogue file is the fallback for when
+        # egov-workflow-v2 cannot answer for the tenant's live workflow.
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json"
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json"
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json"
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Template.json"
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.ProviderTemplate.json"
         # NOTIFICATIONS.Channel.json is deliberately NOT staged: channel rows switch
-        # delivery on and off, so the seeder never writes them from a file — it copies
-        # the tenant's legacy rows or decides them from the bridge's allowlist.
+        # delivery on and off, so they are never written from a file — they are decided
+        # from the bridge's allowlist, or copied from the tenant's legacy rows by the
+        # migration.
         - "{{ playbook_dir }}/../scripts/seed-notifications.py"
-        # The conversion itself. seed-notifications.py imports it from its own
-        # directory: without it staged, the copy step reports NOT STAGED and the new
-        # namespace stays empty rather than being filled with guesses.
+        # The conversion rules (the one source of them) and the catalogue generator; the
+        # seeder and the migration script import both from their own directory.
         - "{{ playbook_dir }}/../scripts/notifications_convert.py"
+        - "{{ playbook_dir }}/../scripts/generate_event_catalogue.py"
+        # Staged so an operator can plan/apply the per-tenant migration on the box:
+        #   cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:<kong>
+        #   python3 migrate-notifications.py plan --all
+        # The deploy itself never runs it.
+        - "{{ playbook_dir }}/../scripts/migrate-notifications.py"
 
     # The allowlist novu-bridge falls back to for a tenant with no channel rows. Read
     # from the RUNNING container, not host_vars: a per-tenant overlay can override the
@@ -6577,7 +6591,7 @@
       until: accesscontrol_ready.rc == 0
       changed_when: false
 
-    - name: "notif-seed — schemas, masters, channel rows, NOTIFICATIONS.* copy (phase 2 of 2)"
+    - name: "notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
@@ -6596,8 +6610,11 @@
       register: notif_seed
       changed_when: "'ROWS-CREATED' in (notif_seed.stdout | default(''))"
       # Exit 3 = a write was refused with 403: handled by the restart + second pass
-      # below, not a failure yet. Exit 2 (a core master failed) fails here. Gate on DONE
-      # too: the seeder prints it last, so a crash before it is caught.
+      # below, not a failure yet. Exit 2 fails here: a core master failed — for a fresh
+      # tenant that includes NOTIFICATIONS-SEED-INCOMPLETE (its defaults did not all
+      # land, routing is held back, so it has no configuration yet and a re-run finishes
+      # it) — or the tenant's masters could not be read, in which case nothing was
+      # written. Gate on DONE too: the seeder prints it last, so a crash is caught.
       failed_when: "notif_seed.rc not in [0, 3] or 'DONE' not in (notif_seed.stdout | default(''))"
 
     - name: "notif-seed — result"
@@ -6662,7 +6679,7 @@
       when: notif_seed_second is defined and notif_seed_second.stdout is defined
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
-        msg: "{{ notif_seed_second.stdout_lines | default([]) | select('search', 'copy |channel|data |CHANNEL-|DONE|NOTIF') | list }}"
+        msg: "{{ notif_seed_second.stdout_lines | default([]) | select('search', 'defaults |channel|data |CHANNEL-|DONE|NOTIF') | list }}"
 
     - name: "notif-seed — fail: still refused after restarting egov-accesscontrol"
       when:
@@ -6675,8 +6692,13 @@
           (exit {{ notif_seed_second.rc }}). Exit 3 = still 403: the seeding user's roles
           lack the role-actions — check it holds MDMS_ADMIN (a user provisioned by tenant
           bootstrap holds SUPERUSER only) and run repair-tenant-masters.py for a tenant with
-          truncated ACCESSCONTROL rows. Exit 2 = a core master failed; read the lines above.
-          Legacy rows are untouched. Re-run with
+          truncated ACCESSCONTROL rows. If the user DOES hold the role, its login token is stale:
+          egov-user keeps the roles a token was issued with and hands the same token back on
+          every login, so a role change during this deploy is invisible to Kong until the token
+          goes (flush that user's auth_to_access/auth/access/uname_to_access/refresh keys in
+          digit-redis, then re-run). Exit 2 = a core master failed, or the tenant's
+          notification masters could not be read (nothing was written then); read the lines
+          above. A tenant's configuration is never modified by this step. Re-run with
           `./deploy.sh {{ state_root | default('<tenant>') }} --tags notifications`.
           {{ notif_seed_second.stdout_lines | default([]) | select('search', 'FORBIDDEN|FAILED|NOTIF-|CHANNEL-') | list }}
 
@@ -6686,23 +6708,23 @@
       ansible.builtin.set_fact:
         notif_seed_final: "{{ notif_seed_second if (notif_seed_second is defined and notif_seed_second.stdout is defined) else notif_seed }}"
 
-    # The copy into NOTIFICATIONS.* is LOUD but not fatal: the seeder copies Routing last
-    # and holds it back when the templates did not make it, so a tenant whose copy did
-    # not finish keeps being served from its legacy masters and keeps delivering. What it
-    # costs is the Configurator (read-only "not migrated" banner). A warning buried in 40
-    # lines of seeder output is a warning nobody reads, so surface it as its own task.
-    - name: "notif-seed — WARNING: the NOTIFICATIONS.* copy did not complete"
+    # The deploy does NOT migrate a tenant that still has its 2.12 configuration: it
+    # keeps being served from the legacy masters, unchanged. Say so where it is seen,
+    # with the command that shows what a migration would change.
+    - name: "notif-seed — ACTION: this tenant's notification configuration is not migrated"
       when:
         - seed_notifications | default(enable_novu | default(false))
-        - "'NOTIFICATIONS-COPY-FAILED' in (notif_seed_final.stdout | default(''))"
+        - "'NOTIFICATIONS-MIGRATION-PENDING' in (notif_seed_final.stdout | default(''))"
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: >-
-          The legacy RAINMAKER-PGR.Notification* rows are UNTOUCHED and notifications
-          keep working through them. Re-run just this step with
-          `./deploy.sh {{ state_root | default('<tenant>') }} --tags notifications`
-          once MDMS is healthy. Lines:
-          {{ notif_seed_final.stdout_lines | default([]) | select('search', 'NOTIFICATIONS|HELD') | list }}
+          {{ state_root | default('<tenant>') }} still runs on its 2.12 notification
+          configuration (RAINMAKER-PGR.Notification*). Nothing changed and it keeps
+          delivering, but the Configurator shows it read-only until it is migrated.
+          Review, then migrate (one-way):
+          `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
+          python3 migrate-notifications.py plan --tenant {{ state_root | default('<tenant>') }}`,
+          then the same with `apply ... --yes`. See docs/2.20/notifications/migration.md.
 
     - name: "notif-seed — WARNING: channel rows were not written"
       when:

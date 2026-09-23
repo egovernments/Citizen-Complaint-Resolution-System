@@ -9,15 +9,15 @@ The same mapping has to run in two places and produce byte-identical results:
   1. offline, over the repo's committed defaults, to generate
      utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/*.json
      (the CLI at the bottom of this file does that, and its output is committed);
-  2. online, inside seed-notifications.py, over the rows a LIVE tenant actually has.
+  2. online, inside migrate-notifications.py, over the rows a LIVE tenant actually has
+     (convert_records), when an operator migrates that tenant after reviewing its plan.
 
-(2) cannot be replaced by (1). The seeder is create-only -- a data row that collides
-on x-unique comes back DUPLICATE and is counted as `dup`, and there is no data _update
-call anywhere in it. So it is idempotent but NOT convergent: a changed default value
-has never reached a deployed box. Live servers have drifted from the repo's 24/42/14
-to roughly 41/60/14 rows through operator edits. Staging a file of adapted rows would
-therefore copy the REPO's defaults over a tenant that has its own. The copy must read
-the live rows and convert them.
+(2) cannot be replaced by (1). Live servers have drifted from the repo's 24/42/14 to
+roughly 41/60/14 rows through operator edits, so copying a file of adapted defaults
+would put the REPO's messages in place of the tenant's own. The copy must read the live
+rows and convert them. novu-bridge's LegacyMasterAdapter applies this same mapping at
+read time to a tenant that has not been migrated; the two must stay identical, or a
+tenant's messages change the moment it is migrated.
 
 THE MAPPING
 -----------
@@ -338,6 +338,58 @@ def convert_all(legacy_by_code):
         if legacy_code not in legacy_by_code:
             continue
         new_code, rows, drops = convert_master(legacy_code, legacy_by_code[legacy_code], index)
+        converted[new_code] = rows
+        dropped[new_code] = drops
+    return converted, dropped
+
+
+# ── live MDMS records (what migrate-notifications.py copies) ─────────────────
+
+def record_active(record):
+    """The EFFECTIVE active flag of a raw MDMS record, exactly as novu-bridge reads it:
+    the record's isActive (the soft delete; absent = true) AND the data's own flag.
+
+    Both halves matter. The configurator's "deactivate" flips the record's isActive and
+    leaves data.active alone; an operator editing the JSON flips data.active and leaves the
+    record alone. MdmsNotificationConfigRepository.effectiveActive ANDs them, so a copy that
+    read only one of them would switch a row back on that the bridge serves as off.
+    """
+    data = record.get("data") if isinstance(record, dict) else None
+    if not isinstance(data, dict):
+        return False
+    return record.get("isActive") is not False and is_active(data)
+
+
+def convert_records(records_by_code):
+    """Convert a tenant's LIVE legacy records. {legacy code: [raw mdms record]} ->
+    ({new code: [row]}, {new code: [(data, reason)]}).
+
+    Unlike convert_all, the input is the raw search result (record + data), and every
+    converted row's `active` is record_active(record) — so the copy serves exactly what the
+    bridge's legacy adapter serves today. The audience index is built from EVERY routing
+    record, active or not, as the bridge builds it (a deactivated routing row still decides
+    the audience string of its templates).
+    """
+    data_by_code = {}
+    for code, records in (records_by_code or {}).items():
+        data_by_code[code] = [r.get("data") for r in records or []
+                              if isinstance(r, dict) and isinstance(r.get("data"), dict)]
+    index = build_audience_index(data_by_code.get("RAINMAKER-PGR.NotificationRouting"))
+    converted, dropped = {}, {}
+    for legacy_code in LEGACY_ORDER:
+        if legacy_code not in records_by_code:
+            continue
+        new_code = LEGACY_TO_NEW_CODE[legacy_code]
+        rows, drops = [], []
+        for record in records_by_code[legacy_code] or []:
+            data = record.get("data") if isinstance(record, dict) else None
+            if not isinstance(data, dict):
+                continue
+            _, out, lost = convert_master(legacy_code, [data], index)
+            drops.extend(lost)
+            for row in out:
+                row["active"] = record_active(record)
+                rows.append(row)
         converted[new_code] = rows
         dropped[new_code] = drops
     return converted, dropped

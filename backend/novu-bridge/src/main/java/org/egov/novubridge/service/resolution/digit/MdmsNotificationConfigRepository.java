@@ -134,8 +134,8 @@ public class MdmsNotificationConfigRepository implements NotificationConfigRepos
     private void logLegacyOnce(String stateTenant) {
         if (legacyLogged.putIfAbsent(stateTenant, Boolean.TRUE) == null) {
             log.info("Tenant {} has no NOTIFICATIONS.Routing rows — serving notification config from the "
-                    + "legacy RAINMAKER-PGR.Notification* masters through the read adapter. Run "
-                    + "`./deploy.sh <tenant> --tags notifications` to copy them; "
+                    + "legacy RAINMAKER-PGR.Notification* masters through the read adapter. Move it with "
+                    + "`migrate-notifications.py` (plan, then apply); "
                     + "GET /novu-adapter/v1/config/source reports which namespace is in effect.", stateTenant);
         }
     }

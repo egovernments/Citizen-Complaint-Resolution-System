@@ -69,12 +69,14 @@ function total(counts: MasterCounts | undefined): number {
 }
 
 /**
- * The seed step that performs the copy. Named in every banner so the operator
- * does not have to find it: the copy is new CODE in the seeder (it reads the
- * tenant's real rows over `/mdms-v2/v2/_search`), not a data file, so re-running
- * the tag is the whole fix.
+ * Named in every banner so the operator does not have to find them. A deploy only upgrades
+ * software: it installs the defaults on a tenant with no configuration, but never moves a
+ * tenant that still has legacy rows — that is the per-tenant migration script, one-way,
+ * after its plan has been reviewed (docs/2.20/notifications/migration.md).
  */
-export const NOTIFICATION_SEED_COMMAND = './deploy.sh <tenant> --tags notifications';
+export const NOTIFICATION_SEED_COMMAND = './deploy.sh <tenant>';
+export const NOTIFICATION_MIGRATE_COMMAND =
+  'migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes';
 
 /** The master whose rows decide the namespace, as the box decides it. */
 export type SwitchMaster = 'routing' | 'channel';
@@ -156,7 +158,7 @@ export function selectNotificationSource(input: {
         + `configuration (${legacy} row${legacy === 1 ? '' : 's'}). It is shown here translated into the new vocabulary, exactly as the `
         + 'notification service reads it, so what you see is what is delivered — but it cannot be edited from here: '
         + `${names.flip}. `
-        + `Re-run the notification seed step (${NOTIFICATION_SEED_COMMAND}) to copy all of it; it is additive and never deletes or changes a legacy row.`,
+        + `Move it with the migration script (${NOTIFICATION_MIGRATE_COMMAND}); it copies this tenant's own rows, is one-way, and never deletes or changes a legacy row.`,
       level: 'warn',
       rows: legacy,
     };
@@ -183,7 +185,7 @@ export function selectNotificationSource(input: {
     message:
       `Neither ${names.modern} nor the old ${names.legacy} masters have any rows here, and nothing else in NOTIFICATIONS.* is seeded, `
       + `so there is nothing to show and nothing to edit — ${names.none}. `
-      + `Run the notification seed step (${NOTIFICATION_SEED_COMMAND}) to install the default configuration, then reload this screen.`,
+      + `Re-run the deploy (${NOTIFICATION_SEED_COMMAND}) to install the default configuration, then reload this screen.`,
     level: 'warn',
     rows: 0,
   };
@@ -213,8 +215,8 @@ export function namespaceSwitchMessage(
   if (decision.source !== 'LEGACY') return null;
   const names = SWITCH[key];
   return `This tenant is still served from the legacy ${names.legacy} masters, and ${names.flip}. `
-    + `Saving this ${names.modern} row would do exactly that. Run the notification seed step (${NOTIFICATION_SEED_COMMAND}) `
-    + 'to copy the whole configuration instead, then edit it here.';
+    + `Saving this ${names.modern} row would do exactly that. Move the whole configuration with the migration script `
+    + `(${NOTIFICATION_MIGRATE_COMMAND}) instead, then edit it here.`;
 }
 
 /** True when the screens may create, edit or delete. */
