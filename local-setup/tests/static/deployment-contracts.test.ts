@@ -143,11 +143,17 @@ describe('ansible.cfg — executable has a matching shell plugin (#2111)', () =>
     const name = path.basename(m[1]);
     if (BUILTIN.includes(name)) return;
 
-    // Not built in, so the repo must ship one and point Ansible at it.
-    const dir = cfg.match(/^\s*shell_plugins\s*=\s*(\S+)/m);
-    expect(dir).not.toBeNull();
-    const pluginDir = path.join(REPO_ROOT, 'local-setup/ansible',
-      (dir as RegExpMatchArray)[1].replace(/^\.\//, ''));
+    // Not built in, so the repo must ship one — NEXT TO THE PLAYBOOK.
+    //
+    // Asserted against the playbook directory, not a config key: `shell_plugins`
+    // is not an Ansible setting (no such entry in `ansible-config list`, and
+    // shell_loader.config is the hardcoded literal ['shell_plugins'] resolved
+    // against the process CWD). ansible-playbook calls
+    // add_all_plugin_dirs(playbook_dir), so <playbook_dir>/shell_plugins is what
+    // is actually searched. Keying this test on a cfg line would let someone
+    // move the directory, update that line, and keep a green build while every
+    // synchronize task broke again.
+    const pluginDir = path.join(path.dirname(path.join(REPO_ROOT, CFG)), 'shell_plugins');
     expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
   });
 });
