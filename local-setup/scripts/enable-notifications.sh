@@ -9,12 +9,13 @@
 # stack from scratch — it assumes DIGIT is already up and flips the feature on.
 #
 # What it does, in 9 ordered steps (each is a resumable, idempotent shell fn):
-#   1. PGR onto the config-driven path   (PGR_NOTIFICATION_CONFIG_DRIVEN=true)
+#   1. PGR image on the same build as the bridge (bridge recreated first if running)
 #   2. Pin the bridge image + bring up the Novu stack
 #   3. Mint the self-hosted Novu API key and wire it into the bridge
 #   4. Open the channel gate (SMS,EMAIL,WHATSAPP) + config-admin proxy roles
 #   5. Ingress for the Novu dashboard (SHOWCASE + VALIDATE — site-specific)
-#   6. Seed the 4 notification MDMS masters at the state-root tenant
+#   6. Seed the notification masters at the state-root tenant (access-control rows
+#      first; channel rows from the channel gate for a tenant that has none)
 #   7. Provider credentials (Twilio) — the ONE manual input. Require the three
 #      TWILIO_* env vars (secrets are never printed); stop with actionable
 #      instructions if any are missing. This is the only thing a human supplies.
@@ -76,20 +77,24 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 
 # Novu.
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
-NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}"
-# ^ same multi-arch tag docker-compose.egov-digit.yaml pins, deliberately. It
-#   includes the WhatsApp integration-selection fix, so SMS/email and WhatsApp
-#   use one bridge image unless NOVU_BRIDGE_IMAGE_WA is explicitly overridden.
+# ONE BUILD for the notification stack: pgr-services, pgr-services-db, novu-bridge and
+# novu-bridge-db must come from the same build (pgr-services' thin events need a bridge
+# of the same build; each app needs the migrations its -db image carries). This tag is
+# written to .env as NOTIFICATION_STACK_TAG, which the compose files use as the default
+# tag of all four, and the two app images below derive from it. `nightly-develop` is the
+# rolling tag the develop nightly publishes; it moves per image, so pin an immutable
+# develop-<sha8> or release tag that exists for all four on a box you care about.
+NOTIFICATION_STACK_TAG="${NOTIFICATION_STACK_TAG:-nightly-develop}"
+NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:$NOTIFICATION_STACK_TAG}"
 NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-$NOVU_BRIDGE_IMAGE}"
-# WA_IMAGE_TAG was a feature-branch build (whatsapp-contentsid-pipeline-f76f6ea)
-# because the Content-SID pipeline was not yet released. #1284 is now merged and
-# is an ancestor of 5137119, so the release build carries it and both SMS/email
-# and WhatsApp can run one pgr-services image. Override to pin a branch build.
-WA_IMAGE_TAG="${WA_IMAGE_TAG:-2.12-5137119}"                                 # PGR Content-SID ships in 2.12 (#1284)
+# pgr-services, pinned whatever the channels (the names keep their old WA_ spelling so
+# existing invocations still work): it must be the same build as the bridge.
+WA_IMAGE_TAG="${WA_IMAGE_TAG:-$NOTIFICATION_STACK_TAG}"
 PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"     # public Docker Hub, multi-arch
 
 # Feature toggles that get written into .env.
-CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (no compose default: unset = nothing dispatched)
+CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (no compose default: unset = nothing dispatched).
+                                                                     # Step 6 turns it into the tenant's channel rows when it has none.
 PROXY_ALLOWED_ROLES="${PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}"
 # ^ NOVU_BRIDGE_PROXY_ALLOWED_ROLES. MDMS_ADMIN is the config-admin; it is
 #   EXCLUDED by the compose default, which 403s the configurator's own screens.
@@ -245,6 +250,26 @@ _svc_env_has() {   # _svc_env_has <service> <grep-ERE against the container env>
   local cid; cid=$(container_of "$1"); [[ -n "$cid" ]] || return 1
   sudo docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -qE "$2"
 }
+_svc_env_get() {   # _svc_env_get <service> <VAR> — the value of VAR in the container env
+  local cid; cid=$(container_of "$1"); [[ -n "$cid" ]] || return 1
+  sudo docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+    | sed -n "s/^$2=//p" | tail -n1
+}
+
+# _restart_accesscontrol — egov-accesscontrol caches role-actions in memory; new rows
+# are invisible to Kong's RBAC until it restarts. Waits for /access/health.
+_restart_accesscontrol() {
+  log "Restarting egov-accesscontrol (it caches role-actions)…"
+  compose restart egov-accesscontrol
+  [[ "$DRY_RUN" == true ]] && return 0
+  local i
+  for i in $(seq 1 60); do
+    http_ok "$DIGIT_URL/access/health" && { ok "egov-accesscontrol is back"; return 0; }
+    sleep 5
+  done
+  err "egov-accesscontrol did not come back within 5 minutes"
+  return 1
+}
 
 # _wa_enabled — is WhatsApp in the channel gate? Only then is the Content-SID
 # WhatsApp image a hard requirement.
@@ -284,10 +309,23 @@ _read_novu_key() { sudo grep -E '^NOVU_API_KEY=' "$DIGIT_HOME/.env" 2>/dev/null 
 
 # mdms_count <schemaCode> <token> — how many rows exist at NOTIF_TENANT.
 mdms_count() {
-  local code="$1" tok="$2"
+  local code="$1" tok="$2" n
+  # Prefer mdms-v2 _count: the _search fallback below is ONE page, and a page is not a
+  # count — a live tenant's templates have already drifted past the shipped 42 and a
+  # bigger master would silently report its page size. _count returns totalCount for
+  # the same MdmsCriteria; builds without it fall through to the page.
+  n="$(curl -s -X POST "$PUBLIC_URL/mdms-v2/v2/_count" \
+    -H "Content-Type: application/json" \
+    -d "{\"RequestInfo\":{\"apiId\":\"enable-notif\",\"authToken\":\"$tok\"},\"MdmsCriteria\":{\"tenantId\":\"$NOTIF_TENANT\",\"schemaCode\":\"$code\"}}" 2>/dev/null \
+  | python3 -c 'import sys,json
+try:
+  t = json.load(sys.stdin).get("totalCount")
+  print(t if isinstance(t, int) else -1)
+except Exception: print(-1)' 2>/dev/null)"
+  if [[ "${n:--1}" -ge 0 ]]; then printf '%s\n' "$n"; return 0; fi
   curl -s -X POST "$PUBLIC_URL/mdms-v2/v2/_search" \
     -H "Content-Type: application/json" \
-    -d "{\"RequestInfo\":{\"apiId\":\"enable-notif\",\"authToken\":\"$tok\"},\"MdmsCriteria\":{\"tenantId\":\"$NOTIF_TENANT\",\"schemaCode\":\"$code\",\"limit\":200}}" 2>/dev/null \
+    -d "{\"RequestInfo\":{\"apiId\":\"enable-notif\",\"authToken\":\"$tok\"},\"MdmsCriteria\":{\"tenantId\":\"$NOTIF_TENANT\",\"schemaCode\":\"$code\",\"limit\":500}}" 2>/dev/null \
   | python3 -c 'import sys,json
 try: print(len(json.load(sys.stdin).get("mdms",[])))
 except Exception: print(-1)' 2>/dev/null
@@ -310,7 +348,7 @@ pause() {
 ALL_STEPS=(step1 step2 step3 step4 step5 step6 step7 step8 step9)
 step_title() {
   case "$1" in
-    step1) echo "PGR onto the config-driven notification path" ;;
+    step1) echo "PGR image on the bridge's build (bridge first when one runs)" ;;
     step2) echo "Pin the bridge image + bring up the Novu stack" ;;
     step3) echo "Mint the Novu API key and wire it into the bridge" ;;
     step4) echo "Open the channel gate + config-admin proxy roles" ;;
@@ -327,42 +365,51 @@ step_index() { local i=1 s; for s in "${ALL_STEPS[@]}"; do [[ "$s" == "$1" ]] &&
 normalize_step() { local x="$1"; [[ "$x" =~ ^[0-9]+$ ]] && x="step$x"; echo "$x"; }
 
 # =============================================================================
-# STEP 1 — PGR onto the config-driven path.
+# STEP 1 — PGR image (same build as the bridge).
+#   There is no notification path to select: pgr-services emits one thin event
+#   per workflow transition and novu-bridge routes, renders and delivers it.
+#   Which image you run is the only thing that decides what PGR emits — and a
+#   pgr-services from this stack needs a novu-bridge from the SAME build: an older
+#   bridge dead-letters its thin events, and nothing replays them.
 #   pre : pgr-services exists as a compose service
-#   act : set PGR_NOTIFICATION_CONFIG_DRIVEN=true; up -d pgr-services
-#   post: container env shows the flag true AND the container is running
+#   act : write NOTIFICATION_STACK_TAG (moves pgr-services-db + novu-bridge-db too);
+#         pin the pgr image; when a bridge is already running, recreate IT first
+#         (new bridge before new pgr); then up -d pgr-services
+#   post: the container is running
 # =============================================================================
 do_step1() {
   step step1 "$(step_title step1)"
   require "pgr-services is a service in the compose stack" \
     "( cd '$DIGIT_HOME' && ${DC} config --services 2>/dev/null | grep -qx pgr-services )"
 
-  log "Setting the config-driven flag…"
-  set_env PGR_NOTIFICATION_CONFIG_DRIVEN true
-  # NOTE: for WhatsApp *templates* you also need this PR's Content-SID pgr image.
-  # When WHATSAPP is enabled we PULL + PIN it and FAIL LOUDLY if it can't be
-  # resolved (never silently keep the base image). Compose var is PGR_SERVICES_IMAGE.
-  if _wa_enabled; then
-    if [[ "$DRY_RUN" == true ]]; then
-      note "WHATSAPP enabled → would pull + pin ${PGR_IMAGE_WA}; would BLOCK the run if it can't be resolved"
-    elif _ensure_wa_image "$PGR_IMAGE_WA"; then
-      log "WhatsApp Content-SID pgr image ${PGR_IMAGE_WA} available — pinning it"
-      set_env PGR_SERVICES_IMAGE "$PGR_IMAGE_WA"
-    else
-      err "WHATSAPP is enabled but the Content-SID pgr image ${PGR_IMAGE_WA} could not be resolved or pulled."
-      err "Publish/pull it (or set PGR_IMAGE_WA / WA_IMAGE_TAG), or drop WHATSAPP from CHANNELS_ENABLED."
-      err "Refusing to silently fall back to the base image (no Content-SID WhatsApp path)."
-      return 1
-    fi
+  # Pull + pin the pgr image and FAIL LOUDLY if it can't be resolved — never silently
+  # keep an older image, which would pair the new bridge with an old producer.
+  set_env NOTIFICATION_STACK_TAG "$NOTIFICATION_STACK_TAG"
+  if [[ "$DRY_RUN" == true ]]; then
+    note "would pull + pin ${PGR_IMAGE_WA}; would BLOCK the run if it can't be resolved"
+  elif _ensure_wa_image "$PGR_IMAGE_WA"; then
+    log "pgr image ${PGR_IMAGE_WA} available — pinning it"
+    set_env PGR_SERVICES_IMAGE "$PGR_IMAGE_WA"
   else
-    note "WHATSAPP not in CHANNELS_ENABLED — keeping current pgr image (SMS/email path)"
+    err "The pgr image ${PGR_IMAGE_WA} could not be resolved or pulled."
+    err "Publish/pull it, or set NOTIFICATION_STACK_TAG / PGR_IMAGE_WA to a build that exists."
+    return 1
   fi
 
+  # Upgrade order: the new bridge before the new pgr-services. Only when a bridge is
+  # already running — on a first enable there is no old bridge to race, and the thin
+  # events wait in Kafka until step 2 starts one.
+  if [[ -n "$(container_of novu-bridge)" ]]; then
+    log "A bridge is running — recreating it on the same build BEFORE pgr-services…"
+    set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
+    compose up -d novu-bridge-migration novu-bridge
+  fi
+
+  # Per-recipient language is resolved by novu-bridge now (NOVU_BRIDGE_PREFERENCE_HOST in the
+  # compose file); pgr-services only emits the thin event, so it needs no preference host.
   log "Recreating pgr-services…"
   compose up -d pgr-services
 
-  verify "pgr-services env has PGR_NOTIFICATION_CONFIG_DRIVEN=true" \
-    "_svc_env_has pgr-services '^PGR_NOTIFICATION_CONFIG_DRIVEN=true'"
   verify "pgr-services container is running" "_svc_running pgr-services"
 }
 
@@ -409,6 +456,22 @@ do_step2() {
   log "Bringing up the Novu stack (named services only — never a bare up -d)…"
   compose up -d novu-mongo novu-api novu-worker novu-ws novu-dashboard novu-bridge \
     digit-config-service novu-bridge-migration digit-config-service-migration
+
+  # Containers of services this release removed. `up -d` leaves them running as
+  # orphans, and egov-notification-sms would keep consuming egov.core.notification.sms
+  # alongside novu-bridge — every login OTP sent twice. Only a container compose made
+  # for that service in $DIGIT_HOME is removed.
+  local svc owner
+  for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
+    [[ "$DRY_RUN" == true ]] && { note "would remove a retired '$svc' container if present"; continue; }
+    sudo docker inspect "$svc" >/dev/null 2>&1 || continue
+    owner="$(sudo docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$svc")"
+    if [[ "$owner" == "$svc|$DIGIT_HOME" ]]; then
+      run "remove retired container $svc" "sudo docker rm -f '$svc' >/dev/null"
+    else
+      warn "left '$svc' alone: not this deployment's compose container ($owner)"
+    fi
+  done
 
   verify "novu-api responds on ${NOVU_API_LOCAL}" "http_reachable '$NOVU_API_LOCAL'"
   verify "novu-bridge container is running" "_svc_running novu-bridge"
@@ -525,10 +588,20 @@ EOF
 # =============================================================================
 # STEP 6 — Seed the notification MDMS masters.
 #   pre : MDMS reachable + we can mint an admin token
-#   act : copy the schema + the 3 RAINMAKER-PGR.Notification* data files into a
-#         notification-seed/ dir, then run seed-notifications.py (its env interface)
-#   post: MDMS _search shows Routing/Template/ProviderTemplate rows (expect
-#         24/42/14; assert each >= 1 and log the actual counts)
+#   act : copy the schemas + the RAINMAKER-PGR.Notification* data files AND the
+#         module-neutral NOTIFICATIONS.* schema + data files into a notification-seed/
+#         dir, then run seed-notifications.py twice: the access phase (access-control
+#         rows; egov-accesscontrol is restarted when it created any), then the data
+#         phase (schemas, channel rows, and the shipped defaults into NOTIFICATIONS.*
+#         for a tenant with NO configuration), retried once after another restart if it
+#         hit a 403. Channel rows for a tenant that has none are decided by the bridge's
+#         NOVU_BRIDGE_CHANNELS_ENABLED (the gate step 4 opened): listed = on. Rows a
+#         tenant already has are never changed, and a tenant with 2.12 configuration is
+#         NOT migrated (that is migrate-notifications.py, per tenant, after its plan).
+#   post: the tenant is on NOTIFICATIONS.* with Routing/Template/EventCatalogue rows
+#         (a fresh tenant: 24/42/14 defaults; assert each >= 1 and log the counts), OR
+#         it still holds its 2.12 legacy configuration — reported, with the migration
+#         command, not failed: the seed leaves it on purpose.
 # =============================================================================
 do_step6() {
   step step6 "$(step_title step6)"
@@ -539,41 +612,104 @@ do_step6() {
   require "MDMS reachable at ${PUBLIC_URL}" "http_reachable '$PUBLIC_URL/mdms-v2/v2/_search' || http_reachable '$PUBLIC_URL'"
   require "admin token can be minted (user=${ADMIN_USER}, tenant=${NOTIF_TENANT})" "_have_token"
   require "seed script exists" "test -f '$scripts/seed-notifications.py'"
+  require "converter module exists" "test -f '$scripts/notifications_convert.py'"
   require "DDH source JSON present (schema + data)" "test -f '$ddh/schema/RAINMAKER-PGR.json'"
+  require "DDH NOTIFICATIONS schema present" "test -f '$ddh/schema/NOTIFICATIONS.json'"
 
   # Single source of truth: the SAME JSON that ships in the default-data-handler
   # image. Copy it into a scoped dir the seeder reads from.
-  log "Staging schema + Notification* data into notification-seed/…"
+  log "Staging schemas + Notification* data into notification-seed/…"
   run "mkdir + copy seed JSON" \
-    "mkdir -p '$seeddir' && cp '$ddh/schema/RAINMAKER-PGR.json' '$ddh/mdmsData-dev/RAINMAKER-PGR/'RAINMAKER-PGR.Notification*.json '$seeddir/'"
+    "mkdir -p '$seeddir' && cp '$ddh/schema/RAINMAKER-PGR.json' '$ddh/schema/NOTIFICATIONS.json' '$ddh/mdmsData-dev/RAINMAKER-PGR/'RAINMAKER-PGR.Notification*.json '$ddh/mdmsData-dev/NOTIFICATIONS/'NOTIFICATIONS.*.json '$seeddir/'"
+
+  # The allowlist the bridge falls back to for a tenant with NO channel rows — read from
+  # the running container (what actually decides delivery), else the value step 4 sets.
+  # The seeder turns it into that tenant's channel rows, so the rows say exactly what the
+  # env said and nothing switches off. (Seeding the committed all-off rows here, after
+  # step 4 opened the gate, used to silently close it again.)
+  local allowlist
+  allowlist="$(_svc_env_get novu-bridge NOVU_BRIDGE_CHANNELS_ENABLED 2>/dev/null || true)"
+  if [[ -z "$(container_of novu-bridge)" ]]; then allowlist="$CHANNELS_ENABLED"; fi
+  log "Channel allowlist for tenants without channel rows: '${allowlist}'"
+
+  # seed-notifications.py env interface: DIGIT_URL/NOTIF_TENANT/DIGIT_USERNAME/
+  # DIGIT_PASSWORD/SCHEMA_FILE/NOTIF_SCHEMA_FILE/DATA_DIR/NOTIF_SEED_PHASE/
+  # NOTIF_CHANNELS_ALLOWLIST. It auths with Basic egov-user-client: at /user/oauth/token,
+  # and imports notifications_convert from its own directory. Idempotent.
+  local seedenv="DIGIT_URL='$PUBLIC_URL' NOTIF_TENANT='$NOTIF_TENANT' DIGIT_USERNAME='$ADMIN_USER' DIGIT_PASSWORD='$ADMIN_PASS' SCHEMA_FILE='$seeddir/RAINMAKER-PGR.json' NOTIF_SCHEMA_FILE='$seeddir/NOTIFICATIONS.json' DATA_DIR='$seeddir' NOTIF_CHANNELS_ALLOWLIST='$allowlist'"
+  local out="${TMPDIR:-/tmp}/enable-notifications-seed.$$"
+  # Each run is a subshell: `run` evals in THIS shell, and the pipeline's status is the
+  # seeder's (pipefail is on), so its exit code (3 = 403) reaches `rc` below.
+
+  # Access-control rows FIRST: every write of the data phase needs them, and
+  # egov-accesscontrol only sees new ones after a restart.
+  log "Seeding access-control rows…"
+  run "seed-notifications.py (access phase)" \
+    "( cd '$scripts' && env $seedenv NOTIF_SEED_PHASE=access python3 seed-notifications.py | tee '$out' )"
+  if [[ "$DRY_RUN" != true ]] && grep -q 'ACL-CHANGED' "$out"; then
+    _restart_accesscontrol
+  fi
 
   log "Seeding masters…"
-  # seed-notifications.py env interface: DIGIT_URL/NOTIF_TENANT/DIGIT_USERNAME/
-  # DIGIT_PASSWORD/SCHEMA_FILE/DATA_DIR. It auths with Basic egov-user-client: at
-  # /user/oauth/token. Idempotent — re-runs skip already-present rows.
-  run "run seed-notifications.py" \
-    "cd '$scripts' && DIGIT_URL='$PUBLIC_URL' NOTIF_TENANT='$NOTIF_TENANT' DIGIT_USERNAME='$ADMIN_USER' DIGIT_PASSWORD='$ADMIN_PASS' SCHEMA_FILE='$seeddir/RAINMAKER-PGR.json' DATA_DIR='$seeddir' python3 seed-notifications.py"
+  local rc=0
+  run "seed-notifications.py (data phase)" \
+    "( cd '$scripts' && env $seedenv NOTIF_SEED_PHASE=data python3 seed-notifications.py | tee '$out' )" || rc=$?
+  if [[ "$rc" == 3 ]]; then
+    # 403: egov-accesscontrol's cache predates the access-control rows (e.g. an earlier
+    # run created them and stopped before restarting it). Restart once and retry.
+    warn "a write was refused with 403 — restarting egov-accesscontrol and retrying once"
+    _restart_accesscontrol
+    rc=0
+    run "seed-notifications.py (data phase, retry)" \
+      "( cd '$scripts' && env $seedenv NOTIF_SEED_PHASE=data python3 seed-notifications.py | tee '$out' )" || rc=$?
+  fi
+  rm -f "$out"
+  if [[ "$rc" != 0 ]]; then
+    err "seed-notifications.py exited ${rc} — see its output above (3 = still 403: check the admin holds MDMS_ADMIN)"
+    return 1
+  fi
 
   # Independent postcondition: count the rows ourselves and assert each >= 1.
   if [[ "$DRY_RUN" == true ]]; then
     verify "Routing/Template/ProviderTemplate rows >= 1 each" "true"
+    verify "NOTIFICATIONS.* rows >= the legacy rows" "true"
     return 0
   fi
   local tok; tok="$(mint_token)"
-  local nr nt np
+  local nr nt np nc xe xr xt xp xc
   nr="$(mdms_count RAINMAKER-PGR.NotificationRouting "$tok")"
   nt="$(mdms_count RAINMAKER-PGR.NotificationTemplate "$tok")"
   np="$(mdms_count RAINMAKER-PGR.NotificationProviderTemplate "$tok")"
-  log "MDMS row counts — Routing=${nr} (expect 24), Template=${nt} (expect 42), ProviderTemplate=${np} (expect 14)"
-  verify "NotificationRouting has >= 1 row (got ${nr})"          "[[ '${nr:-0}' -ge 1 ]]"
-  verify "NotificationTemplate has >= 1 row (got ${nt})"         "[[ '${nt:-0}' -ge 1 ]]"
-  # WhatsApp is a HARD gate. seed-notifications.py treats a NotificationProviderTemplate
-  # data failure as NON-fatal, so the run could "succeed" with WhatsApp unconfigured.
-  # When WHATSAPP is enabled, fail the step if the ProviderTemplate master is empty.
+  nc="$(mdms_count RAINMAKER-PGR.NotificationChannel "$tok")"
+  xe="$(mdms_count NOTIFICATIONS.EventCatalogue "$tok")"
+  xr="$(mdms_count NOTIFICATIONS.Routing "$tok")"
+  xt="$(mdms_count NOTIFICATIONS.Template "$tok")"
+  xp="$(mdms_count NOTIFICATIONS.ProviderTemplate "$tok")"
+  xc="$(mdms_count NOTIFICATIONS.Channel "$tok")"
+  log "legacy RAINMAKER-PGR.* row counts — Routing=${nr}, Template=${nt}, ProviderTemplate=${np}"
+  log "NOTIFICATIONS.* row counts — EventCatalogue=${xe}, Routing=${xr}, Template=${xt}, ProviderTemplate=${xp}, Channel=${xc} (a fresh tenant: 14/24/42/14)"
+
+  # A tenant that still holds its 2.12 configuration is served from it, unchanged, until
+  # an operator migrates it — the seed does not. That is a finished step, not a failure.
+  if [[ "${xr:-0}" -eq 0 && $(( ${nr:-0} + ${nt:-0} + ${np:-0} )) -gt 0 ]]; then
+    note "${NOTIF_TENANT} still runs on its 2.12 notification configuration (legacy rows ${nr}/${nt}/${np}); nothing was migrated."
+    note "Review, then migrate it (one-way): cd '$scripts' && DIGIT_URL='$PUBLIC_URL' python3 migrate-notifications.py plan --tenant ${NOTIF_TENANT}"
+    verify "legacy NotificationRouting still has its rows (got ${nr})" "[[ '${nr:-0}' -ge 1 ]]"
+    return 0
+  fi
+
+  verify "NOTIFICATIONS.Routing has >= 1 row (got ${xr})"         "[[ '${xr:-0}' -ge 1 ]]"
+  verify "NOTIFICATIONS.Template has >= 1 row (got ${xt})"        "[[ '${xt:-0}' -ge 1 ]]"
+  verify "NOTIFICATIONS.EventCatalogue has >= 1 row (got ${xe})"  "[[ '${xe:-0}' -ge 1 ]]"
+  # Channel rows may sit in either master (a tenant whose rows predate NOTIFICATIONS.*
+  # keeps them in the legacy one until it is migrated; the bridge reads both).
+  verify "channel rows exist (NOTIFICATIONS ${xc}, legacy ${nc})" "[[ $(( ${xc:-0} + ${nc:-0} )) -ge 1 ]]"
+  # WhatsApp is a HARD gate: without provider templates every WhatsApp message is
+  # SKIPPED NB_TEMPLATE_NOT_APPROVED, and the seed would still have "succeeded".
   if _wa_enabled; then
-    verify "WHATSAPP enabled → NotificationProviderTemplate has >= 1 row (got ${np})" "[[ '${np:-0}' -ge 1 ]]"
+    verify "WHATSAPP enabled → NOTIFICATIONS.ProviderTemplate has >= 1 row (got ${xp})" "[[ '${xp:-0}' -ge 1 ]]"
   else
-    note "WHATSAPP not enabled — NotificationProviderTemplate rows are informational (got ${np})"
+    note "WHATSAPP not enabled — NOTIFICATIONS.ProviderTemplate rows are informational (got ${xp})"
   fi
 }
 
@@ -871,7 +1007,8 @@ KEY ENV VARS (override on the command line; defaults are the reference-box value
   NOTIF_TENANT=$NOTIF_TENANT   ADMIN_USER=$ADMIN_USER   ADMIN_PASS=******
   NOVU_API_LOCAL=$NOVU_API_LOCAL
   NOVU_BASE_URL=$NOVU_BASE_URL   (bootstrap-novu-whatsapp.sh target — step8)
-  NOVU_BRIDGE_IMAGE=$NOVU_BRIDGE_IMAGE
+  NOTIFICATION_STACK_TAG=$NOTIFICATION_STACK_TAG   (pgr-services, pgr-services-db, novu-bridge, novu-bridge-db: one build)
+  NOVU_BRIDGE_IMAGE=$NOVU_BRIDGE_IMAGE   PGR_IMAGE_WA=$PGR_IMAGE_WA
   CHANNELS_ENABLED=$CHANNELS_ENABLED
   PROXY_ALLOWED_ROLES=$PROXY_ALLOWED_ROLES
   TWILIO_ACCOUNT_SID=$([[ -n "${TWILIO_ACCOUNT_SID}" ]] && echo '<set>' || echo '<unset>')   TWILIO_AUTH_TOKEN=$([[ -n "${TWILIO_AUTH_TOKEN}" ]] && echo '<set>' || echo '<unset>')   TWILIO_WHATSAPP_FROM=${TWILIO_WHATSAPP_FROM:-<unset>}

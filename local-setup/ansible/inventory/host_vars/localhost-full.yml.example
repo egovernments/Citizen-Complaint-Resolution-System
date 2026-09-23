@@ -8,7 +8,7 @@
 # moment the stack is up.
 #
 # FULL means every optional subsystem this profile knows about is on:
-# notifications (Novu + otp-publisher), MCP, the configurator wizard, and both
+# notifications (Novu), MCP, the configurator wizard, and both
 # SPAs (legacy employee UI at /digit-ui/ and the citizen SPA at /citizen/).
 #
 # SIZING. Needs ~16 GB for the containers alone. On a 16 GB box the notification
@@ -214,11 +214,10 @@ enable_integration_tests_runner: false
 
 # ────────── Optional services ──────────
 
-# Real OTP delivery: egov-otp + user-otp + egov-notification-sms.
-# Values: true | false. False (here) means Kong mocks /user-otp/* with a canned
-# 200, so citizen login works with the fixed OTP 123456 and no SMS infra.
-# Turning it on for production also needs the mock removed from kong.yml and a
-# real SMS_PROVIDER_CLASS wired up — it defaults to Console, which only logs.
+# Real OTP delivery: egov-otp + user-otp generate/validate; novu-bridge sends the SMS
+# (requires enable_novu: true and SMS enabled for the tenant). Values: true | false.
+# False (here) means Kong mocks /user-otp/* with a canned 200, so citizen login works
+# with the fixed OTP 123456 and no SMS infra. The deploy strips the mocks when true.
 enable_otp_services: false
 
 # Elasticsearch + egov-indexer + inbox-v2. Values: true | false.
@@ -239,9 +238,6 @@ build_mcp: true
 # Build the employee SPA bundle on this box. Values: true | false.
 # False here because digit_ui_mode is `container` — the image already has it.
 build_digit_ui: false
-
-# Build the OTP publisher image on this box. Values: true | false.
-build_otp_publisher: false
 
 # Let the deploy continue when tenant bootstrap steps fail. Values: true | false.
 # True is right for a local box booting from the dump, where some bootstrap

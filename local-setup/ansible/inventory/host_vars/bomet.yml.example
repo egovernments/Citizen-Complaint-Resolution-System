@@ -114,8 +114,6 @@ db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md
 # explicit ack (deploy.sh would fail preflight otherwise). Set only after confirming
 # this box has no anonymous-volume postgres data worth keeping.
 db_fast_path_ack_data_wipe: true
-build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
-                                   # the notifications profile needs it, so build it here
 build_digit_ui: true
 build_configurator: true
 tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
@@ -125,10 +123,13 @@ tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see 
 requires_nairobi_mdms: false
 
 # ── Config-driven notifications (design D1/D4/D6/D7/D8) ──
-# Bomet is the FIRST tenant cut over. PGR reads PGR.NotificationRouting +
-# PGR.NotificationTemplate from MDMS, renders + localizes per recipient, and
-# emits one pre-rendered event per (recipient × channel); novu-bridge delivers.
-# docker-compose.bomet.yml ALSO hard-sets PGR_NOTIFICATION_CONFIG_DRIVEN=true.
+# Bomet was the FIRST tenant cut over. Config-driven notifications are now the
+# only path and are decided by which image you run, not by a setting: pgr-services
+# emits ONE thin event per workflow transition and novu-bridge reads the
+# NOTIFICATIONS.* masters to route, render and deliver it.
+# The variable below is an INERT leftover — nothing renders it into any env file
+# or compose service any more. It is kept only so an existing inventory copied
+# from this example does not need editing; setting it either way changes nothing.
 pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 
@@ -151,8 +152,8 @@ twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"
 
 # ── Optional services (opt-in via flags; all off, matching _example.yml) ──
-# Real OTP stack (egov-otp/user-otp/egov-notification-sms). Off keeps the
-# local kong.yml mock (fixed OTP 123456) — fine for this local box.
+# Real OTP stack (egov-otp/user-otp; the SMS goes out via novu-bridge, so it
+# needs enable_novu). Off keeps the kong.yml mock (fixed OTP 123456) — fine here.
 enable_otp_services: false
 # Turbopass (OSM location autocomplete) — standalone on-box container.
 enable_turbopass: false

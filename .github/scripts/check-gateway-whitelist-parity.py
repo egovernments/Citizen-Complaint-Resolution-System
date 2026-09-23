@@ -52,12 +52,48 @@ KONG_ONLY_AUTH_OPTIONAL = {
     "/novu-bridge/novu-adapter/v1/preferences",
     "/novu-bridge/novu-adapter/v1/providers/templates",
     "/novu-bridge/novu-adapter/v1/providers/twilio-templates",
+    # Provider catalog (Phase 1): the configurator is the only provider console, so
+    # the catalog read and the edit/rotate/delete writes are in the same bucket.
+    "/novu-bridge/novu-adapter/v1/providers/catalog",
+    "/novu-bridge/novu-adapter/v1/providers/_update",
+    "/novu-bridge/novu-adapter/v1/providers/_delete",
+    # Delivery receipts: machine callbacks (Novu webhook, SMSCountry DR) authenticated
+    # by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not a user
+    # token — so no body authToken exists to enrich and Kong must let them through.
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier
+    # does not route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/receipts/novu",
+    "/novu-bridge/novu-adapter/v1/receipts/smscountry",
+    # The published contract (Phase 3a): the inbound envelope's JSON Schema and the OpenAPI
+    # description of the bridge's own endpoints, served read-only from its jar. Descriptions of
+    # an interface — no tenant data, no recipient, no credential — and the same bytes are
+    # published in docs/2.20/notifications/contract/. Anonymous on Kong, and novu-bridge does
+    # not gate them either (ProxyAuthFilter excludes /novu-adapter/v1/contract explicitly).
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier does not
+    # route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/contract/envelope",
+    "/novu-bridge/novu-adapter/v1/contract/openapi",
+    # The thin domain event's schema, published for the same reason and served the same
+    # way (GET-only route, no accesscontrol action, ProxyAuthFilter excludes /contract).
+    "/novu-bridge/novu-adapter/v1/contract/thin-event",
+    # Thin-event design 5.2 / 7.2 P1. /config/source reports which config namespace
+    # served each master for a tenant; /dispatch/_resolve returns the envelope list a
+    # thin event would produce without dispatching it. Both authenticate inside
+    # novu-bridge (ProxyAuthFilter; _resolve on the admin role set), and both are
+    # Kong-only for the same reason as the rest of the bridge: the Spring gateway tier
+    # does not route novu-bridge at all.
+    "/novu-bridge/novu-adapter/v1/config/source",
+    "/novu-bridge/novu-adapter/v1/dispatch/_resolve",
     # Inbound WhatsApp webhooks (#1992). Compose-only: the Spring gateway has no
     # xstate-chatbot route, so there is nothing to mirror into env.yaml. Twilio cannot
     # present a DIGIT token; these are authenticated by X-Twilio-Signature in-service.
     "/xstate-chatbot/message",
     "/xstate-chatbot/status",
 }
+# NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
+# (the internal SMSCountry send adapter Novu's worker calls over the container
+# network, carrying provider credentials in headers). Kong terminates it — see
+# novu-bridge-internal-gateways-deny in kong.yml.
 
 
 def _find_value(node, key):

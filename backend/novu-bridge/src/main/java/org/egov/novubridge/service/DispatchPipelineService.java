@@ -4,261 +4,220 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.service.core.CoreSmsTranslator;
+import org.egov.novubridge.service.delivery.DeliveryProvider;
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.DeliveryResult;
+import org.egov.novubridge.service.delivery.Dispatch;
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+import org.egov.novubridge.service.provider.ProviderCatalog;
 import org.egov.novubridge.util.PiiMask;
+import org.egov.novubridge.util.Values;
 import org.egov.novubridge.web.models.*;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
 
 /**
- * Pass-through delivery + tracking pipeline.
- *
- * <p>PGR now pre-renders ONE event per (recipient x channel): it has already
- * resolved the recipient, picked + filled + localized the template, and put the
- * final text in {@code renderedBody}. novu-bridge therefore does NOT resolve
- * templates, providers, or localization. It only:
- * <ol>
- *   <li>upserts the Novu subscriber (identify, D6) with the carried profile,</li>
- *   <li>delivers the rendered body via the per-channel Novu workflow for every ENABLED channel
- *       (novu.bridge.channels.enabled); known-but-disabled channels (e.g. WHATSAPP with no
- *       provider) persist an explicit SKIPPED/NB_NO_PROVIDER row, and</li>
- *   <li>records the result in {@code nb_dispatch_log} keyed by transactionId.</li>
- * </ol>
+ * Pass-through delivery pipeline: validate the pre-rendered envelope, apply the gates in a fixed
+ * order, hand a {@link Dispatch} to the selected {@link DeliveryProvider}, and record exactly one
+ * {@code nb_dispatch_log} row for every terminal outcome (envelope rejections included).
  */
 @Service
 @Slf4j
 public class DispatchPipelineService {
 
     private static final Set<String> KNOWN_CHANNELS = Set.of("SMS", "WHATSAPP", "EMAIL");
+    /** Ledger statuses that mean the message already left; a replay must not send it again. */
+    private static final Set<String> ALREADY_SENT = Set.of("SENT", "DELIVERED");
 
     private final EnvelopeValidator envelopeValidator;
     private final PreferenceServiceClient preferenceServiceClient;
-    private final NovuClient novuClient;
-    private final SmsCountryClient smsCountryClient;
+    private final DeliveryProviderRegistry providers;
+    private final ChannelPolicyClient channelPolicy;
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
-    private final MdmsServiceClient mdmsServiceClient;
+    private final ProviderAvailability providerAvailability;
 
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
-                                   NovuClient novuClient,
-                                   SmsCountryClient smsCountryClient,
+                                   DeliveryProviderRegistry providers,
+                                   ChannelPolicyClient channelPolicy,
                                    DispatchLogRepository dispatchLogRepository,
                                    NovuBridgeConfiguration config,
-                                   MdmsServiceClient mdmsServiceClient) {
+                                   ProviderAvailability providerAvailability) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
-        this.novuClient = novuClient;
-        this.smsCountryClient = smsCountryClient;
+        this.providers = providers;
+        this.channelPolicy = channelPolicy;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
-        this.mdmsServiceClient = mdmsServiceClient;
+        this.providerAvailability = providerAvailability;
     }
 
-    public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
-        log.info("Processing pre-rendered domain event: eventId={}, eventName={}, tenant={}, channel={}, send={}",
+    public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo) {
+        return process(event, send, requestInfo, null);
+    }
+
+    /** @param sourcePath {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered */
+    public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
+                                  String sourcePath) {
+        log.info("Processing {} envelope: eventId={}, eventName={}, tenant={}, channel={}, send={}",
+                sourcePath == null ? "pre-rendered" : "resolved",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
-        envelopeValidator.validate(event);
+        // Rejections are written down BEFORE they are thrown; the consumer still DLQs the event.
+        try {
+            envelopeValidator.validate(event);
+        } catch (CustomException ce) {
+            persistRejected(event, ce.getCode(), ce.getMessage(), sourcePath);
+            throw ce;
+        }
 
         DerivedContext context = deriveContext(event);
-        String subscriberId = StringUtils.hasText(event.getSubscriberId())
-                ? event.getSubscriberId()
-                : context.getSubscriberId();
-        if (!StringUtils.hasText(subscriberId)) {
-            // A blank subscriberId is a pre-delivery validation-family rejection: throw
-            // WITHOUT writing a dispatch-log row. This is the tested contract — see
-            // EnvelopePipelineNegativesTest.assertRejected (verify(dispatchLogRepository,
-            // never()).upsert(...)). Do NOT add a persist() here.
-            throw new CustomException("NB_SUBSCRIBER_ID_MISSING",
-                    "subscriberId is required (PGR resolved it; null means a bad event)");
-        }
+        context.setSourcePath(sourcePath);
+        String subscriberId = event.getSubscriberId();
         context.setSubscriberId(subscriberId);
-
-        // subscriberId is masked too: when the recipient has no UUID it falls back
-        // to `tenantId:mobile`, so it can embed a raw phone number.
+        // subscriberId is masked too: without a UUID it falls back to tenantId:mobile.
         log.info("Derived context: eventId={}, channel={}, subscriberId={}, recipientPhone={}, email={}, locale={}",
                 event.getEventId(), context.getChannel(), PiiMask.mask(subscriberId),
                 PiiMask.mask(context.getRecipientMobile()), PiiMask.mask(context.getEmail()), context.getLocale());
 
-        // Optional channel-preference gate (PGR owns locale; preferences only gate delivery).
-        String recipientUuid = context.getRecipientUserId();
-        boolean preferenceAllowed = preferenceServiceClient.isChannelAllowed(
-                event.getTenantId(), recipientUuid, context.getRecipientMobile(), context.getChannel());
-        if (!preferenceAllowed) {
-            persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED",
-                    context.getChannel() + " preference denied", null, 1);
+        // Replay guard (DLQ replay, Kafka redelivery): checked before any gate so a replay can
+        // neither re-send nor overwrite the SENT row with a later SKIPPED.
+        String priorStatus = dispatchLogRepository.findStatus(
+                context.getTransactionId(), context.getChannel(), recipientValue(context));
+        if (priorStatus != null && ALREADY_SENT.contains(priorStatus)) {
+            log.info("Already {}: eventId={} txn={} channel={}; not sending again", priorStatus,
+                    event.getEventId(), PiiMask.mask(context.getTransactionId()), context.getChannel());
             return DispatchResult.builder()
-                    .valid(true)
-                    .preferenceAllowed(false)
-                    .derivedContext(context)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Preference denied"))
+                    .valid(true).preferenceAllowed(true).derivedContext(context).novuTriggered(false)
+                    .diagnostics(List.of("Already " + priorStatus + " for this transaction; not sent again"))
                     .build();
+        }
+
+        if (!CoreSmsTranslator.isConsentExempt(event)
+                && !preferenceServiceClient.isChannelAllowed(event.getTenantId(), context.getRecipientUserId(),
+                        context.getRecipientMobile(), context.getChannel())) {
+            persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied");
+            return skipped(context, "Preference denied").preferenceAllowed(false).build();
         }
 
         if (!send) {
-            persist(event, context, "RECEIVED", null, null, null, 1);
-            return DispatchResult.builder()
-                    .valid(true)
-                    .preferenceAllowed(true)
-                    .derivedContext(context)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Validation only mode"))
-                    .build();
+            persist(event, context, "RECEIVED", null, null);
+            return skipped(context, "Validation only mode").build();
         }
 
         String channel = context.getChannel();
-        // Gate 1: unknown/null channel — never guess, never fall back to SMS.
-        if (!isKnownChannel(channel)) {
-            persist(event, context, "SKIPPED", "NB_UNSUPPORTED_CHANNEL",
-                    "Unknown channel: " + channel, null, 1);
-            return DispatchResult.builder()
-                    .valid(true).preferenceAllowed(true).derivedContext(context)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Unsupported channel " + channel + " skipped"))
-                    .build();
+        // Never guess a channel, never fall back to SMS.
+        if (channel == null || !KNOWN_CHANNELS.contains(channel.toUpperCase())) {
+            return skip(event, context, "NB_UNSUPPORTED_CHANNEL", "Unknown channel: " + channel,
+                    "Unsupported channel " + channel + " skipped");
         }
-        // Gate 2: known channel with no enabled provider (e.g. WHATSAPP pre-onboarding).
-        if (!config.isChannelEnabled(channel)) {
-            persist(event, context, "SKIPPED", "NB_NO_PROVIDER",
-                    "No provider enabled for channel " + channel, null, 1);
-            return DispatchResult.builder()
-                    .valid(true).preferenceAllowed(true).derivedContext(context)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Channel " + channel + " has no enabled provider; skipped"))
-                    .build();
+        if (!channelPolicy.isEnabled(event.getTenantId(), channel)) {
+            return skip(event, context, "NB_NO_PROVIDER",
+                    "Channel " + channel + " is not enabled for tenant " + event.getTenantId(),
+                    "Channel " + channel + " has no enabled provider; skipped");
         }
 
         Contact contact = buildContact(event, context);
-
-        // Contact gate (bridge-side defense): an EMAIL event needs an email; SMS/WHATSAPP
-        // need a phone. The bridge consumes a shared topic and must defend independently of
-        // PGR's emission-side filter — a phone-only recipient on an EMAIL row would otherwise
-        // trigger complaints-email and phantom-SENT with no address.
-        boolean hasRequiredContact = "EMAIL".equalsIgnoreCase(channel)
-                ? StringUtils.hasText(contact.getEmail())
-                : StringUtils.hasText(contact.getPhone());
-        if (!hasRequiredContact) {
-            persist(event, context, "SKIPPED", "NB_CONTACT_MISSING",
-                    "Recipient has no " + ("EMAIL".equalsIgnoreCase(channel) ? "email" : "phone")
-                    + " for channel " + channel, null, 1);
-            return DispatchResult.builder()
-                    .valid(true).preferenceAllowed(true).derivedContext(context)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Missing contact for channel " + channel))
-                    .build();
+        // The bridge consumes shared topics, so it defends independently of producer-side filters:
+        // an EMAIL row with no address would otherwise phantom-SENT.
+        boolean email = "EMAIL".equalsIgnoreCase(channel);
+        if (!StringUtils.hasText(email ? contact.getEmail() : contact.getPhone())) {
+            return skip(event, context, "NB_CONTACT_MISSING",
+                    "Recipient has no " + (email ? "email" : "phone") + " for channel " + channel,
+                    "Missing contact for channel " + channel);
         }
-
-        // WhatsApp template gate: a business-initiated WhatsApp message MUST reference an approved
-        // Twilio Content template (SID). PGR emits WHATSAPP events with a null templateId when no
-        // approved NotificationProviderTemplate matched — persist an auditable SKIP here rather than
-        // fall through to a free-form send, which Twilio rejects (63016). Bridge-side defense: hold
-        // regardless of the producer.
+        // Business-initiated WhatsApp must use an approved template; the provider rejects free-form.
         if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(event.getTemplateId())) {
-            persist(event, context, "SKIPPED", "NB_TEMPLATE_NOT_APPROVED",
-                    "No approved Twilio Content template for this WhatsApp event; free-form WhatsApp is "
-                    + "rejected (63016). Map an approved template in NotificationProviderTemplate.", null, 1);
-            return DispatchResult.builder()
-                    .valid(true).preferenceAllowed(true).derivedContext(context)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("WhatsApp event has no approved provider template; skipped"))
-                    .build();
+            return skip(event, context, "NB_TEMPLATE_NOT_APPROVED",
+                    "No approved provider template for this WhatsApp event; free-form WhatsApp is "
+                            + "rejected. Map an approved template in NotificationProviderTemplate.",
+                    "WhatsApp event has no approved provider template; skipped");
         }
 
-        // WhatsApp recipient formatting: Twilio requires the recipient as `whatsapp:+<E164 digits>`.
-        // PGR emits the phone as country-code + national number with no `+` and no `whatsapp:` prefix
-        // (e.g. 254712345678), which Twilio rejects on delivery (63024). Mirror the working test-send
-        // path (ProviderController: "whatsapp:+" + digitsOnly(phone)). digitsOnly strips any pre-existing
-        // `+` or `whatsapp:` prefix, so this is idempotent (never double-prefixed). SMS and EMAIL are
-        // left untouched — the country code was already prepended by PGR; the bridge only adds the prefix.
-        if ("WHATSAPP".equalsIgnoreCase(channel) && StringUtils.hasText(contact.getPhone())) {
-            contact.setPhone("whatsapp:+" + digitsOnly(contact.getPhone()));
+        String integrationIdentifier = channelPolicy.provider(event.getTenantId(), channel);
+        // Novu ACCEPTS a trigger naming a deleted/disabled/wrong-channel integration and fails it
+        // internally, so without this check the row would read SENT for a message that never left.
+        ProviderAvailability.Result availability = providerAvailability.check(integrationIdentifier, channel);
+        if (!availability.usable()) {
+            return skip(event, context, "NB_PROVIDER_UNAVAILABLE", availability.message(), availability.message());
         }
 
-        NovuClient.NovuResponse response;
+        Dispatch dispatch = Dispatch.builder()
+                .tenantId(event.getTenantId())
+                .channel(channel.toUpperCase(Locale.ROOT))
+                .subscriberId(subscriberId)
+                .contact(contact)
+                .body(context.getRenderedBody())
+                .subject(context.getRenderedSubject())
+                .transactionId(context.getTransactionId())
+                .data(event.getData())
+                .templateId(event.getTemplateId())
+                .contentVariables(event.getContentVariables())
+                .integrationIdentifier(integrationIdentifier)
+                .providerType(ProviderCatalog.typeFromIdentifier(integrationIdentifier))
+                .build();
+        DeliveryProvider provider = providers.select(event.getTenantId(), channel);
+
+        DeliveryResult result;
         try {
-            // SMSCountry's legacy API is form-encoded with a plain-text reply, which
-            // Novu's generic-sms provider cannot express, so that gateway is driven
-            // directly. Every other channel and gateway still goes through Novu.
-            if ("SMS".equalsIgnoreCase(channel) && config.isSmsCountryDirect()) {
-                response = smsCountryClient.send(
-                        contact != null ? contact.getPhone() : null,
-                        context.getRenderedBody(), context.getTransactionId());
-            } else {
-                response = novuClient.identifyThenTrigger(
-                        subscriberId, contact, channel,
-                        context.getRenderedBody(), context.getRenderedSubject(),
-                        context.getTransactionId(), event.getData(),
-                        event.getTemplateId(), event.getContentVariables());
-            }
+            result = provider.send(dispatch);
         } catch (CustomException ce) {
-            persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
-            throw ce;   // consumer logs + DLQs as before
+            persist(event, context, "FAILED", ce.getCode(), ce.getMessage());
+            throw ce;
         } catch (Exception e) {
-            persist(event, context, "FAILED", "NB_DELIVERY_ERROR", e.getMessage(), null, 1);
+            persist(event, context, "FAILED", "NB_DELIVERY_ERROR", e.getMessage());
             throw e;
         }
 
-        Integer sc = response != null ? response.getStatusCode() : null;
-        boolean delivered = sc != null && sc >= 200 && sc < 300;
-        if (!delivered) {
-            persist(event, context, "FAILED", "NB_NOVU_TRIGGER_FAILED",
-                    "Novu returned status " + sc, response != null ? response.getResponse() : null, 1);
+        if (!result.isAccepted()) {
+            persist(event, context, "FAILED", result.getProviderCode(), result.getProviderMessage(),
+                    result.getRawResponse(), result.getProviderRef());
             return DispatchResult.builder()
                     .valid(true).preferenceAllowed(true).derivedContext(context)
-                    .novuTriggered(false).novuStatusCode(sc)
-                    .novuResponse(response != null ? response.getResponse() : null)
-                    .diagnostics(Collections.singletonList("Novu trigger failed: status " + sc))
+                    .novuTriggered(false).novuStatusCode(result.getStatusCode())
+                    .novuResponse(result.getRawResponse())
+                    .diagnostics(Collections.singletonList(provider.id() + " rejected: " + result.getProviderCode()))
                     .build();
         }
 
-        log.info("Dispatch response: eventId={}, channel={}, statusCode={}, txn={}",
-                event.getEventId(), channel, sc, PiiMask.mask(context.getTransactionId()));
-
-        persist(event, context, "SENT", null, null,
-                response != null ? response.getResponse() : null, 1);
+        log.info("Dispatch accepted: eventId={}, channel={}, provider={}, statusCode={}, ref={}, txn={}",
+                event.getEventId(), channel, provider.id(), result.getStatusCode(), result.getProviderRef(),
+                PiiMask.mask(context.getTransactionId()));
+        persist(event, context, "SENT", null, null, result.getRawResponse(), result.getProviderRef());
         return DispatchResult.builder()
-                .valid(true)
-                .preferenceAllowed(true)
-                .derivedContext(context)
+                .valid(true).preferenceAllowed(true).derivedContext(context)
                 .novuTriggered(true)
-                .novuStatusCode(sc)
-                .novuResponse(response != null ? response.getResponse() : null)
-                .diagnostics(Collections.singletonList("Dispatch successful"))
+                .novuStatusCode(result.getStatusCode())
+                .novuResponse(result.getRawResponse())
+                .diagnostics(Collections.singletonList("Dispatch accepted by " + provider.id()))
                 .build();
     }
 
-    public NovuClient.NovuResponse testTrigger(String workflowId, String subscriberId, String phone,
-                                               Map<String, Object> payload, String transactionId,
-                                               String contentSid, Map<String, String> contentVariables,
-                                               RequestInfo requestInfo) {
-        // Pass-through test path: trigger Novu directly with the supplied payload.
-        // contentSid/contentVariables are accepted for backward-compatible request
-        // shape but no longer used (PGR owns rendering).
-        return novuClient.trigger(
-                workflowId,
-                subscriberId,
-                formatRecipientPhone(phone, null, config.getChannel(), requestInfo),
-                null,
-                payload,
-                transactionId);
+    /** Persist a SKIPPED row for a gate refusal and build the matching result. */
+    private DispatchResult skip(NotificationEvent event, DerivedContext context, String code,
+                                String rowMessage, String diagnostic) {
+        persist(event, context, "SKIPPED", code, rowMessage);
+        return skipped(context, diagnostic).build();
     }
 
-    private boolean isKnownChannel(String channel) {
-        return channel != null && KNOWN_CHANNELS.contains(channel.toUpperCase());
+    private static DispatchResult.DispatchResultBuilder skipped(DerivedContext context, String diagnostic) {
+        return DispatchResult.builder()
+                .valid(true).preferenceAllowed(true).derivedContext(context)
+                .novuTriggered(false)
+                .diagnostics(Collections.singletonList(diagnostic));
     }
 
-    private Contact buildContact(ComplaintsDomainEvent event, DerivedContext context) {
-        Contact contact = event.getContact();
-        if (contact != null) {
-            return contact;
+    private Contact buildContact(NotificationEvent event, DerivedContext context) {
+        if (event.getContact() != null) {
+            return event.getContact();
         }
-        // Fallback: assemble a Contact from the derived context (e.g. legacy
-        // stakeholders[] envelope or dry-run requests without a contact block).
+        // A dry-run request without a contact block.
         return Contact.builder()
                 .userId(context.getRecipientUserId())
                 .type(context.getAudience())
@@ -269,137 +228,105 @@ public class DispatchPipelineService {
                 .build();
     }
 
-    /** Strip everything but digits — mirrors ProviderController.digitsOnly so the real
-     *  delivery path and the test-send path build the WhatsApp recipient identically. */
-    private static String digitsOnly(String value) {
-        return value == null ? "" : value.replaceAll("\\D", "");
-    }
-
-    private String formatRecipientPhone(String mobile, String tenantId, String channel, RequestInfo requestInfo) {
-        if (!StringUtils.hasText(mobile)) {
-            return null;
-        }
-        boolean isWhatsapp = "whatsapp".equalsIgnoreCase(channel);
-        String normalized = mobile.trim();
-
-        // Strip any pre-existing whatsapp: prefix so we control formatting from here.
-        if (normalized.startsWith("whatsapp:")) {
-            normalized = normalized.substring("whatsapp:".length());
-        }
-
-        String e164;
-        if (normalized.startsWith("+")) {
-            e164 = normalized;
-        } else {
-            // Fetch default country-code prefix from MDMS
-            if (!StringUtils.hasText(tenantId)) {
-                throw new CustomException("NB_TENANT_ID_MISSING",
-                        "tenantId is required to resolve phone country-code prefix from MDMS");
-            }
-            MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
-            if (!normalized.matches(validationConfig.getMobileNumberRegex())) {
-                throw new CustomException("NB_INVALID_MOBILE_NUMBER",
-                        "Mobile number does not match the configured pattern for tenantId=" + tenantId);
-            }
-            e164 = validationConfig.getCountryCode() + normalized;
-        }
-
-        // Twilio Programmable WhatsApp requires the "whatsapp:" prefix; SMS takes raw E.164.
-        return isWhatsapp ? "whatsapp:" + e164 : e164;
-    }
-
-    private DerivedContext deriveContext(ComplaintsDomainEvent event) {
-        // Primary path: the pre-rendered per-recipient event carries everything flat.
-        if (event.getContact() != null || StringUtils.hasText(event.getRenderedBody())) {
-            Contact c = event.getContact();
-            return DerivedContext.builder()
-                    .channel(StringUtils.hasText(event.getChannel()) ? event.getChannel() : config.getChannel())
-                    .audience(c != null ? c.getType() : null)
-                    .locale(c != null && StringUtils.hasText(c.getLocale()) ? c.getLocale() : config.getDefaultLocale())
-                    .recipientMobile(c != null ? c.getPhone() : null)
-                    .recipientUserId(c != null ? c.getUserId() : null)
-                    .email(c != null ? c.getEmail() : null)
-                    .name(c != null ? c.getName() : null)
-                    .subscriberId(event.getSubscriberId())
-                    .renderedBody(event.getRenderedBody())
-                    .renderedSubject(event.getSubject())
-                    .transactionId(StringUtils.hasText(event.getTransactionId())
-                            ? event.getTransactionId()
-                            : event.getEventId() + ":" + event.getChannel())
-                    .build();
-        }
-
-        // Backward-compat fallback: legacy stakeholders[] envelope.
-        Stakeholder stakeholder = null;
-        if (!CollectionUtils.isEmpty(event.getStakeholders())) {
-            stakeholder = event.getStakeholders().stream()
-                    .filter(s -> StringUtils.hasText(s.getMobile()))
-                    .findFirst()
-                    .orElse(event.getStakeholders().get(0));
-        }
-        String locale = event.getContext() != null && StringUtils.hasText(event.getContext().getLocale())
-                ? event.getContext().getLocale() : config.getDefaultLocale();
+    private DerivedContext deriveContext(NotificationEvent event) {
+        Contact c = event.getContact();
         return DerivedContext.builder()
-                .channel(StringUtils.hasText(event.getChannel()) ? event.getChannel() : config.getChannel())
-                .audience(stakeholder != null ? stakeholder.getType() : null)
-                .workflowState(event.getWorkflow() != null ? event.getWorkflow().getToState() : null)
-                .locale(stakeholder != null && StringUtils.hasText(stakeholder.getLocale())
-                        ? stakeholder.getLocale() : locale)
-                .recipientMobile(stakeholder != null ? stakeholder.getMobile() : null)
-                .recipientUserId(stakeholder != null ? stakeholder.getUserId() : null)
-                .email(stakeholder != null ? stakeholder.getEmail() : null)
-                .renderedBody(stakeholder != null ? stakeholder.getRenderedBody() : event.getRenderedBody())
-                .renderedSubject(stakeholder != null ? stakeholder.getRenderedSubject() : event.getSubject())
+                .channel(event.getChannel())
+                .audience(c != null ? c.getType() : null)
+                .locale(c != null && StringUtils.hasText(c.getLocale()) ? c.getLocale() : config.getDefaultLocale())
+                .recipientMobile(c != null ? c.getPhone() : null)
+                .recipientUserId(c != null ? c.getUserId() : null)
+                .email(c != null ? c.getEmail() : null)
+                .name(c != null ? c.getName() : null)
                 .subscriberId(event.getSubscriberId())
+                .renderedBody(event.getRenderedBody())
+                .renderedSubject(event.getSubject())
                 .transactionId(StringUtils.hasText(event.getTransactionId())
                         ? event.getTransactionId()
                         : event.getEventId() + ":" + event.getChannel())
                 .build();
     }
 
-    private void persist(ComplaintsDomainEvent event, DerivedContext context,
-                         String status, String errorCode, String errorMessage,
-                         Map<String, Object> providerResponse, Integer attemptCount) {
+    /** The recipient half of the ledger's unique key (transaction_id, channel, recipient_value). */
+    private static String recipientValue(DerivedContext context) {
+        return StringUtils.hasText(context.getSubscriberId()) ? context.getSubscriberId() : context.getRecipientUserId();
+    }
+
+    private void persist(NotificationEvent event, DerivedContext context,
+                         String status, String errorCode, String errorMessage) {
+        persist(event, context, status, errorCode, errorMessage, null, null);
+    }
+
+    private void persist(NotificationEvent event, DerivedContext context, String status, String errorCode,
+                         String errorMessage, Map<String, Object> providerResponse, String providerRef) {
+        long now = System.currentTimeMillis();
         dispatchLogRepository.upsert(DispatchLogEntry.builder()
+                .providerRef(providerRef)
+                .isTest(false)
                 .eventId(event.getEventId())
                 .transactionId(context.getTransactionId())
-                .referenceNumber(event.getEntityId())
+                .referenceNumber(resolveReferenceNumber(event))
                 .module(event.getModule())
                 .eventName(event.getEventName())
                 .tenantId(event.getTenantId())
                 .channel(context.getChannel())
-                .recipientValue(StringUtils.hasText(context.getSubscriberId())
-                        ? context.getSubscriberId() : context.getRecipientUserId())
+                .recipientValue(recipientValue(context))
                 .templateKey(resolveTemplateKey(event, context))
                 .status(status)
-                .attemptCount(attemptCount)
+                .attemptCount(1)
                 .lastErrorCode(errorCode)
                 .lastErrorMessage(errorMessage)
                 .providerResponse(providerResponse)
-                .createdTime(System.currentTimeMillis())
-                .lastModifiedTime(System.currentTimeMillis())
+                .sourcePath(context.getSourcePath())
+                .createdTime(now)
+                .lastModifiedTime(now)
                 .build());
     }
 
+    /** A REJECTED row for an envelope that failed validation; only literal {@code unknown} markers are invented. */
+    private void persistRejected(NotificationEvent event, String errorCode, String errorMessage, String sourcePath) {
+        String channel = Values.firstText(event.getChannel(), "UNKNOWN");
+        String eventId = Values.firstText(event.getEventId(), "unknown");
+        Contact c = event.getContact();
+        String recipient = Values.firstText(event.getSubscriberId(),
+                c != null ? c.getUserId() : null, c != null ? c.getPhone() : null, "unknown");
+        long now = System.currentTimeMillis();
+        dispatchLogRepository.upsert(DispatchLogEntry.builder()
+                .eventId(eventId)
+                .transactionId(Values.firstText(event.getTransactionId(), eventId + ":" + channel))
+                .referenceNumber(resolveReferenceNumber(event))
+                .module(Values.firstText(event.getModule(), "unknown"))
+                .eventName(Values.firstText(event.getEventName(), "unknown"))
+                .tenantId(Values.firstText(event.getTenantId(), "unknown"))
+                .channel(channel)
+                .recipientValue(recipient)
+                .templateKey(event.getTemplateKey())
+                .status("REJECTED")
+                .attemptCount(1)
+                .lastErrorCode(errorCode)
+                .lastErrorMessage(errorMessage)
+                .sourcePath(sourcePath)
+                .createdTime(now)
+                .lastModifiedTime(now)
+                .build());
+    }
+
+    /** The ledger's reference_number: entityId, then data.referenceNumber, data.complaintNo (PGR legacy), eventId. */
+    private static String resolveReferenceNumber(NotificationEvent event) {
+        Map<String, Object> data = event.getData();
+        return Values.firstText(event.getEntityId(),
+                data == null ? null : Values.str(data.get("referenceNumber")),
+                data == null ? null : Values.str(data.get("complaintNo")),
+                event.getEventId());
+    }
+
     /**
-     * Best-available template identity for the dispatch-log row.
-     *
-     * <p>The authoritative value is the MDMS {@code RAINMAKER-PGR.NotificationTemplate}
-     * uid — {@code audience.action.toState.channel.locale} — that PGR's
-     * TemplateRenderer actually selected. pgr-services does NOT yet put it on the
-     * wire: {@code NotificationService.publishRenderedEvent} must add an explicit
-     * {@code templateKey} field to the pre-rendered event (carrying the locale it
-     * actually rendered with, i.e. after any default-locale fallback). Until then
-     * {@link ComplaintsDomainEvent#getTemplateKey()} is null and we reconstruct
-     * the ROUTING key from segments the event already carries verbatim — audience
-     * (contact.type), action/toState (event data block), channel and locale. This
-     * matches the template uid except when the renderer fell back to its default
-     * locale. Legacy envelopes without an action/toState fall back to the
-     * eventName. Nothing here is fabricated: every segment comes from the event.
+     * The producer's templateKey when sent; else reconstructed from audience.action.toState.channel[.locale];
+     * else the eventName (OTP and producers without that vocabulary).
      */
-    private String resolveTemplateKey(ComplaintsDomainEvent event, DerivedContext context) {
+    private String resolveTemplateKey(NotificationEvent event, DerivedContext context) {
         if (StringUtils.hasText(event.getTemplateKey())) {
-            return event.getTemplateKey();   // explicit wire value wins once PGR emits it
+            return event.getTemplateKey();
         }
         Map<String, Object> data = event.getData();
         Object action = data != null ? data.get("action") : null;

@@ -51,6 +51,40 @@
       become: false
       when: host_vars_file.stat.exists
 
+    - name: "preflight — real OTP needs the notification stack (enable_otp_services ⇒ enable_novu)"
+      ansible.builtin.assert:
+        that: (not (enable_otp_services | default(false))) or (enable_novu | default(false))
+        fail_msg: |
+          enable_otp_services: true but enable_novu is false. Login OTP SMS are delivered by
+          novu-bridge (it consumes egov.core.notification.sms); without the notification stack
+          no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
+          Configurator -> Notifications -> Channels), or leave enable_otp_services false.
+
+    # pgr-services, pgr-services-db, novu-bridge and novu-bridge-db must come from ONE
+    # build (see notification_stack_tag in host_vars/_example.yml). They all follow
+    # notification_stack_tag unless a per-image override pins one of them, and a partial
+    # set of pins is the easy way to run a new app on an old schema or a new pgr against
+    # an old bridge. Warn rather than fail: a local build legitimately pins some of them
+    # here and the rest in a per-tenant compose overlay, which this cannot see.
+    - name: "preflight — notification images: warn when only some are pinned"
+      when:
+        - enable_novu | default(false)
+        - _notif_pins | length > 0
+        - _notif_pins | length < 4
+      vars:
+        _notif_names: "{{ q('ansible.builtin.varnames', '^(pgr_services_image|pgr_services_db_image|novu_bridge_image|novu_bridge_db_image)$') }}"
+        # defined AND non-empty ("" means "use the default", like every *_image var)
+        _notif_pins: >-
+          {{ _notif_names | zip(q('ansible.builtin.vars', *_notif_names, default=''))
+             | selectattr('1') | map(attribute='0') | sort | list }}
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: {{ _notif_pins | join(', ') }} {{ 'is' if (_notif_pins | length) == 1 else 'are' }}
+          pinned in host_vars; the other notification images follow notification_stack_tag
+          ({{ notification_stack_tag | default('nightly-develop') }}). All four must be the
+          same build — pin all four, or none and set notification_stack_tag. Ignore this
+          only if a per-tenant compose overlay pins the rest to the same build.
+
     - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
       ansible.builtin.assert:
         that: uppercase_host_vars_keys | length == 0
@@ -1351,6 +1385,11 @@
       register: per_tenant_overlay
       delegate_to: localhost
       become: false
+      # `always`: compose_files (below) is built from this, and tagged runs such as
+      # `--tags notifications` / `--tags master-repair` restart containers through it.
+      # Untagged, it was skipped under --tags and every such restart died on an
+      # undefined compose_files.
+      tags: ['always']
 
     - name: "Per-tenant compose overlay — copy to target (if present)"
       copy:
@@ -1486,6 +1525,17 @@
         replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}"
       register: kong_cors_pin
 
+    # Real OTP: the two request-termination mocks on /user-otp and /otp must go, or
+    # user-otp / egov-otp are never reached. Both mock `plugins:` lines carry a marker
+    # comment; drop the key, its list items (same indent, `- `) and everything deeper.
+    - name: "Kong — strip the OTP mocks when enable_otp_services (staging copy)"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: "(?m)^([ \\t]*)plugins:[ \\t]*# kong-otp-mock-marker[ \\t]*\\n(?:\\1(?:-[ \\t]|[ \\t]+).*\\n)+"
+        replace: ""
+      register: kong_otp_unmock
+      when: enable_otp_services | default(false)
+
     - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
       ansible.builtin.shell: |
         set -euo pipefail
@@ -1550,20 +1600,6 @@
           {{ novu_dashboard_image
              | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
                        else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
-
-    # otp-publisher: same shape as MCP above. `build_otp_publisher: true` builds
-    # the vendored service on the box and tags it otp-publisher:local; otherwise
-    # pull the published image. The old default was the local-only tag in BOTH
-    # cases, so a tenant that enabled notifications without opting into the build
-    # selected an image that exists in no registry — `pull` skipped it
-    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy.
-    # Override with `otp_publisher_image:` in host_vars.
-    - name: "Resolve otp-publisher image tag"
-      ansible.builtin.set_fact:
-        otp_publisher_image: >-
-          {{ otp_publisher_image
-             | default('otp-publisher:local' if (build_otp_publisher | default(false))
-                       else 'egovio/otp-publisher:2.12-81fc6be') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -1804,6 +1840,7 @@
     # above it. Default `traces` yields all three profiles, i.e. exactly the
     # stack every tenant runs today — this knob only ever removes.
     - name: "Validate observability_level"
+      tags: ['always']   # compose_profiles is derived from it; see the overlay stat above
       ansible.builtin.fail:
         msg: >-
           observability_level must be one of metrics|logs|traces, got
@@ -1814,6 +1851,7 @@
       when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
 
     - name: "Compute compose profiles for this tenant"
+      tags: ['always']   # tagged runs restart services with these; see the overlay stat above
       vars:
         _obs: "{{ observability_level | default('traces') }}"
         # collector lives in `metrics`, not `traces`: JVM metrics reach
@@ -1853,6 +1891,7 @@
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
     - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + per-tenant overlay)"
+      tags: ['always']   # tagged runs restart services with these; see the overlay stat above
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -1939,24 +1978,6 @@
       when:
         - enable_novu | default(false)
         - build_novu_dashboard | default(false)
-
-    # ==================== Build otp-publisher image locally ===============
-    # When `build_otp_publisher: true`, build the vendored Node service at
-    # utilities/otp-publisher (its own Dockerfile, NOT the maven one) and tag
-    # it otp-publisher:local; compose picks it up via OTP_PUBLISHER_IMAGE.
-    # Only needed when the notifications profile (SMS-OTP path) is enabled.
-    - name: "Build otp-publisher image locally (when build_otp_publisher)"
-      ansible.builtin.command: >-
-        docker build
-        -t otp-publisher:local
-        -f utilities/otp-publisher/Dockerfile
-        utilities/otp-publisher
-      args:
-        chdir: "{{ playbook_dir }}/../.."
-      register: otp_publisher_build_run
-      changed_when: true
-      when:
-        - build_otp_publisher | default(false)
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
@@ -2381,7 +2402,6 @@
           NOVU_JWT_SECRET={{ bao_secrets.json.data.data.novu_jwt_secret | default('', true) }}
           NOVU_STORE_ENCRYPTION_KEY={{ bao_secrets.json.data.data.novu_store_encryption_key | default('', true) }}
           NOVU_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
-          NOVU_BRIDGE_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
           NOVU_MONGO_PASSWORD={{ bao_secrets.json.data.data.novu_mongo_password | default('', true) }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
@@ -2793,6 +2813,34 @@
         executable: /bin/bash
       changed_when: false
 
+    # Upgrade order for the notification stack: the NEW novu-bridge (and its Flyway
+    # migrator) before the new pgr-services. A new pgr-services publishes thin events;
+    # a bridge from before the thin-event stack cannot resolve them and dead-letters
+    # them, and nothing replays the DLQ — each is a notification lost for good. A plain
+    # `up -d` recreates both in parallel, so for the length of one JVM start the old
+    # bridge can consume the new pgr's events. Recreating the bridge on its own first
+    # closes that window: pgr-services is not one of its dependencies, so the old pgr
+    # keeps running (its pre-rendered envelopes are accepted by the new bridge) until
+    # the full `up -d` below replaces it, and events published while the new bridge
+    # boots wait in Kafka. Only on a box that already runs a bridge — a fresh install
+    # has no old one to race.
+    - name: "notification stack — recreate novu-bridge before pgr-services (upgrade order)"
+      when:
+        - ansible_system != "Darwin"
+        - enable_novu | default(false)
+      ansible.builtin.shell: |
+        set -o pipefail
+        if ! docker inspect novu-bridge >/dev/null 2>&1; then
+          echo "NOCHANGE no running novu-bridge — fresh install, nothing to order"
+          exit 0
+        fi
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d novu-bridge 2>&1 | tee -a {{ compose_progress_file }}
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      register: bridge_first
+      changed_when: "'NOCHANGE' not in (bridge_first.stdout | default(''))"
+
     - name: Start DIGIT stack (Linux/Debian)
       shell: |
         set -o pipefail
@@ -2802,6 +2850,39 @@
         executable: /bin/bash
       changed_when: false
       when: ansible_system != "Darwin"
+
+    # Containers of services this release deleted from the compose files. `up -d`
+    # leaves them running (they are orphans now, and the deploy does not pass
+    # --remove-orphans because it would also take out containers other compose files
+    # on the box started under the same project). Left running they do real harm:
+    # egov-notification-sms and novu-bridge both consume egov.core.notification.sms,
+    # so every login OTP would go out twice through two providers; otp-publisher keeps
+    # publishing the retired OTP event. Removed only when the notification stack is on
+    # (novu-bridge now does their job) and only a container that compose created for
+    # that service in THIS deployment directory.
+    - name: "notification stack — remove the retired egov-notification-sms / otp-publisher / novu-bridge-endpoint containers"
+      when:
+        - ansible_system != "Darwin"
+        - enable_novu | default(false)
+      ansible.builtin.shell: |
+        set -eo pipefail
+        GONE=""
+        for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
+          docker inspect "$svc" >/dev/null 2>&1 || continue
+          owner="$(docker inspect --format '{{ '{{' }}index .Config.Labels "com.docker.compose.service"{{ '}}' }}|{{ '{{' }}index .Config.Labels "com.docker.compose.project.working_dir"{{ '}}' }}' "$svc")"
+          if [ "$owner" != "$svc|{{ digit_dir }}" ]; then
+            echo "SKIP $svc: not this deployment's compose container ($owner)"
+            continue
+          fi
+          docker rm -f "$svc" >/dev/null
+          GONE="$GONE $svc"
+        done
+        [ -z "$GONE" ] && { echo "NOCHANGE no retired notification containers"; exit 0; }
+        echo "removed:$GONE"
+      args:
+        executable: /bin/bash
+      register: retired_notification_containers
+      changed_when: "'removed:' in (retired_notification_containers.stdout | default(''))"
 
     # macOS/Rosetta: JVM services cold-start slower than compose's
     # depends_on: service_healthy timeouts, so the first `up -d` aborts
@@ -2938,6 +3019,7 @@
         cmd: docker exec kong-gateway kong reload
       when: >-
         (kong_cors_pin.changed | default(false))
+        or (kong_otp_unmock.changed | default(false))
         or (config_sync.results | default([])
             | selectattr('item.key', 'equalto', 'kong')
             | selectattr('changed', 'defined') | selectattr('changed')
@@ -4023,12 +4105,35 @@
     #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
     #     so `-b` defeats no_log for the lifetime of the exec — the same reason
     #     the Grafana reset uses --password-from-stdin).
+    # The htpasswd files are root-owned 0640, and nginx reads them from a WORKER, which
+    # runs as the `user` of nginx.conf (www-data on Debian, nginx on RHEL) — not as root.
+    # Without that group on the file every authenticated request answers 500
+    # ("open() .htpasswd-status failed (13: Permission denied)"), and the validate step
+    # below aborts a fresh deploy. Found on a from-scratch box, 2026-09-22.
+    - name: "nginx — resolve the worker user that must read the htpasswd files"
+      ansible.builtin.shell:
+        cmd: awk '$1 == "user" { gsub(";", "", $2); print $2; exit }' /etc/nginx/nginx.conf
+        executable: /bin/bash
+      register: _nginx_worker_user
+      changed_when: false
+      failed_when: false
+      when: ansible_system != "Darwin"
+
+    - name: "nginx — htpasswd group = the worker user's group"
+      ansible.builtin.set_fact:
+        _nginx_htpasswd_group: >-
+          {{ (_nginx_worker_user.stdout | default('') | trim)
+             or ('www-data' if ansible_os_family == 'Debian' else 'nginx') }}
+      when: ansible_system != "Darwin"
+
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
       community.general.htpasswd:
         path: /etc/nginx/.htpasswd-status
         name: "{{ status_basic_auth_user | default('digit-status') }}"
         password: "{{ status_basic_auth_password }}"
         crypt_scheme: bcrypt
+        owner: root
+        group: "{{ _nginx_htpasswd_group }}"
         mode: '0640'
       no_log: true
       when:
@@ -4061,6 +4166,8 @@
         name: "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
         password: "{{ integration_tests_basic_auth_password }}"
         crypt_scheme: bcrypt
+        owner: root
+        group: "{{ _nginx_htpasswd_group }}"
         mode: '0640'
       no_log: true
       when:
@@ -4768,6 +4875,15 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # novu-bridge is not in the recreate list below: "novu-bootstrap — recreate
+    # novu-bridge" runs later in this play with --force-recreate, which picks it up.
+    - name: "post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'
+        replace: '\1NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: {{ state_root }}'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
@@ -5203,12 +5319,12 @@
     # the bridge consumer + retry/DLQ exist before the first event and so
     # the dependency order is explicit. failed_when:false → re-runs are
     # no-ops ("TOPIC_ALREADY_EXISTS").
-    - name: "novu — ensure complaints.domain.events + retry + dlq topics exist"
+    - name: "novu — ensure notification input + core-sms + dlq topics exist"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} \
           exec -T redpanda rpk topic create \
-          complaints.domain.events novu-bridge.retry novu-bridge.dlq \
+          complaints.domain.events notifications.events egov.core.notification.sms novu-bridge.dlq \
           -p 1 -r 1
       register: novu_topic_create
       changed_when: "'CREATED' in (novu_topic_create.stdout | default(''))"
@@ -5244,7 +5360,11 @@
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
 
-    - name: "novu-bootstrap — mint Development API key programmatically when unset"
+    # Attempt 1 — no registration window. On a box that has already been
+    # bootstrapped the admin user exists, so the script's login fallback returns
+    # the key and we never touch DISABLE_USER_REGISTRATION at all. That keeps the
+    # steady state of every existing deployment byte-identical to before.
+    - name: "novu-bootstrap — mint Development API key (attempt 1: existing account)"
       ansible.builtin.shell: |
         NOVU_API_URL=http://127.0.0.1:14002 \
         NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
@@ -5254,16 +5374,131 @@
       args:
         chdir: "{{ digit_dir }}"
       register: novu_mint
-      changed_when: true
+      changed_when: false
+      failed_when: false
       when:
         - enable_novu | default(false)
         - (novu_api_key | default('')) | length == 0
 
-    - name: "novu-bootstrap — resolve effective Novu key (pinned or minted)"
-      ansible.builtin.set_fact:
-        effective_novu_key: "{{ (novu_api_key | default('')) if ((novu_api_key | default('')) | length > 0) else (novu_mint.stdout | default('') | trim) }}"
+    # Attempt 2 — the FRESH-Mongo case. novu-api ships with
+    # DISABLE_USER_REGISTRATION=true (docker-compose.egov-digit.yaml, and now
+    # explicitly in .env), so on an empty Mongo `POST /v1/auth/register` answers
+    # 400 "Account creation is disabled" and the login fallback has no user to log
+    # in as — attempt 1 exits 1 with an empty key. That is why a from-scratch
+    # deploy has never been able to mint; only deployments that PIN novu_api_key
+    # got past it.
+    #
+    # Public signup is opened for exactly one call and closed again:
+    #   .env flip -> recreate novu-api -> wait healthy -> mint -> ALWAYS flip back,
+    #   recreate, wait healthy.
+    # The close runs in `always:`, so a mint that fails, times out, or aborts the
+    # play still leaves registration disabled. The window is one container lifetime
+    # on a box whose Novu has no data yet, and the very first account created in it
+    # is ours (Novu's first signup also creates the organization, so a later signup
+    # would not become an admin of it). The next deploy re-renders .env from
+    # digit.env.j2, which pins the secure value again regardless.
+    - name: "novu-bootstrap — fresh Novu: mint inside a closed registration window"
       when:
         - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+        - (novu_mint.rc | default(1)) != 0 or ((novu_mint.stdout | default('') | trim) | length) == 0
+      block:
+        - name: "novu-bootstrap — open Novu registration for the mint window"
+          ansible.builtin.lineinfile:
+            path: "{{ digit_dir }}/.env"
+            regexp: '^NOVU_DISABLE_USER_REGISTRATION='
+            line: "NOVU_DISABLE_USER_REGISTRATION=false"
+          changed_when: true
+
+        - name: "novu-bootstrap — recreate novu-api with registration open"
+          ansible.builtin.shell: >-
+            docker compose {{ compose_files }} up -d --force-recreate novu-api
+          args:
+            chdir: "{{ digit_dir }}"
+          environment:
+            COMPOSE_PROFILES: "{{ compose_profiles }}"
+          changed_when: true
+
+        - name: "novu-bootstrap — wait for novu-api health (registration open)"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:14002/v1/health-check
+            status_code: [200]
+            timeout: 10
+          register: novu_api_health_open
+          retries: 18
+          delay: 10
+          until: novu_api_health_open.status == 200
+
+        - name: "novu-bootstrap — mint Development API key (attempt 2: fresh signup)"
+          ansible.builtin.shell: |
+            NOVU_API_URL=http://127.0.0.1:14002 \
+            NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
+            NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
+            NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
+            bash {{ digit_dir }}/novu-mint-key.sh
+          args:
+            chdir: "{{ digit_dir }}"
+          register: novu_mint_fresh
+          changed_when: true
+          failed_when: false
+
+      always:
+        # Restore the secure default no matter how the block ended. Both tasks run
+        # even on failure, which is the whole point of putting them here.
+        - name: "novu-bootstrap — close the Novu registration window"
+          ansible.builtin.lineinfile:
+            path: "{{ digit_dir }}/.env"
+            regexp: '^NOVU_DISABLE_USER_REGISTRATION='
+            line: "NOVU_DISABLE_USER_REGISTRATION=true"
+          changed_when: true
+
+        - name: "novu-bootstrap — recreate novu-api with registration disabled"
+          ansible.builtin.shell: >-
+            docker compose {{ compose_files }} up -d --force-recreate novu-api
+          args:
+            chdir: "{{ digit_dir }}"
+          environment:
+            COMPOSE_PROFILES: "{{ compose_profiles }}"
+          changed_when: true
+
+        - name: "novu-bootstrap — wait for novu-api health (registration closed)"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:14002/v1/health-check
+            status_code: [200]
+            timeout: 10
+          register: novu_api_health_closed
+          retries: 18
+          delay: 10
+          until: novu_api_health_closed.status == 200
+
+        # Fail loudly rather than silently continuing with an empty key: an empty
+        # key means the whole notification stack is inert, and the old code path
+        # hid that behind a green recap.
+        - name: "novu-bootstrap — assert registration is disabled again"
+          ansible.builtin.shell: >-
+            grep -q '^NOVU_DISABLE_USER_REGISTRATION=true$' {{ digit_dir }}/.env
+          changed_when: false
+
+    - name: "novu-bootstrap — resolve effective Novu key (pinned or minted)"
+      ansible.builtin.set_fact:
+        effective_novu_key: >-
+          {{ (novu_api_key | default(''))
+             if ((novu_api_key | default('')) | length > 0)
+             else ((novu_mint_fresh.stdout | default('') | trim)
+                   if ((novu_mint_fresh.stdout | default('') | trim) | length > 0)
+                   else (novu_mint.stdout | default('') | trim)) }}
+      when:
+        - enable_novu | default(false)
+
+    - name: "novu-bootstrap — warn when no Novu key could be minted"
+      ansible.builtin.debug:
+        msg: >-
+          Novu API key is EMPTY after bootstrap. novu-bridge will run unauthenticated
+          against Novu and nothing will be delivered. Check `docker logs novu-api`,
+          then re-run the deploy; or mint by hand and pin `novu_api_key` in host_vars.
+      when:
+        - enable_novu | default(false)
+        - (effective_novu_key | default('')) | length == 0
 
     # BOTH files: the script sources ${SCRIPT_DIR}/load-dotenv.sh, so shipping it
     # alone makes the bootstrap exit 1 on line 62 of a fresh box — silently, since
@@ -6114,31 +6349,252 @@
       register: newman_install
       changed_when: "'added' in newman_install.stdout"
 
+    # ─────────── Tenant-master bootstrap verification / repair ───────────
+    # Creating a tenant copies the state-level masters from `pg`. That copy comes up
+    # SHORT on a fresh box: the new tenant gets exactly 500
+    # ACCESSCONTROL-ROLEACTIONS.roleactions rows against 945 at `pg` — a round number,
+    # i.e. a pagination limit, not a data difference. SUPERUSER/MDMS_ADMIN lose their
+    # /mdms-v2/v2/_create/* role-actions and Kong's fail-closed RBAC then 403s every
+    # MDMS write the configurator makes, on a tenant that otherwise looks deployed.
+    #
+    # The truncation is NOT in this repository: the copy is done by
+    # POST /mdms-v2/defaultdata/_create inside the prebuilt mdms-v2 image (there is
+    # no mdms-v2 source under backend/). See the header of repair-tenant-masters.py
+    # for the full trace. So this step verifies the outcome and copies whatever is
+    # missing back through the ordinary MDMS API. Idempotent: a complete bootstrap
+    # reports "0 row(s) missing" and writes nothing.
+    #
+    # It touches the ACCESS-CONTROL masters (actions, role-actions) ONLY. It runs on
+    # live tenants by default, and every other master legitimately differs from pg's
+    # demo data: an earlier version compared all shared schemas and, had its schema
+    # paging worked, would have copied pg's ComplaintHierarchy, Departments and
+    # Workflow rows into the tenant. Actions match on url, role-actions on
+    # (rolecode, actionid) and only when that id means the same url on both tenants.
+    #
+    # Runs BEFORE notif-seed on purpose — notif-seed writes access-control rows of
+    # its own and would 403 on a truncated tenant.
+    - name: "master-repair — stage tenant-master repair script"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+      tags: ['master-repair']
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../scripts/repair-tenant-masters.py"
+        dest: "{{ digit_dir }}/repair-tenant-masters.py"
+        mode: '0755'
+
+    - name: "master-repair — compare {{ state_root }}'s access-control rows against pg and restore missing ones"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+      tags: ['master-repair']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        SOURCE_TENANT=pg \
+        TARGET_TENANT={{ state_root }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ state_root }} \
+        APPLY={{ '1' if (repair_tenant_masters | default(true)) else '0' }} \
+        python3 repair-tenant-masters.py
+      register: master_repair
+      changed_when: "'ACL-CHANGED' in (master_repair.stdout | default(''))"
+      failed_when: false
+
+    - name: "master-repair — result"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+      tags: ['master-repair']
+      ansible.builtin.debug:
+        msg: "{{ master_repair.stdout_lines | default(['(no output)']) }}"
+
+    - name: "master-repair — restart egov-accesscontrol after restoring role-actions"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+        - "'ACL-CHANGED' in (master_repair.stdout | default(''))"
+      tags: ['master-repair']
+      ansible.builtin.shell: >-
+        docker compose {{ compose_files }} restart egov-accesscontrol
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+
+    # RBAC_BLOCKED means the repair could not run because the permission needed to
+    # restore the permissions was itself among the rows dropped. Nothing downstream
+    # will work, so say so instead of letting the deploy finish green.
+    - name: "master-repair — fail when the tenant cannot be repaired through the API"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true)
+        - not (tolerate_bootstrap_failures | default(false))
+        - "'RBAC_BLOCKED' in (master_repair.stdout | default(''))"
+      tags: ['master-repair']
+      ansible.builtin.fail:
+        msg: >-
+          Tenant {{ state_root }} bootstrapped with truncated ACCESSCONTROL role-actions
+          and cannot repair itself through the gateway (the admin role lost the very
+          /mdms-v2/v2/_create role-action the repair needs). The configurator's MDMS
+          writes will 403. Fix the mdms-v2 /mdms-v2/defaultdata/_create pagination or
+          restore the rows directly, then re-run with --tags master-repair. Set
+          `tolerate_bootstrap_failures: true` to continue past this.
+
     # ─────────── Config-driven notification MDMS seed ───────────
-    # Seeds the 3 PGR notification masters (schema + data) at the state root,
-    # scoped to JUST notifications — the standalone equivalent of DDH's file
-    # loader (which the deploy does NOT invoke; the fast-path dump carries no
-    # notification rows). Two run modes:
-    #   • Fresh install: runs automatically when `seed_notifications` (or the
-    #     config-driven flag) is on.
-    #   • Add-on to an existing deploy:  ./deploy.sh <tenant> --tags notifications
-    #     (state_root / digit_dir / upstream_kong_port are group/host vars, so
-    #     they resolve even under --tags). Idempotent — MDMS dedupes on re-run.
-    - name: "notif-seed — stage schema + data + seeder on target"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+    # A DEPLOY UPGRADES SOFTWARE ONLY. This step creates the notification schemas (both
+    # namespaces), grants the access-control rows the Channels screen, the new masters
+    # and the novu-bridge endpoints need, and gives a tenant WITHOUT channel rows rows
+    # that say what NOVU_BRIDGE_CHANNELS_ENABLED says. Because MDMS SQL migrations never
+    # run on a deployed box, this is the ONLY way those reach an existing install.
+    #
+    # It never moves a tenant's notification CONFIGURATION (see seed-notifications.py):
+    #   • 2.12 configuration (RAINMAKER-PGR.Notification* rows, no NOTIFICATIONS.Routing):
+    #     left exactly as it is — novu-bridge keeps serving it through its legacy
+    #     adapter. It is reported (NOTIFICATIONS-MIGRATION-PENDING) and migrated by an
+    #     operator, per tenant, after reviewing `migrate-notifications.py plan`
+    #     (docs/2.20/notifications/migration.md). No row is copied, no default merged.
+    #   • already on NOTIFICATIONS.*: left exactly as it is.
+    #   • no configuration at all (fresh install): the shipped defaults, written straight
+    #     into NOTIFICATIONS.* (routing last, held back if a template write failed), the
+    #     event catalogue generated from the tenant's live workflow.
+    #
+    # This is NOT inert: novu-bridge reads these rows. A tenant is served from
+    # NOTIFICATIONS.* as soon as it has one NOTIFICATIONS.Routing row, and its channels
+    # are decided by its channel rows as soon as it has one (only a tenant with none
+    # follows NOVU_BRIDGE_CHANNELS_ENABLED) — hence the rules above.
+    #
+    # Order, and why it converges on a re-run:
+    #   1. access phase: the access-control rows, FIRST — every write below needs them.
+    #   2. restart egov-accesscontrol when (1) created rows (it caches role-actions).
+    #   3. data phase. A 403 there (exit 3) means the cache is still stale — e.g. an
+    #      earlier run created the rows and died before step 2 — so restart once more
+    #      and run the data phase again. A second 403 is a real RBAC gap and fails.
+    # Two run modes:
+    #   • Fresh install / upgrade: runs automatically when `seed_notifications` (default:
+    #     enable_novu) is on.
+    #   • On its own:  ./deploy.sh <tenant> --tags notifications
+    #     (state_root / digit_dir / upstream_kong_port are group/host vars and
+    #     compose_files is computed by an `always` task, so all resolve under --tags).
+    - name: "notif-seed — stage schemas, defaults, seeder and migration script on target"
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.copy:
         src: "{{ item }}"
         dest: "{{ digit_dir }}/notification-seed/"
       loop:
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json"
-        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
-        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
-        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
+        # The row shapes for the channel decision (see seed-notifications.py): the
+        # seeder takes code/gateway/senderId/provider from here but decides `enabled`
+        # from the bridge's NOVU_BRIDGE_CHANNELS_ENABLED for a tenant with no rows.
+        # The legacy Routing/Template/ProviderTemplate defaults are NOT staged: the
+        # deploy never writes default rows into the legacy masters any more.
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationChannel.json"
+        # The module-neutral NOTIFICATIONS.* namespace (thin-event design §5): the five
+        # schemas and the shipped defaults. The deploy writes the defaults only for a
+        # tenant with no configuration at all; migrate-notifications.py compares a
+        # tenant's legacy rows against them (category defaults / customised) and writes
+        # them only with --adopt-defaults. The catalogue file is the fallback for when
+        # egov-workflow-v2 cannot answer for the tenant's live workflow.
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/NOTIFICATIONS.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.EventCatalogue.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Routing.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.Template.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/NOTIFICATIONS/NOTIFICATIONS.ProviderTemplate.json"
+        # NOTIFICATIONS.Channel.json is deliberately NOT staged: channel rows switch
+        # delivery on and off, so they are never written from a file — they are decided
+        # from the bridge's allowlist, or copied from the tenant's legacy rows by the
+        # migration.
         - "{{ playbook_dir }}/../scripts/seed-notifications.py"
+        # The conversion rules (the one source of them) and the catalogue generator; the
+        # seeder and the migration script import both from their own directory.
+        - "{{ playbook_dir }}/../scripts/notifications_convert.py"
+        - "{{ playbook_dir }}/../scripts/generate_event_catalogue.py"
+        # Staged so an operator can plan/apply the per-tenant migration on the box:
+        #   cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:<kong>
+        #   python3 migrate-notifications.py plan --all
+        # The deploy itself never runs it.
+        - "{{ playbook_dir }}/../scripts/migrate-notifications.py"
 
-    - name: "notif-seed — seed the 3 notification MDMS masters (idempotent)"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+    # The allowlist novu-bridge falls back to for a tenant with no channel rows. Read
+    # from the RUNNING container, not host_vars: a per-tenant overlay can override the
+    # .env value, and the container is what decides delivery. The seeder copies it into
+    # the channel rows of a tenant that has none, so that tenant keeps delivering exactly
+    # what it delivers now. No container (never started) → the host_vars value, which is
+    # what the next compose up would give it.
+    - name: "notif-seed — read NOVU_BRIDGE_CHANNELS_ENABLED from the running novu-bridge"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.command: docker inspect --format '{{ '{{' }}json .Config.Env{{ '}}' }}' novu-bridge
+      register: notif_bridge_env
+      changed_when: false
+      failed_when: false
+
+    - name: "notif-seed — resolve the effective channel allowlist"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.set_fact:
+        # One expression, so the result stays a plain string. An env var absent from the
+        # container means the bridge's own default for it: empty.
+        notif_channels_allowlist: >-
+          {{ ((notif_bridge_env.stdout | from_json)
+                | select('match', '^NOVU_BRIDGE_CHANNELS_ENABLED=')
+                | map('regex_replace', '^NOVU_BRIDGE_CHANNELS_ENABLED=', '')
+                | list | first | default(''))
+             if (notif_bridge_env.rc | default(1)) == 0
+             else (novu_bridge_channels_enabled | default('')) }}
+        notif_channels_allowlist_source: >-
+          {{ 'the running novu-bridge container'
+             if (notif_bridge_env.rc | default(1)) == 0
+             else 'host_vars novu_bridge_channels_enabled (no novu-bridge container)' }}
+
+    - name: "notif-seed — access-control rows (phase 1 of 2)"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/notification-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        NOTIF_SEED_PHASE=access \
+        python3 seed-notifications.py
+      register: notif_seed_acl
+      changed_when: "'ACL-CHANGED' in (notif_seed_acl.stdout | default(''))"
+      failed_when: "notif_seed_acl.rc != 0 or 'DONE' not in (notif_seed_acl.stdout | default(''))"
+
+    # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
+    # startup. Rows created just now are invisible to the running process, so Kong's
+    # enforce_rbac keeps 403ing the very writes they authorize until it is restarted.
+    # The seeder prints ACL-CHANGED only when it actually created rows, so a re-run on an
+    # already-seeded box restarts nothing here.
+    - name: "notif-seed — restart egov-accesscontrol after new role-actions"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'ACL-CHANGED' in (notif_seed_acl.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: >-
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} restart egov-accesscontrol
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+
+    - name: "notif-seed — wait for egov-accesscontrol to come back"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'ACL-CHANGED' in (notif_seed_acl.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: >-
+        curl -sf -o /dev/null http://127.0.0.1:{{ upstream_kong_port }}/access/health
+      register: accesscontrol_ready
+      retries: 60
+      delay: 5
+      until: accesscontrol_ready.rc == 0
+      changed_when: false
+
+    - name: "notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)"
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
         cd {{ digit_dir }}/notification-seed
@@ -6148,20 +6604,141 @@
         DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
         DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
         SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
+        NOTIF_SCHEMA_FILE={{ digit_dir }}/notification-seed/NOTIFICATIONS.json \
         DATA_DIR={{ digit_dir }}/notification-seed \
+        NOTIF_SEED_PHASE=data \
+        NOTIF_CHANNELS_ALLOWLIST={{ notif_channels_allowlist | trim | quote }} \
         python3 seed-notifications.py
       register: notif_seed
-      changed_when: "'created' in (notif_seed.stdout | default(''))"
-      # Gate on the exit code too: seed-notifications.py prints DONE even when it
-      # exits non-zero on core-master failures, so a DONE-only check would let a
-      # broken seed pass.
-      failed_when: "notif_seed.rc != 0 or 'DONE' not in (notif_seed.stdout | default(''))"
+      changed_when: "'ROWS-CREATED' in (notif_seed.stdout | default(''))"
+      # Exit 3 = a write was refused with 403: handled by the restart + second pass
+      # below, not a failure yet. Exit 2 fails here: a core master failed — for a fresh
+      # tenant that includes NOTIFICATIONS-SEED-INCOMPLETE (its defaults did not all
+      # land, routing is held back, so it has no configuration yet and a re-run finishes
+      # it) — or the tenant's masters could not be read, in which case nothing was
+      # written. Gate on DONE too: the seeder prints it last, so a crash is caught.
+      failed_when: "notif_seed.rc not in [0, 3] or 'DONE' not in (notif_seed.stdout | default(''))"
 
     - name: "notif-seed — result"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
-        msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
+        msg: "{{ ['channel allowlist (from ' ~ notif_channels_allowlist_source | trim ~ '): ' ~ (notif_channels_allowlist | trim or '(empty)')] + (notif_seed.stdout_lines | default(['(no output)'])) }}"
+
+    # A 403 in the data phase with the access-control rows already in MDMS means
+    # egov-accesscontrol is serving a cache from before they existed: typically an
+    # earlier run created them and stopped before its restart, so this run's access
+    # phase found them present and printed no ACL-CHANGED. Restart once, then run the
+    # idempotent data phase again.
+    - name: "notif-seed — restart egov-accesscontrol after a 403"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (notif_seed.rc | default(0)) == 3
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: >-
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} restart egov-accesscontrol
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+
+    - name: "notif-seed — wait for egov-accesscontrol after the 403 restart"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (notif_seed.rc | default(0)) == 3
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: >-
+        curl -sf -o /dev/null http://127.0.0.1:{{ upstream_kong_port }}/access/health
+      register: accesscontrol_ready_retry
+      retries: 60
+      delay: 5
+      until: accesscontrol_ready_retry.rc == 0
+      changed_when: false
+
+    - name: "notif-seed — data phase again with the role-actions loaded"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (notif_seed.rc | default(0)) == 3
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        sleep 10
+        cd {{ digit_dir }}/notification-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
+        NOTIF_SCHEMA_FILE={{ digit_dir }}/notification-seed/NOTIFICATIONS.json \
+        DATA_DIR={{ digit_dir }}/notification-seed \
+        NOTIF_SEED_PHASE=data \
+        NOTIF_CHANNELS_ALLOWLIST={{ notif_channels_allowlist | trim | quote }} \
+        python3 seed-notifications.py
+      register: notif_seed_second
+      changed_when: "'ROWS-CREATED' in (notif_seed_second.stdout | default(''))"
+      failed_when: false
+
+    - name: "notif-seed — second pass result"
+      when: notif_seed_second is defined and notif_seed_second.stdout is defined
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: "{{ notif_seed_second.stdout_lines | default([]) | select('search', 'defaults |channel|data |CHANNEL-|DONE|NOTIF') | list }}"
+
+    - name: "notif-seed — fail: still refused after restarting egov-accesscontrol"
+      when:
+        - notif_seed_second is defined and notif_seed_second.rc is defined
+        - notif_seed_second.rc != 0
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.fail:
+        msg: >-
+          The notification seed still fails after egov-accesscontrol was restarted
+          (exit {{ notif_seed_second.rc }}). Exit 3 = still 403: the seeding user's roles
+          lack the role-actions — check it holds MDMS_ADMIN (a user provisioned by tenant
+          bootstrap holds SUPERUSER only) and run repair-tenant-masters.py for a tenant with
+          truncated ACCESSCONTROL rows. If the user DOES hold the role, its login token is stale:
+          egov-user keeps the roles a token was issued with and hands the same token back on
+          every login, so a role change during this deploy is invisible to Kong until the token
+          goes (flush that user's auth_to_access/auth/access/uname_to_access/refresh keys in
+          digit-redis, then re-run). Exit 2 = a core master failed, or the tenant's
+          notification masters could not be read (nothing was written then); read the lines
+          above. A tenant's configuration is never modified by this step. Re-run with
+          `./deploy.sh {{ state_root | default('<tenant>') }} --tags notifications`.
+          {{ notif_seed_second.stdout_lines | default([]) | select('search', 'FORBIDDEN|FAILED|NOTIF-|CHANNEL-') | list }}
+
+    - name: "notif-seed — pick the pass that reported the final state"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.set_fact:
+        notif_seed_final: "{{ notif_seed_second if (notif_seed_second is defined and notif_seed_second.stdout is defined) else notif_seed }}"
+
+    # The deploy does NOT migrate a tenant that still has its 2.12 configuration: it
+    # keeps being served from the legacy masters, unchanged. Say so where it is seen,
+    # with the command that shows what a migration would change.
+    - name: "notif-seed — ACTION: this tenant's notification configuration is not migrated"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'NOTIFICATIONS-MIGRATION-PENDING' in (notif_seed_final.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: >-
+          {{ state_root | default('<tenant>') }} still runs on its 2.12 notification
+          configuration (RAINMAKER-PGR.Notification*). Nothing changed and it keeps
+          delivering, but the Configurator shows it read-only until it is migrated.
+          Review, then migrate (one-way):
+          `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
+          python3 migrate-notifications.py plan --tenant {{ state_root | default('<tenant>') }}`,
+          then the same with `apply ... --yes`. See docs/2.20/notifications/migration.md.
+
+    - name: "notif-seed — WARNING: channel rows were not written"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'CHANNEL-POLICY: ' in (notif_seed_final.stdout | default(''))"
+        - "('mode=unknown' in (notif_seed_final.stdout | default(''))) or ('mode=conflict' in (notif_seed_final.stdout | default('')))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: >-
+          The tenant still follows NOVU_BRIDGE_CHANNELS_ENABLED — nothing changed. The
+          seeder would not write channel rows it could not prove are safe. Lines:
+          {{ notif_seed_final.stdout_lines | default([]) | select('search', 'channel|CHANNEL') | list }}
 
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated

@@ -1,8 +1,8 @@
 # Novu Bridge
 
-`novu-bridge` consumes pre-rendered PGR notification events, applies channel and preference gates, triggers fixed Novu workflows, and records trigger outcomes.
+`novu-bridge` consumes notification events from Kafka (thin domain events and pre-rendered envelopes), resolves recipients, language and text from the `NOTIFICATIONS.*` masters, applies channel and preference gates, delivers through Novu, and records every outcome in `nb_dispatch_log`.
 
-The single current architecture, enablement, provider, Configurator, verification, and rollback guide is [`docs/2.12/notifications/README.md`](../../docs/2.12/notifications/README.md).
+Documentation: [`docs/2.20/notifications/`](../../docs/2.20/notifications/README.md) — setup, migration, developer guide, provider adapters, Kafka topics and the published contract.
 
 Run the component tests with Java 17:
 

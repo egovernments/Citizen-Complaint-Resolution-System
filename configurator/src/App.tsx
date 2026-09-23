@@ -36,13 +36,14 @@ import {
 // @/resources barrel) so the notification surfaces stay self-contained.
 import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
 import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationChannelsPage } from '@/resources/notification-providers/NotificationChannelsPage';
 import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient } from '@/providers/bridge';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient, isReadOnlyResource } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -173,9 +174,22 @@ function ManagementAdminResources() {
         {canViewResource('notification-provider') && <Resource name="notification-provider" list={NotificationProviderList} />}
         {canViewResource('notification-preference') && <Resource name="notification-preference" list={NotificationPreferenceList} />}
 
-        {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
+        {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above).
+            A `readOnly` master (the legacy RAINMAKER-PGR.Notification* four, whose
+            configuration moved to NOTIFICATIONS.*, and the module-owned event catalogue)
+            gets NO edit/create route at all — not merely a hidden button, so a
+            hand-typed /manage/<name>/<id> URL lands on Show rather than a form whose
+            Save would 403 or, worse, succeed. canEditResource already returns false for
+            them, which removes the buttons. */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions' && canViewResource(name)).map((name) => (
-          <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
+          isReadOnlyResource(name)
+            ? <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} />
+            // Notifications → Channels: the channel card replaces the generic list, and
+            // there is no Create — the three channels are a closed, seeded set (see
+            // NotificationChannelsPage). Show/Edit stay for the legacy gateway fields.
+            : name === 'notifications-channel'
+              ? <Resource key={name} name={name} list={NotificationChannelsPage} show={MdmsResourceShow} edit={MdmsResourceEdit} />
+              : <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
         {/* Custom routes */}

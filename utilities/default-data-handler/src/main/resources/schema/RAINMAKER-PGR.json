@@ -690,4 +690,27 @@
       "additionalProperties": false
     }
   }
+  ,{
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.NotificationChannel",
+    "description": "Per-tenant notification channel policy (the 'is this channel on, and through which gateway'): one row per channel. Read by novu-bridge at the STATE tenant on every dispatch (cached 60s); replaces the process-wide NOVU_BRIDGE_CHANNELS_ENABLED / NOVU_BRIDGE_SMS_PROVIDER env vars, which remain only as a fallback for tenants with no rows. Edited via the configurator (Notifications -> Channels).",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "PGR Notification Channel",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": ["code", "enabled"],
+      "x-unique": ["code"],
+      "properties": {
+        "code": { "type": "string", "enum": ["SMS", "WHATSAPP", "EMAIL"], "description": "Channel." },
+        "enabled": { "type": "boolean", "description": "false = every event on this channel is recorded SKIPPED/NB_NO_PROVIDER, never delivered." },
+        "gateway": { "type": "string", "enum": ["novu", "smscountry"], "description": "Transport. novu (default) delivers through the Novu integration for the channel; smscountry (SMS only) posts straight to SMSCountry's bulk API." },
+        "senderId": { "type": ["string", "null"], "description": "Registered sender id / DLT header for a direct SMS gateway. Ignored for novu." },
+        "provider": { "type": ["string", "null"], "description": "Novu integration identifier of the ACTIVE provider for this channel at this state tenant (one per channel). Set/cleared from the configurator (Notifications -> Providers); credentials live in Novu, never here. Empty/absent = no provider selected: the pre-catalog behaviour applies unchanged (the row's gateway field, then the deployment's env fallbacks, decide the transport). Nullable like senderId so clearing the selection is a valid write." },
+        "active": { "type": "boolean" }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
 ]

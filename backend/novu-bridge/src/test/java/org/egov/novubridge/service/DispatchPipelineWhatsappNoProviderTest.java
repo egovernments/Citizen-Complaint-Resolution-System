@@ -1,8 +1,14 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
@@ -47,7 +53,6 @@ class DispatchPipelineWhatsappNoProviderTest {
     private NovuClient novuClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
-    private MdmsServiceClient mdmsServiceClient;
 
     private DispatchPipelineService service;
 
@@ -58,29 +63,29 @@ class DispatchPipelineWhatsappNoProviderTest {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         config = new NovuBridgeConfiguration();
-        config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
         // Default enabled set ships SMS,EMAIL — WHATSAPP is deliberately absent.
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
-        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                null, dispatchLogRepository, config, mdmsServiceClient);
+        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, config), dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent whatsappEvent() {
+    private NotificationEvent whatsappEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
                 .build();
         Map<String, Object> data = new HashMap<>();
         data.put("complaintNo", "PGR-001");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-wa").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -121,14 +126,14 @@ class DispatchPipelineWhatsappNoProviderTest {
         // resolving the complaints-whatsapp workflow id internally.
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("WHATSAPP"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any(), any(), any());
+                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any(), any(), any(), any(), any());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
     }
 
     @Test
     void whatsappEvent_gateEnabled_noApprovedTemplate_skipsTemplateNotApproved_neverTriggersNovu() {
         config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
-        ComplaintsDomainEvent event = whatsappEvent();
+        NotificationEvent event = whatsappEvent();
         event.setTemplateId(null);   // PGR found no approved NotificationProviderTemplate for this leg
 
         DispatchResult result = assertDoesNotThrow(() -> service.process(event, true, null));
@@ -150,7 +155,7 @@ class DispatchPipelineWhatsappNoProviderTest {
         // NB_UNSUPPORTED_CHANNEL row BEFORE NovuClient/getNovuWorkflowId is ever consulted.
         // getNovuWorkflowId("PIGEON") throws NB_UNSUPPORTED_CHANNEL (see the config unit test),
         // but the pipeline never reaches it — so process() itself does NOT throw and does NOT DLQ.
-        ComplaintsDomainEvent event = whatsappEvent();
+        NotificationEvent event = whatsappEvent();
         event.setChannel("PIGEON");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:PIGEON");
 

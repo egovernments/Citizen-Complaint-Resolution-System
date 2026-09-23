@@ -32,10 +32,12 @@ import {
   ScrollText,
   Plug,
   SlidersHorizontal,
+  ToggleRight,
   MessageCircle,
   UserCog,
   Map,
   Globe2,
+  CalendarClock,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,13 +54,38 @@ import { DigitFooter } from '@/components/DigitFooter';
 const navGroups = [
   {
     labelKey: 'app.nav.notifications',
+    // Ordered the way a first-time operator needs them, not alphabetically and
+    // not by storage: a gateway account must exist (Providers) before a channel
+    // can be switched on (Channels), before anything can be configured
+    // (Configure), which is read against the vocabulary (Events). The raw
+    // Templates/Routing masters come after the guided screen because they are
+    // the bulk-edit path, WhatsApp's extra step after them, and Logs last —
+    // that is where you go once something has been sent. User Preferences is
+    // per-citizen data, not setup, so it sits at the end.
+    //
+    // Labels drop the "Notification" prefix: inside a menu already titled
+    // Notifications it read as "Notifications → Notification Routing". The page
+    // TITLES keep the long form so a screen is unambiguous out of context.
+    //
+    // The masters below are the shared NOTIFICATIONS.* ones, and they appear
+    // HERE ONLY — `advancedResources` drops every id already listed in a
+    // primary group, so Advanced no longer repeats "Notification Events /
+    // Routing / Templates" a second time under different labels.
+    //
+    // The legacy RAINMAKER-PGR.Notification* four are deliberately NOT in this
+    // group: they are read-only history, still reachable at
+    // /manage/notification-<x> and, because they are in no primary group, still
+    // listed in Advanced — so an operator on an un-migrated tenant can see their
+    // data without the sidebar offering two of everything.
     items: [
-      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
-      { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
-      { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
-      { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },
-      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
       { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
+      { id: 'notifications-channel', nameKey: 'app.nav.notification_channels', path: '/manage/notifications-channel', icon: ToggleRight },
+      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
+      { id: 'notifications-event-catalogue', nameKey: 'app.nav.notification_events', path: '/manage/notifications-event-catalogue', icon: CalendarClock },
+      { id: 'notifications-template', nameKey: 'app.nav.notification_templates', path: '/manage/notifications-template', icon: Mail },
+      { id: 'notifications-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notifications-routing', icon: Bell },
+      { id: 'notifications-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notifications-provider-template', icon: MessageCircle },
+      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
       { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
     ],
   },
@@ -105,12 +132,26 @@ const navGroups = [
   },
 ];
 
-/** Generic MDMS resources for the Advanced section */
-const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => ({
-  id: name,
-  name: getResourceLabel(name),
-  path: `/manage/${name}`,
-}));
+/** Every resource id that already has its own entry in a primary nav group. */
+const primaryNavIds = new Set(navGroups.flatMap((group) => group.items.map((item) => item.id)));
+
+/**
+ * Generic MDMS resources for the Advanced section.
+ *
+ * Derived from the menu definition above rather than from a hand-kept list, so
+ * a resource promoted into a primary group cannot end up listed twice — which
+ * is what "Notification Events / Routing / Templates" were, once under
+ * NOTIFICATIONS and again down here under their long registry labels. Anything
+ * NOT in a primary group stays, including the read-only Legacy (PGR)
+ * Notification masters, for which Advanced is the only way in.
+ */
+const advancedResources = Object.keys(getGenericMdmsResources())
+  .filter((name) => !primaryNavIds.has(name))
+  .map((name) => ({
+    id: name,
+    name: getResourceLabel(name),
+    path: `/manage/${name}`,
+  }));
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, setMode, toggleHelp } = useApp();

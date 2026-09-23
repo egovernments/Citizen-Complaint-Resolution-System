@@ -504,37 +504,6 @@ services:
     networks:
     - egov-network
 
-  egov-notification-sms:
-    image: egovio/egov-notification-sms:master-e22c7c5
-    container_name: egov-notification-sms
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8080
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      SMS_ENABLED: 'true'
-      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
-      OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
-      SMS_PROVIDER_CLASS: Console
-    ports:
-    - 18093:8080
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/notification-sms/actuator/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-    networks:
-    - egov-network
-
   egov-workflow-v2:
     image: egovio/egov-workflow-v2:2.12-87e13fe
     container_name: egov-workflow-v2

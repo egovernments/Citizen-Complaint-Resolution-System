@@ -234,11 +234,49 @@ plugins:
           ["/novu-bridge/novu-adapter/v1/providers"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
+          -- Provider catalog (Phase 1): the configurator is now the ONLY place an
+          -- operator manages providers, so the catalog read and the edit/rotate and
+          -- delete writes join the same bucket. Same auth boundary as the rest of the
+          -- proxy set — ProxyAuthFilter inside novu-bridge, Bearer header, no body token.
+          -- NOTE: /novu-bridge/novu-adapter/v1/gateways/** is deliberately NOT here and
+          -- NOT routed: it is the internal SMSCountry adapter Novu's worker calls over
+          -- the container network, and it carries provider credentials in headers. Kong
+          -- terminates it (see novu-bridge-internal-gateways-deny below).
+          ["/novu-bridge/novu-adapter/v1/providers/catalog"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/_update"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/_delete"]=true,
+          -- Delivery receipts: machine callbacks (Novu webhook, SMS gateway DR) authenticated
+          -- by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not by a user token.
+          ["/novu-bridge/novu-adapter/v1/receipts/novu"]=true,
+          ["/novu-bridge/novu-adapter/v1/receipts/smscountry"]=true,
           ["/novu-bridge/novu-adapter/v1/logs"]=true,
           ["/novu-bridge/novu-adapter/v1/integrations"]=true,
           ["/novu-bridge/novu-adapter/v1/preferences"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/templates"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/twilio-templates"]=true,
+          -- The published contract (Phase 3a): the inbound envelope's JSON Schema and the
+          -- OpenAPI description of these very endpoints, served read-only from the bridge's
+          -- own jar. They describe an INTERFACE, not a deployment — no tenant data, no
+          -- recipient, no credential — so they are anonymous the way the docs that carry the
+          -- same bytes already are, and novu-bridge deliberately does not gate them either
+          -- (ProxyAuthFilter excludes /novu-adapter/v1/contract explicitly). A consumer
+          -- integrating with the notification subsystem can therefore fetch the contract the
+          -- running build actually enforces.
+          ["/novu-bridge/novu-adapter/v1/contract/envelope"]=true,
+          ["/novu-bridge/novu-adapter/v1/contract/openapi"]=true,
+          -- The thin domain event's JSON Schema, served the same way and for the same
+          -- reason: it describes the interface a producing module writes against. It is
+          -- deliberately NOT action-RBAC'd -- there is no accesscontrol action for it,
+          -- exactly like the two above.
+          ["/novu-bridge/novu-adapter/v1/contract/thin-event"]=true,
+          -- Thin-event design §5.2 / §7.2 P1. Both authenticate INSIDE novu-bridge
+          -- (ProxyAuthFilter, Bearer header, no body token) like the rest of the proxy
+          -- set, so Kong must let them past the body-token enrichment. /config/source
+          -- reports which config namespace served each master for a tenant;
+          -- /dispatch/_resolve turns a thin event into the envelope list WITHOUT
+          -- dispatching or writing a ledger row, and is admin-gated by the bridge.
+          ["/novu-bridge/novu-adapter/v1/config/source"]=true,
+          ["/novu-bridge/novu-adapter/v1/dispatch/_resolve"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -577,22 +615,15 @@ services:
     # MOCK (default): request-termination short-circuits every /user-otp/*
     # call with a canned success response, so login/register work using the
     # fixed OTP (123456, see CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE in
-    # docker-compose.egov-digit.yaml) without the real egov-otp/user-otp/
-    # egov-notification-sms stack running or any SMS gateway integrated.
+    # docker-compose.egov-digit.yaml) without the `otp` profile running.
     #
-    # TO ENABLE REAL OTP FOR PRODUCTION, before deploying:
-    #   1. Delete the `plugins:` block below (the request-termination mock).
-    #   2. Set enable_otp_services: true in the tenant's Ansible host_vars
-    #      (local-setup/ansible/inventory/host_vars/<tenant>.yml) so compose
-    #      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
-    #   3. Configure a real SMS gateway: egov-notification-sms defaults to
-    #      SMS_PROVIDER_CLASS: Console (logs OTP SMS to container stdout only)
-    #      in docker-compose.egov-digit.yaml — point it at a real provider
-    #      class + credentials before relying on SMS delivery.
-    # Without all three, the first OTP request has nothing to answer it
-    # (real stack down or SMS not actually sent), and only the fixed
-    # 123456 fallback keeps working.
-    plugins:
+    # REAL OTP: set enable_otp_services: true (and enable_novu: true) in the
+    # tenant's host_vars. The Ansible deploy strips this mock (the marker on the
+    # `plugins:` line below), starts egov-otp + user-otp, turns the fixed OTP
+    # off, and user-otp's SMS goes out through novu-bridge (topic
+    # egov.core.notification.sms) — same channel policy, provider and dispatch
+    # log as every other SMS. Hand-deploys: delete the `plugins:` block.
+    plugins: # kong-otp-mock-marker
     - name: request-termination
       config:
         status_code: 200
@@ -958,6 +989,109 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/providers/twilio-templates
     strip_path: false
+  # Provider catalog (Phase 1): the five supported provider types and their
+  # credential field descriptors, read by the configurator's Add/Edit Provider form.
+  - name: novu-bridge-providers-catalog-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/catalog
+    strip_path: false
+  # Edit / rotate credentials, and delete. Same auth boundary as create.
+  - name: novu-bridge-providers-update-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/_update
+    strip_path: false
+  - name: novu-bridge-providers-delete-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/_delete
+    strip_path: false
+  # Delivery receipts from providers (Novu webhook, SMSCountry DR). Shared-secret
+  # authenticated inside novu-bridge; both verbs because DR pings are often GETs.
+  - name: novu-bridge-receipts-route
+    methods:
+    - POST
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/receipts/novu
+    - /novu-bridge/novu-adapter/v1/receipts/smscountry
+    strip_path: false
+  # The published contract, GET only. Read-only documents packaged in the bridge's jar (the
+  # envelope JSON Schema and this API's OpenAPI), so a consumer can fetch what THIS build
+  # enforces instead of trusting a wiki. Anonymous on purpose — see the AUTH_OPTIONAL note.
+  - name: novu-bridge-contract-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/contract/envelope
+    - /novu-bridge/novu-adapter/v1/contract/openapi
+    - /novu-bridge/novu-adapter/v1/contract/thin-event
+    strip_path: false
+  # Thin-event design §5.2: which config namespace (NOTIFICATIONS.* or the legacy
+  # RAINMAKER-PGR.* adapter) served each master for a tenant, and how many rows it
+  # found. An observability READ with no setting behind it -- the data chooses, and
+  # this makes the choice readable. GET only.
+  - name: novu-bridge-config-source-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/config/source
+    strip_path: false
+  # Thin-event design §7.2 P1: POST a thin event, get back the envelope list it would
+  # produce, WITHOUT dispatching or writing a ledger row. The dry-run the golden-master
+  # harness diffs against. Admin-gated inside novu-bridge; action 4639 mirrors that.
+  - name: novu-bridge-dispatch-resolve-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/dispatch/_resolve
+    strip_path: false
+# ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/gateways/** ──────────────────
+# The SMSCountry send adapter (POST .../gateways/smscountry/send) exists so Novu's
+# WORKER can hand an SMS to SMSCountry's bulk API. The worker calls novu-bridge
+# DIRECTLY on the compose network (http://novu-bridge:8080/...), never through Kong,
+# and the request carries the provider's panel username/password in headers.
+#
+# So this prefix must never be reachable from the internet. It is blocked THREE ways,
+# deliberately redundant because each one alone is a single point of failure:
+#   1. it is absent from AUTH_OPTIONAL above, so the global auth pre-function demands
+#      a token and then action-RBAC (no action is seeded for it → fail-closed 403);
+#   2. this route terminates every method with 404 before anything is proxied;
+#   3. the upstream is a dead address, so even a mis-edit that drops the plugin
+#      cannot forward the request to the bridge.
+# 404 rather than 403: an outside caller learns nothing about the path existing.
+# Container-network traffic does not traverse Kong, so the worker is unaffected.
+- name: novu-bridge-internal-gateways-deny
+  url: http://localhost:9999
+  tags:
+  - internal
+  routes:
+  - name: novu-bridge-internal-gateways-deny-route
+    paths:
+    - /novu-bridge/novu-adapter/v1/gateways
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 404
+      content_type: application/json
+      body: '{"ResponseInfo":null,"Errors":[{"code":"NotFound","message":"NotFound","description":"No Route matched with those values"}]}'
+# digit-user-preferences-service: per-user notification consent + preferredLanguage.
+# Read/written by the citizen profile screen; read in-cluster (not via Kong) by
+# pgr-services and novu-bridge. Only up under the `notifications` compose profile.
+- name: user-preference-service
+  url: http://digit-user-preferences-service:8080
+  routes:
+  - name: user-preference-route
+    methods:
+    - POST
+    paths:
+    - /user-preference
+    strip_path: false
 - name: xstate-chatbot
   url: http://xstate-chatbot:8080
   tags:
@@ -1157,14 +1291,10 @@ services:
 # Mirrors /user-otp: the mock rubber-stamps every OTP validation as successful, so citizen
 # login works with the fixed OTP (123456) without the `otp` profile running.
 #
-# TO ENABLE REAL OTP VALIDATION FOR PRODUCTION, before deploying:
-#   1. Delete the `plugins:` block below (the request-termination mock).
-#   2. Set enable_otp_services: true in the tenant's Ansible host_vars so compose
-#      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
-#   3. Configure a real SMS gateway (see egov-notification-sms SMS_PROVIDER_CLASS).
-# With the mock removed and the otp profile running, /otp reaches egov-otp for real
-# validation (an incorrect OTP is rejected instead of rubber-stamped). The upstream was
-# previously a dead localhost:9999, so de-mocking alone returned HTTP 502 — now fixed.
+# REAL OTP: enable_otp_services: true — the Ansible deploy strips this mock (marker on
+# the `plugins:` line below) and starts egov-otp, so /otp reaches it for real validation
+# (an incorrect OTP is rejected instead of rubber-stamped). Hand-deploys: delete the
+# `plugins:` block. The upstream was previously a dead localhost:9999 — now fixed.
 - name: otp-validate-mock
   url: http://egov-otp:8089
   tags:
@@ -1176,7 +1306,7 @@ services:
     paths:
     - /otp
     strip_path: false
-  plugins:
+  plugins: # kong-otp-mock-marker
   - name: request-termination
     config:
       status_code: 200

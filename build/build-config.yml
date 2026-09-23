@@ -33,6 +33,10 @@ config:
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "backend/pgr-services/src/main/resources/db"
         image-name: "pgr-services-db"
+  # pgr-services, novu-bridge and their -db migrator images are one release unit: the
+  # deploy moves all four with one tag (NOTIFICATION_STACK_TAG / notification_stack_tag /
+  # global.notificationStackTag). Every run builds all of them from the same commit.
+  # (novu-bridge-endpoint and otp-publisher were retired with the thin-event stack.)
   - name: "builds/Citizen-Complaint-Resolution-System/backend/novu-bridge"
     build:
       - work-dir: "backend/novu-bridge"
@@ -40,11 +44,6 @@ config:
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "backend/novu-bridge/src/main/resources/db"
         image-name: "novu-bridge-db"
-  - name: "builds/Citizen-Complaint-Resolution-System/backend/novu-bridge-endpoint"
-    build:
-      - work-dir: "backend/novu-bridge-endpoint"
-        dockerfile: "backend/novu-bridge-endpoint/Dockerfile"
-        image-name: "novu-bridge-endpoint"
   - name: "builds/Citizen-Complaint-Resolution-System/backend/digit-config-service"
     build:
       - work-dir: "backend/digit-config-service"
@@ -85,11 +84,6 @@ config:
       - work-dir: "digit-mcp"
         dockerfile: "digit-mcp/Dockerfile"
         image-name: "digit-mcp"
-  - name: "builds/Citizen-Complaint-Resolution-System/utilities/otp-publisher"
-    build:
-      - work-dir: "utilities/otp-publisher"
-        dockerfile: "utilities/otp-publisher/Dockerfile"
-        image-name: "otp-publisher"
   - name: "builds/Citizen-Complaint-Resolution-System/backend/identity-bff"
     build:
       - work-dir: "backend/identity-bff"

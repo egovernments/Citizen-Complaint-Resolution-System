@@ -4,7 +4,7 @@ import { FieldSection, FieldRow, StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useShowController, useGetList } from 'ra-core';
+import { useShowController } from 'ra-core';
 import {
   Table,
   TableHeader,
@@ -16,10 +16,11 @@ import {
 import {
   validateNotifications,
   type RoutingRow,
-  type TemplateRow,
-  type BusinessServiceRecord,
   type ValidationFinding,
 } from './validateNotifications';
+import { parseAudience, describeAudience } from '../notification-configure/audienceScheme';
+import { legacyEventName } from '../notification-configure/legacyAdapter';
+import { useNotificationConfig } from '../notification-configure/useNotificationGuard';
 
 /** Case-insensitive, trimmed comparison helper (mirrors the checker). */
 function eq(a: unknown, b: unknown): boolean {
@@ -39,51 +40,35 @@ function NotificationChips({ rows }: { rows: RoutingRow[] }) {
           variant="outline"
           className="text-xs font-medium"
         >
-          {`${r.audience ?? '?'} · ${r.channel ?? '?'}`}
+          {`${describeAudience(parseAudience(r.audience))} · ${r.channel ?? '?'}`}
         </Badge>
       ))}
     </div>
   );
 }
 
-/** Red/green summary badge + expandable findings list for the checker. */
-function ValidationPanel({ businessService }: { businessService: BusinessServiceRecord }) {
+/**
+ * Red/green summary badge + expandable findings list for the checker.
+ *
+ * It validates the tenant's WHOLE notification configuration, not this workflow
+ * alone: since the event catalogue replaced the state machine as the checker's
+ * vocabulary, "the rows belonging to this business service" is no longer a thing
+ * this screen can compute (a routing row names an event, and events belong to a
+ * module, which is not the same axis as a workflow).
+ *
+ * It now also passes the provider templates. It did not before, which meant the
+ * three WhatsApp rules silently never ran HERE while they did run on the
+ * Configure tab — the same button reporting a clean bill of health on one screen
+ * and errors on another. Loading everything through one hook is what stops that
+ * asymmetry coming back.
+ */
+function ValidationPanel() {
   const [findings, setFindings] = useState<ValidationFinding[] | null>(null);
   const [expanded, setExpanded] = useState(true);
-
-  const { data: routingData } = useGetList('notification-routing', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
-  });
-  const { data: templateData } = useGetList('notification-template', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
-  });
-  const { data: roleData } = useGetList('access-roles', {
-    pagination: { page: 1, perPage: 500 },
-    sort: { field: 'name', order: 'ASC' },
-  });
-
-  const bsId = String(businessService.businessService ?? '');
-
-  // Routing rows scoped to this business service (or unscoped/blank).
-  const routingRows = useMemo<RoutingRow[]>(() => {
-    const all = (routingData ?? []) as RoutingRow[];
-    return all.filter((r) => !r.businessService || eq(r.businessService, bsId));
-  }, [routingData, bsId]);
-
-  const templateRows = (templateData ?? []) as TemplateRow[];
-
-  const roleCodes = useMemo<string[]>(() => {
-    return (roleData ?? []).map((r) =>
-      String((r as Record<string, unknown>).code ?? (r as Record<string, unknown>).id ?? ''),
-    );
-  }, [roleData]);
+  const { snapshot, decision } = useNotificationConfig();
 
   const run = () => {
-    setFindings(
-      validateNotifications({ businessService, routingRows, templateRows, roleCodes }),
-    );
+    setFindings(snapshot ? validateNotifications(snapshot) : []);
     setExpanded(true);
   };
 
@@ -120,6 +105,11 @@ function ValidationPanel({ businessService }: { businessService: BusinessService
               </button>
             )}
           </>
+        )}
+        {decision.source === 'LEGACY' && (
+          <span className="text-xs text-amber-700">
+            Read from the legacy PGR masters — this tenant has not been migrated yet.
+          </span>
         )}
       </div>
 
@@ -173,11 +163,11 @@ export function WorkflowServiceShow() {
 
             {states && states.length > 0 && (
               <FieldSection title="State Machine">
-                <StateMachineTable states={states} businessService={String(rec.businessService ?? rec.id ?? '')} />
+                <StateMachineTable states={states} />
               </FieldSection>
             )}
 
-            <ValidationPanel businessService={rec as unknown as BusinessServiceRecord} />
+            <ValidationPanel />
           </div>
         );
       }}
@@ -190,22 +180,13 @@ export function WorkflowServiceShow() {
  * shows the routing rows mapped to that transition (action -> nextState) as
  * `audience · channel` chips.
  */
-function StateMachineTable({
-  states,
-  businessService,
-}: {
-  states: Array<Record<string, unknown>>;
-  businessService: string;
-}) {
-  const { data: routingData } = useGetList('notification-routing', {
-    pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
-  });
-
-  const routingRows = useMemo<RoutingRow[]>(() => {
-    const all = (routingData ?? []) as RoutingRow[];
-    return all.filter((r) => !r.businessService || eq(r.businessService, businessService));
-  }, [routingData, businessService]);
+function StateMachineTable({ states }: { states: Array<Record<string, unknown>> }) {
+  // Routing rows come from wherever this tenant's configuration lives, already
+  // adapted to the event vocabulary (useNotificationConfig). A transition is
+  // matched to its routing rows through the SAME derivation the seed-time
+  // catalogue generator uses, so this table keeps working for PGR without the
+  // notification screens needing the workflow record at all.
+  const { routingRows } = useNotificationConfig();
 
   // workflow-v2's action.nextState is the target state's UUID; routing.toState
   // is the applicationStatus NAME. Resolve UUID -> name before matching.
@@ -220,8 +201,10 @@ function StateMachineTable({
   const resolveState = (ns: unknown): string =>
     statusByStateUuid.get(String(ns ?? '')) ?? String(ns ?? '');
 
-  const notificationsFor = (action: unknown, nextState: unknown): RoutingRow[] =>
-    routingRows.filter((r) => eq(r.action, action) && eq(r.toState, resolveState(nextState)));
+  const notificationsFor = (action: unknown, nextState: unknown): RoutingRow[] => {
+    const eventName = legacyEventName(action, resolveState(nextState));
+    return routingRows.filter((r) => eq(r.eventName, eventName));
+  };
 
   return (
     <Table>

@@ -9,7 +9,7 @@ to the production code it exercises (linked below).
 - **Runner:** [`run-notif-suite.js`](./run-notif-suite.js) / [`run-notif-suite.sh`](./run-notif-suite.sh) — runs `cases/area-*.js` and prints a PASS/FAIL/SKIP matrix keyed by case id. Exits non-zero on any **FAIL** (SKIP is not a failure).
 - **Cases:** one file per area under [`cases/`](./cases/).
 
-Setting up the feature? Use the single [Novu notifications guide](../../../../docs/2.12/notifications/README.md).
+Setting up the feature? See the [notifications setup guide](../../../../docs/2.20/notifications/setup-guide.md).
 
 ## Run it
 
@@ -114,6 +114,17 @@ The 3 masters via mdms-v2 + the emitter's resolver. **Test file:** [`cases/area-
 | **F3** | Resolve by (action,toState,audience,channel,locale) → the live SMS body starts with that template's prefix. | `guard('F3'` | [`TemplateRenderer#L69`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L69) findField · [`NotificationService#L857`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L857) processConfigDriven · [`NotificationTemplate.json`](/utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json) | ✅ |
 | **F4** | No-template-resolved → skip + honest log (no crash). | `SKIP('F4'` | [`TemplateRenderer#L60`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L60) returns null+logs · [`NotificationService#L946`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L946) skip on null | ⏭ needs orphan key (unit: `NotificationResolverEdgeCasesTest`) |
 | **F5** | Rendered body carries live token data — complaint id + dd/mm/yyyy date substituted. | `guard('F5'` | [`NotificationService#L1127`](/backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java#L1127) buildPlaceholderValues · [`TemplateRenderer#L85`](/backend/pgr-services/src/main/java/org/egov/pgr/service/notification/TemplateRenderer.java#L85) · [`DispatchPipelineService#L147`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java#L147) | ✅ |
+
+---
+
+## Area G — Login OTP through the bridge
+
+Login OTPs are DIGIT-core `SMSRequest`s on `egov.core.notification.sms`; novu-bridge translates them into the envelope and delivers them like any other SMS. **Test file:** [`cases/area-g-otp.js`](./cases/area-g-otp.js). Needs the `otp` profile (`enable_otp_services: true`, Kong mocks stripped); the cases SKIP when `/user-otp` is still the mock.
+
+| Case | What it verifies | Test | Exercises | Bomet |
+|---|---|---|---|---|
+| **G1** | `POST /user-otp/v1/_send` for a test number leaves a `CORE.SMS.OTP` dispatch-log row at the tenant — `SENT`, or `SKIPPED/NB_NO_PROVIDER` when SMS is off. Never no row. | `guard('G1'` | [`CoreSmsTranslator`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/core/CoreSmsTranslator.java) · [`CoreSmsConsumer`](/backend/novu-bridge/src/main/java/org/egov/novubridge/consumer/CoreSmsConsumer.java) | ⏭ otp profile off |
+| **G2** | The OTP row never stores the code: neither `provider_response_jsonb` nor `last_error_message` contains the 6-digit OTP. | `guard('G2'` | [`DispatchPipelineService`](/backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) persist path | ⏭ otp profile off |
 
 ---
 

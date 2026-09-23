@@ -3,12 +3,13 @@ package org.egov.novubridge.web.controllers;
 import jakarta.validation.Valid;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.novubridge.service.DispatchPipelineService;
-import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.resolution.NotificationResolver;
+import org.egov.novubridge.service.resolution.ResolutionOutcome;
 import org.egov.novubridge.util.ResponseInfoFactory;
 import org.egov.novubridge.web.models.DispatchDryRunRequest;
 import org.egov.novubridge.web.models.DispatchDryRunResponse;
-import org.egov.novubridge.web.models.TestTriggerRequest;
-import org.egov.novubridge.web.models.TestTriggerResponse;
+import org.egov.novubridge.web.models.ThinEventResolveRequest;
+import org.egov.novubridge.web.models.ThinEventResolveResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -21,11 +22,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class DispatchController {
 
     private final DispatchPipelineService dispatchPipelineService;
+    private final NotificationResolver notificationResolver;
     private final ResponseInfoFactory responseInfoFactory;
 
     public DispatchController(DispatchPipelineService dispatchPipelineService,
+                              NotificationResolver notificationResolver,
                               ResponseInfoFactory responseInfoFactory) {
         this.dispatchPipelineService = dispatchPipelineService;
+        this.notificationResolver = notificationResolver;
         this.responseInfoFactory = responseInfoFactory;
     }
 
@@ -50,24 +54,19 @@ public class DispatchController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
-    @PostMapping("/_test-trigger")
-    public ResponseEntity<TestTriggerResponse> testTrigger(@Valid @RequestBody TestTriggerRequest request) {
-        NovuClient.NovuResponse novuResponse = dispatchPipelineService.testTrigger(
-                request.getTemplateKey(),
-                request.getSubscriberId(),
-                request.getPhone(),
-                request.getPayload(),
-                request.getTransactionId(),
-                request.getContentSid(),
-                request.getContentVariables(),
-                request.getRequestInfo());
-
+    /**
+     * The envelopes a thin event WOULD produce against the tenant's real config: nothing sent, no
+     * ledger row. Admin-only: the answer carries recipient PII for every holder of a role.
+     */
+    @PostMapping("/_resolve")
+    public ResponseEntity<ThinEventResolveResponse> resolve(@Valid @RequestBody ThinEventResolveRequest request) {
         ResponseInfo responseInfo = responseInfoFactory.createResponseInfoFromRequestInfo(request.getRequestInfo(), true);
-        TestTriggerResponse response = TestTriggerResponse.builder()
+        ResolutionOutcome outcome = notificationResolver.resolve(request.getEvent(), false);
+        ThinEventResolveResponse response = ThinEventResolveResponse.builder()
                 .responseInfo(responseInfo)
-                .status("ACCEPTED")
-                .novuStatusCode(novuResponse.getStatusCode())
-                .novuResponse(novuResponse.getResponse())
+                .envelopes(outcome.getEnvelopes())
+                .terminalCode(outcome.getTerminalCode())
+                .diagnostics(outcome.getDiagnostics())
                 .build();
         return new ResponseEntity<>(response, HttpStatus.OK);
     }

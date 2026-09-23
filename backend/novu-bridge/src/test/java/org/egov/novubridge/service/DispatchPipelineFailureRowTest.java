@@ -1,8 +1,14 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
@@ -51,7 +57,6 @@ class DispatchPipelineFailureRowTest {
     private NovuClient novuClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
-    private MdmsServiceClient mdmsServiceClient;
 
     private DispatchPipelineService service;
 
@@ -62,26 +67,26 @@ class DispatchPipelineFailureRowTest {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         config = new NovuBridgeConfiguration();
-        config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
 
-        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                null, dispatchLogRepository, config, mdmsServiceClient);
+        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, config), dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent smsEvent() {
+    private NotificationEvent smsEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
                 .build();
         Map<String, Object> data = new HashMap<>();
         data.put("complaintNo", "PGR-001");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -100,7 +105,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void providerThrowsCustomException_persistsFailedWithPropagatedCode_thenRethrows() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenThrow(new CustomException("NB_NOVU_RATE_LIMITED", "429 from Novu"));
 
         CustomException ex = assertThrows(CustomException.class, () -> service.process(smsEvent(), true, null));
@@ -114,7 +119,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void providerThrowsGenericException_persistsFailedWithDeliveryError_thenRethrows() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("connection reset"));
 
         assertThrows(RuntimeException.class, () -> service.process(smsEvent(), true, null));
@@ -126,7 +131,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void novuNon2xxResponse_recordsFailed_noRethrow() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(500)
                         .response(Map.of("message", "internal error")).build());
 
@@ -141,7 +146,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void novuNullResponse_recordsFailed_noRethrow() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(null);
 
         DispatchResult result = service.process(smsEvent(), true, null);

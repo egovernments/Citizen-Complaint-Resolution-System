@@ -26,8 +26,6 @@ import java.util.TimeZone;
 public class PGRConfiguration {
 
 
-
-
     @Value("${app.timezone}")
     private String timeZone;
 
@@ -162,12 +160,6 @@ public class PGRConfiguration {
     private List<String> employeeContextAdminRoleCodes;
 
     //Notification
-    @Value("${egov.user.event.notification.enabled}")
-    private Boolean isUserEventsNotificationEnabled;
-
-    @Value("${notification.sms.enabled}")
-    private Boolean isSMSEnabled;
-
     @Value("${egov.localization.statelevel}")
     private Boolean isLocalizationStateLevel;
 
@@ -180,12 +172,6 @@ public class PGRConfiguration {
     @Value("${egov.localization.search.endpoint}")
     private String localizationSearchEndpoint;
 
-    @Value("${kafka.topics.notification.sms}")
-    private String smsNotifTopic;
-
-    @Value("${egov.usr.events.create.topic}")
-    private String saveUserEventsTopic;
-
     @Value("${mseva.mobile.app.download.link}")
     private String mobileDownloadLink;
 
@@ -194,22 +180,6 @@ public class PGRConfiguration {
 
     @Value("${egov.url.shortner.endpoint}")
     private String urlShortnerEndpoint;
-
-    @Value("#{${egov.ui.app.host.map}}")
-    private Map<String, String> uiAppHostMap;
-
-    @Value("${egov.pgr.events.rate.link}")
-    private String rateLink;
-
-    @Value("${egov.pgr.events.reopen.link}")
-    private String reopenLink;
-
-    @Value("${egov.usr.events.rate.code}")
-    private String rateCode;
-
-    @Value("${egov.usr.events.reopen.code}")
-    private String reopenCode;
-
 
 
     //Allowed Search Parameters
@@ -286,12 +256,6 @@ public class PGRConfiguration {
     @Value("${kafka.topics.complaints.domain.events:complaints.domain.events}")
     private String complaintsDomainEventsTopic;
 
-    @Value("${complaints.domain.events.enabled:true}")
-    private Boolean isComplaintsDomainEventEnabled;
-
-    @Value("${complaints.domain.events.default.locale:en_IN}")
-    private String complaintsDomainEventDefaultLocale;
-
     // Visibility (V1 Step-2 reportee core) — deploy-level kill switch plus
     // resolver defaults; the per-tenant switch is MDMS InboxVisibilityConfig.
     //
@@ -321,19 +285,9 @@ public class PGRConfiguration {
     @Value("${pgr.visibility.team.fanout.max:25}")
     private Integer visibilityTeamFanoutMax;
 
-    // Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate)
-    @Value("${pgr.notification.config.driven:false}")
-    private Boolean notificationConfigDriven;
-
-    @Value("${pgr.notification.default.locale:en_IN}")
-    private String notificationDefaultLocale;
-
-    @Value("${pgr.notification.rolepool.page.size:100}")
-    private Integer notificationRolePoolPageSize;
-
-    @Value("${pgr.notification.rolepool.max.pages:10}")
-    private Integer notificationRolePoolMaxPages;
-
+    // Shared MDMS cache window. Named for the notification masters it was introduced for; those
+    // moved to novu-bridge with the routing/rendering half, and the knob now paces the MDMS caches
+    // that are left here (per-complaint-type SLA, the reopen window, department code->name).
     @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
     private Long notificationMdmsCacheTtlMs;
 

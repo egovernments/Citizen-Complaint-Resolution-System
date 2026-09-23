@@ -53,7 +53,7 @@ class SmsCountryClientTest {
         NovuClient.NovuResponse r = client().parse("x".repeat(5000), "txn-1", "+919000000000");
         String message = String.valueOf(r.getResponse().get("message"));
         assertTrue(message.length() < 250, "stack traces must not be stored whole");
-        assertTrue(message.endsWith("…"));
+        assertFalse(message.contains("xxxxxxxxxx"), "the upstream body must not be echoed at all");
     }
 
     @Test

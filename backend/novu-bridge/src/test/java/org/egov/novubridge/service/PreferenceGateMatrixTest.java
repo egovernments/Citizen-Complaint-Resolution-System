@@ -1,8 +1,14 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,7 +139,16 @@ class PreferenceGateMatrixTest {
     }
 
     @Test
-    void gateOn_serviceUnreachable_failsClosed() {
+    void gateOn_serviceUnreachable_failsOpenByDefault() {
+        when(restTemplate.exchange(anyString(), any(HttpMethod.class), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new ResourceAccessException("connection timed out"));
+        assertTrue(client.isChannelAllowed("ke.bomet", "uuid-1", "+254712345678", "SMS"),
+                "an outage of the consent service is not a citizen's refusal");
+    }
+
+    @Test
+    void gateOn_serviceUnreachable_failsClosedWhenConfigured() {
+        config.setPreferenceFailOpen(false);
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new ResourceAccessException("connection timed out"));
         assertFalse(client.isChannelAllowed("ke.bomet", "uuid-1", "+254712345678", "SMS"));
@@ -155,17 +170,18 @@ class PreferenceGateMatrixTest {
         NovuClient novuClient = mock(NovuClient.class);
         DispatchLogRepository dispatchLogRepository = mock(DispatchLogRepository.class);
         NovuBridgeConfiguration pipelineConfig = new NovuBridgeConfiguration();
-        pipelineConfig.setChannel("SMS");
         pipelineConfig.setDefaultLocale("en_IN");
         pipelineConfig.setChannelsEnabled(List.of("SMS", "EMAIL"));
 
         DispatchPipelineService service = new DispatchPipelineService(new EnvelopeValidator(), denying,
-                novuClient, null, dispatchLogRepository, pipelineConfig, mock(MdmsServiceClient.class));
+                new DeliveryProviderRegistry(pipelineConfig, new ChannelPolicyClient(null, pipelineConfig), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, pipelineConfig), dispatchLogRepository, pipelineConfig,
+                new ProviderAvailability(novuClient, pipelineConfig));
 
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN").build();
-        ComplaintsDomainEvent event = ComplaintsDomainEvent.builder()
+        NotificationEvent event = NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")

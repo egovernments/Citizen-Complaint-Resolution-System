@@ -15,14 +15,23 @@ initContainers:
   dbMigration:
     enabled: true
     schemaTable: "novu_bridge_schema"
+    # Same build as the app image below — see "One build" there.
     image:
       repository: "novu-bridge-db"
-      tag: "2.12-5137119"
+      tag: "nightly-develop"
+      pullPolicy: Always   # a rolling tag is only re-read with Always
 
 # Container Configs
+# One build for the notification stack: novu-bridge, novu-bridge-db, pgr-services and
+# pgr-services-db MUST come from the same build (the bridge's dispatch-log migrations
+# ship in novu-bridge-db; pgr-services' thin events need a bridge of the same build).
+# global.notificationStackTag in charts/environments/env.yaml sets all four at once
+# (templates/deployment.yaml); these tags are the fallback when it is unset. See
+# charts/urban/pgr-services/values.yaml for the tag policy.
 image:
   repository: "novu-bridge"
-  tag: "2.12-5137119"
+  tag: "nightly-develop"
+  pullPolicy: Always   # a rolling tag is only re-read with Always
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"
@@ -52,16 +61,31 @@ env: |
     value: "8080"
   - name: SERVER_SERVLET_CONTEXT_PATH
     value: "/novu-bridge"
-  - name: NOVU_BRIDGE_KAFKA_INPUT_TOPIC
-    value: "complaints.domain.events"
-  - name: NOVU_BRIDGE_KAFKA_RETRY_TOPIC
-    value: "novu-bridge.retry"
+  # The envelope's eventType — never the topic — decides handling. `notifications.events`
+  # is the module-neutral topic any new producer should use; `complaints.domain.events` is
+  # PGR's original topic, still consumed so existing deployments are unaffected.
+  - name: NOVU_BRIDGE_KAFKA_INPUT_TOPICS
+    value: "complaints.domain.events,notifications.events"
+  # DIGIT-core SMS (login OTPs from user-otp, egov-user password resets) — the
+  # bridge translates SMSRequest into the envelope (eventType CORE_SMS).
+  - name: NOVU_BRIDGE_CORE_SMS_TOPIC
+    value: "egov.core.notification.sms"
+  # Tenant a core SMS (login OTP, password reset) is attributed to when the
+  # producer does not carry one. Hardcoding "pg" sent every OTP on a non-pg
+  # deployment to a tenant that does not exist, so the channel policy lookup
+  # found nothing and the OTP was dropped. Read the deployment's real state root,
+  # the same value compose now takes from ${STATE_LEVEL_TENANT_ID:-pg}.
+  - name: NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT
+    valueFrom:
+      configMapKeyRef:
+        name: egov-config
+        key: state-level-tenant-id
+  - name: NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE
+    value: ""
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC
     value: "novu-bridge.dlq"
   - name: NOVU_BRIDGE_MAX_RETRIES
     value: "3"
-  - name: NOVU_BRIDGE_CHANNEL
-    value: "WHATSAPP"
   - name: NOVU_BRIDGE_DEFAULT_LOCALE
     value: "en_IN"
   - name: NOVU_BRIDGE_PREFERENCE_ENABLED
@@ -75,15 +99,6 @@ env: |
     value: {{ index .Values "preference-check-path" | quote }}
   - name: NOVU_BRIDGE_PREFERENCE_CODE
     value: "USER_NOTIFICATION_PREFERENCES"
-  - name: NOVU_BRIDGE_CONFIG_HOST
-    valueFrom:
-      configMapKeyRef:
-        name: egov-service-host
-        key: digit-config-service
-  - name: NOVU_BRIDGE_CONFIG_RESOLVE_PATH
-    value: {{ index .Values "config-resolve-path" | quote }}
-  - name: NOVU_BRIDGE_CONFIG_SEARCH_PATH
-    value: {{ index .Values "config-search-path" | quote }}
   - name: NOVU_BRIDGE_USER_HOST
     valueFrom:
       configMapKeyRef:
@@ -91,8 +106,21 @@ env: |
         key: egov-user
   - name: NOVU_BRIDGE_USER_SEARCH_PATH
     value: "/user/_search"
-  - name: MDMS_SEARCH_PATH
+  # Thin events: placeholder labels are resolved through egov-localization.
+  - name: NOVU_BRIDGE_LOCALIZATION_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: egov-localization
+  - name: NOVU_BRIDGE_MDMS_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: mdms-service-v2
+  - name: NOVU_BRIDGE_MDMS_SEARCH_PATH
     value: "/mdms-v2/v2/_search"
+  - name: NOVU_BRIDGE_RECEIPTS_SECRET
+    value: {{ index .Values "receipts-secret" | default "" | quote }}
   - name: NOVU_BASE_URL
     value: {{ index .Values "novu-base-url" | quote }}
   - name: NOVU_API_KEY

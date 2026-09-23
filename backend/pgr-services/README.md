@@ -67,15 +67,16 @@ erDiagram
 
 ### Service Dependencies
 - egov-user
-- egov-localization
 - egov-idgen
 - mdms-v2
 - egov-persister
-- egov-notification-sms
-- egov-notification-mail
 - egov-hrms
 - egov-workflow-v2
 - egov-url-shortening
+- novu-bridge (asynchronous, over Kafka — see **Notification** below)
+
+pgr-services no longer calls egov-localization or digit-user-preferences-service for
+notifications; novu-bridge does.
 
 
 ### Swagger API Contract
@@ -98,7 +99,25 @@ erDiagram
 
 
 **Notification:**
-- Notification is sent to the phone number of the citizen who has been created in the system. This is an SMS notification.
+
+pgr-services only produces notification events. On every workflow transition
+`NotificationConsumer` publishes one **thin event** to `complaints.domain.events`; novu-bridge
+decides recipients, channels, language and text from the `NOTIFICATIONS.*` masters. There is no
+flag: rollback means redeploying the previous image.
+
+| Field | Carries |
+|---|---|
+| `eventName` / `ledgerEventName` | `COMPLAINTS.WORKFLOW.<ACTION>.<TOSTATE>` (config key) / `COMPLAINTS.WORKFLOW.<ACTION>` (dispatch-log name) |
+| `transactionSeed` | `<complaintNo>:<action>:<toState>:<workflow ProcessInstance id>` — one per transition, the same on redelivery (falls back to `auditDetails.lastModifiedTime`) |
+| `actors` | `citizen` (inline contact from the complaint) and `assignee` (uuid only; the bridge looks up contacts) |
+| `data` | complaint number, date, service code, status, comments, rating, citizen name, short download link, assignee name |
+| `localized` | localization codes for `complaint_type`, `status`, `ulb`, `ao_designation`, `emp_department`, `emp_designation` |
+
+A token PGR cannot fill is omitted, not blanked; `download_link` is blanked to `""` on a
+shortener outage. The event must stay valid against
+[`thin-event-v1.schema.json`](../../docs/2.20/notifications/contract/thin-event-v1.schema.json)
+([examples](../../docs/2.20/notifications/contract/examples/thin/)); see the
+[notifications developer guide](../../docs/2.20/notifications/developer-guide.md).
 
 
 ### Configurable properties
@@ -109,8 +128,12 @@ erDiagram
 | `pgr.default.offset`                      | The default offset in any search                                                                                                                          | 0                                                 |
 | `pgr.default.limit`                       | The default limit in any search call.                                                                                                                     | 100                                               |
 | `pgr.search.max.limit`                    | The maximum number of record returned in any search call                                                                                                  | 200                                               |
-| `notification.sms.enabled`                | Switch to enable/disable sms notification                                                                                                                 | true                                              |
-| `egov.user.event.notification.enabled`    | Switch to enable/disable event notification                                                                                                               | true                                              |
+| `kafka.topics.complaints.domain.events`   | Topic the thin notification event is published to; `novu-bridge` consumes it and dispatches on the event's `kind`                                          | complaints.domain.events                          |
+| `pgr.notification.mdms.cache.ttl.ms`      | Shared MDMS cache window (SLA map, reopen window, department code→name). Named for the notification masters it was introduced for; those are novu-bridge's now | 60000                                          |
+
+Removed notification properties are listed in
+[docs/2.20/notifications/migration.md](../../docs/2.20/notifications/migration.md#removed-settings).
+
 ### API Details
 
 `BasePath` /pgr-services/v2/[API endpoint]
@@ -126,13 +149,17 @@ erDiagram
 
 ### Kafka Consumers
 
-- NA
+- **save-pgr-request / update-pgr-request** (pattern `pgr.kafka.notification.topic.pattern`) :-
+  `NotificationConsumer` reads every complaint transition back off its own topics and publishes the
+  thin notification event for it.
 
 ### Kafka Producers
 
 - Following are the Producer topic.
     - **save-pgr-request** :- This topic is used to create new complaint in the system.
     - **update-pgr-request** :- This topic is used to update the existing complaint in the systen.
+    - **complaints.domain.events** :- One thin notification event per workflow transition, consumed
+      by `novu-bridge`.
 
 ### note
 all master data, localisation data, boundary data, users, employees, workflow config will be update by a service in utilities/default-data-handler which update all these data which is maintained in resource folder.

@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digit.org/schemas/notifications/thin-event-v1.schema.json",
+  "title": "novu-bridge thin domain event, version 1",
+  "description": "The SECOND inbound contract of the notification subsystem, and the one a new module should use. A producer says only *this happened to this entity*; the box decides who to tell, on which channel, in which language, and what the words are. It is the exact complement of `envelope-v1.schema.json`, which carries a finished message for one recipient on one channel.\n\nThe two are told apart by the `kind` discriminator, never by sniffing the shape: `kind: \"THIN\"` is this schema, `kind` absent or `\"RENDERED\"` is the pre-rendered envelope. Both travel on the same topics; the topic never decides how an event is handled.\n\nOne thin event becomes N ledger rows — one per recipient x channel the routing config resolves to — plus, where the box decides there is nothing to deliver, a channel-less row (`channel: \"NONE\"`) carrying the reason. Nothing here is ever published back onto Kafka: the v1 envelopes the resolution stage mints are in-process objects handed straight to the dispatch pipeline, which is why a role notification to a 40-person pool now puts zero phone numbers on the broker.\n\nThis schema is enforced by org.egov.novubridge.service.thin.ThinEventValidator. `required` below is exactly the set that validator enforces; keep the two in step.",
+  "type": "object",
+  "required": [
+    "kind",
+    "eventId",
+    "eventType",
+    "module",
+    "eventName",
+    "tenantId"
+  ],
+  "additionalProperties": true,
+  "$comment": "additionalProperties is true for the same reason envelope-v1 has it: DomainEventConsumer deserializes with Jackson's FAIL_ON_UNKNOWN_PROPERTIES disabled, so an extra field is IGNORED — accepted, not stored, not forwarded. Put anything a template should see in `data`.",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "THIN",
+      "description": "The DISCRIMINATOR. `THIN` selects this schema and the resolution stage. Absent, or `RENDERED`, selects envelope-v1.schema.json and the pass-through delivery path. The bridge reads this field off the raw map before binding to a model; it never guesses from which fields happen to be set.",
+      "examples": ["THIN"]
+    },
+    "schemaVersion": {
+      "type": "string",
+      "enum": ["1"],
+      "default": "1",
+      "description": "Version of THIS kind. Absent means \"1\". Any other value is rejected NB_UNSUPPORTED_SCHEMA_VERSION. `schemaVersion` versions the kind, not the subsystem: a thin event is {kind:THIN, schemaVersion:1} and a pre-rendered envelope is {schemaVersion:1} independently."
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique id of the DOMAIN EVENT — not of a message. Unlike envelope-v1's eventId, which names one recipient's message, this one id fans out to every row the event produces. Recorded as nb_dispatch_log.event_id on all of them, which is how an operator sees one transition's whole fan-out.",
+      "examples": ["3f1c9c4e-1f0a-4a1c-9c55-2b3d6f1f0a11"]
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Which producer contract this is. Matched case-insensitively against the deployment's allowlist `novu.bridge.event.types` (NOVU_BRIDGE_EVENT_TYPES) exactly as for envelope-v1; anything else is REJECTED NB_UNSUPPORTED_EVENT_TYPE with a ledger row AND a DLQ message, per message. That loudness is deliberate: the failure mode of a mis-provisioned deployment must be a screen full of red rows, never silence.",
+      "examples": ["COMPLAINTS_WORKFLOW_TRANSITIONED", "XYZ_LICENCE_EVENT"]
+    },
+    "eventTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the producing module decided the event happened, ISO-8601 / RFC 3339 in UTC. Informational: the bridge stamps its own created_time and never orders on this.",
+      "examples": ["2026-09-21T07:35:02.631Z"]
+    },
+    "producer": {
+      "type": "string",
+      "description": "Service that emitted the event, for tracing.",
+      "examples": ["complaints-service", "xyz-services"]
+    },
+    "module": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Producing module. REQUIRED here, unlike envelope-v1 where it is optional, because it is the catalogue's owner key: it says whose event this is, is recorded verbatim as nb_dispatch_log.module, and lets the Configurator group and filter rows without a join.",
+      "examples": ["Complaints", "XYZ"]
+    },
+    "eventName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The EVENT KEY: dotted, module-prefixed, globally unique. This single string replaces the (businessService, action, toState) triple the PGR routing masters used, and it is what NOTIFICATIONS.Routing, NOTIFICATIONS.Template and NOTIFICATIONS.EventCatalogue are keyed on. It must distinguish outcomes that need different words — RATE to CLOSEDAFTERRESOLUTION is not RATE to CLOSEDAFTERREJECTION — so the target state belongs in the name.",
+      "examples": [
+        "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+        "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+        "XYZ.LICENCE.RENEWED"
+      ]
+    },
+    "entityType": {
+      "type": "string",
+      "description": "What `entityId` names, in the producer's own vocabulary.",
+      "examples": ["COMPLAINT", "LICENCE"]
+    },
+    "entityId": {
+      "type": "string",
+      "description": "The producing module's own handle for whatever this event is about. Becomes nb_dispatch_log.reference_number on every row the event produces, which is how an operator finds every notification for one case. Strongly recommended: without it the ledger falls back to data.referenceNumber, then data.complaintNo, then eventId.",
+      "examples": ["PGR-2026-000123", "XYZ-LIC-2026-0042"]
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "DIGIT tenant the event belongs to. Decides which routing rows, which templates, which channel policy and which provider apply, and which tenant's Logs screen the rows appear on.",
+      "examples": ["ke.bomet", "pg"]
+    },
+    "transactionSeed": {
+      "type": "string",
+      "description": "IDEMPOTENCY SEED. The box does not invent an idempotency key, it COMPLETES one: `transactionId = <transactionSeed>:<subscriberId>:<channel>`, and a channel-less row is `<transactionSeed>:NONE`. The box never re-sends a transactionId that is already SENT or DELIVERED, and the ledger upserts on it, so the seed must be ONE PER OCCURRENCE of the event: the same when that occurrence is redelivered or replayed from the DLQ, and different for every new occurrence, including a repeat of the same kind on the same entity (a second ASSIGN into the same state, next year's renewal of the same licence, a re-sent OTP). A seed built only from the entity and the kind of event, such as `<entityId>:<ACTION>:<TOSTATE>` or `<entityId>:<eventName>`, silently drops every repeat. PGR sends `<complaintNo>:<action>:<toState>:<workflow ProcessInstance id>`. Absent, the box uses `<eventId>`, so a producer that omits the seed must keep `eventId` stable when it retries one occurrence.",
+      "examples": ["PGR-2026-000123:ASSIGN:PENDINGATLME:7d2c4b1e-5f60-4a8b-9c3d-2e1f0a9b8c7d"]
+    },
+    "actors": {
+      "type": "object",
+      "description": "The named people this event is ABOUT, keyed by a name the routing config refers to as `ACTOR:<name>`. This is the only recipient knowledge a producer supplies, and it is the knowledge the box cannot reconstruct: who filed the case, who it was just assigned to. A producer must NOT name audiences — routing config owns those — and must not resolve role pools, which the box expands itself.",
+      "additionalProperties": { "$ref": "#/$defs/actorRef" },
+      "examples": [
+        {
+          "citizen": { "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f", "type": "CITIZEN" },
+          "assignee": { "userId": "3c2b1a09-7f6e-4d5c-8b2a-1e0f9d8c7b6a", "type": "EMPLOYEE" }
+        }
+      ]
+    },
+    "recipients": {
+      "type": "array",
+      "description": "Explicit contact overrides for ACCOUNT-LESS flows — an anonymously filed complaint, an OTP to a number that has no user record yet. Reached by the routing audience `EVENT_RECIPIENTS`. Same shape as an actor ref, as a list. Use it only when there is genuinely no account to hydrate: everything put here is contact PII on the broker, which is precisely what naming an actor by uuid avoids.",
+      "items": { "$ref": "#/$defs/actorRef" }
+    },
+    "data": {
+      "type": "object",
+      "description": "Placeholder name to LITERAL value. These are the words that plug into a template's {tokens}. A token with no value anywhere is left unsubstituted (literal braces) rather than blanked — that is today's behaviour and it must not change, because a silently empty variable is what a provider rejects.",
+      "additionalProperties": true,
+      "examples": [
+        { "id": "PGR-2026-000123", "date": "21/09/2026", "citizen_name": "Jane Doe" }
+      ]
+    },
+    "localized": {
+      "type": "object",
+      "description": "Placeholder name to localization CODE, or to an ordered array of codes to try. The box resolves these once per recipient locale, which the producer cannot do: it builds placeholders once per event but the box renders once per locale. The producer keeps deciding WHICH codes apply (the COMPLAINT_HIERARCHY then pgr.complaint.category ladder is PGR knowledge); a code-to-message lookup is a DIGIT primitive.\n\nResolution order per token, per locale: the first code in this array that has a message, else dataByLocale[locale][token], else data[token], else the token is left unsubstituted.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      },
+      "examples": [
+        {
+          "complaint_type": ["COMPLAINT_HIERARCHY.Streetlight", "pgr.complaint.category.Streetlight"],
+          "status": ["CS_COMMON_RESOLVED"]
+        }
+      ]
+    },
+    "localizationModules": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Which egov-localization modules to search, IN ORDER. First module with a message for a code wins.",
+      "examples": [["rainmaker-pgr", "rainmaker-common"]]
+    },
+    "dataByLocale": {
+      "type": "object",
+      "description": "Locale to a partial `data` override. The escape hatch for a value that genuinely cannot be expressed as a localization code. Consulted after `localized` and before `data`.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "examples": [{ "sw_KE": { "ao_designation": "Afisa Msaidizi" } }]
+    },
+    "localizationLocale": {
+      "type": "string",
+      "description": "The ONE locale the `localized` codes above are resolved in, for the WHOLE event. Absent means novu.bridge.default.locale.\n\nDeliberately per-event and not per-recipient, because that is what the behaviour being replaced does: a producer builds its placeholder values once, in the locale its inbound request asked for, and then renders per-recipient templates against that one set. In a two-language fan-out both recipients therefore get the template text in their own language and the SAME substituted values. A producer cutting over from the pre-rendered path sets this to the locale it used to build its values with, and its messages come out byte-identical; localizing per recipient is a real improvement and a separate, deliberate decision.",
+      "examples": ["en_IN", "hi_IN"]
+    },
+    "ledgerEventName": {
+      "type": "string",
+      "description": "The event name stamped on the minted envelopes and on every ledger row. Absent means `eventName`.\n\nThe two are different things. `eventName` is the CONFIG KEY and must distinguish outcomes that need different words, so it carries the target state. This is an OPERATOR-FACING LABEL that a deployment may have been filtering and reporting on for releases. A producer cutting over from the pre-rendered path sets this to whatever it used to send, so saved filters and dashboards keep working across the release; a producer starting fresh leaves it out and gets the config key, which is the more informative of the two.",
+      "examples": ["COMPLAINTS.WORKFLOW.ASSIGN"]
+    },
+    "payload": {
+      "type": "object",
+      "description": "Free-form structured payload echoed onto every minted envelope's `data` block, and the source of the ledger's `referenceNumber` / `action` / `toState` fallbacks.\n\nNOT the same thing as `data`. `data` is placeholder values — the words that go into the message, which never leave the box. This is the producer's own vocabulary for the ROW, which the pre-rendered envelope has always carried and which a producer moving to the thin event would otherwise lose.",
+      "additionalProperties": true,
+      "examples": [
+        { "complaintNo": "PGR-2026-000123", "status": "PENDINGATLME", "action": "ASSIGN", "toState": "PENDINGATLME" }
+      ]
+    }
+  },
+  "$defs": {
+    "actorRef": {
+      "type": "object",
+      "title": "actor reference",
+      "description": "A person the box must reach. `userId` ALONE is enough — the box hydrates name, phone, email and preferred locale from egov-user — and it is the form to prefer, because it is the one that keeps contact PII off the broker. The remaining fields exist for recipients with NO account: an anonymously filed complaint, an OTP target. Anything supplied here is used as-is and not looked up.",
+      "additionalProperties": true,
+      "properties": {
+        "userId": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "User uuid. Enough on its own; everything else is hydrated."
+        },
+        "type": {
+          "type": ["string", "null"],
+          "description": "CITIZEN | EMPLOYEE by convention. Informational — routing is keyed on the audience ref, not on this.",
+          "examples": ["CITIZEN", "EMPLOYEE"]
+        },
+        "name": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "Display name, for an account-less recipient."
+        },
+        "phone": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "E.164 with country code. Required in practice for SMS and WHATSAPP when there is no account to hydrate it from.",
+          "examples": ["+254712345678"]
+        },
+        "email": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "Required in practice for EMAIL when there is no account to hydrate it from.",
+          "examples": ["jane@example.org"]
+        },
+        "locale": {
+          "type": ["string", "null"],
+          "description": "Overrides the locale the box would read from user preferences. Falls back to novu.bridge.default.locale.",
+          "examples": ["en_IN", "sw_KE"]
+        }
+      }
+    }
+  }
+}

@@ -11,6 +11,7 @@ import { groupShowFields, getRefMap, formatFieldLabel } from './schemaUtils';
 import type { SchemaDefinition, RefMapEntry } from './schemaUtils';
 import type { ReverseRef } from '@/hooks/useReverseRefs';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { ReadOnlyResourceNotice } from './ReadOnlyResourceNotice';
 
 export function MdmsResourceShow() {
   const resource = useResourceContext() ?? '';
@@ -24,14 +25,17 @@ export function MdmsResourceShow() {
   const { refs: reverseRefs } = useReverseRefs(config?.schema);
 
   return (
-    <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
+    <>
+      <ReadOnlyResourceNotice resource={resource} />
+      <DigitShow title={record ? `${label}: ${record[config?.idField ?? 'id'] ?? record.id}` : label} hasEdit={canEditResource(resource)}>
       {(rec: Record<string, unknown>) => {
         if (definition) {
           return <SchemaShowContent rec={rec} definition={definition} reverseRefs={reverseRefs} />;
         }
         return <FallbackShowContent rec={rec} />;
       }}
-    </DigitShow>
+      </DigitShow>
+    </>
   );
 }
 
@@ -183,6 +187,21 @@ function SchemaFieldRow({
     return (
       <FieldRow label={label}>
         <StatusChip value={value} labels={{ true: 'Yes', false: 'No' }} />
+      </FieldRow>
+    );
+  }
+
+  // Array / object → the same expandable viewer the "Nested Data" section uses.
+  // groupShowFields only calls a property complex when its `type` is exactly
+  // "array" or "object", so a nullable one (`type: ["array","null"]`, which is
+  // how NOTIFICATIONS.EventCatalogue declares actors / placeholders / channels)
+  // lands here instead — and `String(value)` printed it as "[object Object]".
+  // This is the detail view the compact list cell defers to, so it has to show
+  // the whole thing.
+  if (value != null && typeof value === 'object') {
+    return (
+      <FieldRow label={label}>
+        <JsonViewer data={value} initialExpanded={false} />
       </FieldRow>
     );
   }

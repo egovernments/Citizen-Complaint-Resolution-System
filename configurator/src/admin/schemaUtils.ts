@@ -6,7 +6,8 @@ import {
   type DigitColumn,
 } from '@digit-ui/datagrid';
 import { EntityLink } from '@/components/ui/EntityLink';
-import { StatusChip } from '@/admin/fields';
+import { StatusChip, ListWidgetCell } from '@/admin/fields';
+import type { ListWidgetKind, SchemaDescriptor } from './schemaDescriptors';
 
 // Re-export types and pure functions from the package
 export {
@@ -77,4 +78,43 @@ export function generateColumns(
     React.createElement(EntityLink, { resource, id })
   );
   return withStatusChipForBooleans(base);
+}
+
+/**
+ * Apply a schema descriptor's `listWidget` choices to generated list columns.
+ *
+ * Two things happen per matched column, and the second matters as much as the
+ * first: the cell gets the descriptor's renderer, AND `editable` is cleared.
+ * The package's column builder makes every non-key field inline-editable, which
+ * turns an `enum` column into a live <select> in every row — that is how the
+ * Channels list came to offer the SMS-only `smscountry` gateway on the EMAIL and
+ * WHATSAPP rows. Editing belongs in the row's own form, where the save guard
+ * runs.
+ *
+ * Columns the descriptor says nothing about are returned untouched, so a
+ * resource with no `listWidget` anywhere keeps exactly the list it has today.
+ */
+export function applyDescriptorListWidgets(
+  columns: DigitColumn[],
+  descriptor: SchemaDescriptor | undefined
+): DigitColumn[] {
+  if (!descriptor) return columns;
+  const byPath = new Map<string, ListWidgetKind>();
+  for (const field of descriptor.fields) {
+    if (field.listWidget) byPath.set(field.path, field.listWidget);
+  }
+  if (byPath.size === 0) return columns;
+  return columns.map((col) => {
+    const kind = byPath.get(col.source);
+    if (!kind) return col;
+    return {
+      ...col,
+      editable: undefined,
+      render: (record) =>
+        React.createElement(ListWidgetCell, {
+          kind,
+          value: (record as Record<string, unknown>)[col.source],
+        }),
+    };
+  });
 }

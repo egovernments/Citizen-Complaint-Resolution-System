@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digit.org/schemas/notifications/envelope-v1.schema.json",
+  "title": "novu-bridge notification envelope, version 1",
+  "description": "The PRE-RENDERED inbound contract of the notification subsystem: a fully-rendered message for a single recipient on a single channel, published on Kafka. The producing module resolves the recipient, picks the template, fills it and localizes it; the bridge only gates, delivers and records. The envelope names no business domain: `module`, `entityType`, `entityId` and `data` are the producer's own vocabulary and the bridge reads them only for the ledger.\n\nThere is now a second inbound kind, the thin domain event (`thin-event-v1.schema.json`), where the producer says only what happened and the box decides the rest. The two are told apart by the optional `kind` discriminator, never by sniffing the shape: `kind` ABSENT or `RENDERED` is this schema, `kind: \"THIN\"` is the other one. Absent is the historical and still-correct form — adding an optional field is not a version change — so every v1 producer written before the thin event existed is untouched and stays untouched.\n\nThis schema is enforced by org.egov.novubridge.service.EnvelopeValidator. `required` below is exactly the set that validator enforces. This file is frozen: change it only as a deliberate, versioned contract change.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventName",
+    "tenantId",
+    "channel",
+    "subscriberId",
+    "renderedBody"
+  ],
+  "additionalProperties": true,
+  "$comment": "additionalProperties is true because the consumer really tolerates unknown keys: DomainEventConsumer deserializes with Jackson's FAIL_ON_UNKNOWN_PROPERTIES disabled, so an extra field is IGNORED — accepted, not stored, not forwarded. Do not rely on one surviving; put anything the ledger should see in `data`.",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["RENDERED"],
+      "description": "OPTIONAL discriminator, and the only value this schema accepts. Omit it — that is what every v1 producer does and what the bridge assumes when the field is absent. State it only if you want the choice to be explicit on the wire. `kind: \"THIN\"` is a different contract entirely (`thin-event-v1.schema.json`) and is NOT an envelope: the bridge reads this field off the raw map before binding and routes to the resolution stage instead. Nothing else is accepted for either kind.",
+      "examples": ["RENDERED"]
+    },
+    "schemaVersion": {
+      "type": "string",
+      "enum": ["1"],
+      "default": "1",
+      "description": "Envelope version. Absent means \"1\". Any other value is rejected NB_UNSUPPORTED_SCHEMA_VERSION. A field rename or a semantic change to an existing field bumps this; adding an optional field does not."
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique id of THIS message (one recipient, one channel). Usually a UUID. Recorded as nb_dispatch_log.event_id and used as the last-resort reference_number.",
+      "examples": ["3f1c9c4e-1f0a-4a1c-9c55-2b3d6f1f0a11"]
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Which producer contract this is. Matched case-insensitively against the deployment's allowlist `novu.bridge.event.types` (NOVU_BRIDGE_EVENT_TYPES); anything else is rejected NB_UNSUPPORTED_EVENT_TYPE. A new producer is onboarded by ADDING its type to that list — never by teaching the bridge to sniff the payload shape.",
+      "examples": ["COMPLAINTS_WORKFLOW_TRANSITIONED", "CORE_SMS"]
+    },
+    "eventTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the producing module decided to notify, ISO-8601 / RFC 3339 in UTC. Informational: the bridge stamps its own created_time and never orders on this.",
+      "examples": ["2026-09-21T07:35:02.631Z"]
+    },
+    "producer": {
+      "type": "string",
+      "description": "Service that emitted the event, for tracing.",
+      "examples": ["complaints-service", "digit-core"]
+    },
+    "module": {
+      "type": "string",
+      "description": "Producing module, free-form. Recorded verbatim as nb_dispatch_log.module and shown on the Logs screen; the bridge never branches on it.",
+      "examples": ["Complaints", "CORE", "XYZ"]
+    },
+    "eventName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Dotted name of the business event, stable per producer. Recorded as nb_dispatch_log.event_name and used as the template_key when no template identity is sent.",
+      "examples": ["COMPLAINTS.WORKFLOW.ASSIGN", "CORE.SMS.OTP", "XYZ.LICENCE.RENEWED"]
+    },
+    "entityType": {
+      "type": "string",
+      "description": "What `entityId` names, in the producer's vocabulary.",
+      "examples": ["COMPLAINT", "SMS", "LICENCE"]
+    },
+    "entityId": {
+      "type": "string",
+      "description": "The producing module's own handle for whatever this message is about. Recorded as nb_dispatch_log.reference_number, which is how an operator finds every notification for one case. Strongly recommended: without it the ledger falls back to data.referenceNumber, then data.complaintNo, then eventId.",
+      "examples": ["PGR-2026-000123"]
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "DIGIT tenant the message belongs to. Decides which channel policy and which provider apply, and which tenant's Logs screen the row appears on.",
+      "examples": ["ke.bomet", "pg"]
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["SMS", "WHATSAPP", "EMAIL"],
+      "description": "Delivery channel, upper-case. NOTE the deliberate asymmetry: the validator only requires this field to be PRESENT, so an envelope naming an unknown channel is ACCEPTED and then persisted SKIPPED / NB_UNSUPPORTED_CHANNEL rather than DLQ'd. The enum here is the contract a producer must keep; the bridge's looser check exists so a typo is visible in the ledger instead of lost.",
+      "examples": ["SMS"]
+    },
+    "subscriberId": {
+      "type": "string",
+      "minLength": 1,
+      "x-pii": true,
+      "description": "Stable recipient identity, conventionally `tenantId:userUuid`, falling back to `tenantId:phone` when the recipient has no uuid. Upserted into Novu as the subscriber. PII: the fallback form embeds a raw phone number, which is why the bridge masks this value in logs and on the Logs screen.",
+      "examples": ["ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f"]
+    },
+    "contact": {
+      "type": "object",
+      "description": "Recipient profile, already resolved by the producer. The bridge never looks a recipient up.",
+      "additionalProperties": true,
+      "properties": {
+        "userId": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "User uuid; null for uuid-less citizens."
+        },
+        "type": {
+          "type": ["string", "null"],
+          "description": "Audience the producer resolved. CITIZEN | EMPLOYEE by convention; used only for the reconstructed template key.",
+          "examples": ["CITIZEN", "EMPLOYEE"]
+        },
+        "name": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "Display name. The body is already rendered, so this is only used to build a Novu subscriber profile."
+        },
+        "phone": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "E.164 with country code. REQUIRED IN PRACTICE for SMS and WHATSAPP: without it the message is persisted SKIPPED / NB_CONTACT_MISSING.",
+          "examples": ["+254712345678"]
+        },
+        "email": {
+          "type": ["string", "null"],
+          "x-pii": true,
+          "description": "REQUIRED IN PRACTICE for EMAIL: without it the message is persisted SKIPPED / NB_CONTACT_MISSING.",
+          "examples": ["jane@example.org"]
+        },
+        "locale": {
+          "type": ["string", "null"],
+          "description": "Locale the producer rendered in. Informational — the body is already localized. Falls back to novu.bridge.default.locale.",
+          "examples": ["en_IN", "sw_KE"]
+        }
+      }
+    },
+    "renderedBody": {
+      "type": "string",
+      "minLength": 1,
+      "x-pii": true,
+      "description": "The FINAL, localized message text. The bridge does no templating, no placeholder substitution and no translation. PII: personalized content; never logged in full.",
+      "examples": ["Dear Jane, your complaint PGR-2026-000123 has been assigned."]
+    },
+    "subject": {
+      "type": ["string", "null"],
+      "x-pii": true,
+      "description": "EMAIL subject, already rendered. Null/absent for SMS and WHATSAPP."
+    },
+    "transactionId": {
+      "type": "string",
+      "x-pii": true,
+      "description": "IDEMPOTENCY KEY. The ledger's unique key is (transaction_id, channel, recipient_value), so re-delivering the same envelope UPDATES its row instead of creating a second one. Make it deterministic from the business fact — PGR uses `entityId:action:toState:subscriberId:channel` — so that a Kafka redelivery or a producer retry cannot double-count a send. Two genuinely different sends must carry different values: CoreSmsTranslator appends a fresh uuid precisely so a re-sent OTP is its own row. Absent means the bridge derives `eventId:channel`, which dedupes redelivery but nothing else. PII: the conventional form embeds the subscriberId and therefore possibly a raw phone.",
+      "examples": ["PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f:SMS"]
+    },
+    "templateKey": {
+      "type": ["string", "null"],
+      "description": "The template identity the producer actually rendered with, recorded verbatim in the ledger. PGR sends the MDMS NotificationTemplate uid. When absent the bridge reconstructs `<contact.type>.<data.action>.<data.toState>.<channel>.<locale>`, and failing that records eventName."
+    },
+    "templateId": {
+      "type": ["string", "null"],
+      "description": "PROVIDER-side template id, WHATSAPP only — e.g. a Twilio WhatsApp Content SID. Business-initiated WhatsApp must reference an approved provider template: a WHATSAPP envelope without this is persisted SKIPPED / NB_TEMPLATE_NOT_APPROVED rather than sent free-form. Null for SMS and EMAIL.",
+      "examples": ["HX1234567890abcdef1234567890abcdef"]
+    },
+    "contentVariables": {
+      "type": ["object", "null"],
+      "x-pii": true,
+      "description": "Positional variables for `templateId`, 1-based string keys as the provider expects ({\"1\": …, \"2\": …}). Only read when templateId is set. PII: the values are the personalized parts of the message.",
+      "propertyNames": { "pattern": "^[0-9]+$" },
+      "additionalProperties": true,
+      "examples": [{ "1": "Jane", "2": "PGR-2026-000123" }]
+    },
+    "data": {
+      "type": ["object", "null"],
+      "description": "Free-form structured payload, carried to the provider alongside the body. The bridge reads only three OPTIONAL keys and ignores everything else: `referenceNumber` (ledger reference when entityId is absent), `action` and `toState` (used together to reconstruct a template key). PGR fills it with complaintNo, status, action, toState.",
+      "additionalProperties": true,
+      "properties": {
+        "referenceNumber": {
+          "type": ["string", "null"],
+          "description": "Neutral alternative to entityId for the ledger's reference_number."
+        },
+        "action": {
+          "type": ["string", "null"],
+          "description": "Workflow action, if the producer uses that vocabulary. Only used, with toState, to reconstruct a template key."
+        },
+        "toState": {
+          "type": ["string", "null"],
+          "description": "Workflow state reached, if the producer uses that vocabulary."
+        }
+      }
+    }
+  }
+}

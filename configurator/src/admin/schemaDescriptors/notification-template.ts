@@ -21,7 +21,11 @@ export const notificationTemplateDescriptor: SchemaDescriptor = {
     { path: 'channel', required: true, label: 'Channel', help: 'SMS, WHATSAPP, EMAIL.' },
     { path: 'locale', required: true, label: 'Locale', help: 'e.g. en_IN, sw_KE.' },
     { path: 'subject', label: 'Subject', help: 'EMAIL only; leave blank for SMS/WHATSAPP.' },
-    { path: 'body', widget: 'textarea', required: true, label: 'Body', help: 'Use {placeholder} tokens: {id} {complaint_type} {emp_name} {ulb} {status} {date} {download_link} {rating} {additional_comments}.' },
+    // The help text here used to carry its own list of placeholder tokens — nine
+    // of the thirteen, never parity-checked against the Java that fills them, one
+    // directory away from the test built to prevent exactly that drift. Deleted.
+    // The tokens an event fills are declared by its event-catalogue row.
+    { path: 'body', widget: 'textarea', required: true, label: 'Body', help: 'Use single-brace {token} placeholders. The tokens available for an event are listed by Notifications → Configure, which reads them from the event catalogue.' },
     { path: 'placeholders', widget: 'chip-array', label: 'Placeholders', help: 'Declared tokens this body uses (documentation).' },
     { path: 'active', widget: 'boolean', label: 'Active' },
   ],

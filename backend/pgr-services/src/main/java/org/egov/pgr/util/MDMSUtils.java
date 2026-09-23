@@ -34,13 +34,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_RELATED_TO_MAP;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_TEMPLATE_TYPE;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SCHEMA;
-import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
-import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
-import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
-import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_ACCESSCONTROL_ACTIONS_MASTER;
-import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER;
-import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_UI_CONSTANTS_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_UI_CONSTANTS_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_REOPEN_SLA_KEYWORD;
@@ -60,8 +54,8 @@ public class MDMSUtils {
 
     // serviceCode -> SLA millis (from RAINMAKER-PGR.ComplaintHierarchy LEAF rows' slaHours),
     // cached per state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
-    // #432). Same TTL / never-cache-empty / serve-stale-on-failure semantics as the notification
-    // and department caches above — issue #1238: the previous process-lifetime cache pinned
+    // #432). Same TTL / never-cache-empty / serve-stale-on-failure semantics as the reopen-window
+    // and department caches below — issue #1238: the previous process-lifetime cache pinned
     // whatever the FIRST SLA-sorted search happened to see, so a transient MDMS miss cached an
     // empty map forever, and a configurator slaHours edit never reached the ORDER BY without a
     // restart. In both cases every complaint type fell back to the uniform business-level SLA
@@ -77,26 +71,10 @@ public class MDMSUtils {
     }
     private final Map<String, TimedSlaMap> serviceCodeToSlaCache = new ConcurrentHashMap<>();
 
-    // Config-driven notification masters, cached per state-level tenant with a short TTL
-    // (pgr.notification.mdms.cache.ttl.ms, default 60s). Configurator edits to
-    // NotificationRouting/NotificationTemplate become visible within that window without a
-    // pgr-services restart. Only NON-EMPTY results are cached, so a transient MDMS miss is
-    // retried on the next event rather than caching an empty result; during an MDMS outage the
-    // last-known non-empty entry is served stale (past its TTL) so notifications keep flowing
-    // with the last good config instead of being dropped.
-    private static final class TimedRows {
-        final List<Object> rows;
-        final long fetchedAt;
-        TimedRows(List<Object> rows) { this.rows = rows; this.fetchedAt = System.currentTimeMillis(); }
-        boolean fresh(long ttlMs) { return System.currentTimeMillis() - fetchedAt < ttlMs; }
-    }
-    private final Map<String, TimedRows> notificationRoutingCache = new ConcurrentHashMap<>();
-    private final Map<String, TimedRows> notificationTemplateCache = new ConcurrentHashMap<>();
-    private final Map<String, TimedRows> notificationProviderTemplateCache = new ConcurrentHashMap<>();
-
     // Reopen window (RAINMAKER-PGR.UIConstants.REOPENSLA) in millis, cached with the same short
-    // TTL as the notification masters so a configurator edit takes effect without a pgr-services
-    // restart. Keyed by the REQUESTING tenant, not the state tenant: UIConstants may be overridden
+    // TTL (pgr.notification.mdms.cache.ttl.ms — one shared MDMS cache window, named for the
+    // notification masters that are now novu-bridge's) so a configurator edit takes effect
+    // without a pgr-services restart. Keyed by the REQUESTING tenant, not the state tenant: UIConstants may be overridden
     // city-side (data/<state>/<city>/RAINMAKER-PGR/UIConstants.json), so a state-keyed entry would
     // serve one city's window to its siblings. Only successful lookups are cached — a transient
     // MDMS miss is retried on the next reopen attempt rather than pinning the property fallback.
@@ -110,7 +88,7 @@ public class MDMSUtils {
     }
 
     // Department code->name map, cached per tenant with the same TTL/never-cache-empty/
-    // serve-stale-on-failure semantics as the notification masters above — a transient MDMS
+    // serve-stale-on-failure semantics as the other MDMS caches here — a transient MDMS
     // hiccup during department-scoped search (see getDepartmentCodeToNameMap) would otherwise
     // silently drop dual-read matches for every request until the NEXT successful fetch, not just
     // the one that hit the hiccup.
@@ -126,7 +104,7 @@ public class MDMSUtils {
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
      * slaHours (interior nodes carry no slaHours and are skipped by the Number guard below).
      * Resolved as a complete city map followed by a complete state map, and cached by requesting
-     * tenant with the same short TTL as the notification masters. Returns an empty map (never
+     * tenant with the same short TTL as the other MDMS caches. Returns an empty map (never
      * null) on MDMS failure, so callers can use an explicit non-type-specific fallback.
      */
     public Map<String, Long> getServiceCodeToSlaMillis(String tenantId) {
@@ -183,73 +161,6 @@ public class MDMSUtils {
                     + "to the configured absolute escalation threshold", tenantId, e);
         }
         return map;
-    }
-
-    /**
-     * Notification routing rows (RAINMAKER-PGR.NotificationRouting) for the tenant, cached per
-     * state-level tenant with a short TTL (pgr.notification.mdms.cache.ttl.ms). Returns an empty
-     * list (never null) on MDMS failure; callers DROP the event's notifications in that case —
-     * there is no legacy fallback when the config-driven flag is on. During an MDMS outage a
-     * last-known non-empty entry is served stale rather than dropping notifications.
-     */
-    public List<Object> getNotificationRouting(String tenantId) {
-        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-        long ttl = config.getNotificationMdmsCacheTtlMs();
-        TimedRows cached = notificationRoutingCache.get(stateTenant);
-        if (cached != null && cached.fresh(ttl)) return cached.rows;
-        List<Object> fetched = fetchNotificationMaster(stateTenant,
-                MDMS_NOTIFICATION_ROUTING_MASTER, MDMS_NOTIFICATION_ROUTING_JSONPATH);
-        if (!fetched.isEmpty()) {
-            notificationRoutingCache.put(stateTenant, new TimedRows(fetched));
-            return fetched;
-        }
-        // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
-        // (retry next event); serve a stale non-empty entry if we have one rather than dropping
-        // notifications during an MDMS blip.
-        return cached != null ? cached.rows : fetched;
-    }
-
-    /**
-     * Notification template rows (RAINMAKER-PGR.NotificationTemplate) for the tenant, cached per
-     * state-level tenant with a short TTL (pgr.notification.mdms.cache.ttl.ms). Returns an empty
-     * list (never null) on MDMS failure; there is no legacy fallback when the config-driven flag
-     * is on. During an MDMS outage a last-known non-empty entry is served stale.
-     */
-    public List<Object> getNotificationTemplates(String tenantId) {
-        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-        long ttl = config.getNotificationMdmsCacheTtlMs();
-        TimedRows cached = notificationTemplateCache.get(stateTenant);
-        if (cached != null && cached.fresh(ttl)) return cached.rows;
-        List<Object> fetched = fetchNotificationMaster(stateTenant,
-                MDMS_NOTIFICATION_TEMPLATE_MASTER, MDMS_NOTIFICATION_TEMPLATE_JSONPATH);
-        if (!fetched.isEmpty()) {
-            notificationTemplateCache.put(stateTenant, new TimedRows(fetched));
-            return fetched;
-        }
-        // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
-        // (retry next event); serve a stale non-empty entry if we have one rather than dropping
-        // notifications during an MDMS blip.
-        return cached != null ? cached.rows : fetched;
-    }
-
-    /**
-     * Provider→template mapping rows (RAINMAKER-PGR.NotificationProviderTemplate) for the tenant —
-     * Twilio WhatsApp Content SIDs + ordered variables, keyed by (provider, channel, audience,
-     * action, toState, locale). Same cache/staleness semantics as the routing/template masters.
-     * Empty is fine (a tenant with no approved provider templates simply won't send WHATSAPP).
-     */
-    public List<Object> getNotificationProviderTemplates(String tenantId) {
-        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-        long ttl = config.getNotificationMdmsCacheTtlMs();
-        TimedRows cached = notificationProviderTemplateCache.get(stateTenant);
-        if (cached != null && cached.fresh(ttl)) return cached.rows;
-        List<Object> fetched = fetchNotificationMaster(stateTenant,
-                MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER, MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH);
-        if (!fetched.isEmpty()) {
-            notificationProviderTemplateCache.put(stateTenant, new TimedRows(fetched));
-            return fetched;
-        }
-        return cached != null ? cached.rows : fetched;
     }
 
     /**
@@ -329,34 +240,6 @@ public class MDMSUtils {
             return null;
         }
     }
-
-    @SuppressWarnings("unchecked")
-    private List<Object> fetchNotificationMaster(String stateTenant, String masterName, String jsonPath) {
-        try {
-            MdmsCriteriaReq req = getNotificationModuleRequest(new RequestInfo(), stateTenant, masterName);
-            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
-            List<Object> rows = JsonPath.read(result, jsonPath);
-            return rows != null ? rows : Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Failed to load notification master {} for tenant {} — there is NO legacy fallback "
-                    + "when pgr.notification.config.driven=true: notifications for this tenant will be "
-                    + "DROPPED (or served from a stale cache entry) until MDMS recovers or the tenant is seeded",
-                    masterName, stateTenant, e);
-            return Collections.emptyList();
-        }
-    }
-
-    private MdmsCriteriaReq getNotificationModuleRequest(RequestInfo requestInfo, String tenantId, String masterName) {
-        List<MasterDetail> masterDetails = new ArrayList<>();
-        masterDetails.add(MasterDetail.builder().name(masterName).build());
-        ModuleDetail moduleDetail = ModuleDetail.builder().masterDetails(masterDetails)
-                .moduleName(MDMS_MODULE_NAME).build();
-        MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
-                .moduleDetails(Collections.singletonList(moduleDetail)).tenantId(tenantId).build();
-        return MdmsCriteriaReq.builder().mdmsCriteria(mdmsCriteria).requestInfo(requestInfo).build();
-    }
-
-
 
     private PGRConfiguration config;
 
@@ -476,7 +359,7 @@ public class MDMSUtils {
      * widen matches, not restrict them.
      *
      * <p>Cached per tenant with the same TTL ({@code pgr.notification.mdms.cache.ttl.ms}) and
-     * never-cache-empty/serve-stale-on-failure semantics as the notification masters above — the
+     * never-cache-empty/serve-stale-on-failure semantics as the other MDMS caches here — the
      * Department master changes about as often as those do, and without this, a single transient
      * MDMS hiccup would silently drop dual-read matches for EVERY department-scoped search until
      * the next successful fetch, not just the one request that hit the hiccup.

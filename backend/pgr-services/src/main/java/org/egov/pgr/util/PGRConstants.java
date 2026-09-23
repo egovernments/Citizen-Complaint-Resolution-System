@@ -54,15 +54,6 @@ public class PGRConstants {
 
     public static final String PENDING_FOR_REASSIGNMENT = "PENDINGFORREASSIGNMENT";
 
-    public static final String APPLY_PENDING_FOR_REASSIGNMENT = "APPLY_PENDINGFORASSIGNMENT";
-
-    public static final String RESOLVE_RESOLVED = "RESOLVE_RESOLVED";
-
-    public static final String REOPEN_PENDING_FOR_ASSIGNMENT = "REOPEN_PENDINGFORASSIGNMENT";
-
-    public static final String REASSIGN_PENDINGATLME = "REASSIGN_PENDINGATLME";
-
-    public static final String REJECT_REJECTED = "REJECT_REJECTED";
 
     public static final String PENDINGATLME = "PENDINGATLME";
 
@@ -94,42 +85,9 @@ public class PGRConstants {
 
     public static final String DEFAULT = "DEFAULT";
 
-    public static final String ASSIGN_CITIZEN_PENDINGATLME = "ASSIGN_CITIZEN_PENDINGATLME";
-
-    public static final String ASSIGN_EMPLOYEE_PENDINGATLME = "ASSIGN_EMPLOYEE_PENDINGATLME";
-
-    public static final String CLOSE_EMPLOYEE_CLOSED_AFTER_RESOLUTION = "CLOSE_EMPLOYEE_CLOSEDAFTERRESOLUTION";
-
-    public static final String REASSIGN_CITIZEN_PENDINGATLME = "REASSIGN_CITIZEN_PENDINGATLME";
-
-    public static final String REASSIGN_EMPLOYEE_PENDINGATLME = "REASSIGN_EMPLOYEE_PENDINGATLME";
-
-    public static final String REJECT_CITIZEN_REJECTED = "REJECT_CITIZEN_REJECTED";
-
-    public static final String REOPEN_CITIZEN_PENDINGFORASSIGNMENT = "REOPEN_CITIZEN_PENDINGFORASSIGNMENT";
-
-    public static final String REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT = "REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT";
-
-    public static final String RESOLVE_CITIZEN_RESOLVED = "RESOLVE_CITIZEN_RESOLVED";
-
-    public static final String APPLY_PENDINGFORASSIGNMENT = "APPLY_PENDINGFORASSIGNMENT";
-
-    public static final String REASSIGN_PENDING_FOR_REASSIGNMENT = "REASSIGN_PENDINGFORREASSIGNMENT";
 
     public static final String ASSIGN = "ASSIGN";
 
-    public static final String ASSIGN_PENDING_AT_LME = "ASSIGN_PENDINGATLME";
-
-    public static final String RATE_CLOSED_AFTER_REJECTION = "RATE_CLOSEDAFTERREJECTION";
-
-    public static final String RATE_CLOSED_AFTER_RESOLUTION = "RATE_CLOSEDAFTERRESOLUTION";
-
-    public static final List<String> NOTIFICATION_ENABLE_FOR_STATUS = Collections
-            .unmodifiableList(Arrays.asList(APPLY_PENDING_FOR_REASSIGNMENT,RESOLVE_RESOLVED,REOPEN_PENDING_FOR_ASSIGNMENT,REASSIGN_PENDINGATLME,
-                    REJECT_REJECTED,ASSIGN_CITIZEN_PENDINGATLME,ASSIGN_EMPLOYEE_PENDINGATLME,CLOSE_EMPLOYEE_CLOSED_AFTER_RESOLUTION,
-                    REASSIGN_CITIZEN_PENDINGATLME,REASSIGN_EMPLOYEE_PENDINGATLME,REJECT_CITIZEN_REJECTED,REOPEN_CITIZEN_PENDINGFORASSIGNMENT,
-                    REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT,RESOLVE_CITIZEN_RESOLVED,APPLY_PENDINGFORASSIGNMENT,COMMENT, COMMENT_DEFAULT, DEFAULT,
-                    REASSIGN_PENDING_FOR_REASSIGNMENT, ASSIGN_PENDING_AT_LME, RATE_CLOSED_AFTER_REJECTION, RATE_CLOSED_AFTER_RESOLUTION));
 
     public static final String NOTIFICATION_LOCALE = "en_IN";
 
@@ -164,30 +122,17 @@ public class PGRConstants {
     public static final String MDMS_UI_CONSTANTS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.UIConstants";
     public static final String MDMS_REOPEN_SLA_KEYWORD = "REOPENSLA";
 
-    // --- Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate) ---
-    public static final String MDMS_NOTIFICATION_ROUTING_MASTER = "NotificationRouting";
-    public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
-    public static final String MDMS_NOTIFICATION_ROUTING_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationRouting";
-    public static final String MDMS_NOTIFICATION_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationTemplate";
-    // Provider→template mapping (Twilio WhatsApp Content SIDs + ordered variables). Resolved for
-    // the WHATSAPP channel only; business-initiated WhatsApp must reference an approved template.
-    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER = "NotificationProviderTemplate";
-    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationProviderTemplate";
+    // --- Thin notification events (docs/2.20/notifications/contract/thin-event-v1.schema.json) ---
+    // The four RAINMAKER-PGR.Notification* masters are novu-bridge's now, not this service's: the
+    // producer names no audience, picks no channel and reads no routing row. What is left is the
+    // vocabulary that goes ON the event.
 
-    // Channels — must match the MDMS schema enum.
-    public static final String CHANNEL_SMS = "SMS";
-    public static final String CHANNEL_WHATSAPP = "WHATSAPP";
-    public static final String CHANNEL_EMAIL = "EMAIL";
-
-    // Audience normalization (template lookup): any employee-type subscriber -> EMPLOYEE.
+    // ActorRef.type on the two actors a complaint has.
     public static final String AUDIENCE_CITIZEN = "CITIZEN";
     public static final String AUDIENCE_EMPLOYEE = "EMPLOYEE";
 
-    // Non-notifiable pseudo-audiences: workflow-internal, resolve to no recipients.
-    public static final String AUDIENCE_AUTO_ESCALATE = "AUTO_ESCALATE";
-    public static final String AUDIENCE_SYSTEM = "SYSTEM";
-
-    // Per-recipient event name prefix consumed by novu-bridge.
+    // Event-name prefix: <prefix><ACTION>.<TOSTATE> is the config key, <prefix><ACTION> the ledger
+    // label the Logs screen has been filtering on for releases.
     public static final String EVENT_NAME_PREFIX = "COMPLAINTS.WORKFLOW.";
 
     public static final String COMPLAINTS_RESOLVED = "complaintsResolved";

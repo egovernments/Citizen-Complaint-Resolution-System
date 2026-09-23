@@ -1,5 +1,6 @@
 package org.egov.novubridge.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -7,16 +8,21 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.PiiMask;
+import org.egov.novubridge.web.models.Contact;
 import org.egov.tracer.model.CustomException;
-import org.springframework.http.*;
+import org.egov.novubridge.util.ServiceUrl;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
-import org.egov.novubridge.web.models.Contact;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,11 +30,11 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class NovuClient {
 
+    private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
+
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
-
-    // Hand-rolled subscriberId -> last-identified epoch-ms TTL cache (no guava/caffeine);
-    // skips redundant POST /v1/subscribers calls within the configured TTL window.
+    /** subscriberId -> epoch ms of the last successful identify; skips redundant upserts within the TTL. */
     private final Map<String, Long> identifiedAt = new ConcurrentHashMap<>();
 
     public NovuClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
@@ -37,37 +43,23 @@ public class NovuClient {
     }
 
     /**
-     * Upsert a Novu subscriber (identify, D6) then trigger the per-channel
-     * workflow with the pre-rendered body. PGR already resolved the recipient,
-     * rendered + localized the body, so this is pure pass-through delivery.
+     * Upsert the subscriber, then trigger the channel's workflow with the pre-rendered body.
      *
-     * @param subscriberId    tenantId:userUuid (fallback tenantId:mobile)
-     * @param contact         profile resolved by PGR (phone/email/name/locale)
-     * @param channel         SMS | WHATSAPP | EMAIL (selects the Novu workflow id)
-     * @param renderedBody    final localized message body
-     * @param renderedSubject EMAIL subject, else null
-     * @param transactionId   stable idempotency key
-     * @param data            structured payload echoed alongside body/subject
+     * @param integrationIdentifier the Novu integration the tenant pinned for this channel; blank = Novu's primary
+     * @param providerType          catalog type of that integration, so a gateway needing its own body (Ozeki) gets it
      */
     public NovuResponse identifyThenTrigger(String subscriberId, Contact contact, String channel,
                                             String renderedBody, String renderedSubject,
                                             String transactionId, Map<String, Object> data,
-                                            String templateId, Map<String, Object> contentVariables) {
-        // Channel-scope the Novu subscriber. The SMS and WHATSAPP legs of one complaint arrive with
-        // the SAME base subscriberId (tenantId:userUuid) but need DIFFERENT recipient formats — SMS
-        // the bare "+E164", WhatsApp "whatsapp:+E164". A single Novu subscriber's phone field can
-        // hold only one; the two legs then clobber each other's phone (and the identify TTL cache
-        // skips the second identify), so WhatsApp goes out as the bare number and Twilio rejects it
-        // (unexpected_sms_error / undelivered). Isolating the subscriber per channel gives each leg
-        // its own subscriber carrying the correctly-formatted phone.
-        String scopedSubscriberId = StringUtils.hasText(channel)
-                ? subscriberId + ":" + channel : subscriberId;
+                                            String templateId, Map<String, Object> contentVariables,
+                                            String integrationIdentifier, String providerType) {
+        // Channel-scoped subscriber: SMS wants "+E164" and WhatsApp "whatsapp:+E164" in the same
+        // phone field; one shared subscriber would let the two legs clobber each other.
+        String scopedSubscriberId = StringUtils.hasText(channel) ? subscriberId + ":" + channel : subscriberId;
         identify(scopedSubscriberId, contact);
 
-        String workflowId = config.getNovuWorkflowId(channel);
         String phone = contact != null ? contact.getPhone() : null;
         String email = contact != null ? contact.getEmail() : null;
-
         Map<String, Object> payload = new HashMap<>();
         if (data != null) {
             payload.putAll(data);
@@ -77,44 +69,62 @@ public class NovuClient {
             payload.put("subject", renderedSubject);
         }
 
-        // Provider-template delivery (WHATSAPP): PGR resolved an approved Content SID for this
-        // routing key. Pass it + positional contentVariables as a Twilio provider override so Novu
-        // sends the approved template rather than the free-form body. The integration supplies the
-        // sender/credentials; we only add the template. SMS/EMAIL keep the free-form path.
         Map<String, Object> overrides = StringUtils.hasText(templateId)
                 ? buildProviderTemplateOverrides(templateId, contentVariables) : null;
-        // Applied regardless of templateId: DispatchPipelineService currently gates WHATSAPP on a
-        // templateId being present, but that's a caller-side policy, not a guarantee this method can
-        // rely on. Without this, a future WHATSAPP caller that skips the template path would silently
-        // fall through to the primary-SMS-integration bug this override exists to prevent.
         overrides = applyWhatsappIntegrationOverride(overrides, channel);
-        if (overrides != null && !overrides.isEmpty()) {
-            return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
-        }
-
-        return trigger(workflowId, scopedSubscriberId, phone, email, payload, transactionId);
+        // The tenant's pick wins over the deployment-wide WhatsApp pin: it is more specific and needs no redeploy.
+        overrides = applyIntegrationOverride(overrides, channel, integrationIdentifier);
+        overrides = applyGatewayBody(overrides, providerType, transactionId, phone, renderedBody);
+        return trigger(config.getNovuWorkflowId(channel), scopedSubscriberId, phone, email, payload,
+                transactionId, overrides);
     }
 
-    private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
+    /**
+     * Pin a trigger to one named integration. Novu keys overrides by its own channel name, so
+     * WhatsApp (which rides Novu's {@code sms} channel) pins under {@code sms}. Blank is a no-op.
+     */
+    public static Map<String, Object> applyIntegrationOverride(Map<String, Object> overrides,
+                                                               String channel, String integrationIdentifier) {
+        if (!StringUtils.hasText(integrationIdentifier)) {
+            return overrides;
+        }
+        Map<String, Object> merged = overrides == null ? new HashMap<>() : overrides;
+        Map<String, Object> channelOverride = new HashMap<>();
+        channelOverride.put("integrationIdentifier", integrationIdentifier);
+        merged.put("EMAIL".equalsIgnoreCase(channel) ? "email" : "sms", channelOverride);
+        return merged;
+    }
 
     /**
-     * Novu selects the PRIMARY integration for a channel unless the trigger names an
-     * explicit {@code overrides.<channel>.integrationIdentifier}. WhatsApp-via-Twilio is
-     * an "sms"-channel step in Novu, so without this override a WhatsApp send would
-     * silently resolve to the primary (plain SMS, non-WhatsApp-registered) Twilio
-     * integration and be rejected by Twilio for a from/to channel mismatch. Only applies
-     * when {@code novu.bridge.integration.id.whatsapp} is configured; otherwise this is a
-     * no-op so deployments without a dedicated WhatsApp integration are unaffected.
-     *
-     * <p>Public so {@code ProviderController}'s {@code /providers/test-send} can apply the
-     * same override the live dispatch path uses — otherwise a WHATSAPP test-send would
-     * validate against the primary SMS integration and give a false read on whether the
-     * dedicated WhatsApp integration is actually reachable.
-     *
-     * @param overrides existing overrides map, or {@code null} if none built yet
-     * @return {@code overrides} with the {@code sms.integrationIdentifier} override merged in
-     *         (a new map if {@code overrides} was {@code null}), or {@code overrides} unchanged
-     *         (possibly {@code null}) when the override doesn't apply
+     * Ozeki's API wants {@code {messages:[{message_id, to_address, text}]}}, which generic-sms
+     * cannot express. Novu deep-merges {@code _passthrough.body} verbatim (no key-casing), but only
+     * under the Novu provider id ({@code generic-sms}), and never templates it, so {@code text}
+     * must already be rendered. SMSCountry needs nothing here: its adapter does the translating.
+     */
+    public static Map<String, Object> applyGatewayBody(Map<String, Object> overrides, String providerType,
+                                                       String transactionId, String toAddress, String text) {
+        if (!"ozeki".equalsIgnoreCase(providerType == null ? "" : providerType.trim())) {
+            return overrides;
+        }
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("message_id", transactionId);
+        message.put("to_address", toAddress);
+        message.put("text", text);
+
+        Map<String, Object> merged = overrides == null ? new HashMap<>() : overrides;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> providers = merged.get("providers") instanceof Map
+                ? (Map<String, Object>) merged.get("providers") : new HashMap<>();
+        providers.put("generic-sms", Map.of("_passthrough", Map.of("body",
+                Map.of("messages", List.of(message)))));
+        merged.put("providers", providers);
+        return merged;
+    }
+
+    /**
+     * Without an explicit integration override Novu picks the PRIMARY sms integration, so a
+     * WhatsApp send would go out through the plain-SMS Twilio sender and be rejected. No-op
+     * unless {@code novu.bridge.integration.id.whatsapp} is set.
      */
     public Map<String, Object> applyWhatsappIntegrationOverride(Map<String, Object> overrides, String channel) {
         if (!"WHATSAPP".equalsIgnoreCase(channel) || !StringUtils.hasText(config.getWhatsappIntegrationId())) {
@@ -129,15 +139,9 @@ public class NovuClient {
         return overrides;
     }
 
-
-    /**
-     * The exact {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
-     * override envelope Novu's Twilio provider consumes for an approved Content template — matching
-     * {@code TwilioProviderStrategy.buildProviderConfig}. {@code contentVariables} is a JSON string
-     * (Twilio requirement). No sender/credentials here — those live in the Novu integration.
-     */
-    private Map<String, Object> buildProviderTemplateOverrides(String contentSid,
-                                                               Map<String, Object> contentVariables) {
+    /** Twilio approved-Content-template envelope; {@code contentVariables} must be a JSON string. */
+    public static Map<String, Object> buildProviderTemplateOverrides(String contentSid,
+                                                                     Map<String, ?> contentVariables) {
         Map<String, Object> body = new HashMap<>();
         body.put("contentSid", contentSid);
         if (contentVariables != null && !contentVariables.isEmpty()) {
@@ -148,6 +152,7 @@ public class NovuClient {
                         "Failed to serialize contentVariables for Twilio: " + e.getMessage());
             }
         }
+        // Mutable all the way down: applyGatewayBody may add to "providers" later.
         Map<String, Object> passthrough = new HashMap<>();
         passthrough.put("body", body);
         Map<String, Object> twilio = new HashMap<>();
@@ -159,29 +164,17 @@ public class NovuClient {
         return overrides;
     }
 
-    /**
-     * Upsert (identify) a Novu subscriber by subscriberId. Idempotent and
-     * guarded by a short-lived in-memory TTL cache. Identify failures are
-     * logged but non-fatal — the trigger still proceeds.
-     */
+    /** Upsert a Novu subscriber. Non-fatal: a missing profile degrades tracking, not delivery. */
     public void identify(String subscriberId, Contact contact) {
-        if (!StringUtils.hasText(subscriberId)) {
-            return;
-        }
-        if (recentlyIdentified(subscriberId)) {
-            log.debug("Skipping identify for subscriberId={} (within TTL)", subscriberId);
+        if (!StringUtils.hasText(subscriberId) || recentlyIdentified(subscriberId)) {
             return;
         }
         try {
             Map<String, Object> body = new HashMap<>();
             body.put("subscriberId", subscriberId);
             if (contact != null) {
-                if (StringUtils.hasText(contact.getPhone())) {
-                    body.put("phone", contact.getPhone());
-                }
-                if (StringUtils.hasText(contact.getEmail())) {
-                    body.put("email", contact.getEmail());
-                }
+                putIfText(body, "phone", contact.getPhone());
+                putIfText(body, "email", contact.getEmail());
                 if (StringUtils.hasText(contact.getName())) {
                     String[] parts = contact.getName().trim().split("\\s+", 2);
                     body.put("firstName", parts[0]);
@@ -189,31 +182,18 @@ public class NovuClient {
                         body.put("lastName", parts[1]);
                     }
                 }
-                if (StringUtils.hasText(contact.getLocale())) {
-                    body.put("locale", contact.getLocale());
-                }
+                putIfText(body, "locale", contact.getLocale());
                 Map<String, Object> subData = new HashMap<>();
-                if (StringUtils.hasText(contact.getType())) {
-                    subData.put("role", contact.getType());
-                }
-                if (StringUtils.hasText(contact.getUserId())) {
-                    subData.put("userId", contact.getUserId());
-                }
+                putIfText(subData, "role", contact.getType());
+                putIfText(subData, "userId", contact.getUserId());
                 if (!subData.isEmpty()) {
                     body.put("data", subData);
                 }
             }
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String url = config.getNovuBaseUrl() + "/v1/subscribers";
-            log.info("Novu identify (upsert) subscriberId={} url={}", subscriberId, url);
-            restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
-            markIdentified(subscriberId);
+            log.info("Novu identify (upsert) subscriberId={}", subscriberId);
+            send(HttpMethod.POST, "/v1/subscribers", body);
+            identifiedAt.put(subscriberId, System.currentTimeMillis());
         } catch (Exception e) {
-            // Non-fatal: a missing profile only degrades tracking, not delivery.
             log.warn("Novu identify failed for subscriberId={} (continuing to trigger): {}",
                     subscriberId, e.getMessage());
         }
@@ -226,226 +206,130 @@ public class NovuClient {
         }
         long ttl = config.getIdentifyCacheTtlMs() != null ? config.getIdentifyCacheTtlMs() : 0L;
         if (System.currentTimeMillis() - ts > ttl) {
-            identifiedAt.remove(subscriberId); // evict-on-read
+            identifiedAt.remove(subscriberId);
             return false;
         }
         return true;
     }
 
-    private void markIdentified(String subscriberId) {
-        identifiedAt.put(subscriberId, System.currentTimeMillis());
-    }
-
     /**
-     * Trigger a Novu workflow for a single subscriber, routing the rendered
-     * body via payload. Used by the pass-through path.
+     * Trigger one workflow for one subscriber. Phone AND email always ride in {@code to} when known:
+     * the subscriber profile from {@link #identify} is best-effort, so it cannot be relied on to
+     * hold the address.
+     *
+     * @param overrides provider/integration overrides, or null/empty for none
      */
     public NovuResponse trigger(String workflowId, String subscriberId, String phone, String email,
-                                Map<String, Object> payload, String transactionId) {
-        try {
-            Map<String, Object> request = new HashMap<>();
-            request.put("name", workflowId);
-
-            Map<String, Object> to = new HashMap<>();
-            to.put("subscriberId", subscriberId);
-            if (StringUtils.hasText(phone)) {
-                to.put("phone", phone);
-            }
-            if (StringUtils.hasText(email)) {
-                to.put("email", email);
-            }
-            request.put("to", to);
-            request.put("payload", payload);
-            if (StringUtils.hasText(transactionId)) {
-                request.put("transactionId", transactionId);
-            }
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String url = config.getNovuBaseUrl() + "/v1/events/trigger";
-            log.info("Novu trigger workflowId={} subscriberId={} channel-phone={} txn={}",
-                    workflowId, subscriberId, PiiMask.mask(phone), transactionId);
-
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST,
-                    new HttpEntity<>(request, headers), Map.class);
-            return NovuResponse.builder()
-                    .statusCode(response.getStatusCodeValue())
-                    .response(response.getBody())
-                    .build();
-        } catch (Exception e) {
-            log.error("Novu trigger failed for workflowId={} subscriberId={}", workflowId, subscriberId, e);
-            throw new CustomException("NB_NOVU_TRIGGER_FAILED", "Failed triggering Novu event: " + e.getMessage());
+                                Map<String, Object> payload, String transactionId, Map<String, Object> overrides) {
+        Map<String, Object> to = new HashMap<>();
+        to.put("subscriberId", subscriberId);
+        putIfText(to, "phone", phone);
+        putIfText(to, "email", email);
+        Map<String, Object> request = new HashMap<>();
+        request.put("name", workflowId);
+        request.put("to", to);
+        request.put("payload", payload);
+        putIfText(request, "transactionId", transactionId);
+        boolean hasOverrides = overrides != null && !overrides.isEmpty();
+        if (hasOverrides) {
+            request.put("overrides", overrides);
         }
+        // Never log the request (recipient + message text) or headers (ApiKey).
+        log.info("Novu trigger workflowId={} subscriberId={} channel-phone={} txn={} overrides={}",
+                workflowId, subscriberId, PiiMask.mask(phone), transactionId, hasOverrides);
+        return exchange(HttpMethod.POST, "/v1/events/trigger", request, "NB_NOVU_TRIGGER_FAILED", "triggering Novu event");
     }
 
-    public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,
-                                String transactionId, Map<String, Object> overrides, String novuApiKey) {
-        try {
-            Map<String, Object> request = new HashMap<>();
-            request.put("name", templateKey);
-            
-            Map<String, Object> to = new HashMap<>();
-            to.put("subscriberId", subscriberId);
-            if (phone != null && !phone.isBlank()) {
-                to.put("phone", phone);
-            }
-            request.put("to", to);
-            request.put("payload", payload);
-            request.put("transactionId", transactionId);
-            
-            if (overrides != null && !overrides.isEmpty()) {
-                request.put("overrides", overrides);
-            }
-
-            String apiKey = (novuApiKey != null && !novuApiKey.isBlank()) ? novuApiKey : config.getNovuApiKey();
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + apiKey);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String url = config.getNovuBaseUrl() + "/v1/events/trigger";
-            // Masked like the pass-through overload above — never log the raw
-            // request (recipient phone + message text) or headers (Novu ApiKey).
-            log.info("Novu trigger templateKey={} subscriberId={} channel-phone={} txn={} overrides={}",
-                    templateKey, subscriberId, PiiMask.mask(phone), transactionId,
-                    overrides != null && !overrides.isEmpty());
-
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), Map.class);
-            return NovuResponse.builder()
-                    .statusCode(response.getStatusCodeValue())
-                    .response(response.getBody())
-                    .build();
-        } catch (Exception e) {
-            log.error("Novu trigger failed for templateKey={} subscriberId={}", templateKey, subscriberId, e);
-            throw new CustomException("NB_NOVU_TRIGGER_FAILED", "Failed triggering Novu event: " + e.getMessage());
-        }
-    }
-
-    public NovuResponse trigger(String templateKey, String subscriberId, String phone, Map<String, Object> payload,
-                                String transactionId, Map<String, Object> overrides) {
-        return trigger(templateKey, subscriberId, phone, payload, transactionId, overrides, null);
-    }
-
-    public NovuResponse trigger(String templateKey, String subscriberId, Map<String, Object> payload, String transactionId) {
-        return trigger(templateKey, subscriberId, null, payload, transactionId, null, null);
-    }
-
-    /**
-     * Read the configured provider integrations from Novu ({@code GET /v1/integrations}).
-     * The Novu ApiKey is applied server-side here; the returned body is raw and
-     * still carries provider {@code credentials}, so callers exposing this to the
-     * browser MUST redact secrets first (see the integrations controller). The key
-     * itself is never returned — the keyless configurator SPA only ever sees the
-     * redacted response.
-     *
-     * @return the parsed Novu response ({@code data} is the integration list)
-     */
+    /** {@code GET /v1/integrations}. The raw body carries provider credentials: callers must redact. */
     public NovuResponse listIntegrations() {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String url = config.getNovuBaseUrl() + "/v1/integrations";
-            log.info("Novu list integrations url={}", url);
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET,
-                    new HttpEntity<>(headers), Map.class);
-            return NovuResponse.builder()
-                    .statusCode(response.getStatusCodeValue())
-                    .response(response.getBody())
-                    .build();
-        } catch (Exception e) {
-            log.error("Novu list integrations failed", e);
-            throw new CustomException("NB_NOVU_INTEGRATIONS_FAILED",
-                    "Failed listing Novu integrations: " + e.getMessage());
-        }
+        return exchange(HttpMethod.GET, "/v1/integrations", null, "NB_NOVU_INTEGRATIONS_FAILED", "listing Novu integrations");
     }
 
-    /**
-     * Create a Novu provider integration ({@code POST /v1/integrations}) with the
-     * same payload shape as {@code bootstrap-novu-whatsapp.sh}:
-     * {@code {name, identifier, providerId, channel, active:true, check:false, credentials}}.
-     * The Novu ApiKey is applied server-side; the operator-entered {@code credentials}
-     * POST straight through to Novu over TLS and live only there.
-     *
-     * <p><b>Secrets never logged.</b> Only the credential <i>key names</i> (never the
-     * values) are logged; the full body — including {@code credentials} — is never
-     * written to a log line. The returned {@link NovuResponse#getResponse()} is the
-     * raw Novu body (the created integration under {@code data}); callers exposing it
-     * to the browser MUST allowlist-project it so no {@code credentials} echo back.
-     *
-     * @param name        human-readable integration name
-     * @param identifier  stable integration identifier (optional; Novu generates one if blank)
-     * @param providerId  Novu provider id (e.g. {@code twilio}, {@code nodemailer})
-     * @param channel     Novu channel (e.g. {@code sms}, {@code email})
-     * @param credentials provider credential map (accountSid/token/from, host/user/pass/…)
-     * @return the parsed Novu response ({@code data} is the created integration)
-     */
     public NovuResponse createIntegration(String name, String identifier, String providerId,
                                           String channel, Map<String, Object> credentials) {
-        try {
-            Map<String, Object> body = new HashMap<>();
-            body.put("name", name);
-            if (StringUtils.hasText(identifier)) {
-                body.put("identifier", identifier);
-            }
-            body.put("providerId", providerId);
-            body.put("channel", channel);
-            body.put("active", true);
-            body.put("check", false);
-            body.put("credentials", credentials != null ? credentials : new HashMap<>());
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String url = config.getNovuBaseUrl() + "/v1/integrations";
-            // Log the credential KEY NAMES only — never the secret values, never the body.
-            log.info("Novu create integration name={} identifier={} providerId={} channel={} credentialKeys={} url={}",
-                    name, identifier, providerId, channel,
-                    credentials != null ? credentials.keySet() : "none", url);
-
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST,
-                    new HttpEntity<>(body, headers), Map.class);
-            return NovuResponse.builder()
-                    .statusCode(response.getStatusCodeValue())
-                    .response(response.getBody())
-                    .build();
-        } catch (Exception e) {
-            // Message deliberately omits the body so a stack trace can never surface a secret.
-            log.error("Novu create integration failed for providerId={} channel={}", providerId, channel, e);
-            throw new CustomException("NB_NOVU_INTEGRATION_CREATE_FAILED",
-                    "Failed creating Novu integration: " + e.getMessage());
-        }
+        return createIntegration(name, identifier, providerId, channel, credentials, true);
     }
 
     /**
-     * Read the configured Novu workflows ({@code GET /v2/workflows?limit=100&page=0}).
-     * Used by the read-only "pull templates" discovery on the Notification Providers
-     * screen — it lists delivery-shell workflows (workflowId + name); it does NOT
-     * call Twilio. The Novu ApiKey is applied server-side.
-     *
-     * @return the parsed Novu response ({@code data} is the workflow list)
+     * {@code POST /v1/integrations}. Credentials pass straight through to Novu and are never
+     * logged (key names only). An inactive integration is stored but never selected by Novu.
      */
-    public NovuResponse listWorkflows() {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
-            headers.setContentType(MediaType.APPLICATION_JSON);
+    public NovuResponse createIntegration(String name, String identifier, String providerId,
+                                          String channel, Map<String, Object> credentials, boolean active) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", name);
+        putIfText(body, "identifier", identifier);
+        body.put("providerId", providerId);
+        body.put("channel", channel);
+        body.put("active", active);
+        body.put("check", false);
+        body.put("credentials", credentials != null ? credentials : new HashMap<>());
+        log.info("Novu create integration name={} identifier={} providerId={} channel={} credentialKeys={}",
+                name, identifier, providerId, channel, credentials != null ? credentials.keySet() : "none");
+        return exchange(HttpMethod.POST, "/v1/integrations", body, "NB_NOVU_INTEGRATION_CREATE_FAILED",
+                "creating Novu integration");
+    }
 
-            String url = config.getNovuBaseUrl() + "/v2/workflows?limit=100&page=0";
-            log.info("Novu list workflows url={}", url);
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET,
-                    new HttpEntity<>(headers), Map.class);
+    /**
+     * {@code PUT /v1/integrations/{id}} with only the changed fields. Novu REPLACES the credential
+     * set wholesale, so {@code credentials} must be complete (that is the rotation path).
+     */
+    public NovuResponse updateIntegration(String integrationId, String name,
+                                          Map<String, Object> credentials, Boolean active) {
+        Map<String, Object> body = new HashMap<>();
+        putIfText(body, "name", name);
+        if (credentials != null) {
+            body.put("credentials", credentials);
+        }
+        if (active != null) {
+            body.put("active", active);
+        }
+        body.put("check", false);
+        log.info("Novu update integration id={} name={} active={} credentialKeys={}",
+                integrationId, name, active, credentials != null ? credentials.keySet() : "unchanged");
+        return exchange(HttpMethod.PUT, "/v1/integrations/" + integrationId, body,
+                "NB_NOVU_INTEGRATION_UPDATE_FAILED", "updating Novu integration");
+    }
+
+    /** Destroys the integration and its credentials; callers must first check no tenant routes through it. */
+    public NovuResponse deleteIntegration(String integrationId) {
+        log.info("Novu delete integration id={}", integrationId);
+        return exchange(HttpMethod.DELETE, "/v1/integrations/" + integrationId, null,
+                "NB_NOVU_INTEGRATION_DELETE_FAILED", "deleting Novu integration");
+    }
+
+    public NovuResponse listWorkflows() {
+        return exchange(HttpMethod.GET, "/v2/workflows?limit=100&page=0", null, "NB_NOVU_WORKFLOWS_FAILED",
+                "listing Novu workflows");
+    }
+
+    /** One Novu call with the server-side ApiKey. The error message never includes the request body (secrets). */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private NovuResponse exchange(HttpMethod method, String path, Object body, String errorCode, String action) {
+        try {
+            ResponseEntity<Map> response = send(method, path, body);
             return NovuResponse.builder()
-                    .statusCode(response.getStatusCodeValue())
+                    .statusCode(response.getStatusCode().value())
                     .response(response.getBody())
                     .build();
         } catch (Exception e) {
-            log.error("Novu list workflows failed", e);
-            throw new CustomException("NB_NOVU_WORKFLOWS_FAILED",
-                    "Failed listing Novu workflows: " + e.getMessage());
+            log.error("Novu {} {} failed", method, path, e);
+            throw new CustomException(errorCode, "Failed " + action + ": " + e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private ResponseEntity<Map> send(HttpMethod method, String path, Object body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<?> entity = body == null ? new HttpEntity<>(headers) : new HttpEntity<>(body, headers);
+        return restTemplate.exchange(ServiceUrl.join(config.getNovuBaseUrl(), path), method, entity, Map.class);
+    }
+
+    private static void putIfText(Map<String, Object> map, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            map.put(key, value);
         }
     }
 

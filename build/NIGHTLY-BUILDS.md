@@ -113,7 +113,7 @@ Its pattern is `develop-` + **8 or more** hex chars, which deliberately:
 
 **In scope — everything in `build-config.yml`** (CCRS-owned): `pgr-services`,
 `novu-bridge`, `digit-config-service`, `digit-user-preferences-service`,
-`xstate-chatbot`, `default-data-handler`, `digit-mcp`, `otp-publisher`,
+`xstate-chatbot`, `default-data-handler`, `digit-mcp`,
 `identity-bff`, `identity-keycloak`, `digit-ui` (legacy micro-ui),
 `digit-ui-esbuild`, `configurator`, `digit-ui-v2`, and the `*-db` flyway images.
 
@@ -183,18 +183,27 @@ nightly — **both**, or the box silently keeps running something else:
 
    ```yaml
    # host_vars/<tenant>.yml
-   pgr_services_image:  "host:5000/egovio/pgr-services:nightly-develop"
    digit_ui_image:      "host:5000/egovio/digit-ui:nightly-develop"
-   otp_publisher_image: "host:5000/egovio/otp-publisher:nightly-develop"
    mcp_image:           "host:5000/egovio/digit-mcp:nightly-develop"
    identity_bff_image:  "host:5000/egovio/identity-bff:nightly-develop"
    identity_keycloak_image: "host:5000/egovio/identity-keycloak:nightly-develop"
    ddh_image:           "host:5000/egovio/default-data-handler:nightly-develop"
    ```
 
+   The notification stack is the exception: `pgr-services`, `pgr-services-db`,
+   `novu-bridge` and `novu-bridge-db` must come from **one build**, so they share
+   one tag, `notification_stack_tag` (compose `NOTIFICATION_STACK_TAG`, Helm
+   `global.notificationStackTag`), which already defaults to Docker Hub's
+   `nightly-develop`. `nightly-develop` moves per image — two overlapping runs can
+   leave it on different commits for different images — so a box you care about
+   pins an immutable `develop-<sha8>` that exists for all four. To pull them from
+   the VPC registry instead, pin all four per-image vars (`pgr_services_image`,
+   `pgr_services_db_image`, `novu_bridge_image`, `novu_bridge_db_image`) to the
+   same build; the deploy warns when only some are pinned.
+
 2. **Turn the matching `build_*` flag OFF.** ⚠️ This is the trap. When
-   `build_digit_ui` / `build_mcp` / `build_default_data_handler` /
-   `build_otp_publisher` is `true`, the deploy builds that service from source
+   `build_digit_ui` / `build_mcp` / `build_default_data_handler`
+   is `true`, the deploy builds that service from source
    on the box and tags it `:local`, **overriding the image pin** — so you get an
    on-box build, not the nightly. For a pull-the-nightly deploy these must be
    `false`. (pgr-services has no `build_*` flag; it always pulls its image var.)
@@ -206,7 +215,7 @@ pipeline changes nothing until a deployment opts a service in.
 
 ```bash
 docker ps --format '{{.Names}}\t{{.Image}}' \
-  | grep -E 'pgr-services|digit-ui|digit-mcp|otp-publisher|default-data-handler'
+  | grep -E 'pgr-services|novu-bridge|digit-ui|digit-mcp|default-data-handler'
 ```
 
 Every line should show your registry + `:nightly-develop` (or an immutable

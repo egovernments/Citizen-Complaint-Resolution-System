@@ -121,7 +121,7 @@ services:
     #
     # Written as deploy.resources.limits.memory rather than the legacy
     # top-level mem_limit key, because that is already the convention here:
-    # egov-otp, user-otp and egov-notification-sms use it in this file, and
+    # egov-otp and user-otp use it in this file, and
     # 28 of docker-compose.yml's services do. Compose V2 applies it outside
     # Swarm exactly as it applies mem_limit — egov-otp's cap was raised
     # 256M→512M precisely because it was taking effect — so this is one
@@ -1718,44 +1718,6 @@ services:
     networks:
       - egov-network
 
-  egov-notification-sms:
-    # Hardening: no capabilities, no privilege escalation (see file header).
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    image: egovio/egov-notification-sms:master-e22c7c5
-    container_name: egov-notification-sms
-    profiles: [otp]
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8005
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      SMS_ENABLED: "true"
-      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
-      EGOV_MDMS_HOST: http://egov-mdms-service:8094
-      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-      EGOV_STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: none
-      OTEL_METRICS_EXPORTER: none
-      OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
-      # Console only logs the OTP SMS to this container's stdout — no SMS is
-      # actually sent. For production, set enable_otp_services: true in the
-      # tenant's Ansible host_vars AND replace this with a real provider
-      # class + credentials (e.g. an SMSCountry/Twilio/MSG91 provider class
-      # supported by this image) before relying on real OTP delivery.
-      SMS_PROVIDER_CLASS: Console
-    deploy:
-      resources:
-        limits:
-          # Bumped 256M→512M with the other otp-profile services for headroom (Spring Boot 3.2 / Java 17).
-          memory: 512M
-          cpus: '0.1'
-    networks:
-      - egov-network
-
   # ===========================================================================
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
@@ -1763,9 +1725,17 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
+    # ONE BUILD, FOUR IMAGES: pgr-services, pgr-services-db (migrations.yml),
+    # novu-bridge and novu-bridge-db (migrations.yml) all default to
+    # ${NOTIFICATION_STACK_TAG}, so they move together. pgr-services emits thin events
+    # that only a bridge from the same build resolves (an older bridge dead-letters
+    # them), and each app needs the Flyway migrations its -db image carries.
+    # `nightly-develop` is what the develop nightly publishes for all four
+    # (build/NIGHTLY-BUILDS.md); it moves per image, so a live deployment pins an
+    # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars.
+    # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
+    # pin the other three to the same build yourself.
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1838,19 +1808,13 @@ services:
       EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
-      # Config-driven notifications (design D1/D4). When 'true', PGR reads the
-      # PGR.NotificationRouting + PGR.NotificationTemplate MDMS masters, renders
-      # + localizes per recipient, and publishes ONE pre-rendered event per
-      # (recipient × channel) to complaints.domain.events for novu-bridge to
-      # deliver. DEFAULT stays 'false' here (and in application.properties) so
-      # non-Bomet tenants keep the legacy hardcoded path; Bomet flips it 'true'
-      # via docker-compose.bomet.yml. Spring relaxed-binding maps this env to
-      # the `pgr.notification.config.driven` property.
-      PGR_NOTIFICATION_CONFIG_DRIVEN: ${PGR_NOTIFICATION_CONFIG_DRIVEN:-false}
       # Kafka topic the per-recipient pre-rendered events are published to.
       # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
-      # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
+      # is one of novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPICS.
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
+      # pgr-services only EMITS a thin event per transition; routing, recipients, language and
+      # rendering are novu-bridge's job now, so the locale / user-preference settings that used
+      # to live here moved to the bridge (NOVU_BRIDGE_DEFAULT_LOCALE, NOVU_BRIDGE_PREFERENCE_HOST).
       # Tenant-admin onboarding (#1999) authenticates through the identity BFF's
       # session-introspection endpoint. Reuse the BFF's introspection-only
       # credential by default; either value can still be overridden explicitly.
@@ -2210,7 +2174,6 @@ services:
       GATUS_PROFILE_CHATBOT: ${GATUS_PROFILE_CHATBOT:-false}
       GATUS_AUDIT: "true"
       GATUS_PROXIES: "true"
-      GATUS_SMS_PORT: "8005"
       # Watch the monitoring itself (#1613). This is the only compose path that
       # deploys the full observability stack, so it is the only one where these
       # checks can pass. Ansible renders it true in .env; the default keeps a
@@ -2785,40 +2748,6 @@ services:
     networks:
       - egov-network
 
-  # Novu Framework "Bridge" endpoint. Novu v2 workflows are Code-First
-  # — the workflow definitions (SMS body templates, conditional steps,
-  # etc.) live in code, not in the Novu DB. At trigger time, Novu's API
-  # calls THIS service to render the step content. Without it every
-  # trigger fails with "Bridge execution failed".
-  #
-  # The workflows are defined in
-  # /backend/novu-bridge-endpoint/workflows.js — one per domain event
-  # (OTP send + 6 complaint lifecycle events).
-  novu-bridge-endpoint:
-    # Hardening: no capabilities, no privilege escalation (see file header).
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    image: egovio/novu-bridge-endpoint:latest@sha256:15ece70b86a7cdac29111d3a13c22e08f1337e985eb8417a06976baf98411b5d
-    container_name: novu-bridge-endpoint
-    restart: unless-stopped
-    profiles: ["notifications"]
-    environment:
-      PORT: '3000'
-      # MUST match the env API key Novu uses to sign bridge requests
-      # (set NOVU_SECRET_KEY in compose .env to whatever the per-env
-      # API key Novu generated is, OR leave STRICT_AUTH=false for the
-      # in-cluster case where we trust the network).
-      NOVU_SECRET_KEY: ${NOVU_BRIDGE_SECRET_KEY:-dev-novu-secret-key-change-in-production}
-      STRICT_AUTH: 'false'
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - egov-network
-
   # ==================== Notification stack (opt-in) ====================
   # `digit-config-service` + `digit-user-preferences-service` +
   # `novu-bridge` work together to deliver event-driven WhatsApp/SMS via
@@ -2937,11 +2866,10 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Overridable so Bomet can pull the pass-through build (PGR pre-renders
-    # + localizes; the bridge only identifies the Novu subscriber and
-    # delivers renderedBody — design D4/D6). Default is the multi-arch
-    # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}
+    # Same build as pgr-services — see the ONE BUILD, FOUR IMAGES note there.
+    # NOVU_BRIDGE_IMAGE overrides this one image; novu-bridge-migration then still
+    # follows NOTIFICATION_STACK_TAG unless NOVU_BRIDGE_DB_IMAGE is pinned too.
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2978,28 +2906,36 @@ services:
       SERVER_SERVLET_CONTEXT_PATH: /novu-bridge
       # Kafka topics (bridge auto-creates if redpanda's
       # auto.create.topics.enable=true; otherwise create them upfront).
-      NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
-      NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
+      # The envelope's eventType — never the topic — decides handling, so a producer may
+      # publish to the shared neutral topic or get its own. `notifications.events` is the
+      # module-neutral topic any new producer should use; `complaints.domain.events` is PGR's
+      # original topic, still consumed so existing deployments are unaffected.
+      NOVU_BRIDGE_KAFKA_INPUT_TOPICS: ${NOVU_BRIDGE_KAFKA_INPUT_TOPICS:-complaints.domain.events,notifications.events}
+      # DIGIT core SMS topic (user-otp login OTPs, egov-user password resets): translated into
+      # the envelope and delivered through the same pipeline — this replaces egov-notification-sms.
+      NOVU_BRIDGE_CORE_SMS_TOPIC: egov.core.notification.sms
+      # Tenant a core SMS (login OTP) is attributed to when the producer sends none. A
+      # literal `pg`, like every other state-tenant key in this file, so the playbook's
+      # post-bootstrap rewrite turns it into state_root. `${STATE_LEVEL_TENANT_ID:-pg}`
+      # looked right but nothing puts that variable in .env: it resolved to `pg` on every
+      # box, so those OTPs were checked against a tenant with no SMS policy and dropped
+      # as SKIPPED / NB_NO_PROVIDER.
+      NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg
+      NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE: ${NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE:-}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
-      # Channel is compared CASE-SENSITIVELY against the TemplateBinding
-      # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
-      # — keep this lowercase too. Override per-tenant in host_vars.
-      # (Default SMS: WhatsApp is paused pending an A2P/provider. The config-
-      # driven path uses NOVU_BRIDGE_CHANNELS_ENABLED below, not this legacy knob.)
-      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-SMS}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
-      # NOTE: the preference check calls
-      # `digit-user-preferences-service/user-preference/v1/_check`,
-      # which 404s on the upstream image (the actual path differs and
-      # the controller may not be deployed). Leaving it off lets OTP
-      # and complaint events flow; flip to 'true' once preferences are
-      # wired up for the tenant.
+      # Consent gate. Off by default; when on, the bridge asks
+      # digit-user-preferences-service (POST /user-preference/v1/_search) whether
+      # the recipient GRANTED this channel. An outage of that service fails OPEN
+      # (allow) unless NOVU_BRIDGE_PREFERENCE_FAIL_OPEN=false — a check that cannot
+      # be performed is not a citizen's refusal.
       NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
+      NOVU_BRIDGE_PREFERENCE_FAIL_OPEN: ${NOVU_BRIDGE_PREFERENCE_FAIL_OPEN:-true}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
-      NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_search
       # Full search endpoint (returns the preferences list) — used by the
       # read-only /novu-adapter/v1/preferences proxy for the configurator's
-      # User Preferences screen. Distinct from the boolean _check path above.
+      # User Preferences screen (the consent check above uses the same _search).
       NOVU_BRIDGE_PREFERENCE_SEARCH_PATH: /user-preference/v1/_search
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
       # Per-channel Novu workflow ids the bridge triggers (rendered text
@@ -3025,29 +2961,36 @@ services:
       NOVU_BRIDGE_SMSCOUNTRY_URL: ${NOVU_BRIDGE_SMSCOUNTRY_URL:-http://api.smscountry.com/SMSCwebservice_bulk.aspx}
       NOVU_BRIDGE_SMSCOUNTRY_USER: ${NOVU_BRIDGE_SMSCOUNTRY_USER:-}
       NOVU_BRIDGE_SMSCOUNTRY_PASSWORD: ${NOVU_BRIDGE_SMSCOUNTRY_PASSWORD:-}
+      # Hosts the SMSCountry adapter may post to via its apiUrl parameter (the
+      # SMSCOUNTRY_URL host is always allowed). Add a local mock's host here.
+      NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS: ${NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS:-api.smscountry.com,www.smscountry.com}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
-      # Channels actually delivered. WHATSAPP stays OFF until a legitimate
-      # provider is onboarded as a Novu integration (then just add it here).
+      # Per-tenant channel policy: the bridge reads RAINMAKER-PGR.NotificationChannel
+      # at the state tenant (Configurator -> Notifications -> Channels). The env
+      # allowlist below is only the fallback for tenants that have no rows yet.
+      NOVU_BRIDGE_CHANNEL_POLICY_ENABLED: ${NOVU_BRIDGE_CHANNEL_POLICY_ENABLED:-true}
+      NOVU_BRIDGE_MDMS_HOST: http://egov-mdms-service:8094
+      NOVU_BRIDGE_MDMS_SEARCH_PATH: /mdms-v2/v2/_search
       NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}
+      # Shared secret for provider delivery receipts (Novu webhook / SMSCountry DR) posted to
+      # /novu-bridge/novu-adapter/v1/receipts/{novu|smscountry}. Blank = receipts off; rows
+      # then never move past SENT ("accepted by the transport").
+      NOVU_BRIDGE_RECEIPTS_SECRET: ${NOVU_BRIDGE_RECEIPTS_SECRET:-}
       # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
-      # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
-      # configurator's own provider/template screens are not 403'd.
-      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
+      # plumbed from .env — the installer sets it. MDMS_ADMIN (the config-admin) is in
+      # the default so the configurator's own provider/template screens work out of the box.
+      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}
+      # The narrower tier for the calls that carry provider credentials or destroy them
+      # (POST /providers, /providers/_update, /providers/_delete). A caller without one
+      # of these roles gets 403 NB_ADMIN_ROLE_REQUIRED even if it is on the list above.
+      NOVU_BRIDGE_PROXY_ADMIN_ROLES: ${NOVU_BRIDGE_PROXY_ADMIN_ROLES:-SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
-      # MDMS_HOST MUST be set. The bridge's application.properties default
-      # is `mdms.host=${MDMS_HOST:-http://mdms-v2.egov:8080}` — that host
-      # does not resolve on the egov docker network, so the citizen
-      # phone-prefix lookup (formatRecipientPhone -> MDMS
-      # ValidationConfigs.mobileNumberValidation) throws
-      # NB_MDMS_PHONE_PREFIX_UNAVAILABLE and NO notification is ever sent.
-      # Setting only MDMS_SEARCH_PATH (as earlier iterations did) is not
-      # enough. Verified on Bomet 2026-05-16: with MDMS_HOST unset, every
-      # complaint failed here; with it set, prefix resolves (+254) and the
-      # pipeline completes through Twilio.
-      MDMS_HOST: http://egov-mdms-service:8094
-      MDMS_SEARCH_PATH: /mdms-v2/v2/_search
+      # Thin events: the bridge resolves placeholder labels (complaint type, status, department)
+      # through egov-localization. Without this the property default names a host that does not
+      # exist on Compose, and messages degrade to raw codes ("NoStreetlight" for "No streetlight").
+      NOVU_BRIDGE_LOCALIZATION_HOST: http://egov-localization:8096
       # Novu API endpoints are populated in iteration 3 once novu-api
       # is in the stack; bridge starts up but won't dispatch until
       # NOVU_BASE_URL + NOVU_API_KEY resolve to a reachable Novu.
@@ -3248,46 +3191,6 @@ services:
       start_period: 30s
     networks:
       - egov-network
-  # otp-publisher — replaces Kong's mock /user-otp termination with a real
-  # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish OTP.SEND to
-  # kafka complaints.domain.events -> novu-bridge -> Twilio SMS. Part of the
-  # SMS-OTP path; gated behind the notifications profile (off by default).
-  # Node service vendored at utilities/otp-publisher; built locally via
-  # `build_otp_publisher: true` (tag otp-publisher:local) or override with
-  # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
-  # bare `docker compose --profile notifications up` works without a local build.
-  otp-publisher:
-    # Hardening: no capabilities, no privilege escalation (see file header).
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: [ALL]
-    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:2.12-81fc6be}
-    container_name: otp-publisher
-    restart: unless-stopped
-    profiles: ["notifications"]
-    depends_on:
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    environment:
-      PORT: '3030'
-      REDIS_URL: redis://redis:6379
-      KAFKA_BROKERS: redpanda:9092
-      EVENT_TOPIC: complaints.domain.events
-      OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
-      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-pg}
-      STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
-      # Per-tenant recipient for OTP routing; set in host_vars when wiring SMS.
-      OTP_RECIPIENT_USER_ID: ${OTP_RECIPIENT_USER_ID:-}
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    networks:
-      - egov-network
-
 networks:
   egov-network:
     driver: bridge

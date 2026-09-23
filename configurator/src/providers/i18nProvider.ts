@@ -41,12 +41,17 @@ const customEnglishMessages: TranslationMessages = {
     nav: {
       dashboard: 'Dashboard',
       notifications: 'Notifications',
+      // Menu entries INSIDE the Notifications group: no "Notification" prefix —
+      // the group already says it. Page titles (app.resources.*) keep the long
+      // form so a screen read out of context is still unambiguous.
       notification_configure: 'Configure',
-      notification_routing: 'Notification Routing',
-      notification_templates: 'Notification Templates',
+      notification_channels: 'Channels',
+      notification_events: 'Events',
+      notification_routing: 'Routing',
+      notification_templates: 'Templates',
       notification_provider_templates: 'Provider Templates (WhatsApp)',
-      notification_logs: 'Notification Logs',
-      notification_providers: 'Notification Providers',
+      notification_logs: 'Logs',
+      notification_providers: 'Providers',
       notification_preferences: 'User Preferences',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
@@ -170,6 +175,11 @@ const customEnglishMessages: TranslationMessages = {
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
     },
+    channels: {
+      // Notifications → Channels screen (the channel card, moved off Providers).
+      title: 'Notification Channels',
+      subtitle_before: 'Switch each channel on and choose the provider it sends through. Add or change the accounts themselves under',
+    },
     providers: {
       // Notification Providers screen — self-service actions.
       add: 'Add Provider',
@@ -187,12 +197,16 @@ const customEnglishMessages: TranslationMessages = {
       field_content_sid: 'Content SID',
       field_variables: 'Variables (comma-separated)',
       body_placeholder: 'Test message text',
-      // Column headers.
+      // Column headers. Every one of these is used as a bare `label:` on the
+      // providers datagrid (no `{ _: default }` at the call site), so a missing
+      // key renders as the raw `app.providers.col_*` string in the header row.
       col_channel: 'Channel',
       col_provider: 'Provider',
       col_name: 'Name',
       col_active: 'Active',
       col_primary: 'Primary',
+      col_type: 'Type',
+      col_selected: 'In use',
       // Credential field labels.
       cred: {
         account_sid: 'Account SID',
@@ -205,9 +219,14 @@ const customEnglishMessages: TranslationMessages = {
         secure: 'Use TLS (secure)',
       },
       // Row actions.
-      verify: 'Verify',
+      verify: 'Check status',
+      verify_hint: 'Confirms the provider exists and is switched on. It does not prove the credentials — send a test for that.',
       test: 'Test',
-      templates: 'Templates',
+      // The row action that lists Novu's delivery workflows. NOT "Templates":
+      // message text lives on Notifications → Templates and approved WhatsApp
+      // templates on Provider Templates (WhatsApp); three different things
+      // under one word is how an operator edits the wrong screen.
+      delivery_workflows: 'Delivery workflows',
       verified: 'Verified',
       failed: 'Failed',
       status: 'Status',
@@ -217,9 +236,9 @@ const customEnglishMessages: TranslationMessages = {
       send_test: 'Send Test',
       view_logs: 'View Notification Logs',
       whatsapp_sid_hint: 'Approved WhatsApp ContentSids are listed on the Provider Templates screen.',
-      // Templates dialog.
-      templates_title: 'Novu Workflows',
-      templates_hint: 'Delivery workflows configured in Novu for this channel — not provider templates (Twilio has no SMS template registry). SMS/Email message text is managed under Notification Templates. Copy a workflow ID to reference it.',
+      // Delivery-workflows dialog (Novu plumbing, not message templates).
+      delivery_workflows_title: 'Delivery workflows (Novu)',
+      delivery_workflows_hint: 'The delivery plumbing configured in Novu for this channel. These are NOT message templates: your message text lives on Notifications → Templates, and approved WhatsApp templates on Provider Templates (WhatsApp). Copy a workflow ID to reference it.',
       templates_empty: 'No Novu workflows found for this channel.',
       whatsapp_sid_note: 'WhatsApp ContentSids are managed on the Provider Templates screen, not here.',
       copy: 'Copy',
@@ -229,8 +248,8 @@ const customEnglishMessages: TranslationMessages = {
       msg_missing: 'Fill in the name and all required credential fields.',
       msg_created: 'Provider created.',
       msg_create_failed: 'Could not create provider.',
-      msg_verify_ok: 'Provider verified.',
-      msg_verify_fail: 'Provider not active.',
+      msg_verify_ok: 'Provider is set up and switched on.',
+      msg_verify_fail: 'Provider not found, or switched off.',
       msg_no_id: 'This provider has no integration id to verify.',
       msg_test_sent: 'Test dispatched via Novu.',
       msg_test_failed: 'Test delivery failed.',
@@ -259,6 +278,50 @@ const customEnglishMessages: TranslationMessages = {
       sync_persist: 'Persist %{n} selected',
       sync_persist_done: 'Provider templates persisted.',
       sync_persist_summary: '%{ok} saved, %{fail} failed.',
+    },
+    otp_wording: {
+      // Notifications → Configure: "Login and registration OTP (SMS)" section.
+      // %s and %% below are the OTP service's own format syntax, shown to the
+      // operator literally; polyglot only interpolates %{name}.
+      title: 'Login and registration OTP (SMS)',
+      subtitle: 'The text of the one-time-password SMS sent for login, registration and password reset. The OTP service writes this SMS itself; it is not an event and has no routing.',
+      wording_only: 'Only the wording is changed here. Whether OTPs are sent, and through which provider, is set on Channels (SMS): OTPs use the same SMS channel, provider and log as every other SMS.',
+      timing: 'A saved change is used by the next OTP. The OTP service reads the wording from localization for every OTP and keeps no copy, and saving clears localization\'s cache.',
+      languages: 'Citizens get the wording in the language their app is set to; a request with no language gets en_IN. A language with no OTP wording stored gets the built-in English text.',
+      stored_at: 'Stored as localization messages: tenant %{tenant}, module %{module}.',
+      language: 'Language',
+      purpose_login: 'Login',
+      purpose_register: 'Registration',
+      purpose_passwordreset: 'Password reset',
+      source_builtin: 'Default (built into the OTP service)',
+      source_missing: 'Missing: OTPs of this type fail',
+      source_inherited: 'Inherited from tenant %{tenant}',
+      source_stored_default: 'Default wording, stored in localization',
+      source_custom: 'Custom',
+      missing_hint: 'No message for this code, while this language holds other egov-user messages: the OTP service cannot build the SMS and the request fails. Save a wording to fix it.',
+      broken: 'In %{locale}, egov-user holds messages but not all three OTP codes, so the OTP types marked Missing fail today. Saving any one of them writes all three.',
+      inherited_note: 'In %{locale}, tenant %{tenant} serves the same egov-user messages as %{parent} (usually inherited from it). A save writes that whole set at %{tenant}, so none of it is lost.',
+      edit: 'Edit wording',
+      reset: 'Reset to default',
+      textarea_label: '%{purpose} OTP wording',
+      code_hint: 'Put %s exactly once where the code goes. Write %% for a literal percent sign.',
+      preview: 'Preview with a 6-digit code:',
+      segments: '%{segments} SMS segment(s) · %{encoding} · %{units} characters',
+      save: 'Save wording',
+      saving: 'Saving…',
+      cancel: 'Cancel',
+      blocked: 'This wording cannot be saved: %{reason}',
+      saved: 'OTP wording saved. The next OTP sent in %{locale} uses it.',
+      save_failed: 'Save failed: %{error}',
+      confirm_reset: 'Replace the %{purpose} OTP wording for %{locale} with the built-in default?',
+      reset_deleted: 'Stored OTP wording for %{locale} removed; the OTP service is back on its built-in text.',
+      reset_written: 'Default wording restored as a stored message. It is not deleted because other egov-user messages exist in %{locale}, and the OTP service would then fail this OTP type.',
+      reset_none: 'Already the built-in wording.',
+      readonly_role: 'Read-only: changing this wording needs a role with the localization write action (%{action}), the same permission the Localization screens need.',
+      readonly_unknown: 'Read-only: your permission to change localization could not be checked.',
+      no_tenant: 'No tenant selected.',
+      loading: 'Loading…',
+      load_failed: 'Could not read the OTP wording from localization: %{error}',
     },
   },
 };

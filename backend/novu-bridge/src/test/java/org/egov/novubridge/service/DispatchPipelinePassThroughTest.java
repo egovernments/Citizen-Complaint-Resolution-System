@@ -1,9 +1,14 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.service.provider.WhatsAppBusinessApiProviderStrategy;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
@@ -42,7 +47,6 @@ class DispatchPipelinePassThroughTest {
     private NovuClient novuClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
-    private MdmsServiceClient mdmsServiceClient;
 
     private DispatchPipelineService service;
 
@@ -53,21 +57,21 @@ class DispatchPipelinePassThroughTest {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         config = new NovuBridgeConfiguration();
-        config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
-        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                null, dispatchLogRepository, config, mdmsServiceClient);
+        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, config), dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent smsEvent() {
+    private NotificationEvent smsEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
@@ -77,7 +81,7 @@ class DispatchPipelinePassThroughTest {
         data.put("status", "PENDINGATLME");
         data.put("action", "ASSIGN");
         data.put("toState", "PENDINGATLME");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -103,7 +107,7 @@ class DispatchPipelinePassThroughTest {
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> txn = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(subId.capture(), contact.capture(), eq("SMS"),
-                body.capture(), any(), txn.capture(), any(), any(), any());
+                body.capture(), any(), txn.capture(), any(), any(), any(), any(), any());
 
         // subscriberId, contact profile, renderedBody, transactionId all come straight from the event.
         assertEquals("ke.bomet:uuid-123", subId.getValue());
@@ -131,7 +135,7 @@ class DispatchPipelinePassThroughTest {
     void explicitTemplateKeyOnTheWire_winsOverDerivedRoutingKey() {
         // Forward-compat: once pgr-services publishes the actual MDMS
         // NotificationTemplate uid on the event, it is persisted verbatim.
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setTemplateKey("CITIZEN.ASSIGN.PENDINGATLME.SMS.sw_KE");
 
         service.process(event, true, null);
@@ -143,7 +147,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void whatsappEvent_noEnabledProvider_persistsSkippedNoProvider_neverFallsBackToSms() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("WHATSAPP");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP");
 
@@ -151,7 +155,7 @@ class DispatchPipelinePassThroughTest {
 
         assertFalse(result.getNovuTriggered());
         // No Novu trigger at all — in particular NOT the SMS workflow.
-        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         // Explicit SKIPPED/NB_NO_PROVIDER dispatch row.
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(captor.capture());
@@ -162,14 +166,14 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void unknownChannel_isSkippedWithUnsupportedChannel_notDefaultedToSms() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("PIGEON");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:PIGEON");
 
         DispatchResult result = service.process(event, true, null);
 
         assertFalse(result.getNovuTriggered());
-        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(captor.capture());
         assertEquals("SKIPPED", captor.getValue().getStatus());
@@ -178,7 +182,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void emailEvent_isDispatchedViaNovu_withRenderedBodyAndSubject() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("EMAIL");
         event.setSubject("Your complaint PGR-001");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL");
@@ -188,13 +192,13 @@ class DispatchPipelinePassThroughTest {
         assertTrue(result.getNovuTriggered());
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("EMAIL"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL"), any(), any(), any());
+                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL"), any(), any(), any(), any(), any());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
     }
 
     @Test
     void novuTriggerThrows_persistsFailed_thenRethrows() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
                 .thenThrow(new CustomException("NB_NOVU_TRIGGER_FAILED", "boom"));
 
         assertThrows(CustomException.class, () -> service.process(smsEvent(), true, null));
@@ -208,7 +212,7 @@ class DispatchPipelinePassThroughTest {
 
     @Test
     void emailEvent_withoutEmail_skippedContactMissing() {
-        ComplaintsDomainEvent event = smsEvent();
+        NotificationEvent event = smsEvent();
         event.setChannel("EMAIL");
         // Contact carries a phone but no email — an EMAIL row must not phantom-SEND.
         event.setContact(Contact.builder()
@@ -219,7 +223,7 @@ class DispatchPipelinePassThroughTest {
         DispatchResult result = service.process(event, true, null);
 
         assertFalse(result.getNovuTriggered());
-        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(captor.capture());
         assertEquals("SKIPPED", captor.getValue().getStatus());
@@ -235,13 +239,7 @@ class DispatchPipelinePassThroughTest {
 
         assertEquals(Boolean.FALSE, result.getPreferenceAllowed());
         assertEquals(Boolean.FALSE, result.getNovuTriggered());
-        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any());
+        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any());
     }
 
-    @Test
-    void whatsAppBusinessApiStrategy_ownsBareWhatsappAlias() {
-        // Durable concern carried over from the deleted BaileysProviderStrategyTest:
-        // with Baileys gone, the Meta strategy owns the bare "whatsapp" alias again.
-        assertTrue(new WhatsAppBusinessApiProviderStrategy().supports("whatsapp"));
-    }
 }

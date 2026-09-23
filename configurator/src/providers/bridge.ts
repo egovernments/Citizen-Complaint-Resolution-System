@@ -20,6 +20,8 @@ export {
   getResourceLabel,
   getResourceBySchema,
   isAccessControlGated,
+  isReadOnlyResource,
+  readOnlyNoticeFor,
   REGISTRY,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';

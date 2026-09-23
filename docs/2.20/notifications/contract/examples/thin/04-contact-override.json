@@ -1,0 +1,25 @@
+{
+  "kind": "THIN",
+  "schemaVersion": "1",
+  "eventId": "8c5d4e3f-2a1b-4c9d-8e7f-6a5b4c3d2e1f",
+  "eventType": "CORE_SMS",
+  "eventTime": "2026-09-21T10:44:09.412Z",
+  "producer": "digit-core",
+  "module": "CORE",
+  "eventName": "CORE.SMS.OTP",
+  "entityType": "SMS",
+  "tenantId": "ke.bomet",
+  "transactionSeed": "CORE.SMS.OTP:5f3a9c21-0b7e-4d16-9a44-3e8c7b2d1a05",
+  "recipients": [
+    {
+      "type": "CITIZEN",
+      "name": "Jane Doe",
+      "phone": "+254712345678",
+      "locale": "sw_KE"
+    }
+  ],
+  "data": {
+    "otp": "482913",
+    "validity_minutes": "10"
+  }
+}

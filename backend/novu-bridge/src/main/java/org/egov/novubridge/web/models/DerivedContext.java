@@ -24,4 +24,7 @@ public class DerivedContext {
     private String email;
     private String name;
     private String transactionId;
+
+    /** {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered. */
+    private String sourcePath;
 }

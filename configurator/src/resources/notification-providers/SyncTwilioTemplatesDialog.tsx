@@ -2,22 +2,24 @@
 // local-setup/scripts/persist-provider-templates.py.
 //
 // Flow: (1) pull the operator's OWN approved Twilio WhatsApp Content templates
-// from the bridge (already reconciled server-side against the PGR routing
-// tuples); (2) let the operator review the auto-matched rows + see unmatched
+// from the bridge as metadata, matched HERE against the tenant's own routing and
+// template rows (twilioTemplateMatch.ts); (2) let the operator review the auto-matched rows + see unmatched
 // diagnostics; (3) confirm + upsert the selected rows into MDMS
-// RAINMAKER-PGR.NotificationProviderTemplate (resource `notification-provider-template`).
+// NOTIFICATIONS.ProviderTemplate (resource `notifications-provider-template`).
 //
 // WHY THE WRITE PATH WORKS (identical mechanics to NotificationConfigure): the
-// schema declares x-unique = [provider, channel, audience, action, toState,
-// locale]; egov-mdms-service v2 derives `uniqueIdentifier` server-side by joining
+// schema declares x-unique = [provider, channel, eventName, audience, locale];
+// egov-mdms-service v2 derives `uniqueIdentifier` server-side by joining
 // those with '.', so the deterministic uid we compute here is exactly the id
 // react-admin reads back (dataProvider normalizeMdmsRecord sets id =
-// uniqueIdentifier). Create-if-absent, update carrying the existing id (the
+// uniqueIdentifier). Note the uid is not decomposable: eventName contains dots. Create-if-absent, update carrying the existing id (the
 // dataProvider re-fetches + carries auditDetails) if present — idempotent, safe
 // to re-run. Twilio secrets never reach the client; we only receive the SID map.
 
 import { useState } from 'react';
 import { useCreate, useUpdate, useGetList, useRefresh, useTranslate } from 'ra-core';
+import { digitClient } from '@/providers/bridge';
+import { matchTwilioTemplates } from './twilioTemplateMatch';
 import { Loader2, RefreshCw, ChevronRight, AlertTriangle, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,15 +31,15 @@ import { isMdmsDuplicate, type Mutate } from '../notification-configure/notifica
 import {
   syncTwilioTemplates,
   type TwilioMatchedTemplate,
-  type TwilioTemplatesResponse,
+  type TwilioUnmatchedTemplate,
 } from './providerApi';
 
-const RESOURCE = 'notification-provider-template';
+const RESOURCE = 'notifications-provider-template';
 const RETURN_PROMISE = { returnPromise: true };
 
 /** x-unique join = the server-derived MDMS uniqueIdentifier for a matched row. */
 function uidOf(row: TwilioMatchedTemplate): string {
-  return [row.provider, row.channel, row.audience, row.action, row.toState, row.locale].join('.');
+  return [row.provider, row.channel, row.eventName, row.audience, row.locale].join('.');
 }
 
 /** Project a bridge row down to the persisted MDMS `data` object. The schema is
@@ -48,8 +50,7 @@ function mdmsData(row: TwilioMatchedTemplate): Record<string, unknown> {
     provider: row.provider,
     channel: row.channel,
     audience: row.audience,
-    action: row.action,
-    toState: row.toState,
+    eventName: row.eventName,
     locale: row.locale,
     templateId: row.templateId,
     templateName: row.templateName,
@@ -87,7 +88,7 @@ export function SyncTwilioTemplatesDialog({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resp, setResp] = useState<TwilioTemplatesResponse | null>(null);
+  const [resp, setResp] = useState<{ matched: TwilioMatchedTemplate[]; unmatched: TwilioUnmatchedTemplate[]; total: number } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showSkipped, setShowSkipped] = useState(false);
 
@@ -99,9 +100,16 @@ export function SyncTwilioTemplatesDialog({
   // CLI's "search the master once, then decide per row").
   const { data: existing } = useGetList(RESOURCE, {
     pagination: { page: 1, perPage: 1000 },
-    sort: { field: 'action', order: 'ASC' },
+    sort: { field: 'eventName', order: 'ASC' },
   });
   const existingIds = new Set((existing ?? []).map((r) => String(r.id)));
+
+  // The tenant's routing + template rows are the source of truth for matching (read at
+  // the STATE tenant, where pgr-services reads them).
+  const stateTenant = String(digitClient.stateTenantId || '');
+  const stateFilter = stateTenant ? { __tenantId: stateTenant } : {};
+  const { data: routingRows } = useGetList('notifications-routing', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'eventName', order: 'ASC' }, filter: stateFilter });
+  const { data: templateRows } = useGetList('notifications-template', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'eventName', order: 'ASC' }, filter: stateFilter });
 
   const reset = () => {
     setLoading(false);
@@ -120,7 +128,9 @@ export function SyncTwilioTemplatesDialog({
     setResp(null);
     setResults({});
     try {
-      const data = await syncTwilioTemplates();
+      const meta = await syncTwilioTemplates();
+      const { matched, unmatched } = matchTwilioTemplates(meta.templates ?? [], (routingRows ?? []) as never[], (templateRows ?? []) as never[]);
+      const data = { matched, unmatched, total: meta.total };
       setResp(data);
       const preselect = new Set(
         (data.matched ?? []).filter(isApproved).map(uidOf),
@@ -315,8 +325,7 @@ export function SyncTwilioTemplatesDialog({
                           </td>
                           <td className="px-2 py-1.5">{row.audience}</td>
                           <td className="px-2 py-1.5">
-                            <span className="font-medium">{row.action}</span>
-                            <span className="text-muted-foreground"> → {row.toState}</span>
+                            <span className="font-medium">{row.eventName}</span>
                           </td>
                           <td className="px-2 py-1.5 font-mono">{row.locale}</td>
                           <td className="px-2 py-1.5 font-mono" title={row.templateId}>{truncateId(row.templateId)}</td>
@@ -360,7 +369,7 @@ export function SyncTwilioTemplatesDialog({
           {resp && matched.length === 0 && !error && (
             <p className="text-sm text-muted-foreground py-2">
               {t('app.providers.sync_none', {
-                _: 'No approved Twilio Content templates map to the PGR routing tuples yet.',
+                _: 'No approved Twilio Content templates map to this tenant\'s routing rows yet.',
               })}
             </p>
           )}

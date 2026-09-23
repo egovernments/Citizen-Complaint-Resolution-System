@@ -1,0 +1,389 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "NOTIFICATIONS.EventCatalogue",
+    "description": "Module-neutral catalogue of the domain events the notification box accepts. One row per event: the module, a label, the actors the producer names (who can be notified by ACTOR:x), the placeholders it fills, and optionally the channels it allows. Routing and template rows reference eventName; an event that is not catalogued is rejected. The PGR rows are generated from the workflow definition (local-setup/scripts/generate_event_catalogue.py).",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Notification Event Catalogue",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "module",
+        "eventName",
+        "label"
+      ],
+      "x-unique": [
+        "eventName"
+      ],
+      "properties": {
+        "module": {
+          "type": "string",
+          "description": "Owning module, e.g. Complaints. Recorded verbatim on the thin event and used by the Configurator to group and filter."
+        },
+        "eventName": {
+          "type": "string",
+          "description": "The globally unique, dotted, module-prefixed event key, e.g. COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME. Replaces the legacy (businessService, action, toState) tuple."
+        },
+        "entityType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "What the event's entityId names, e.g. COMPLAINT."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable name shown in the Configurator's event picker."
+        },
+        "actors": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "The actor names a producer sends on this event. Feeds the audience picker's Actor list: an audience of ACTOR:<name> is resolvable only for a name declared here.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Actor key as it appears in the thin event's actors map, e.g. citizen, assignee."
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "required": {
+                "type": "boolean",
+                "description": "true = the producer always sends this actor; false = it may be absent, so an audience that depends on it needs a fallback in its pipe chain."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "placeholders": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "The {token} vocabulary this event carries. A template may only use tokens listed here; anything else ships with literal braces.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Token name WITHOUT braces, e.g. complaint_type."
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "blankWhen": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "When this token resolves to an empty string rather than a value. Authoring hint only."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "channels": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "Channels this event may be routed to. A module may declare EMAIL-only events.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "SMS",
+              "WHATSAPP",
+              "EMAIL"
+            ]
+          }
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "NOTIFICATIONS.Routing",
+    "description": "Module-neutral notification routing (the 'who'): one row per (eventName, audience, channel) declaring that this domain event notifies that audience over that channel. Joins 1:1 with NOTIFICATIONS.Template on (eventName, audience, channel). Replaces RAINMAKER-PGR.NotificationRouting, whose businessService is subsumed by eventName, whose fromState was documentation-only, and whose assigneeOnly is now expressed by the audience chain ACTOR:assignee|ROLE:<code>.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Notification Routing",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "module",
+        "eventName",
+        "audience",
+        "channel"
+      ],
+      "x-unique": [
+        "eventName",
+        "audience",
+        "channel"
+      ],
+      "properties": {
+        "module": {
+          "type": "string",
+          "description": "Owning module, e.g. Complaints. NOT part of the uniqueness key -- eventName is already globally unique -- it exists so a row's owner is visible without a join."
+        },
+        "eventName": {
+          "type": "string",
+          "description": "Event key from NOTIFICATIONS.EventCatalogue, e.g. COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME."
+        },
+        "audience": {
+          "type": "string",
+          "description": "Recipient reference with a scheme. ACTOR:<name> resolves from the event's actors map with no I/O; ROLE:<code> expands to every holder of the role in the tenant; EVENT_RECIPIENTS reads the event's recipients array; A|B is a pipe chain taking the first form that yields a non-empty list. Legacy bare names still resolve: CITIZEN=ACTOR:citizen, EMPLOYEE=ACTOR:assignee, any other bare name=ROLE:<it>. AUTO_ESCALATE and SYSTEM are non-notifiable and dropped with a warning."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "NOTIFICATIONS.Template",
+    "description": "Module-neutral notification content (the 'what'). One row per (eventName, audience, channel, locale) holding the message body the notification box renders per recipient locale. Replaces RAINMAKER-PGR.NotificationTemplate. Edited via the configurator.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Notification Template",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "module",
+        "eventName",
+        "audience",
+        "channel",
+        "locale",
+        "body"
+      ],
+      "x-unique": [
+        "eventName",
+        "audience",
+        "channel",
+        "locale"
+      ],
+      "properties": {
+        "module": {
+          "type": "string",
+          "description": "Owning module, e.g. Complaints. Not part of the uniqueness key; see NOTIFICATIONS.Routing.module."
+        },
+        "eventName": {
+          "type": "string",
+          "description": "Event key from NOTIFICATIONS.EventCatalogue."
+        },
+        "audience": {
+          "type": "string",
+          "description": "The audience this body is written for, in the same scheme form the matching NOTIFICATIONS.Routing row uses. The two must be byte-identical or the routing row finds no template."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "locale": {
+          "type": "string",
+          "description": "e.g. en_IN, sw_KE."
+        },
+        "subject": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "EMAIL only; null for SMS/WHATSAPP."
+        },
+        "body": {
+          "type": "string",
+          "description": "Message body with {placeholder} tokens. A token the event does not carry is left unsubstituted (literal braces)."
+        },
+        "placeholders": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Declared {tokens} this body uses. Must be a subset of the event's catalogue vocabulary."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "NOTIFICATIONS.ProviderTemplate",
+    "description": "Module-neutral provider template mapping (the 'how it is delivered'): one row per (provider, channel, eventName, audience, locale) mapping a rendered notification to the external provider's pre-registered template and its ordered variables (e.g. a Twilio Content SID for WhatsApp). Replaces RAINMAKER-PGR.NotificationProviderTemplate. Carries no module column: it is keyed by the provider's own registry, and eventName already names the owner.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Notification Provider Template",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "provider",
+        "channel",
+        "eventName",
+        "audience",
+        "locale",
+        "templateId",
+        "variables"
+      ],
+      "x-unique": [
+        "provider",
+        "channel",
+        "eventName",
+        "audience",
+        "locale"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "External delivery provider whose template registry this row targets, e.g. twilio."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "eventName": {
+          "type": "string",
+          "description": "Event key from NOTIFICATIONS.EventCatalogue."
+        },
+        "audience": {
+          "type": "string",
+          "description": "Same scheme form as the matching NOTIFICATIONS.Routing / NOTIFICATIONS.Template rows."
+        },
+        "locale": {
+          "type": "string",
+          "description": "e.g. en_IN, sw_KE."
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Provider-side template identifier, e.g. a Twilio Content SID (HX...)."
+        },
+        "templateName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Human-readable provider template name, for reference in the configurator."
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered {token} names substituted into the provider template positionally."
+        },
+        "approvalStatus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Provider approval state of the template, e.g. approved, pending, rejected."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "NOTIFICATIONS.Channel",
+    "description": "Per-tenant notification channel policy (the 'is this channel on, and through which gateway'): one row per channel. Read by novu-bridge at the STATE tenant on every dispatch (cached 60s). Shape unchanged from RAINMAKER-PGR.NotificationChannel, which it replaces; only the namespace moves. Edited via the configurator (Notifications -> Channels).",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Notification Channel",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code",
+        "enabled"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ],
+          "description": "Channel."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "false = every event on this channel is recorded SKIPPED/NB_NO_PROVIDER, never delivered."
+        },
+        "gateway": {
+          "type": "string",
+          "enum": [
+            "novu",
+            "smscountry"
+          ],
+          "description": "Transport. novu (default) delivers through the Novu integration for the channel; smscountry (SMS only) posts straight to SMSCountry's bulk API."
+        },
+        "senderId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Registered sender id / DLT header for a direct SMS gateway. Ignored for novu."
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Novu integration identifier of the ACTIVE provider for this channel at this state tenant (one per channel). Set/cleared from the configurator (Notifications -> Providers); credentials live in Novu, never here. Empty/absent = no provider selected. Nullable like senderId so clearing the selection is a valid write."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]
