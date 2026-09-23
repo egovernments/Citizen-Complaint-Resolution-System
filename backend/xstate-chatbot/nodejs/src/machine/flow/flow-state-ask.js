@@ -47,7 +47,7 @@ class AskState extends State {
       initial: 'question',
       states: {
         question: {
-          entry: (context) => this.enter(context),
+          entry: (context, event) => this.enter(context, undefined, event),
           on: { USER_MESSAGE: 'process' }
         },
         process: {

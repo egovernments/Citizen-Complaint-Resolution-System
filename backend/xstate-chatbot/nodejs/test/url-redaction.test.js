@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 const { redactUrl } = require("../src/privacy");
 
 test("no query value survives into a log line, whatever it is", () => {
-  // The shared secret is header-only now, but a provider can still put
-  // anything in the query, so every value goes rather than a named list.
+  // A provider can put anything in the query, so every value is redacted
+  // rather than a named list of secret-looking keys.
   const url = "/xstate-chatbot/message?token=s3cret-live-value&From=849904390";
   const redacted = redactUrl(url);
 

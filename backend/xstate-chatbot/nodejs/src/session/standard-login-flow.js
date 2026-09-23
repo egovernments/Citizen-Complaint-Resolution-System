@@ -5,6 +5,7 @@ const Session = require("./session");
 const dialog = require("../machine/util/dialog");
 const messages = require("../machine/flow/shell-messages");
 const { maskMobile } = require("../privacy");
+const { isWhitelisted: isNumberAllowed } = require("../whitelist");
 
 class StandardLoginFlow {
   constructor(inboundRequestModel) {
@@ -13,8 +14,7 @@ class StandardLoginFlow {
   }
 
   isWhitelisted() {
-    const allowed = config.allowedMobileNumbers.split(",").map((n) => n.trim()).filter(Boolean);
-    return allowed.length === 0 || allowed.includes(this.mobileNumber);
+    return isNumberAllowed(this.mobileNumber);
   }
 
   async resolveSession() {

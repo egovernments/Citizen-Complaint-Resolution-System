@@ -72,7 +72,7 @@ class WalkState extends State {
   renderPreamble(context) {
     const { levelLabel, trailBundle } = context[this.stepSlot] || {};
     let text = this.preamble ? dialog.get_message(this.preamble, context.user.locale) : '';
-    text = text.replace('{{level}}', levelLabel || '');
+    text = text.split('{{level}}').join(levelLabel || '');
     if (this.trail) {
       const trail = this.getPath(context)
         .map((code) => (trailBundle && trailBundle[code] ? dialog.get_message(trailBundle[code], context.user.locale) : code))

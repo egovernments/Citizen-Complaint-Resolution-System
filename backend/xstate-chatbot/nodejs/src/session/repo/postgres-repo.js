@@ -9,6 +9,9 @@ class StateRepository {
         return result;
     }
 
+    // FLAG: last writer wins. No version column, no row lock, and persist-queue
+    // serialises per citizen within ONE process — two replicas can interleave
+    // read-modify-write here and drop a transition. Safe at replicas: 1.
     async updateState(userId, active, state, time_stamp) {
         const query = 'UPDATE eg_chat_state_v2 SET active = $2, state = $3, time_stamp = $4 WHERE user_id = $1';
         let result = await pool.query(query, [userId, active, state, time_stamp]);

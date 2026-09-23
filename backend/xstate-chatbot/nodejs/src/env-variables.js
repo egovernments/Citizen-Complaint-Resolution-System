@@ -52,6 +52,9 @@ const envVariables = {
     // MZ: 258 / 9 (^8[0-9]{8}$).   IN: 91 / 10.
     countryCode: process.env.COUNTRY_CODE || '91',
     mobileNumberLength: parseInt(process.env.MOBILE_NUMBER_LENGTH || '10', 10),
+    // Whether the two above were set, as opposed to defaulted. startup-checks
+    // demands them from providers that convert numbers without MDMS.
+    countryExplicitlySet: Boolean(process.env.COUNTRY_CODE && process.env.MOBILE_NUMBER_LENGTH),
 
     descriptionMinLength: parseInt(process.env.DESCRIPTION_MIN_LENGTH || '20', 10),
 
@@ -71,6 +74,10 @@ const envVariables = {
         defaultRegex: process.env.DEFAULT_MOBILE_REGEX || '^[0-9]{10}$',
         cacheTtlMs: parseInt(process.env.MOBILE_VALIDATION_CACHE_TTL_MS || '300000', 10),
     },
+
+    // Reference data the walks re-read once per level (MDMS masters, boundary
+    // trees). Rarely changes, and the reads sit between two WhatsApp messages.
+    referenceCacheTtlMs: parseInt(process.env.REFERENCE_CACHE_TTL_MS || '60000', 10),
 
     // The dev-only catch-all reverse proxy in app.js. OFF by default: with it on, every
     // path the chatbot does not own is forwarded to the DIGIT services host, so a publicly

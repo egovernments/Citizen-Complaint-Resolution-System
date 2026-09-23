@@ -26,6 +26,16 @@ function missingConfig() {
     need(config.webhook.sharedSecret, 'WEBHOOK_SHARED_SECRET');
   }
 
+  // FLAG: ValueFirst and Kaleyra convert numbers through phone-numbers.js, which reads
+  // COUNTRY_CODE, while Twilio and user-service read the tenant's MDMS
+  // common-masters.MobileNumberValidation row. Two sources of truth, and COUNTRY_CODE
+  // defaults to '91' — so a tenant seeded +258 that never sets the env var gets a silent
+  // mismatch between inbound and outbound identity. Demanded explicitly here until those
+  // adapters move to mobile-validation-service.
+  if (['ValueFirst', 'Kaleyra'].includes(config.whatsAppProvider) && !config.countryExplicitlySet) {
+    missing.push('COUNTRY_CODE', 'MOBILE_NUMBER_LENGTH');
+  }
+
   return missing;
 }
 
@@ -52,8 +62,9 @@ function warnings() {
 
   if (config.repoProvider === 'InMemory') {
     found.push(
-      'REPO_PROVIDER is InMemory: conversations are lost on restart and break with more ' +
-      'than one replica. Set it to Postgres for any real deployment.'
+      'REPO_PROVIDER is InMemory: conversations are lost on restart. Set it to Postgres ' +
+      'for any real deployment — that fixes restarts, not concurrency; see ' +
+      'postgres-repo.updateState before running more than one replica.'
     );
   }
 

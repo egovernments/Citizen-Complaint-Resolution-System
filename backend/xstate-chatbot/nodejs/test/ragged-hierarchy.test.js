@@ -62,10 +62,9 @@ function raggedTree() {
 }
 
 test("a branch that bottoms out early is marked a leaf, whatever the level declares", async () => {
-  // Before this, leafness came only from level.isLeafServiceCode. LIXO is at
-  // level 1, the definition says leaves live at level 2, so picking LIXO
-  // descended into an empty level — and pgr-machine wires onEmpty to
-  // system_error, so the citizen lost the complaint instead of filing it.
+  // LIXO sits at level 1 with nothing under it, while the definition puts
+  // leaves at level 2. Treating it as non-leaf descends into an empty level,
+  // and pgr-machine wires onEmpty to system_error — the complaint is lost.
   raggedTree();
   const step = await pgrService.fetchComplaintHierarchyStep("mz", []);
 
@@ -75,9 +74,8 @@ test("a branch that bottoms out early is marked a leaf, whatever the level decla
 });
 
 test("only the disagreeing codes are carried, so a uniform level costs nothing", async () => {
-  // leafByCode rides in context, which is JSON-serialised into eg_chat_state_v2
-  // on every transition. Carrying every code would grow that row with tenant
-  // size rather than conversation length.
+  // leafByCode rides in context, serialised into eg_chat_state_v2 each
+  // transition, so it must scale with variation and not with tenant size.
   raggedTree();
   const root = await pgrService.fetchComplaintHierarchyStep("mz", []);
   assert.deepEqual(Object.keys(root.leafByCode), ["LIXO"], "SAUDE agrees with the default, so it is absent");

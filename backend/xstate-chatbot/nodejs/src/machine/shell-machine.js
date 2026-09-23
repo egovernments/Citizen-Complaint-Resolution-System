@@ -9,6 +9,7 @@ const ProcessingState = require('./flow/flow-state-processing');
 const GateState = require('./flow/flow-state-gate');
 const Group = require('./flow/flow-state-group');
 const compile = require('./flow/flow-state-compiler');
+const { isWhitelisted: isNumberAllowed } = require('../whitelist');
 
 const dialog = require('./util/dialog');
 const config = require('../env-variables');
@@ -22,10 +23,7 @@ const isOnboarded = (context) => context.user.locale;
 const hasProfileName = (context) => context.user.name && context.user.name !== config.citizenPlaceholderName;
 const gaveName = (context) => context.onboarding.name;
 const commitName = (context) => { context.user.name = context.onboarding.name; };
-const isWhitelisted = (context) => {
-  const allowed = config.allowedMobileNumbers.split(',').map((n) => n.trim()).filter(Boolean);
-  return allowed.length === 0 || allowed.includes(context.user.mobileNumber);
-};
+const isWhitelisted = (context) => isNumberAllowed(context.user.mobileNumber);
 
 
 // -- onboarding group ---------------------------------------------------

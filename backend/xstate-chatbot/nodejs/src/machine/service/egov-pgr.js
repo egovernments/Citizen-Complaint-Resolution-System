@@ -10,6 +10,7 @@ const fs = require("fs");
 const axios = require("axios");
 var FormData = require("form-data");
 const mediaTypes = require("../../media-types");
+const TtlCache = require("../../ttl-cache");
 var geturl = require("url");
 var path = require("path");
 const userService = require('../../session/user-service');
@@ -18,6 +19,8 @@ require("url-search-params-polyfill");
 
 let pgrCreateRequestBody =
   '{"RequestInfo":{"authToken":"","userInfo":{}},"service":{"tenantId":"","serviceCode":"","description":"","accountId":"","source":"whatsapp","address":{"landmark":"","city":"","geoLocation":{"latitude": null, "longitude": null},"locality":{"code":""}}},"workflow":{"action":"APPLY","verificationDocuments":[]}}';
+
+const referenceCache = new TtlCache(config.referenceCacheTtlMs);
 
 class PGRService {
   async fetchMdmsData(tenantId, moduleName, masterName, filterPath, user) {
@@ -112,11 +115,13 @@ class PGRService {
   }
 
   async fetchComplaintHierarchyLevels(tenantId) {
-    const rows = await this.fetchMdmsData(
-      tenantId,
-      "RAINMAKER-PGR",
-      "ComplaintHierarchyDefinition",
-      "$.[?(@.active == true)]"
+    const rows = await referenceCache.get(`definition:${tenantId}`, () =>
+      this.fetchMdmsData(
+        tenantId,
+        "RAINMAKER-PGR",
+        "ComplaintHierarchyDefinition",
+        "$.[?(@.active == true)]"
+      )
     );
     const definition = rows?.[0] ?? {};
     const levels = definition.levels ?? [];
@@ -137,8 +142,11 @@ class PGRService {
   async fetchComplaintHierarchyStep(tenantId, hierarchyPath = []) {
     const [{ hierarchyType, levels }, hierarchyRows] = await Promise.all([
       this.fetchComplaintHierarchyLevels(tenantId),
-      this.fetchMdmsData(tenantId, "RAINMAKER-PGR", "ComplaintHierarchy", "$.[?(@.active == true)]")
+      referenceCache.get(`hierarchy:${tenantId}`, () =>
+        this.fetchMdmsData(tenantId, "RAINMAKER-PGR", "ComplaintHierarchy", "$.[?(@.active == true)]")
+      )
     ]);
+
 
     const parentCode = hierarchyPath[hierarchyPath.length - 1];
     const children = hierarchyRows
@@ -176,11 +184,8 @@ class PGRService {
     };
   }
 
-  /**
-   * Codes whose leafness disagrees with the level default. Empty on a uniform
-   * level, so the walk's context — JSON-serialised into eg_chat_state_v2 on
-   * every transition — only grows for tenants with genuinely ragged branches.
-   */
+  /** Codes whose leafness disagrees with isLeafLevel; empty on a uniform level.
+   *  Rides in context, which is serialised into eg_chat_state_v2 each transition. */
   leafExceptions(pairs, isLeafLevel) {
     const exceptions = {};
     for (const [code, leaf] of pairs) {
@@ -203,20 +208,24 @@ class PGRService {
     const url =
       config.egovServices.egovServicesHost +
       "boundary-service/boundary-hierarchy-definition/_search";
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        RequestInfo: {},
-        BoundaryTypeHierarchySearchCriteria: { tenantId },
-      }),
+     
+      const data = await referenceCache.get(`boundary-def:${tenantId}`, async () => {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            RequestInfo: {},
+            BoundaryTypeHierarchySearchCriteria: { tenantId },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Boundary hierarchy fetch failed with status ${response.status}`);
+        }
+
+        return response.json();
     });
 
-    if (!response.ok) {
-      throw new Error(`Boundary hierarchy fetch failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
     // a tenant can have several unrelated hierarchy types registered (other
     // modules, QA fixtures) - pick the one PGR is configured to use, not just
     // whichever the search happens to return first.
@@ -263,17 +272,21 @@ class PGRService {
       "&hierarchyType=" +
       encodeURIComponent(hierarchyType) +
       "&includeChildren=true";
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ RequestInfo: {} }),
+    
+    const data = await referenceCache.get(`boundary-tree:${tenantId}:${hierarchyType}`, async () => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ RequestInfo: {} }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Boundary relationships fetch failed with status ${response.status}`);
+      }
+
+      return response.json();
     });
 
-    if (!response.ok) {
-      throw new Error(`Boundary relationships fetch failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
 
     let nodes = (data.TenantBoundary ?? []).flatMap((entry) => entry.boundary ?? []);
     for (const code of boundaryPath) {

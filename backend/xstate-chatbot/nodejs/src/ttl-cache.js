@@ -1,0 +1,30 @@
+/**
+ * Per-key cache with a time limit. Stores the in-flight promise, so callers
+ * racing on a cold key share one load; a rejected load is evicted rather than
+ * cached.
+ */
+class TtlCache {
+  constructor(ttlMs) {
+    this.ttlMs = ttlMs;
+    this.entries = new Map();
+  }
+
+  get(key, load) {
+    const hit = this.entries.get(key);
+    if (hit && hit.expiresAt > Date.now()) return hit.promise;
+
+    const promise = load();
+    const entry = { promise, expiresAt: Date.now() + this.ttlMs };
+    this.entries.set(key, entry);
+    promise.catch(() => {
+      if (this.entries.get(key) === entry) this.entries.delete(key);
+    });
+    return promise;
+  }
+
+  clear() {
+    this.entries.clear();
+  }
+}
+
+module.exports = TtlCache;

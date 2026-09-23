@@ -15,15 +15,8 @@ function maskMobile(mobileNumber) {
 }
 
 /**
- * A request url with its query values replaced by `<redacted>`.
- *
- * A url reaches the log on every inbound request, accepted or rejected, and
- * its query can carry a citizen's number or anything else a provider chooses
- * to put there. Keys are kept, values are not: which parameters arrived is
- * useful for debugging, what they held is not ours to write down.
- *
- * Every value goes, rather than an allowlist of secret-looking names — such a
- * list is one somebody forgets to update.
+ * A request url with every query VALUE replaced by `<redacted>`; keys are kept.
+ * Applied to all values, not a list of secret-looking names.
  */
 function redactUrl(url) {
   const raw = String(url ?? '');

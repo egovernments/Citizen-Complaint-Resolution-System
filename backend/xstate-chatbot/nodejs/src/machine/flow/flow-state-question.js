@@ -83,7 +83,7 @@ class QuestionState extends State {
         question: {
           entry: [
             assign((context) => { context[this.optionsSlot] = this.resolveOptions(context); }),
-            (context) => this.enter(context, { options: () => this.renderOptionsList(context[this.optionsSlot] || []) })
+            (context, event) => this.enter(context, { options: () => this.renderOptionsList(context[this.optionsSlot] || []) }, event)
           ],
           on: { USER_MESSAGE: 'process' }
         },

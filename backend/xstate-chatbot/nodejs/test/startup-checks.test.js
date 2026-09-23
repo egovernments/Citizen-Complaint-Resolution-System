@@ -17,6 +17,7 @@ function config(overrides = {}) {
     serviceAccount: { username: "svc", password: "pw", tenantId: "mz" },
     twilio: { accountSid: "AC1", authToken: "tok", webhookBaseUrl: "https://x.example", verifyWebhookSignature: true },
     webhook: { sharedSecret: "s3cret", verify: true },
+    countryExplicitlySet: true,
   };
   return { ...base, ...overrides };
 }
@@ -71,6 +72,22 @@ test("ValueFirst and Kaleyra need the shared secret they verify against", () => 
     off.webhook = { sharedSecret: "", verify: false };
     assert.deepEqual(missingWith(off), [], `${provider} with verification off`);
   }
+});
+
+test("the env-path providers must set the country explicitly", () => {
+  // ValueFirst and Kaleyra convert numbers from COUNTRY_CODE, which defaults to
+  // India's 91, while the rest of the service reads the tenant's MDMS rule.
+  // Defaulting silently disagrees with a tenant seeded +258.
+  for (const provider of ["ValueFirst", "Kaleyra"]) {
+    const cfg = config({ whatsAppProvider: provider });
+    cfg.countryExplicitlySet = false;
+    assert.deepEqual(missingWith(cfg), ["COUNTRY_CODE", "MOBILE_NUMBER_LENGTH"], provider);
+  }
+
+  // Twilio reads MDMS, so it is not asked.
+  const twilio = config();
+  twilio.countryExplicitlySet = false;
+  assert.deepEqual(missingWith(twilio), []);
 });
 
 test("Twilio settings are not demanded of a ValueFirst deployment", () => {

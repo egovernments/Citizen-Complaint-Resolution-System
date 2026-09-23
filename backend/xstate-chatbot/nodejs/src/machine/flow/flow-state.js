@@ -102,13 +102,14 @@ class State {
   }
 
   // compiles this state into its XState node shape
-    compileNode() {
+  compileNode() {
     return {
       id: this.key,
       entry: (context, event) => {
-        this.enter(context);
+        this.enter(context, undefined, event);
         if (this.effect) this.effect(context, event);
       },
+
       always: this.resolveBranches()
     };
   }
