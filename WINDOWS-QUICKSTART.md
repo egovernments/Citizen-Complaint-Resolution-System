@@ -114,8 +114,25 @@ cp inventory/host_vars/localhost-slim.yml.example inventory/host_vars/mybox.yml
 # 32 GB machine? use localhost-full.yml.example instead
 ```
 
-The defaults are validated — nothing needs editing for a local bring-up. The
-filename (`mybox`) is your tenant handle for `deploy.sh`.
+The defaults are validated — one line needs setting for a local bring-up, and the
+first `./deploy.sh` stops in about two seconds to tell you so:
+
+```
+[FAIL] fastpath-data-wipe-ack: db_fast_path: true requires db_fast_path_ack_data_wipe: true
+```
+
+Set `db_fast_path_ack_data_wipe: true` in your file and re-run. That gate exists because
+enabling the DB fast path on a machine that already holds a database replaces it with the
+shipped snapshot — on a laptop doing a first bring-up there is nothing to lose, so this is
+a one-line confirmation.
+
+If you have run DIGIT on this machine before and the postgres container is
+currently stopped, the deploy may stop with "Could not determine where this box
+keeps its PostgreSQL data" — Docker Desktop keeps volume data inside a VM, so
+the check cannot see it while nothing is running. Start the stack first, or set
+`pg_allow_data_loss: true` once you are sure there is nothing here to keep.
+
+The filename (`mybox`) is just your tenant handle for `deploy.sh`.
 
 ## 5. Deploy (as root)
 

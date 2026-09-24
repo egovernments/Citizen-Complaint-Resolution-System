@@ -118,9 +118,14 @@ cp inventory/host_vars/localhost-full.yml.example inventory/host_vars/mybox.yml
 ```
 
 Every setting in both files is commented in place — what it does, and what values it
-accepts. **The presets run as-is**; you do not have to edit anything to get a working stack.
-Read the comments before changing values: several are pinned by the database dump and will
-break the deploy if you "harden" them, notably `elasticsearch_master_password`.
+accepts. **One line needs setting before the first run**: `db_fast_path_ack_data_wipe: true`.
+Preflight stops the deploy until you do, because the DB fast path replaces any database
+already on the machine with the shipped snapshot. On a fresh local box there is nothing to
+lose; on a machine that has run DIGIT before, check first.
+
+Beyond that the presets run as-is. Read the comments before changing values: several are
+pinned by the database dump and will break the deploy if you "harden" them, notably
+`elasticsearch_master_password`.
 
 No inventory edit is needed. `deploy.sh` regenerates `inventory/hosts.yml` from whatever
 `host_vars/*.yml` exist on every run.

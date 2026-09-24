@@ -55,7 +55,26 @@ jobs:
         run: yamllint -c .yamllint playbook-deploy.yml
 
       - name: yamllint — inventory
-        run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/
+        run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/ tasks/ tests/
+
+      # Drives the real tasks in tasks/pg-storage-guard.yml over the decision
+      # matrix, with the box probe stubbed. Offline — no Docker, no target host.
+      # Exists because review of #2101 found three blocking bugs in this logic,
+      # none of which were reachable by testing the probe shell script alone.
+      - name: pg storage guard — decision matrix
+        run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-test.yml
+
+      # Every combination of probe verdict x effective mount x stack state x
+      # override, generated rather than hand-picked. The named rows above cover
+      # the incidents; a coverage count showed they reached 14 of 56 tuples.
+      - name: pg storage guard — exhaustive matrix
+        run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-exhaustive.yml
+
+      # Separate run on purpose: set_fact persists across plays, so the
+      # production shape (no injected probe verdict) only isolates as its own
+      # invocation. See the playbook header.
+      - name: pg storage guard — production path
+        run: ansible-playbook -i localhost, -c local tests/pg-storage-guard-prod-path.yml
 
   config-contracts:
     name: Config combination + infra contracts
@@ -78,8 +97,25 @@ jobs:
       - name: preflight — fixtures (valid must pass, invalid must trip)
         run: python3 local-setup/scripts/preflight.py --fixtures local-setup/tests/fixtures/host_vars/
 
-      - name: preflight — tracked example must pass
-        run: python3 local-setup/scripts/preflight.py local-setup/ansible/inventory/host_vars/_example.yml
+      # _example.yml deliberately ships db_fast_path: true with the ack set to
+      # false (issue #2082), so that copying it and deploying is stopped once and
+      # the operator has to confirm the wipe. CI therefore asserts the file FAILS,
+      # and fails for EXACTLY that one reason — anything else is a regression.
+      - name: preflight — tracked example must trip only the fast-path ack gate
+        run: |
+          set -o pipefail
+          out=$(python3 local-setup/scripts/preflight.py \
+                  local-setup/ansible/inventory/host_vars/_example.yml 2>&1) && rc=0 || rc=$?
+          echo "$out"
+          if [ "${rc:-0}" -eq 0 ]; then
+            echo "::error::_example.yml passed preflight; it must trip fastpath-data-wipe-ack (#2082)"
+            exit 1
+          fi
+          fails=$(printf '%s\n' "$out" | grep -c '^\[FAIL\]' || true)
+          if [ "$fails" -ne 1 ] || ! printf '%s\n' "$out" | grep -q '^\[FAIL\] fastpath-data-wipe-ack:'; then
+            echo "::error::_example.yml must trip exactly one rule (fastpath-data-wipe-ack); got $fails"
+            exit 1
+          fi
 
       # Renders the daemon.json the deploy would write across a matrix of
       # docker_log_* combinations and asserts three things per case: it parses
@@ -90,12 +126,19 @@ jobs:
         run: local-setup/scripts/test-daemon-json.sh
 
       # Cross-file contracts lint can't see: compose -f stack discipline,
-      # :latest pin freeze, overlay-service existence.
-      - name: infra contract tests
+      # :latest pin freeze, overlay-service existence, postgres volume paths,
+      # host_vars template invariants.
+      #
+      # The DIRECTORY, not one file. This named infra-contracts.test.ts alone,
+      # so deployment-contracts / mobile-rules / pgr-inbox-pagination never ran
+      # in CI and their assertions were dead code — a template could be flipped
+      # back to a pre-set data-wipe ack on a fully green build. A new file under
+      # static/ now runs without anyone remembering to add it here.
+      - name: static contract tests
         working-directory: local-setup/tests
         run: |
           npm ci
-          npx jest static/infra-contracts.test.ts
+          npx jest static/
 
   test:
     runs-on: ubuntu-latest

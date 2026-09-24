@@ -8,7 +8,7 @@ CMS ships as one product with two deployment substrates: **Ansible on a single V
 
 ## Architecture at a glance
 
-*Source of this diagram: [`docs/images/complaints-management-architecture.mmd`](images/complaints-management-architecture.mmd) — edit there and keep this block in sync.*
+*Source of this diagram:* `[docs/images/complaints-management-architecture.mmd](images/complaints-management-architecture.mmd)` *— edit there and keep this block in sync.*
 
 ```mermaid
 flowchart TB
@@ -105,15 +105,19 @@ flowchart TB
     classDef added  fill:#BBF7D0,stroke:#15803D,color:#14532D
 ```
 
+
+
 **Legend.** Blue = stock DIGIT platform (we consume, we don't own). Orange = CMS domain services (Complaints Management business logic). Green = CMS-added at the platform tier — candidates for absorption into DIGIT over time.
 
 ## Deployment modes
 
-| Mode | Substrate | Use for | HA |
-|---|---|---|---|
-| A. Ansible + Docker Compose | Single VM | Dev, demos, pilots, CI | No |
-| B. Local Kubernetes | kind / k3d | Developing & validating the k8s path | No |
-| **C. Helm + K8S (recommended for production)** | Multi-node cluster | Production tenants | Capable, opt-in |
+
+| Mode                                           | Substrate          | Use for                              | HA              |
+| ---------------------------------------------- | ------------------ | ------------------------------------ | --------------- |
+| A. Ansible + Docker Compose                    | Single VM          | Dev, demos, pilots, CI               | No              |
+| B. Local Kubernetes                            | kind / k3d         | Developing & validating the k8s path | No              |
+| **C. Helm + K8S (recommended for production)** | Multi-node cluster | Production tenants                   | Capable, opt-in |
+
 
 Non-production runs on **Mode A** (fastest bring-up, most reproducible). Production tenants run on **Mode C**. **Mode B** exists only to develop and validate the k8s manifests without a cloud cluster.
 
@@ -129,19 +133,21 @@ Helm charts (`devops/deploy-as-code/charts/`) on HA RKE2 (or cloud-managed K8s p
 
 Ordered by CTO-impact (identity/compliance → security → perimeter → cost/scale → recurring cost → feature velocity → ops → observability → developer productivity). The same componentry ships in both Mode A and Mode C.
 
-| # | Component | Stock DIGIT | CMS choice | Why we changed | Absorption candidate? |
-|---|---|---|---|---|---|
-| 1 | **Identity / SSO** | egov-user + custom JWTs | **Keycloak + OAuth2 Proxy** | Standards-based (OIDC), realm-per-tenant, external-IdP federation without touching services, better session/token management, auth enforced at the edge | **Yes, for 2.9.x** |
-| 2 | **Secrets** | Env vars in files | **OpenBao** (Vault-compatible fork) | Central secret store with rotation and audit trail — required for enterprise ops and compliance reviews | **Yes, for 2.9.x** |
-| 3 | **API gateway** | Spring Cloud Gateway (JVM) | **Kong** (nginx + Lua) | Off-JVM (no heap contention with services); declarative config; mature plugin ecosystem (rate limit, auth, CORS, transforms); first-class K8s ingress controller; lower, more predictable footprint. | **Yes, for 2.9.x. 3.0 is on Kong already** |
-| 4 | **Event bus** | Kafka (KRaft mode) | **Redpanda** (single binary) | Kafka wire-compatible drop-in — existing Kafka clients (spring-kafka etc.) work unchanged. KRaft has closed the ZooKeeper gap, so the remaining differentiators are: C++ / Seastar thread-per-core → no JVM GC pauses and more predictable p99 tail latency; meaningfully lower RAM floor at rest (critical for the single-VM Ansible profile — Kafka can be tuned down but Redpanda has a lower floor); faster cold-boot for CI / pilot bring-up; smaller ops surface (single binary + declarative config vs. broker/controller roles, listener config, and JVM tuning) | Maybe |
-| 5 | **Maps / spatial** | Google Maps tiles (paid, external) | **Overpass + Turbopass** (self-hosted OSM) | Zero per-tile cost, no external dependency, no location data leaves the deployment (data-sovereignty) | Domain-adjacent |
-| 6 | **Notifications** | egov-notification-sms/email/* per-channel services | **Novu** | One notification platform, one API, workflow-driven templates; UI for config & logs; channel expansion (WhatsApp bidirectional sits on top) without new services | Maybe |
-| 7 | **Admin console** | Workbench or Piecemeal per-service MDMS UIs | **Configurator** (built by us) | Single admin surface for platform config (tenant, roles etc..) / branding / complaints /configuration; ships identically in both modes | **Yes, for 2.9.x and 3.0** |
-| 8 | **Observability** | Prometheus baseline | **Gatus + custom Grafana dashboards** | Gatus gives leadership a black-box SLO/uptime view; dashboards tuned for JVM/pod metrics | **Yes** |
-| 9 | **Automation test suite** | Ad-hoc, per-service | **Playwright (E2E) + integration tests + k6 (perf)**, wired to run against deployed environments via the `integration-tests-runner` systemd service | Continuous validation against real environments (not just CI), makes rapid release credible, catches regressions before tenant rollout — the quality gate behind the nightly develop redeploy | **Yes, with changes** |
-| 10 | **UI framework** | digit-ui (webpack, multi-repo) | **digit-ui-v2** (esbuild, monorepo) | Faster builds, cleaner shared-component story, easier per-tenant theming | **Yes** |
-| 11 | **Agentic Layer** | (none) | **digit-mcp** (MCP server) | Programmatic driver for tenant setup, boundary loads, city onboarding — reduces manual ops during rollout and validates configurations independently | **Yes** |
+
+| #   | Component                 | Stock DIGIT                                        | CMS choice                                                                                                                                          | Why we changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Absorption candidate?                      |
+| --- | ------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| 1   | **Identity / SSO**        | egov-user + custom JWTs                            | **Keycloak + OAuth2 Proxy**                                                                                                                         | Standards-based (OIDC), realm-per-tenant, external-IdP federation without touching services, better session/token management, auth enforced at the edge. Backwards compatible.                                                                                                                                                                                                                                                                                                                                                                                           | **Yes, for 2.9.x**                         |
+| 2   | **Secrets**               | Env vars in files                                  | **OpenBao** (Vault-compatible fork)                                                                                                                 | Central secret store with rotation and audit trail — required for enterprise ops and compliance reviews. OpenBao has a OSI-approved license, vendor-neutral governance model under the Linux foundation, support for full k8s & lighter single-VM deploy.                                                                                                                                                                                                                                                                                                                | **Yes**                                    |
+| 3   | **API gateway**           | Spring Cloud Gateway (JVM)                         | **Kong** (nginx + Lua)                                                                                                                              | Off-JVM (no heap contention with services); declarative config; mature plugin ecosystem (rate limit, auth, CORS, transforms); first-class K8s ingress controller; lower, more predictable footprint.                                                                                                                                                                                                                                                                                                                                                                     | **Yes, for 2.9.x. 3.0 is on Kong already** |
+| 4   | **Event bus**             | Kafka (KRaft mode)                                 | **Redpanda** (single binary)                                                                                                                        | Kafka wire-compatible drop-in — existing Kafka clients (spring-kafka etc.) work unchanged. KRaft has closed the ZooKeeper gap, so the remaining differentiators are: C++ / Seastar thread-per-core → no JVM GC pauses and more predictable p99 tail latency; meaningfully lower RAM floor at rest (critical for the single-VM Ansible profile — Kafka can be tuned down but Redpanda has a lower floor); faster cold-boot for CI / pilot bring-up; smaller ops surface (single binary + declarative config vs. broker/controller roles, listener config, and JVM tuning) | Maybe                                      |
+| 5   | **Maps / spatial**        | Google Maps tiles (paid, external)                 | **Overpass + Turbopass** (self-hosted OSM)                                                                                                          | Zero per-tile cost, no external dependency, no location data leaves the deployment (data-sovereignty)                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Domain-adjacent                            |
+| 6   | **Notifications**         | egov-notification-sms/email/* per-channel services | **Novu**                                                                                                                                            | One notification platform, one API, workflow-driven templates; UI for config & logs; channel expansion (WhatsApp bidirectional sits on top) without new services                                                                                                                                                                                                                                                                                                                                                                                                         | Maybe                                      |
+| 7   | **Admin console**         | Workbench or Piecemeal per-service MDMS UIs        | **Configurator** (built by us)                                                                                                                      | Single admin surface for platform config (tenant, roles etc..) / branding / complaints /configuration; ships identically in both modes                                                                                                                                                                                                                                                                                                                                                                                                                                   | **Yes, for 2.9.x and 3.0**                 |
+| 8   | **Observability**         | Prometheus baseline                                | **Gatus + custom Grafana dashboards**                                                                                                               | Gatus gives leadership a black-box SLO/uptime view; dashboards tuned for JVM/pod metrics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **Yes**                                    |
+| 9   | **Automation test suite** | Ad-hoc, per-service                                | **Playwright (E2E) + integration tests + k6 (perf)**, wired to run against deployed environments via the `integration-tests-runner` systemd service | Continuous validation against real environments (not just CI), makes rapid release credible, catches regressions before tenant rollout — the quality gate behind the nightly develop redeploy                                                                                                                                                                                                                                                                                                                                                                            | **Yes, with changes**                      |
+| 10  | **UI framework**          | digit-ui (webpack, multi-repo)                     | **digit-ui-v2** (esbuild, monorepo)                                                                                                                 | Faster builds, cleaner shared-component story, easier per-tenant theming                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | **Yes**                                    |
+| 11  | **Agentic Layer**         | (none)                                             | **digit-mcp** (MCP server)                                                                                                                          | Programmatic driver for tenant setup, boundary loads, city onboarding — reduces manual ops during rollout and validates configurations independently                                                                                                                                                                                                                                                                                                                                                                                                                     | **Yes**                                    |
+
 
 "Absorption candidate" = a platform-tier choice that logically belongs upstream in DIGIT rather than in CMS. If adopted upstream, CMS would stop owning it.
 
@@ -155,14 +161,20 @@ Both modes consume the same service images, same tenant config, same MDMS, same 
 - **Ansible has an anonymous-volume hazard.** `docker compose down -v` destroys stateful data on that host. Operator discipline required, especially for the bomet nightly re-converge.
 - **Mode B uses raw manifests, not the production Helm charts** — small dev/prod drift we should close to make local == prod.
 
+
+
 ## Open questions
 
--**Maintenance** - Maintaining two modes of deployment for each release is additional work. 
+- **Maintenance** - Maintaining parity between the two modes of deployment for each release will have to be accounted for in each release.
+
 - **Backup / restore story** — product-level guarantee for Mode A pilots vs. the replication + snapshot story for Mode C needs to be validated.
+
+
 
 ## Further reading
 
-- Detailed technical comparison: [`docs/deployment-modes.md`](deployment-modes.md)
-- Business framing: [`docs/deployment-overview.md`](deployment-overview.md)
-- Ansible entry point: [`local-setup/ansible/README.md`](../local-setup/ansible/README.md)
-- Kubernetes deployment assets: [`devops/deploy-as-code/`](../devops/deploy-as-code/) and [`devops/infra-as-code/terraform/`](../devops/infra-as-code/terraform/)
+- Detailed technical comparison: `[docs/deployment-modes.md](deployment-modes.md)`
+- Business framing: `[docs/deployment-overview.md](deployment-overview.md)`
+- Ansible entry point: `[local-setup/ansible/README.md](../local-setup/ansible/README.md)`
+- Kubernetes deployment assets: `[devops/deploy-as-code/](../devops/deploy-as-code/)` and `[devops/infra-as-code/terraform/](../devops/infra-as-code/terraform/)`
+

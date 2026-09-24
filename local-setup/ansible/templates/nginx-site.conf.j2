@@ -188,9 +188,16 @@ server {
     # The board enumerates the whole internal service topology (every
     # component, its endpoint and its live health), which is a free recon map
     # of the deployment. Same basic-auth front as the integration-tests
-    # dashboards above; the playbook writes .htpasswd-status and refuses to
-    # deploy with `status: true` and no password set, so this cannot silently
-    # render open.
+    # dashboards above.
+    #
+    # These two directives are INSIDE the `nginx_features.status` guard and are
+    # not themselves conditional, so there is no configuration in which the
+    # board is served unauthenticated — that is what lets the feature default to
+    # on. The playbook always resolves a password (host_vars, else OpenBao, else
+    # generated) and writes .htpasswd-status; if it somehow did not, nginx has
+    # no auth_basic_user_file to open and fails the request closed. Do NOT read
+    # this as "the deploy refuses to start with status: true and no password" —
+    # that assert existed before the feature shipped enabled and is gone.
     auth_basic "DIGIT status";
     auth_basic_user_file /etc/nginx/.htpasswd-status;
 
