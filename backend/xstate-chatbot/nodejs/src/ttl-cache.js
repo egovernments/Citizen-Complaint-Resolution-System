@@ -5,6 +5,9 @@
  */
 class TtlCache {
   constructor(ttlMs) {
+    // A missing ttl would make every expiry NaN, so every lookup misses and the
+    // cache quietly does nothing. Loud, because that is invisible in a test.
+    if (!(ttlMs > 0)) throw new Error(`TtlCache needs a positive ttlMs, got ${ttlMs}`);
     this.ttlMs = ttlMs;
     this.entries = new Map();
   }

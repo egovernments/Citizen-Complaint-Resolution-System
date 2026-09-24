@@ -194,6 +194,11 @@ class PGRService {
     return exceptions;
   }
 
+  /** Drops the cached MDMS and boundary reads for every tenant. */
+  clearReferenceCache() {
+    referenceCache.clear();
+  }
+
   hierarchyMessageBundle(codes) {
     const messageBundle = {};
     for (const code of codes) {

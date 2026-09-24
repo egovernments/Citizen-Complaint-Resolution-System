@@ -74,7 +74,10 @@ function warnings() {
 function invalidConfig() {
   const bad = [];
   const { request, mediaProcessing, dispatchSettle } = config.timeouts || {};
-  if (!dispatchSettle) return bad;
+  if (!dispatchSettle || !request || !mediaProcessing) {
+    bad.push('REQUEST_TIMEOUT_MS, MEDIA_PROCESSING_TIMEOUT_MS and DISPATCH_SETTLE_TIMEOUT_MS must all be set');
+    return bad;
+  }
 
   if (dispatchSettle <= request) {
     bad.push(`DISPATCH_SETTLE_TIMEOUT_MS (${dispatchSettle}) must exceed REQUEST_TIMEOUT_MS (${request})`);

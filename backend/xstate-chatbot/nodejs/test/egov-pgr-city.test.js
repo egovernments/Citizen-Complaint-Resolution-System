@@ -14,6 +14,7 @@ function load() {
     id: envPath, filename: envPath, loaded: true,
     exports: {
       rootTenantId: "ke",
+      referenceCacheTtlMs: 60000,
       boundaryHierarchyType: "ADMIN",
       supportedLocales: "en_IN",
       mobileValidation: { defaultCountryCode: "+254", defaultRegex: "^0?[17][0-9]{8}$", cacheTtlMs: 1000 },

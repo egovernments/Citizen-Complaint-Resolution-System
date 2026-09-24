@@ -1,4 +1,5 @@
 const test = require("node:test");
+const { beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
@@ -17,6 +18,7 @@ stub("src/env-variables.js", {
   countryCode: "258",
   mobileNumberLength: 9,
   timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
+  referenceCacheTtlMs: 60000,
   pgrUseCase: {},
 });
 stub("src/machine/util/localisation-service.js", { getMessageBundleForCode: () => undefined, getLocales: () => [] });
@@ -40,6 +42,10 @@ require.cache[require.resolve("node-fetch")] = {
 };
 
 const pgrService = require(p("src/machine/service/egov-pgr.js"));
+
+// Each case stubs its own MDMS response; a cached one from the previous
+// case would answer instead.
+beforeEach(() => pgrService.clearReferenceCache());
 
 // A definition that declares leaves at level 2, and a tree where one branch
 // disagrees: LIXO has no children even though it sits at level 1.
