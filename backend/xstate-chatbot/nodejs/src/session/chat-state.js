@@ -38,6 +38,8 @@ class ChatState {
     state.context.user = { locale: locale, userId: userId, mobileNumber: mobileNumber };
     state.event = {};
     state._event = {};
+    state.actions = [];
+
     // history keeps its OWN copy of the event that produced it, and that event
     // is the inbound model — service-account authToken included. Looped rather
     // than done once: toJSON caps the chain today, nothing guarantees it will.
@@ -45,6 +47,7 @@ class ChatState {
       if (past.context) past.context.user = {};
       past.event = {};
       past._event = {};
+      past.actions = [];
     }
 
     return this;
