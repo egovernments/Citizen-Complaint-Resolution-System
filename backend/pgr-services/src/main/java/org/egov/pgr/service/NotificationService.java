@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.egov.pgr.util.PGRConstants.ASSIGN;
 import static org.egov.pgr.util.PGRConstants.DEPARTMENT;
@@ -107,6 +108,19 @@ public class NotificationService {
     private Producer producer;
 
     /**
+     * How long one shortened {@code {download_link}} is reused. The long URL is a single
+     * deployment-wide setting ({@code mobileDownloadLink}), and egov-url-shortening mints a new key
+     * for it on every call, so shortening it per transition bought nothing but a round trip and a
+     * row. Package-private for tests.
+     */
+    long shortLinkTtlMs = TimeUnit.HOURS.toMillis(1);
+
+    /** The last successful shortening; immutable, swapped whole, so the Kafka threads can share it. */
+    private volatile ShortLink shortLink;
+
+    private record ShortLink(String longUrl, String shortUrl, long fetchedAt) { }
+
+    /**
      * Entry point from the Kafka notification consumer: publish ONE thin domain event for this
      * workflow transition onto {@code complaints.domain.events}, the same topic the pre-rendered
      * envelopes used. novu-bridge consumes that topic and dispatches on the event's {@code kind},
@@ -155,9 +169,11 @@ public class NotificationService {
      * workflow history. Never throws — no assignee is a normal state (an APPLY has none), and a
      * failure to find one must not stop the event being published.
      *
-     * <p>Design errata 6: when the egov-user lookup fails on the history path the workflow's own
-     * user record is sent INLINE, which publishes the same person under a different identity than
-     * the uuid-only form would. That is today's behaviour, deliberately preserved.
+     * <p>When PGR's own egov-user lookup fails on the history path the assignee still goes out
+     * uuid-only whenever the workflow record has a uuid: the bridge looks the contact up itself (an
+     * {@code NB_CONTACT_MISSING} row if it cannot), so no employee phone reaches Kafka, and the
+     * workflow record's number, which has no country code, is never sent to. Only a record with no
+     * uuid at all is sent INLINE, because its phone is then the only contact anyone has.
      */
     ResolvedAssignee resolveAssignee(ServiceRequest request) {
         String tenantId = request.getService().getTenantId();
@@ -178,11 +194,11 @@ public class NotificationService {
                 User wu = pi.getAssignes().get(0);
                 if (StringUtils.hasText(wu.getUuid())) {
                     org.egov.pgr.web.models.User u = fetchUserByUUID(wu.getUuid(), requestInfo, tenantId);
-                    if (u != null) return ResolvedAssignee.ofUuid(u.getUuid(), u.getName());
+                    // The lookup only names {emp_name}; failed, the workflow record's name does.
+                    return ResolvedAssignee.ofUuid(wu.getUuid(), u != null ? u.getName() : wu.getName());
                 }
-                // The lookup failed: send what the workflow record holds, inline, uuid and all —
-                // it is then the only contact anyone has.
-                return ResolvedAssignee.inline(wu.getUuid(), wu.getName(), wu.getMobileNumber());
+                // No uuid to look up: the workflow record's contact is the only one anyone has.
+                return ResolvedAssignee.inline(null, wu.getName(), wu.getMobileNumber());
             }
         } catch (Exception e) {
             // Expected when there is no assignee yet (e.g. APPLY, where the history search 404s or
@@ -197,11 +213,21 @@ public class NotificationService {
     /**
      * {@code {download_link}} — the one placeholder blanked rather than omitted on failure, because
      * a shortener outage must not ship a message containing the literal text
-     * <code>{download_link}</code>.
+     * <code>{download_link}</code>. Cached for {@link #shortLinkTtlMs}; a failure, or the long URL
+     * the shortener hands back when it answers empty, is not cached, so the next transition retries.
      */
     private String shortenedDownloadLink(String serviceRequestId) {
+        String longUrl = config.getMobileDownloadLink();
+        ShortLink cached = shortLink;
+        if (cached != null && cached.longUrl().equals(longUrl)
+                && System.currentTimeMillis() - cached.fetchedAt() < shortLinkTtlMs) {
+            return cached.shortUrl();
+        }
         try {
-            String url = notificationUtil.getShortnerURL(config.getMobileDownloadLink());
+            String url = notificationUtil.getShortnerURL(longUrl);
+            if (StringUtils.hasText(url) && longUrl != null && !url.equals(longUrl)) {
+                shortLink = new ShortLink(longUrl, url, System.currentTimeMillis());
+            }
             return url == null ? "" : url;
         } catch (Exception e) {
             log.warn("url-shortening unavailable; blanked {download_link} for {}: {}",

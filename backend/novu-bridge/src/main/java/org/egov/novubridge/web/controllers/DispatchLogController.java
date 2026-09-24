@@ -61,12 +61,14 @@ public class DispatchLogController {
                 includeTest);
 
         // recipient_value and transaction_id can embed a raw phone (tenantId:mobile), and the stored
-        // provider response echoes the raw transactionId, so all three are masked on the way out.
+        // provider response and error message can echo the raw transactionId or recipient, so all
+        // four are masked on the way out.
         List<DispatchLogEntry> masked = data.stream()
                 .map(e -> e.toBuilder()
                         .recipientValue(PiiMask.mask(e.getRecipientValue()))
                         .transactionId(PiiMask.maskEmbedded(e.getTransactionId()))
                         .providerResponse(PiiMask.maskDeep(e.getProviderResponse()))
+                        .lastErrorMessage(PiiMask.maskEmbedded(e.getLastErrorMessage()))
                         .build())
                 .collect(Collectors.toList());
 

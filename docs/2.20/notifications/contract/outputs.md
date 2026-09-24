@@ -56,8 +56,10 @@ occurrence of the event, stable on redelivery and replay
 ([thin-event-v1.schema.json](./thin-event-v1.schema.json) `transactionSeed`). A `transactionId`
 that is already `SENT` or `DELIVERED` is not sent again: a redelivery or replay of it leaves the
 row as it is. The check is check-then-act, so two copies arriving at the same moment can both be
-sent. A random `transactionId` per attempt gives one row per attempt; `CoreSmsTranslator`
-deliberately adds a uuid so each OTP is its own row.
+sent. A random `transactionId` per attempt gives one row per attempt. A core SMS gets
+`CORE:<tenant>:<uuid>`, the uuid derived from the Kafka record's topic, partition, offset and
+timestamp: each OTP is its own row, a redelivery of the same record is the same row and is not
+sent again, and no phone number is in it.
 
 ### Columns
 
@@ -77,7 +79,7 @@ deliberately adds a uuid so each OTP is its own row.
 | `template_version` | varchar(64) | reserved |
 | `status` | varchar(32) NOT NULL | see above |
 | `attempt_count` | int NOT NULL | always 1 — no internal retry |
-| `last_error_code` / `last_error_message` | varchar(128) / text | `NB_*` code; provider's own words |
+| `last_error_code` / `last_error_message` | varchar(128) / text | `NB_*` code; provider's own words, stored raw, phones and emails masked on read |
 | `provider_response_jsonb` | jsonb | transport acceptance, later the receipt; deep-masked on read |
 | `is_test` | boolean NOT NULL, default false | test-sends; hidden unless `includeTest=true` |
 | `provider_ref` | varchar(256) | provider correlation id (Novu transactionId, SMSCountry job id) |
@@ -104,6 +106,15 @@ Topic `novu-bridge.dlq` (`NOVU_BRIDGE_KAFKA_DLQ_TOPIC`).
 
 `event` is the envelope or thin event as received, or the raw `SMSRequest` for a core-SMS
 translation failure. `errorCode` is `NB_PROCESSING_ERROR` when the failure carried no code.
+
+**Core SMS is redacted.** For a core-SMS translation failure, and for any `CORE_SMS` envelope
+that fails, the text (`message`/`body`/`text`, `renderedBody`, `subject`, `contentVariables`) is
+**removed** and phone numbers, emails, `subscriberId` and `transactionId` are masked (`***678`),
+as are phones in `errorMessage`. A top-level `redacted` array names each field changed, e.g.
+`["message", "mobileNumber"]` or `["renderedBody", "subscriberId", "contact.phone"]`. The text is
+an OTP, a password-reset link or a temporary password; the DLQ keeps it for days, and a replay
+would skip the expiry check. Such a message is for diagnosis only: replayed, it is refused
+(`NB_INVALID_CORE_SMS` / `NB_INVALID_EVENT`) rather than sent. The user asks for a new OTP.
 
 - **DLQ'd:** envelope and thin-event rejections, and any failure that throws (provider
   exception, Novu transport failure).

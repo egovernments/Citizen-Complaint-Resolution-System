@@ -154,9 +154,9 @@ public class ThinEventBuilder {
             Map<String, Object> ref = new LinkedHashMap<>();
             put(ref, "userId", assignee.getUserId());
             ref.put("type", AUDIENCE_EMPLOYEE);
-            // uuid-only on the normal path: the bridge hydrates, and no employee phone number
-            // reaches Kafka. Inline ONLY when PGR's own egov-user lookup failed and the workflow
-            // record is the only contact anyone has.
+            // uuid-only whenever a uuid is known: the bridge hydrates, and no employee phone number
+            // reaches Kafka. Inline ONLY when the workflow record has no uuid and is the only
+            // contact anyone has.
             if (assignee.isInline()) {
                 put(ref, "name", assignee.getName());
                 put(ref, "phone", assignee.getPhone());

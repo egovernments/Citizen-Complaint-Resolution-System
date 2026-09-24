@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -96,7 +97,8 @@ public class DispatchLogRepository {
                     String.class, transactionId, channel, recipientValue);
             return rows.isEmpty() ? null : rows.get(0);
         } catch (Exception e) {
-            log.warn("Dispatch log lookup failed for txn={} channel={}: {}", transactionId, channel, e.getMessage());
+            log.warn("Dispatch log lookup failed for txn={} channel={}: {}", PiiMask.maskEmbedded(transactionId),
+                    channel, e.getMessage());
             return null;
         }
     }
@@ -121,7 +123,7 @@ public class DispatchLogRepository {
         try {
             receiptJson = providerResponse != null ? mapper.writeValueAsString(providerResponse) : null;
         } catch (JsonProcessingException e) {
-            log.warn("Receipt payload not serialisable for txn={} ref={}", transactionId, providerRef);
+            log.warn("Receipt payload not serialisable for txn={} ref={}", PiiMask.maskEmbedded(transactionId), providerRef);
         }
         args.add(receiptJson);
         args.add(now); args.add(newStatus); args.add(now);
@@ -132,7 +134,7 @@ public class DispatchLogRepository {
         try {
             return jdbcTemplate.update(sql.toString(), args.toArray());
         } catch (Exception e) {
-            log.error("Failed to apply delivery receipt txn={} ref={}", transactionId, providerRef, e);
+            log.error("Failed to apply delivery receipt txn={} ref={}", PiiMask.maskEmbedded(transactionId), providerRef, e);
             return 0;
         }
     }
@@ -221,7 +223,7 @@ public class DispatchLogRepository {
                     providerResponse = mapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
                 } catch (Exception e) {
                     log.warn("Failed to parse provider_response_jsonb for txn={}: {}",
-                            rs.getString("transaction_id"), e.getMessage());
+                            PiiMask.maskEmbedded(rs.getString("transaction_id")), e.getMessage());
                 }
             }
             String idStr = rs.getString("id");

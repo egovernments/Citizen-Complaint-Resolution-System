@@ -109,8 +109,8 @@ flag: rollback means redeploying the previous image.
 |---|---|
 | `eventName` / `ledgerEventName` | `COMPLAINTS.WORKFLOW.<ACTION>.<TOSTATE>` (config key) / `COMPLAINTS.WORKFLOW.<ACTION>` (dispatch-log name) |
 | `transactionSeed` | `<complaintNo>:<action>:<toState>:<workflow ProcessInstance id>` — one per transition, the same on redelivery (falls back to `auditDetails.lastModifiedTime`) |
-| `actors` | `citizen` (inline contact from the complaint) and `assignee` (uuid only; the bridge looks up contacts) |
-| `data` | complaint number, date, service code, status, comments, rating, citizen name, short download link, assignee name |
+| `actors` | `citizen` (inline contact from the complaint) and `assignee` (uuid only, even when PGR's own egov-user lookup failed; the bridge looks up contacts. Name and phone go inline only when the workflow record has no uuid) |
+| `data` | complaint number, date, service code, status, comments, rating, citizen name, short download link (shortened once and reused for an hour), assignee name |
 | `localized` | localization codes for `complaint_type`, `status`, `ulb`, `ao_designation`, `emp_department`, `emp_designation` |
 
 A token PGR cannot fill is omitted, not blanked; `download_link` is blanked to `""` on a

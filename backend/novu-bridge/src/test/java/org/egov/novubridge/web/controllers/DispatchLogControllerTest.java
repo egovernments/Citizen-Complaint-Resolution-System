@@ -116,6 +116,28 @@ class DispatchLogControllerTest {
     }
 
     @Test
+    void lastErrorMessageIsMasked_itCanQuoteTheRawTransactionId() {
+        // A gateway rejection names the transaction, and a transactionId can embed a raw phone.
+        DispatchLogEntry row = DispatchLogEntry.builder()
+                .tenantId("ke.bomet").channel("SMS").status("FAILED")
+                .recipientValue("ke.bomet:0712345678")
+                .transactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS")
+                .lastErrorCode("NB_SMSCOUNTRY_REJECTED")
+                .lastErrorMessage("SMSCountry did not answer OK:<jobid>; see the bridge log for txn "
+                        + "PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS (to c@example.org)")
+                .build();
+        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+
+        DispatchLogEntry masked = controller.logs("ke.bomet", null, false, null, null, null, null, false, null, null)
+                .getBody().getData().get(0);
+
+        assertEquals("SMSCountry did not answer OK:<jobid>; see the bridge log for txn "
+                + "PGR-001:ASSIGN:PENDINGATLME:ke.bomet:***678:SMS (to c***@example.org)", masked.getLastErrorMessage());
+        assertEquals("NB_SMSCOUNTRY_REJECTED", masked.getLastErrorCode());
+    }
+
+    @Test
     void providerResponsePiiIsDeepMasked_nonPiiFieldsKeepExactValues() {
         // The Novu delivery receipt echoes the RAW transactionId (which embeds the
         // subscriber segment — a raw phone for uuid-less recipients) and can carry

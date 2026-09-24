@@ -145,7 +145,7 @@
     "transactionId": {
       "type": "string",
       "x-pii": true,
-      "description": "IDEMPOTENCY KEY. The ledger's unique key is (transaction_id, channel, recipient_value), so re-delivering the same envelope UPDATES its row instead of creating a second one. Make it deterministic from the business fact — PGR uses `entityId:action:toState:subscriberId:channel` — so that a Kafka redelivery or a producer retry cannot double-count a send. Two genuinely different sends must carry different values: CoreSmsTranslator appends a fresh uuid precisely so a re-sent OTP is its own row. Absent means the bridge derives `eventId:channel`, which dedupes redelivery but nothing else. PII: the conventional form embeds the subscriberId and therefore possibly a raw phone.",
+      "description": "IDEMPOTENCY KEY. The ledger's unique key is (transaction_id, channel, recipient_value), so re-delivering the same envelope UPDATES its row instead of creating a second one. Make it deterministic from the business fact — PGR uses `entityId:action:toState:subscriberId:channel` — so that a Kafka redelivery or a producer retry cannot double-count a send. Two genuinely different sends must carry different values: CoreSmsTranslator derives `CORE:<tenant>:<uuid>` from the Kafka record's topic, partition, offset and timestamp, so a re-sent OTP is its own row and a redelivered one is the same row. Absent means the bridge derives `eventId:channel`, which dedupes redelivery but nothing else. PII: the conventional form embeds the subscriberId and therefore possibly a raw phone.",
       "examples": ["PGR-2026-000123:ASSIGN:PENDINGATLME:ke.bomet:9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f:SMS"]
     },
     "templateKey": {

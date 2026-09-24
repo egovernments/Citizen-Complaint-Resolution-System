@@ -149,7 +149,8 @@ paths:
       description: |
         Read-only projection of `nb_dispatch_log`. Recipient PII is masked SERVER-SIDE before
         the response is built — `recipientValue`, the embedded subscriber inside
-        `transactionId`, and the whole `providerResponse` tree. Stored rows are untouched.
+        `transactionId`, any phone or email quoted in `lastErrorMessage`, and the whole
+        `providerResponse` tree. Stored rows are untouched.
 
         Statuses and their transitions are described in `outputs.md`.
       parameters:
@@ -326,6 +327,8 @@ paths:
         is the one the Configurator uses: the bridge resolves the Novu provider id, the Novu
         channel, the credential mapping and a round-trippable `<type>-<sha256(name)[0:16]>`
         identifier, and validates the type's required credentials BEFORE anything reaches Novu.
+        A caller-supplied `identifier` must start with `<type>-`, because dispatch and rotation
+        read the type back from it; anything else is `400 NB_INVALID_PROVIDER`.
         `active` absent means true. The LEGACY form `{channel, providerId, name, identifier,
         credentials}` remains the escape hatch for a Novu provider the catalog does not cover.
         An `smscountry` Gateway URL (`credentials.apiUrl`) off the allowed hosts is refused here
@@ -990,7 +993,7 @@ components:
         status: { $ref: "#/components/schemas/DispatchStatus" }
         attemptCount: { type: integer }
         lastErrorCode: { type: string, nullable: true }
-        lastErrorMessage: { type: string, nullable: true }
+        lastErrorMessage: { type: string, nullable: true, description: "Masked like `transactionId`: it can quote one." }
         providerResponse:
           type: object
           nullable: true
@@ -1070,7 +1073,7 @@ components:
       properties:
         type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki] }
         name: { type: string, description: "Defaults to the type's label. Also seeds the identifier." }
-        identifier: { type: string, description: "Overrides the derived `<type>-<hash>` identifier." }
+        identifier: { type: string, description: "Overrides the derived `<type>-<hash>` identifier. Must start with `<type>-`, else `400 NB_INVALID_PROVIDER`." }
         active: { type: boolean, default: true, description: "Absent means true." }
         credentials:
           type: object

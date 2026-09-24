@@ -49,6 +49,16 @@ class SmsCountryClientTest {
     }
 
     @Test
+    void theRejectionMessageNamesTheTransactionMasked_itBecomesLastErrorMessage() {
+        // A transactionId can embed the recipient's raw phone (tenantId:mobile subscribers).
+        NovuClient.NovuResponse r = client().parse("Invalid Username or Password",
+                "PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS", "+254712345678");
+        String message = String.valueOf(r.getResponse().get("message"));
+        assertFalse(message.contains("0712345678"), message);
+        assertTrue(message.endsWith("txn PGR-001:ASSIGN:PENDINGATLME:ke.bomet:***678:SMS"), message);
+    }
+
+    @Test
     void aVeryLongErrorBodyIsTruncatedBeforeItReachesTheDispatchLog() {
         NovuClient.NovuResponse r = client().parse("x".repeat(5000), "txn-1", "+919000000000");
         String message = String.valueOf(r.getResponse().get("message"));

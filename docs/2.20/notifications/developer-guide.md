@@ -197,11 +197,20 @@ Use a translator bound to the topic, not shape-sniffing in the consumer. Model:
   `message`/`body`/`text`, `tenantId`/`tenant`); refuse without phone or text
   (`NB_INVALID_CORE_SMS`);
 - fill gaps from configuration (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`,
-  `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`) and mint a unique `transactionId` per send;
+  `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE`) and derive `eventId` and `transactionId`
+  (`CORE:<tenant>:<uuid>`) from the Kafka record's topic, partition, offset and timestamp: unique
+  per send, the same on a redelivery (so the replay guard does not send an OTP twice), and
+  without the phone number, since the id reaches logs, gateway requests and error messages;
 - drop what is no longer worth sending: an OTP (`category` `OTP`) whose `expiryTime` (epoch
   milliseconds) has passed is logged at INFO — without phone or text — and gets no dispatch-log
   row and no DLQ message;
-- a translation failure is DLQ'd with no dispatch-log row;
+- a translation failure is DLQ'd with no dispatch-log row, and any core-SMS DLQ message is
+  redacted (text removed, phone masked; [outputs.md](./contract/outputs.md#the-dlq));
+- the consent gate is skipped for core SMS other than `PROMOTION` (the user just asked for it,
+  often before having an account), but only because `CoreSmsConsumer` hands the event to
+  `DomainEventConsumer.handleCoreSms` → `DispatchPipelineService.processCoreSms`. Event fields
+  never grant it: an envelope or thin event on a shared topic, or a `/dispatch/_dry-run`, that
+  says `CORE_SMS` is consent-checked like any other;
 - the listener starts at the **latest** offset when its group has no committed offset (the
   domain-event listeners start at `earliest`): replaying days of queued OTPs is worse than
   missing them;
@@ -211,6 +220,9 @@ Use a translator bound to the topic, not shape-sniffing in the consumer. Model:
 
 If the foreign format's recipients should be configurable, emit a thin event with
 `EVENT_RECIPIENTS` instead ([examples/thin/04-contact-override.json](./contract/examples/thin/04-contact-override.json)).
+Such an event is consent-checked like any other, whatever its `eventType`: with the consent gate
+on (`NOVU_BRIDGE_PREFERENCE_ENABLED`), a recipient without a `userId` is `SKIPPED /
+NB_PREFERENCE_DENIED`.
 
 ## Local testing without real gateways
 

@@ -13,6 +13,7 @@ import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
 import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -23,14 +24,17 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -145,6 +149,60 @@ class ProviderControllerTest {
 
         verify(novuClient).createIntegration(nullable(String.class), eq("my-wa-sender"),
                 eq("twilio"), anyString(), nullable(Map.class));
+    }
+
+    // ---- POST /providers, catalog form: the identifier must read back as the type ----
+
+    private Map<String, Object> twilioSmsCatalogBody(String identifier) {
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("type", "twilio-sms");
+        req.put("name", "Twilio SMS");
+        if (identifier != null) req.put("identifier", identifier);
+        req.put("credentials", Map.of("accountSid", "AC123", "token", "SECRET", "from", "+15551234567"));
+        return req;
+    }
+
+    private String createdIdentifier() {
+        ArgumentCaptor<String> identifier = ArgumentCaptor.forClass(String.class);
+        verify(novuClient).createIntegration(nullable(String.class), identifier.capture(),
+                eq("twilio"), eq("sms"), nullable(Map.class), anyBoolean());
+        return identifier.getValue();
+    }
+
+    @Test
+    void createFromCatalog_refusesAnIdentifierThatReadsBackAsAnotherType_orAsNone() {
+        // Novu would accept it: the refusal has to be the bridge's own.
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9", "providerId", "twilio"))));
+        for (String bad : new String[] {"ozeki-x", "twilio-whatsapp-x", "my-sms", "twiliosms"}) {
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> controller.createProvider(twilioSmsCatalogBody(bad)), bad);
+            assertEquals("NB_INVALID_PROVIDER", ex.getCode(), bad);
+        }
+        verify(novuClient, never()).createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean());
+    }
+
+    @Test
+    void createFromCatalog_keepsATypedIdentifier_andDerivesOneWhenAbsent() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9", "providerId", "twilio"))));
+
+        controller.createProvider(twilioSmsCatalogBody("twilio-sms-primary"));
+        assertEquals("twilio-sms-primary", createdIdentifier());
+        assertEquals("twilio-sms", ProviderCatalog.typeFromIdentifier(createdIdentifier()));
+    }
+
+    @Test
+    void createFromCatalog_derivesATypedIdentifierWhenNoneIsGiven() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9", "providerId", "twilio"))));
+
+        controller.createProvider(twilioSmsCatalogBody(null));
+        assertTrue(createdIdentifier().startsWith("twilio-sms-"), createdIdentifier());
     }
 
     // ---- GET /providers/templates ---------------------------------------

@@ -8,14 +8,12 @@ package org.egov.pgr.service.notification;
  * <p>Two shapes, and the difference is load-bearing:
  *
  * <ul>
- *   <li><b>uuid-only</b> ({@code inline == false}) — the normal path. PGR's own egov-user lookup
- *       succeeded, so the bridge can hydrate name, phone and email itself and none of that contact
- *       detail goes on Kafka.</li>
- *   <li><b>inline</b> ({@code inline == true}) — the fallback. PGR's egov-user lookup FAILED and all
- *       anyone holds is the user record embedded in the workflow's history entry, so it is sent as
- *       is (no country code, possibly no uuid). Design errata 6: this publishes the same person
- *       under a different identity, and it is the only case where the producer ships contact
- *       details for an account-holding employee.</li>
+ *   <li><b>uuid-only</b> ({@code inline == false}) — whenever a uuid is known, including when
+ *       PGR's own egov-user lookup failed: the bridge hydrates name, phone and email itself, so none
+ *       of that contact detail goes on Kafka.</li>
+ *   <li><b>inline</b> ({@code inline == true}) — the last resort: the workflow's history entry
+ *       carries no uuid, so its embedded user record (no country code) is the only contact anyone
+ *       has and is sent as is.</li>
  * </ul>
  *
  * <p>{@code name} is carried in both shapes because it also fills the {@code {emp_name}}
@@ -36,12 +34,12 @@ public final class ResolvedAssignee {
         this.inline = inline;
     }
 
-    /** The normal path: the bridge hydrates everything from the uuid. */
+    /** Any known uuid: the bridge hydrates the contact from it. */
     public static ResolvedAssignee ofUuid(String userId, String name) {
         return new ResolvedAssignee(userId, name, null, false);
     }
 
-    /** The fallback: egov-user could not be reached, so the workflow record travels on the wire. */
+    /** No uuid to hydrate from, so the workflow record's contact travels on the wire. */
     public static ResolvedAssignee inline(String userId, String name, String phone) {
         return new ResolvedAssignee(userId, name, phone, true);
     }

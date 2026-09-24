@@ -23,7 +23,7 @@ replay the DLQ; *yes* = transient.
 | `NB_INVALID_EVENT` | Missing/blank `eventId`, `eventType`, `eventName`, `tenantId`, `channel`, `subscriberId` or `renderedBody` (named in the message), or null payload. HTTP 400 on `/dispatch/*` | no | Fix the producer against `envelope-v1.schema.json` |
 | `NB_UNSUPPORTED_SCHEMA_VERSION` | `schemaVersion` present and not `1` (both kinds) | no | Upgrade the bridge or pin the producer to 1 |
 | `NB_UNSUPPORTED_EVENT_TYPE` | `eventType` not in `novu.bridge.event.types` (both kinds) | config | Add it to `NOVU_BRIDGE_EVENT_TYPES`, restart, replay |
-| `NB_INVALID_CORE_SMS` | A core `SMSRequest` without phone or text, or without tenant while `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` is blank. **DLQ only, no row** | no / config | Discard, or set the default tenant and replay |
+| `NB_INVALID_CORE_SMS` | A core `SMSRequest` without phone or text, or without tenant while `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` is blank. **DLQ only, no row**; the DLQ copy has no text and a masked phone ([outputs.md](./outputs.md#the-dlq)) | no / config | Discard (it cannot be replayed; the user asks again). Missing tenant: set the default tenant for the next ones |
 
 ## Thin-event rejections (`REJECTED`, channel `NONE`, then DLQ)
 
@@ -73,7 +73,7 @@ Channel `NONE`, `recipient_value` `none`, `transaction_id` `<seed>:NONE` — exc
 | `NB_NOVU_TRIGGER_FAILED` | Novu trigger failed or answered non-2xx (DLQ when thrown) | yes | Check Novu and `NOVU_API_KEY`; replay |
 | `NB_DELIVERY_ERROR` | A provider threw an unexpected exception (also DLQ) | yes | Read `last_error_message` |
 | `NB_SMSCOUNTRY_UNREACHABLE` | SMSCountry bulk API unreachable | yes | Check egress and `novu.bridge.smscountry.url` |
-| `NB_SMSCOUNTRY_REJECTED` | SMSCountry answered anything but `OK:<jobid>`; HTTP 502 from the adapter | no / config | Usually credentials, sender id or (India) DLT template; the gateway's reply is in the bridge log (by txn), redacted, not in `last_error_message` |
+| `NB_SMSCOUNTRY_REJECTED` | SMSCountry answered anything but `OK:<jobid>`; HTTP 502 from the adapter | no / config | Usually credentials, sender id or (India) DLT template; the gateway's reply is in the bridge log (by the masked txn quoted in `last_error_message`), redacted, not in `last_error_message` |
 | `NB_PROCESSING_ERROR` | Uncoded failure caught by the consumer. DLQ only | yes | Bridge log has the stack trace |
 | `NB_PROVIDER_FAILED` | A receipt reported final failure (`UNDELIV`, `REJECTD`, `EXPIRED`, `failed`, `…error…`) | no | `last_error_message` holds the provider's word |
 | `NB_PROVIDER_BOUNCED` | A receipt reported a bounce (status `BOUNCED`) | no | Correct the address |
@@ -84,7 +84,7 @@ Body: `{"ResponseInfo": …, "Errors": [{"code", "message"}]}`.
 
 | Code | HTTP | Meaning / action |
 |---|---|---|
-| `NB_INVALID_PROVIDER` | 400 | Missing `id` / `providerId`, empty `_update`, a required credential missing (see `GET /providers/catalog`), or no `tenantId` on `_delete` / `_update` with `active: false` |
+| `NB_INVALID_PROVIDER` | 400 | Missing `id` / `providerId`, empty `_update`, a required credential missing (see `GET /providers/catalog`), a catalog-form `identifier` that does not start with `<type>-`, or no `tenantId` on `_delete` / `_update` with `active: false` |
 | `NB_UNKNOWN_PROVIDER_TYPE` | 400 | `type` not one of `twilio-sms`, `twilio-whatsapp`, `smtp`, `smscountry`, `ozeki`, or an existing integration's type cannot be derived for a rotation — re-create it from the catalog |
 | `NB_INVALID_CHANNEL` | 400 | `channel` blank or not SMS / WHATSAPP / EMAIL |
 | `NB_PROVIDER_NOT_FOUND` | 400 | No integration with that `_id` / identifier |

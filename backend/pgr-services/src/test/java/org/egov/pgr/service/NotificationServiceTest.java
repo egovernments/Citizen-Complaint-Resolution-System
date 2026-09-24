@@ -42,6 +42,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -211,17 +212,31 @@ class NotificationServiceTest {
                 at(event, "localized").get("emp_designation"));
     }
 
+    /** Kanav: a failed egov-user lookup must not put the employee's phone on Kafka when a uuid is known. */
     @Test
-    void failedUserLookupSendsTheHistoryRecordInline() {
+    void failedUserLookupStillSendsTheHistoryAssigneeUuidOnly() {
         userServiceDown = true;
         history.add(assignInHistory(HISTORY_UUID));
 
         service.process(request("REOPEN", "PENDINGATLME", null), "update-pgr-request");
 
         Map<String, Object> event = published();
-        assertEquals(Map.of("userId", HISTORY_UUID, "type", "EMPLOYEE", "name", "History Assignee", "phone", "0722000111"),
-                at(event, "actors", "assignee"));
+        assertEquals(Map.of("userId", HISTORY_UUID, "type", "EMPLOYEE"), at(event, "actors", "assignee"));
+        // {emp_name} still filled, from the workflow record.
         assertEquals("History Assignee", at(event, "data").get("emp_name"));
+        assertFalse(event.toString().contains("0722000111"), "no employee phone on the wire: " + event);
+    }
+
+    @Test
+    void aHistoryRecordWithNoUuidIsTheOnlyAssigneeSentInline() {
+        userServiceDown = true;
+        history.add(assignInHistory(null));
+
+        service.process(request("REOPEN", "PENDINGATLME", null), "update-pgr-request");
+
+        Map<String, Object> event = published();
+        assertEquals(Map.of("type", "EMPLOYEE", "name", "History Assignee", "phone", "0722000111"),
+                at(event, "actors", "assignee"));
     }
 
     @Test
@@ -244,6 +259,51 @@ class NotificationServiceTest {
         service.process(request("APPLY", "PENDINGFORASSIGNMENT", null), "save-pgr-request");
 
         assertEquals("", at(published(), "data").get("download_link"));
+    }
+
+    /** Kanav: the short link is the same for every transition; one shortener call per window, not per event. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theShortLinkIsFetchedOnceAndReused() {
+        service.process(request("APPLY", "PENDINGFORASSIGNMENT", null), "save-pgr-request");
+        service.process(request("COMMENT", "PENDINGFORASSIGNMENT", null), "update-pgr-request");
+
+        verify(notificationUtil, times(1)).getShortnerURL("http://app/pgr");
+        ArgumentCaptor<Object> events = ArgumentCaptor.forClass(Object.class);
+        verify(producer, times(2)).push(eq(TENANT), eq(TOPIC), events.capture());
+        for (Object e : events.getAllValues()) {
+            assertEquals("https://s.gov/x1", at((Map<String, Object>) e, "data").get("download_link"));
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aShortenerFailureIsNotCached_theNextTransitionRetries() {
+        when(notificationUtil.getShortnerURL(anyString()))
+                .thenThrow(new RuntimeException("shortener down"))
+                .thenReturn("http://app/pgr")        // answered empty: the long URL comes back
+                .thenReturn("https://s.gov/x2");
+
+        for (int i = 0; i < 4; i++) {
+            service.process(request("COMMENT", "PENDINGATLME", null), "update-pgr-request");
+        }
+
+        verify(notificationUtil, times(3)).getShortnerURL("http://app/pgr");
+        ArgumentCaptor<Object> events = ArgumentCaptor.forClass(Object.class);
+        verify(producer, times(4)).push(eq(TENANT), eq(TOPIC), events.capture());
+        List<Object> links = events.getAllValues().stream()
+                .map(e -> at((Map<String, Object>) e, "data").get("download_link")).toList();
+        assertEquals(List.of("", "http://app/pgr", "https://s.gov/x2", "https://s.gov/x2"), links);
+    }
+
+    @Test
+    void anExpiredShortLinkIsFetchedAgain() {
+        service.shortLinkTtlMs = 0;
+
+        service.process(request("COMMENT", "PENDINGATLME", null), "update-pgr-request");
+        service.process(request("COMMENT", "PENDINGATLME", null), "update-pgr-request");
+
+        verify(notificationUtil, times(2)).getShortnerURL("http://app/pgr");
     }
 
     @Test

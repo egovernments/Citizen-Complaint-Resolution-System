@@ -65,8 +65,23 @@ public class DispatchPipelineService {
     /** @param sourcePath {@link DispatchLogEntry#SOURCE_PATH_RESOLVED}, or null for pre-rendered */
     public DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
                                   String sourcePath) {
+        return process(event, send, requestInfo, sourcePath, false);
+    }
+
+    /**
+     * A core SMS {@code CoreSmsConsumer} translated in this process, and the only way to the consent
+     * exemption ({@link CoreSmsTranslator#isConsentExempt}). The exemption is an in-process fact,
+     * never an envelope field: {@code eventType CORE_SMS} is something any producer on the shared
+     * topics, or a {@code /dispatch/_dry-run} caller, can write.
+     */
+    public DispatchResult processCoreSms(NotificationEvent event) {
+        return process(event, true, null, null, true);
+    }
+
+    private DispatchResult process(NotificationEvent event, boolean send, RequestInfo requestInfo,
+                                   String sourcePath, boolean coreSms) {
         log.info("Processing {} envelope: eventId={}, eventName={}, tenant={}, channel={}, send={}",
-                sourcePath == null ? "pre-rendered" : "resolved",
+                sourcePath != null ? "resolved" : coreSms ? "core-SMS" : "pre-rendered",
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         // Rejections are written down BEFORE they are thrown; the consumer still DLQs the event.
@@ -99,7 +114,7 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        if (!CoreSmsTranslator.isConsentExempt(event)
+        if (!(coreSms && CoreSmsTranslator.isConsentExempt(event))
                 && !preferenceServiceClient.isChannelAllowed(event.getTenantId(), context.getRecipientUserId(),
                         context.getRecipientMobile(), context.getChannel())) {
             persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied");

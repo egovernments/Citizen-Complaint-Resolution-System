@@ -24,7 +24,8 @@ dispatch the bridge triggers the channel's Novu workflow (`complaints-sms` / `-w
 
 The configurator renders the credential form from `GET /novu-adapter/v1/providers/catalog`, so a
 new type needs no UI change. Integration identifiers are `<type>-<hash>`; `typeFromIdentifier`
-maps them back using `TYPES_LONGEST_FIRST`.
+maps them back using `TYPES_LONGEST_FIRST`. A caller may choose its own identifier on the catalog
+form, but it must start with `<type>-` (`400 NB_INVALID_PROVIDER` otherwise).
 
 ### generic-sms
 

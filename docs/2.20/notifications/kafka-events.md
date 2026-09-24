@@ -130,7 +130,9 @@ would produce without sending anything.
    failures (`NB_INVALID_CORE_SMS`) and `NB_CONFIG_UNAVAILABLE` / `NB_RESOLUTION_INCOMPLETE`
    appear only here. There is no automatic replay: fix the cause and re-produce `event`; the
    ledger upserts, so rows are not duplicated, and a recipient already `SENT` or `DELIVERED`
-   is not sent again.
+   is not sent again. Core-SMS messages are the exception: they arrive with the text removed
+   and the phone masked (a `redacted` array names the fields) and cannot be replayed
+   ([outputs.md](./contract/outputs.md#the-dlq)).
 3. **Still nothing?** The bridge is not subscribed: check `rpk topic list`, the input-topic
    env, and `docker logs novu-bridge` for the consumer assignment.
 

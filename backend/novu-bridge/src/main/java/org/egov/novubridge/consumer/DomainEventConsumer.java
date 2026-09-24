@@ -5,7 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.producer.Producer;
 import org.egov.novubridge.service.DispatchPipelineService;
+import org.egov.novubridge.service.core.CoreSmsTranslator;
 import org.egov.novubridge.service.thin.ThinEventPipelineService;
+import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.ThinEvent;
 import org.egov.tracer.model.CustomException;
@@ -14,7 +16,9 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -66,8 +70,24 @@ public class DomainEventConsumer {
 
     /** Run one envelope through the pipeline; any failure is logged and DLQ'd with its code. */
     public void handle(NotificationEvent event, String topic) {
+        handle(event, topic, false);
+    }
+
+    /**
+     * {@link #handle} for an envelope {@link CoreSmsConsumer} translated in this process: the only
+     * caller that may reach {@link DispatchPipelineService#processCoreSms} and its consent exemption.
+     */
+    public void handleCoreSms(NotificationEvent event, String topic) {
+        handle(event, topic, true);
+    }
+
+    private void handle(NotificationEvent event, String topic, boolean coreSms) {
         try {
-            dispatchPipelineService.process(event, true, null);
+            if (coreSms) {
+                dispatchPipelineService.processCoreSms(event);
+            } else {
+                dispatchPipelineService.process(event, true, null);
+            }
         } catch (CustomException ce) {
             log.error("Domain event processing failed for eventId={} topic={} code={}", event.getEventId(), topic, ce.getCode(), ce);
             publishDlq(event, topic, ce.getCode(), ce.getMessage());
@@ -83,20 +103,39 @@ public class DomainEventConsumer {
             thinEventPipelineService.process(event);
         } catch (CustomException ce) {
             log.error("Thin event processing failed for eventId={} topic={} code={}", event.getEventId(), topic, ce.getCode(), ce);
-            publishDlq(event, event.getTenantId(), topic, ce.getCode(), ce.getMessage());
+            publishDlq(event, event.getTenantId(), topic, ce.getCode(), ce.getMessage(), null);
         } catch (Exception e) {
             log.error("Thin event processing failed for eventId={} topic={}", event.getEventId(), topic, e);
-            publishDlq(event, event.getTenantId(), topic, "NB_PROCESSING_ERROR", e.getMessage());
+            publishDlq(event, event.getTenantId(), topic, "NB_PROCESSING_ERROR", e.getMessage(), null);
         }
     }
 
+    /**
+     * A {@code CORE_SMS} envelope, whichever path it came by, is dead-lettered redacted
+     * ({@link CoreSmsTranslator#redactForDlq}): its body is an OTP or a password, the DLQ keeps it
+     * for days, and a replay would skip the expiry check. Everything else goes as received, so it
+     * can be replayed.
+     */
+    @SuppressWarnings("unchecked")
     private void publishDlq(NotificationEvent event, String sourceTopic, String errorCode, String errorMessage) {
-        publishDlq(event, event.getTenantId(), sourceTopic, errorCode, errorMessage);
+        if (event.getEventType() == null
+                || !CoreSmsTranslator.EVENT_TYPE.equalsIgnoreCase(event.getEventType().trim())) {
+            publishDlq(event, event.getTenantId(), sourceTopic, errorCode, errorMessage, null);
+            return;
+        }
+        List<String> redacted = new ArrayList<>();
+        Map<String, Object> copy = CoreSmsTranslator.redactForDlq(mapper.convertValue(event, Map.class), redacted);
+        publishDlq(copy, event.getTenantId(), sourceTopic, errorCode, PiiMask.maskEmbedded(errorMessage), redacted);
     }
 
-    private void publishDlq(Object event, String tenantId, String sourceTopic, String errorCode, String errorMessage) {
+    /** @param redacted the fields {@link CoreSmsTranslator#redactForDlq} changed, or null: nothing was */
+    private void publishDlq(Object event, String tenantId, String sourceTopic, String errorCode, String errorMessage,
+                            List<String> redacted) {
         Map<String, Object> dlq = new HashMap<>();
         dlq.put("event", event);
+        if (redacted != null) {
+            dlq.put("redacted", redacted);
+        }
         dlq.put("sourceTopic", sourceTopic);
         dlq.put("errorCode", errorCode);
         dlq.put("errorMessage", errorMessage);

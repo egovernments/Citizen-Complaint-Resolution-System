@@ -190,12 +190,13 @@ public class NovuClient {
                     body.put("data", subData);
                 }
             }
-            log.info("Novu identify (upsert) subscriberId={}", subscriberId);
+            // subscriberId falls back to tenantId:phone for a recipient with no uuid.
+            log.info("Novu identify (upsert) subscriberId={}", PiiMask.maskEmbedded(subscriberId));
             send(HttpMethod.POST, "/v1/subscribers", body);
             identifiedAt.put(subscriberId, System.currentTimeMillis());
         } catch (Exception e) {
             log.warn("Novu identify failed for subscriberId={} (continuing to trigger): {}",
-                    subscriberId, e.getMessage());
+                    PiiMask.maskEmbedded(subscriberId), e.getMessage());
         }
     }
 
@@ -234,9 +235,10 @@ public class NovuClient {
         if (hasOverrides) {
             request.put("overrides", overrides);
         }
-        // Never log the request (recipient + message text) or headers (ApiKey).
+        // Never log the request (recipient + message text) or headers (ApiKey); the ids can embed a phone.
         log.info("Novu trigger workflowId={} subscriberId={} channel-phone={} txn={} overrides={}",
-                workflowId, subscriberId, PiiMask.mask(phone), transactionId, hasOverrides);
+                workflowId, PiiMask.maskEmbedded(subscriberId), PiiMask.mask(phone),
+                PiiMask.maskEmbedded(transactionId), hasOverrides);
         return exchange(HttpMethod.POST, "/v1/events/trigger", request, "NB_NOVU_TRIGGER_FAILED", "triggering Novu event");
     }
 

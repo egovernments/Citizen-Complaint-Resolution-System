@@ -130,16 +130,26 @@ public class ProviderController {
         return projected(unwrapData(novuResponse.getResponse()));
     }
 
-    /** The bridge resolves Novu provider id, channel, credential mapping and a typed identifier. */
+    /**
+     * The bridge resolves Novu provider id, channel, credential mapping and a typed identifier. A
+     * caller's own identifier must read back as the same type (start {@code <type>-}): dispatch
+     * picks the request body, and rotation the credential form, from the identifier alone, so
+     * {@code ozeki-x} on a twilio-sms integration would get Ozeki's body and a prefix-less one
+     * could never be rotated.
+     */
     private ResponseEntity<ProviderCreateResponse> createFromCatalog(Map<String, Object> body) {
         ProviderType type = catalog.require(str(body.get("type")));
         Map<String, Object> credentials = asMap(body.get("credentials"));
         catalog.validateRequired(type, credentials);
 
         String name = StringUtils.hasText(str(body.get("name"))) ? str(body.get("name")) : type.getLabel();
-        String identifier = StringUtils.hasText(str(body.get("identifier")))
-                ? str(body.get("identifier"))
-                : ProviderCatalog.identifierFor(type.getType(), name);
+        String identifier = str(body.get("identifier"));
+        if (!StringUtils.hasText(identifier)) {
+            identifier = ProviderCatalog.identifierFor(type.getType(), name);
+        } else if (!type.getType().equals(ProviderCatalog.typeFromIdentifier(identifier))) {
+            throw new CustomException("NB_INVALID_PROVIDER", "identifier '" + identifier + "' must start with '"
+                    + type.getType() + "-': the provider type is read back from it. Omit it to have one derived.");
+        }
         // Absent means active: Novu's own default (inactive) would make it invisible to every trigger.
         boolean active = !body.containsKey("active") || truthy(body.get("active"));
 

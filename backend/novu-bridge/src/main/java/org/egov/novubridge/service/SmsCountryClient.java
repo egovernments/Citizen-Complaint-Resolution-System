@@ -72,7 +72,8 @@ public class SmsCountryClient {
             // Never surface e.getMessage(): RestTemplate puts the upstream response body in it.
             String cause = e instanceof RestClientResponseException re
                     ? "HTTP " + re.getStatusCode().value() : e.getClass().getSimpleName();
-            log.error("SMSCountry send failed for txn={} to={}: {}", transactionId, PiiMask.mask(phone), cause);
+            log.error("SMSCountry send failed for txn={} to={}: {}", PiiMask.maskEmbedded(transactionId),
+                    PiiMask.mask(phone), cause);
             return error("NB_SMSCOUNTRY_UNREACHABLE", "SMSCountry gateway call failed (" + cause + ")");
         }
         return parse(body, transactionId, phone, user, password);
@@ -85,12 +86,16 @@ public class SmsCountryClient {
     NovuClient.NovuResponse parse(String body, String transactionId, String phone, String... secrets) {
         String trimmed = body == null ? "" : body.trim();
         if (!trimmed.startsWith("OK:")) {
-            log.error("SMSCountry rejected txn={} to={}: {}", transactionId, PiiMask.mask(phone), snippet(trimmed, secrets));
+            // The message becomes the row's last_error_message: the txn in it is masked like the log's,
+            // so the two still match up (a transactionId can embed the recipient's phone).
+            String txn = PiiMask.maskEmbedded(transactionId);
+            log.error("SMSCountry rejected txn={} to={}: {}", txn, PiiMask.mask(phone), snippet(trimmed, secrets));
             return error("NB_SMSCOUNTRY_REJECTED", "SMSCountry did not answer OK:<jobid>; see the bridge log for txn "
-                    + transactionId);
+                    + txn);
         }
         String jobId = trimmed.substring(3).trim();
-        log.info("SMSCountry queued txn={} to={} jobId={}", transactionId, PiiMask.mask(phone), jobId);
+        log.info("SMSCountry queued txn={} to={} jobId={}", PiiMask.maskEmbedded(transactionId), PiiMask.mask(phone),
+                jobId);
         Map<String, Object> payload = new HashMap<>();
         payload.put("jobId", jobId);
         payload.put("accepted", true);
