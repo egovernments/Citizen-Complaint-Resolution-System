@@ -124,6 +124,7 @@ export function deriveChannelStatus(
   const enabled = !!row?.enabled && row?.active !== false;
   const gateway = String(row?.gateway || 'novu').toLowerCase();
   const direct = gateway === 'smscountry';
+  const senderId = text(row?.senderId);
   const provider = text(row?.provider);
   const hasWorkflow = workflowIds === null ? true : workflowIds.includes(`complaints-${channel.toLowerCase()}`);
 
@@ -157,7 +158,7 @@ export function deriveChannelStatus(
   else if (!enabled) reasons.push('disabled in NotificationChannel');
   if (direct) {
     if (channel !== 'SMS') reasons.push('smscountry gateway carries SMS only');
-    if (row && !row.senderId) reasons.push('no senderId for the SMSCountry gateway');
+    if (row && !senderId) reasons.push('no senderId for the SMSCountry gateway');
   } else {
     // Provider complaints only matter while the channel is on; a channel that is
     // switched off should not also nag about its provider selection.
@@ -183,7 +184,8 @@ export function deriveChannelStatus(
     if (!hasWorkflow) reasons.push(`Novu workflow complaints-${channel.toLowerCase()} not found`);
   }
 
-  const effective = enabled && (direct ? channel === 'SMS' : hasIntegration && hasWorkflow);
+  // The direct gateway rejects every message without a sender ID, so it is not delivering.
+  const effective = enabled && (direct ? channel === 'SMS' && !!senderId : hasIntegration && hasWorkflow);
 
   let verdict: ChannelVerdict;
   let summary: string;
@@ -197,12 +199,12 @@ export function deriveChannelStatus(
     if (channel !== 'SMS') {
       verdict = 'gateway-incomplete';
       summary = `${channel} is on but points at the SMSCountry gateway, which carries SMS only.`;
-    } else if (!row.senderId) {
+    } else if (!senderId) {
       verdict = 'gateway-incomplete';
       summary = `${channel} is on through the direct SMSCountry gateway but has no sender ID, so the gateway will reject every message.`;
     } else {
       verdict = 'ok';
-      summary = `${channel} is on and delivering through the direct SMSCountry gateway (sender ${row.senderId}). This legacy gateway bypasses Novu, so no provider is selected.`;
+      summary = `${channel} is on and delivering through the direct SMSCountry gateway (sender ${senderId}). This legacy gateway bypasses Novu, so no provider is selected.`;
     }
   } else if (providerState === 'missing') {
     verdict = 'provider-missing';

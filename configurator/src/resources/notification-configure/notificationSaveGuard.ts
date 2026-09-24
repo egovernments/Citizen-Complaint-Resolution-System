@@ -249,10 +249,16 @@ export function fieldForRule(rule: string): string | undefined {
  * Findings with no field mapping (and any extra finding for a field that is
  * already taken) stay out — they belong in the summary the caller renders, so
  * nothing is ever silently dropped.
+ *
+ * `fallbackField` is for a form: there the returned map is the ONLY thing that
+ * stops the save, so when findings block but none of them landed on a field
+ * (`routing-has-template` has no field; `whatsapp-variable-unmapped`'s `body`
+ * is not on the provider-template form), the first one is pinned to it.
  */
 export function fieldErrorsFor(
   blocking: ValidationFinding[],
   knownFields?: string[],
+  fallbackField?: string,
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const f of blocking) {
@@ -261,6 +267,9 @@ export function fieldErrorsFor(
     if (knownFields && !knownFields.includes(field)) continue;
     if (out[field]) continue;
     out[field] = `${f.rule}: ${f.message}`;
+  }
+  if (fallbackField && blocking.length > 0 && Object.keys(out).length === 0) {
+    out[fallbackField] = `${blocking[0].rule}: ${blocking[0].message}`;
   }
   return out;
 }

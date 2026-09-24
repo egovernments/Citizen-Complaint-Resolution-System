@@ -13,7 +13,8 @@
 // what the runtime resolves:
 //
 //   businessService + action + toState  ->  eventName COMPLAINTS.WORKFLOW.<ACTION>.<TOSTATE>
-//   audience (bare) + assigneeOnly      ->  an audience chain (audienceScheme.ts)
+//   audience (bare) + assigneeOnly      ->  an audience chain (audienceScheme.ts); template
+//                                           rows reuse the chain their routing row produced
 //   fromState                           ->  dropped (it is documentation-only)
 //
 // THIS FILE IS DATED. It is deleted, together with PLACEHOLDER_VOCABULARY and
@@ -154,12 +155,56 @@ export function adaptLegacyRouting(rows: LegacyRoutingRow[] | undefined): Array<
   }));
 }
 
-/** Adapt legacy template rows. */
-export function adaptLegacyTemplate(rows: LegacyTemplateRow[] | undefined): Array<TemplateRow & { id?: string; _uniqueIdentifier?: string }> {
+const SEP = '\u0000';
+
+/**
+ * How routing mapped each legacy audience, keyed by the legacy
+ * `(audience, action, toState, channel)` and — where every channel agreed on one
+ * chain — by `(audience, action, toState)`. The box's
+ * LegacyMasterAdapter.buildAudienceIndex, row for row.
+ *
+ * A template row has no `assigneeOnly` column, so on its own routing
+ * `GRO + assigneeOnly` reads `ACTOR:assignee|ROLE:GRO` while its template reads
+ * `ROLE:GRO`. The box renders the template matching the audience string routing
+ * produced, so it reuses that string; without doing the same here the checker
+ * reports a routing-has-template error the runtime does not have.
+ */
+function legacyAudienceIndex(routingRows: LegacyRoutingRow[] | undefined): Map<string, string> {
+  const index = new Map<string, string>();
+  const byTransition = new Map<string, Set<string>>();
+  for (const r of routingRows ?? []) {
+    const ref = parseAudience(r.audience, { assigneeOnly: r.assigneeOnly === true });
+    if (ref.empty || ref.nonNotifiable) continue;
+    const audience = legacyAudience(r.audience, r.assigneeOnly);
+    const transition = [up(r.audience), up(r.action), up(r.toState)].join(SEP);
+    index.set(`${transition}${SEP}${up(r.channel)}`, audience);
+    byTransition.set(transition, (byTransition.get(transition) ?? new Set<string>()).add(audience));
+  }
+  for (const [transition, audiences] of byTransition) {
+    if (audiences.size === 1) index.set(transition, [...audiences][0]);
+  }
+  return index;
+}
+
+/** The chain the matching routing row produced, else the bare mapping. */
+function joinedAudience(
+  row: { audience?: string; action?: string; toState?: string; channel?: string },
+  index: Map<string, string>,
+): string {
+  const transition = [up(row.audience), up(row.action), up(row.toState)].join(SEP);
+  return index.get(`${transition}${SEP}${up(row.channel)}`) ?? index.get(transition) ?? legacyAudience(row.audience);
+}
+
+/** Adapt legacy template rows. Pass the legacy routing rows so audiences join as the box joins them. */
+export function adaptLegacyTemplate(
+  rows: LegacyTemplateRow[] | undefined,
+  routingRows?: LegacyRoutingRow[],
+): Array<TemplateRow & { id?: string; _uniqueIdentifier?: string }> {
+  const index = legacyAudienceIndex(routingRows);
   return (rows ?? []).map((t) => ({
     module: LEGACY_MODULE,
     eventName: legacyEventName(t.action, t.toState),
-    audience: legacyAudience(t.audience),
+    audience: joinedAudience(t, index),
     channel: trim(t.channel),
     locale: trim(t.locale),
     subject: t.subject ?? undefined,
@@ -171,13 +216,17 @@ export function adaptLegacyTemplate(rows: LegacyTemplateRow[] | undefined): Arra
   }));
 }
 
-/** Adapt legacy provider-template rows. */
-export function adaptLegacyProviderTemplate(rows: LegacyProviderTemplateRow[] | undefined): Array<ProviderTemplateRow & { id?: string; _uniqueIdentifier?: string }> {
+/** Adapt legacy provider-template rows; `routingRows` as for adaptLegacyTemplate. */
+export function adaptLegacyProviderTemplate(
+  rows: LegacyProviderTemplateRow[] | undefined,
+  routingRows?: LegacyRoutingRow[],
+): Array<ProviderTemplateRow & { id?: string; _uniqueIdentifier?: string }> {
+  const index = legacyAudienceIndex(routingRows);
   return (rows ?? []).map((p) => ({
     provider: trim(p.provider),
     channel: trim(p.channel),
     eventName: legacyEventName(p.action, p.toState),
-    audience: legacyAudience(p.audience),
+    audience: joinedAudience(p, index),
     locale: trim(p.locale),
     templateId: p.templateId,
     templateName: p.templateName,

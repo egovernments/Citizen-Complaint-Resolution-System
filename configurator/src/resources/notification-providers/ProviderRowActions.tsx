@@ -7,13 +7,17 @@
 //                          credentials are NEVER shown (the bridge does not return
 //                          them), so rotation means entering a full new set.
 //   Enable / Disable     — flips the integration's `active` flag.
-//   Delete               — confirmed, and refuses with a plain-English message while
-//                          a channel still selects this provider (NB_PROVIDER_IN_USE).
+//   Delete               — confirmed. Disable and Delete are both refused while a channel
+//                          still selects this provider: the buttons are off here, and the
+//                          bridge answers 409 NB_PROVIDER_IN_USE for the tenant sent.
 //   Delivery workflows   — read-only Novu workflow discovery: the plumbing Novu
 //                          triggers, NOT message templates. Named that way on
 //                          purpose — "Templates" here collided with the message
 //                          Templates screen and with Provider Templates
 //                          (WhatsApp), three different things under one word.
+//
+// Everything but Check status and Delivery workflows is admin-only on the bridge, so it
+// is only offered to a provider admin (providerApi.isProviderAdmin).
 import { useState } from 'react';
 import { useRefresh, useTranslate } from 'ra-core';
 import {
@@ -185,7 +189,7 @@ function RotateDialog({
 // Delete
 // ---------------------------------------------------------------------------
 function DeleteDialog({
-  open, onOpenChange, row, label, selectedForChannel, onDone,
+  open, onOpenChange, row, label, selectedForChannel, stateTenant, onDone,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -193,6 +197,8 @@ function DeleteDialog({
   label: string;
   /** Channel that currently selects this provider, if any — a local pre-check. */
   selectedForChannel?: string;
+  /** The tenant whose channel policy the bridge checks for NB_PROVIDER_IN_USE. */
+  stateTenant?: string;
   onDone: () => void;
 }) {
   const t = useTranslate();
@@ -207,7 +213,7 @@ function DeleteDialog({
     setBusy(true);
     setInUse(null);
     try {
-      await deleteProvider({ id: idOf(row) });
+      await deleteProvider({ id: idOf(row), tenantId: stateTenant || undefined });
       notify(t('app.providers.msg_deleted', { _: 'Provider deleted.' }), label);
       onOpenChange(false);
       onDone();
@@ -246,7 +252,7 @@ function DeleteDialog({
           <AlertDialogCancel disabled={busy}>{t('ra.action.cancel', { _: 'Cancel' })}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => { e.preventDefault(); void submit(); }}
-            disabled={busy}
+            disabled={busy || !!selectedForChannel}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -262,12 +268,16 @@ function DeleteDialog({
 // Row action bar
 // ---------------------------------------------------------------------------
 export function ProviderRowActions({
-  record, catalog, selectedForChannel,
+  record, catalog, selectedForChannel, stateTenant, canManage,
 }: {
   record: IntegrationRow;
   catalog: ProviderType[];
   /** Channel whose NotificationChannel row selects this provider, if any. */
   selectedForChannel?: string;
+  /** The STATE tenant — where the channel policy lives, sent with disable and delete. */
+  stateTenant?: string;
+  /** The user holds a provider-admin role; everything that writes or sends is hidden otherwise. */
+  canManage: boolean;
 }) {
   const t = useTranslate();
   const refresh = useRefresh();
@@ -291,6 +301,15 @@ export function ProviderRowActions({
   // verified/tested/renamed, we just cannot render its credential form.
   const canVerify = providerType ? providerType.supportsVerify : true;
   const canTest = providerType ? providerType.supportsTestSend : true;
+  // A provider a channel still selects cannot be disabled or deleted: that channel would
+  // stop delivering (login OTPs included on SMS). Enabling is always allowed.
+  const inUseReason = selectedForChannel
+    ? t('app.providers.in_use_locked', {
+      _: 'Selected for %{channel}. Pick another provider for %{channel} on Channels before disabling or deleting this one.',
+      channel: selectedForChannel,
+    })
+    : undefined;
+  const toggleLocked = isActive && !!selectedForChannel;
 
   const runVerify = async () => {
     if (!integrationId) {
@@ -316,24 +335,31 @@ export function ProviderRowActions({
   };
 
   const toggleActive = async () => {
+    if (toggleLocked) return;
     setToggling(true);
     try {
-      await updateProvider({ id: integrationId, active: !isActive });
+      await updateProvider({ id: integrationId, active: !isActive, tenantId: stateTenant || undefined });
       notify(
         isActive
           ? t('app.providers.msg_disabled', { _: 'Provider disabled.' })
           : t('app.providers.msg_enabled', { _: 'Provider enabled.' }),
-        // Disabling one that a channel still points at breaks that channel — say so now.
-        isActive && selectedForChannel
-          ? t('app.providers.msg_disabled_selected', {
-            _: 'It is still the selected provider for a channel, which can no longer deliver until you pick another.',
-          })
-          : undefined,
-        isActive && selectedForChannel ? 'destructive' : 'default',
       );
       refresh();
     } catch (err) {
-      notify(t('app.providers.msg_update_failed', { _: 'Could not update provider.' }), (err as Error)?.message, 'destructive');
+      if (bridgeErrorCode(err) === PROVIDER_IN_USE) {
+        // The channel list here was stale, or the bridge could not read the policy and
+        // refused to guess — its own message says which.
+        notify(
+          t('app.providers.msg_disable_in_use', {
+            _: 'This provider is still selected for a channel, so it was not disabled. Open Channels, pick another provider for that channel, then disable this one.',
+          }),
+          (err as Error)?.message,
+          'destructive',
+        );
+        refresh();
+      } else {
+        notify(t('app.providers.msg_update_failed', { _: 'Could not update provider.' }), (err as Error)?.message, 'destructive');
+      }
     } finally {
       setToggling(false);
     }
@@ -364,47 +390,60 @@ export function ProviderRowActions({
           {t('app.providers.verify', { _: 'Check status' })}
         </Button>
       )}
-      {canTest && (
+      {canManage && canTest && (
         <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setTestOpen(true)} title={t('app.providers.test', { _: 'Test' })}>
           <Send className="w-3.5 h-3.5" />
           {t('app.providers.test', { _: 'Test' })}
         </Button>
       )}
-      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setRenameOpen(true)} title={t('app.providers.rename', { _: 'Rename' })}>
-        <Pencil className="w-3.5 h-3.5" />
-        {t('app.providers.rename', { _: 'Rename' })}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 gap-1 text-xs"
-        onClick={() => setRotateOpen(true)}
-        title={t('app.providers.rotate', { _: 'Rotate credentials' })}
-      >
-        <RotateCcw className="w-3.5 h-3.5" />
-        {t('app.providers.rotate', { _: 'Rotate credentials' })}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 gap-1 text-xs"
-        onClick={toggleActive}
-        disabled={toggling}
-        title={isActive ? t('app.providers.disable', { _: 'Disable' }) : t('app.providers.enable', { _: 'Enable' })}
-      >
-        {toggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
-        {isActive ? t('app.providers.disable', { _: 'Disable' }) : t('app.providers.enable', { _: 'Enable' })}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 gap-1 text-xs text-destructive"
-        onClick={() => setDeleteOpen(true)}
-        title={t('ra.action.delete', { _: 'Delete' })}
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-        {t('ra.action.delete', { _: 'Delete' })}
-      </Button>
+      {canManage && (
+        <>
+          <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setRenameOpen(true)} title={t('app.providers.rename', { _: 'Rename' })}>
+            <Pencil className="w-3.5 h-3.5" />
+            {t('app.providers.rename', { _: 'Rename' })}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => setRotateOpen(true)}
+            title={t('app.providers.rotate', { _: 'Rotate credentials' })}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            {t('app.providers.rotate', { _: 'Rotate credentials' })}
+          </Button>
+          {/* A disabled button takes no pointer events, so the reason sits on a wrapper. */}
+          <span className="inline-flex" title={toggleLocked ? inUseReason : undefined}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={toggleActive}
+              disabled={toggling || toggleLocked}
+              title={isActive ? t('app.providers.disable', { _: 'Disable' }) : t('app.providers.enable', { _: 'Enable' })}
+            >
+              {toggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+              {isActive ? t('app.providers.disable', { _: 'Disable' }) : t('app.providers.enable', { _: 'Enable' })}
+            </Button>
+          </span>
+          <span className="inline-flex" title={inUseReason}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              disabled={!!selectedForChannel}
+              title={t('ra.action.delete', { _: 'Delete' })}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t('ra.action.delete', { _: 'Delete' })}
+            </Button>
+          </span>
+          {inUseReason && (
+            <span className="text-[11px] text-muted-foreground">{inUseReason}</span>
+          )}
+        </>
+      )}
       <Button
         variant="outline"
         size="sm"
@@ -439,6 +478,7 @@ export function ProviderRowActions({
         row={record}
         label={label}
         selectedForChannel={selectedForChannel}
+        stateTenant={stateTenant}
         onDone={refresh}
       />
     </div>

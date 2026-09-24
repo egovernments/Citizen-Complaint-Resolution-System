@@ -66,6 +66,8 @@ export interface NotificationConfigQuery {
    */
   snapshot: NotificationSnapshot | null;
   ready: boolean;
+  /** True while any master is still loading — tells "not loaded yet" apart from "no catalogue". */
+  loading: boolean;
   /** Which namespace served this tenant, and whether the screens may write. */
   decision: SourceDecision;
   /** The same decision for channel policy, which the box makes on its own master. */
@@ -197,14 +199,17 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
         )
       : ((catalogueData ?? []) as unknown as EventCatalogueRow[]);
 
+    const legacyRoutingRows = legacyRoutingData as unknown as LegacyRoutingRow[] | undefined;
     const routingRows = legacy
-      ? adaptLegacyRouting(legacyRoutingData as unknown as LegacyRoutingRow[] | undefined)
+      ? adaptLegacyRouting(legacyRoutingRows)
       : ((routingData ?? []) as unknown as Ided<RoutingRow>[]);
+    // Templates take the routing rows too: their audience is joined to the chain
+    // routing produced, exactly as the box joins it (legacyAdapter.ts).
     const templateRows = legacy
-      ? adaptLegacyTemplate(legacyTemplateData as unknown as LegacyTemplateRow[] | undefined)
+      ? adaptLegacyTemplate(legacyTemplateData as unknown as LegacyTemplateRow[] | undefined, legacyRoutingRows)
       : ((templateData ?? []) as unknown as Ided<TemplateRow>[]);
     const providerTemplateRows = legacy
-      ? adaptLegacyProviderTemplate(legacyProviderTemplateData as unknown as LegacyProviderTemplateRow[] | undefined)
+      ? adaptLegacyProviderTemplate(legacyProviderTemplateData as unknown as LegacyProviderTemplateRow[] | undefined, legacyRoutingRows)
       : ((providerTemplateData ?? []) as unknown as Ided<ProviderTemplateRow>[]);
 
     // Not `legacy ? … : …`: the box picks the channel master independently.
@@ -218,6 +223,7 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
 
     return {
       ready,
+      loading: pending,
       decision,
       channelDecision,
       catalogue,
@@ -316,10 +322,12 @@ export function useNotificationFormGuard(
   const validate = useCallback((values: Record<string, unknown>) => {
     const { enabled: on, ready: rdy, snapshot: snap, resource: res0, editingId: id, switchBlock: block } = live.current;
     if (!on) return {};
+    // The row's key field: every form of that master has it, so an error there
+    // always makes react-hook-form refuse the submit.
+    const keyField = res0 === 'notifications-channel' ? 'code' : 'eventName';
     if (block) {
       const f = block.blocking[0];
-      // On the row's key field, so react-hook-form refuses the submit.
-      return { [res0 === 'notifications-channel' ? 'code' : 'eventName']: `${f.rule}: ${f.message}` };
+      return { [keyField]: `${f.rule}: ${f.message}` };
     }
     if (!rdy || !snap) return {};
     const res = checkPendingChanges(snap, [
@@ -337,7 +345,7 @@ export function useNotificationFormGuard(
       lastSignature.current = signature;
       setResult(res);
     }
-    return fieldErrorsFor(res.blocking, Object.keys(values ?? {}));
+    return fieldErrorsFor(res.blocking, Object.keys(values ?? {}), keyField);
   }, []);
 
   return { validate, result, enabled, ready: enabled && ready };

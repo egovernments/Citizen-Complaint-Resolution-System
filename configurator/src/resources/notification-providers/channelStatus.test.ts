@@ -52,6 +52,11 @@ describe('deriveChannelStatus', () => {
     const noSender = deriveChannelStatus('SMS', { code: 'SMS', enabled: true, gateway: 'smscountry', senderId: null, active: true }, [], [], channelOf);
     expect(noSender.reasons).toContain('no senderId for the SMSCountry gateway');
     expect(noSender.verdict).toBe('gateway-incomplete');
+    // The gateway rejects every message without one, so the badge must not say delivering.
+    expect(noSender.effective).toBe(false);
+    const blankSender = deriveChannelStatus('SMS', { code: 'SMS', enabled: true, gateway: 'smscountry', senderId: '  ', active: true }, [], [], channelOf);
+    expect(blankSender.effective).toBe(false);
+    expect(blankSender.verdict).toBe('gateway-incomplete');
     const wrongChannel = deriveChannelStatus('EMAIL', { code: 'EMAIL', enabled: true, gateway: 'smscountry', active: true }, [gmail], workflows, channelOf);
     expect(wrongChannel.effective).toBe(false);
   });

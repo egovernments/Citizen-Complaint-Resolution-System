@@ -576,13 +576,17 @@ export function validateNotifications({
     // transition"; now "is this an active catalogue row". Same guarantee for
     // PGR — its catalogue rows are generated from that very workflow — and it
     // works for a module whose workflow this browser has never seen.
+    // Only for active rows: an inactive row sends nothing, and flagging it would
+    // make the save guard refuse the very deactivation that retires a stale row.
     if (!event) {
-      findings.push({
-        level: 'error',
-        rule: 'transition-exists',
-        message: `Routing row names event "${r.eventName ?? ''}", which has no active row in the event catalogue. Nothing will ever match it.`,
-        ref,
-      });
+      if (isActive(r.active)) {
+        findings.push({
+          level: 'error',
+          rule: 'transition-exists',
+          message: `Routing row names event "${r.eventName ?? ''}", which has no active row in the event catalogue. Nothing will ever match it.`,
+          ref,
+        });
+      }
     } else {
       // R4b: channel-in-event (warn). A module may declare EMAIL-only events.
       const allowed = eventChannels(event);

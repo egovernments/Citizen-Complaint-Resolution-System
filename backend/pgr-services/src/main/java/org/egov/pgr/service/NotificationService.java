@@ -26,7 +26,6 @@ import org.springframework.util.StringUtils;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -109,9 +108,11 @@ public class NotificationService {
 
     /**
      * Entry point from the Kafka notification consumer: publish ONE thin domain event for this
-     * workflow transition onto {@code complaints.domain.events}, the same topic and the same Kafka
-     * key (the tenant) as the pre-rendered envelopes used. novu-bridge consumes that topic and
-     * dispatches on the event's {@code kind}, so nothing downstream had to be repointed.
+     * workflow transition onto {@code complaints.domain.events}, the same topic the pre-rendered
+     * envelopes used. novu-bridge consumes that topic and dispatches on the event's {@code kind},
+     * so nothing downstream had to be repointed. The record carries NO Kafka key:
+     * {@link Producer#push} uses the tenant only to pick the state-specific topic name, so there
+     * is no per-tenant or per-complaint ordering, exactly as with the envelopes.
      */
     public void process(ServiceRequest request, String topic) {
         try {
@@ -130,8 +131,11 @@ public class NotificationService {
             ResolvedAssignee assignee = resolveAssignee(request);
             String downloadLink = shortenedDownloadLink(service.getServiceRequestId());
             // The HRMS + MDMS join only means anything for a named assignee, and skipping it when
-            // there is none also spares an HRMS round trip on every APPLY.
-            Map<String, String> employment = assignee == null ? Collections.emptyMap() : hrmsCodes(request);
+            // there is none also spares an HRMS round trip on every APPLY. It is keyed on the
+            // RESOLVED assignee: on RESOLVE/REJECT/REOPEN/RATE the request carries no assignes.
+            String assigneeUuid = assignee == null ? null : assignee.getUserId();
+            Map<String, String> employment = StringUtils.hasText(assigneeUuid)
+                    ? hrmsCodes(request, assigneeUuid) : Collections.emptyMap();
 
             Map<String, Object> event = thinEventBuilder.build(request, assignee, downloadLink,
                     employment.get(DEPARTMENT), employment.get(DESIGNATION));
@@ -207,9 +211,9 @@ public class NotificationService {
     }
 
     /** {@link #getHRMSEmployee} with the failure isolated: no assignment found is not an error. */
-    private Map<String, String> hrmsCodes(ServiceRequest request) {
+    private Map<String, String> hrmsCodes(ServiceRequest request, String assigneeUuid) {
         try {
-            return getHRMSEmployee(request);
+            return getHRMSEmployee(request, assigneeUuid);
         } catch (Exception e) {
             log.debug("Could not resolve the HRMS assignment for complaint {}: {}",
                     request.getService().getServiceRequestId(), e.getMessage());
@@ -337,21 +341,23 @@ public class NotificationService {
      * in the complaint's department — a designation from some unrelated assignment would name the
      * wrong job.
      *
+     * @param assigneeUuid the resolved assignee ({@link #resolveAssignee}), which on
+     *        RESOLVE/REJECT/REOPEN/RATE comes from workflow history, not the request
      * @return {@code {department, designation}} (designation absent when the assignment has none),
-     *         or an empty map when there is no matching assignment
+     *         or an empty map when there is no matching assignment or no assignee
      */
-    public Map<String, String> getHRMSEmployee(ServiceRequest request){
+    public Map<String, String> getHRMSEmployee(ServiceRequest request, String assigneeUuid){
         Map<String, String> assigneeDetails = new HashMap<>();
         List<String> mdmsDepartmentList;
         List<String> hrmsDepartmentList;
         String departmentFromMDMS;
 
-        // HRMS CALL. Keyed on the workflow's OWN assignes list, exactly as before the cutover —
-        // the resolved assignee can come from history, and swapping the key here would change which
-        // employees HRMS returns, which is a behaviour change and not part of this move.
-        List<String> assignes = request.getWorkflow() == null || request.getWorkflow().getAssignes() == null
-                ? new ArrayList<>() : request.getWorkflow().getAssignes();
-        StringBuilder url = hrmsUtils.getHRMSURI(assignes, request.getService().getTenantId());
+        // HRMS CALL. Never with an empty uuid list: egov-hrms reads `&uuids=` as "no filter" and
+        // returns the whole tenant, whose first designation would then name somebody else's job.
+        if (!StringUtils.hasText(assigneeUuid))
+            return Collections.emptyMap();
+        StringBuilder url = hrmsUtils.getHRMSURI(Collections.singletonList(assigneeUuid),
+                request.getService().getTenantId());
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(request.getRequestInfo()).build();
         Object response = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
 

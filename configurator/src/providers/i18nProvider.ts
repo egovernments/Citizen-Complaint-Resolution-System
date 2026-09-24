@@ -278,6 +278,15 @@ const customEnglishMessages: TranslationMessages = {
       sync_persist: 'Persist %{n} selected',
       sync_persist_done: 'Provider templates persisted.',
       sync_persist_summary: '%{ok} saved, %{fail} failed.',
+      // Admin-only actions and the in-use lock.
+      admin_only: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.',
+      in_use_locked: 'Selected for %{channel}. Pick another provider for %{channel} on Channels before disabling or deleting this one.',
+      msg_disable_in_use: 'This provider is still selected for a channel, so it was not disabled. Open Channels, pick another provider for that channel, then disable this one.',
+    },
+    notification_validate: {
+      // Workflow screen → "Validate notifications": no verdict without the configuration.
+      loading: 'Loading the notification configuration…',
+      not_configured: 'Not configured: this tenant has no notification event catalogue, so there is nothing to validate against.',
     },
     otp_wording: {
       // Notifications → Configure: "Login and registration OTP (SMS)" section.

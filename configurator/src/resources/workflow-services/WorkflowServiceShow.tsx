@@ -4,7 +4,7 @@ import { FieldSection, FieldRow, StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useShowController } from 'ra-core';
+import { useShowController, useTranslate } from 'ra-core';
 import {
   Table,
   TableHeader,
@@ -61,14 +61,19 @@ function NotificationChips({ rows }: { rows: RoutingRow[] }) {
  * Configure tab — the same button reporting a clean bill of health on one screen
  * and errors on another. Loading everything through one hook is what stops that
  * asymmetry coming back.
+ *
+ * No verdict without a snapshot: it is null while the masters load AND when the
+ * tenant has no event catalogue, and validating nothing must not read as healthy.
  */
 function ValidationPanel() {
+  const t = useTranslate();
   const [findings, setFindings] = useState<ValidationFinding[] | null>(null);
   const [expanded, setExpanded] = useState(true);
-  const { snapshot, decision } = useNotificationConfig();
+  const { snapshot, decision, loading } = useNotificationConfig();
 
   const run = () => {
-    setFindings(snapshot ? validateNotifications(snapshot) : []);
+    if (!snapshot) return;
+    setFindings(validateNotifications(snapshot));
     setExpanded(true);
   };
 
@@ -78,10 +83,23 @@ function ValidationPanel() {
   return (
     <FieldSection title="Notification Configuration">
       <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="outline" size="sm" onClick={run}>
+        <Button variant="outline" size="sm" onClick={run} disabled={!snapshot}>
           Validate notifications
         </Button>
-        {findings !== null && (
+        {!snapshot && (
+          loading ? (
+            <span className="text-xs text-muted-foreground">
+              {t('app.notification_validate.loading', { _: 'Loading the notification configuration…' })}
+            </span>
+          ) : (
+            <span className="text-xs text-amber-700">
+              {t('app.notification_validate.not_configured', {
+                _: 'Not configured: this tenant has no notification event catalogue, so there is nothing to validate against.',
+              })}
+            </span>
+          )
+        )}
+        {snapshot && findings !== null && (
           <>
             {errorCount === 0 ? (
               <Badge variant="success" className="text-xs">
@@ -113,7 +131,7 @@ function ValidationPanel() {
         )}
       </div>
 
-      {findings !== null && expanded && findings.length > 0 && (
+      {snapshot && findings !== null && expanded && findings.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {findings.map((f, i) => (
             <li

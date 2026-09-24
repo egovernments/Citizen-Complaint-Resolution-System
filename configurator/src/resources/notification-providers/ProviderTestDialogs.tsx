@@ -8,7 +8,7 @@
 //                         never "Templates": message wording is a different screen.
 //
 // Recipients are operator-entered and only leave the browser on an explicit submit.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslate } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
@@ -222,25 +222,35 @@ export function PullTemplatesDialog({
   const [copied, setCopied] = useState<string | null>(null);
 
   // Fetch when opened (fresh each time — no caching of discovery results).
+  // Each fetch takes a number; a response that is no longer the latest (the
+  // dialog closed, or moved to another channel/provider) is dropped, or it would
+  // repopulate the dialog with the previous provider's workflows.
+  const requestSeq = useRef(0);
   const load = async () => {
+    const seq = ++requestSeq.current;
+    const current = () => seq === requestSeq.current;
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      setResult(await pullTemplates(channel, providerId));
+      const r = await pullTemplates(channel, providerId);
+      if (current()) setResult(r);
     } catch (err) {
-      setError((err as Error)?.message ?? 'Failed to load templates');
+      if (current()) setError((err as Error)?.message ?? 'Failed to load templates');
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 
   // The dialog is opened by the PARENT flipping the `open` prop, so Radix's
   // onOpenChange never fires for the open transition — an effect on `open` is
   // the only reliable trigger for the fetch. handleOpenChange below only ever
-  // runs for the close path (Esc/overlay/Close button).
+  // runs for the close path (Esc/overlay/Close button). The cleanup retires the
+  // in-flight fetch whenever the dialog closes or its target changes.
   useEffect(() => {
-    if (open) { void load(); }
+    if (!open) return;
+    void load();
+    return () => { requestSeq.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, channel, providerId]);
 

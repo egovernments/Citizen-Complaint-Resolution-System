@@ -7,7 +7,7 @@ import { StatusChip } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  integrationChannel, integrationKey, isDeliverableIntegration, providerTypeLabelKey, findProviderType,
+  integrationChannel, integrationKey, isDeliverableIntegration, isProviderAdmin, providerTypeLabelKey, findProviderType,
   type IntegrationRow,
 } from './providerApi';
 import { selectionsByProvider } from './channelStatus';
@@ -16,6 +16,7 @@ import { AddProviderDialog } from './AddProviderDialog';
 import { ProviderRowActions } from './ProviderRowActions';
 import { useProviderCatalog } from './useProviderCatalog';
 import { useChannelRows } from './useChannelRows';
+import { useApp } from '../../App';
 
 /** Render a boolean flag as a compact yes/no chip. */
 function flag(value: unknown) {
@@ -62,7 +63,11 @@ export function NotificationProviderList() {
   const t = useTranslate();
   const catalogState = useProviderCatalog();
   const { catalog } = catalogState;
-  const { rows: channelRows } = useChannelRows();
+  const { rows: channelRows, stateTenant } = useChannelRows();
+  // Add / rename / rotate / enable / disable / delete / test are admin-only on the
+  // bridge; offering them to everyone meant non-admins only learned that from a 403.
+  const { state } = useApp();
+  const canManage = isProviderAdmin(state.user?.roles);
 
   const selected = useMemo(() => selectionsByProvider(channelRows), [channelRows]);
   const channelOf = (record: IntegrationRow) => {
@@ -150,7 +155,15 @@ export function NotificationProviderList() {
       actions={
         <div className="flex items-center gap-2">
           <SyncTemplatesAction />
-          <AddProviderDialog catalogState={catalogState} />
+          {canManage ? (
+            <AddProviderDialog catalogState={catalogState} />
+          ) : (
+            <span className="text-xs text-muted-foreground max-w-xs">
+              {t('app.providers.admin_only', {
+                _: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.',
+              })}
+            </span>
+          )}
         </div>
       }
     >
@@ -161,6 +174,8 @@ export function NotificationProviderList() {
             record={record as IntegrationRow}
             catalog={catalog}
             selectedForChannel={channelOf(record as IntegrationRow)}
+            stateTenant={stateTenant}
+            canManage={canManage}
           />
         )}
       />

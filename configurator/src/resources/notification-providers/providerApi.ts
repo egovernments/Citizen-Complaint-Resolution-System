@@ -80,10 +80,13 @@ export interface UpdateProviderInput {
   /** A FULL replacement credential set — rotation, not a patch. Omit to leave credentials alone. */
   credentials?: Record<string, unknown>;
   active?: boolean;
+  /** STATE tenant whose channel policy the bridge checks before a deactivate (NB_PROVIDER_IN_USE). */
+  tenantId?: string;
 }
 
 export interface DeleteProviderInput {
   id: string;
+  /** STATE tenant whose channel policy the bridge checks before deleting (NB_PROVIDER_IN_USE). */
   tenantId?: string;
 }
 
@@ -253,6 +256,19 @@ export async function deleteProvider(input: DeleteProviderInput): Promise<Delete
 
 /** The bridge's error code for "this provider is still selected on a channel". */
 export const PROVIDER_IN_USE = 'NB_PROVIDER_IN_USE';
+
+/**
+ * Roles the bridge accepts for provider create / _update / _delete and test-send
+ * (`novu.bridge.proxy.admin.roles`). The bridge also requires the role to be held
+ * at the STATE tenant; the session keeps role codes only, so this check cannot see
+ * that half and the bridge's 403 stays the last word for a city-level admin.
+ */
+export const PROVIDER_ADMIN_ROLES = ['SUPERUSER', 'MDMS_ADMIN', 'ACCOUNT_ADMIN'];
+
+/** True when the signed-in user's role codes include a provider-admin role. */
+export function isProviderAdmin(roles: readonly string[] | undefined): boolean {
+  return (roles ?? []).some((r) => PROVIDER_ADMIN_ROLES.includes(String(r).toUpperCase()));
+}
 
 /** GET /providers/templates — read-only discovery of Novu delivery workflows.
  *  `channel` filters server-side by the workflow's Novu step types; these are

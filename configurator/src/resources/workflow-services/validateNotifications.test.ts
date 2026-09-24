@@ -199,6 +199,17 @@ describe('validateNotifications', () => {
     expect(f?.message).toMatch(/event catalogue/);
   });
 
+  it('R4: an INACTIVE routing row is not flagged, so it can be deactivated away', () => {
+    const ghost = 'COMPLAINTS.WORKFLOW.GHOST.NOWHERE';
+    const findings = validateNotifications({
+      catalogue: CATALOGUE,
+      routingRows: [routing({ eventName: ghost, active: false })],
+      templateRows: [],
+      roleCodes: ROLE_CODES,
+    });
+    expect(findings.filter((f) => f.rule === 'transition-exists')).toHaveLength(0);
+  });
+
   it('R4: an INACTIVE catalogue row is not a valid routing target', () => {
     const findings = validateNotifications({
       catalogue: [event(ASSIGN, { active: false }), event(RESOLVE)],
