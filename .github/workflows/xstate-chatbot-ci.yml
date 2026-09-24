@@ -1,0 +1,46 @@
+name: xstate-chatbot CI
+
+# build.yml only builds the image, so the test suite never ran anywhere but a
+# developer's machine — where .env supplies COUNTRY_CODE, RESET_WORDS and the
+# rest, and hides any test that depends on them. .env is gitignored, so a CI
+# checkout is the clean-checkout case by construction.
+
+on:
+  push:
+    branches: [master, develop, main]
+    paths:
+      - 'backend/xstate-chatbot/**'
+      - '.github/workflows/xstate-chatbot-ci.yml'
+  pull_request:
+    branches: [master, develop, main]
+    paths:
+      - 'backend/xstate-chatbot/**'
+      - '.github/workflows/xstate-chatbot-ci.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: backend/xstate-chatbot/nodejs
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '23.9.0'        # matches the Dockerfile
+          cache: 'npm'
+          cache-dependency-path: 'backend/xstate-chatbot/nodejs/package-lock.json'
+
+      - run: npm ci
+
+      - name: Fail if a committed .env could mask a missing default
+        run: test ! -f .env
+
+      - name: Unit tests (no environment required)
+        run: npm test

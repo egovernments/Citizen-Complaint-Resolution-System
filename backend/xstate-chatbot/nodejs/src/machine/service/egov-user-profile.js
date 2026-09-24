@@ -1,38 +1,37 @@
+const { StatusCodes } = require('http-status-codes');
 const config = require('../../env-variables');
 const fetch = require('node-fetch');
+const { ExternalServiceError } = require('../../session/errors');
+const userService = require('../../session/user-service');
 
 class UserProfileService {
-  async updateUser(user, slots, tenantId) {
-    user.userInfo.locale = slots.locale;
-    if(slots.name)
-      user.userInfo.name = slots.name;
 
-    let requestBody = {
-      RequestInfo: {
-        authToken: user.authToken
-      },
+  async updateUser(user, userSlots, tenantId) {
+    user.userInfo.locale = userSlots.locale;
+    user.userInfo.name = userSlots.name || user.userInfo.name;
+
+    const { authToken, userInfo } = await userService.getServiceAccount();
+    const url = config.egovServices.userServiceHost + config.egovServices.userServiceUpdateNoValidatePath;
+
+    const requestBody = {
+      RequestInfo: userService.serviceRequestInfo(authToken, userInfo),
       user: user.userInfo
     };
-    let url = config.egovServices.egovServicesHost + config.egovServices.userServiceUpdateProfilePath + '?tenantId=' + tenantId;
 
-    let options = {
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      timeout: config.timeouts.request,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
+    });
+
+    if (response.status === StatusCodes.OK) {
+      return await response.json();
     }
 
-    let response = await fetch(url, options);
-    if(response.status === 200) {
-      let responseBody = await response.json();
-      return responseBody;
-    } else {
-      console.error('Error Updating the user profile');
-      let responseBody = await response.json();
-      console.error(JSON.stringify(responseBody));
-      return undefined;
-    }
+    console.error('Error Updating the user profile');
+    console.error((await response.text()).slice(0, 300));
+    throw new ExternalServiceError('Error updating the user profile');
   }
 }
 

@@ -1,6 +1,6 @@
 const fetch = require("node-fetch");
 const config = require("../../env-variables");
-const mobileValidation = require('./mobile-validation-service');
+const mobileValidation = require("./mobile-validation-service");
 const getCityAndLocality = require("./util/google-maps-util");
 const localisationService = require("../util/localisation-service");
 const urlencode = require("urlencode");
@@ -9,12 +9,18 @@ const moment = require("moment-timezone");
 const fs = require("fs");
 const axios = require("axios");
 var FormData = require("form-data");
+const mediaTypes = require("../../media-types");
+const TtlCache = require("../../ttl-cache");
 var geturl = require("url");
 var path = require("path");
+const userService = require('../../session/user-service');
+const { ExternalServiceError } = require("../../session/errors");
 require("url-search-params-polyfill");
 
 let pgrCreateRequestBody =
   '{"RequestInfo":{"authToken":"","userInfo":{}},"service":{"tenantId":"","serviceCode":"","description":"","accountId":"","source":"whatsapp","address":{"landmark":"","city":"","geoLocation":{"latitude": null, "longitude": null},"locality":{"code":""}}},"workflow":{"action":"APPLY","verificationDocuments":[]}}';
+
+const referenceCache = new TtlCache(config.referenceCacheTtlMs);
 
 class PGRService {
   async fetchMdmsData(tenantId, moduleName, masterName, filterPath, user) {
@@ -48,7 +54,7 @@ class PGRService {
       },
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
 
     if (!response.ok) {
       throw new Error(`MDMS fetch failed with status ${response.status}`);
@@ -98,7 +104,7 @@ class PGRService {
       }
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
 
     if (!response.ok) {
       throw new Error(`MDMS v2 fetch failed with status ${response.status}`);
@@ -108,286 +114,221 @@ class PGRService {
     return data.MdmsRes || data.mdms || {};
   }
 
-  // ComplaintHierarchy is a single adjacency list holding interior nodes AND leaf
-  // complaint types. A row is a LEAF iff it carries `department` or `slaHours`
-  // (interior nodes omit both). The old RAINMAKER-PGR.ServiceDefs master is gone,
-  // so this adapter fetches ComplaintHierarchy, keeps the leaf rows, and maps each
-  // to the legacy ServiceDef shape so the rest of this file is unchanged.
-  //   serviceCode := row.code        menuPath     := row.parentCode
-  //                                  menuPathName := name of parent node (code === parentCode)
-  mapHierarchyToServiceDefs(rows) {
-    if (!Array.isArray(rows)) return [];
-    const isLeaf = (r) =>
-      r && (r.department !== undefined || r.slaHours !== undefined);
-    const nameByCode = {};
-    for (const r of rows) {
-      if (r && r.code !== undefined) nameByCode[r.code] = r.name;
-    }
-    return rows.filter(isLeaf).map((r) => ({
-      serviceCode: r.code,
-      name: r.name,
-      department: r.department,
-      departments: r.departments,
-      slaHours: r.slaHours,
-      keywords: r.keywords,
-      order: r.order,
-      active: r.active,
-      parentCode: r.parentCode,
-      menuPath: r.parentCode,
-      menuPathName: r.parentCode !== undefined ? nameByCode[r.parentCode] : undefined,
-    }));
-  }
-
-  async fetchFrequentComplaints(tenantId, user) {
-    try {
-
-      // Try MDMS v2 first
-      try {
-        const mdmsData = await this.fetchMdmsV2Data(
-          tenantId,
-          [
-            {
-              moduleName: "RAINMAKER-PGR",
-              masterDetails: [{ name: "ComplaintHierarchy" }]
-            }
-          ],
-          user
-        );
-
-        if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ComplaintHierarchy']) {
-          // ComplaintHierarchy holds interior + leaf rows; keep leaves mapped to
-          // the legacy ServiceDef shape so downstream logic is unchanged.
-          const serviceDefs = this.mapHierarchyToServiceDefs(
-            mdmsData['RAINMAKER-PGR']['ComplaintHierarchy']
-          );
-
-          // Filter active services - show all complaint types
-          const activeServices = serviceDefs
-            .filter(def => def.active === true)
-            .sort((a, b) => (a.order || 999) - (b.order || 999));
-            // Removed slice to show all complaint types
-
-          let complaintTypes = [];
-          let messageBundle = {};
-          let localisationPrefix = "COMPLAINT_HIERARCHY.";
-          
-          // Collect all localization codes
-          let localizationCodes = [];
-          for (let service of activeServices) {
-            complaintTypes.push(service.serviceCode);
-            localizationCodes.push(localisationPrefix + service.serviceCode.toUpperCase());
-          }
-          
-          // Fetch all localizations at once from API
-          let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
-            localizationCodes,
-            tenantId
-          );
-          
-          // Build message bundle
-          for (let service of activeServices) {
-            let localizationKey = localisationPrefix + service.serviceCode.toUpperCase();
-            if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
-              messageBundle[service.serviceCode] = localizedMessages[localizationKey];
-            } else {
-              // Fallback to MDMS name if localization not found
-              messageBundle[service.serviceCode] = {
-                en_IN: service.name || service.serviceCode,
-                hi_IN: service.name || service.serviceCode
-              };
-            }
-          }
-
-          return { complaintTypes, messageBundle };
-        }
-      } catch (v2Error) {
-      }
-
-      // Fallback to MDMS v1. ComplaintHierarchy holds interior + leaf rows; the
-      // adapter keeps only leaves (mapped to the legacy ServiceDef shape).
-      let complaintTypeMdmsData = await this.fetchMdmsData(
+  async fetchComplaintHierarchyLevels(tenantId) {
+    const rows = await referenceCache.get(`definition:${tenantId}`, () =>
+      this.fetchMdmsData(
         tenantId,
         "RAINMAKER-PGR",
-        "ComplaintHierarchy",
-        "$.[?(@.active == true)]",
-        user
-      );
-      let sortedData = this.mapHierarchyToServiceDefs(complaintTypeMdmsData)
-        .sort((a, b) => (a.order || 999) - (b.order || 999));
-        // Removed slice to show all complaint types
+        "ComplaintHierarchyDefinition",
+        "$.[?(@.active == true)]"
+      )
+    );
+    const definition = rows?.[0] ?? {};
+    const levels = definition.levels ?? [];
+    if (levels.some((level) => level.isFreeText)) {
+      throw new Error("ComplaintHierarchyDefinition declares an isFreeText level, which the chatbot does not support");
+    }
+    return {
+      hierarchyType: definition.hierarchyType,
+      levels: [...levels].sort((a, b) => a.order - b.order)
+    };
+  }
 
-      let complaintTypes = [];
-      let messageBundle = {};
-      let localisationPrefix = "COMPLAINT_HIERARCHY.";
+  isOtherOption(row) {
+    return /^(other|others|outro|outros)$/i.test(String(row.name ?? "").trim())
+      || String(row.code ?? "").endsWith("Other");
+  }
+
+  async fetchComplaintHierarchyStep(tenantId, hierarchyPath = []) {
+    const [{ hierarchyType, levels }, hierarchyRows] = await Promise.all([
+      this.fetchComplaintHierarchyLevels(tenantId),
+      referenceCache.get(`hierarchy:${tenantId}`, () =>
+        this.fetchMdmsData(tenantId, "RAINMAKER-PGR", "ComplaintHierarchy", "$.[?(@.active == true)]")
+      )
+    ]);
+
+
+    const parentCode = hierarchyPath[hierarchyPath.length - 1];
+    const children = hierarchyRows
+      .filter((row) => !hierarchyType || row.hierarchyType === hierarchyType)
+      .filter((row) => (parentCode ? row.parentCode === parentCode : row.parentCode == null))
+      .sort(
+        (a, b) =>
+          (this.isOtherOption(a) ? 1 : 0) - (this.isOtherOption(b) ? 1 : 0) ||
+          (a.order ?? 0) - (b.order ?? 0) ||
+          String(a.code).localeCompare(String(b.code))
+      );
+
+    const level =
+      levels.find((candidate) => candidate.levelCode === children[0]?.levelCode) ??
+      levels[hierarchyPath.length];
+    
+    const hasChildren = (code) =>
+      hierarchyRows.some(
+        (row) => (!hierarchyType || row.hierarchyType === hierarchyType) && row.parentCode === code
+      );
       
-      // Collect unique service codes and localization codes
-      let localizationCodes = [];
-      for (let data of sortedData) {
-        if (!complaintTypes.includes(data.serviceCode)) {
-          complaintTypes.push(data.serviceCode);
-          localizationCodes.push(localisationPrefix + data.serviceCode.toUpperCase());
+    const isLeaf = (row) => !hasChildren(row.code);
+    const isLeafLevel = level
+      ? level.isLeafServiceCode === true || (children.length > 0 && children.every(isLeaf))
+      : children.every((row) => row.department !== undefined || row.slaHours !== undefined);
+
+    const options = children.map((row) => row.code);
+    return {
+      options,
+      messageBundle: this.hierarchyMessageBundle(options),
+      trailBundle: this.hierarchyMessageBundle(hierarchyPath),
+      levelLabel: level?.label ?? "",
+      isLeafLevel,
+      leafByCode: this.leafExceptions(children.map((row) => [row.code, isLeaf(row)]), isLeafLevel)
+    };
+  }
+
+  /** Codes whose leafness disagrees with isLeafLevel; empty on a uniform level.
+   *  Rides in context, which is serialised into eg_chat_state_v2 each transition. */
+  leafExceptions(pairs, isLeafLevel) {
+    const exceptions = {};
+    for (const [code, leaf] of pairs) {
+      if (leaf !== isLeafLevel) exceptions[code] = leaf;
+    }
+    return exceptions;
+  }
+
+  /** Drops the cached MDMS and boundary reads for every tenant. */
+  clearReferenceCache() {
+    referenceCache.clear();
+  }
+
+  hierarchyMessageBundle(codes) {
+    const messageBundle = {};
+    for (const code of codes) {
+      messageBundle[code] = localisationService.getMessageBundleForCode(
+        "COMPLAINT_HIERARCHY." + code.toUpperCase()
+      );
+    }
+    return messageBundle;
+  }
+
+  async fetchBoundaryHierarchy(tenantId) {
+    const url =
+      config.egovServices.egovServicesHost +
+      "boundary-service/boundary-hierarchy-definition/_search";
+     
+      const data = await referenceCache.get(`boundary-def:${tenantId}`, async () => {
+        const response = await fetch(url, {
+          method: "POST",
+          timeout: config.timeouts.request,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            RequestInfo: {},
+            BoundaryTypeHierarchySearchCriteria: { tenantId },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Boundary hierarchy fetch failed with status ${response.status}`);
         }
-      }
-      
-      // Fetch all localizations at once from API
-      let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
-        localizationCodes,
-        tenantId
-      );
-      
-      // Build message bundle
-      for (let data of sortedData) {
-        if (messageBundle[data.serviceCode]) continue; // Skip if already processed
-        
-        let localizationKey = localisationPrefix + data.serviceCode.toUpperCase();
-        if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
-          messageBundle[data.serviceCode] = localizedMessages[localizationKey];
-        } else {
-          // Fallback to MDMS name if localization not found
-          messageBundle[data.serviceCode] = {
-            en_IN: data.name || data.serviceCode,
-            hi_IN: data.name || data.serviceCode
-          };
-        }
-      }
 
-      return { complaintTypes, messageBundle };
-    } catch (error) {
+        return response.json();
+    });
 
-      // Fallback to basic complaint types if MDMS fails
-      const fallbackTypes = [
-        { code: 'STREETLIGHT', name: 'Streetlight not working' },
-        { code: 'SEWAGE', name: 'Sewage overflow / blocked' },
-        { code: 'GARBAGE', name: 'Garbage not cleared' },
-        { code: 'WATER', name: 'Pipe broken / leaking' }
-      ];
-
-      let complaintTypes = [];
-      let messageBundle = {};
-
-      for (let type of fallbackTypes) {
-        complaintTypes.push(type.code);
-        messageBundle[type.code] = {
-          en_IN: type.name,
-          hi_IN: type.name
-        };
-      }
-
-      return { complaintTypes, messageBundle };
-    }
-  }
-
-
-  async fetchComplaintCategories(tenantId) {
-    // Categories = parent nodes of the active leaf complaint types. ServiceDefs
-    // is gone; the leaf's parentCode replaces the legacy menuPath grouping key.
-    let hierarchyRows = await this.fetchMdmsData(
-      tenantId,
-      "RAINMAKER-PGR",
-      "ComplaintHierarchy",
-      "$.[?(@.active == true)]"
+    // a tenant can have several unrelated hierarchy types registered (other
+    // modules, QA fixtures) - pick the one PGR is configured to use, not just
+    // whichever the search happens to return first.
+    const definition = (data.BoundaryHierarchy ?? []).find(
+      (d) => d.hierarchyType === config.boundaryHierarchyType
+    ) ?? {};
+    const levels = (definition.boundaryHierarchy ?? []).filter(
+      (level) => level.active !== false
     );
-    let complaintCategories = this.mapHierarchyToServiceDefs(hierarchyRows).map(
-      (def) => def.menuPath
-    );
-    complaintCategories = [...new Set(complaintCategories)];
-    complaintCategories = complaintCategories.filter(
-      (complaintCategory) => complaintCategory != ""
-    ); // To remove any empty category
-    let localisationPrefix = "COMPLAINT_HIERARCHY.";
-    let messageBundle = {};
-    for (let complaintCategory of complaintCategories) {
-      let message = localisationService.getMessageBundleForCode(
-        localisationPrefix + complaintCategory.toUpperCase()
-      );
-      messageBundle[complaintCategory] = message;
-    }
-    return { complaintCategories, messageBundle };
+    return {
+      hierarchyType: definition.hierarchyType,
+      levels: this.orderBoundaryLevels(levels),
+    };
   }
 
-
-  async fetchComplaintItemsForCategory(category, tenantId) {
-    // Leaf complaint types under a category = leaves whose parentCode (legacy
-    // menuPath) matches the category. ServiceDefs is gone; read ComplaintHierarchy.
-    let hierarchyRows = await this.fetchMdmsData(
-      tenantId,
-      "RAINMAKER-PGR",
-      "ComplaintHierarchy",
-      "$.[?(@.active == true)]"
-    );
-    let complaintItems = this.mapHierarchyToServiceDefs(hierarchyRows)
-      .filter((def) => def.menuPath == category)
-      .map((def) => def.serviceCode);
-    let localisationPrefix = "COMPLAINT_HIERARCHY.";
-    let messageBundle = {};
-    for (let complaintItem of complaintItems) {
-      let message = localisationService.getMessageBundleForCode(
-        localisationPrefix + complaintItem.toUpperCase()
-      );
-      messageBundle[complaintItem] = message;
+  // Levels declare parentBoundaryType, not an index; follow the chain from the root.
+  orderBoundaryLevels(levels) {
+    const byParent = {};
+    for (const level of levels) {
+      byParent[level.parentBoundaryType ?? "\u0000root"] = level;
     }
-
-    return { complaintItems, messageBundle };
+    const ordered = [];
+    let key = "\u0000root";
+    while (byParent[key] && ordered.length <= levels.length) {
+      ordered.push(byParent[key]);
+      key = byParent[key].boundaryType;
+    }
+    return ordered.length ? ordered : levels;
   }
 
-
-  async getCityAndLocalityForGeocode(geocode, tenantId) {
-    let latlng = geocode.substring(1, geocode.length - 1); // Remove braces
-    let cityAndLocality = await getCityAndLocality(latlng);
-    let { cities, messageBundle } = await this.fetchCities(tenantId);
-    if (cityAndLocality.city == "Sahibzada Ajit Singh Nagar") {
-      cityAndLocality.city = "Mohali";
+  async fetchBoundaryStep(tenantId, boundaryPath = []) {
+    const { hierarchyType, levels } = await this.fetchBoundaryHierarchy(tenantId);
+    if (!hierarchyType) {
+      throw new ExternalServiceError(
+        `No boundary hierarchy registered for '${config.boundaryHierarchyType}' in tenant ${tenantId}`
+      );
     }
-    let matchedCity = null;
-    let matchedCityMessageBundle = null;
-    for (let city of cities) {
-      let cityName = messageBundle[city]["en_IN"];
-      if (cityName.toLowerCase() == cityAndLocality.city.toLowerCase()) {
-        matchedCity = city;
-        matchedCityMessageBundle = messageBundle[city];
-        break;
+
+
+    const url =
+      config.egovServices.egovServicesHost +
+      "boundary-service/boundary-relationships/_search?tenantId=" +
+      encodeURIComponent(tenantId) +
+      "&hierarchyType=" +
+      encodeURIComponent(hierarchyType) +
+      "&includeChildren=true";
+    
+    const data = await referenceCache.get(`boundary-tree:${tenantId}:${hierarchyType}`, async () => {
+      const response = await fetch(url, {
+        method: "POST",
+        timeout: config.timeouts.request,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ RequestInfo: {} }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Boundary relationships fetch failed with status ${response.status}`);
       }
+
+      return response.json();
+    });
+
+
+    let nodes = (data.TenantBoundary ?? []).flatMap((entry) => entry.boundary ?? []);
+    for (const code of boundaryPath) {
+      const match = nodes.find((node) => node.code === code);
+      nodes = match?.children ?? [];
     }
-    if (matchedCity) {
-      let matchedLocality = null;
-      let matchedLocalityMessageBundle = null;
-      let { localities, messageBundle } = await this.fetchLocalities(
-        matchedCity
-      );
-      for (let locality of localities) {
-        let localityName = messageBundle[locality]["en_IN"];
-        if (
-          localityName.toLowerCase() == cityAndLocality.locality.toLowerCase()
-        ) {
-          matchedLocality = locality;
-          matchedLocalityMessageBundle = messageBundle[locality];
-          return {
-            city: matchedCity,
-            locality: matchedLocality,
-            matchedCityMessageBundle: matchedCityMessageBundle,
-            matchedLocalityMessageBundle: matchedLocalityMessageBundle,
-          };
-        }
-      }
-      // Matched City found but no matching locality found
-      return {
-        city: matchedCity,
-        matchedCityMessageBundle: matchedCityMessageBundle,
-      };
-    }
-    return undefined; // No matching city found
+
+    const options = nodes
+      .map((node) => node.code)
+      .sort((a, b) => String(a).localeCompare(String(b)));
+
+    const isLeaf = (node) => (node.children ?? []).length === 0;
+    const isLeafLevel = nodes.every(isLeaf);
+
+    return {
+      options,
+      messageBundle: this.boundaryMessageBundle(options),
+      levelLabel:
+        nodes[0]?.boundaryType ?? levels[boundaryPath.length]?.boundaryType ?? "",
+      isLeafLevel,
+      leafByCode: this.leafExceptions(nodes.map((node) => [node.code, isLeaf(node)]), isLeafLevel),
+    };
+
   }
 
-  async fetchCitiesAndWebpageLink(tenantId, whatsAppBusinessNumber, user) {
-    let { cities, messageBundle } = await this.fetchCities(tenantId, user);
-    let link = await this.getCityExternalWebpageLink(
-      tenantId,
-      whatsAppBusinessNumber
-    );
-    return { cities, messageBundle, link };
+  boundaryMessageBundle(codes) {
+    const messageBundle = {};
+    for (const code of codes) {
+      messageBundle[code] = localisationService.getMessageBundleForCode(code);
+    }
+    return messageBundle;
   }
 
-  /**
+  
+/**
    * The city pick-list a citizen chooses from, and the tenant the complaint is filed against.
    *
    * Derived from `tenant.tenants`, NOT seeded statically. The previous implementation read
@@ -414,6 +355,23 @@ class PGRService {
     return { cities, messageBundle };
   }
 
+  /** City tenants from `tenant.tenants` -- everything below the state root. */
+  async fetchCityTenants(tenantId, user) {
+    const stateRoot = String(tenantId || "").split(".")[0];
+    try {
+      const rows = await this.fetchMdmsData(tenantId, "tenant", "tenants", "$.*", user);
+      const codes = (rows || [])
+        .map((r) => (typeof r === "string" ? r : r && r.code))
+        .filter((c) => c && c !== stateRoot);
+      if (codes.length) return codes;
+      // Single-tenant deployment: the state root IS the only place to file.
+      return stateRoot ? [stateRoot] : [];
+    } catch (error) {
+      console.error(`Unable to derive city tenants for ${tenantId}: ${error.message}`);
+      return stateRoot ? [stateRoot] : [];
+    }
+  }
+
   /** Optional `tenant.citymodule` PGR.WHATSAPP restriction. Empty when unset. */
   async fetchWhatsAppCityOverride(tenantId, user) {
     try {
@@ -429,24 +387,8 @@ class PGRService {
       const stateRoot = String(tenantId || "").split(".")[0];
       return (codes || []).filter((c) => c && c !== stateRoot);
     } catch (error) {
+      console.warn(`WhatsApp city override lookup failed, using none: ${error.message}`);
       return [];
-    }
-  }
-
-  /** City tenants from `tenant.tenants` -- everything below the state root. */
-  async fetchCityTenants(tenantId, user) {
-    const stateRoot = String(tenantId || "").split(".")[0];
-    try {
-      const rows = await this.fetchMdmsData(tenantId, "tenant", "tenants", "$.*", user);
-      const codes = (rows || [])
-        .map((r) => (typeof r === "string" ? r : r && r.code))
-        .filter((c) => c && c !== stateRoot);
-      if (codes.length) return codes;
-      // Single-tenant deployment: the state root IS the only place to file.
-      return stateRoot ? [stateRoot] : [];
-    } catch (error) {
-      console.error(`Unable to derive city tenants for ${tenantId}: ${error.message}`);
-      return stateRoot ? [stateRoot] : [];
     }
   }
 
@@ -470,15 +412,9 @@ class PGRService {
     return shorturl;
   }
 
-  async fetchLocalitiesAndWebpageLink(tenantId, whatsAppBusinessNumber, user) {
-    let { localities, messageBundle } = await this.fetchLocalities(tenantId, user);
-    let link = await this.getLocalityExternalWebpageLink(
-      tenantId,
-      whatsAppBusinessNumber
-    );
-    return { localities, messageBundle, link };
-  }
 
+
+  
   async getLocalityExternalWebpageLink(tenantId, whatsAppBusinessNumber) {
     let url =
       config.egovServices.externalHost +
@@ -519,21 +455,19 @@ class PGRService {
         if (mdmsData['CMS-BOUNDARY'] && mdmsData['CMS-BOUNDARY']['HierarchySchema']) {
           const hierarchySchemas = mdmsData['CMS-BOUNDARY']['HierarchySchema'];
           // Find ADMIN hierarchy
-          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === config.boundaryHierarchyType);
+          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === 'ADMIN');
           if (adminHierarchy && adminHierarchy.lowestHierarchy) {
             lowestBoundaryType = adminHierarchy.lowestHierarchy;
           }
         }
       } catch (mdmsError) {
+        console.warn(`Hierarchy schema lookup failed, using the default boundary type: ${mdmsError.message}`);
       }
 
       // Step 1: Fetch boundary data from boundary service with specific boundary type
 
       // Use boundary type parameter to fetch only the lowest level boundaries
-      // hierarchyType is named per deployment (it is not always ADMIN), so it is
-      // configurable; the default preserves the previous behaviour.
-      const hierarchyType = config.boundaryHierarchyType;
-      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=${encodeURIComponent(hierarchyType)}&boundaryType=${lowestBoundaryType}&includeChildren=true`;
+      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=ADMIN&boundaryType=${lowestBoundaryType}&includeChildren=true`;
 
       const boundaryRequest = {
         RequestInfo: {
@@ -552,7 +486,7 @@ class PGRService {
         }
       };
 
-      const boundaryResponse = await fetch(boundaryUrl, boundaryOptions);
+      const boundaryResponse = await fetch(boundaryUrl, { ...boundaryOptions, timeout: config.timeouts.request });
 
       if (!boundaryResponse.ok) {
         throw new Error(`Boundary service returned status ${boundaryResponse.status}`);
@@ -605,7 +539,7 @@ class PGRService {
       let localizedMessages = {};
 
       try {
-        const localizationResponse = await fetch(localizationUrl, localizationOptions);
+        const localizationResponse = await fetch(localizationUrl, { ...localizationOptions, timeout: config.timeouts.request });
 
         if (localizationResponse.ok) {
           const localizationData = await localizationResponse.json();
@@ -628,7 +562,7 @@ class PGRService {
         } else {
         }
       } catch (localizationError) {
-        // Continue without localized messages
+        console.warn(`Locality names unavailable, showing codes: ${localizationError.message}`);
       }
 
       // Step 3: Build the result with proper display names
@@ -716,140 +650,14 @@ class PGRService {
           return { localities, messageBundle };
         }
       } catch (mdmsError) {
+        console.warn(`Locality MDMS lookup failed, falling back to boundary service: ${mdmsError.message}`);
       }
 
       throw new Error(`Unable to fetch localities for tenant ${tenantId}`);
     }
   }
 
-  async getCity(input, locale, tenantId) {
-
-    try {
-    var url =
-      config.egovServices.nlpEngineHost +
-      config.egovServices.cityFuzzySearch;
-
-    // Add tenant ID to bypass gateway
-    if (tenantId) {
-      url += `?tenantId=${tenantId}`;
-    }
-
-    // Fix locale format - NLP expects "en" not "en_IN"
-    const nlpLocale = locale === "en_IN" ? "en" : locale.split("_")[0];
-
-    var requestBody = {
-      input_city: input,
-      input_lang: nlpLocale,
-    };
-
-    var options = {
-      method: "POST",
-      body: JSON.stringify(requestBody),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-
-    let response = await fetch(url, options);
-
-    let predictedCity = null;
-    let predictedCityCode = null;
-    let isCityDataMatch = false;
-    if (response.status === 200) {
-      let responseBody = await response.json();
-      if (responseBody.match == 0) {
-        return { predictedCityCode, predictedCity, isCityDataMatch };
-      } else {
-        predictedCityCode = responseBody.city_detected[0];
-        let localisationMessages =
-          await localisationService.getMessageBundleForCode(predictedCityCode);
-        predictedCity = dialog.get_message(localisationMessages, locale);
-        if (locale === "en_IN") {
-          if (predictedCity.toLowerCase() === input.toLowerCase())
-            isCityDataMatch = true;
-        } else {
-          if (predictedCity === input) isCityDataMatch = true;
-        }
-        return { predictedCityCode, predictedCity, isCityDataMatch };
-      }
-    } else {
-      const errorText = await response.text();
-      return { predictedCityCode, predictedCity, isCityDataMatch };
-    }
-  } catch (error) {
-    return { predictedCityCode: null, predictedCity: null, isCityDataMatch: false };
-  }
-  }
-
-  async getLocality(input, city, locale, tenantId) {
-    var url =
-      config.egovServices.nlpEngineHost +
-      config.egovServices.localityFuzzySearch;
-
-    // Add tenant ID to bypass gateway
-    if (tenantId) {
-      url += `?tenantId=${tenantId}`;
-    }
-
-    var requestBody = {
-      city: city,
-      locality: input,
-    };
-
-    var options = {
-      method: "POST",
-      body: JSON.stringify(requestBody),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-    let response = await fetch(url, options);
-
-    let predictedLocality = null;
-    let predictedLocalityCode = null;
-    let isLocalityDataMatch = false;
-
-    if (response.status === 200) {
-      let responseBody = await response.json();
-      if (responseBody.predictions.length == 0)
-        return {
-          predictedLocalityCode,
-          predictedLocality,
-          isLocalityDataMatch,
-        };
-      else {
-        let localityList = responseBody.predictions;
-        for (let locality of localityList) {
-          if (locality.name.toLowerCase() === input.toLowerCase()) {
-            predictedLocalityCode = locality.code;
-            predictedLocality = locality.name;
-            isLocalityDataMatch = true;
-            return {
-              predictedLocalityCode,
-              predictedLocality,
-              isLocalityDataMatch,
-            };
-          }
-        }
-
-        predictedLocalityCode = localityList[0].code;
-        predictedLocality = localityList[0].name;
-        isLocalityDataMatch = false;
-        return {
-          predictedLocalityCode,
-          predictedLocality,
-          isLocalityDataMatch,
-        };
-      }
-    } else {
-      const errorText = await response.text();
-      return { predictedLocalityCode, predictedLocality, isLocalityDataMatch };
-    }
-  }
-
-
+  
   async preparePGRResult(responseBody, locale) {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
@@ -944,17 +752,21 @@ class PGRService {
   async persistComplaint(user, slots, extraInfo) {
     let requestBody = JSON.parse(pgrCreateRequestBody);
 
-    let authToken = user.authToken;
+    const serviceAccount = await userService.getServiceAccount();
+    let authToken = serviceAccount.authToken;
     let userId = user.userId;
     let complaintType = slots.complaint;
     let locality = slots.locality;
     let city = slots.city;
-    let userInfo = user.userInfo;
+    let userInfo = serviceAccount.userInfo;
 
     requestBody["RequestInfo"]["authToken"] = authToken;
     requestBody["service"]["tenantId"] = city;
+    requestBody["service"]["citizen"] = user.userInfo;
     requestBody["service"]["address"]["city"] = city;
-    requestBody["service"]["address"]["locality"]["code"] = "ADMIN_" + locality;
+    requestBody["service"]["address"]["locality"]["code"] = locality;
+    requestBody["service"]["accountId"] = userId;
+    requestBody["RequestInfo"]["userInfo"] = userInfo;
 
     // Add localized locality name if available
     if (slots.localityName) {
@@ -974,6 +786,7 @@ class PGRService {
 
         const response = await fetch(localizationUrl, {
           method: "POST",
+          timeout: config.timeouts.request,
           body: JSON.stringify(localizationRequest),
           headers: { "Content-Type": "application/json" }
         });
@@ -982,7 +795,7 @@ class PGRService {
           const data = await response.json();
           if (data.messages) {
             // Look for ADMIN_<locality> code
-            const localityCode = `ADMIN_${locality}`;
+            const localityCode = locality;
             const message = data.messages.find(m => m.code === localityCode);
             if (message) {
               requestBody["service"]["address"]["locality"]["name"] = message.message;
@@ -990,12 +803,17 @@ class PGRService {
           }
         }
       } catch (error) {
+        console.warn(`Could not resolve the locality name; filing with the code: ${error.message}`);
       }
     }
 
     requestBody["service"]["serviceCode"] = complaintType;
-    requestBody["service"]["accountId"] = userId;
-    requestBody["RequestInfo"]["userInfo"] = userInfo;
+    requestBody["service"]["description"] = slots.description ?? "";
+    requestBody["service"]["extendedAttributes"] = {
+      caseRelatedTo: config.caseRelatedTo,
+      instituteName: slots.instituteName,
+      isConfidential: slots.isConfidential === true,
+    };
 
     // Handle location coordinates (geocode)
     if (slots.geocode) {
@@ -1015,6 +833,7 @@ class PGRService {
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
+        console.error(`Attachment dropped from the complaint: ${error.message}`);
       }
     }
 
@@ -1028,6 +847,7 @@ class PGRService {
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
+        console.error(`Attachment dropped from the complaint: ${error.message}`);
       }
     }
 
@@ -1045,62 +865,24 @@ class PGRService {
       headers: {
         "Content-Type": "application/json",
       },
+      timeout: config.timeouts.request,
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
 
-    let results;
     if (response.status === 200) {
+      // the create endpoint wraps its result the same way search does:
+      // {ServiceWrappers: [{service: {...}}]}
       let responseBody = await response.json();
-      results = await this.preparePGRResult(responseBody, user.locale);
+      let serviceWrapper = (responseBody.ServiceWrappers || [])[0];
+      return { complaintNumber: serviceWrapper && serviceWrapper.service && serviceWrapper.service.serviceRequestId };
     } else {
       const errorText = await response.text();
-      return undefined;
+      throw new Error(`Failed to create complaint: ${response.status} ${errorText}`);
     }
-    return results[0];
   }
 
-  async fetchOpenComplaints(user, extraInfo) {
-    let requestBody = {
-      RequestInfo: {
-        authToken: user.authToken,
-      },
-    };
-
-    // Use tenant from extraInfo in sandbox mode, otherwise use root tenant
-    let tenantId = (config.enableSandboxMode && extraInfo && extraInfo.tenantId)
-      ? extraInfo.tenantId
-      : config.rootTenantId;
-
-    var url =
-      config.egovServices.egovServicesHost +
-      config.egovServices.pgrSearchEndpoint;
-    url = url + "?tenantId=" + tenantId;
-    url += "&";
-    url += "mobileNumber=" + user.mobileNumber;
-
-    let options = {
-      method: "POST",
-      origin: "*",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    };
-
-    let response = await fetch(url, options);
-    let results;
-    if (response.status === 200) {
-      let responseBody = await response.json();
-      results = await this.preparePGRResult(responseBody, user.locale);
-    } else {
-      return [];
-    }
-
-    return results;
-  }
-
-
+  
   async getShortenedURL(finalPath) {
     var url =
       config.egovServices.egovServicesHost +
@@ -1114,7 +896,10 @@ class PGRService {
         "Content-Type": "application/json",
       },
     };
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
+    if (!response.ok) {
+      return finalPath;
+    }
     let data = await response.text();
     return data;
   }
@@ -1123,10 +908,10 @@ class PGRService {
     let encodedPath = urlencode(serviceRequestId, "utf8");
 
     // Use sandbox-ui for sandbox mode, digit-ui otherwise
-    const uiPath = config.enableSandboxMode ? 'sandbox-ui' : 'digit-ui';
+    const uiPath = config.isSandboxMode ? 'sandbox-ui' : 'digit-ui';
 
     let url;
-    if (config.enableSandboxMode) {
+    if (config.isSandboxMode) {
       // For sandbox mode, use the proper login page with redirect
       const sandboxHost = config.sandboxHost || 'https://sandbox.digit.org';
       url = `${sandboxHost}/sandbox-ui/user/login?redirectTo=/sandbox-ui/citizen/pgr/complaints/${encodedPath}`;
@@ -1172,7 +957,7 @@ class PGRService {
     });
   }
 
-  async fileStoreAPICall(fileName, fileData, tenantId) {
+  async fileStoreAPICall(fileName, fileData, tenantId, contentType = null) {
     var url =
       config.egovServices.egovServicesHost +
       config.egovServices.egovFilestoreServiceUploadEndpoint;
@@ -1180,7 +965,7 @@ class PGRService {
     var form = new FormData();
     form.append("file", fileData, {
       filename: fileName,
-      contentType: "image/jpg",
+      contentType: mediaTypes.filestoreContentType(fileName) || contentType || "image/jpg",
     });
     let response = await axios.post(url, form, {
       headers: {
@@ -1206,7 +991,7 @@ class PGRService {
       origin: "*",
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
     response = await response.json();
 
     // Handle the correct response structure based on actual API response

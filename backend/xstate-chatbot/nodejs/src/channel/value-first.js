@@ -1,507 +1,516 @@
-const config = require('../env-variables');
+const config = require("../env-variables");
+const { toNationalNumber, toInternationalNumber } = require("../phone-numbers");
+const { summarizeInbound } = require("../privacy");
 const fetch = require("node-fetch");
-const urlencode = require('urlencode');
-const fs = require('fs');
-const axios = require('axios');
+const urlencode = require("urlencode");
+const fs = require("fs");
+const axios = require("axios");
 var FormData = require("form-data");
-var uuid = require('uuid-random');
+var uuid = require("uuid-random");
 var geturl = require("url");
 var path = require("path");
-const exifr = require('exifr');
-require('url-search-params-polyfill');
+const exifr = require("exifr");
+const { verifySharedSecret } = require("./shared-secret");
+require("url-search-params-polyfill");
 
-let valueFirstRequestBody = "{\"@VER\":\"1.2\",\"USER\":{\"@USERNAME\":\"\",\"@PASSWORD\":\"\",\"@UNIXTIMESTAMP\":\"\",\"@CH_TYPE\":\"4\"},\"DLR\":{\"@URL\":\"\"},\"SMS\":[]}";
+// ValueFirst answers with an HTML error page on some failures and an empty
+// body on others; response.json() throws on both.
+async function parseJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
-let textMessageBody = "{\"@UDH\":\"0\",\"@CODING\":\"1\",\"@TEXT\":\"\",\"@MSGTYPE\":\"1\",\"@TEMPLATEINFO\":\"\",\"@PROPERTY\":\"0\",\"@ID\":\"\",\"ADDRESS\":[{\"@FROM\":\"\",\"@TO\":\"\",\"@SEQ\":\"\",\"@TAG\":\"\"}]}";
+let valueFirstRequestBody =
+  '{"@VER":"1.2","USER":{"@USERNAME":"","@PASSWORD":"","@UNIXTIMESTAMP":"","@CH_TYPE":"4"},"DLR":{"@URL":""},"SMS":[]}';
 
-let imageMessageBody = "{\"@UDH\":\"0\",\"@CODING\":\"1\",\"@TEXT\":\"\",\"@MSGTYPE\":\"4\",\"@MEDIADATA\":\"\",\"@CAPTION\":\"\",\"@TYPE\":\"image\",\"@CONTENTTYPE\":\"image\/jpeg\",\"@TEMPLATEINFO\":\"\",\"@PROPERTY\":\"0\",\"@ID\":\"\",\"ADDRESS\":[{\"@FROM\":\"\",\"@TO\":\"\",\"@SEQ\":\"\",\"@TAG\":\"\"}]}";
+let textMessageBody =
+  '{"@UDH":"0","@CODING":"1","@TEXT":"","@MSGTYPE":"1","@TEMPLATEINFO":"","@PROPERTY":"0","@ID":"","ADDRESS":[{"@FROM":"","@TO":"","@SEQ":"","@TAG":""}]}';
 
-let buttontemplateMessageBody = "{\"@UDH\":\"0\",\"@CODING\":\"1\",\"@TEXT\":\"\",\"@CAPTION\":\"\",\"@TYPE\":\"\",\"@CONTENTTYPE\":\"\",\"@TEMPLATEINFO\":\"\",\"@MSGTYPE\":\"3\",\"@B_URLINFO\":\"\",\"@PROPERTY\":\"0\",\"@ID\":\"\",\"ADDRESS\":[{\"@FROM\":\"\",\"@TO\":\"\",\"@SEQ\":\"1\",\"@TAG\":\"\"}]}"
+let imageMessageBody =
+  '{"@UDH":"0","@CODING":"1","@TEXT":"","@MSGTYPE":"4","@MEDIADATA":"","@CAPTION":"","@TYPE":"image","@CONTENTTYPE":"image\/jpeg","@TEMPLATEINFO":"","@PROPERTY":"0","@ID":"","ADDRESS":[{"@FROM":"","@TO":"","@SEQ":"","@TAG":""}]}';
 
-let templateMessageBody = "{\"@UDH\":\"0\",\"@CODING\":\"1\",\"@TEXT\":\"\",\"@CAPTION\":\"\",\"@TYPE\":\"\",\"@CONTENTTYPE\":\"\",\"@TEMPLATEINFO\":\"\",\"@PROPERTY\":\"0\",\"@ID\":\"\",\"ADDRESS\":[{\"@FROM\":\"\",\"@TO\":\"\",\"@SEQ\":\"1\",\"@TAG\":\"\"}]}"
+let buttontemplateMessageBody =
+  '{"@UDH":"0","@CODING":"1","@TEXT":"","@CAPTION":"","@TYPE":"","@CONTENTTYPE":"","@TEMPLATEINFO":"","@MSGTYPE":"3","@B_URLINFO":"","@PROPERTY":"0","@ID":"","ADDRESS":[{"@FROM":"","@TO":"","@SEQ":"1","@TAG":""}]}';
+
+let templateMessageBody =
+  '{"@UDH":"0","@CODING":"1","@TEXT":"","@CAPTION":"","@TYPE":"","@CONTENTTYPE":"","@TEMPLATEINFO":"","@PROPERTY":"0","@ID":"","ADDRESS":[{"@FROM":"","@TO":"","@SEQ":"1","@TAG":""}]}';
 
 class ValueFirstWhatsAppProvider {
+  async checkForMissedCallNotification(requestBody) {
+    if (requestBody.Call_id || requestBody.operartor || requestBody.circle)
+      return true;
 
-    async checkForMissedCallNotification(requestBody){
-        if(requestBody.Call_id || requestBody.operartor || requestBody.circle)
-            return true;
-        
-        return false;
+    return false;
+  }
+
+  async getMissedCallValues(requestBody) {
+    let reformattedMessage = {};
+
+    reformattedMessage.message = {
+      input: "missed_call",
+      type: "text",
+    };
+
+    reformattedMessage.user = {
+      mobileNumber: toNationalNumber(requestBody.mobile_number),
+    };
+    reformattedMessage.extraInfo = {
+      whatsAppBusinessNumber: toNationalNumber(config.whatsAppBusinessNumber),
+      tenantId: config.rootTenantId,
+      missedCall: true,
+    };
+    return reformattedMessage;
+  }
+
+  async fileStoreAPICall(fileName, fileData, tenantId = null) {
+    var url =
+      config.egovServices.egovServicesHost +
+      config.egovServices.egovFilestoreServiceUploadEndpoint;
+    url = url + "&tenantId=" + (tenantId || config.rootTenantId);
+    var form = new FormData();
+    form.append("file", fileData, {
+      filename: fileName,
+      contentType: "image/jpg",
+    });
+    let response = await axios.post(url, form, {
+      headers: {
+        ...form.getHeaders(),
+      },
+    });
+
+    var filestore = response.data;
+    return filestore["files"][0]["fileStoreId"];
+  }
+
+  async convertFromBase64AndStore(imageInBase64String, tenantId = null) {
+    if (!imageInBase64String || typeof imageInBase64String !== "string") {
+      throw new Error(
+        "Invalid imageInBase64String: Value is missing or not a string",
+      );
     }
 
-    async getMissedCallValues(requestBody){
-        let reformattedMessage={};
+    //console.log("Base64 Input Before Processing:", imageInBase64String.substring(0, 50) + "..."); // Print first 50 chars
 
-        reformattedMessage.message = {
-            input: "mseva",
-            type: "text"
-        };
+    imageInBase64String = imageInBase64String.replace(/ /g, "+");
 
-        reformattedMessage.user = {
-            mobileNumber: requestBody.mobile_number.slice(2)
-        };
-        reformattedMessage.extraInfo = {
-            whatsAppBusinessNumber: config.whatsAppBusinessNumber.slice(2),
-            tenantId: config.rootTenantId,
-            missedCall: true
-        };
-        return reformattedMessage;
-    }
+    let buff = Buffer.from(imageInBase64String, "base64");
+    var tempName = "pgr-whatsapp-" + Date.now() + ".jpg";
 
-    async fileStoreAPICall(fileName,fileData,tenantId = null){
+    // console.log("Temp Filename:", tempName);
 
-        var url = config.egovServices.egovServicesHost+config.egovServices.egovFilestoreServiceUploadEndpoint;
-        url = url+'&tenantId='+(tenantId || config.rootTenantId);
-        var form = new FormData();
-        form.append("file", fileData, {
-            filename: fileName,
-            contentType: "image/jpg"
-        });
-        let response = await axios.post(url, form, {
-            headers: {
-                ...form.getHeaders()
-            }
-        });
-        
-        var filestore = response.data;
-        return filestore['files'][0]['fileStoreId'];
-    }
-    
-
-    async convertFromBase64AndStore(imageInBase64String, tenantId = null){
-
-        if (!imageInBase64String || typeof imageInBase64String !== "string") {
-            throw new Error("Invalid imageInBase64String: Value is missing or not a string");
-        }
-
-       //console.log("Base64 Input Before Processing:", imageInBase64String.substring(0, 50) + "..."); // Print first 50 chars
-    
-
-
-        imageInBase64String = imageInBase64String.replace(/ /g, '+');
-
-        let buff = Buffer.from(imageInBase64String, 'base64');
-        var tempName = 'pgr-whatsapp-' + Date.now() + '.jpg'; 
-
-       // console.log("Temp Filename:", tempName);
-
-        /*fs.writeFile(tempName, buff, (err) => {
+    /*fs.writeFile(tempName, buff, (err) => {
             if (err) throw err;
         });*/
 
-        try {
-            var filestoreId = await this.fileStoreAPICall(tempName, buff, tenantId);
-            //console.log("FileStore ID:", filestoreId);
-            return filestoreId;
-        } catch (error) {
-           // console.error("Error in fileStoreAPICall:", error);
-            return null;
-        }
-
-        // var filestoreId = await this.fileStoreAPICall(tempName,buff);
-        
-        // return filestoreId;
+    try {
+      var filestoreId = await this.fileStoreAPICall(tempName, buff, tenantId);
+      //console.log("FileStore ID:", filestoreId);
+      return filestoreId;
+    } catch (error) {
+      // console.error("Error in fileStoreAPICall:", error);
+      return null;
     }
 
-    async getMetadataFromBase64(base64Image) {
-        try {
-          // Remove "data:image/jpeg;base64," or similar header if present
-          const base64Data = base64Image.replace(/ /g, '+');
-      
-          // Convert to Buffer
-          const imgBuffer = Buffer.from(base64Data, 'base64');
-      
-          // Now pass the buffer to exifr
-          const metadata = await exifr.gps(imgBuffer);
-      
-            if (metadata && metadata.latitude && metadata.longitude) {
-                //console.log('Metadata:', metadata);
-                return {
-                    latitude: metadata.latitude.toString(),
-                    longitude: metadata.longitude.toString(),
-                };
-            }else {
-                console.log('No metadata found.');
-                return {};
-            }
-        } catch (error) {
-          console.error('Error extracting metadata:', error);
-          return {};
+    // var filestoreId = await this.fileStoreAPICall(tempName,buff);
+
+    // return filestoreId;
+  }
+
+  async getMetadataFromBase64(base64Image) {
+    try {
+      // Remove "data:image/jpeg;base64," or similar header if present
+      const base64Data = base64Image.replace(/ /g, "+");
+
+      // Convert to Buffer
+      const imgBuffer = Buffer.from(base64Data, "base64");
+
+      // Now pass the buffer to exifr
+      const metadata = await exifr.gps(imgBuffer);
+
+      if (metadata && metadata.latitude && metadata.longitude) {
+        //console.log('Metadata:', metadata);
+        return {
+          latitude: metadata.latitude.toString(),
+          longitude: metadata.longitude.toString(),
+        };
+      } else {
+        console.log("No metadata found.");
+        return {};
+      }
+    } catch (error) {
+      console.error("Error extracting metadata:", error);
+      return {};
+    }
+  }
+
+  async getUserMessage(requestBody, tenantId = null) {
+    console.log("ValueFirst - inbound:", summarizeInbound(requestBody));
+
+    let reformattedMessage = {};
+    let type;
+    let input;
+    // let metadata = {};
+
+    if (requestBody.buttonLabel && requestBody.buttonLabel != "$btnLabel") {
+      type = "button";
+      input = requestBody.buttonLabel;
+      requestBody.from = requestBody.TO;
+      requestBody.to = config.whatsAppBusinessNumber;
+    } else {
+      if (requestBody.media_type) type = requestBody.media_type;
+      else type = "unknown";
+
+      if (type === "location") {
+        input = "(" + requestBody.latitude + "," + requestBody.longitude + ")";
+      } else if (type === "image") {
+        //var imageInBase64String = requestBody.media_data;
+        var imageInBase64String = requestBody.MediaData;
+
+        if (!imageInBase64String) {
+          console.error(
+            "Error: Base64 image string is missing in requestBody!",
+          );
         }
+        // metadata = await this.getMetadataFromBase64(imageInBase64String);
+        input = await this.convertFromBase64AndStore(
+          imageInBase64String,
+          tenantId,
+        );
+      } else if (type === "unknown" || type === "document") input = " ";
+      else {
+        input = requestBody.text;
+      }
     }
 
-    async getUserMessage(requestBody, tenantId = null){
-
-        console.log("Received requestBody:", JSON.stringify(requestBody, null, 2));
-
-
-        let reformattedMessage={};
-        let type;
-        let input;
-        // let metadata = {};
-
-        if(requestBody.buttonLabel && requestBody.buttonLabel != '$btnLabel'){
-            type = 'button'
-            input = requestBody.buttonLabel;
-            requestBody.from = requestBody.TO;
-            requestBody.to = config.whatsAppBusinessNumber;
-        }
-        else{
-            if(requestBody.media_type)
-                type = requestBody.media_type;
-            else
-                type = "unknown";
-
-            if(type === "location") {
-                input = '(' + requestBody.latitude + ',' + requestBody.longitude + ')';
-            } 
-
-            else if(type === 'image'){
-                //var imageInBase64String = requestBody.media_data;
-                  var imageInBase64String = requestBody.MediaData;
-
-                if (!imageInBase64String) {
-                    console.error("Error: Base64 image string is missing in requestBody!");
-                }
-                // metadata = await this.getMetadataFromBase64(imageInBase64String);
-                input = await this.convertFromBase64AndStore(imageInBase64String, tenantId);
-            }
-            else if(type === 'unknown' || type === 'document')
-                input = ' ';
-            else {
-                input = requestBody.text;
-            }
-        } 
-
-        reformattedMessage.message = {
-            input: input,
-            type: type,
-            // metadata: metadata
-        };
-        reformattedMessage.user = {
-           mobileNumber: requestBody.from.slice(2)
-           //mobileNumber: requestBody.user.mobileNumber.slice(2)
-        };
-        reformattedMessage.extraInfo ={
-           whatsAppBusinessNumber: requestBody.to.slice(2),
-           //whatsAppBusinessNumber: requestBody.extraInfo.whatsAppBusinessNumber.slice(2),
-            tenantId: config.rootTenantId
-        };
-
-        return reformattedMessage;
-
-    }
-
-    async isValid(requestBody){
-        try {
-            if(await this.checkForMissedCallNotification(requestBody)) // validation for misscall
-                return true;
-            
-            let type = requestBody.media_type;
-
-            if(type==="text" || type==="image")
-                return true;
-
-            else if(type || type.length>=1)
-                return true;
-
-        } catch (error) {
-            console.error("Invalid request");
-        }
-        return false;
+    reformattedMessage.message = {
+      input: input,
+      type: type,
+      // metadata: metadata
+    };
+    reformattedMessage.user = {
+      mobileNumber: toNationalNumber(requestBody.from),
+      //mobileNumber: requestBody.user.mobileNumber.slice(2)
+    };
+    reformattedMessage.extraInfo = {
+      whatsAppBusinessNumber: toNationalNumber(requestBody.to),
+      //whatsAppBusinessNumber: requestBody.extraInfo.whatsAppBusinessNumber.slice(2),
+      tenantId: config.rootTenantId,
     };
 
-    async getTransformedRequest(requestBody, tenantId = null){
-        var missCall = await this.checkForMissedCallNotification(requestBody);
-        let reformattedMessage = {};
+    return reformattedMessage;
+  }
 
-        if(missCall)
-            reformattedMessage= await this.getMissedCallValues(requestBody);
-        else
-            reformattedMessage= await this.getUserMessage(requestBody, tenantId);
+  async isValid(requestBody) {
+    try {
+      if (requestBody.media_type && requestBody.media_type === "button")
+        return false;
+      if (requestBody.buttonLabel && requestBody.buttonLabel == "$btnLabel")
+        return false;
 
-        return reformattedMessage;
+      if (await this.checkForMissedCallNotification(requestBody))
+        // validation for misscall
+        return true;
+
+      let type = requestBody.media_type;
+
+      if (type === "text" || type === "image") return true;
+      else if (type || type.length >= 1) return true;
+    } catch (error) {
+      console.error("Invalid request");
+    }
+    return false;
+  }
+
+  async getTransformedRequest(requestBody, tenantId = null) {
+    var missCall = await this.checkForMissedCallNotification(requestBody);
+    let reformattedMessage = {};
+
+    if (missCall)
+      reformattedMessage = await this.getMissedCallValues(requestBody);
+    else reformattedMessage = await this.getUserMessage(requestBody, tenantId);
+
+    return reformattedMessage;
+  }
+
+  async downloadImage(url, filename) {
+    if (!filename || filename.trim() === "") {
+      const timestamp = Date.now();
+      filename = `temp_download_${timestamp}.jpg`;
+      console.warn(`Empty filename detected, using fallback: ${filename}`);
     }
 
-    async downloadImage(url,filename) {  
-
-        if (!filename || filename.trim() === '') {
-        const timestamp = Date.now();
-        filename = `temp_download_${timestamp}.jpg`;
-        console.warn(`Empty filename detected, using fallback: ${filename}`);
-    }
-    
     // Ensure filename is a string and not empty after trim
     filename = filename.toString().trim();
-    if (filename === '') {
-        filename = `fallback_${Date.now()}.jpg`;
-        console.warn(`Invalid filename after processing, using: ${filename}`);
+    if (filename === "") {
+      filename = `fallback_${Date.now()}.jpg`;
+      console.warn(`Invalid filename after processing, using: ${filename}`);
     }
-    
+
     console.log("downloadImage - Using filename:", filename);
-    
-        const writer = fs.createWriteStream(filename);
-      
-        const response = await axios({
-            url,
-            method: 'GET',
-            responseType: 'stream'
-          });
-      
-        response.data.pipe(writer);
-      
-        return new Promise((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
-        })
-    }
 
-    async getFileForFileStoreId(filestoreId){
-        var url = config.egovServices.egovServicesHost+config.egovServices.egovFilestoreServiceDownloadEndpoint;
-        url = url + '?';
-        url = url + 'tenantId='+config.rootTenantId;
-        url = url + '&';
-        url = url + 'fileStoreIds='+filestoreId;
+    const writer = fs.createWriteStream(filename);
 
-        var options = {
-            method: "GET",
-            origin: '*'
-        }
-        //console.log("Filestore URL", url)
-        let response = await fetch(url,options);
-        response = await(response).json();
-        //console.log("getFileForFileStoreId Response", response);
-        var fileURL = response['fileStoreIds'][0]['url'].split(",");
-        /*var fileName = geturl.parse(fileURL[0]);
+    const response = await axios({
+      url,
+      method: "GET",
+      responseType: "stream",
+    });
+
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+      writer.on("finish", resolve);
+      writer.on("error", reject);
+    });
+  }
+
+  async getFileForFileStoreId(filestoreId) {
+    var url =
+      config.egovServices.egovServicesHost +
+      config.egovServices.egovFilestoreServiceDownloadEndpoint;
+    url = url + "?";
+    url = url + "tenantId=" + config.rootTenantId;
+    url = url + "&";
+    url = url + "fileStoreIds=" + filestoreId;
+
+    var options = {
+      method: "GET",
+      origin: "*",
+    };
+    //console.log("Filestore URL", url)
+    let response = await fetch(url, options);
+    response = await response.json();
+    //console.log("getFileForFileStoreId Response", response);
+    var fileURL = response["fileStoreIds"][0]["url"].split(",");
+    /*var fileName = geturl.parse(fileURL[0]);
         fileName = path.basename(fileName.pathname);
         fileName = fileName.substring(13);
         await this.downloadImage(fileURL[0].toString(),fileName);
         const file = fs.readFileSync(fileName,'base64');
         fs.unlinkSync(fileName);*/
-        return fileURL[0].toString();
+    return fileURL[0].toString();
+  }
+
+  async getTransformedResponse(user, messages, extraInfo) {
+    let userMobile = user.mobileNumber;
+
+    let fromMobileNumber = toInternationalNumber(extraInfo.whatsAppBusinessNumber);
+    if (!fromMobileNumber) console.error("Receipient number can not be empty");
+
+    let requestBody = JSON.parse(valueFirstRequestBody);
+    requestBody["USER"]["@USERNAME"] =
+      config.valueFirstWhatsAppProvider.valueFirstUsername;
+    requestBody["USER"]["@PASSWORD"] =
+      config.valueFirstWhatsAppProvider.valueFirstPassword;
+
+    for (let i = 0; i < messages.length; i++) {
+      let message;
+      let type;
+      console.log("getTransformedResponse message", messages[i]);
+      console.log("getTransformedResponse type", typeof messages[i]);
+      if (typeof messages[i] == "string") {
+        type = "text";
+        message = messages[i];
+      }
+
+      if (typeof messages[i] == "object") {
+        type = messages[i].type;
+        message = messages[i].output;
+      }
+
+      let messageBody;
+      if (type === "text") {
+        messageBody = JSON.parse(textMessageBody);
+        let encodedMessage = urlencode(message, "utf8");
+        messageBody["@TEXT"] = encodedMessage;
+      } else if (type == "template") {
+        if (messages[i].bttnUrlComponent) {
+          messageBody = JSON.parse(buttontemplateMessageBody);
+          messageBody["@B_URLINFO"] = messages[i].bttnUrlComponent;
+        } else messageBody = JSON.parse(templateMessageBody);
+
+        let combinedStringForTemplateInfo = message;
+
+        if (messages[i].params) {
+          let templateParams = messages[i].params;
+          for (let param of templateParams)
+            combinedStringForTemplateInfo =
+              combinedStringForTemplateInfo + "~" + param;
+        }
+
+        messageBody["@TEMPLATEINFO"] = combinedStringForTemplateInfo;
+      } else {
+        // TODO for non-textual messages
+        let fileURL;
+
+        // Check if message is already a direct URL (for location instructions, etc.)
+        if (
+          message &&
+          (message.startsWith("http://") || message.startsWith("https://"))
+        ) {
+          // This is already a URL, use it directly
+          fileURL = message;
+          console.log("ValueFirst - Using direct URL for image:", fileURL);
+        } else {
+          // This is a filestore ID, fetch the URL from filestore
+          let fileStoreId;
+          if (message) fileStoreId = message;
+          console.log("getTransformedResponse type for non-textual ", type);
+          console.log(
+            "getTransformedResponse message for non-textual ",
+            message,
+          );
+          fileURL = await this.getFileForFileStoreId(fileStoreId);
+        }
+
+        var uniqueImageMessageId = uuid();
+        messageBody = JSON.parse(imageMessageBody);
+        if (type === "pdf") {
+          messageBody["@TYPE"] = "document";
+          messageBody["@CONTENTTYPE"] = "application/pdf";
+          messageBody["@CAPTION"] = extraInfo.fileName + "-" + Date.now();
+        }
+        messageBody["@MEDIADATA"] = fileURL;
+        messageBody["@ID"] = uniqueImageMessageId;
+      }
+      messageBody["ADDRESS"][0]["@FROM"] = fromMobileNumber;
+      messageBody["ADDRESS"][0]["@TO"] = toInternationalNumber(userMobile);
+
+      requestBody["SMS"].push(messageBody);
     }
 
-    async getTransformedResponse(user, messages, extraInfo){
-        let userMobile = user.mobileNumber;
+    return requestBody;
+  }
 
-        let fromMobileNumber = "91"+extraInfo.whatsAppBusinessNumber;
-        if(!fromMobileNumber)
-            console.error("Receipient number can not be empty");
+  async sendMessage(requestBody) {
+    let url = config.valueFirstWhatsAppProvider.valueFirstURL;
+    let token = await this.generateBearerToken();
 
-        let requestBody = JSON.parse(valueFirstRequestBody);
-        requestBody["USER"]["@USERNAME"] = config.valueFirstWhatsAppProvider.valueFirstUsername;
-        requestBody["USER"]["@PASSWORD"] = config.valueFirstWhatsAppProvider.valueFirstPassword;
-
-        for(let i = 0; i < messages.length; i++) {
-            let message;
-            let type;
-            console.log("getTransformedResponse message",messages[i]);
-            console.log("getTransformedResponse type",typeof messages[i]);
-            if(typeof messages[i] == 'string'){
-                type = "text";
-                message = messages[i];
-            }
-            
-            if(typeof messages[i] == 'object'){
-                type = messages[i].type;
-                message = messages[i].output;
-            }
-            
-            let messageBody;
-            if(type === 'text') {
-                messageBody = JSON.parse(textMessageBody);
-                let encodedMessage=urlencode(message, 'utf8');
-                messageBody['@TEXT'] = encodedMessage;
-            } 
-            else if(type == 'template'){
-
-                if(messages[i].bttnUrlComponent){
-                    messageBody = JSON.parse(buttontemplateMessageBody);
-                    messageBody['@B_URLINFO'] = messages[i].bttnUrlComponent;
-                }
-                else
-                    messageBody = JSON.parse(templateMessageBody);
-
-                let combinedStringForTemplateInfo = message;
-            
-                if(messages[i].params){
-                    let templateParams = messages[i].params;
-                    for(let param of templateParams)
-                        combinedStringForTemplateInfo = combinedStringForTemplateInfo + "~" + param;
-                }
-
-                messageBody['@TEMPLATEINFO'] = combinedStringForTemplateInfo;
-            }     
-            else {
-                // TODO for non-textual messages
-                let fileURL;
-                
-                // Check if message is already a direct URL (for location instructions, etc.)
-                if (message && (message.startsWith('http://') || message.startsWith('https://'))) {
-                    // This is already a URL, use it directly
-                    fileURL = message;
-                    console.log("ValueFirst - Using direct URL for image:", fileURL);
-                } else {
-                    // This is a filestore ID, fetch the URL from filestore
-                    let fileStoreId;
-                    if(message)
-                        fileStoreId = message;
-                    console.log("getTransformedResponse type for non-textual ",type)
-                    console.log("getTransformedResponse message for non-textual ",message)
-                    fileURL = await this.getFileForFileStoreId(fileStoreId);
-                }
-                
-                var uniqueImageMessageId = uuid();
-                messageBody = JSON.parse(imageMessageBody);
-                if(type === 'pdf'){
-                    messageBody['@TYPE'] = "document";
-                    messageBody['@CONTENTTYPE'] = 'application/pdf';
-                    messageBody['@CAPTION'] = extraInfo.fileName+'-'+Date.now();
-                }
-                messageBody['@MEDIADATA'] = fileURL;
-                messageBody['@ID'] = uniqueImageMessageId;
-
-            }
-            messageBody["ADDRESS"][0]["@FROM"] = fromMobileNumber;
-            messageBody["ADDRESS"][0]["@TO"] = '91' + userMobile;
-
-            requestBody["SMS"].push(messageBody);
-        }
-        
-        return requestBody;
+    if (token) {
+      token = "Bearer " + token;
+    } else {
+      console.error("Error in sending message");
+      return undefined;
     }
 
-    async sendMessage(requestBody) {
-        let url = config.valueFirstWhatsAppProvider.valueFirstURL;
-        let token = await this.generateBearerToken();
-        console.log('token:' + token);
+    let headers = {
+      "Content-Type": "application/json",
+      Authorization: token,
+    };
 
-        if(token){
-            token = 'Bearer ' + token;
+    var request = {
+      method: "POST",
+      headers: headers,
+      origin: "*",
+      body: JSON.stringify(requestBody),
+    };
 
-        }
-        else {
-            console.error('Error in sending message');
-            return undefined;
-        }
+    let response = await fetch(url, request);
 
-        let headers = {
-            'Content-Type': 'application/json',
-            'Authorization': token
-        }
-
-        var request = {
-            method: "POST",
-            headers: headers,
-            origin: '*',
-            body: JSON.stringify(requestBody)
-        }
-        console.log(url);
-        console.log(JSON.stringify(request));
-        let response = await fetch(url,request);
-        console.log(response);
-        if(response.status === 200){
-            let messageBack = await response.json();
-            if(messageBack.MESSAGEACK.Err){
-                console.error(messageBack.MESSAGEACK.Err.Desc);
-                return messageBack;
-            }
-
-            
-            return messageBack
-        }         
-        else {
-            console.error('Error in sending message');
-            console.error(response);
-            return undefined;
-          }
-    }    
-    
-    async processMessageFromUser(req, providedTenantId = null) {
-        let reformattedMessage = {}
-        let requestBody = req.query;
-
-        if(Object.keys(requestBody).length === 0)
-            requestBody  = req.body; 
-            
-        if(requestBody.media_type && requestBody.media_type === 'button')
-            return null;
-        
-        if(requestBody.buttonLabel && requestBody.buttonLabel == '$btnLabel')
-            return null;
-        
-        // Use provided tenant ID, or fall back to query parameter, or use default
-        let tenantId = providedTenantId || req.query.tenantId || config.rootTenantId;
-        
-        reformattedMessage = await this.getTransformedRequest(requestBody, tenantId);
-        return reformattedMessage;
-
+    if (response.status !== 200) {
+      console.error(`ValueFirst send failed with status ${response.status}`);
+      return undefined;
     }
 
-    async sendMessageToUser(user, messages,extraInfo) {
-        let requestBody = {};
-        requestBody = await this.getTransformedResponse(user, messages, extraInfo);
-        this.sendMessage(requestBody);       
+    let messageBack = await parseJson(response);
+    if (!messageBack) {
+      console.error("ValueFirst returned 200 with an unreadable body");
+      return undefined;
     }
-    async generateBearerToken(){
-        let url = config.valueFirstWhatsAppProvider.valueFirstTokenURL;
+    if (messageBack.MESSAGEACK?.Err) console.error(messageBack.MESSAGEACK.Err.Desc);
+    return messageBack;
+  }
 
-        let myheaders = {
-            'Authorization': config.valueFirstWhatsAppProvider.valuefirstLoginAuthorizationHeader
-        }
-        var requestOptions = {
-            method: 'POST',
-            headers: myheaders,
-            origin: '*'
-        };
-        url = url + '?action=generate';
 
-        console.log('URL: ' + url + JSON.stringify(requestOptions));
-        let response = await fetch(url,requestOptions);
-        console.log(response);
-        if(response.status === 200){
-            console.log('Token generated successfully');
-            let messageBack = await response.json();
-            return messageBack.token;
-        }
-        else {
-            console.error('Error while generating token');
-            console.error(response);
-            return undefined;
-            }
-        }
-
-    async getTransformMessageForTemplate(reformattedMessages){
-        if(reformattedMessages.length>0){
-            let requestBody = JSON.parse(valueFirstRequestBody);
-            requestBody["USER"]["@USERNAME"] = config.valueFirstWhatsAppProvider.valueFirstUsername;
-            requestBody["USER"]["@PASSWORD"] = config.valueFirstWhatsAppProvider.valueFirstPassword;
-
-            for(let message of reformattedMessages){
-                let messageBody = JSON.parse(templateMessageBody);
-                let templateParams = message.extraInfo.params;
-                let combinedStringForTemplateInfo = message.extraInfo.templateId;
-                let userMobile = message.user.mobileNumber;
-            
-                for(let param of templateParams)
-                    combinedStringForTemplateInfo = combinedStringForTemplateInfo + "~" + param;
-
-                messageBody['@TEMPLATEINFO'] = combinedStringForTemplateInfo;
-
-                messageBody["ADDRESS"][0]["@FROM"] = config.whatsAppBusinessNumber;
-                messageBody["ADDRESS"][0]["@TO"] = '91' + userMobile;
-
-                requestBody["SMS"].push(messageBody);
-
-            }
-            this.sendMessage(requestBody);
-
-        }
-
-         
+  extractRawMessage(req) {
+    let requestBody = req.query;
+    if (Object.keys(requestBody).length === 0) {
+      requestBody = req.body;
+      console.debug("Request body extracted from req.body:", summarizeInbound(requestBody));
     }
 
-    
+    console.debug("Request body extracted from req.query:", summarizeInbound(requestBody));
+    return requestBody;
+  }
+
+  async getFormattedMessageFromUser(rawMessage, tenantId) {
+    return await this.getTransformedRequest(rawMessage, tenantId);
+  }
+
+  async sendMessageToUser(user, messages, extraInfo) {
+    let requestBody = {};
+    requestBody = await this.getTransformedResponse(user, messages, extraInfo);
+    await this.sendMessage(requestBody);
+  }
+
+  async generateBearerToken() {
+    let url = config.valueFirstWhatsAppProvider.valueFirstTokenURL;
+
+    let myheaders = {
+      Authorization:
+        config.valueFirstWhatsAppProvider.valuefirstLoginAuthorizationHeader,
+    };
+    var requestOptions = {
+      method: "POST",
+      headers: myheaders,
+      origin: "*",
+    };
+    url = url + "?action=generate";
+
+    // Logged the Authorization header, then the whole response object.
+    let response = await fetch(url, requestOptions);
+
+    if (response.status !== 200) {
+      console.error(`ValueFirst token request failed with status ${response.status}`);
+      return undefined;
+    }
+
+    const messageBack = await parseJson(response);
+    if (!messageBack?.token) {
+      console.error("ValueFirst token response carried no token");
+      return undefined;
+    }
+    return messageBack.token;
+  }
+
+  async getTransformMessageForTemplate(reformattedMessages) {
+    if (reformattedMessages.length > 0) {
+      let requestBody = JSON.parse(valueFirstRequestBody);
+      requestBody["USER"]["@USERNAME"] =
+        config.valueFirstWhatsAppProvider.valueFirstUsername;
+      requestBody["USER"]["@PASSWORD"] =
+        config.valueFirstWhatsAppProvider.valueFirstPassword;
+
+      for (let message of reformattedMessages) {
+        let messageBody = JSON.parse(templateMessageBody);
+        let templateParams = message.extraInfo.params;
+        let combinedStringForTemplateInfo = message.extraInfo.templateId;
+        let userMobile = message.user.mobileNumber;
+
+        for (let param of templateParams)
+          combinedStringForTemplateInfo =
+            combinedStringForTemplateInfo + "~" + param;
+
+        messageBody["@TEMPLATEINFO"] = combinedStringForTemplateInfo;
+
+        messageBody["ADDRESS"][0]["@FROM"] = config.whatsAppBusinessNumber;
+        messageBody["ADDRESS"][0]["@TO"] = toInternationalNumber(userMobile);
+
+        requestBody["SMS"].push(messageBody);
+      }
+      await this.sendMessage(requestBody);
+    }
+  }
+
+  // ValueFirst signs nothing, so a shared secret is all there is. Explicit
+  // rather than absent: the route used to skip verification for any provider
+  // that simply did not define this.
+  verifyRequest(req) {
+    return verifySharedSecret(req, "ValueFirst");
+  }
 
 }
 

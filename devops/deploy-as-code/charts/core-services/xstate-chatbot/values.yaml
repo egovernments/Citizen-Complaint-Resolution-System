@@ -26,6 +26,11 @@ initContainers:
 image:
   repository: "xstate-chatbot"
   tag: "2.12-5137119"
+# Must stay 1. Conversation state is a read-modify-write on one row per
+# citizen, serialised only within a process (session/persist-queue.js) and
+# written last-writer-wins (session/repo/postgres-repo.js updateState).
+# A second replica can interleave and drop a transition, so the bot forgets
+# a step mid-complaint. Scaling out needs optimistic locking first.
 replicas: "1"
 tracing-enabled: true
 

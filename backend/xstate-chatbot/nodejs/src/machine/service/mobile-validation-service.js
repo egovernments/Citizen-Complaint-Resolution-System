@@ -96,6 +96,7 @@ class MobileValidationService {
 
     const response = await fetch(url, {
       method: "POST",
+      timeout: config.timeouts.request,
       body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
     });
