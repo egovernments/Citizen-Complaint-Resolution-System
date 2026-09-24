@@ -181,7 +181,7 @@ in `service.resolution.digit`. Keep it so: nothing outside `.digit` may import a
 | `LocaleProvider` — `preferredLocales(tenantId, requestInfo)` | Empty map when the source is unreachable | `DigitLocaleProvider` (digit-user-preferences-service) |
 | `LocalizationProvider` — `message(tenantId, locale, modules, code, requestInfo)` | `null` when no module has the code (next code is tried) | `DigitLocalizationProvider` (egov-localization) |
 | `UserHydrator` — `hydrate(userId, type, tenantId, requestInfo)` | `null` rather than throw; called only for a `userId` with no contact fields | `DigitUserHydrator` (egov-user) |
-| `NotificationConfigRepository` — `routing`, `templates`, `providerTemplates`, `catalogue`, `describe` | — | `MdmsNotificationConfigRepository` (MDMS v2 at the state root; paged; cached `NOVU_BRIDGE_NOTIFICATIONS_CACHE_TTL_MS`; empty results never cached; stale entries served through an MDMS outage; legacy fallback via `LegacyMasterAdapter`) |
+| `NotificationConfigRepository` — `routing`, `templates`, `providerTemplates`, `catalogue`, `describe` | — | `MdmsNotificationConfigRepository` (MDMS v2 at the state root; paged; cached `NOVU_BRIDGE_NOTIFICATIONS_CACHE_TTL_MS`, empty results included, though an empty answer never replaces a non-empty cached one; stale entries served through an MDMS outage; legacy fallback via `LegacyMasterAdapter`) |
 
 Each DIGIT bean is `@ConditionalOnMissingBean` on its interface: define your own bean and the
 DIGIT one steps aside. For `RecipientResolver`, register one whose `scheme()` matches (e.g.
@@ -216,13 +216,15 @@ If the foreign format's recipients should be configurable, emit a thin event wit
 
 - **SMS:** run a small HTTP mock on the compose network that answers in the gateway's real
   format (including its failure shapes) and logs what it received; point an Ozeki-type
-  provider's HTTP API URL, or an SMSCountry provider's Gateway URL, at it by service name.
+  provider's HTTP API URL, or an SMSCountry provider's Gateway URL, at it by service name (an
+  SMSCountry mock's host must be in `NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS`, or the save is refused).
 - **Email:** run an SMTP sink with a web inbox (e.g. Mailpit) on the compose network and add it
   as an Email (SMTP) provider: host = service name, its SMTP port, any user/password, **Use TLS
   on connect** unticked. Or use Ethereal ([setup-guide.md §8.5](./setup-guide.md#85-testing-email-without-a-real-mailbox)).
 - **Test** on the Providers screen exercises one provider; `_resolve` shows what a thin event
   would produce; `POST /novu-bridge/novu-adapter/v1/dispatch/_dry-run` with `"send": true`
   pushes one envelope through the full pipeline (container network only — not routed by Kong).
+  All three need an admin role at the state tenant.
 - To check that a producer change changed no message, resolve the old and new events for the
   same flows with `_resolve` and diff the envelopes.
 - After editing the legacy seed or the PGR workflow, run

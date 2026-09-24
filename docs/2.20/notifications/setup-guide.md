@@ -37,11 +37,14 @@ who sends OTPs.
 
 | To | You need a role from | Default |
 |---|---|---|
-| Use the screens: logs, providers, preferences; **Check status**; **Test** | `novu_bridge_proxy_allowed_roles` | `EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN` |
-| Create a provider, rotate its credentials, delete it; `POST /dispatch/_resolve` | `novu_bridge_proxy_admin_roles` | `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN` |
+| Use the screens: logs, providers, preferences; **Check status** | `novu_bridge_proxy_allowed_roles` | `EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN` |
+| Create a provider, rotate its credentials, disable or delete it, **Test** it; `POST /dispatch/_resolve`, `/dispatch/_dry-run` | `novu_bridge_proxy_admin_roles`, **held at the state tenant** | `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN` |
 
-Without an admin role those calls answer `403 NB_ADMIN_ROLE_REQUIRED`. An admin role also
-satisfies the first tier. Editing Channels / Routing / Templates / Provider Templates is
+Without an admin role at a state tenant those calls answer `403 NB_ADMIN_ROLE_REQUIRED`: a
+provider serves the whole deployment, so an admin role held only at a city (`ke.bomet`) does not
+count. An admin role also satisfies the first tier. Logs and the config-source report answer only
+for your own tenant — for a user at the state tenant, the state and its cities — and
+`403 NB_TENANT_NOT_ALLOWED` for any other. Editing Channels / Routing / Templates / Provider Templates is
 governed by the ordinary MDMS roles (`MDMS_ADMIN`, `ACCOUNT_ADMIN`, `SUPERUSER`).
 
 ## 2. Turn the stack on
@@ -68,7 +71,9 @@ The deploy starts novu-bridge, Novu and digit-user-preferences-service; mints th
 key into `/opt/digit/.env`; creates the Novu workflows `complaints-sms`,
 `complaints-whatsapp`, `complaints-email`; creates the Kafka topics
 ([kafka-events.md](./kafka-events.md)); grants the access-control actions (restarting
-`egov-accesscontrol` when it added any) and then seeds the `NOTIFICATIONS.*` masters. A tenant
+`egov-accesscontrol` when it added any; a role the tenant does not have gets no grant and is
+listed as `ACL-ROLES-ABSENT`, which is not a failure) and then seeds the `NOTIFICATIONS.*`
+masters. A tenant
 with no channel rows gets one row per channel, **on only if `novu_bridge_channels_enabled` lists
 it** (unset: all three off) and with no provider selected; a tenant that has rows keeps them
 ([migration.md](./migration.md#channel-rows-what-happens-to-an-existing-tenant)). It also syncs `local-setup/kong/kong.yml`; if you edit
@@ -88,7 +93,7 @@ credential fields, **Create Provider**.
 | Twilio SMS | SMS | Account SID (`AC…`), Auth token, From number (E.164, e.g. `+14155238886`) |
 | Twilio WhatsApp | WHATSAPP | Account SID, Auth token, WhatsApp sender (`whatsapp:+14155238886`; the sandbox number works after `join <code>` from your handset) |
 | Email (SMTP) | EMAIL | SMTP host, SMTP port (`587`), Username, Password (app password), From address (usually = username), From name, Use TLS on connect (port 465) |
-| SMSCountry | SMS | Panel username, Panel password, Registered sender id, Gateway URL (blank = standard bulk endpoint). Legacy bulk API only; a panel showing AuthKey/AuthToken is the unsupported REST API. A Gateway URL on any other host (a mock, a regional endpoint) must be listed in `novu_bridge_smscountry_allowed_hosts` ([§8.1](#81-deployment-settings)), or the bridge ignores it and sends — with these credentials — to the standard endpoint |
+| SMSCountry | SMS | Panel username, Panel password, Registered sender id, Gateway URL (blank = standard bulk endpoint). Legacy bulk API only; a panel showing AuthKey/AuthToken is the unsupported REST API. A Gateway URL on any other host (a mock, a regional endpoint) must be listed in `novu_bridge_smscountry_allowed_hosts` ([§8.1](#81-deployment-settings)): otherwise saving is refused (`NB_ADAPTER_URL_NOT_ALLOWED`), and a provider saved earlier with such a URL fails every send rather than posting these credentials to the standard endpoint |
 | Ozeki SMS Gateway | SMS | HTTP API URL (e.g. `https://ozeki.example.org:9509/api?action=sendmessage`), Username, Password, Sender id (optional) |
 
 Email traps:
@@ -106,11 +111,11 @@ Row actions on the Providers list:
 | Action | What it does |
 |---|---|
 | **Check status** | Confirms the integration exists and is enabled. Proves **no** credential for any type. |
-| **Test** | Sends one real message (see [§6](#6-send-a-test-and-read-the-logs)). The only credential proof. |
+| **Test** | Sends one real message (see [§6](#6-send-a-test-and-read-the-logs)). The only credential proof. Admin role at the state tenant. |
 | **Rotate credentials** | Asks for every field again — the store overwrites, it does not merge. |
 | **Rename** | Display name only. |
-| **Disable** / **Enable** | Switches the Novu integration off/on. |
-| **Delete** | Refused with `409 NB_PROVIDER_IN_USE` while a channel still selects it. Point the channel elsewhere first. |
+| **Disable** / **Enable** | Switches the Novu integration off/on. **Disable** is guarded like **Delete**. |
+| **Delete** | Refused with `409 NB_PROVIDER_IN_USE` while a channel still selects it (checked in MDMS at that moment, for your state and every state this deployment has sent for), and also when those channel rows cannot be read — nothing is deleted; try again. Point the channel elsewhere first. |
 | **Delivery workflows** | Read-only list of Novu workflows for the channel — plumbing, not message text. |
 
 The page also has **Sync WhatsApp templates** ([§5.5](#55-whatsapp-provider-templates)).
@@ -318,7 +323,7 @@ The text is three localization messages in module `egov-user`:
 
 ## 6. Send a test and read the logs
 
-**Providers → Test** on a row, enter a recipient you may message, **Send Test**, then
+**Providers → Test** on a row (admin role at the state tenant), enter a recipient you may message, **Send Test**, then
 **View Notification Logs**. A test is a real message and a real log row at your tenant,
 flagged as a test and hidden unless the **Test sends** filter is *Show test sends*. It proves
 the provider and credentials only — not routing, templates or the channel switch.
@@ -376,8 +381,10 @@ Checklist:
 | Nothing on Logs at all | No event reached the bridge | Confirm the complaint moved; check services, then the DLQ ([kafka-events.md](./kafka-events.md#verify-delivery)) |
 | WhatsApp rows skipped | `NB_TEMPLATE_NOT_APPROVED` | [§5.5](#55-whatsapp-provider-templates) |
 | `SENT` but nothing arrives | Gateway dropped it later | Gateway's own delivery report: sender id, DLT template, barred number; email: spam, SPF/DKIM |
-| 403 saving in Configurator | Missing MDMS role, or access-control rows never seeded | Hold `MDMS_ADMIN`/`ACCOUNT_ADMIN`/`SUPERUSER`; if everyone gets 403: `./deploy.sh mycity --tags notifications` |
-| "Managing notification providers requires one of these roles…" | No admin role | Ask an admin, or be granted one |
+| 403 saving in Configurator | Missing MDMS role, or access-control rows never seeded, or a truncated tenant bootstrap | Hold `MDMS_ADMIN`/`ACCOUNT_ADMIN`/`SUPERUSER`; if everyone gets 403: `./deploy.sh mycity --tags notifications`. If the deploy printed `master-repair — ACTION` (the tenant has exactly 500 role-actions), read the `master-repair — result` rows, then `./deploy.sh mycity -e repair_tenant_masters=true --tags master-repair,notifications` |
+| "This needs one of these roles held at a state tenant…" (`NB_ADMIN_ROLE_REQUIRED`) | No admin role, or one held only at a city | Be granted one at the state tenant |
+| `403 NB_TENANT_NOT_ALLOWED` on Logs, or on Disable / Delete | Looking at another state's tenant, or managing a provider for a state you are not an admin of | Log in at the tenant you mean |
+| `409 NB_PROVIDER_IN_USE` on Disable / Delete | A channel still selects the provider, or MDMS could not be read | Point the channel at another provider; retry if MDMS was down |
 | Banner "not been migrated yet" | Tenant still on its 2.12 configuration | `migrate-notifications.py plan --tenant mycity`, review, then `apply` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | Banner "No notification configuration on this tenant" | Defaults never installed | `./deploy.sh mycity` installs them on a tenant with no configuration |
 | OTP login stopped | SMS off or its provider broke | [§4](#4-switch-the-channel-on); look for `CORE.SMS.OTP` rows |
@@ -401,11 +408,12 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `novu_bridge_proxy_allowed_roles` / `novu_bridge_proxy_admin_roles` | The two role tiers ([§1](#1-before-you-start)) | see §1 |
 | `novu_admin_email` / `novu_admin_password` | Novu's first account | — |
 | `novu_api_key` | Leave unset; the deploy mints it | — |
-| `notification_stack_tag` | Image tag of pgr-services, pgr-services-db, novu-bridge and novu-bridge-db — one build ([migration.md](./migration.md#1-take-all-four-images-from-one-build)) | `nightly-develop` |
+| `notification_stack_tag` | Image tag of pgr-services, pgr-services-db, novu-bridge and novu-bridge-db — one build ([migration.md](./migration.md#1-take-all-four-images-from-one-build)). Pin a `develop-<sha8>` or release tag; the deploy warns while it is rolling | `nightly-develop` (rolling; a stopgap until the release pins one) |
+| `verify_tenant_masters` / `repair_tenant_masters` | Non-`pg` state roots: compare the tenant's access-control rows with `pg`'s and report the gap / also copy the missing rows. Copying is opt-in: a gap can be deliberate, and a copied grant cannot be removed | `true` / `false` |
 | `novu_bridge_channels_enabled` | **Fallback only**, for a tenant with no channel rows, e.g. `"SMS"`. The seed turns it into rows for such a tenant | unset = nothing sent |
 | `novu_bridge_receipts_secret` | Enables delivery receipts ([§8.3](#83-delivery-receipts)); a secret | blank = off |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | Consent gate; allow delivery when the preference service is down | `false` / `true` |
-| `novu_bridge_core_sms_country_code` | Prefix for OTP numbers sent without a country code, e.g. `254` | blank |
+| `novu_bridge_core_sms_country_code` | Country code for OTP numbers sent without one, e.g. `+254` (`254` works too); a leading trunk `0` is dropped. Blank: numbers go out as given, which gateways will not route, and the bridge warns at startup | blank |
 | `novu_bridge_smscountry_allowed_hosts` | Hosts an SMSCountry provider's Gateway URL may name; the default endpoint's host is always allowed | `api.smscountry.com,www.smscountry.com` |
 | `twilio_account_sid` / `twilio_auth_token` / `twilio_whatsapp_from` | Bootstrap the `twilio-whatsapp` Novu integration at deploy | — |
 | `novu_bridge_workflow_id_sms` / `_whatsapp` / `_email` | Novu workflow ids | `complaints-*` |
@@ -422,7 +430,7 @@ set them in host_vars, not in `.env`); on Helm set them in
 |---|---|---|
 | `NOVU_BRIDGE_RECEIPTS_SECRET` | Enables delivery receipts ([§8.3](#83-delivery-receipts)) | blank = off |
 | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `NOVU_BRIDGE_PREFERENCE_FAIL_OPEN` | Consent gate; allow delivery when the preference service is down | Compose `false` / `true` |
-| `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Prefix for OTP numbers sent without a country code | blank |
+| `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Country code for OTP numbers sent without one (see `novu_bridge_core_sms_country_code`) | blank |
 | `NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS` | Hosts the SMSCountry adapter may post to ([providers.md](./providers.md#the-smscountry-adapter)) | `api.smscountry.com,www.smscountry.com` |
 
 Any other property in `backend/novu-bridge/src/main/resources/application.properties` must be

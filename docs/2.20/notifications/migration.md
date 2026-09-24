@@ -43,20 +43,27 @@ with **one** tag:
 | Tier | Setting | Default |
 |---|---|---|
 | Compose (Ansible) | `notification_stack_tag` in host_vars → `NOTIFICATION_STACK_TAG` in `/opt/digit/.env` | `nightly-develop` |
-| Helm | `global.notificationStackTag` in `devops/deploy-as-code/charts/environments/env.yaml` | `nightly-develop` |
+| Helm | `global.notificationStackTag` in `devops/deploy-as-code/charts/environments/env.yaml` | empty → the charts' own defaults, `nightly-develop` |
 | `enable-notifications.sh` | `NOTIFICATION_STACK_TAG` | `nightly-develop` |
 
 `nightly-develop` is the rolling tag the develop nightly publishes for all four
 (`egovio/<image>:nightly-develop`, plus an immutable `develop-<sha8>`; see
-`build/NIGHTLY-BUILDS.md`). It moves **per image**: when one image's build fails, or two runs
-overlap, it points at different commits for different images. **On a live deployment pin an
-immutable tag that exists for all four** — a release tag, or a `develop-<sha8>` you have checked
-on Docker Hub for `pgr-services`, `pgr-services-db`, `novu-bridge` and `novu-bridge-db`.
+`build/NIGHTLY-BUILDS.md`). It is the default only until the first release after this stack
+merges pins an immutable `develop-<sha8>` in its place ([Release
+step](../../../build/NIGHTLY-BUILDS.md#release-step-pin-the-notification-stack)). It moves **per
+image**: when one image's build fails, or two runs overlap, it points at different commits for
+different images. **On a live deployment pin an immutable tag that exists for all four** — a
+release tag, or a `develop-<sha8>` you have checked on Docker Hub for `pgr-services`,
+`pgr-services-db`, `novu-bridge` and `novu-bridge-db`. The Ansible deploy warns while any image it
+runs resolves to a rolling tag; Helm pulls a rolling tag `Always` and an immutable one
+`IfNotPresent`.
 
 A per-image override (`pgr_services_image`, `pgr_services_db_image`, `novu_bridge_image`,
 `novu_bridge_db_image`; Helm `<chart>.image.tag` / `<chart>.initContainers.dbMigration.image.tag`)
 wins over the shared tag for that one image, so pin all four to the same build or none. The
-deploy warns when host_vars pin only some of them.
+deploy warns when host_vars pin only some of the images it runs: `pgr_services_image` +
+`pgr_services_db_image` on every box (they run with notifications off too), all four when
+`enable_novu` is on.
 
 ## 2. New novu-bridge before new pgr-services
 
