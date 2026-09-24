@@ -60,10 +60,12 @@ def get(cfg, path, default=None):
 
 @rule(
     "fastpath-data-wipe-ack",
-    "db_fast_path corrects the postgres volume mount path, which forces "
-    "container recreation and WIPES data stored in an anonymous volume. "
-    "Bomet/Nairobi production boxes are exactly in that state — flipping the "
-    "flag there destroys live tenant data.",
+    "db_fast_path loads db/full-dump.sql whenever PGDATA is empty, replacing "
+    "whatever the box had with a generic snapshot. Before #2085 the overlay "
+    "also corrected the postgres mount path, which is what emptied PGDATA in "
+    "the first place; the base compose now owns that path, and the playbook "
+    "checks the target itself. This ack remains the cheap first gate — it "
+    "fails in 2s on the controller, before Ansible touches the box.",
 )
 def r_fastpath_ack(cfg):
     if get(cfg, "db_fast_path") is True and get(cfg, "db_fast_path_ack_data_wipe") is not True:

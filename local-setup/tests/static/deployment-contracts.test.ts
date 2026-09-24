@@ -121,6 +121,35 @@ describe('host_vars _example.yml', () => {
     expect(example).toContain('/dashboard path is outside this bootstrap contract');
   });
 });
+// issue #2085. Commit 0f1e9a23 ("fix: correct postgres volume mount path")
+// fixed docker-compose.yml, .deploy.yaml and .db-migrations.yml — and MISSED
+// egov-digit.yaml and registry.yml, the two the deployed stack actually uses.
+// Nothing guarded the invariant, so the half-applied fix survived seven months
+// while every real deployment wrote its database to an anonymous volume.
+describe('compose files — postgres uses the real PGDATA (#2085)', () => {
+  const PGDATA = '/var/lib/postgresql/data';
+  const composeFiles = fs
+    .readdirSync(path.join(REPO_ROOT, 'local-setup'))
+    .filter((f) => /^docker-compose\..*\.(yml|yaml)$/.test(f) || f === 'docker-compose.yml');
+
+  test.each(composeFiles)('%s mounts postgres_data at PGDATA, never elsewhere', (file) => {
+    const body = read(path.join('local-setup', file));
+    const mounts = body
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^-\s+postgres_data:/.test(l));
+    // Files that do not run postgres simply have no such mount.
+    for (const m of mounts) expect(m).toBe(`- postgres_data:${PGDATA}`);
+  });
+
+  test('the dead /var/lib/docker-postgresql path is gone from the repo', () => {
+    const hits = composeFiles.filter((f) =>
+      read(path.join('local-setup', f)).includes('postgres_data:/var/lib/docker-postgresql'),
+    );
+    expect(hits).toEqual([]);
+  });
+});
+
 describe('host_vars templates — db_fast_path ack (#2082)', () => {
   const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
   // Tracked templates only. Operator host_vars (<tenant>.yml) are gitignored

@@ -310,7 +310,16 @@ services:
       POSTGRES_DB: egov
     command: postgres -c max_connections=200
     volumes:
-    - postgres_data:/var/lib/docker-postgresql/data
+    # /var/lib/postgresql/data is the image's PGDATA. This mounted at
+    # /var/lib/docker-postgresql/data until #2085 — a path Postgres never reads,
+    # so the named volume stayed empty and the real cluster went to an ANONYMOUS
+    # volume Docker created for the image's declared VOLUME.
+    #
+    # On a box deployed before this fix, changing this line recreates the
+    # container onto the (empty) named volume and Postgres comes up BARE. The
+    # old data is stranded, not deleted. Migrate first:
+    #   docs/2.12/operations/postgres-volume-migration.md
+    - postgres_data:/var/lib/postgresql/data
     ports:
     - "${BIND_IP:-127.0.0.1}:15432:5432"
     healthcheck:

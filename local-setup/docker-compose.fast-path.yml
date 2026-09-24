@@ -8,13 +8,12 @@
 #   - Fresh deploys go from ~5–10 min of seeding to ~1–2 min.
 #
 # When NOT to use this:
-#   - Tenants with live data you care about (Bomet, Nairobi). The base
-#     compose mounts postgres_data at /var/lib/docker-postgresql/data — a
-#     path Postgres ignores — so existing prod state lives in an anonymous
-#     volume tied to the current container. This overlay also corrects the
-#     volume path to the real PGDATA, which forces container recreation;
-#     on the new container PGDATA is empty → initdb fires → the dump (a
-#     pre-Bomet/Nairobi snapshot) loads → city-specific state is gone.
+#   - Any box whose database you want to keep, if that database has not yet
+#     been migrated onto the named postgres_data volume (#2085). Until it is,
+#     PGDATA is empty on the recreated container, initdb fires, and this dump
+#     — a generic pre-tenant snapshot — loads over it. The playbook refuses
+#     the deploy in that state; migrate first:
+#     docs/2.12/operations/postgres-volume-migration.md
 #   - The dump file is checked in at db/full-dump.sql; if you regenerate
 #     it from a tenant's prod DB, regenerate it cleanly (no PII).
 #
@@ -35,19 +34,17 @@ services:
       SPRING_FLYWAY_TABLE: egov_url_shortening_schema_version
 
   postgres-db:
+    # Compose MERGES volumes across -f files, keyed on the container path, so
+    # this ADDS to the base compose's list rather than replacing it. The base
+    # now mounts postgres_data at the real PGDATA itself (#2085), so this
+    # overlay no longer restates it — only the init scripts belong here.
     volumes:
-      # Override the base compose's broken mount point. The base mounts
-      # postgres_data at /var/lib/docker-postgresql/data — a path Postgres
-      # never reads or writes — so the named volume is unused and data
-      # lives in an anonymous volume. Putting the named volume at the
-      # actual PGDATA path makes persistence behave the way the compose
-      # file claims it does.
-      - postgres_data:/var/lib/postgresql/data
       # Postgres runs every *.sql / *.sh under this dir exactly once,
       # when PGDATA is empty. Numeric prefix sets ordering (in case we
       # add more init steps later).
       - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro
-      # The base compose mounts keycloak-init.sql too — fast-path
-      # overrides the entire volumes list, so we have to re-declare it
-      # here. Inert when enable_keycloak is false.
+      # Load-bearing: this is the ONLY mount of keycloak-init.sql anywhere in
+      # the stack, so it runs solely on the fast path. Inert when
+      # enable_keycloak is false. (A non-fast-path deploy with Keycloak on
+      # therefore never gets this init — tracked separately.)
       - ./db/keycloak-init.sql:/docker-entrypoint-initdb.d/02-keycloak-init.sql:ro
