@@ -1312,7 +1312,6 @@ services:
       GATUS_PROFILE_CHATBOT: "false"
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "false"
-      GATUS_SMS_PORT: "8080"
       # No grafana/prometheus/loki/tempo on this path, so the observability
       # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
       # enabled-var as true, which would make them red forever here.
