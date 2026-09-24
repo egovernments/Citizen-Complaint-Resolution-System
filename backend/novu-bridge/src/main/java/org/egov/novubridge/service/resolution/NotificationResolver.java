@@ -41,8 +41,8 @@ import static org.springframework.util.StringUtils.hasText;
  * stay in-process and are never published back to Kafka.
  *
  * <p>Order: catalogue (uncatalogued = REJECTED + DLQ), routing, then ALL audiences before anything
- * is sent (so the fan-out cap can refuse the whole event), then per recipient x channel: contact
- * gate, dedupe, render, WhatsApp provider template, mint, dispatch.
+ * is sent (so the fan-out cap can refuse the whole event), then per recipient x channel: dedupe,
+ * contact gate, render, WhatsApp provider template, mint, dispatch.
  *
  * <ul>
  *   <li>Dedupe is on {@code (channel, subscriberKey)}, not audience, so a person holding two
@@ -214,16 +214,18 @@ public class NotificationResolver implements ThinEventHandler {
                 }
                 String stage = "resolution";
                 try {
+                    // Before any ledger write: a later plan's SKIPPED must not overwrite the SENT
+                    // row an earlier plan wrote for the same person (same transaction id).
+                    String dedupeKey = channel + "|" + subscriberKey;
+                    if (emitted.contains(dedupeKey)) {
+                        continue;
+                    }
                     if (!recipient.reachableOn(channel)) {
                         channelSkip(event, outcome, dispatch, seed, channel, subscriberKey, plan.row(),
                                 "NB_CONTACT_MISSING", "Recipient has no "
                                         + ("EMAIL".equals(channel) ? "email address" : "phone number")
                                         + " for channel " + channel);
-                        continue;
-                    }
-                    String dedupeKey = channel + "|" + subscriberKey;
-                    if (emitted.contains(dedupeKey)) {
-                        continue;
+                        continue;   // the dedupe key is NOT consumed: another plan may reach them
                     }
                     String locale = localeFor(preferredLocales, recipient);
                     if (!renderedByLocale.containsKey(locale)) {
@@ -550,7 +552,9 @@ public class NotificationResolver implements ThinEventHandler {
 
     /**
      * A SKIPPED row on a known channel before there was a message. It carries the transaction id
-     * the message WOULD have had, so a replay after the fix upserts this same row to SENT.
+     * the message WOULD have had, so a replay after the fix upserts this same row to SENT. Like
+     * the pipeline's replay guard, it never downgrades a row that already went: the upsert would
+     * overwrite SENT with SKIPPED and the next replay would send the message again.
      */
     private void channelSkip(ThinEvent event, ResolutionOutcome outcome, boolean dispatch, String seed,
                              String channel, String subscriberKey, RoutingRow row, String code, String message) {
@@ -561,10 +565,17 @@ public class NotificationResolver implements ThinEventHandler {
         if (!dispatch) {
             return;
         }
+        String transactionId = String.join(":", seed, subscriberId, channel);
+        String prior = ledger.findStatus(transactionId, channel, subscriberId);
+        if (prior != null && DispatchPipelineService.ALREADY_SENT.contains(prior)) {
+            log.info("Thin event {}: the {} row for {} is already {}; not overwriting it with {}",
+                    event.getEventId(), channel, PiiMask.mask(subscriberId), prior, code);
+            return;
+        }
         long now = System.currentTimeMillis();
         ledger.upsert(DispatchLogEntry.builder()
                 .eventId(event.getEventId())
-                .transactionId(String.join(":", seed, subscriberId, channel))
+                .transactionId(transactionId)
                 .referenceNumber(referenceNumber(event))
                 .module(event.getModule())
                 .eventName(event.resolvedLedgerEventName())

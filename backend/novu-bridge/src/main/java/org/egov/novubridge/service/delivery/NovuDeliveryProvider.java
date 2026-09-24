@@ -1,6 +1,7 @@
 package org.egov.novubridge.service.delivery;
 
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.util.Values;
 import org.egov.novubridge.web.models.Contact;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -87,7 +88,8 @@ public class NovuDeliveryProvider implements DeliveryProvider {
         if (!accepted) {
             return DeliveryResult.failed(NOVU_TRIGGER_FAILED, "Novu returned status " + sc, sc, raw);
         }
-        Object ref = raw != null ? raw.get("transactionId") : null;
+        // The trigger answers {"data":{"acknowledged":…,"transactionId":…}}.
+        Object ref = Values.unwrapData(raw).get("transactionId");
         return DeliveryResult.accepted(sc, ref != null ? ref.toString() : null, raw);
     }
 

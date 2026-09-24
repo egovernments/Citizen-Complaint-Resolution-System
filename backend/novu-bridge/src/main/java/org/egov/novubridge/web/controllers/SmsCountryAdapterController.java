@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -31,8 +30,9 @@ import java.util.Map;
  * rejection reaches Novu as PROVIDER_ERROR rather than a phantom send.
  *
  * <p>Excluded from ProxyAuthFilter (Novu holds no DIGIT token): the credential headers are the
- * authentication, and {@code apiUrl} is honoured only for allowlisted hosts, so a caller inside the
- * network cannot turn this into a proxy to internal addresses.
+ * authentication, and an {@code apiUrl} on a host that is not allowlisted is refused (400
+ * {@code NB_ADAPTER_URL_NOT_ALLOWED}), so a caller inside the network cannot turn this into a proxy
+ * to internal addresses, and an operator's credentials never go to a gateway they did not choose.
  */
 @RestController
 @RequestMapping("/novu-adapter/v1/gateways")
@@ -60,6 +60,16 @@ public class SmsCountryAdapterController {
                     "Both " + ProviderCatalog.SMSCOUNTRY_USER_HEADER + " and "
                             + ProviderCatalog.SMSCOUNTRY_PASSWORD_HEADER + " are required");
         }
+        // Refused, not replaced by the default gateway: that would post these credentials to a
+        // vendor endpoint the operator did not choose, and hide that their URL was ignored.
+        if (StringUtils.hasText(apiUrl) && !config.isSmsCountryUrlAllowed(apiUrl)) {
+            log.warn("SMSCountry adapter: refused an apiUrl on host '{}' (not in novu.bridge.smscountry.allowed.hosts)",
+                    hostOf(apiUrl));
+            return error(HttpStatus.BAD_REQUEST, "NB_ADAPTER_URL_NOT_ALLOWED",
+                    "The provider's Gateway URL is not an http(s) URL on an allowed host; add its host to "
+                            + "novu.bridge.smscountry.allowed.hosts (NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS) or "
+                            + "clear the Gateway URL. Nothing was sent.");
+        }
 
         Map<String, Object> in = body == null ? Map.of() : body;
         String recipient = firstNonBlank(in, "to", "recipient", "phone", "mobilenumber");
@@ -75,7 +85,7 @@ public class SmsCountryAdapterController {
         String correlationId = firstNonBlank(in, "id", "transactionId");
 
         NovuClient.NovuResponse result = smsCountryClient.send(recipient, text, correlationId, senderId,
-                user, password, allowedApiUrl(apiUrl));
+                user, password, StringUtils.hasText(apiUrl) ? apiUrl.trim() : null);
         Map<String, Object> raw = result.getResponse();
         boolean accepted = result.getStatusCode() != null
                 && result.getStatusCode() >= 200 && result.getStatusCode() < 300;
@@ -97,32 +107,13 @@ public class SmsCountryAdapterController {
         return ResponseEntity.ok(out);
     }
 
-    /**
-     * The caller's {@code apiUrl} decides where a live credential is posted, so only an http(s) URL
-     * whose host is the configured gateway's or on {@code novu.bridge.smscountry.allowed.hosts} is
-     * honoured; anything else falls back to the configured URL (null here).
-     */
-    String allowedApiUrl(String apiUrl) {
-        if (!StringUtils.hasText(apiUrl)) {
+    /** For the log line only. */
+    private static String hostOf(String url) {
+        try {
+            return URI.create(url.trim()).getHost();
+        } catch (IllegalArgumentException e) {
             return null;
         }
-        String trimmed = apiUrl.trim();
-        String host = null;
-        try {
-            URI uri = URI.create(trimmed);
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            if (scheme.equals("http") || scheme.equals("https")) {
-                host = uri.getHost();
-            }
-        } catch (IllegalArgumentException e) {
-            // unparseable: treated as not allowed below
-        }
-        if (host != null && config.isSmsCountryHostAllowed(host)) {
-            return trimmed;
-        }
-        log.warn("SMSCountry adapter: ignoring apiUrl with host '{}' (not in novu.bridge.smscountry.allowed.hosts); "
-                + "using the configured gateway", host);
-        return null;
     }
 
     private static String firstNonBlank(Map<String, Object> body, String... keys) {

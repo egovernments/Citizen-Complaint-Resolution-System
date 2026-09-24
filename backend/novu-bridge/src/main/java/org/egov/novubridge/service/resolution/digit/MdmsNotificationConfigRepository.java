@@ -155,7 +155,8 @@ public class MdmsNotificationConfigRepository implements NotificationConfigRepos
             out.add(new TemplateRow(text(row.data().get("module")), text(row.data().get("eventName")),
                     text(row.data().get("audience")), upper(row.data().get("channel")),
                     locale(row.data().get("locale")), nullableText(row.data().get("subject")),
-                    row.data().get("body") == null ? "" : String.valueOf(row.data().get("body")),
+                    // null, not "": the renderer then falls back to the default locale, else NB_NO_TEMPLATE.
+                    nullableText(row.data().get("body")),
                     effectiveActive(row)));
         }
         return out;
@@ -216,9 +217,11 @@ public class MdmsNotificationConfigRepository implements NotificationConfigRepos
 
     /**
      * Cached, paged, stale-tolerant. An empty answer never replaces a non-empty cached one (it may
-     * be a transient miss). A FAILED read serves the last answer if there is one and otherwise
-     * throws: a failure must never look like "this tenant has no rows", which would skip the
-     * event or silently switch a migrated tenant to the legacy masters.
+     * be a transient miss), but it is cached and served for the TTL like any other: a legacy
+     * tenant's empty {@code NOTIFICATIONS.Routing} is read once a minute, not on every event. A
+     * FAILED read serves the last answer if there is one and otherwise throws: a failure must
+     * never look like "this tenant has no rows", which would skip the event or silently switch a
+     * migrated tenant to the legacy masters.
      */
     Page read(String stateTenant, String schemaCode) {
         if (!StringUtils.hasText(stateTenant) || restTemplate == null) {
@@ -228,7 +231,7 @@ public class MdmsNotificationConfigRepository implements NotificationConfigRepos
         long ttl = config.getNotificationConfigCacheTtlMs() != null
                 ? config.getNotificationConfigCacheTtlMs() : 60_000L;
         List<MdmsRow> fresh = cache.fresh(key, ttl);
-        if (fresh != null && !fresh.isEmpty()) {
+        if (fresh != null) {
             return new Page(fresh, false);
         }
         List<MdmsRow> last = cache.any(key);

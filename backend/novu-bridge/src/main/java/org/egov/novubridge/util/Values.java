@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,6 +29,15 @@ public final class Values {
     @SuppressWarnings("unchecked")
     public static List<Object> asList(Object value) {
         return value instanceof List ? (List<Object>) value : null;
+    }
+
+    /** Novu answers {@code {data:{...}}} or a bare object; never null. */
+    public static Map<String, Object> unwrapData(Map<String, Object> body) {
+        if (body == null) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> data = asMap(body.get("data"));
+        return data != null ? data : body;
     }
 
     /** JSON booleans arrive as Boolean; forms sometimes send the string. */

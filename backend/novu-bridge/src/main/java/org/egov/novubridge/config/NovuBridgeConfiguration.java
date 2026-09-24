@@ -22,6 +22,10 @@ public class NovuBridgeConfiguration {
     @Value("${app.timezone:UTC}")
     private String timeZone;
 
+    // Also the CoreSmsConsumer's @ConditionalOnProperty (missing = on); read here for the startup check.
+    @Value("${novu.bridge.core.sms.enabled:true}")
+    private Boolean coreSmsEnabled;
+
     // Core SmsRequests may carry no tenantId; this is the tenant such sends are attributed to.
     @Value("${novu.bridge.core.sms.default.tenant:}")
     private String coreSmsDefaultTenant;
@@ -215,6 +219,23 @@ public class NovuBridgeConfiguration {
         }
         return smsCountryAllowedHosts != null && smsCountryAllowedHosts.stream()
                 .anyMatch(h -> h != null && wanted.equals(h.trim().toLowerCase(Locale.ROOT)));
+    }
+
+    /**
+     * Where a caller-supplied SMSCountry gateway URL may send the operator's credentials: an
+     * absolute http(s) URL on an allowed host ({@link #isSmsCountryHostAllowed}).
+     */
+    public boolean isSmsCountryUrlAllowed(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(url.trim());
+            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+            return (scheme.equals("http") || scheme.equals("https")) && isSmsCountryHostAllowed(uri.getHost());
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private static String hostOf(String url) {

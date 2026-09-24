@@ -77,6 +77,15 @@ class CoreSmsTranslatorTest {
     void e164Rules() {
         assertEquals("+254712345678", CoreSmsTranslator.toE164("0712345678", "+254"));
         assertEquals("+254712345678", CoreSmsTranslator.toE164("+254 712 345 678", "+91"));
-        assertEquals("712345678", CoreSmsTranslator.toE164("712-345-678", ""));
+        // No code configured: the digits as they are, still behind a '+' (startup warns).
+        assertEquals("+712345678", CoreSmsTranslator.toE164("712-345-678", ""));
+        // A code without '+' is the same code; 00 is the international prefix, not two trunk zeros.
+        assertEquals("+254712345678", CoreSmsTranslator.toE164("0712345678", "254"));
+        assertEquals("+254712345678", CoreSmsTranslator.toE164("00254712345678", "+254"));
+        // Already carries the code: not prefixed twice. A national number that merely starts
+        // with the code's digits (India 91…, 10 digits) still is.
+        assertEquals("+254712345678", CoreSmsTranslator.toE164("254712345678", "+254"));
+        assertEquals("+919415787824", CoreSmsTranslator.toE164("919415787824", "+91"));
+        assertEquals("+919123456789", CoreSmsTranslator.toE164("9123456789", "+91"));
     }
 }

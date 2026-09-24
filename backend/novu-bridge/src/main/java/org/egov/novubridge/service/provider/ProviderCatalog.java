@@ -232,6 +232,12 @@ public class ProviderCatalog {
         String apiUrl = text(in.get("apiUrl"));
         UriComponentsBuilder url = UriComponentsBuilder.fromUriString(config.getSmsCountryAdapterUrl());
         if (StringUtils.hasText(apiUrl)) {
+            // The adapter refuses every send to such a URL; say so at save time instead.
+            if (!config.isSmsCountryUrlAllowed(apiUrl)) {
+                throw new CustomException("NB_ADAPTER_URL_NOT_ALLOWED", "Gateway URL must be an http(s) URL "
+                        + "on an allowed host; add its host to novu.bridge.smscountry.allowed.hosts "
+                        + "(NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS) or leave the field blank");
+            }
             url.queryParam(ADAPTER_PARAM_API_URL, apiUrl);
         }
         Map<String, Object> out = new LinkedHashMap<>();

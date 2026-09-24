@@ -28,6 +28,8 @@ public class CoreSmsTranslator {
     private static final List<String> PHONE_KEYS = List.of("mobileNumber", "mobile", "phone", "to");
     private static final List<String> MESSAGE_KEYS = List.of("message", "body", "text");
     private static final List<String> TENANT_KEYS = List.of("tenantId", "tenant");
+    /** Shortest national mobile number read as "already carries the country code" (KE/MZ 9, IN 10). */
+    private static final int MIN_NATIONAL_DIGITS = 9;
 
     private final NovuBridgeConfiguration config;
 
@@ -112,13 +114,24 @@ public class CoreSmsTranslator {
                 .build();
     }
 
-    /** '+' numbers pass through; otherwise prepend the configured country code, dropping national leading zeros. */
+    /**
+     * Always {@code +<digits>}. {@code +…} and {@code 00…} (the international prefix) are already
+     * international. Otherwise the configured code ({@code +254}, {@code 254} and {@code 00254}
+     * all mean 254) is prepended, replacing ONE national trunk {@code 0}, unless the digits already
+     * start with it and leave at least {@link #MIN_NATIONAL_DIGITS} after it: user-otp sends
+     * national numbers, and India's {@code 9123456789} is national although it starts with 91.
+     * With no code configured the digits go out as they are, behind a {@code +} (startup warns).
+     */
     static String toE164(String mobile, String countryCode) {
         String m = mobile.trim();
-        if (m.startsWith("+")) return "+" + m.substring(1).replaceAll("\\D", "");
         String digits = m.replaceAll("\\D", "");
-        if (!StringUtils.hasText(countryCode)) return digits;
-        return countryCode.trim() + digits.replaceFirst("^0+", "");
+        if (m.startsWith("+")) return "+" + digits;
+        if (digits.startsWith("00")) return "+" + digits.substring(2);
+        String cc = countryCode == null ? "" : countryCode.replaceAll("\\D", "").replaceFirst("^0+", "");
+        if (cc.isEmpty()) return "+" + digits;
+        if (digits.startsWith("0")) return "+" + cc + digits.substring(1);
+        if (digits.startsWith(cc) && digits.length() - cc.length() >= MIN_NATIONAL_DIGITS) return "+" + digits;
+        return "+" + cc + digits;
     }
 
     private static String first(Map<String, Object> m, List<String> keys) {

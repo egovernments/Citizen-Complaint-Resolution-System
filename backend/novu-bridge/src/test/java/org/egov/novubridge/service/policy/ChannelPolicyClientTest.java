@@ -145,18 +145,29 @@ class ChannelPolicyClientTest {
     void providerInUseIsDetectedAcrossEveryChannelOfTheTenant() {
         stubRows(row("SMS", true, null, null, "smscountry-abcdef01"),
                 row("EMAIL", true, null, null, "smtp-deadbeef"));
-        assertTrue(client.isProviderInUse("ke.bomet", "smscountry-abcdef01"));
-        assertTrue(client.isProviderInUse("ke.bomet", "smtp-deadbeef"));
-        assertFalse(client.isProviderInUse("ke.bomet", "ozeki-nobody-uses-this"));
-        assertFalse(client.isProviderInUse("ke.bomet", null));
+        assertEquals(List.of("ke"), client.tenantsUsingProvider(List.of("ke"), "smscountry-abcdef01", null));
+        assertEquals(List.of("ke"), client.tenantsUsingProvider(List.of("ke"), "smtp-deadbeef", null));
+        assertEquals(List.of(), client.tenantsUsingProvider(List.of("ke"), "ozeki-nobody-uses-this", null));
+        assertEquals(List.of(), client.tenantsUsingProvider(List.of("ke"), null, null));
+        // A row may name the integration by its Novu _id instead of its identifier.
+        assertEquals(List.of("ke"), client.tenantsUsingProvider(List.of("ke"), "ozeki-other", "smtp-deadbeef"));
     }
 
     @Test
-    void inUseWithoutATenantScansTheTenantsAlreadySeen() {
+    void inUseReadsMdmsNow_andFailsClosedWhenItCannot() {
         stubRows(row("SMS", true, null, null, "ozeki-0011aabb"));
-        assertFalse(client.isProviderInUse(null, "ozeki-0011aabb"), "nothing cached yet, so nothing to find");
+        assertTrue(client.knownStateTenants().isEmpty(), "nothing dispatched yet");
         client.provider("ke.bomet", "SMS");   // warm the cache as a live dispatch would
-        assertTrue(client.isProviderInUse(null, "ozeki-0011aabb"));
+        assertEquals(java.util.Set.of("ke"), client.knownStateTenants());
+        assertEquals(List.of("ke"), client.tenantsUsingProvider(client.knownStateTenants(), "ozeki-0011aabb", null));
+
+        // The cache still holds the row, but an outage must refuse, not answer from it or say "unused".
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new ResourceAccessException("down"));
+        assertThrows(RuntimeException.class,
+                () -> client.tenantsUsingProvider(List.of("ke"), "ozeki-0011aabb", null));
+        assertThrows(RuntimeException.class,
+                () -> client.tenantsUsingProvider(List.of("mz"), "ozeki-0011aabb", null));
     }
 
     @Test

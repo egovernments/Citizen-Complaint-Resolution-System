@@ -7,6 +7,7 @@
   "producer": "complaints-service",
   "module": "Complaints",
   "eventName": "COMPLAINTS.WORKFLOW.ASSIGN.PENDINGATLME",
+  "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
   "entityType": "COMPLAINT",
   "entityId": "PGR-2026-000123",
   "tenantId": "ke.bomet",
@@ -24,19 +25,23 @@
   "data": {
     "id": "PGR-2026-000123",
     "date": "21/09/2026",
-    "complaint_type": "Streetlight",
+    "complaint_type": "StreetLight",
     "status": "PENDINGATLME",
     "additional_comments": "Assigned to the ward team",
-    "emp_name": "Peter Kirui",
-    "emp_department": "Public Works",
-    "emp_designation": "Engineer"
+    "citizen_name": "Amina Chebet",
+    "download_link": "https://s.gov/x1",
+    "emp_name": "Peter Kirui"
   },
   "localized": {
-    "status": ["CS_COMMON_PENDINGATLME"]
+    "complaint_type": ["COMPLAINT_HIERARCHY.StreetLight", "pgr.complaint.category.StreetLight"],
+    "status": ["CS_COMMON_PENDINGATLME"],
+    "ulb": ["BOMET"],
+    "ao_designation": ["COMMON_MASTERS_DESIGNATION_AO"],
+    "emp_department": ["COMMON_MASTERS_DEPARTMENT_DEPT_25"],
+    "emp_designation": ["COMMON_MASTERS_DESIGNATION_AE"]
   },
   "localizationModules": ["rainmaker-pgr", "rainmaker-common"],
   "localizationLocale": "en_IN",
-  "ledgerEventName": "COMPLAINTS.WORKFLOW.ASSIGN",
   "payload": {
     "complaintNo": "PGR-2026-000123",
     "status": "PENDINGATLME",

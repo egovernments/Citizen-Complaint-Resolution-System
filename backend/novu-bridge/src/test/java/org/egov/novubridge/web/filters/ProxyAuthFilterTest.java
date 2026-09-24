@@ -175,7 +175,7 @@ class ProxyAuthFilterTest {
         assertNull(chain.getRequest());
     }
 
-    // ---- the admin tier: create / _update / _delete --------------------------
+    // ---- the admin tier: create / _update / _delete / test-send / _dry-run / _resolve ----
 
     private static MockHttpServletRequest post(String path) {
         MockHttpServletRequest req = new MockHttpServletRequest();
@@ -185,11 +185,14 @@ class ProxyAuthFilterTest {
         return req;
     }
 
-    /** Run one request with the given roles; returns the response for assertions. */
+    /**
+     * Run one request with the given roles, held at the state tenant {@code pg} as egov-user
+     * returns them (every role object carries its tenantId); returns the response for assertions.
+     */
     private MockHttpServletResponse call(MockHttpServletRequest req, MockFilterChain chain, String... roles) throws Exception {
         List<Map<String, Object>> roleList = java.util.Arrays.stream(roles)
-                .map(r -> Map.<String, Object>of("code", r)).toList();
-        stubUserDetails(Map.of("type", "EMPLOYEE", "roles", roleList));
+                .map(r -> Map.<String, Object>of("code", r, "tenantId", "pg")).toList();
+        stubUserDetails(Map.of("type", "EMPLOYEE", "tenantId", "pg", "roles", roleList));
         req.addHeader("Authorization", "Bearer good-token");
         MockHttpServletResponse res = new MockHttpServletResponse();
         filter.doFilter(req, res, chain);
@@ -200,7 +203,9 @@ class ProxyAuthFilterTest {
     void anAdminRolePassesEveryProviderManagementCall() throws Exception {
         for (String path : List.of("/novu-adapter/v1/providers",
                 "/novu-adapter/v1/providers/_update",
-                "/novu-adapter/v1/providers/_delete")) {
+                "/novu-adapter/v1/providers/_delete",
+                "/novu-adapter/v1/providers/test-send",
+                "/novu-adapter/v1/dispatch/_dry-run")) {
             MockFilterChain chain = new MockFilterChain();
             // A fresh filter per path: the token cache is keyed by token, not by path.
             filter = new ProxyAuthFilter(restTemplate, config);
@@ -215,11 +220,14 @@ class ProxyAuthFilterTest {
     void aNonAdminEmployeeIsRefusedEveryProviderManagementCall() throws Exception {
         for (String path : List.of("/novu-adapter/v1/providers",
                 "/novu-adapter/v1/providers/_update",
-                "/novu-adapter/v1/providers/_delete")) {
+                "/novu-adapter/v1/providers/_delete",
+                "/novu-adapter/v1/providers/test-send",
+                "/novu-adapter/v1/dispatch/_dry-run")) {
             MockFilterChain chain = new MockFilterChain();
             filter = new ProxyAuthFilter(restTemplate, config);
             // GRO is on the BROAD allowlist — it may read the screens — but rotating or
-            // deleting a provider's credentials is not its business.
+            // deleting a provider's credentials, or sending arbitrary text through the
+            // government sender, is not its business.
             MockHttpServletResponse res = call(post(path), chain, "GRO");
 
             assertEquals(403, res.getStatus(), path);
@@ -232,14 +240,13 @@ class ProxyAuthFilterTest {
 
     @Test
     void aNonAdminEmployeeStillReadsTheCatalogAndTheIntegrationsList() throws Exception {
-        // The narrow gate is three exact paths. Everything else on /providers — and every
+        // The narrow gate is a list of exact paths. Everything else on /providers — and every
         // read-only endpoint — keeps the broad allowlist it has always had.
         for (MockHttpServletRequest req : List.of(
                 get("/novu-adapter/v1/providers/catalog"),
                 get("/novu-adapter/v1/integrations"),
                 get("/novu-adapter/v1/logs"),
-                post("/novu-adapter/v1/providers/verify"),
-                post("/novu-adapter/v1/providers/test-send"))) {
+                post("/novu-adapter/v1/providers/verify"))) {
             MockFilterChain chain = new MockFilterChain();
             filter = new ProxyAuthFilter(restTemplate, config);
             MockHttpServletResponse res = call(req, chain, "GRO");

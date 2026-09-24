@@ -23,8 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * automatically and per tenant, to the legacy {@code RAINMAKER-PGR.NotificationChannel} master, and
  * only a tenant with neither falls back to the env vars.
  *
- * <p>{@code provider} is the Novu integration identifier of the ONE active provider for the
- * channel; blank = the pre-catalog {@code gateway} routing. Cache: an empty fetch is never cached,
+ * <p>{@code provider} is the Novu integration identifier (or {@code _id}) of the ONE active
+ * provider for the channel; blank = the pre-catalog {@code gateway} routing. Cache: an empty fetch is never cached,
  * a stale non-empty entry is served through an MDMS outage.
  */
 @Slf4j
@@ -82,28 +82,48 @@ public class ChannelPolicyClient {
     }
 
     /**
-     * Whether any channel row still points at this integration. {@code tenantId == null} checks every
-     * state tenant already cached; tenants never seen are not fetched (MDMS has no all-tenant search),
-     * so a delete is refused on evidence, never on a guess.
+     * The state tenants among {@code stateTenants} whose channel rows select this integration, by
+     * identifier or Novu {@code _id} (a row may name either). Read from MDMS now, never from the
+     * cache, with the same new-then-legacy choice dispatch makes. Fails CLOSED: throws when a
+     * tenant's rows cannot be read, so a delete is never allowed on a guess. Empty when the
+     * policy is off, since dispatch then never reads a pin.
      */
-    public boolean isProviderInUse(String tenantId, String identifier) {
-        if (!StringUtils.hasText(identifier)) {
-            return false;
+    public List<String> tenantsUsingProvider(Collection<String> stateTenants, String identifier, String id) {
+        List<String> using = new ArrayList<>();
+        if (!enabled()) {
+            return using;
         }
-        if (StringUtils.hasText(tenantId)) {
-            return usesProvider(rowsFor(stateTenant(tenantId)), identifier);
-        }
-        for (Timed cached : cache.values()) {
-            if (usesProvider(cached.rows(), identifier)) {
-                return true;
+        for (String stateTenant : new LinkedHashSet<>(stateTenants)) {
+            if (!StringUtils.hasText(stateTenant)) {
+                continue;
+            }
+            Map<String, ChannelSetting> rows = fetchOrThrow(stateTenant, config.getChannelPolicySchema());
+            if (rows.isEmpty() && hasDistinctLegacySchema()) {
+                rows = fetchOrThrow(stateTenant, config.getChannelPolicyLegacySchema());
+            }
+            if (usesProvider(rows, identifier) || usesProvider(rows, id)) {
+                using.add(stateTenant);
             }
         }
-        return false;
+        return using;
     }
 
-    private static boolean usesProvider(Map<String, ChannelSetting> rows, String identifier) {
+    /** Every state tenant this instance has read channel rows for since it started, plus the core-SMS default's. */
+    public Set<String> knownStateTenants() {
+        Set<String> states = new LinkedHashSet<>(cache.keySet());
+        String coreSms = stateTenant(config.getCoreSmsDefaultTenant());
+        if (StringUtils.hasText(coreSms)) {
+            states.add(coreSms.trim());
+        }
+        return states;
+    }
+
+    private static boolean usesProvider(Map<String, ChannelSetting> rows, String key) {
+        if (!StringUtils.hasText(key)) {
+            return false;
+        }
         for (ChannelSetting s : rows.values()) {
-            if (s.provider() != null && identifier.equals(s.provider().trim())) {
+            if (s.provider() != null && key.trim().equalsIgnoreCase(s.provider().trim())) {
                 return true;
             }
         }
@@ -141,7 +161,7 @@ public class ChannelPolicyClient {
         return Boolean.TRUE.equals(config.getChannelPolicyEnabled()) && restTemplate != null;
     }
 
-    static String stateTenant(String tenantId) {
+    public static String stateTenant(String tenantId) {
         if (!StringUtils.hasText(tenantId)) return null;
         int dot = tenantId.indexOf('.');
         return dot < 0 ? tenantId : tenantId.substring(0, dot);
@@ -153,8 +173,7 @@ public class ChannelPolicyClient {
         Timed cached = cache.get(stateTenant);
         if (cached != null && cached.fresh(ttl)) return cached.rows();
         Map<String, ChannelSetting> fetched = fetch(stateTenant, config.getChannelPolicySchema());
-        if (fetched.isEmpty() && StringUtils.hasText(config.getChannelPolicyLegacySchema())
-                && !config.getChannelPolicyLegacySchema().equals(config.getChannelPolicySchema())) {
+        if (fetched.isEmpty() && hasDistinctLegacySchema()) {
             // All-or-nothing and automatic: no setting chooses, so no overlay can flip it.
             fetched = fetch(stateTenant, config.getChannelPolicyLegacySchema());
             if (!fetched.isEmpty() && legacyLogged.add(stateTenant)) {
@@ -170,48 +189,60 @@ public class ChannelPolicyClient {
         return cached != null ? cached.rows() : fetched;
     }
 
-    @SuppressWarnings("unchecked")
+    private boolean hasDistinctLegacySchema() {
+        return StringUtils.hasText(config.getChannelPolicyLegacySchema())
+                && !config.getChannelPolicyLegacySchema().equals(config.getChannelPolicySchema());
+    }
+
+    /** Dispatch's read: a failure is logged and served as no rows (then stale, then the env fallback). */
     private Map<String, ChannelSetting> fetch(String stateTenant, String schemaCode) {
         try {
-            Map<String, Object> criteria = new LinkedHashMap<>();
-            criteria.put("tenantId", stateTenant);
-            criteria.put("schemaCode", schemaCode);
-            criteria.put("isActive", true);
-            criteria.put("limit", 100);
-            criteria.put("offset", 0);
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("RequestInfo", Map.of("apiId", "novu-bridge"));
-            body.put("MdmsCriteria", criteria);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            String url = ServiceUrl.join(config.getMdmsHost(), config.getMdmsSearchPath());
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
-            Object mdms = response.getBody() != null ? response.getBody().get("mdms") : null;
-            Map<String, ChannelSetting> out = new LinkedHashMap<>();
-            if (mdms instanceof List) {
-                for (Object o : (List<Object>) mdms) {
-                    if (!(o instanceof Map)) continue;
-                    Map<String, Object> row = (Map<String, Object>) o;
-                    if (Boolean.FALSE.equals(row.get("isActive"))) continue;
-                    Object dataObj = row.get("data");
-                    if (!(dataObj instanceof Map)) continue;
-                    Map<String, Object> data = (Map<String, Object>) dataObj;
-                    if (Boolean.FALSE.equals(data.get("active"))) continue;
-                    Object code = data.get("code");
-                    if (code == null || !StringUtils.hasText(code.toString())) continue;
-                    out.put(code.toString().trim().toUpperCase(Locale.ROOT), new ChannelSetting(
-                            code.toString().trim().toUpperCase(Locale.ROOT),
-                            Boolean.TRUE.equals(data.get("enabled")),
-                            data.get("gateway") != null ? data.get("gateway").toString() : null,
-                            data.get("senderId") != null ? data.get("senderId").toString() : null,
-                            data.get("provider") != null ? data.get("provider").toString() : null));
-                }
-            }
-            return out;
+            return fetchOrThrow(stateTenant, schemaCode);
         } catch (Exception e) {
             log.warn("Channel policy lookup failed for tenant {} schema {} ({}); serving stale/fallback",
                     stateTenant, schemaCode, e.getMessage());
             return Map.of();
         }
+    }
+
+    /** An answer without an {@code mdms} list is a failure here, not "no rows". */
+    @SuppressWarnings("unchecked")
+    private Map<String, ChannelSetting> fetchOrThrow(String stateTenant, String schemaCode) {
+        Map<String, Object> criteria = new LinkedHashMap<>();
+        criteria.put("tenantId", stateTenant);
+        criteria.put("schemaCode", schemaCode);
+        criteria.put("isActive", true);
+        criteria.put("limit", 100);
+        criteria.put("offset", 0);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("RequestInfo", Map.of("apiId", "novu-bridge"));
+        body.put("MdmsCriteria", criteria);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String url = ServiceUrl.join(config.getMdmsHost(), config.getMdmsSearchPath());
+        ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+        Object mdms = response.getBody() != null ? response.getBody().get("mdms") : null;
+        if (!(mdms instanceof List)) {
+            throw new IllegalStateException("MDMS answered " + response.getStatusCode() + " with no mdms list");
+        }
+        Map<String, ChannelSetting> out = new LinkedHashMap<>();
+        for (Object o : (List<Object>) mdms) {
+            if (!(o instanceof Map)) continue;
+            Map<String, Object> row = (Map<String, Object>) o;
+            if (Boolean.FALSE.equals(row.get("isActive"))) continue;
+            Object dataObj = row.get("data");
+            if (!(dataObj instanceof Map)) continue;
+            Map<String, Object> data = (Map<String, Object>) dataObj;
+            if (Boolean.FALSE.equals(data.get("active"))) continue;
+            Object code = data.get("code");
+            if (code == null || !StringUtils.hasText(code.toString())) continue;
+            out.put(code.toString().trim().toUpperCase(Locale.ROOT), new ChannelSetting(
+                    code.toString().trim().toUpperCase(Locale.ROOT),
+                    Boolean.TRUE.equals(data.get("enabled")),
+                    data.get("gateway") != null ? data.get("gateway").toString() : null,
+                    data.get("senderId") != null ? data.get("senderId").toString() : null,
+                    data.get("provider") != null ? data.get("provider").toString() : null));
+        }
+        return out;
     }
 }

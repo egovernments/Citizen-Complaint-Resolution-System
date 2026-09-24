@@ -14,6 +14,7 @@ import org.egov.novubridge.service.provider.ProviderCatalog;
 import org.egov.novubridge.service.provider.ProviderType;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.util.Values;
+import org.egov.novubridge.web.filters.ProxyAuthFilter;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
@@ -21,6 +22,7 @@ import org.egov.tracer.model.CustomException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,8 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.egov.novubridge.util.Values.asList;
@@ -41,10 +45,11 @@ import static org.egov.novubridge.util.Values.firstText;
 import static org.egov.novubridge.util.Values.stableId;
 import static org.egov.novubridge.util.Values.str;
 import static org.egov.novubridge.util.Values.truthy;
+import static org.egov.novubridge.util.Values.unwrapData;
 
 /**
- * The configurator's Notification Providers screen, behind ProxyAuthFilter (create, _update and
- * _delete additionally need an admin role).
+ * The configurator's Notification Providers screen, behind ProxyAuthFilter (create, _update,
+ * _delete and test-send additionally need an admin role held at a state tenant).
  *
  * <p>Secrets stay server-side: operator credentials go straight to Novu and are never persisted,
  * logged (key names only) or echoed. Every response goes through the {@link IntegrationProjection}
@@ -148,7 +153,8 @@ public class ProviderController {
     /**
      * Rename, toggle or rotate. The id is in the body because the gateway's access control matches
      * exact URLs. Novu REPLACES credentials wholesale on PUT, so a rotation is validated as complete
-     * against the type derived from the integration's own identifier.
+     * against the type derived from the integration's own identifier. Deactivating
+     * ({@code active:false}) is guarded like a delete: see {@link #requireNotInUse}.
      */
     @PostMapping("/providers/_update")
     public ResponseEntity<ProviderCreateResponse> updateProvider(@RequestBody Map<String, Object> body) {
@@ -178,6 +184,9 @@ public class ProviderController {
             throw new CustomException("NB_INVALID_PROVIDER",
                     "Nothing to update: supply at least one of name, credentials, active");
         }
+        if (Boolean.FALSE.equals(active)) {
+            requireNotInUse(body, existing, "disable");
+        }
 
         NovuClient.NovuResponse novuResponse =
                 novuClient.updateIntegration(str(existing.get("_id")), name, novuCredentials, active);
@@ -188,7 +197,7 @@ public class ProviderController {
 
     /**
      * Delete a provider and its Novu-held credentials, but never one a tenant still routes through:
-     * Novu would delete it and every send on that channel would fail. 409 {@code NB_PROVIDER_IN_USE}.
+     * Novu would delete it and every send on that channel would fail. See {@link #requireNotInUse}.
      */
     @PostMapping("/providers/_delete")
     public ResponseEntity<Map<String, Object>> deleteProvider(@RequestBody Map<String, Object> body) {
@@ -197,19 +206,7 @@ public class ProviderController {
             throw new CustomException("NB_INVALID_PROVIDER", "id is required");
         }
         Map<String, Object> existing = findIntegration(id);
-        String identifier = str(existing.get("identifier"));
-        String tenantId = str(body.get("tenantId"));
-
-        if (channelPolicy.isProviderInUse(tenantId, identifier)) {
-            Map<String, Object> error = new LinkedHashMap<>();
-            error.put("code", "NB_PROVIDER_IN_USE");
-            error.put("message", "Provider " + identifier + " is still selected on a NotificationChannel row"
-                    + (StringUtils.hasText(tenantId) ? " for tenant " + tenantId : "")
-                    + ". Point that channel at another provider first.");
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("Errors", List.of(error));
-            return new ResponseEntity<>(out, HttpStatus.CONFLICT);
-        }
+        requireNotInUse(body, existing, "delete");
 
         novuClient.deleteIntegration(str(existing.get("_id")));
         providerAvailability.invalidate();
@@ -219,6 +216,84 @@ public class ProviderController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("data", data);
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Refuses to delete or disable an integration a channel row still selects (409
+     * {@code NB_PROVIDER_IN_USE}), matched by identifier OR Novu {@code _id}. {@code tenantId} is
+     * required (the caller's state tenant) and must be a state the caller is an admin of (403
+     * {@code NB_TENANT_NOT_ALLOWED}). The rows are read from MDMS now, for that state, every state
+     * the caller administers and every state this instance has dispatched for (plus the core-SMS
+     * default tenant's), and the check fails CLOSED: a state whose rows cannot be read refuses too.
+     * Integrations are deployment-wide, so a state this instance has never seen and the caller does
+     * not administer is not checked.
+     */
+    private void requireNotInUse(Map<String, Object> body, Map<String, Object> integration, String verb) {
+        String tenantId = str(body.get("tenantId"));
+        if (!StringUtils.hasText(tenantId)) {
+            throw new CustomException("NB_INVALID_PROVIDER",
+                    "tenantId (your state tenant) is required to " + verb + " a provider");
+        }
+        String state = ChannelPolicyClient.stateTenant(tenantId.trim());
+        ProxyAuthFilter.Caller caller = ProxyAuthFilter.currentCaller();
+        Set<String> states = new LinkedHashSet<>();
+        states.add(state);
+        if (caller != null) {
+            if (!caller.adminStateTenants().contains(state)) {
+                throw new Refusal(HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", "You hold no admin role at state tenant "
+                        + state + ", so you cannot " + verb + " a provider on its behalf");
+            }
+            states.addAll(caller.adminStateTenants());
+        }
+        states.addAll(channelPolicy.knownStateTenants());
+
+        String identifier = str(integration.get("identifier"));
+        String label = StringUtils.hasText(identifier) ? identifier : str(integration.get("_id"));
+        List<String> using;
+        try {
+            using = channelPolicy.tenantsUsingProvider(states, identifier, str(integration.get("_id")));
+        } catch (RuntimeException e) {
+            log.warn("Refusing to {} provider {}: channel rows for {} could not be read ({})",
+                    verb, label, states, e.getMessage());
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Could not confirm that no channel "
+                    + "selects provider " + label + " (channel rows unreadable: " + e.getMessage()
+                    + "). Nothing was changed; try again once MDMS answers.");
+        }
+        if (!using.isEmpty()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                    + " is still selected on a channel for tenant(s) " + String.join(", ", using)
+                    + ". Point that channel at another provider first.");
+        }
+    }
+
+    /** A refusal with its own status (403, 409), in the {@code Errors} shape the tracer handler uses. */
+    static final class Refusal extends RuntimeException {
+        private final HttpStatus status;
+        private final String code;
+
+        Refusal(HttpStatus status, String code, String message) {
+            super(message);
+            this.status = status;
+            this.code = code;
+        }
+
+        HttpStatus status() {
+            return status;
+        }
+
+        String code() {
+            return code;
+        }
+    }
+
+    @ExceptionHandler(Refusal.class)
+    ResponseEntity<Map<String, Object>> refused(Refusal refusal) {
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("code", refusal.code());
+        error.put("message", refusal.getMessage());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("Errors", List.of(error));
+        return new ResponseEntity<>(out, refusal.status());
     }
 
     /** By Novu {@code _id} or {@code identifier}; Novu v2.3.0 has no GET-by-id, so this lists. */
@@ -433,15 +508,6 @@ public class ProviderController {
         return new ResponseEntity<>(
                 ProviderCreateResponse.builder().data(IntegrationProjection.projectListItem(integration)).build(),
                 HttpStatus.OK);
-    }
-
-    /** Novu answers {@code {data:{...}}} or a bare object. */
-    private static Map<String, Object> unwrapData(Map<String, Object> body) {
-        if (body == null) {
-            return new LinkedHashMap<>();
-        }
-        Map<String, Object> data = asMap(body.get("data"));
-        return data != null ? data : body;
     }
 
     /** Positional variables as Twilio's 1-based {@code {"1":..,"2":..}}. */

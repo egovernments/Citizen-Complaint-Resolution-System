@@ -14,7 +14,12 @@ import java.util.Set;
 @Component
 public class ConfigurationSanityCheck {
 
-    private static final Set<String> PLACEHOLDER_KEYS = Set.of("test-api-key", "changeme", "");
+    /**
+     * The shipped defaults: application.properties ({@code test-api-key-123}), the @Value fallback
+     * ({@code test-api-key}), Compose ({@code changeme}), config/.env.novu, and Helm (blank).
+     */
+    private static final Set<String> PLACEHOLDER_KEYS = Set.of(
+            "test-api-key-123", "test-api-key", "changeme", "replace-with-your-novu-api-key", "");
 
     private final NovuBridgeConfiguration config;
 
@@ -78,6 +83,11 @@ public class ConfigurationSanityCheck {
         }
         if (config.getNovuApiKey() == null || PLACEHOLDER_KEYS.contains(config.getNovuApiKey().trim())) {
             warn.add("novu.api.key is a placeholder — Novu deliveries will be rejected until a real key is set");
+        }
+        if (!Boolean.FALSE.equals(config.getCoreSmsEnabled()) && !StringUtils.hasText(config.getCoreSmsCountryCode())) {
+            warn.add("core SMS (login OTPs) is on but novu.bridge.core.sms.country.code is blank — a "
+                    + "number DIGIT sends without a country code (as user-otp does) cannot be made E.164, "
+                    + "so OTPs to it will not be routed. Set NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE, e.g. +254");
         }
         if (Boolean.FALSE.equals(config.getProxyAuthEnabled())) {
             warn.add("novu.bridge.proxy.auth.enabled=false — the configurator proxy endpoints are unauthenticated");

@@ -11,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -62,14 +63,38 @@ public class CoreSmsConsumer {
             event = translator.translate(record);
         } catch (CustomException ce) {
             log.error("Core SMS on {} could not be translated: {}", topic, ce.getMessage());
+            publishDlq(record, topic, ce);
+            return;
+        }
+        domainEventConsumer.handle(event, topic);
+    }
+
+    /**
+     * The one call that must work after translation already failed, so it never throws: a throw
+     * here would have Kafka redeliver the same malformed record and stall the partition. The
+     * record's own tenant first (a blank default must not decide a central instance's topic
+     * prefix), then the default, then the unprefixed DLQ topic ({@link Producer#push}).
+     */
+    private void publishDlq(Map<String, Object> record, String topic, CustomException ce) {
+        String tenant = config.getCoreSmsDefaultTenant();
+        for (String key : new String[] {"tenantId", "tenant"}) {
+            Object own = record == null ? null : record.get(key);
+            if (own != null && StringUtils.hasText(own.toString())) {
+                tenant = own.toString().trim();
+                break;
+            }
+        }
+        try {
             Map<String, Object> dlq = new HashMap<>();
             dlq.put("event", record);
             dlq.put("sourceTopic", topic);
             dlq.put("errorCode", ce.getCode());
             dlq.put("errorMessage", ce.getMessage());
-            producer.push(config.getCoreSmsDefaultTenant(), config.getDlqTopic(), dlq);
-            return;
+            producer.push(tenant, config.getDlqTopic(), dlq);
+        } catch (Exception e) {
+            // Neither phone nor text: the text is the OTP itself.
+            log.error("Core SMS on {} ({}) could not be dead-lettered either, and is dropped: {}",
+                    topic, ce.getCode(), e.getMessage());
         }
-        domainEventConsumer.handle(event, topic);
     }
 }

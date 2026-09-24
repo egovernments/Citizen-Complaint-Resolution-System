@@ -84,12 +84,14 @@ Body: `{"ResponseInfo": …, "Errors": [{"code", "message"}]}`.
 
 | Code | HTTP | Meaning / action |
 |---|---|---|
-| `NB_INVALID_PROVIDER` | 400 | Missing `id` / `providerId`, empty `_update`, or a required credential missing (see `GET /providers/catalog`) |
+| `NB_INVALID_PROVIDER` | 400 | Missing `id` / `providerId`, empty `_update`, a required credential missing (see `GET /providers/catalog`), or no `tenantId` on `_delete` / `_update` with `active: false` |
 | `NB_UNKNOWN_PROVIDER_TYPE` | 400 | `type` not one of `twilio-sms`, `twilio-whatsapp`, `smtp`, `smscountry`, `ozeki`, or an existing integration's type cannot be derived for a rotation — re-create it from the catalog |
 | `NB_INVALID_CHANNEL` | 400 | `channel` blank or not SMS / WHATSAPP / EMAIL |
 | `NB_PROVIDER_NOT_FOUND` | 400 | No integration with that `_id` / identifier |
-| `NB_PROVIDER_IN_USE` | 409 | Delete refused: a channel still selects it. Select another first |
-| `NB_ADMIN_ROLE_REQUIRED` | 403 | Create / `_update` / `_delete` / `/dispatch/_resolve` without a role from `novu.bridge.proxy.admin.roles` |
+| `NB_PROVIDER_IN_USE` | 409 | Delete or disable refused: a channel still selects it (by identifier or Novu `_id`) — select another first. Also when a state's channel rows could not be read: nothing changed, retry once MDMS answers |
+| `NB_ADMIN_ROLE_REQUIRED` | 403 | Create / `_update` / `_delete` / `test-send` / `/dispatch/_dry-run` / `/dispatch/_resolve` without a role from `novu.bridge.proxy.admin.roles` held at a state tenant (a city-level admin role does not count) |
+| `NB_TENANT_NOT_ALLOWED` | 403 | `/logs` or `/config/source` for a tenant that is not the caller's own, nor a city of its state; or `_delete` / disable for a `tenantId` whose state the caller holds no admin role at |
+| `NB_ADAPTER_URL_NOT_ALLOWED` | 400 | An SMSCountry Gateway URL off `novu.bridge.smscountry.allowed.hosts`, refused at create / rotate |
 | `NB_NO_TWILIO_INTEGRATION` | 400 | Template sync found no Twilio integration with credentials |
 | `NB_TWILIO_CONTENT_FETCH_FAILED` | 400 | Twilio ContentAndApprovals call failed; check credentials and egress (retryable) |
 | `NB_TWILIO_CONTENT_VARS_SERIALIZE` | 400 | `contentVariables` values must be plain scalars |
@@ -106,6 +108,7 @@ Body: `{"ResponseInfo": …, "Errors": [{"code", "message"}]}`.
 |---|---|---|
 | `NB_ADAPTER_UNAUTHENTICATED` | 401 | `X-SMSCountry-User` / `X-SMSCountry-Password` missing — re-save the provider from the Configurator |
 | `NB_ADAPTER_BAD_REQUEST` | 400 | No recipient or text — check the integration's `baseUrl` points at the adapter |
+| `NB_ADAPTER_URL_NOT_ALLOWED` | 400 | The integration's `?apiUrl=` is not an http(s) URL on the SMSCountry host or `novu.bridge.smscountry.allowed.hosts`. Nothing was sent (the bridge no longer falls back to the default gateway with these credentials) — list the host, or re-save the provider with a blank Gateway URL |
 
 ## Contract documents (HTTP only)
 

@@ -7,26 +7,40 @@
   "producer": "complaints-service",
   "module": "Complaints",
   "eventName": "COMPLAINTS.WORKFLOW.APPLY.PENDINGFORASSIGNMENT",
+  "ledgerEventName": "COMPLAINTS.WORKFLOW.APPLY",
   "entityType": "COMPLAINT",
   "entityId": "PGR-2026-000123",
   "tenantId": "ke.bomet",
   "transactionSeed": "PGR-2026-000123:APPLY:PENDINGFORASSIGNMENT:c41e8a07-3b5d-4f29-a8e6-0d7b9f2c1a53",
   "actors": {
-    "citizen": { "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f", "type": "CITIZEN" }
+    "citizen": {
+      "userId": "9a1f2e77-0c3b-4c2a-9f3e-5a1d2c3b4e5f",
+      "type": "CITIZEN",
+      "name": "Amina Chebet",
+      "phone": "+254712345678",
+      "email": "amina@example.com"
+    }
   },
   "data": {
     "id": "PGR-2026-000123",
     "date": "21/09/2026",
-    "complaint_type": "Streetlight",
+    "complaint_type": "StreetLight",
     "status": "PENDINGFORASSIGNMENT",
-    "citizen_name": "Jane Doe",
-    "download_link": "https://s.gov/x1",
-    "ao_designation": "Assistant Officer"
+    "citizen_name": "Amina Chebet",
+    "download_link": "https://s.gov/x1"
   },
   "localized": {
-    "complaint_type": ["COMPLAINT_HIERARCHY.Streetlight", "pgr.complaint.category.Streetlight"],
+    "complaint_type": ["COMPLAINT_HIERARCHY.StreetLight", "pgr.complaint.category.StreetLight"],
     "status": ["CS_COMMON_PENDINGFORASSIGNMENT"],
-    "ulb": ["BOMET"]
+    "ulb": ["BOMET"],
+    "ao_designation": ["COMMON_MASTERS_DESIGNATION_AO"]
   },
-  "localizationModules": ["rainmaker-pgr", "rainmaker-common"]
+  "localizationModules": ["rainmaker-pgr", "rainmaker-common"],
+  "localizationLocale": "en_IN",
+  "payload": {
+    "complaintNo": "PGR-2026-000123",
+    "status": "PENDINGFORASSIGNMENT",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT"
+  }
 }

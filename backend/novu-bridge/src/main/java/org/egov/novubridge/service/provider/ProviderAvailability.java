@@ -28,15 +28,20 @@ public class ProviderAvailability {
 
     public enum Status { AVAILABLE, MISSING, INACTIVE, CHANNEL_MISMATCH, UNKNOWN }
 
-    /** The verdict plus the sentence that goes in the dispatch row's error message. */
-    public record Result(Status status, String message) {
+    /**
+     * The verdict, the sentence that goes in the dispatch row's error message, and the
+     * integration's {@code identifier} to trigger with: a channel row may name the Novu
+     * {@code _id}, but Novu's override only understands the identifier (given one it does not
+     * know, it silently uses the PRIMARY integration). As given when it cannot be resolved.
+     */
+    public record Result(Status status, String message, String identifier) {
         /** True unless we positively know the trigger would go nowhere. */
         public boolean usable() {
             return status == Status.AVAILABLE || status == Status.UNKNOWN;
         }
     }
 
-    private record Integration(boolean active, String novuChannel) {
+    private record Integration(boolean active, String novuChannel, String identifier) {
     }
 
     private record Snapshot(Map<String, Integration> byKey, long fetchedAt) {
@@ -60,32 +65,33 @@ public class ProviderAvailability {
      */
     public Result check(String identifier, String channel) {
         if (!StringUtils.hasText(identifier)) {
-            return new Result(Status.AVAILABLE, null);
+            return new Result(Status.AVAILABLE, null, identifier);
         }
         Snapshot current = snapshotForCheck();
         if (current == null) {
             return new Result(Status.UNKNOWN,
-                    "Novu integrations could not be listed; delivering without checking " + identifier);
+                    "Novu integrations could not be listed; delivering without checking " + identifier, identifier);
         }
         Integration integration = current.byKey().get(key(identifier));
         if (integration == null) {
             return new Result(Status.MISSING, "Provider " + identifier.trim()
                     + " is selected for " + channel + " but is missing: no such integration in Novu."
-                    + " Nothing was sent. Select a configured provider for this channel.");
+                    + " Nothing was sent. Select a configured provider for this channel.", identifier);
         }
         if (!integration.active()) {
             return new Result(Status.INACTIVE, "Provider " + identifier.trim()
                     + " is selected for " + channel + " but is disabled in Novu."
-                    + " Nothing was sent. Re-enable it or select another provider.");
+                    + " Nothing was sent. Re-enable it or select another provider.", identifier);
         }
         String wanted = Values.novuChannel(channel);
         if (wanted != null && StringUtils.hasText(integration.novuChannel())
                 && !wanted.equals(integration.novuChannel())) {
             return new Result(Status.CHANNEL_MISMATCH, "Provider " + identifier.trim()
                     + " is a Novu '" + integration.novuChannel() + "' integration, but " + channel
-                    + " delivers on Novu's '" + wanted + "' channel. Nothing was sent.");
+                    + " delivers on Novu's '" + wanted + "' channel. Nothing was sent.", identifier);
         }
-        return new Result(Status.AVAILABLE, null);
+        return new Result(Status.AVAILABLE, null,
+                StringUtils.hasText(integration.identifier()) ? integration.identifier() : identifier.trim());
     }
 
     public void invalidate() {
@@ -136,7 +142,7 @@ public class ProviderAvailability {
             String identifier = Values.str(row.get("identifier"));
             String id = Values.str(row.get("_id"));
             Integration integration = new Integration(Boolean.TRUE.equals(row.get("active")),
-                    Values.lower(Values.str(row.get("channel"))));
+                    Values.lower(Values.str(row.get("channel"))), identifier == null ? null : identifier.trim());
             // Indexed under both: a channel row may name either.
             if (StringUtils.hasText(identifier)) {
                 out.put(key(identifier), integration);

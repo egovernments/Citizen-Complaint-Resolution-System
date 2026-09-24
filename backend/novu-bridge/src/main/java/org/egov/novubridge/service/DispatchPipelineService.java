@@ -32,7 +32,7 @@ public class DispatchPipelineService {
 
     private static final Set<String> KNOWN_CHANNELS = Set.of("SMS", "WHATSAPP", "EMAIL");
     /** Ledger statuses that mean the message already left; a replay must not send it again. */
-    private static final Set<String> ALREADY_SENT = Set.of("SENT", "DELIVERED");
+    public static final Set<String> ALREADY_SENT = Set.of("SENT", "DELIVERED");
 
     private final EnvelopeValidator envelopeValidator;
     private final PreferenceServiceClient preferenceServiceClient;
@@ -140,13 +140,15 @@ public class DispatchPipelineService {
                     "WhatsApp event has no approved provider template; skipped");
         }
 
-        String integrationIdentifier = channelPolicy.provider(event.getTenantId(), channel);
+        String pinned = channelPolicy.provider(event.getTenantId(), channel);
         // Novu ACCEPTS a trigger naming a deleted/disabled/wrong-channel integration and fails it
         // internally, so without this check the row would read SENT for a message that never left.
-        ProviderAvailability.Result availability = providerAvailability.check(integrationIdentifier, channel);
+        ProviderAvailability.Result availability = providerAvailability.check(pinned, channel);
         if (!availability.usable()) {
             return skip(event, context, "NB_PROVIDER_UNAVAILABLE", availability.message(), availability.message());
         }
+        // The row may pin the Novu _id; the trigger override needs the identifier.
+        String integrationIdentifier = availability.identifier();
 
         Dispatch dispatch = Dispatch.builder()
                 .tenantId(event.getTenantId())

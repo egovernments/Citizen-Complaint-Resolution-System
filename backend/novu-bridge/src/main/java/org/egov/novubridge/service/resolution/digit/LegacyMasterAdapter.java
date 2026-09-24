@@ -188,7 +188,7 @@ public final class LegacyMasterAdapter {
         if (alreadyConverted(row)) {
             return new TemplateRow(text(row.get("module")), text(row.get("eventName")),
                     text(row.get("audience")), text(row.get("channel")).toUpperCase(Locale.ROOT),
-                    localeOf(row), string(row.get("subject")), row.get("body") == null ? "" : String.valueOf(row.get("body")),
+                    localeOf(row), string(row.get("subject")), string(row.get("body")),
                     isActive(row));
         }
         String audience = joinedAudience(row, audienceIndex);
@@ -202,7 +202,7 @@ public final class LegacyMasterAdapter {
                 text(row.get("channel")).toUpperCase(Locale.ROOT),
                 localeOf(row),
                 text(row.get("subject")).isEmpty() ? null : String.valueOf(row.get("subject")),
-                row.get("body") == null ? "" : String.valueOf(row.get("body")),
+                string(row.get("body")),
                 isActive(row));
     }
 
