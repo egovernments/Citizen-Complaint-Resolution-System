@@ -26,10 +26,25 @@ The copy is NOT performed by anything in this repository. The chain is:
 this repository consumes as a prebuilt image. So the 500-row limit cannot be changed
 from here; this script is the repair, run after bootstrap.
 
+REPORT-ONLY UNLESS ASKED
+------------------------
+The deploy runs this on every deploy whose state root is not `pg` — i.e. on LIVE
+tenants — and by default it only REPORTS (APPLY=0). A row `pg` grants and the tenant
+lacks looks the same whether the bootstrap dropped it or an operator deliberately
+withheld it (the tenant's own role-action map, GRO/DGRO scoping), and a copied grant
+cannot be taken back by any deploy (MDMS v2 has no delete). So the script cannot be
+the one to decide; it writes only with APPLY=1, which the playbook sets only for
+`repair_tenant_masters: true`.
+
+The truncation SIGNATURE — exactly TRUNCATION_ROWS (500) role-action rows at the target
+while the source has more — is reported as TRUNCATION-SIGNATURE together with the exact
+opt-in command (OPT_IN_HINT), but it does NOT switch writing on by itself: 500 is a
+heuristic, a deliberately trimmed tenant can sit on it, and a missed repair costs an
+explicit 403 and one re-run where a wrong one silently widens access.
+
 WHY ONLY THE ACCESS-CONTROL MASTERS
 -----------------------------------
-This runs by default on every deploy whose state root is not `pg` — i.e. on LIVE
-tenants. An earlier version compared every schema the two tenants share and keyed
+An earlier version compared every schema the two tenants share and keyed
 rows on mdms-v2's uniqueIdentifier. Its schema search sent no limit, so mdms-v2
 answered with 10 schemas and it reported "0 missing" having looked at 10 of ~52. Had
 the paging worked it would have copied `pg`'s DEMO data — ComplaintHierarchy,
@@ -68,11 +83,15 @@ Env:
   DIGIT_USERNAME     admin username                 (default: ADMIN)
   DIGIT_PASSWORD     admin password                 (default: eGov@123)
   DIGIT_LOGIN_TENANT tenant to auth against         (default: $TARGET_TENANT)
-  APPLY              1 = copy missing rows, 0 = report only  (default: 1)
+  APPLY              1 = copy missing rows, 0 = report only  (default: 0)
+  TRUNCATION_ROWS    the role-action count the truncated bootstrap leaves (default: 500)
+  OPT_IN_HINT        the command printed for turning the repair on
+                     (default: this script with APPLY=1; the playbook passes its own)
   PAGE_LIMIT         MDMS search page size          (default: 100)
   SHOW_MISSING       how many missing rows to list per master in the report (default: 5)
 
-Exit: 0 nothing missing / everything repaired · 3 RBAC_BLOCKED · 2 other failures.
+Exit: 0 nothing missing / everything repaired / report-only · 3 RBAC_BLOCKED (APPLY=1
+only: report-only never writes, so it can never be refused) · 2 other failures.
 """
 import os, sys, json, urllib.request, urllib.parse, urllib.error
 
@@ -82,7 +101,13 @@ SOURCE = os.environ.get("SOURCE_TENANT", "pg")
 USERNAME = os.environ.get("DIGIT_USERNAME", "ADMIN")
 PASSWORD = os.environ.get("DIGIT_PASSWORD", "eGov@123")
 LOGIN_TENANT = os.environ.get("DIGIT_LOGIN_TENANT", TARGET)
-APPLY = os.environ.get("APPLY", "1") not in ("0", "false", "no")
+# Report-only unless the caller says otherwise — see "REPORT-ONLY UNLESS ASKED" above.
+APPLY = os.environ.get("APPLY", "0").strip().lower() in ("1", "true", "yes")
+TRUNCATION_ROWS = int(os.environ.get("TRUNCATION_ROWS", "500"))
+OPT_IN_HINT = os.environ.get("OPT_IN_HINT") or (
+    "APPLY=1 DIGIT_URL=%s TARGET_TENANT=%s python3 %s"
+    % (os.environ.get("DIGIT_URL", "<kong>"), os.environ.get("TARGET_TENANT", "<tenant>"),
+       os.path.basename(__file__)))
 PAGE = int(os.environ.get("PAGE_LIMIT", "100"))
 SHOW = int(os.environ.get("SHOW_MISSING", "5"))
 BASIC = "Basic ZWdvdi11c2VyLWNsaWVudDo="
@@ -128,6 +153,11 @@ def schemas_present(tok, tenant):
             page = json.load(_post("/mdms-v2/schema/v1/_search", body)).get("SchemaDefinitions") or []
         except urllib.error.HTTPError as e:
             sys.exit("ERROR: schema search failed for %s: HTTP %s" % (tenant, e.code))
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            # Unreachable is not absent: say which, so nobody goes looking for a bootstrap
+            # that did run.
+            sys.exit("ERROR: schema search for %s did not answer (%s) — MDMS/Kong unreachable"
+                     % (tenant, e))
         found |= {s.get("code") for s in page if s.get("code") in ACL_MASTERS}
         if len(page) < PAGE:
             return found
@@ -154,6 +184,9 @@ def all_rows(tok, tenant, code):
             page = json.load(_post("/mdms-v2/v2/_search", body)).get("mdms") or []
         except urllib.error.HTTPError as e:
             print("    ! search %s@%s failed: HTTP %s" % (code, tenant, e.code))
+            return out, False
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print("    ! search %s@%s did not answer: %s" % (code, tenant, e))
             return out, False
         for rec in page:
             uid = rec.get("id") or rec.get("uniqueIdentifier")
@@ -260,7 +293,12 @@ def main():
     if SOURCE == TARGET:
         print("source == target; nothing to do")
         return 0
-    tok = token()
+    try:
+        tok = token()
+    except (urllib.error.URLError, OSError, KeyError, ValueError) as e:
+        print("ERROR: login as %s at %s failed (%s) — nothing compared, nothing written"
+              % (USERNAME, LOGIN_TENANT, e))
+        return 2
 
     missing_schemas = [(t, c) for t in (SOURCE, TARGET) for c in sorted(set(ACL_MASTERS) - schemas_present(tok, t))]
     if missing_schemas:
@@ -277,6 +315,9 @@ def main():
         print("  ! could not read every page of the access-control masters — nothing compared, "
               "nothing copied")
         return 2
+
+    # The one shape a truncated bootstrap leaves. Reported, never acted on by itself.
+    signature = len(tgt_ra) == TRUNCATION_ROWS and len(src_ra) > TRUNCATION_ROWS
 
     total_missing = total_created = total_failed = 0
     forbidden_codes = []
@@ -353,6 +394,19 @@ def main():
     print("SUMMARY: %d access-control master(s) compared, %d row(s) missing, %s %s, %d failed"
           % (len(ACL_MASTERS), total_missing, total_created if APPLY else total_missing, verb,
              total_failed))
+
+    if signature:
+        print("TRUNCATION-SIGNATURE: %s has exactly %d %s rows and %s has %d — the shape a "
+              "truncated tenant bootstrap leaves (SUPERUSER/MDMS_ADMIN typically lose their "
+              "/mdms-v2/v2/_create role-actions, and the configurator's MDMS writes 403)."
+              % (TARGET, len(tgt_ra), ROLEACTIONS, SOURCE, len(src_ra)))
+    if not APPLY and total_missing:
+        # Nothing was written: a gap on a live tenant can be deliberate. Say how to act on
+        # it instead of acting.
+        print("REPORT-ONLY: nothing written. %s differs from %s by %d access-control row(s); "
+              "that can be deliberate (a tenant's own role-action map), so copying them is the "
+              "operator's call. Review the rows above; to copy them: %s"
+              % (TARGET, SOURCE, total_missing, OPT_IN_HINT))
 
     if forbidden_codes:
         print("RBAC_BLOCKED: the admin role has no /mdms-v2/v2/_create role-action for: %s"

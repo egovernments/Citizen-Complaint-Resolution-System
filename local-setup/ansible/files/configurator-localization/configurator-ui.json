@@ -5326,5 +5326,35 @@
     "message": "Provedores de análise",
     "module": "configurator-ui",
     "locale": "pt_BR"
+  },
+  {
+    "code": "app.providers.admin_only",
+    "message": "Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.in_use_locked",
+    "message": "Selected for %{channel}. Pick another provider for %{channel} on Channels before disabling or deleting this one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.providers.msg_disable_in_use",
+    "message": "This provider is still selected for a channel, so it was not disabled. Open Channels, pick another provider for that channel, then disable this one.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.notification_validate.loading",
+    "message": "Loading the notification configuration…",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.notification_validate.not_configured",
+    "message": "Not configured: this tenant has no notification event catalogue, so there is nothing to validate against.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
   }
 ]

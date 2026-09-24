@@ -40,8 +40,8 @@ initContainers:
     # Same build as the app image below and as novu-bridge — see "One build" below.
     image:
       repository: "pgr-services-db"
-      tag: "nightly-develop"
-      pullPolicy: Always   # a rolling tag is only re-read with Always
+      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — see "One build" below
+      pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
         - name: SCHEMA_NAME
@@ -75,14 +75,23 @@ initContainers:
 # novu-bridge-db MUST come from the same build. This pgr-services publishes thin events
 # only a novu-bridge of the same build resolves, and each app needs the Flyway
 # migrations its -db image carries. global.notificationStackTag in
-# charts/environments/env.yaml sets all four at once (templates/deployment.yaml); the
-# tags here are the fallback when it is unset. `nightly-develop` is the rolling tag the
-# develop nightly publishes for all four (build/NIGHTLY-BUILDS.md). It moves per image,
-# so a production environment pins an immutable release or develop-<sha8> tag there.
+# charts/environments/env.yaml, when set, moves all four at once (templates/deployment.yaml);
+# otherwise these chart defaults apply — the same place every other image in these charts
+# is pinned.
+#
+# Tag policy. `nightly-develop` below is a STOPGAP: it is the rolling tag the develop
+# nightly publishes, and no immutable tag containing this stack exists until the change
+# that introduced it has merged and been built. RELEASE STEP (build/NIGHTLY-BUILDS.md,
+# "Release step: pin the notification stack"): replace it, here AND in
+# common-services/novu-bridge/values.yaml (image + dbMigration), with the develop-<sha8>
+# the develop nightly minted for the merge commit, checked on Docker Hub for all four
+# images. Until then the template pulls a rolling tag with Always, and a production
+# environment pins explicitly: global.notificationStackTag: "develop-<sha8>" (or a release
+# tag) in its env.yaml.
 image:
   repository: "pgr-services"
-  tag: "nightly-develop"
-  pullPolicy: Always   # a rolling tag is only re-read with Always
+  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 healthChecks:
   enabled: true

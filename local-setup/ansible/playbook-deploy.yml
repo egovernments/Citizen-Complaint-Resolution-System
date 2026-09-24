@@ -65,25 +65,76 @@
     # notification_stack_tag unless a per-image override pins one of them, and a partial
     # set of pins is the easy way to run a new app on an old schema or a new pgr against
     # an old bridge. Warn rather than fail: a local build legitimately pins some of them
-    # here and the rest in a per-tenant compose overlay, which this cannot see.
-    - name: "preflight — notification images: warn when only some are pinned"
-      when:
-        - enable_novu | default(false)
-        - _notif_pins | length > 0
-        - _notif_pins | length < 4
+    # here and the rest in a per-tenant compose overlay, which this cannot see — and a
+    # box that pins a consistent set must keep deploying.
+    #
+    # NOT gated on enable_novu: pgr-services and pgr-services-db run on every box, so
+    # pinning one of that pair without the other (an old app under develop-head
+    # migrations, or the reverse) matters with notifications off too. The bridge pair
+    # only counts when the notification stack runs.
+    - name: "preflight — notification-stack images: resolve what each one will run"
       vars:
-        _notif_names: "{{ q('ansible.builtin.varnames', '^(pgr_services_image|pgr_services_db_image|novu_bridge_image|novu_bridge_db_image)$') }}"
-        # defined AND non-empty ("" means "use the default", like every *_image var)
-        _notif_pins: >-
-          {{ _notif_names | zip(q('ansible.builtin.vars', *_notif_names, default=''))
-             | selectattr('1') | map(attribute='0') | sort | list }}
+        _stack_tag: "{{ notification_stack_tag | default('', true) or 'nightly-develop' }}"
+        _in_use: >-
+          {{ ['pgr_services_image', 'pgr_services_db_image']
+             + (['novu_bridge_image', 'novu_bridge_db_image'] if (enable_novu | default(false)) else []) }}
+        _repos:
+          pgr_services_image: egovio/pgr-services
+          pgr_services_db_image: egovio/pgr-services-db
+          novu_bridge_image: egovio/novu-bridge
+          novu_bridge_db_image: egovio/novu-bridge-db
+        # "" = unpinned, like every *_image var: the compose default
+        # <repo>:${NOTIFICATION_STACK_TAG:-nightly-develop}.
+        _pins: "{{ q('ansible.builtin.vars', *_in_use, default='') | map('string') | map('trim') | list }}"
+        _defaults: "{{ _in_use | map('extract', _repos) | map('regex_replace', '$', ':' ~ _stack_tag) | list }}"
+      ansible.builtin.set_fact:
+        # Parallel lists over the images this box runs: the host_vars name, whether it is
+        # pinned, and the image it resolves to (the pin, else the default — `select` keeps
+        # the non-empty members of each (pin, default) pair and `first` takes the pin if any).
+        notif_stack_vars: "{{ _in_use }}"
+        notif_stack_pinned: "{{ _in_use | zip(_pins) | selectattr('1') | map(attribute='0') | list }}"
+        notif_stack_effective: "{{ _pins | zip(_defaults) | map('select') | map('first') | list }}"
+
+    - name: "preflight — notification-stack images: warn when only some are pinned"
+      when: (notif_stack_pinned | length) > 0 and (notif_stack_pinned | length) < (notif_stack_vars | length)
+      vars:
+        _pinned: "{{ notif_stack_pinned }}"
+        _unpinned: "{{ notif_stack_vars | difference(notif_stack_pinned) }}"
       ansible.builtin.debug:
         msg: >-
-          WARNING: {{ _notif_pins | join(', ') }} {{ 'is' if (_notif_pins | length) == 1 else 'are' }}
-          pinned in host_vars; the other notification images follow notification_stack_tag
-          ({{ notification_stack_tag | default('nightly-develop') }}). All four must be the
-          same build — pin all four, or none and set notification_stack_tag. Ignore this
-          only if a per-tenant compose overlay pins the rest to the same build.
+          WARNING: {{ _pinned | join(', ') }} {{ 'is' if (_pinned | length) == 1 else 'are' }}
+          pinned in host_vars but {{ _unpinned | join(', ') }}
+          {{ 'follows' if (_unpinned | length) == 1 else 'follow' }} notification_stack_tag
+          ({{ notification_stack_tag | default('', true) or 'nightly-develop' }}).
+          {{ 'pgr-services and pgr-services-db' if not (enable_novu | default(false)) else 'All four' }}
+          must be the same build (an app needs the migrations its -db image carries{{
+          ', and pgr-services thin events need a novu-bridge of the same build' if (enable_novu | default(false)) else '' }}) —
+          pin {{ 'both' if not (enable_novu | default(false)) else 'all four' }} to it, or none and
+          set notification_stack_tag. Ignore this only if a per-tenant compose overlay pins
+          the rest to the same build.
+
+    # A rolling tag is re-resolved on every pull: two deploys of the same host_vars can run
+    # different code, and there is no rollback target. `nightly-develop` is the compose
+    # default only until the release that ships this stack pins an immutable
+    # develop-<sha8> there (build/NIGHTLY-BUILDS.md "Release step").
+    - name: "preflight — notification-stack images: warn about rolling tags"
+      when: _rolling | length > 0
+      vars:
+        # The tag after the last ':' of the last path segment ("host:5000/x/y" has no tag);
+        # a digest (@sha256:) is immutable.
+        _rolling: >-
+          {{ notif_stack_effective
+             | reject('search', '@sha256:')
+             | select('search', '(^[^:]*$|^[^/]*/[^:]*$|:(latest|nightly-[^/]*|develop|main|master)$)')
+             | list }}
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: {{ _rolling | join(', ') }} {{ 'is a' if (_rolling | length) == 1 else 'are' }}
+          ROLLING tag{{ '' if (_rolling | length) == 1 else 's' }}: whatever the registry holds at
+          pull time runs, so two deploys of the same host_vars can run different code and there
+          is no rollback target. For a live deployment pin an immutable tag that exists for
+          all of them: notification_stack_tag: "develop-<sha8>" (or a release tag). Tracking
+          develop on purpose (a dev or nightly box)? Then this is expected.
 
     - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
       ansible.builtin.assert:
@@ -5661,15 +5712,49 @@
     # advertises methods configured in IDENTITY_AUTH_METHODS; broker credentials
     # remain an operator-owned Keycloak concern.
 
+    # A 200 alone proves nothing here: where nginx proxies /auth/ somewhere else (the
+    # stock-dashboard branch sends all of /auth/ to the Novu dashboard), that SPA's
+    # fallback answers the discovery URL with 200 + index.html while login is broken. So
+    # the body must be this realm's OIDC discovery document: JSON whose `issuer` ends in
+    # /realms/<realm>.
     - name: "validate — shared Keycloak realm reachable via /auth/"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/auth/realms/{{ keycloak_organization_realm | default('digit') }}/.well-known/openid-configuration"
         status_code: [200]
+        return_content: true
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      register: keycloak_oidc_discovery
+      # Matched on the raw body, not `.json`: the uri module parses only an
+      # application/json answer, and the point is to judge whatever came back.
+      until: >-
+        (keycloak_oidc_discovery.status | default(0)) == 200
+        and (keycloak_oidc_discovery.content | default('')) is search(
+              '"issuer" *: *"[^"]*/realms/' ~ (keycloak_organization_realm | default('digit') | regex_escape) ~ '"')
       retries: 3
       delay: 5
+      failed_when: false
+      when:
+        - enable_keycloak | default(false)
+        - nginx_features.keycloak | default(false)
+
+    - name: "validate — /auth/ answers with the realm's OIDC discovery document"
+      ansible.builtin.assert:
+        that:
+          - (keycloak_oidc_discovery.status | default(0)) == 200
+          - >-
+            (keycloak_oidc_discovery.content | default('')) is search(
+              '"issuer" *: *"[^"]*/realms/' ~ (keycloak_organization_realm | default('digit') | regex_escape) ~ '"')
+        fail_msg: >-
+          /auth/realms/{{ keycloak_organization_realm | default('digit') }}/.well-known/openid-configuration
+          answered HTTP {{ keycloak_oidc_discovery.status | default('n/a') }}
+          ({{ keycloak_oidc_discovery.content_type | default('no content type') }}) without an
+          OIDC `issuer` for realm {{ keycloak_organization_realm | default('digit') }} — /auth/ is
+          not reaching Keycloak (an SPA fallback answers index.html with 200). Login will fail.
+          Check the /auth/ location in the nginx site. Body starts:
+          {{ (keycloak_oidc_discovery.content | default(keycloak_oidc_discovery.msg | default('')))[:160] }}
+        quiet: true
       when:
         - enable_keycloak | default(false)
         - nginx_features.keycloak | default(false)
@@ -6358,33 +6443,41 @@
     # The truncation is NOT in this repository: the copy is done by
     # POST /mdms-v2/defaultdata/_create inside the prebuilt mdms-v2 image (there is
     # no mdms-v2 source under backend/). See the header of repair-tenant-masters.py
-    # for the full trace. So this step verifies the outcome and copies whatever is
-    # missing back through the ordinary MDMS API. Idempotent: a complete bootstrap
-    # reports "0 row(s) missing" and writes nothing.
+    # for the full trace.
     #
-    # It touches the ACCESS-CONTROL masters (actions, role-actions) ONLY. It runs on
-    # live tenants by default, and every other master legitimately differs from pg's
-    # demo data: an earlier version compared all shared schemas and, had its schema
-    # paging worked, would have copied pg's ComplaintHierarchy, Departments and
-    # Workflow rows into the tenant. Actions match on url, role-actions on
-    # (rolecode, actionid) and only when that id means the same url on both tenants.
+    # REPORT-ONLY BY DEFAULT. This runs on LIVE tenants, and a (role, action) pair pg
+    # grants and the tenant lacks can be deliberate — its own role-action map, GRO/DGRO
+    # scoping — which the script cannot tell from a truncated bootstrap. A copied grant
+    # cannot be taken back (MDMS v2 has no delete). So:
+    #   verify_tenant_masters  (default true)  compare and report; never writes
+    #   repair_tenant_masters  (default false) also copy the missing rows — opt in, per
+    #                                          run or per tenant, after reading the report
+    # The truncation signature (exactly 500 role-actions while pg has more) is reported
+    # with the exact opt-in command, and does NOT turn writing on by itself: the 500
+    # rule is a heuristic, and a missed repair costs an explicit 403 plus one re-run,
+    # where a wrong one silently widens access on a live tenant.
+    #
+    # It touches the ACCESS-CONTROL masters (actions, role-actions) ONLY: every other
+    # master legitimately differs from pg's demo data. Actions match on url,
+    # role-actions on (rolecode, actionid) and only when that id means the same url on
+    # both tenants.
     #
     # Runs BEFORE notif-seed on purpose — notif-seed writes access-control rows of
     # its own and would 403 on a truncated tenant.
     - name: "master-repair — stage tenant-master repair script"
       when:
         - state_root != 'pg'
-        - verify_tenant_masters | default(true)
+        - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../scripts/repair-tenant-masters.py"
         dest: "{{ digit_dir }}/repair-tenant-masters.py"
         mode: '0755'
 
-    - name: "master-repair — compare {{ state_root }}'s access-control rows against pg and restore missing ones"
+    - name: "master-repair — compare {{ state_root }}'s access-control rows with pg's"
       when:
         - state_root != 'pg'
-        - verify_tenant_masters | default(true)
+        - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
       ansible.builtin.shell: |
         cd {{ digit_dir }}
@@ -6394,39 +6487,82 @@
         DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
         DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
         DIGIT_LOGIN_TENANT={{ state_root }} \
-        APPLY={{ '1' if (repair_tenant_masters | default(true)) else '0' }} \
+        APPLY={{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }} \
+        OPT_IN_HINT={{ master_repair_opt_in | quote }} \
         python3 repair-tenant-masters.py
+      vars:
+        master_repair_opt_in: >-
+          ./deploy.sh {{ inventory_hostname }} -e repair_tenant_masters=true
+          --tags master-repair,notifications
       register: master_repair
       changed_when: "'ACL-CHANGED' in (master_repair.stdout | default(''))"
+      # Report-only never fails a deploy: the report IS the result. An opt-in run that
+      # cannot write fails below (RBAC_BLOCKED).
       failed_when: false
 
     - name: "master-repair — result"
       when:
         - state_root != 'pg'
-        - verify_tenant_masters | default(true)
+        - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
       ansible.builtin.debug:
         msg: "{{ master_repair.stdout_lines | default(['(no output)']) }}"
 
+    - name: "master-repair — ACTION: {{ state_root }} looks like a truncated bootstrap (report only, nothing written)"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true) | bool
+        - not (repair_tenant_masters | default(false) | bool)
+        - "'TRUNCATION-SIGNATURE' in (master_repair.stdout | default(''))"
+      tags: ['master-repair']
+      ansible.builtin.debug:
+        msg: >-
+          {{ state_root }} has exactly 500 ACCESSCONTROL-ROLEACTIONS rows while pg has more —
+          the shape the truncated tenant bootstrap leaves. Nothing was written: this deploy
+          does not grant permissions on its own. If the missing rows listed above are ones
+          this tenant should have (a freshly bootstrapped tenant: yes), restore them with
+          `./deploy.sh {{ inventory_hostname }} -e repair_tenant_masters=true --tags master-repair,notifications`
+          (or set repair_tenant_masters: true in host_vars for one run). Until then the
+          configurator's MDMS writes, and the notification seed below, may be refused (403).
+
     - name: "master-repair — restart egov-accesscontrol after restoring role-actions"
       when:
         - state_root != 'pg'
-        - verify_tenant_masters | default(true)
+        - verify_tenant_masters | default(true) | bool
         - "'ACL-CHANGED' in (master_repair.stdout | default(''))"
       tags: ['master-repair']
       ansible.builtin.shell: >-
-        docker compose {{ compose_files }} restart egov-accesscontrol
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} restart egov-accesscontrol
       args:
         chdir: "{{ digit_dir }}"
       changed_when: true
 
-    # RBAC_BLOCKED means the repair could not run because the permission needed to
-    # restore the permissions was itself among the rows dropped. Nothing downstream
-    # will work, so say so instead of letting the deploy finish green.
+    # Every write after this — the notification seed's first `_create` above all — goes
+    # through Kong's RBAC, i.e. through egov-accesscontrol. A call that lands while it is
+    # still booting gets 403/5xx and fails exactly the run where the repair did its job.
+    # Same wait as the notif-seed restarts below.
+    - name: "master-repair — wait for egov-accesscontrol to come back"
+      when:
+        - state_root != 'pg'
+        - verify_tenant_masters | default(true) | bool
+        - "'ACL-CHANGED' in (master_repair.stdout | default(''))"
+      tags: ['master-repair']
+      ansible.builtin.shell: >-
+        curl -sf -o /dev/null http://127.0.0.1:{{ upstream_kong_port }}/access/health
+      register: accesscontrol_ready_repair
+      retries: 60
+      delay: 5
+      until: accesscontrol_ready_repair.rc == 0
+      changed_when: false
+
+    # RBAC_BLOCKED means an OPTED-IN repair could not write because the permission needed
+    # to restore the permissions was itself among the rows dropped. Report-only never
+    # writes, so it never gets here.
     - name: "master-repair — fail when the tenant cannot be repaired through the API"
       when:
         - state_root != 'pg'
-        - verify_tenant_masters | default(true)
+        - verify_tenant_masters | default(true) | bool
+        - repair_tenant_masters | default(false) | bool
         - not (tolerate_bootstrap_failures | default(false))
         - "'RBAC_BLOCKED' in (master_repair.stdout | default(''))"
       tags: ['master-repair']
@@ -6560,7 +6696,37 @@
         python3 seed-notifications.py
       register: notif_seed_acl
       changed_when: "'ACL-CHANGED' in (notif_seed_acl.stdout | default(''))"
-      failed_when: "notif_seed_acl.rc != 0 or 'DONE' not in (notif_seed_acl.stdout | default(''))"
+      # Judged by the next two tasks, so the failure says what to do about it.
+      failed_when: false
+
+    # A role the tenant does not have is NOT a failure: its role-actions are skipped and
+    # listed (a tenant's role set is its own). Only an action row, or a role-action for a
+    # role the tenant has, can fail this phase.
+    - name: "notif-seed — WARNING: role-actions skipped for roles this tenant does not have"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'ACL-ROLES-ABSENT' in (notif_seed_acl.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: "{{ notif_seed_acl.stdout_lines | default([]) | select('search', 'ACL-ROLES-ABSENT') | list }}"
+
+    - name: "notif-seed — fail: the access-control rows could not be written"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - (notif_seed_acl.rc | default(1)) != 0 or 'DONE' not in (notif_seed_acl.stdout | default(''))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.fail:
+        msg: >-
+          The notification access-control rows were not written (exit
+          {{ notif_seed_acl.rc | default('n/a') }}), and every notification write after them
+          needs them. Exit 3 = refused with 403: this login's roles have no role-action for
+          /mdms-v2/v2/_create/ACCESSCONTROL-* — on a tenant whose bootstrap was truncated
+          (see "master-repair" above) restore them with
+          `./deploy.sh {{ inventory_hostname }} -e repair_tenant_masters=true --tags master-repair,notifications`.
+          Exit 2 = an action row failed, a role-action for a role the tenant HAS failed, or
+          MDMS could not be read. Lines:
+          {{ notif_seed_acl.stdout_lines | default([]) | select('search', 'FORBIDDEN|FAILED|UNREADABLE|ABSENT|ERROR|access-control') | list }}
+          {{ (notif_seed_acl.stderr | default(''))[-600:] }}
 
     # egov-accesscontrol loads ACCESSCONTROL-ROLEACTIONS into an in-memory cache at
     # startup. Rows created just now are invisible to the running process, so Kong's

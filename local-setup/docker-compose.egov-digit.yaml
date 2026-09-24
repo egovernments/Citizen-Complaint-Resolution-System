@@ -1732,7 +1732,10 @@ services:
     # them), and each app needs the Flyway migrations its -db image carries.
     # `nightly-develop` is what the develop nightly publishes for all four
     # (build/NIGHTLY-BUILDS.md); it moves per image, so a live deployment pins an
-    # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars.
+    # immutable develop-<sha8> or release tag via notification_stack_tag in host_vars
+    # (the deploy warns while it resolves to a rolling tag). The default itself is a
+    # stopgap: the release pins develop-<sha8> here, in the four image lines at once
+    # (build/NIGHTLY-BUILDS.md "Release step").
     # PGR_SERVICES_IMAGE still overrides this one image (e.g. a local build) — then
     # pin the other three to the same build yourself.
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:${NOTIFICATION_STACK_TAG:-nightly-develop}}

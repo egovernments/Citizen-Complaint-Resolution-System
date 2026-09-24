@@ -454,17 +454,102 @@ describe('notification stack images come from one build', () => {
   const migrations = read('local-setup/docker-compose.migrations.yml');
   const env = read('local-setup/ansible/templates/digit.env.j2');
 
-  test.each([
+  const CHARTS = [
+    'devops/deploy-as-code/charts/urban/pgr-services',
+    'devops/deploy-as-code/charts/common-services/novu-bridge',
+  ];
+  // The app image (top-level `image:`) and the Flyway image (initContainers.dbMigration
+  // .image) of a chart, read from its values.yaml by layout (no YAML parser is a declared
+  // dependency here). A null means the layout moved: fix the pattern, do not drop the test.
+  const chartImages = (dir: string) => {
+    const v = read(`${dir}/values.yaml`);
+    const app = v.match(/^image:\n {2}repository: "[^"]+"\n {2}tag: "([^"]+)"[^\n]*\n {2}pullPolicy: (\S+)/m);
+    const db = v.match(/^ {4}image:\n {6}repository: "[^"]+-db"\n {6}tag: "([^"]+)"[^\n]*\n {6}pullPolicy: (\S+)/m);
+    expect(app).not.toBeNull();
+    expect(db).not.toBeNull();
+    return { app: { tag: app![1], pullPolicy: app![2] }, db: { tag: db![1], pullPolicy: db![2] } };
+  };
+  const images: Array<[string, string, string]> = [
     [base, 'PGR_SERVICES_IMAGE', 'egovio/pgr-services'],
     [base, 'NOVU_BRIDGE_IMAGE', 'egovio/novu-bridge'],
     [migrations, 'PGR_SERVICES_DB_IMAGE', 'egovio/pgr-services-db'],
     [migrations, 'NOVU_BRIDGE_DB_IMAGE', 'egovio/novu-bridge-db'],
-  ])('%#: %s defaults to the shared NOTIFICATION_STACK_TAG', (file, override, image) => {
-    expect(file).toContain(`image: \${${override}:-${image}:\${NOTIFICATION_STACK_TAG:-nightly-develop}}`);
+  ];
+  // The default tag of one image line: ${OVERRIDE:-<image>:${NOTIFICATION_STACK_TAG:-<tag>}}.
+  const composeDefault = (file: string, override: string, image: string) => {
+    const m = file.match(new RegExp(
+      `image: \\$\\{${override}:-${image.replace(/[/.]/g, '\\$&')}:\\$\\{NOTIFICATION_STACK_TAG:-([^}]+)\\}\\}`));
+    return m ? m[1] : null;
+  };
+
+  test.each(images)('%#: %s defaults to the shared NOTIFICATION_STACK_TAG', (file, override, image) => {
+    expect(composeDefault(file, override, image)).not.toBeNull();
     expect(env).toMatch(new RegExp(`^${override}=\\{\\{ `, 'm'));
+  });
+
+  // The release step (build/NIGHTLY-BUILDS.md) swaps the stopgap rolling default for an
+  // immutable develop-<sha8> in SIX places — four compose lines and two charts. Bumping
+  // only some of them is exactly the split build this block exists to prevent.
+  test('all four images default to ONE tag, in compose and in both Helm charts', () => {
+    const tags = new Set(images.map(([file, override, image]) => composeDefault(file, override, image)));
+    for (const dir of CHARTS) {
+      const { app, db } = chartImages(dir);
+      tags.add(app.tag);
+      tags.add(db.tag);
+    }
+    expect([...tags]).toHaveLength(1);
   });
 
   test('the shared tag is rendered from host_vars', () => {
     expect(env).toContain("NOTIFICATION_STACK_TAG={{ notification_stack_tag | default('') }}");
+  });
+
+  // Kanav/Vinoth review of #2097: the charts pulled a rolling tag with Always while
+  // env.yaml forced `nightly-develop` over any chart pin. The charts now default to
+  // IfNotPresent and switch to Always only for a rolling tag, and env.yaml leaves the tag
+  // to the charts unless a deployment pins one.
+  test.each(CHARTS)('%s pulls IfNotPresent unless the tag is rolling', (chartDir) => {
+    const { app, db } = chartImages(chartDir);
+    expect(app.pullPolicy).toBe('IfNotPresent');
+    expect(db.pullPolicy).toBe('IfNotPresent');
+    const tpl = read(`${chartDir}/templates/deployment.yaml`);
+    expect(tpl).toContain('regexMatch "^(latest|nightly-.*|develop|main|master)$"');
+    expect(tpl).toContain('$_ := set $img "pullPolicy" "Always"');
+  });
+
+  test('env.yaml does not force a rolling notificationStackTag over the chart pins', () => {
+    const m = read('devops/deploy-as-code/charts/environments/env.yaml').match(/^ {2}notificationStackTag: "([^"]*)"/m);
+    expect(m).not.toBeNull();
+    expect(m![1]).not.toMatch(/^(latest|nightly-.*|develop|main|master)$/);
+  });
+});
+
+describe('tenant-master repair is report-only unless opted in', () => {
+  // Kanav review of #2097 (4079418087): the repair ran with APPLY=1 by default on every
+  // non-pg deploy, so a live tenant that deliberately withheld grants got pg's back.
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const script = read('local-setup/scripts/repair-tenant-masters.py');
+
+  test('the playbook writes only for repair_tenant_masters: true', () => {
+    expect(playbook).toContain("APPLY={{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }}");
+    expect(playbook).not.toMatch(/repair_tenant_masters \| default\(true\)/);
+  });
+
+  test('the script itself defaults to report-only', () => {
+    expect(script).toContain('APPLY = os.environ.get("APPLY", "0")');
+  });
+
+  test('RBAC_BLOCKED fails the deploy only on an opted-in run', () => {
+    const task = playbook.slice(playbook.indexOf('master-repair — fail when the tenant cannot be repaired'));
+    const when = task.slice(0, task.indexOf('ansible.builtin.fail'));
+    expect(when).toContain('repair_tenant_masters | default(false) | bool');
+  });
+
+  test('a restart of egov-accesscontrol is followed by a readiness wait', () => {
+    const restart = playbook.indexOf('master-repair — restart egov-accesscontrol');
+    const wait = playbook.indexOf('master-repair — wait for egov-accesscontrol to come back');
+    expect(restart).toBeGreaterThan(-1);
+    expect(wait).toBeGreaterThan(restart);
+    expect(playbook.slice(wait, wait + 600)).toContain('/access/health');
   });
 });

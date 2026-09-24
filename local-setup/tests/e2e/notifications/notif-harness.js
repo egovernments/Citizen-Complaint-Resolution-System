@@ -56,6 +56,32 @@ const NOVU_API_URL = process.env.NOVU_API_URL || 'http://localhost:14002';
 // Owner-authorized test recipients (defaults are the owner's own contacts).
 const TEST_PHONE = process.env.TEST_PHONE || '+919415787824';
 const TEST_EMAIL = process.env.TEST_EMAIL || 'contact@theflywheel.in';
+// TEST_PHONE without its country code — what user-otp takes as `mobileNumber`. The code
+// cannot be inferred from the digits: country codes are 1-3 digits and a greedy
+// /^\+\d{1,3}/ also eats the first digit of a 1- or 2-digit code's number (+91 94157…
+// became 415787824). So it is configuration: TEST_PHONE_COUNTRY_CODE (default 91, the
+// default TEST_PHONE's), or TEST_PHONE_NATIONAL outright.
+const TEST_PHONE_COUNTRY_CODE = String(process.env.TEST_PHONE_COUNTRY_CODE || '91').replace(/\D/g, '');
+function nationalNumber(phone, countryCode) {
+  const digits = String(phone).replace(/[^\d+]/g, '');
+  if (!digits.startsWith('+')) return digits;  // already national
+  if (!digits.startsWith('+' + countryCode)) {
+    throw new Error(`TEST_PHONE ${phone} does not start with +${countryCode}: set TEST_PHONE_COUNTRY_CODE ` +
+      '(or TEST_PHONE_NATIONAL) to match it');
+  }
+  return digits.slice(1 + countryCode.length);
+}
+// Resolved once, never thrown at load: only the OTP case needs it, and it FAILs with this
+// error instead of taking every other case down with the harness.
+let TEST_PHONE_NATIONAL = '';
+let TEST_PHONE_NATIONAL_ERROR = '';
+try {
+  TEST_PHONE_NATIONAL = process.env.TEST_PHONE_NATIONAL
+    ? String(process.env.TEST_PHONE_NATIONAL).replace(/\D/g, '')
+    : nationalNumber(TEST_PHONE, TEST_PHONE_COUNTRY_CODE);
+} catch (e) {
+  TEST_PHONE_NATIONAL_ERROR = e.message;
+}
 
 // Employee actor (for auth-gated flows + role fan-out). Optional for read-only cases.
 const EMP_USER = process.env.E2E_EMP_USER;
@@ -326,7 +352,8 @@ async function guard(id, fn) {
 module.exports = {
   // config
   BASE, TENANT, STATE_TENANT, ROOT, BUSINESS_SERVICE, SERVICE_CODE, SERVICE_NAME, LOCALITY,
-  TEST_PHONE, TEST_EMAIL, EMP_USER, EMP_PASS, NB_PREFIX, NOVU_API_URL, NOVU_API_KEY,
+  TEST_PHONE, TEST_PHONE_COUNTRY_CODE, TEST_PHONE_NATIONAL, TEST_PHONE_NATIONAL_ERROR, nationalNumber,
+  TEST_EMAIL, EMP_USER, EMP_PASS, NB_PREFIX, NOVU_API_URL, NOVU_API_KEY,
   // primitives
   sleep, psql, psqlRaw, post, get, RI, token,
   // provider api

@@ -605,14 +605,18 @@ novu_bridge_smscountry_password: ""
 # build: pgr-services emits thin events only a bridge of the same build resolves
 # (an older bridge dead-letters them, unrecoverably), and each app needs the
 # Flyway migrations its -db image carries. This one tag moves all four.
-# Unset = "nightly-develop", the rolling tag the develop nightly publishes for all
-# four (build/NIGHTLY-BUILDS.md). That tag moves PER IMAGE and can briefly point
-# at different commits for different images, so a live deployment pins an
-# immutable tag that exists for all four: a release tag, or a develop-<sha8>.
+# Unset = the compose default, for now "nightly-develop": the rolling tag the develop
+# nightly publishes for all four, a stopgap until a release pins an immutable one
+# (build/NIGHTLY-BUILDS.md "Release step"). That tag moves PER IMAGE and can briefly
+# point at different commits for different images, so a live deployment pins an
+# immutable tag that exists for all four: a release tag, or a develop-<sha8>. The
+# deploy warns while any image it runs resolves to a rolling tag.
 # notification_stack_tag: "develop-<sha8>"
 #
 # Per-image overrides — for a local or VPC-registry build. Each wins over the tag
-# above for ITS image only, so pin all four to the same build or none:
+# above for ITS image only, so pin all four to the same build or none. The deploy
+# warns when only some are pinned: pgr_services_image + pgr_services_db_image on
+# every box (both run with notifications off too), all four when enable_novu is on.
 # pgr_services_image:     "10.0.0.4:5000/egovio/pgr-services:develop-<sha8>"
 # pgr_services_db_image:  "10.0.0.4:5000/egovio/pgr-services-db:develop-<sha8>"
 # novu_bridge_image:      "10.0.0.4:5000/egovio/novu-bridge:develop-<sha8>"
@@ -912,6 +916,28 @@ grafana_anonymous_enabled: false
 # tolerate_bootstrap_failures: false    # true = keep going past a failed tenant bootstrap.
 #                                       # Leaves a half-seeded tenant; use only to get
 #                                       # past a known-benign failure you have diagnosed.
+#
+# Tenant access-control check (non-pg state roots only). A new tenant's role-actions
+# are copied from pg, and that copy can come up short (exactly 500 rows, a paging
+# bug in the mdms-v2 image): the admin roles then 403 on configurator writes.
+# verify_tenant_masters: true           # compare the tenant's ACCESSCONTROL actions /
+#                                       # role-actions with pg's on every deploy and
+#                                       # REPORT the gap ("master-repair — result").
+#                                       # Never writes; never fails a deploy.
+# repair_tenant_masters: false          # true = also COPY the missing rows from pg (and
+#                                       # restart egov-accesscontrol). Opt-in because
+#                                       # a gap can be deliberate — a tenant's own
+#                                       # role-action map, GRO/DGRO scoping — and a
+#                                       # copied grant cannot be removed by a deploy.
+#                                       # Read the report first. The deploy prints the
+#                                       # one-off command when the tenant shows the
+#                                       # truncation signature:
+#                                       #   ./deploy.sh <tenant> -e repair_tenant_masters=true \
+#                                       #     --tags master-repair,notifications
+#                                       # An opted-in run that cannot write (the admin
+#                                       # role lost the permission to restore the
+#                                       # permissions) fails, unless
+#                                       # tolerate_bootstrap_failures is true.
 
 # ── Extra UI settings ──
 # city_tenant: ""                # the tenant the citizen map falls back to when a

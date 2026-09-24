@@ -193,13 +193,20 @@ nightly — **both**, or the box silently keeps running something else:
    The notification stack is the exception: `pgr-services`, `pgr-services-db`,
    `novu-bridge` and `novu-bridge-db` must come from **one build**, so they share
    one tag, `notification_stack_tag` (compose `NOTIFICATION_STACK_TAG`, Helm
-   `global.notificationStackTag`), which already defaults to Docker Hub's
-   `nightly-develop`. `nightly-develop` moves per image — two overlapping runs can
-   leave it on different commits for different images — so a box you care about
-   pins an immutable `develop-<sha8>` that exists for all four. To pull them from
-   the VPC registry instead, pin all four per-image vars (`pgr_services_image`,
-   `pgr_services_db_image`, `novu_bridge_image`, `novu_bridge_db_image`) to the
-   same build; the deploy warns when only some are pinned.
+   `global.notificationStackTag`). Its shipped default is, for now, Docker Hub's
+   rolling `nightly-develop` — see [Release step](#release-step-pin-the-notification-stack)
+   below for why and for when that changes. `nightly-develop` moves per image — two
+   overlapping runs can leave it on different commits for different images — so a
+   box you care about pins an immutable `develop-<sha8>` that exists for all four.
+   To pull them from the VPC registry instead, pin all four per-image vars
+   (`pgr_services_image`, `pgr_services_db_image`, `novu_bridge_image`,
+   `novu_bridge_db_image`) to the same build. The deploy warns — with or without
+   `enable_novu` — when the images it will run resolve to a rolling tag, and when
+   only some of the ones it runs are pinned (`pgr_services_image` +
+   `pgr_services_db_image` always; the bridge pair too when `enable_novu` is on).
+   Helm pulls these images `IfNotPresent`, switching to `Always` only while the
+   effective tag is a rolling one (`nightly-*`, `latest`, `develop`, `main`,
+   `master`).
 
 2. **Turn the matching `build_*` flag OFF.** ⚠️ This is the trap. When
    `build_digit_ui` / `build_mcp` / `build_default_data_handler`
@@ -210,6 +217,43 @@ nightly — **both**, or the box silently keeps running something else:
 
 Anything left unset keeps the prior compose default — pinning is opt-in, so this
 pipeline changes nothing until a deployment opts a service in.
+
+### Release step: pin the notification stack
+
+Until the change that introduced the thin-event notification stack (PR #2097 and the
+PRs it is stacked on) has merged to `develop` and been built, **no immutable tag
+containing it exists**: the only tag that will hold it is the rolling `nightly-develop`.
+So that is the shipped default for the four notification-stack images, as a stopgap —
+and every deploy says so (the Ansible preflight warns about the rolling tag; Helm pulls
+it `Always`). Every other CCRS image default is an immutable tag; this one must become
+one too, in the first release after the merge:
+
+1. After the merge, let the develop nightly (or a `build.yml` dispatch on `develop`)
+   build the merge commit. Note its `develop-<sha8>` — the first 8 hex chars of the
+   commit it built.
+2. Check that tag exists on Docker Hub for **all four** images:
+   `egovio/pgr-services`, `egovio/pgr-services-db`, `egovio/novu-bridge`,
+   `egovio/novu-bridge-db` (a failed leg leaves one of them missing).
+3. Replace `nightly-develop` with that tag in the **six** defaults, in one commit:
+   - `local-setup/docker-compose.egov-digit.yaml` — `pgr-services` and `novu-bridge`
+     (`${NOTIFICATION_STACK_TAG:-…}`);
+   - `local-setup/docker-compose.migrations.yml` — `pgr-services-migration` and
+     `novu-bridge-migration`;
+   - `devops/deploy-as-code/charts/urban/pgr-services/values.yaml` and
+     `devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml` —
+     `image.tag` and `initContainers.dbMigration.image.tag` (both marked
+     `RELEASE STEP`).
+   Also `enable-notifications.sh`'s `NOTIFICATION_STACK_TAG` default. The static test
+   `all four images default to ONE tag, in compose and in both Helm charts`
+   (`local-setup/tests/static/deployment-contracts.test.ts`) fails if the six
+   disagree.
+4. Leave `global.notificationStackTag` in `charts/environments/env.yaml` empty — it
+   overrides the chart pins when set — and update the `Default` column of the tag
+   table in `docs/2.20/notifications/migration.md`.
+
+Later releases bump the same six values to the new build's tag. Boxes that must track
+`develop` keep setting `notification_stack_tag: nightly-develop` (or Helm
+`global.notificationStackTag: nightly-develop`) themselves.
 
 ### Verify what's actually running
 

@@ -83,7 +83,8 @@ NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct por
 # written to .env as NOTIFICATION_STACK_TAG, which the compose files use as the default
 # tag of all four, and the two app images below derive from it. `nightly-develop` is the
 # rolling tag the develop nightly publishes; it moves per image, so pin an immutable
-# develop-<sha8> or release tag that exists for all four on a box you care about.
+# develop-<sha8> or release tag that exists for all four on a box you care about. The
+# default is a stopgap until the release pins one (build/NIGHTLY-BUILDS.md "Release step").
 NOTIFICATION_STACK_TAG="${NOTIFICATION_STACK_TAG:-nightly-develop}"
 NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:$NOTIFICATION_STACK_TAG}"
 NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-$NOVU_BRIDGE_IMAGE}"

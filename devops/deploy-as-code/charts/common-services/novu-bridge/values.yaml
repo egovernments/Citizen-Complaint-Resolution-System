@@ -18,20 +18,21 @@ initContainers:
     # Same build as the app image below — see "One build" there.
     image:
       repository: "novu-bridge-db"
-      tag: "nightly-develop"
-      pullPolicy: Always   # a rolling tag is only re-read with Always
+      tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> — see "One build" below
+      pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 
 # Container Configs
 # One build for the notification stack: novu-bridge, novu-bridge-db, pgr-services and
 # pgr-services-db MUST come from the same build (the bridge's dispatch-log migrations
 # ship in novu-bridge-db; pgr-services' thin events need a bridge of the same build).
-# global.notificationStackTag in charts/environments/env.yaml sets all four at once
-# (templates/deployment.yaml); these tags are the fallback when it is unset. See
-# charts/urban/pgr-services/values.yaml for the tag policy.
+# global.notificationStackTag in charts/environments/env.yaml, when set, moves all four at
+# once (templates/deployment.yaml); otherwise these chart defaults apply. `nightly-develop`
+# is a stopgap until the release step pins develop-<sha8> here and in
+# urban/pgr-services/values.yaml — see the tag policy there.
 image:
   repository: "novu-bridge"
-  tag: "nightly-develop"
-  pullPolicy: Always   # a rolling tag is only re-read with Always
+  tag: "nightly-develop"   # RELEASE STEP: develop-<sha8> of the merge build
+  pullPolicy: IfNotPresent   # Always while the tag is rolling (templates/deployment.yaml)
 replicas: "1"
 httpPort: 8080
 appType: "java-spring"
@@ -73,8 +74,9 @@ env: |
   # Tenant a core SMS (login OTP, password reset) is attributed to when the
   # producer does not carry one. Hardcoding "pg" sent every OTP on a non-pg
   # deployment to a tenant that does not exist, so the channel policy lookup
-  # found nothing and the OTP was dropped. Read the deployment's real state root,
-  # the same value compose now takes from ${STATE_LEVEL_TENANT_ID:-pg}.
+  # found nothing and the OTP was dropped. Read the deployment's real state root
+  # from egov-config (compose gets the same value from the playbook, which rewrites
+  # the literal `pg` there to state_root after the tenant bootstrap).
   - name: NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT
     valueFrom:
       configMapKeyRef:

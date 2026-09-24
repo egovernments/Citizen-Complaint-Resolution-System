@@ -54,7 +54,9 @@ and "upgrade" work from the one task. They run in this order:
 
   1. access    ACCESSCONTROL-ACTIONS-TEST.actions-test + ACCESSCONTROL-ROLEACTIONS
                .roleactions rows for the NotificationChannel master, the five new
-               NOTIFICATIONS.* masters and the novu-bridge endpoints. SQL migrations
+               NOTIFICATIONS.* masters and the novu-bridge endpoints. Role-actions only for
+               roles the tenant has (ACCESSCONTROL-ROLES.roles); the rest are listed as
+               ACL-ROLES-ABSENT, not failed. SQL migrations
                for MDMS do not run on deployed boxes, so local-setup/db/full-dump.sql
                alone never reaches an existing install; these rows are how it gets
                there. FIRST, because every write below needs them: a data write that
@@ -78,7 +80,8 @@ and "upgrade" work from the one task. They run in this order:
                A held-back routing write leaves the tenant "fresh", so a re-run finishes it.
   6. verify    row counts per master, on both namespaces.
 
-Exit: 0 done · 2 a core master failed · 3 at least one write was refused with 403
+Exit: 0 done · 2 a core master failed, or MDMS could not be read (a schema search that
+fails is reported as unreadable, never as "absent") · 3 at least one write was refused with 403
 (restart egov-accesscontrol and run the data phase again — the playbook does this once
 by itself) or, with NOTIF_SEED_PHASE=all, access-control rows were just created.
 
@@ -203,6 +206,10 @@ FORBIDDEN = []
 
 ACTION_SCHEMA = "ACCESSCONTROL-ACTIONS-TEST.actions-test"
 ROLEACTION_SCHEMA = "ACCESSCONTROL-ROLEACTIONS.roleactions"
+ROLES_SCHEMA = "ACCESSCONTROL-ROLES.roles"
+# {role: [action id, ...]} the last access phase did not grant because the tenant has no
+# such role (seed_access_control). Reported, never a failure.
+ACL_ROLES_ABSENT = {}
 
 # ── Phase 1 provider catalog: access control ────────────────────────────────
 # Kong's enforce_rbac authorizes every protected URI through egov-accesscontrol,
@@ -337,15 +344,41 @@ def ri(tok):
     return {"RequestInfo": {"apiId": "notif-seed", "authToken": tok}}
 
 
+class SchemaUnreadable(RuntimeError):
+    """The schema search itself failed — NOT the same as the schema being absent.
+
+    `status` is the HTTP status when there was one (403 = Kong refused the search), else
+    None (MDMS/Kong unreachable, or an answer that was not JSON)."""
+
+    def __init__(self, code, tenant, detail, status=None):
+        super().__init__("schema search for %s at %s failed: %s" % (code, tenant, detail))
+        self.status = status
+
+
 def find_schema(tok, code, tenant=None):
-    """The live SchemaDefinition for `code`, or None."""
-    body = ri(tok); body["SchemaDefCriteria"] = {"tenantId": tenant or TENANT, "codes": [code]}
+    """The live SchemaDefinition for `code`, or None when the tenant has no such schema.
+
+    Raises SchemaUnreadable when the search fails. It used to return None then too, so a
+    gateway that was still booting read as "schema absent" and the caller printed "tenant
+    bootstrap has not run?" about a tenant that was fine. mdms-v2 answers an absent code
+    with 2xx and an empty list, so only a real failure raises."""
+    tenant = tenant or TENANT
+    body = ri(tok); body["SchemaDefCriteria"] = {"tenantId": tenant, "codes": [code]}
     try:
         r = json.load(_post("/mdms-v2/schema/v1/_search", body, tok))
-        defs = r.get("SchemaDefinitions") or []
-        return defs[0] if defs else None
-    except urllib.error.HTTPError:
-        return None
+    except urllib.error.HTTPError as e:
+        raise SchemaUnreadable(code, tenant, "HTTP %s" % e.code, e.code)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise SchemaUnreadable(code, tenant, "no answer (%s) — MDMS/Kong unreachable" % e)
+    defs = r.get("SchemaDefinitions") or []
+    return defs[0] if defs else None
+
+
+def schema_properties(sdef):
+    """(property names, closed) of a stored SchemaDefinition. closed = the definition sets
+    additionalProperties:false, i.e. mdms-v2 REJECTS a row carrying any other field."""
+    defn = (sdef or {}).get("definition") or {}
+    return set(defn.get("properties") or {}), defn.get("additionalProperties") is False
 
 
 def _strip_empty_ref(sdef):
@@ -694,11 +727,18 @@ def seed_fresh_defaults(tok, tenant=None):
     planned, origin, missing = shipped_default_rows(tok, tenant)
     for name in missing:
         print("  defaults: NO staged default file %s in %s" % (name, DATA_DIR))
-    if missing and any(name.startswith(("NOTIFICATIONS.Template", "NOTIFICATIONS.Routing"))
-                       for name in missing):
-        # Without templates or routing a fresh tenant would get half a configuration.
-        # Write nothing; the tenant stays fresh and a re-run with the files staged seeds it.
-        return 0, 0, 1, False
+    if missing:
+        # Every file here is either Routing or something write_new_namespace holds Routing
+        # back for (ROUTING_PREREQUISITES: the catalogue, Template, ProviderTemplate). A
+        # MISSING file is not a failed write, though: it plans zero rows, fails nothing, and
+        # so would let the first Routing row through — the one-way switch (MDMS v2 has no
+        # delete) — onto a namespace without, say, its WhatsApp ProviderTemplates, leaving
+        # WhatsApp NB_TEMPLATE_NOT_APPROVED for good. So any missing file stops the seed
+        # before its first write; the tenant stays fresh and a re-run with the files
+        # staged seeds it.
+        print("  defaults: NOT SEEDED — %s missing; writing the rest would let Routing switch "
+              "%s onto an incomplete configuration" % (", ".join(missing), tenant or TENANT))
+        return 0, 0, len(missing), False
     print("  defaults: event catalogue from %s" % origin)
     result = write_new_namespace(tok, planned, tenant, label="defaults")
     created = sum(s["created"] for s in result["by_code"].values())
@@ -883,6 +923,53 @@ def channel_target(legacy_records, new_records, state):
     return LEGACY_CHANNEL if state == "legacy" else NEW_CHANNEL
 
 
+def fit_rows_to_stored_schema(tok, code, rows, tenant=None):
+    """(rows to write, rows that cannot be written) for `code`'s STORED schema at `tenant`.
+
+    mdms-v2 validates a row against the definition stored at the tenant, not the committed
+    file, and cannot update a stored definition. A tenant whose NotificationChannel schema
+    was stored by an earlier release (additionalProperties:false, no `provider`) therefore
+    rejects every row that carries `provider` — even `provider: null` — and the channel seed
+    used to abort the deploy there, leaving the tenant with no channel rows at all. So a
+    field the stored definition does not declare is left out when its value is empty (null
+    or ""), which is what "no provider selected" means anyway. A row that would lose a
+    non-empty value is not written: writing it without the value would change what it says.
+
+    Returns (None, []) when the stored schema cannot be read or is absent — the caller
+    writes nothing then.
+    """
+    if not rows:
+        return [], []
+    try:
+        stored = find_schema(tok, code, tenant)
+    except SchemaUnreadable as exc:
+        print("  channel policy: %s — no channel rows written" % exc)
+        return None, []
+    if stored is None:
+        print("  channel policy: schema %s ABSENT at %s — no channel rows written"
+              % (code, tenant or TENANT))
+        return None, []
+    allowed, closed = schema_properties(stored)
+    if not closed or not allowed:
+        return list(rows), []
+    fitted, unwritable, dropped = [], [], set()
+    for row in rows:
+        extra = [k for k in row if k not in allowed]
+        lossy = [k for k in extra if row[k] not in (None, "")]
+        if lossy:
+            unwritable.append(row)
+            print("  channel %-8s NOT WRITTEN — the %s schema stored at %s has no %s, and this "
+                  "row sets it" % (_channel_code(row), code, tenant or TENANT, ", ".join(lossy)))
+            continue
+        dropped.update(extra)
+        fitted.append({k: v for k, v in row.items() if k in allowed})
+    if dropped:
+        print("  channel policy: the %s schema stored at %s predates %s (an earlier release; "
+              "mdms-v2 cannot update it) — left out of the rows written, all of them empty"
+              % (code, tenant or TENANT, ", ".join(sorted(dropped))))
+    return fitted, unwritable
+
+
 def seed_channel_policy(tok, state, tenant=None):
     """Create the channel rows decide_channel_rows asks for, in channel_target's master.
 
@@ -897,8 +984,12 @@ def seed_channel_policy(tok, state, tenant=None):
         return 0, 0, 1, True
     legacy = search_rows(tok, LEGACY_CHANNEL, tenant)
     new = search_rows(tok, NEW_CHANNEL, tenant)
-    if new is None and find_schema(tok, NEW_CHANNEL, tenant) is None:
-        new = []  # no schema = no rows there; the bridge reads the legacy master then
+    if new is None:
+        try:
+            if find_schema(tok, NEW_CHANNEL, tenant) is None:
+                new = []  # no schema = no rows there; the bridge reads the legacy master then
+        except SchemaUnreadable:
+            pass  # still unknown: reported as a failed search just below
     if legacy is None or new is None:
         print("  channel policy: SEARCH FAILED — no channel rows written (cannot tell "
               "whether this tenant already has any, and guessing could switch it off)")
@@ -913,9 +1004,17 @@ def seed_channel_policy(tok, state, tenant=None):
     for line in decision["lines"]:
         print("  channel %s" % line)
 
+    rows, unwritable = fit_rows_to_stored_schema(tok, target, decision["create"], tenant)
+    if rows is None:
+        return 0, 0, len(decision["create"]) or 1, True
+
     created = present = failed = 0
     lost_on = []
-    for row in decision["create"]:
+    for row in unwritable:
+        failed += 1
+        if row.get("enabled"):
+            lost_on.append(_channel_code(row))
+    for row in rows:
         result = create_row(tok, target, row, tenant=tenant)
         if result == "created":
             created += 1
@@ -941,14 +1040,50 @@ def seed_channel_policy(tok, state, tenant=None):
     return created, present, failed, core
 
 
+def tenant_roles(tok, tenant=None):
+    """The role codes `tenant` has (active ACCESSCONTROL-ROLES.roles rows), every page of
+    them, or None when the master could not be read."""
+    rows = search_rows(tok, ROLES_SCHEMA, tenant)
+    if rows is None:
+        return None
+    return {str(data.get("code") or "").strip() for data, active in _record_rows(rows)
+            if active} - {""}
+
+
 def seed_access_control(tok):
-    """Upsert the notification actions + roleactions. Returns (created, dup, failed)."""
+    """Upsert the notification actions + roleactions. Returns (created, dup, failed).
+
+    A role-action is written only for a role the tenant HAS. roleactions' x-ref-schema
+    validates rolecode against the tenant's ACCESSCONTROL-ROLES.roles, so a grant to a role
+    it lacks is a 400 — which carries neither DUPLICATE nor ALREADY, used to count as
+    failed, and so aborted every deploy of a tenant missing one of CSR / GRO / PGR_LME /
+    ACCOUNT_ADMIN / MDMS_ADMIN (naipepea's `ke` lacked ACCOUNT_ADMIN). A tenant's role set
+    is its own and this does not invent roles, so those grants are skipped and listed
+    (ACL-ROLES-ABSENT). An action row, or a role-action for a role the tenant has, still
+    fails the phase.
+    """
     created = dup = failed = 0
-    for schema in (ACTION_SCHEMA, ROLEACTION_SCHEMA):
-        if find_schema(tok, schema) is None:
+    for schema in (ACTION_SCHEMA, ROLEACTION_SCHEMA, ROLES_SCHEMA):
+        try:
+            present = find_schema(tok, schema) is not None
+        except SchemaUnreadable as exc:
+            if exc.status == 403:
+                FORBIDDEN.append("schema search " + schema)
+            print("  access-control: %s — nothing written (MDMS did not answer; this is not "
+                  "the same as the schema being absent)" % exc)
+            return 0, 0, 1
+        if not present:
             print("  access-control: schema %s ABSENT at %s — skipping ACL seed "
                   "(tenant bootstrap has not run?)" % (schema, TENANT))
             return 0, 0, 1
+
+    roles_here = tenant_roles(tok)
+    if roles_here is None:
+        print("  access-control: could not read %s at %s — nothing written (cannot tell "
+              "which role-actions this tenant can hold)" % (ROLES_SCHEMA, TENANT))
+        return 0, 0, 1
+    absent = ACL_ROLES_ABSENT  # role -> [action id, ...] not granted: the tenant lacks the role
+    absent.clear()
 
     for aid, url, name, enabled, disp, svc, roles in NOTIF_ACTIONS:
         action = {"id": aid, "url": url, "code": "null", "name": name, "path": "",
@@ -957,12 +1092,19 @@ def seed_access_control(tok):
         r = create_row(tok, ACTION_SCHEMA, action)
         created += (r == "created"); dup += (r == "dup"); failed += r in ("failed", "forbidden")
         for role in roles:
-            # x-ref-schema on roleactions validates rolecode against
-            # ACCESSCONTROL-ROLES.roles — a role this tenant does not have fails
-            # here and is skipped, which is correct: we do not invent roles.
+            if role not in roles_here:
+                absent.setdefault(role, []).append(aid)
+                continue
             ra = {"rolecode": role, "actionid": aid, "actioncode": "", "tenantId": TENANT}
             r = create_row(tok, ROLEACTION_SCHEMA, ra)
             created += (r == "created"); dup += (r == "dup"); failed += r in ("failed", "forbidden")
+    if absent:
+        print("ACL-ROLES-ABSENT: %s has no %s role — %d notification role-action(s) not "
+              "granted (%s). Not a failure: that role simply cannot use these screens here. "
+              "Create the role and re-run `--tags notifications` if it should."
+              % (TENANT, ", ".join(sorted(absent)), sum(len(v) for v in absent.values()),
+                 "; ".join("%s: %s" % (r, ",".join(str(a) for a in ids))
+                           for r, ids in sorted(absent.items()))))
     return created, dup, failed
 
 
@@ -978,7 +1120,20 @@ def ensure_schemas(tok, schema_file, codes, tenant=None):
     for code in codes:
         if code not in schemas:
             sys.exit("ERROR: schema %s not found in %s" % (code, schema_file))
-        live = find_schema(tok, code, tenant)
+        try:
+            live = find_schema(tok, code, tenant)
+        except SchemaUnreadable as exc:
+            if exc.status == 403:
+                # Kong refused the search: the same stale-cache/RBAC contract as a refused
+                # create below — exit 3, restart egov-accesscontrol, run again.
+                FORBIDDEN.append("schema " + code)
+                print("  ! schema %s FORBIDDEN (403) on search — egov-accesscontrol is still "
+                      "booting or serving a stale cache" % code)
+                continue
+            # Unreachable is not absent: creating now could duplicate a schema that exists,
+            # and "bootstrap has not run?" would send the operator the wrong way. Stop.
+            print("  ! schema UNREADABLE %s: %s — nothing created or written" % (code, exc))
+            raise
         if live is None:
             try:
                 create_schema(tok, schemas[code], tenant)
@@ -1000,16 +1155,31 @@ def ensure_schemas(tok, schema_file, codes, tenant=None):
             continue
         # mdms-v2 cannot change a stored schema: POST /mdms-v2/schema/v1/_update answers
         # 501 Not Implemented (verified against the deployed image), and the gateway has
-        # no access-control action for it either. So do not try. It is harmless for the
-        # legacy RAINMAKER-PGR masters, which are read-only now — configuration is written
-        # to NOTIFICATIONS.*, whose schemas are created fresh from the committed file. For
-        # any other schema it means rows carrying the new field will be rejected until the
-        # definition is replaced in the database by hand, so say so plainly.
-        legacy = code.startswith("RAINMAKER-PGR.")
-        print("  schema STALE   %s lacks %s — mdms-v2 cannot update schemas in place%s"
-              % (code, ", ".join(added),
-                 " (harmless: this legacy master is read-only now)" if legacy
-                 else " — writes carrying these fields will be REJECTED"))
+        # no access-control action for it either. So do not try; say what it means for
+        # THIS master, because that differs:
+        #   - the legacy Routing/Template/ProviderTemplate masters: nothing writes them any
+        #     more (the deploy and the Configurator write NOTIFICATIONS.*) — no effect.
+        #   - the legacy NotificationChannel master: the deploy's channel seed still writes
+        #     rows there for a tenant on its 2.12 configuration, and leaves these fields out
+        #     of them (seed_channel_policy reads the stored schema) — so a 2.12 tenant's
+        #     channel rows carry no `provider` until it is migrated.
+        #   - any other schema: a row carrying these fields is REJECTED when the stored
+        #     definition is closed (additionalProperties:false), until it is replaced in
+        #     the database by hand.
+        _, closed = schema_properties(live)
+        if code == LEGACY_CHANNEL:
+            effect = ("the deploy's channel seed writes rows here only for a tenant still on "
+                      "its 2.12 configuration, and leaves these fields out of them; the tenant "
+                      "gets them in NOTIFICATIONS.Channel when it is migrated")
+        elif code.startswith("RAINMAKER-PGR."):
+            effect = ("no effect: nothing writes this legacy master any more (the deploy and "
+                      "the Configurator write NOTIFICATIONS.*)")
+        elif closed:
+            effect = "writes carrying these fields will be REJECTED"
+        else:
+            effect = "the stored definition accepts undeclared fields, so writes are unaffected"
+        print("  schema STALE   %s lacks %s — mdms-v2 cannot update schemas in place; %s"
+              % (code, ", ".join(added), effect))
     return made
 
 
@@ -1019,9 +1189,11 @@ def run_access_phase(tok):
         print("  access-control  SKIPPED (SEED_ACCESS_CONTROL=0)")
         return 0, 0, 0
     created, dup, failed = seed_access_control(tok)
-    print("  access-control  +%d created, %d already-present, %d FAILED "
+    skipped = sum(len(ids) for ids in ACL_ROLES_ABSENT.values())
+    print("  access-control  +%d created, %d already-present, %d FAILED, %d skipped (role absent) "
           "(%d actions, %d roleactions)"
-          % (created, dup, failed, len(NOTIF_ACTIONS), sum(len(a[6]) for a in NOTIF_ACTIONS)))
+          % (created, dup, failed, skipped, len(NOTIF_ACTIONS),
+             sum(len(a[6]) for a in NOTIF_ACTIONS)))
     if created:
         # egov-accesscontrol caches role-actions in memory: new rows are invisible until
         # it restarts. The playbook greps for this marker and restarts it before running
@@ -1033,12 +1205,18 @@ def run_access_phase(tok):
 
 def run_data_phase(tok):
     """Jobs 2-6. Returns the process exit code."""
-    ensure_schemas(tok, SCHEMA_FILE, NOTIF_CODES)
-    # The module-neutral schemas. NOTE the schema upgrade path compares PROPERTY NAMES
-    # only: a changed x-unique, required, enum or property type on an EXISTING schema is
-    # invisible and never pushed (missing_properties). These five must be right the
-    # first time — there is no in-place key migration.
-    ensure_schemas(tok, NOTIF_SCHEMA_FILE, NEW_CODES)
+    try:
+        ensure_schemas(tok, SCHEMA_FILE, NOTIF_CODES)
+        # The module-neutral schemas. NOTE the schema upgrade path compares PROPERTY NAMES
+        # only: a changed x-unique, required, enum or property type on an EXISTING schema
+        # is invisible and never pushed (missing_properties). These five must be right the
+        # first time — there is no in-place key migration.
+        ensure_schemas(tok, NOTIF_SCHEMA_FILE, NEW_CODES)
+    except SchemaUnreadable as exc:
+        print("NOTIF-UNREADABLE: %s — MDMS did not answer the schema search, so nothing was "
+              "decided or written. Check egov-mdms-service / Kong and re-run." % exc)
+        print("DONE: 0 created, 0 already-present.  WARNING: schemas unreadable")
+        return 2
     if FORBIDDEN:
         # Nothing below can be written without its schema.
         print("NOTIF-FORBIDDEN: 403 on %s — restart egov-accesscontrol and run the data "

@@ -10,5 +10,20 @@
 {{- $_ := set .Values.image "tag" $stackTag }}
 {{- $_ := set .Values.initContainers.dbMigration.image "tag" $stackTag }}
 {{- end }}
+{{- /*
+  Pull policy follows the tag that will actually run. values.yaml says IfNotPresent, which
+  is right for an immutable tag (a release, develop-<sha8>) and wrong for a rolling one
+  (nightly-*, latest, develop, …): a node that already holds the image would keep running
+  whatever that tag pointed at when it was first pulled. So a rolling tag gets Always.
+  common.name merges the env.yaml per-chart overrides into .Values; run it first so the
+  decision sees an overriding tag too. An explicit pullPolicy override in env.yaml still
+  wins: common.name merges it again when the deployment renders.
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- range $img := list .Values.image .Values.initContainers.dbMigration.image }}
+{{- if regexMatch "^(latest|nightly-.*|develop|main|master)$" (toString $img.tag) }}
+{{- $_ := set $img "pullPolicy" "Always" }}
+{{- end }}
+{{- end }}
 # deployment.yaml
 {{- template "common.deployment" . -}}

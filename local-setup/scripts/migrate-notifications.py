@@ -1425,10 +1425,16 @@ exit: 0 ok · 1 warnings · 2 a tenant failed · 3 403 · 4 refused to start""")
 def resolve_files(ctx, args):
     repo = os.path.abspath(os.path.join(HERE, "..", "..", "utilities", "default-data-handler",
                                         "src", "main", "resources"))
-    staged = os.path.join(HERE, "notification-seed")
+    # Where the data files are, first match wins:
+    #   HERE                    the on-box layout: the playbook stages this script INTO
+    #                           /opt/digit/notification-seed next to the files, and prints
+    #                           `cd /opt/digit/notification-seed && … migrate-notifications.py`
+    #   HERE/notification-seed  enable-notifications.sh's layout (local-setup/scripts/)
+    #   the repo's mdmsData-dev a plain checkout
+    staged = [d for d in (HERE, os.path.join(HERE, "notification-seed"))
+              if os.path.exists(os.path.join(d, "NOTIFICATIONS.Template.json"))]
     data_dir = args.data_dir or os.environ.get("DATA_DIR") or (
-        staged if os.path.exists(os.path.join(staged, "NOTIFICATIONS.Template.json"))
-        else os.path.join(repo, "mdmsData-dev", "NOTIFICATIONS"))
+        staged[0] if staged else os.path.join(repo, "mdmsData-dev", "NOTIFICATIONS"))
     sn.DATA_DIR = data_dir
     ctx.notif_schema_file = first_existing([
         os.environ.get("NOTIF_SCHEMA_FILE"), os.path.join(data_dir, "NOTIFICATIONS.json"),

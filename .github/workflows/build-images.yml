@@ -90,6 +90,18 @@ jobs:
           IMAGES=$(yq -o=json -I=0 '[.config[].build[].["image-name"]]' build/build-config.yml)
           COUNT=$(echo "$TARGETS" | jq 'length')
           if [ "$COUNT" -eq 0 ]; then echo "FATAL: no targets parsed"; exit 1; fi
+          # An entry whose build context is gone (a service deleted without its manifest
+          # entry, as otp-publisher and novu-bridge-endpoint once were) becomes one failing
+          # leg per image per arch on every run. Name it here, once, instead.
+          MISSING=$(echo "$TARGETS" | jq -r '.[] | [.image, .workdir, .dockerfile] | @tsv' \
+            | while IFS=$'\t' read -r img wd df; do
+                if [ ! -d "$wd" ]; then printf '%s (work-dir %s) ' "$img" "$wd";
+                elif [ -n "$df" ] && [ ! -f "$df" ] && [ ! -f "$wd/$df" ]; then printf '%s (dockerfile %s) ' "$img" "$df"; fi
+              done)
+          if [ -n "$MISSING" ]; then
+            echo "FATAL: build/build-config.yml lists images whose build context does not exist: $MISSING"
+            exit 1
+          fi
           VERSION_TAG="$INPUT_VERSION_TAG"
           if [ -z "$VERSION_TAG" ]; then
             # Default tag names the COMMIT, not the calendar day. It is sliced
