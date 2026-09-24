@@ -25,7 +25,9 @@ class RemindersService {
         let chatState = await repoProvider.getActiveStateForUserId(userId);
         // getActiveStateForUserId returns undefined for a finished session, and
         // the sweep reads chatState.value straight after.
-        if (!chatState || chatState.value == 'start' || chatState.value.sevamenu == 'question')
+        // menu is a QuestionState, so it compiles to a triplet — the value is
+        // { pgr: { menu: 'question' } }, not a bare 'menu'.
+        if (!chatState || chatState.value === 'start' || chatState.value?.pgr?.menu === 'question')
           continue;
 
         let mobileNumber = await this.getMobileNumberFromUserId(userId);

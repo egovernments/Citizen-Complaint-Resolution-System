@@ -15,7 +15,9 @@ function config(overrides = {}) {
   const base = {
     whatsAppProvider: "Twilio",
     serviceAccount: { username: "svc", password: "pw", tenantId: "mz" },
-    twilio: { accountSid: "AC1", authToken: "tok", webhookBaseUrl: "https://x.example", verifyWebhookSignature: true },
+    twilio: { accountSid: "AC1", authToken: "tok", whatsappNumber: "whatsapp:+14155238886", webhookBaseUrl: "https://x.example", verifyWebhookSignature: true },
+    kaleyra: { sid: "K1", apikey: "KEY" },
+    valueFirstWhatsAppProvider: { valueFirstUsername: "vfuser", valueFirstPassword: "vfpass" },
     webhook: { sharedSecret: "s3cret", verify: true },
     countryExplicitlySet: true,
     timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
@@ -47,12 +49,14 @@ test("the service account is required whatever the channel", () => {
 
 test("Twilio credentials are required, and the base url only when verifying", () => {
   const cfg = config();
-  cfg.twilio = { accountSid: "", authToken: "", webhookBaseUrl: "", verifyWebhookSignature: true };
-  assert.deepEqual(missingWith(cfg), ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WEBHOOK_BASE_URL"]);
+  cfg.twilio = { accountSid: "", authToken: "", whatsappNumber: "", webhookBaseUrl: "", verifyWebhookSignature: true };
+  assert.deepEqual(missingWith(cfg), [
+    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_NUMBER", "TWILIO_WEBHOOK_BASE_URL",
+  ]);
 
   // Verification off is a deliberate local-testing choice; the url is then unused.
   const unverified = config();
-  unverified.twilio = { accountSid: "AC1", authToken: "tok", webhookBaseUrl: "", verifyWebhookSignature: false };
+  unverified.twilio = { accountSid: "AC1", authToken: "tok", whatsappNumber: "whatsapp:+1", webhookBaseUrl: "", verifyWebhookSignature: false };
   assert.deepEqual(missingWith(unverified), []);
 });
 
@@ -85,10 +89,28 @@ test("the env-path providers must set the country explicitly", () => {
     assert.deepEqual(missingWith(cfg), ["COUNTRY_CODE", "MOBILE_NUMBER_LENGTH"], provider);
   }
 
-  // Twilio reads MDMS, so it is not asked.
+  // Twilio is asked as well: isServedCountry drops inbound messages using the
+  // global COUNTRY_CODE before any tenant-aware code runs.
   const twilio = config();
   twilio.countryExplicitlySet = false;
-  assert.deepEqual(missingWith(twilio), []);
+  assert.deepEqual(missingWith(twilio), ["COUNTRY_CODE", "MOBILE_NUMBER_LENGTH"]);
+});
+
+test("each provider's own credentials are required", () => {
+  const kaleyra = config({ whatsAppProvider: "Kaleyra" });
+  kaleyra.kaleyra = { sid: "", apikey: "" };
+  assert.deepEqual(missingWith(kaleyra), ["KALEYRA_SID", "KALEYRA_API_KEY"]);
+
+  // ValueFirst ships 'demo' defaults: present, so a blank check passes, and
+  // every send fails against the real endpoint.
+  const valueFirst = config({ whatsAppProvider: "ValueFirst" });
+  valueFirst.valueFirstWhatsAppProvider = { valueFirstUsername: "demo", valueFirstPassword: "demo" };
+  assert.deepEqual(missingWith(valueFirst), ["VALUEFIRST_USERNAME", "VALUEFIRST_PASSWORD"]);
+
+  // Twilio cannot reply without its number, so it is fatal rather than a warning.
+  const twilio = config();
+  twilio.twilio = { ...twilio.twilio, whatsappNumber: "" };
+  assert.deepEqual(missingWith(twilio), ["TWILIO_WHATSAPP_NUMBER"]);
 });
 
 test("Twilio settings are not demanded of a ValueFirst deployment", () => {

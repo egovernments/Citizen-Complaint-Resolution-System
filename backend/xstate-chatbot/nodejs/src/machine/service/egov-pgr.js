@@ -387,6 +387,7 @@ class PGRService {
       const stateRoot = String(tenantId || "").split(".")[0];
       return (codes || []).filter((c) => c && c !== stateRoot);
     } catch (error) {
+      console.warn(`WhatsApp city override lookup failed, using none: ${error.message}`);
       return [];
     }
   }
@@ -460,6 +461,7 @@ class PGRService {
           }
         }
       } catch (mdmsError) {
+        console.warn(`Hierarchy schema lookup failed, using the default boundary type: ${mdmsError.message}`);
       }
 
       // Step 1: Fetch boundary data from boundary service with specific boundary type
@@ -560,7 +562,7 @@ class PGRService {
         } else {
         }
       } catch (localizationError) {
-        // Continue without localized messages
+        console.warn(`Locality names unavailable, showing codes: ${localizationError.message}`);
       }
 
       // Step 3: Build the result with proper display names
@@ -648,6 +650,7 @@ class PGRService {
           return { localities, messageBundle };
         }
       } catch (mdmsError) {
+        console.warn(`Locality MDMS lookup failed, falling back to boundary service: ${mdmsError.message}`);
       }
 
       throw new Error(`Unable to fetch localities for tenant ${tenantId}`);
@@ -800,6 +803,7 @@ class PGRService {
           }
         }
       } catch (error) {
+        console.warn(`Could not resolve the locality name; filing with the code: ${error.message}`);
       }
     }
 
@@ -829,6 +833,7 @@ class PGRService {
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
+        console.error(`Attachment dropped from the complaint: ${error.message}`);
       }
     }
 
@@ -842,6 +847,7 @@ class PGRService {
         };
         requestBody["workflow"]["verificationDocuments"].push(content);
       } catch (error) {
+        console.error(`Attachment dropped from the complaint: ${error.message}`);
       }
     }
 

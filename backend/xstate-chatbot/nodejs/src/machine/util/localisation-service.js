@@ -24,7 +24,10 @@ class LocalisationService {
         for (const { value, label } of candidates) {
             const codeToMessages = {};
             for (const tenantId of tenants) {
-                const messages = await this.fetchMessagesForLocale(value, tenantId).catch(() => []);
+                const messages = await this.fetchMessagesForLocale(value, tenantId).catch((error) => {
+                    console.warn(`No messages for ${value} at ${tenantId}: ${error.message}`);
+                    return [];
+                });
                 (messages || []).forEach((record) => { codeToMessages[record.code] = record.message; });
             }
             if (Object.keys(codeToMessages).length === 0) continue;

@@ -15,6 +15,9 @@ function missingConfig() {
   if (config.whatsAppProvider === 'Twilio') {
     need(config.twilio.accountSid, 'TWILIO_ACCOUNT_SID');
     need(config.twilio.authToken, 'TWILIO_AUTH_TOKEN');
+    // senderAddress() throws without it, so every outbound reply fails while
+    // the service still accepts complaints it can never answer.
+    need(config.twilio.whatsappNumber, 'TWILIO_WHATSAPP_NUMBER');
     if (config.twilio.verifyWebhookSignature) {
       need(config.twilio.webhookBaseUrl, 'TWILIO_WEBHOOK_BASE_URL');
     }
@@ -22,6 +25,19 @@ function missingConfig() {
 
   // These two verify a shared secret instead of a signature; without it they
   // reject every webhook, which is a silent outage rather than a loud one.
+  if (config.whatsAppProvider === 'Kaleyra') {
+    need(config.kaleyra.sid, 'KALEYRA_SID');
+    need(config.kaleyra.apikey, 'KALEYRA_API_KEY');
+  }
+
+  // These default to the literal 'demo' — present, so a blank check passes,
+  // and every send fails against the real endpoint.
+  if (config.whatsAppProvider === 'ValueFirst') {
+    const vf = config.valueFirstWhatsAppProvider || {};
+    if (!vf.valueFirstUsername || vf.valueFirstUsername === 'demo') missing.push('VALUEFIRST_USERNAME');
+    if (!vf.valueFirstPassword || vf.valueFirstPassword === 'demo') missing.push('VALUEFIRST_PASSWORD');
+  }
+
   if (['ValueFirst', 'Kaleyra'].includes(config.whatsAppProvider) && config.webhook.verify) {
     need(config.webhook.sharedSecret, 'WEBHOOK_SHARED_SECRET');
   }
@@ -32,7 +48,7 @@ function missingConfig() {
   // defaults to '91' — so a tenant seeded +258 that never sets the env var gets a silent
   // mismatch between inbound and outbound identity. Demanded explicitly here until those
   // adapters move to mobile-validation-service.
-  if (['ValueFirst', 'Kaleyra'].includes(config.whatsAppProvider) && !config.countryExplicitlySet) {
+  if (config.whatsAppProvider !== 'console' && !config.countryExplicitlySet) {
     missing.push('COUNTRY_CODE', 'MOBILE_NUMBER_LENGTH');
   }
 
@@ -46,12 +62,6 @@ function warnings() {
   const found = [];
 
   if (config.whatsAppProvider === 'Twilio') {
-    if (!String(config.twilio.whatsappNumber ?? '').trim()) {
-      found.push(
-        'TWILIO_WHATSAPP_NUMBER is not set: inbound messages would be accepted and ' +
-        'complaints filed, but every reply would be dropped.'
-      );
-    }
     if (!config.twilio.verifyWebhookSignature) {
       found.push(
         'TWILIO_VERIFY_WEBHOOK_SIGNATURE is false: the public webhook is forgeable by ' +
