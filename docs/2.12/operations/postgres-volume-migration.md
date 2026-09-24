@@ -203,9 +203,10 @@ docker image inspect alpine >/dev/null 2>&1 && echo "alpine present" || docker p
 
 ## 5. Point the compose file at the named volume
 
-**Skip this step if the box's `docker-compose.egov-digit.yaml` already reads
-`/var/lib/postgresql/data`** — the central fix has shipped and there is nothing to edit.
-Check with the `grep` below first.
+**Skip the edit if the box's `docker-compose.egov-digit.yaml` already reads
+`/var/lib/postgresql/data`** — the central fix has shipped. Check with the `grep` below
+first. **Never skip the `config` check at the end of this step**: an overlay can still set
+`PGDATA` elsewhere.
 
 Otherwise edit `docker-compose.egov-digit.yaml`, in the `postgres-db` service:
 
@@ -482,4 +483,4 @@ You do not have to remember this. The playbook refuses in both directions:
   immediately afterwards.
 
 So the safe order is: migrate the box, then deploy only from a branch that has the mount-path
-fix. A routine deploy in between is blocked rather than silently destructive.: mount postgres_data at the real PGDATA (#2085))
+fix. A routine deploy in between is blocked rather than silently destructive.
