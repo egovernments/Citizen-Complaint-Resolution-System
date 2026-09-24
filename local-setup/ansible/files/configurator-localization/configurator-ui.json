@@ -5356,5 +5356,23 @@
     "message": "Not configured: this tenant has no notification event catalogue, so there is nothing to validate against.",
     "module": "configurator-ui",
     "locale": "en_IN"
+  },
+  {
+    "code": "app.channels.legacy_tooltip",
+    "message": "This tenant's channel policy is still in the legacy master. Move it with the migration script on the server: %{command}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.channels.admin_only",
+    "message": "Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.notification_guard.config_loading",
+    "message": "The notification configuration is still loading, so this change cannot be checked yet — wait a moment and save again.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
   }
 ]

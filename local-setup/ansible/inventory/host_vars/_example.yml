@@ -600,6 +600,18 @@ novu_bridge_smscountry_password: ""
 # novu_bridge_proxy_allowed_roles: "EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN"
 # novu_bridge_proxy_admin_roles:   "SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN"
 
+# The shipped default notification configuration. A deploy writes it ONLY into a
+# tenant with no notification configuration at all AND no complaint ever filed at it
+# (a fresh install). A tenant with complaints but no configuration is what a 2.12
+# tenant on the old hard-coded path looks like; the defaults would change what its
+# citizens receive, so the deploy reports it (notif-seed — ACTION) and you install
+# them after a review: `migrate-notifications.py plan --tenant <t> --adopt-defaults`,
+# then `apply ... --adopt-defaults --yes` (docs/2.20/notifications/migration.md).
+# true = seed them anyway on such a tenant: ONLY for a fresh install whose database
+# arrived with complaints in it (a restored demo dump). Never affects a tenant that
+# already has configuration.
+# notifications_adopt_defaults: false
+
 # ONE BUILD for the notification stack. pgr-services, its pgr-services-db
 # migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same
 # build: pgr-services emits thin events only a bridge of the same build resolves

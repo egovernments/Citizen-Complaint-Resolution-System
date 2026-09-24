@@ -15,6 +15,15 @@
 // Writes go through the generic `notification-channel` MDMS resource. Because MDMS writes
 // land in the SESSION tenant while the bridge reads at the STATE tenant, the controls are
 // disabled (with an explanation) when the session is scoped to a city.
+//
+// Every write is checked first, exactly like the notification forms: the whole-config
+// checker runs over the policy as it WOULD be (checkPendingChanges), and an error this change
+// is answerable for — "None" on a channel routing uses (channel-needs-provider), a disabled
+// provider (channel-provider-inactive) — blocks it. Nothing is written until the
+// configuration the check needs has loaded. The controls themselves are only offered to the
+// roles that may write channel rows (the same provider-admin roles the Providers list uses:
+// the NOTIFICATIONS.Channel role-actions are seeded for exactly those); everyone else sees
+// the state, read-only, and why.
 import { useEffect, useMemo, useState } from 'react';
 import { useCreate, useGetList, useRefresh, useTranslate, useUpdate } from 'ra-core';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
@@ -24,7 +33,7 @@ import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { pullTemplates } from './providerApi';
+import { isProviderAdmin, pullTemplates } from './providerApi';
 import {
   integrationChannel, providerChoicesForChannel, type IntegrationRow,
 } from './providerCatalog';
@@ -32,9 +41,17 @@ import { CHANNELS, deriveChannelStatus, type ChannelRow, type ChannelStatus } fr
 import { CHANNEL_RESOURCE, useChannelRows } from './useChannelRows';
 import type { ProviderCatalogState } from './useProviderCatalog';
 import { notify } from './providerToast';
+import { useApp } from '../../App';
+import { blockingSummary, checkPendingChanges } from '../notification-configure/notificationSaveGuard';
+import { CONFIG_LOADING_KEY, CONFIG_LOADING_MESSAGE, channelGuardSnapshot, useNotificationConfig } from '../notification-configure/useNotificationGuard';
+import { NOTIFICATION_MIGRATE_COMMAND } from '../notification-configure/notificationSource';
 
 /** Sentinel for "no provider selected" — Radix Select rejects an empty string value. */
 const NONE = '__none__';
+
+/** English default of `app.channels.admin_only`. */
+const CHANNELS_ADMIN_ONLY =
+  'Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.';
 
 export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCatalogState }) {
   const t = useTranslate();
@@ -48,6 +65,13 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
   // tenant", `sourceReadOnly` is "this tenant's policy still lives in the legacy
   // master and must be copied first". Both disable the controls; both say why.
   const locked = scopedToCity || sourceReadOnly;
+  // Switching a channel or choosing its provider writes NOTIFICATIONS.Channel, which only the
+  // provider-admin roles may do. Offering it to everyone meant non-admins learned that from a 403.
+  const { state } = useApp();
+  const canManage = isProviderAdmin(state.user?.roles);
+  // The whole configuration, for the validate-on-save check below.
+  const config = useNotificationConfig();
+  const guardSnapshot = channelGuardSnapshot(config);
   const refresh = useRefresh();
   const [update] = useUpdate();
   const [create] = useCreate();
@@ -91,17 +115,32 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
       );
       return;
     }
+    if (!canManage) {
+      notify(t('app.channels.admin_only', { _: CHANNELS_ADMIN_ONLY }), undefined, 'destructive');
+      return;
+    }
+    const data: Record<string, unknown> = {
+      code: s.channel,
+      enabled: s.enabled,
+      gateway: s.row?.gateway || 'novu',
+      senderId: s.row?.senderId ?? null,
+      provider: s.row?.provider ?? null,
+      active: true,
+      ...patch,
+    };
+    // VALIDATE ON UPDATE, as every notification form does. Not until the configuration the
+    // check needs has loaded: a save that races the load would go through unchecked.
+    if (!guardSnapshot) {
+      notify(t(CONFIG_LOADING_KEY, { _: CONFIG_LOADING_MESSAGE }), undefined, 'destructive');
+      return;
+    }
+    const guard = checkPendingChanges(guardSnapshot, [{ resource: CHANNEL_RESOURCE, op: 'upsert', row: data }]);
+    if (guard.blocking.length > 0) {
+      notify(blockingSummary(guard.blocking), guard.blocking.map((f) => f.message).join(' '), 'destructive');
+      return;
+    }
     setBusy(s.channel);
     try {
-      const data: Record<string, unknown> = {
-        code: s.channel,
-        enabled: s.enabled,
-        gateway: s.row?.gateway || 'novu',
-        senderId: s.row?.senderId ?? null,
-        provider: s.row?.provider ?? null,
-        active: true,
-        ...patch,
-      };
       if (s.row?.id) {
         await update(CHANNEL_RESOURCE, { id: s.row.id, data, previousData: s.row }, { returnPromise: true });
       } else {
@@ -146,6 +185,11 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
               {t('app.channels.scoped_warning', { _: 'You are scoped to' })}{' '}
               <span className="font-mono">{sessionTenant}</span>;{' '}
               {t('app.channels.scoped_warning_2', { _: 'switch to the state tenant to change channel policy.' })}
+            </span>
+          )}
+          {!canManage && (
+            <span className="block mt-1 text-muted-foreground" data-testid="channels-admin-only">
+              {t('app.channels.admin_only', { _: CHANNELS_ADMIN_ONLY })}
             </span>
           )}
         </CardDescription>
@@ -199,7 +243,13 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
                         {s.reasons.map((r) => <li key={r}>{r}</li>)}
                       </ul>
                     )}
-                    {selectable && (
+                    {selectable && !canManage && (
+                      <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                        <span>{t('app.channels.active_provider', { _: 'Active provider' })}</span>
+                        <span className="font-mono">{s.provider || t('app.channels.no_provider', { _: 'None selected' })}</span>
+                      </div>
+                    )}
+                    {selectable && canManage && (
                       <div className="flex items-center gap-2 pt-1">
                         <span className="text-xs text-muted-foreground">
                           {t('app.channels.active_provider', { _: 'Active provider' })}
@@ -241,26 +291,31 @@ export function ChannelStatusCard({ catalogState }: { catalogState: ProviderCata
                       </p>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant={s.enabled ? 'outline' : 'default'}
-                    className="h-7 text-xs shrink-0"
-                    disabled={locked || busy !== null}
-                    onClick={() => toggle(s)}
-                    title={
-                      sourceReadOnly
-                        ? t('app.channels.legacy_tooltip', { _: 'This tenant\'s channel policy is still in the legacy master — run the notification seed step to copy it' })
-                        : scopedToCity
-                          ? t('app.channels.scoped_tooltip', { _: 'Switch to the state tenant to change channel policy' })
-                          : undefined
-                    }
-                  >
-                    {busy === s.channel
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : s.enabled
-                        ? t('app.channels.disable', { _: 'Disable' })
-                        : t('app.channels.enable', { _: 'Enable' })}
-                  </Button>
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      variant={s.enabled ? 'outline' : 'default'}
+                      className="h-7 text-xs shrink-0"
+                      disabled={locked || busy !== null}
+                      onClick={() => toggle(s)}
+                      title={
+                        sourceReadOnly
+                          ? t('app.channels.legacy_tooltip', {
+                            _: 'This tenant\'s channel policy is still in the legacy master. Move it with the migration script on the server: %{command}',
+                            command: NOTIFICATION_MIGRATE_COMMAND,
+                          })
+                          : scopedToCity
+                            ? t('app.channels.scoped_tooltip', { _: 'Switch to the state tenant to change channel policy' })
+                            : undefined
+                      }
+                    >
+                      {busy === s.channel
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : s.enabled
+                          ? t('app.channels.disable', { _: 'Disable' })
+                          : t('app.channels.enable', { _: 'Enable' })}
+                    </Button>
+                  )}
                 </div>
               );
             })}

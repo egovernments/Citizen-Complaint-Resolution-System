@@ -6,13 +6,13 @@
 // legacyAdapter.ts (how a legacy row reads in the new vocabulary) — so this file
 // is only data loading and plumbing.
 //
-// It loads BOTH namespaces on purpose. A tenant whose deploy-time copy step has
-// not run still has its live configuration in the legacy masters, and showing
+// It loads BOTH namespaces on purpose. A tenant that has not been migrated
+// (migrate-notifications.py) still has its live configuration in the legacy masters, and showing
 // that tenant an empty Configure screen would invite an operator to re-enter the
 // whole configuration into the new masters while the old rows keep firing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useGetList } from 'ra-core';
+import { useGetList, useTranslate } from 'ra-core';
 import { useQuery } from '@tanstack/react-query';
 import { digitClient, getResourceConfig } from '@/providers/bridge';
 import {
@@ -50,6 +50,12 @@ import type {
   ValidationFinding,
 } from '../workflow-services/validateNotifications';
 
+/** Shown when a save is attempted before the configuration the check needs has loaded.
+ *  The English default of `app.notification_guard.config_loading`. */
+export const CONFIG_LOADING_KEY = 'app.notification_guard.config_loading';
+export const CONFIG_LOADING_MESSAGE =
+  'The notification configuration is still loading, so this change cannot be checked yet — wait a moment and save again.';
+
 const BIG = { pagination: { page: 1, perPage: 1000 }, sort: { field: 'eventName', order: 'ASC' as const } };
 const SMALL = { pagination: { page: 1, perPage: 20 }, sort: { field: 'code', order: 'ASC' as const } };
 const LEGACY_BIG = { pagination: { page: 1, perPage: 1000 }, sort: { field: 'action', order: 'ASC' as const } };
@@ -66,7 +72,11 @@ export interface NotificationConfigQuery {
    */
   snapshot: NotificationSnapshot | null;
   ready: boolean;
-  /** True while any master is still loading — tells "not loaded yet" apart from "no catalogue". */
+  /**
+   * True while any master — or the tenant's roles or the provider list, which the checker
+   * also reads — is still loading. Tells "not loaded yet" apart from "no catalogue": a save
+   * must wait for the first, and must not be locked out by the second.
+   */
   loading: boolean;
   /** Which namespace served this tenant, and whether the screens may write. */
   decision: SourceDecision;
@@ -134,8 +144,8 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
   const legacyRouting = useAnyRecord('notification-routing', stateTenant, enabled);
 
   // Not namespaced: Novu integrations (a runtime fact, not MDMS) and the tenant's roles.
-  const { data: integrationData } = useGetList('notification-provider', { pagination: { page: 1, perPage: 100 }, sort: { field: 'channel', order: 'ASC' } }, q);
-  const { data: roleData } = useGetList('access-roles', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' } }, q);
+  const { data: integrationData, isPending: integrationPending } = useGetList('notification-provider', { pagination: { page: 1, perPage: 100 }, sort: { field: 'channel', order: 'ASC' } }, q);
+  const { data: roleData, isPending: rolePending } = useGetList('access-roles', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' } }, q);
 
   const pending =
     !enabled ||
@@ -219,11 +229,15 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
     const channelRows = rawChannels && rawChannels.length > 0 ? (rawChannels as unknown as ChannelRow[]) : undefined;
     const integrationRows = integrationData ? (integrationData as unknown as IntegrationRow[]) : undefined;
 
-    const ready = !pending && catalogue.length > 0;
+    // The checker reads the roles (audience-role-exists) and the providers (channel-provider-*)
+    // too. Checked while they load, every ROLE: audience would read as a role that does not
+    // exist — a false error that blocks the save of the very row being edited.
+    const loading = pending || rolePending || integrationPending;
+    const ready = !loading && catalogue.length > 0;
 
     return {
       ready,
-      loading: pending,
+      loading,
       decision,
       channelDecision,
       catalogue,
@@ -246,10 +260,34 @@ export function useNotificationConfig(options: { enabled?: boolean } = {}): Noti
         : null,
     };
   }, [
-    pending, decision, channelDecision, catalogueData, routingData, templateData, providerTemplateData, channelData,
-    legacyRoutingData, legacyTemplateData, legacyProviderTemplateData, legacyChannelData,
+    pending, rolePending, integrationPending, decision, channelDecision, catalogueData, routingData, templateData,
+    providerTemplateData, channelData, legacyRoutingData, legacyTemplateData, legacyProviderTemplateData, legacyChannelData,
     integrationData, roleCodes,
   ]);
+}
+
+/**
+ * The snapshot a CHANNEL-policy or PROVIDER change is checked against, or null while the
+ * configuration is still loading (the caller must then not save).
+ *
+ * Unlike `snapshot` it does not wait for an event catalogue. The rules such a change can
+ * trip (channel-needs-provider, channel-provider-missing/-inactive, channel-gateway-mismatch)
+ * never read it, and without one every routing row carries the SAME transition-exists error
+ * before and after the change, on a routing ref the change does not touch — advisory, never
+ * blocking (partitionFindings). Waiting for a catalogue would instead lock the Channels card
+ * on a tenant that has none.
+ */
+export function channelGuardSnapshot(cfg: NotificationConfigQuery): NotificationSnapshot | null {
+  if (cfg.loading) return null;
+  return cfg.snapshot ?? {
+    catalogue: cfg.catalogue,
+    routingRows: cfg.routingRows,
+    templateRows: cfg.templateRows,
+    roleCodes: cfg.roleCodes,
+    channelRows: cfg.channelRows,
+    providerTemplateRows: cfg.providerTemplateRows,
+    integrationRows: cfg.integrationRows,
+  };
 }
 
 export interface FormGuard {
@@ -285,7 +323,9 @@ export function useNotificationFormGuard(
   options: { editingId?: string } = {},
 ): FormGuard {
   const enabled = isNotificationResource(resource);
-  const { snapshot, ready, decision, channelDecision } = useNotificationConfig({ enabled });
+  const { snapshot, ready, loading, decision, channelDecision } = useNotificationConfig({ enabled });
+  const t = useTranslate();
+  const loadingMessage = t(CONFIG_LOADING_KEY, { _: CONFIG_LOADING_MESSAGE });
   const [result, setResult] = useState<GuardResult | null>(null);
   const lastSignature = useRef('');
   const { editingId } = options;
@@ -302,10 +342,10 @@ export function useNotificationFormGuard(
   // Read through a ref so `validate` below never changes identity — see FormGuard.
   // Written in an effect, not during render: the ref only has to be fresh by the
   // time the operator types, which is always after the effect has run.
-  const live = useRef({ enabled, ready, snapshot, resource, editingId, switchBlock });
+  const live = useRef({ enabled, ready, loading, loadingMessage, snapshot, resource, editingId, switchBlock });
   useEffect(() => {
-    live.current = { enabled, ready, snapshot, resource, editingId, switchBlock };
-  }, [enabled, ready, snapshot, resource, editingId, switchBlock]);
+    live.current = { enabled, ready, loading, loadingMessage, snapshot, resource, editingId, switchBlock };
+  }, [enabled, ready, loading, loadingMessage, snapshot, resource, editingId, switchBlock]);
 
   // Shown as soon as it is known, not on the first keystroke: the operator should
   // learn why this form cannot be saved before filling it in.
@@ -320,7 +360,10 @@ export function useNotificationFormGuard(
   }, [switchBlock]);
 
   const validate = useCallback((values: Record<string, unknown>) => {
-    const { enabled: on, ready: rdy, snapshot: snap, resource: res0, editingId: id, switchBlock: block } = live.current;
+    const {
+      enabled: on, ready: rdy, loading: busy, loadingMessage: waitText, snapshot: snap, resource: res0, editingId: id,
+      switchBlock: block,
+    } = live.current;
     if (!on) return {};
     // The row's key field: every form of that master has it, so an error there
     // always makes react-hook-form refuse the submit.
@@ -329,6 +372,9 @@ export function useNotificationFormGuard(
       const f = block.blocking[0];
       return { [keyField]: `${f.rule}: ${f.message}` };
     }
+    // Still loading: refuse rather than let the save through unchecked. (No catalogue at all
+    // is different — nothing can be checked then, and refusing would lock the form for good.)
+    if (busy) return { [keyField]: waitText };
     if (!rdy || !snap) return {};
     const res = checkPendingChanges(snap, [
       {

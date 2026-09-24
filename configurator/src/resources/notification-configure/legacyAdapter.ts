@@ -3,7 +3,8 @@
 //
 // A live server runs the current code with real data in the PGR-namespaced
 // masters, and MDMS migrations do not run on deployed boxes: the only vehicle
-// for the copy is the deploy-time seed step. Until that has run, the screens
+// for the copy is the per-tenant migration script (NOTIFICATION_MIGRATE_COMMAND in
+// notificationSource.ts — a deploy never copies). Until it has run, the screens
 // must NOT show an empty configuration (an operator would "fix" it by writing a
 // second, parallel set of rows) and must NOT write to the legacy masters
 // either. So they read the legacy rows, adapt them to the new vocabulary here,

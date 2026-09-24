@@ -179,6 +179,11 @@ const customEnglishMessages: TranslationMessages = {
       // Notifications → Channels screen (the channel card, moved off Providers).
       title: 'Notification Channels',
       subtitle_before: 'Switch each channel on and choose the provider it sends through. Add or change the accounts themselves under',
+      // The Enable/Disable tooltip on a tenant not yet migrated. %{command} is
+      // NOTIFICATION_MIGRATE_COMMAND — a deploy no longer copies anything.
+      legacy_tooltip: "This tenant's channel policy is still in the legacy master. Move it with the migration script on the server: %{command}",
+      // Shown instead of the controls to a user without a provider-admin role.
+      admin_only: 'Read-only: switching a channel on or off, or choosing its provider, needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role.',
     },
     providers: {
       // Notification Providers screen — self-service actions.
@@ -282,6 +287,10 @@ const customEnglishMessages: TranslationMessages = {
       admin_only: 'Read-only: adding, changing or testing a provider needs the SUPERUSER, MDMS_ADMIN or ACCOUNT_ADMIN role at the state tenant.',
       in_use_locked: 'Selected for %{channel}. Pick another provider for %{channel} on Channels before disabling or deleting this one.',
       msg_disable_in_use: 'This provider is still selected for a channel, so it was not disabled. Open Channels, pick another provider for that channel, then disable this one.',
+    },
+    notification_guard: {
+      // A notification save attempted before the configuration its check needs has loaded.
+      config_loading: 'The notification configuration is still loading, so this change cannot be checked yet — wait a moment and save again.',
     },
     notification_validate: {
       // Workflow screen → "Validate notifications": no verdict without the configuration.

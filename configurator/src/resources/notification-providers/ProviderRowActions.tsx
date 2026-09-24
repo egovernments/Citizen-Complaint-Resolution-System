@@ -18,6 +18,12 @@
 //
 // Everything but Check status and Delivery workflows is admin-only on the bridge, so it
 // is only offered to a provider admin (providerApi.isProviderAdmin).
+//
+// Disable / Enable and Delete are checked before they are sent, like every notification
+// write: the whole-config checker runs over the configuration as it would be
+// (checkIntegrationChange), and an error on a channel that selects this provider —
+// channel-provider-inactive / channel-provider-missing — blocks it. Nothing is sent until
+// the configuration the check needs has loaded (`guardSnapshot` is null until then).
 import { useState } from 'react';
 import { useRefresh, useTranslate } from 'ra-core';
 import {
@@ -50,6 +56,34 @@ import {
 import { ProviderCredentialFields } from './ProviderCredentialFields';
 import { PullTemplatesDialog, TestSendDialog } from './ProviderTestDialogs';
 import { notify } from './providerToast';
+import {
+  blockingSummary, checkIntegrationChange, type NotificationSnapshot,
+} from '../notification-configure/notificationSaveGuard';
+import { CONFIG_LOADING_KEY, CONFIG_LOADING_MESSAGE } from '../notification-configure/useNotificationGuard';
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+/**
+ * True when the provider change may be sent; otherwise says why (toast) and returns false.
+ * Shared by Disable/Enable and Delete.
+ */
+export function guardProviderChange(
+  t: Translate,
+  guardSnapshot: NotificationSnapshot | null | undefined,
+  row: IntegrationRow,
+  change: Parameters<typeof checkIntegrationChange>[2],
+): boolean {
+  if (!guardSnapshot) {
+    notify(t(CONFIG_LOADING_KEY, { _: CONFIG_LOADING_MESSAGE }), undefined, 'destructive');
+    return false;
+  }
+  const guard = checkIntegrationChange(guardSnapshot, row, change);
+  if (guard.blocking.length > 0) {
+    notify(blockingSummary(guard.blocking), guard.blocking.map((f) => f.message).join(' '), 'destructive');
+    return false;
+  }
+  return true;
+}
 
 type VerifyState = { status: 'idle' | 'loading' | 'ok' | 'fail'; detail?: string };
 
@@ -189,7 +223,7 @@ function RotateDialog({
 // Delete
 // ---------------------------------------------------------------------------
 function DeleteDialog({
-  open, onOpenChange, row, label, selectedForChannel, stateTenant, onDone,
+  open, onOpenChange, row, label, selectedForChannel, stateTenant, guardSnapshot, onDone,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -199,6 +233,8 @@ function DeleteDialog({
   selectedForChannel?: string;
   /** The tenant whose channel policy the bridge checks for NB_PROVIDER_IN_USE. */
   stateTenant?: string;
+  /** The configuration the delete is checked against; null while it loads. */
+  guardSnapshot?: NotificationSnapshot | null;
   onDone: () => void;
 }) {
   const t = useTranslate();
@@ -210,6 +246,7 @@ function DeleteDialog({
   });
 
   const submit = async () => {
+    if (!guardProviderChange(t, guardSnapshot, row, { op: 'remove' })) return;
     setBusy(true);
     setInUse(null);
     try {
@@ -268,7 +305,7 @@ function DeleteDialog({
 // Row action bar
 // ---------------------------------------------------------------------------
 export function ProviderRowActions({
-  record, catalog, selectedForChannel, stateTenant, canManage,
+  record, catalog, selectedForChannel, stateTenant, canManage, guardSnapshot,
 }: {
   record: IntegrationRow;
   catalog: ProviderType[];
@@ -278,6 +315,8 @@ export function ProviderRowActions({
   stateTenant?: string;
   /** The user holds a provider-admin role; everything that writes or sends is hidden otherwise. */
   canManage: boolean;
+  /** The notification configuration Disable / Delete are checked against; null while it loads. */
+  guardSnapshot?: NotificationSnapshot | null;
 }) {
   const t = useTranslate();
   const refresh = useRefresh();
@@ -336,6 +375,7 @@ export function ProviderRowActions({
 
   const toggleActive = async () => {
     if (toggleLocked) return;
+    if (!guardProviderChange(t, guardSnapshot, record, { op: 'patch', patch: { active: !isActive } })) return;
     setToggling(true);
     try {
       await updateProvider({ id: integrationId, active: !isActive, tenantId: stateTenant || undefined });
@@ -479,6 +519,7 @@ export function ProviderRowActions({
         label={label}
         selectedForChannel={selectedForChannel}
         stateTenant={stateTenant}
+        guardSnapshot={guardSnapshot}
         onDone={refresh}
       />
     </div>

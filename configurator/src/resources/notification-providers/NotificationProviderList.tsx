@@ -17,6 +17,7 @@ import { ProviderRowActions } from './ProviderRowActions';
 import { useProviderCatalog } from './useProviderCatalog';
 import { useChannelRows } from './useChannelRows';
 import { useApp } from '../../App';
+import { channelGuardSnapshot, useNotificationConfig } from '../notification-configure/useNotificationGuard';
 
 /** Render a boolean flag as a compact yes/no chip. */
 function flag(value: unknown) {
@@ -68,6 +69,8 @@ export function NotificationProviderList() {
   // bridge; offering them to everyone meant non-admins only learned that from a 403.
   const { state } = useApp();
   const canManage = isProviderAdmin(state.user?.roles);
+  // What Disable / Delete are validated against before they are sent (null while loading).
+  const guardSnapshot = channelGuardSnapshot(useNotificationConfig());
 
   const selected = useMemo(() => selectionsByProvider(channelRows), [channelRows]);
   const channelOf = (record: IntegrationRow) => {
@@ -154,7 +157,8 @@ export function NotificationProviderList() {
       recordFilter={(record) => isDeliverableIntegration(record as IntegrationRow, catalog)}
       actions={
         <div className="flex items-center gap-2">
-          <SyncTemplatesAction />
+          {/* Sync writes NOTIFICATIONS.ProviderTemplate rows: the same admin roles as the rest. */}
+          {canManage && <SyncTemplatesAction />}
           {canManage ? (
             <AddProviderDialog catalogState={catalogState} />
           ) : (
@@ -176,6 +180,7 @@ export function NotificationProviderList() {
             selectedForChannel={channelOf(record as IntegrationRow)}
             stateTenant={stateTenant}
             canManage={canManage}
+            guardSnapshot={guardSnapshot}
           />
         )}
       />

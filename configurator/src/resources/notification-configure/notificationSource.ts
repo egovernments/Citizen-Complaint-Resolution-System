@@ -8,13 +8,16 @@
 //                  WRITE there. The legacy masters are read-only history.
 //                  (Also: nothing is routed in EITHER namespace but the new
 //                  masters are seeded — writable, since no route can stop.)
-//   LEGACY         the images are new but the seed step has not run:
-//                  `NOTIFICATIONS.Routing` is empty and the legacy routing
-//                  master is not. The `RAINMAKER-PGR.Notification*` rows are
-//                  still the live configuration, and the box reads them
+//   LEGACY         the images are new but the tenant has not been migrated
+//                  (migrate-notifications.py — a deploy never moves a tenant's
+//                  configuration): `NOTIFICATIONS.Routing` is empty and the
+//                  legacy routing master is not. The `RAINMAKER-PGR.Notification*`
+//                  rows are still the live configuration, and the box reads them
 //                  through its own adapter. Show them, adapted, READ-ONLY, and
 //                  say why.
-//   NONE           neither namespace has a row. Nothing has been seeded.
+//   NONE           neither namespace has a row. Nothing has been seeded: a fresh
+//                  install whose seed has not run, or an upgraded tenant that ran
+//                  2.12's hard-coded notifications and waits for its defaults.
 //
 // THE DECISION IS PER TENANT AND ALL-OR-NOTHING, NEVER PER ROW. Per-row
 // precedence between two namespaces is the kind of thing nobody can reason
@@ -33,8 +36,8 @@
 // THE SCREENS NEVER WRITE TO THE LEGACY MASTERS. Not because the write would
 // fail — an MDMS_ADMIN can still write them — but because a tenant whose
 // configuration was edited in both namespaces has no single answer to "what is
-// configured", and the copy step (which is create-only) would then silently
-// keep the pre-edit values.
+// configured", and the migration's copy (which is create-only) would then
+// silently keep the pre-edit values.
 //
 // Pure and React-free so it can be tested without the app graph.
 
@@ -70,13 +73,18 @@ function total(counts: MasterCounts | undefined): number {
 
 /**
  * Named in every banner so the operator does not have to find them. A deploy only upgrades
- * software: it installs the defaults on a tenant with no configuration, but never moves a
- * tenant that still has legacy rows — that is the per-tenant migration script, one-way,
- * after its plan has been reviewed (docs/2.20/notifications/migration.md).
+ * software. It installs the shipped defaults on a FRESH install only (no configuration and
+ * no complaint ever filed); it never moves a tenant that still has legacy rows, and never
+ * writes defaults into an existing tenant with no configuration — that tenant may have run
+ * 2.12's hard-coded notifications, and the defaults would change what its citizens receive.
+ * Both are the per-tenant migration script, one-way, after its plan has been reviewed
+ * (docs/2.20/notifications/migration.md). Reused by every screen that says "move it".
  */
-export const NOTIFICATION_SEED_COMMAND = './deploy.sh <tenant>';
+export const NOTIFICATION_SEED_COMMAND = './deploy.sh <tenant> --tags notifications';
 export const NOTIFICATION_MIGRATE_COMMAND =
   'migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes';
+export const NOTIFICATION_ADOPT_DEFAULTS_COMMAND =
+  'migrate-notifications.py plan --tenant <tenant> --adopt-defaults, then apply --tenant <tenant> --adopt-defaults --yes';
 
 /** The master whose rows decide the namespace, as the box decides it. */
 export type SwitchMaster = 'routing' | 'channel';
@@ -185,7 +193,10 @@ export function selectNotificationSource(input: {
     message:
       `Neither ${names.modern} nor the old ${names.legacy} masters have any rows here, and nothing else in NOTIFICATIONS.* is seeded, `
       + `so there is nothing to show and nothing to edit — ${names.none}. `
-      + `Re-run the deploy (${NOTIFICATION_SEED_COMMAND}) to install the default configuration, then reload this screen.`,
+      + `On a fresh install the deploy installs the default configuration (${NOTIFICATION_SEED_COMMAND}). `
+      + 'A tenant that already has complaints does not get it from a deploy — it may have run the old built-in notifications, '
+      + `and the defaults would change what its citizens receive — so review and install them with the migration script `
+      + `(${NOTIFICATION_ADOPT_DEFAULTS_COMMAND}). Then reload this screen.`,
     level: 'warn',
     rows: 0,
   };
@@ -201,7 +212,7 @@ export const NAMESPACE_SWITCH_RULE = 'namespace-switch';
  * written to it — from any screen, including the raw MDMS form — switches the
  * whole tenant. The guided screens are already read-only there; this closes
  * the raw form the same way. Refused rather than confirmed: the only safe way
- * off legacy is the seed step's copy, which moves every row at once.
+ * off legacy is the migration script's copy, which moves every row at once.
  */
 export function namespaceSwitchMessage(
   resource: string | undefined,

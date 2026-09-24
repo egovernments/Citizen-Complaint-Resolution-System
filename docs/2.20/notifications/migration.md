@@ -99,11 +99,31 @@ rejects it with `Recreate`).
 **The deploy upgrades software only.** `./deploy.sh <tenant>` (or `--tags notifications`)
 creates the notification schemas and access-control rows, gives a tenant with **no** channel
 rows rows that say what `NOVU_BRIDGE_CHANNELS_ENABLED` says
-([below](#channel-rows-what-happens-to-an-existing-tenant)), and — only for a tenant with no
-notification configuration at all — writes the shipped defaults straight into
-`NOTIFICATIONS.*`. It never copies a tenant's 2.12 rows and never adds a default row to a
-configured tenant. A 2.12 tenant keeps being served from its legacy masters, unchanged; the
-deploy says so (`notif-seed — ACTION: this tenant's notification configuration is not migrated`).
+([below](#channel-rows-what-happens-to-an-existing-tenant)), and — only for a **fresh install**:
+no notification configuration in either namespace **and no complaint ever filed** at the tenant
+or its cities — writes the shipped defaults straight into `NOTIFICATIONS.*`. It never copies a
+tenant's 2.12 rows and never adds a default row to a configured tenant. A 2.12 tenant keeps being
+served from its legacy masters, unchanged; the deploy says so (`notif-seed — ACTION: this
+tenant's notification configuration is not migrated`).
+
+**A tenant that ran 2.12's hard-coded notifications gets no defaults from the deploy.** With
+`pgr_notification_config_driven: false` (every tenant but Bomet) the wording came from
+`novu-bridge-endpoint`, not MDMS, so such a tenant has no notification rows in either namespace —
+the same as a fresh install. The deploy tells them apart by the complaints filed at the tenant,
+counted in the database: with any (or when they cannot be counted) it writes nothing, reports
+`NOTIFICATIONS-STATE: … state=none` and `notif-seed — ACTION: this tenant has no notification
+configuration`, and **the tenant sends no complaint notifications** (`SKIPPED / NB_NO_ROUTING`;
+login OTPs are not affected) until you review and install the defaults:
+
+```bash
+python3 migrate-notifications.py plan  --tenant mycity --adopt-defaults
+python3 migrate-notifications.py apply --tenant mycity --adopt-defaults --yes
+```
+
+The plan calls it `none` and lists every row it would write. `notifications_adopt_defaults: true`
+in host_vars makes the deploy seed the defaults anyway — only for a fresh install whose database
+arrived with complaints (the `full-dump.sql` demo data under `pg`; `localhost-full.yml.example`
+sets it). It never touches a tenant that has configuration.
 Until it is migrated, the Configure and Channels screens show it read-only (*"This tenant has not
 been migrated yet — shown read-only"*) and refuse a raw first `NOTIFICATIONS.Routing` /
 `NOTIFICATIONS.Channel` row (`namespace-switch`): that row alone would switch the tenant over.
@@ -134,8 +154,8 @@ junk (`--exclude`, default `(?i)^(PW_|pwt)`). `--tenant X` (repeatable) names te
 | `none` | no configuration in either namespace | nothing, unless `--adopt-defaults` (then the shipped defaults) |
 | `defaults` | legacy rows equal the shipped defaults, after conversion | copies the tenant's rows |
 | `customised` | legacy rows differ; the plan lists rows only in the tenant, rows only in the defaults (**not** added) and every changed field | copies the tenant's rows, exactly |
-| `migrated` | already served from `NOTIFICATIONS.*` | adds missing catalogue rows, channel rows that are still only in the legacy master, and provider pins; nothing else |
-| `partial` | `NOTIFICATIONS.*` rows but no Routing, a copy that did not finish, no event catalogue, or an interrupted default seed | finishes the copy with the tenant's own rows (`--adopt-defaults` for an interrupted default seed) |
+| `migrated` | already served from `NOTIFICATIONS.*` | adds missing catalogue rows, channel rows that are still only in the legacy master (when `NOTIFICATIONS.Channel` is empty, so nothing changes), and provider pins; nothing else |
+| `partial` | `NOTIFICATIONS.*` rows but no Routing, a copy that did not finish (configuration rows, or channel rows — a legacy channel code missing from a non-empty `NOTIFICATIONS.Channel` is **off** until it is copied), no event catalogue, or an interrupted default seed | finishes the copy with the tenant's own rows, channel codes one by one (`--adopt-defaults` for an interrupted default seed) |
 
 For each tenant the plan also shows the rows `apply` would create, after conversion
 (`--show-rows full` prints them whole); the event catalogue, generated from the tenant's
@@ -209,7 +229,9 @@ Credentials are read only from `--credentials-file`, a JSON object keyed by type
 
 The file must be mode `0600` or stricter, or it is refused. Values are never printed or written
 to the report. The identifier is derived from the name, so a re-run finds the provider rather
-than creating a second one. Integrations created before the catalog are listed as working but
+than creating a second one. An `"identifier"` you set yourself must start with the type
+(`smscountry-…`, `twilio-sms-…`): novu-bridge reads the type back from it and refuses any other
+(`400 NB_INVALID_PROVIDER`), so the script refuses it at plan time (exit `4`) instead. Integrations created before the catalog are listed as working but
 not rotatable from the Configurator; re-create them from the catalog when convenient.
 
 ### The report
@@ -249,8 +271,11 @@ the allowlist the **running** `novu-bridge` container has and decides per tenant
 The seed prints its decision — `CHANNEL-POLICY: tenant=… mode=… allowlist=… target=…` and one
 line per channel — and the deploy shows it under `notif-seed — result`. A run that dies half way
 is finished by the next one with the same rule. The migration copies a 2.12 tenant's channel rows
-into `NOTIFICATIONS.Channel` as they are (plus provider pins). The bridge caches channel policy
-for 60 s, so a change takes up to a minute to apply.
+into `NOTIFICATIONS.Channel` as they are (plus provider pins), **per channel code**: from its first
+row there, `NOTIFICATIONS.Channel` alone decides and a channel without a row is off, so a re-run of
+`apply` copies any code an interrupted one left out (the tenant plans as `partial`, and the plan
+shows e.g. `EMAIL off → ON`). A code already there is never rewritten. The bridge caches channel
+policy for 60 s, so a change takes up to a minute to apply.
 
 A tenant created by `default-data-handler` (a new tenant, or a Helm bootstrap) starts with the
 committed all-off rows whatever the allowlist says; the Helm tier runs no seed and sets no
@@ -274,7 +299,10 @@ There is no setting that chooses old or new — the data does. Check with any of
   `up -d` does not stop containers of services it no longer knows, and a leftover
   `egov-notification-sms` still consumes `egov.core.notification.sms` next to novu-bridge — every
   OTP sent twice, through two providers. The deploy removes the three containers when
-  `enable_novu` is on (only a container this deployment's compose created). By hand:
+  `enable_novu` is on (only a container this deployment's compose created), right after the image
+  pull and **before** it starts the new bridge, so no OTP is ever sent by both. An OTP requested in
+  the seconds the new bridge takes to boot is not sent (see the offset note below); the user asks
+  again. By hand, do the same — remove them first, then start the new bridge:
   `docker rm -f egov-notification-sms otp-publisher novu-bridge-endpoint`, or
   `docker compose <files> up -d --remove-orphans` (which also removes any other orphan of the
   project). On Helm `egov-notification-sms` is `installed: false` in
@@ -288,7 +316,8 @@ There is no setting that chooses old or new — the data does. Check with any of
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
 - The tenant an OTP is checked against is `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` when the
-  message carries none: Compose rewrites it to `state_root`, Helm reads `state-level-tenant-id`
+  message carries none: Compose rewrites it to `state_root` (and recreates `novu-bridge` whenever it did,
+  with or without a Novu key — a direct-gateway box needs none), Helm reads `state-level-tenant-id`
   from the `egov-config` ConfigMap. **SMS must be switched on, with a provider, at that tenant**
   or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login stops.
 

@@ -64,11 +64,15 @@ export interface ResourceConfig {
  * once: where did the configuration go, is THIS tenant still using these rows,
  * and what do I run to move it.
  */
+// The command is spelled out, not imported: this package cannot reach the app's
+// notificationSource.ts. It must stay the same text as NOTIFICATION_MIGRATE_COMMAND there
+// (a deploy no longer copies anything — since 96c96d1 it upgrades software only).
 export const LEGACY_NOTIFICATION_NOTICE =
   'Notification configuration has moved to the shared NOTIFICATIONS.* masters, which every module uses — see Notifications → Configure. '
-  + 'These rows are kept and still read by the notification service on a tenant whose copy step has not run yet, so they are shown here, '
-  + 'read-only; they are never deleted. To move them, re-run the notification seed step (./deploy.sh <tenant> --tags notifications): it '
-  + 'copies what this tenant actually has, is additive, and leaves these rows untouched.';
+  + 'These rows are kept and still read by the notification service on a tenant that has not been migrated yet, so they are shown here, '
+  + 'read-only; they are never deleted. To move them, run the migration script on the server '
+  + '(migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes): it copies what this tenant actually has, '
+  + 'is one-way per tenant, and leaves these rows untouched. Re-running the deploy does not move them.';
 
 export const REGISTRY: Record<string, ResourceConfig> = {
   // Dedicated Resources
@@ -264,8 +268,8 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // LEGACY notification masters (RAINMAKER-PGR.Notification*) — READ-ONLY.
   //
   // Their configuration moved to NOTIFICATIONS.* above. They stay registered,
-  // and their rows are never deleted, because on a tenant whose seed step has
-  // not run yet these rows ARE the live configuration (the box adapts them on
+  // and their rows are never deleted, because on a tenant that has not been
+  // migrated yet these rows ARE the live configuration (the box adapts them on
   // read) and hiding them would show an operator an empty screen for a working
   // tenant. They are removed from the UI one release after the copy ships.
   // -------------------------------------------------------------------------

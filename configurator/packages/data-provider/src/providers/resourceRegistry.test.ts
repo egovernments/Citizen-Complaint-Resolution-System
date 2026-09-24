@@ -232,7 +232,11 @@ describe('notification masters', () => {
       const notice = readOnlyNoticeFor(name);
       assert.ok(notice, `${name} must explain where its configuration moved`);
       assert.match(notice!, /NOTIFICATIONS\.\*/);
-      assert.match(notice!, /--tags notifications/);
+      // Kanav review of #2097 (4079418192): the deploy no longer copies anything, so the
+      // notice must send the operator to the migration script, not back to the deploy.
+      assert.ok(notice!.includes('migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes'),
+        `${name}'s notice must name the migration command`);
+      assert.doesNotMatch(notice!, /--tags notifications|seed step/);
       assert.match(notice!, /never deleted/);
     }
   });

@@ -3,7 +3,7 @@
 // A resource is read-only when its configuration moved somewhere else (the
 // legacy RAINMAKER-PGR.Notification* four) or when another system owns the rows
 // (the module-generated event catalogue). In both cases the rows are still real
-// — on a tenant whose copy step has not run, the legacy rows ARE what gets
+// — on a tenant that has not been migrated, the legacy rows ARE what gets
 // delivered — so the screen must show them AND explain, in one place, why there
 // is no Create button and what to do instead. A greyed-out button with no
 // explanation is how an operator ends up re-typing the configuration into a

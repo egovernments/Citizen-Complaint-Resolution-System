@@ -531,7 +531,8 @@ describe('tenant-master repair is report-only unless opted in', () => {
   const script = read('local-setup/scripts/repair-tenant-masters.py');
 
   test('the playbook writes only for repair_tenant_masters: true', () => {
-    expect(playbook).toContain("APPLY={{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }}");
+    expect(playbook).toContain(`APPLY: "{{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }}"`);
+    expect(playbook).not.toMatch(/APPLY[=:] *"?1"?\s*$/m);
     expect(playbook).not.toMatch(/repair_tenant_masters \| default\(true\)/);
   });
 
@@ -551,5 +552,84 @@ describe('tenant-master repair is report-only unless opted in', () => {
     expect(restart).toBeGreaterThan(-1);
     expect(wait).toBeGreaterThan(restart);
     expect(playbook.slice(wait, wait + 600)).toContain('/access/health');
+  });
+});
+
+// Kanav review of #2097, second round.
+describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  /** The text of the task named `name` (up to the next task at the same indent). */
+  const task = (name: string) => {
+    const start = playbook.indexOf(`- name: "${name}`);
+    expect(start).toBeGreaterThan(-1);
+    const next = playbook.indexOf('\n    - name:', start + 1);
+    return playbook.slice(start, next === -1 ? undefined : next);
+  };
+
+  // 4079418204: the retired OTP senders were removed AFTER the main `up -d`, so for the
+  // whole stack start egov-notification-sms and the new novu-bridge both consumed
+  // egov.core.notification.sms and every login OTP went out twice.
+  test('the retired OTP senders are removed before any new bridge starts', () => {
+    const removal = playbook.indexOf('- name: "notification stack — remove the retired egov-notification-sms');
+    const bridgeFirst = playbook.indexOf('- name: "notification stack — recreate novu-bridge before pgr-services');
+    const mainStart = playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)');
+    const pull = playbook.indexOf('- name: Pull all images from VPC registry');
+    expect(removal).toBeGreaterThan(pull);
+    expect(removal).toBeLessThan(bridgeFirst);
+    expect(bridgeFirst).toBeLessThan(mainStart);
+    const removalTask = task('notification stack — remove the retired');
+    expect(removalTask).toContain('enable_novu | default(false)');
+    expect(removalTask).toContain('"$svc|{{ digit_dir }}"');
+  });
+
+  // 4079418208: the pg → state_root rewrite of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT only
+  // reached the container through a recreate gated on a non-empty Novu key.
+  test('novu-bridge is recreated whenever the OTP default-tenant rewrite changed', () => {
+    expect(task('post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT')).toContain('register: core_sms_tenant_rewrite');
+    const recreate = task('novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY');
+    expect(recreate).toContain('--force-recreate novu-bridge');
+    expect(recreate).toContain("or ((core_sms_tenant_rewrite | default({})) is changed)");
+  });
+
+  // 4079418212: the admin password was spliced into the shell command, and a failed task
+  // prints `cmd`.
+  test('no task passes DIGIT_PASSWORD on its command line', () => {
+    for (const name of [
+      'master-repair — compare',
+      'notif-seed — access-control rows (phase 1 of 2)',
+      'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
+      'notif-seed — data phase again with the role-actions loaded',
+    ]) {
+      const t = task(name);
+      expect(t).toMatch(/\n {6}environment:\n/);
+      expect(t).toContain(`DIGIT_PASSWORD: "{{ notif_seed_pass | default('eGov@123') }}"`);
+      expect(t).not.toMatch(/DIGIT_PASSWORD=/);
+    }
+    expect(playbook).not.toMatch(/DIGIT_PASSWORD=\{\{/);
+  });
+
+  // 4079418103: a tenant with no MDMS notification rows was always "fresh", so an upgrade
+  // wrote the shipped defaults over every tenant that ran 2.12's hard-coded path.
+  test('the seed gets the complaint count that tells a fresh install from an upgraded tenant', () => {
+    const count = task('notif-seed — count the complaints ever filed at the tenant');
+    // the tenant is a psql variable, never spliced into the SQL
+    expect(count).toContain(`-v t="$NOTIF_TENANT"`);
+    expect(count).toContain("tenantid = :'t' or tenantid like :'t' || '.%%'");
+    expect(count).toContain('failed_when: false');
+    for (const name of [
+      'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
+      'notif-seed — data phase again with the role-actions loaded',
+    ]) {
+      const t = task(name);
+      // an unreadable count must reach the seeder as EMPTY (unknown), never as 0
+      expect(t).toContain(`NOTIF_TENANT_COMPLAINTS: "{{ (notif_tenant_complaints.stdout | default('') | trim) if (notif_tenant_complaints.rc | default(1)) == 0 else '' }}"`);
+      expect(t).toContain(`NOTIF_ADOPT_DEFAULTS: "{{ '1' if (notifications_adopt_defaults | default(false) | bool) else '' }}"`);
+    }
+    expect(playbook.indexOf('notif-seed — count the complaints')).toBeLessThan(
+      playbook.indexOf('notif-seed — schemas, channel rows, fresh-tenant defaults'));
+    const none = task('notif-seed — ACTION: this tenant has no notification configuration');
+    expect(none).toContain("' state=none '");
+    expect(none).toContain('--adopt-defaults');
+    expect(task("notif-seed — ACTION: this tenant's notification configuration is not migrated")).toContain("' state=legacy '");
   });
 });

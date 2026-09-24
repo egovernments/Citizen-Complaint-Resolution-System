@@ -2864,6 +2864,47 @@
         executable: /bin/bash
       changed_when: false
 
+    # Containers of services this release deleted from the compose files. `up -d`
+    # leaves them running (they are orphans now, and the deploy does not pass
+    # --remove-orphans because it would also take out containers other compose files
+    # on the box started under the same project). Left running they do real harm:
+    # egov-notification-sms and novu-bridge both consume egov.core.notification.sms,
+    # so every login OTP would go out twice through two providers; otp-publisher keeps
+    # publishing the retired OTP event. Removed only when the notification stack is on
+    # (novu-bridge now does their job) and only a container that compose created for
+    # that service in THIS deployment directory.
+    #
+    # BEFORE anything starts a new bridge — the upgrade-order recreate below, or the main
+    # `up -d` — and after the pull, so the gap is as short as it can be. Removed after the
+    # main start (as it used to be), the old sender and the new bridge both consumed the
+    # topic for the whole ~10-minute up, and OTPs went out twice. Removed first, the only
+    # cost is an OTP requested while the new bridge boots: its first subscription to the
+    # topic starts at the latest offset, so that OTP is not sent and the user asks again.
+    # Never sent twice.
+    - name: "notification stack — remove the retired egov-notification-sms / otp-publisher / novu-bridge-endpoint containers"
+      when:
+        - ansible_system != "Darwin"
+        - enable_novu | default(false)
+      ansible.builtin.shell: |
+        set -eo pipefail
+        GONE=""
+        for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
+          docker inspect "$svc" >/dev/null 2>&1 || continue
+          owner="$(docker inspect --format '{{ '{{' }}index .Config.Labels "com.docker.compose.service"{{ '}}' }}|{{ '{{' }}index .Config.Labels "com.docker.compose.project.working_dir"{{ '}}' }}' "$svc")"
+          if [ "$owner" != "$svc|{{ digit_dir }}" ]; then
+            echo "SKIP $svc: not this deployment's compose container ($owner)"
+            continue
+          fi
+          docker rm -f "$svc" >/dev/null
+          GONE="$GONE $svc"
+        done
+        [ -z "$GONE" ] && { echo "NOCHANGE no retired notification containers"; exit 0; }
+        echo "removed:$GONE"
+      args:
+        executable: /bin/bash
+      register: retired_notification_containers
+      changed_when: "'removed:' in (retired_notification_containers.stdout | default(''))"
+
     # Upgrade order for the notification stack: the NEW novu-bridge (and its Flyway
     # migrator) before the new pgr-services. A new pgr-services publishes thin events;
     # a bridge from before the thin-event stack cannot resolve them and dead-letters
@@ -2901,39 +2942,6 @@
         executable: /bin/bash
       changed_when: false
       when: ansible_system != "Darwin"
-
-    # Containers of services this release deleted from the compose files. `up -d`
-    # leaves them running (they are orphans now, and the deploy does not pass
-    # --remove-orphans because it would also take out containers other compose files
-    # on the box started under the same project). Left running they do real harm:
-    # egov-notification-sms and novu-bridge both consume egov.core.notification.sms,
-    # so every login OTP would go out twice through two providers; otp-publisher keeps
-    # publishing the retired OTP event. Removed only when the notification stack is on
-    # (novu-bridge now does their job) and only a container that compose created for
-    # that service in THIS deployment directory.
-    - name: "notification stack — remove the retired egov-notification-sms / otp-publisher / novu-bridge-endpoint containers"
-      when:
-        - ansible_system != "Darwin"
-        - enable_novu | default(false)
-      ansible.builtin.shell: |
-        set -eo pipefail
-        GONE=""
-        for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
-          docker inspect "$svc" >/dev/null 2>&1 || continue
-          owner="$(docker inspect --format '{{ '{{' }}index .Config.Labels "com.docker.compose.service"{{ '}}' }}|{{ '{{' }}index .Config.Labels "com.docker.compose.project.working_dir"{{ '}}' }}' "$svc")"
-          if [ "$owner" != "$svc|{{ digit_dir }}" ]; then
-            echo "SKIP $svc: not this deployment's compose container ($owner)"
-            continue
-          fi
-          docker rm -f "$svc" >/dev/null
-          GONE="$GONE $svc"
-        done
-        [ -z "$GONE" ] && { echo "NOCHANGE no retired notification containers"; exit 0; }
-        echo "removed:$GONE"
-      args:
-        executable: /bin/bash
-      register: retired_notification_containers
-      changed_when: "'removed:' in (retired_notification_containers.stdout | default(''))"
 
     # macOS/Rosetta: JVM services cold-start slower than compose's
     # depends_on: service_healthy timeouts, so the first `up -d` aborts
@@ -4927,12 +4935,19 @@
       when: state_root != 'pg'
 
     # novu-bridge is not in the recreate list below: "novu-bootstrap — recreate
-    # novu-bridge" runs later in this play with --force-recreate, which picks it up.
+    # novu-bridge" runs later in this play with --force-recreate, and it recreates the
+    # bridge whenever THIS rewrite changed the file — whether or not a Novu key exists.
+    # The compose file is copied fresh (with `pg`) on every run, so on a state_root other
+    # than pg this reports changed every time, and the main `up -d` has just started the
+    # bridge with `pg`. Without that recreate a box with no Novu key (direct SMSCountry
+    # sends without one) kept `pg`: every login OTP checked against pg's channel policy
+    # and filed under pg.
     - name: "post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'
         replace: '\1NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: {{ state_root }}'
+      register: core_sms_tenant_rewrite
       when: state_root != 'pg'
 
     - name: "post-bootstrap — set EGOV_STATE_LEVEL_TENANT_ID (state-root) in compose"
@@ -5617,13 +5632,18 @@
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length > 0
 
-    - name: "novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY"
+    # Two things only reach the bridge through this recreate: the Novu key written into
+    # .env just above, and the NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT pg → state_root rewrite
+    # in the compose file ("post-bootstrap" above). The second must not wait for the
+    # first: with no Novu key the bridge still sends direct-gateway SMS (OTPs included),
+    # and would keep checking and filing every one of them under `pg`.
+    - name: "novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY and the state-root OTP tenant"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate novu-bridge
       when:
         - enable_novu | default(false)
-        - (effective_novu_key | default('')) | length > 0
+        - ((effective_novu_key | default('')) | length > 0) or ((core_sms_tenant_rewrite | default({})) is changed)
       changed_when: false
 
     - name: "novu-bootstrap — provider setup hint (Novu key auto-minted; no provider yet)"
@@ -6479,17 +6499,20 @@
         - state_root != 'pg'
         - verify_tenant_masters | default(true) | bool
       tags: ['master-repair']
-      ansible.builtin.shell: |
-        cd {{ digit_dir }}
-        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
-        SOURCE_TENANT=pg \
-        TARGET_TENANT={{ state_root }} \
-        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
-        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
-        DIGIT_LOGIN_TENANT={{ state_root }} \
-        APPLY={{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }} \
-        OPT_IN_HINT={{ master_repair_opt_in | quote }} \
-        python3 repair-tenant-masters.py
+      # Credentials go through `environment:`, never the command line: a failed task
+      # prints its `cmd`, and the admin password used to be in it.
+      ansible.builtin.command: python3 repair-tenant-masters.py
+      args:
+        chdir: "{{ digit_dir }}"
+      environment:
+        DIGIT_URL: "http://127.0.0.1:{{ upstream_kong_port }}"
+        SOURCE_TENANT: pg
+        TARGET_TENANT: "{{ state_root }}"
+        DIGIT_USERNAME: "{{ notif_seed_user | default('ADMIN') }}"
+        DIGIT_PASSWORD: "{{ notif_seed_pass | default('eGov@123') }}"
+        DIGIT_LOGIN_TENANT: "{{ state_root }}"
+        APPLY: "{{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }}"
+        OPT_IN_HINT: "{{ master_repair_opt_in }}"
       vars:
         master_repair_opt_in: >-
           ./deploy.sh {{ inventory_hostname }} -e repair_tenant_masters=true
@@ -6589,9 +6612,18 @@
     #     operator, per tenant, after reviewing `migrate-notifications.py plan`
     #     (docs/2.20/notifications/migration.md). No row is copied, no default merged.
     #   • already on NOTIFICATIONS.*: left exactly as it is.
-    #   • no configuration at all (fresh install): the shipped defaults, written straight
-    #     into NOTIFICATIONS.* (routing last, held back if a template write failed), the
-    #     event catalogue generated from the tenant's live workflow.
+    #   • no configuration at all AND no complaint ever filed at the tenant (a fresh
+    #     install): the shipped defaults, written straight into NOTIFICATIONS.* (routing
+    #     last, held back if a template write failed), the event catalogue generated from
+    #     the tenant's live workflow.
+    #   • no configuration but complaints filed (or the count unreadable): NOT seeded. This
+    #     is what a 2.12 tenant on the old hard-coded path (pgr_notification_config_driven:
+    #     false, wording from novu-bridge-endpoint) looks like, and the defaults would change
+    #     its wording and audiences unreviewed. Reported (NOTIFICATIONS-MIGRATION-PENDING,
+    #     state=none); the operator installs the defaults after `migrate-notifications.py
+    #     plan --adopt-defaults`. `notifications_adopt_defaults: true` in host_vars is the
+    #     explicit override for a fresh install whose database arrived with complaints (a
+    #     demo dump) — it never touches a tenant that has configuration.
     #
     # This is NOT inert: novu-bridge reads these rows. A tenant is served from
     # NOTIFICATIONS.* as soon as it has one NOTIFICATIONS.Routing row, and its channels
@@ -6681,19 +6713,49 @@
           {{ 'the running novu-bridge container'
              if (notif_bridge_env.rc | default(1)) == 0
              else 'host_vars novu_bridge_channels_enabled (no novu-bridge container)' }}
+        # The state root the seed runs at (and logs in to).
+        notif_seed_tenant: >-
+          {{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }}
+
+    # The fresh-install signal for a tenant with NO notification configuration. MDMS cannot
+    # tell a fresh install from a 2.12 tenant that ran on the old hard-coded path (no MDMS
+    # notification rows either), and seeding the shipped defaults into the second changes
+    # what its citizens receive with no review — so the seeder writes defaults only when
+    # no complaint has ever been filed at the tenant or its cities. Counted in the database:
+    # authoritative, no gateway ABAC scoping, and independent of pgr-services still booting.
+    # Any failure leaves the count empty, which the seeder reads as "unknown" — never zero —
+    # and then it writes no defaults and says how to install them after a review
+    # (migrate-notifications.py --adopt-defaults). The tenant goes in as a psql variable,
+    # never spliced into the SQL.
+    - name: "notif-seed — count the complaints ever filed at the tenant (fresh-install signal)"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf "select count(*) from eg_pgr_service_v2 where tenantid = :'t' or tenantid like :'t' || '.%%';\n" \
+          | docker exec -i docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -v t="$NOTIF_TENANT" -tAq
+      args:
+        executable: /bin/bash
+      environment:
+        NOTIF_TENANT: "{{ notif_seed_tenant }}"
+      register: notif_tenant_complaints
+      changed_when: false
+      failed_when: false
 
     - name: "notif-seed — access-control rows (phase 1 of 2)"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
-      ansible.builtin.shell: |
-        cd {{ digit_dir }}/notification-seed
-        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
-        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
-        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
-        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
-        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
-        NOTIF_SEED_PHASE=access \
-        python3 seed-notifications.py
+      # Credentials via `environment:` (never in `cmd`, which a failed task prints).
+      ansible.builtin.command: python3 seed-notifications.py
+      args:
+        chdir: "{{ digit_dir }}/notification-seed"
+      environment:
+        DIGIT_URL: "http://127.0.0.1:{{ upstream_kong_port }}"
+        NOTIF_TENANT: "{{ notif_seed_tenant }}"
+        DIGIT_USERNAME: "{{ notif_seed_user | default('ADMIN') }}"
+        DIGIT_PASSWORD: "{{ notif_seed_pass | default('eGov@123') }}"
+        DIGIT_LOGIN_TENANT: "{{ notif_seed_tenant }}"
+        NOTIF_SEED_PHASE: access
       register: notif_seed_acl
       changed_when: "'ACL-CHANGED' in (notif_seed_acl.stdout | default(''))"
       # Judged by the next two tasks, so the failure says what to do about it.
@@ -6760,19 +6822,24 @@
     - name: "notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)"
       when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
-      ansible.builtin.shell: |
-        cd {{ digit_dir }}/notification-seed
-        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
-        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
-        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
-        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
-        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
-        SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
-        NOTIF_SCHEMA_FILE={{ digit_dir }}/notification-seed/NOTIFICATIONS.json \
-        DATA_DIR={{ digit_dir }}/notification-seed \
-        NOTIF_SEED_PHASE=data \
-        NOTIF_CHANNELS_ALLOWLIST={{ notif_channels_allowlist | trim | quote }} \
-        python3 seed-notifications.py
+      ansible.builtin.command: python3 seed-notifications.py
+      args:
+        chdir: "{{ digit_dir }}/notification-seed"
+      environment:
+        DIGIT_URL: "http://127.0.0.1:{{ upstream_kong_port }}"
+        NOTIF_TENANT: "{{ notif_seed_tenant }}"
+        DIGIT_USERNAME: "{{ notif_seed_user | default('ADMIN') }}"
+        DIGIT_PASSWORD: "{{ notif_seed_pass | default('eGov@123') }}"
+        DIGIT_LOGIN_TENANT: "{{ notif_seed_tenant }}"
+        SCHEMA_FILE: "{{ digit_dir }}/notification-seed/RAINMAKER-PGR.json"
+        NOTIF_SCHEMA_FILE: "{{ digit_dir }}/notification-seed/NOTIFICATIONS.json"
+        DATA_DIR: "{{ digit_dir }}/notification-seed"
+        NOTIF_SEED_PHASE: data
+        # Set even when empty: "" is "the bridge enables nothing", unset is "unknown".
+        NOTIF_CHANNELS_ALLOWLIST: "{{ notif_channels_allowlist | trim }}"
+        # Empty when the count failed: the seeder reads that as unknown, never as zero.
+        NOTIF_TENANT_COMPLAINTS: "{{ (notif_tenant_complaints.stdout | default('') | trim) if (notif_tenant_complaints.rc | default(1)) == 0 else '' }}"
+        NOTIF_ADOPT_DEFAULTS: "{{ '1' if (notifications_adopt_defaults | default(false) | bool) else '' }}"
       register: notif_seed
       changed_when: "'ROWS-CREATED' in (notif_seed.stdout | default(''))"
       # Exit 3 = a write was refused with 403: handled by the restart + second pass
@@ -6825,18 +6892,24 @@
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
         sleep 10
-        cd {{ digit_dir }}/notification-seed
-        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
-        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
-        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
-        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
-        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
-        SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
-        NOTIF_SCHEMA_FILE={{ digit_dir }}/notification-seed/NOTIFICATIONS.json \
-        DATA_DIR={{ digit_dir }}/notification-seed \
-        NOTIF_SEED_PHASE=data \
-        NOTIF_CHANNELS_ALLOWLIST={{ notif_channels_allowlist | trim | quote }} \
         python3 seed-notifications.py
+      args:
+        chdir: "{{ digit_dir }}/notification-seed"
+      environment:
+        DIGIT_URL: "http://127.0.0.1:{{ upstream_kong_port }}"
+        NOTIF_TENANT: "{{ notif_seed_tenant }}"
+        DIGIT_USERNAME: "{{ notif_seed_user | default('ADMIN') }}"
+        DIGIT_PASSWORD: "{{ notif_seed_pass | default('eGov@123') }}"
+        DIGIT_LOGIN_TENANT: "{{ notif_seed_tenant }}"
+        SCHEMA_FILE: "{{ digit_dir }}/notification-seed/RAINMAKER-PGR.json"
+        NOTIF_SCHEMA_FILE: "{{ digit_dir }}/notification-seed/NOTIFICATIONS.json"
+        DATA_DIR: "{{ digit_dir }}/notification-seed"
+        NOTIF_SEED_PHASE: data
+        # Set even when empty: "" is "the bridge enables nothing", unset is "unknown".
+        NOTIF_CHANNELS_ALLOWLIST: "{{ notif_channels_allowlist | trim }}"
+        # Empty when the count failed: the seeder reads that as unknown, never as zero.
+        NOTIF_TENANT_COMPLAINTS: "{{ (notif_tenant_complaints.stdout | default('') | trim) if (notif_tenant_complaints.rc | default(1)) == 0 else '' }}"
+        NOTIF_ADOPT_DEFAULTS: "{{ '1' if (notifications_adopt_defaults | default(false) | bool) else '' }}"
       register: notif_seed_second
       changed_when: "'ROWS-CREATED' in (notif_seed_second.stdout | default(''))"
       failed_when: false
@@ -6864,7 +6937,8 @@
           goes (flush that user's auth_to_access/auth/access/uname_to_access/refresh keys in
           digit-redis, then re-run). Exit 2 = a core master failed, or the tenant's
           notification masters could not be read (nothing was written then); read the lines
-          above. A tenant's configuration is never modified by this step. Re-run with
+          above. A tenant's configuration is never modified by this step (credentials were
+          passed in the task environment, so none appear above). Re-run with
           `./deploy.sh {{ state_root | default('<tenant>') }} --tags notifications`.
           {{ notif_seed_second.stdout_lines | default([]) | select('search', 'FORBIDDEN|FAILED|NOTIF-|CHANNEL-') | list }}
 
@@ -6881,6 +6955,7 @@
       when:
         - seed_notifications | default(enable_novu | default(false))
         - "'NOTIFICATIONS-MIGRATION-PENDING' in (notif_seed_final.stdout | default(''))"
+        - "' state=legacy ' in (notif_seed_final.stdout | default(''))"
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: >-
@@ -6891,6 +6966,34 @@
           `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
           python3 migrate-notifications.py plan --tenant {{ state_root | default('<tenant>') }}`,
           then the same with `apply ... --yes`. See docs/2.20/notifications/migration.md.
+
+    # No configuration in either namespace, and not provably a fresh install (complaints
+    # have been filed at it, or they could not be counted). The deploy wrote no default:
+    # on a tenant that ran 2.12's hard-coded path they would change what citizens receive,
+    # unreviewed. Until the defaults are installed, complaint events are SKIPPED /
+    # NB_NO_ROUTING, so this is the one PENDING state that costs notifications — say so.
+    - name: "notif-seed — ACTION: this tenant has no notification configuration — review and install the defaults"
+      when:
+        - seed_notifications | default(enable_novu | default(false))
+        - "'NOTIFICATIONS-MIGRATION-PENDING' in (notif_seed_final.stdout | default(''))"
+        - "' state=none ' in (notif_seed_final.stdout | default(''))"
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: >-
+          {{ notif_seed_tenant | default(state_root) }} has no notification configuration in
+          either namespace, and it is not provably a fresh install
+          ({{ ((notif_tenant_complaints.stdout | default('') | trim) ~ ' complaint(s) filed at it')
+              if (notif_tenant_complaints.rc | default(1)) == 0 and (notif_tenant_complaints.stdout | default('') | trim) | length > 0
+              else 'the complaint count could not be read' }}), so this deploy did NOT write the
+          shipped defaults: a 2.12 tenant on the old hard-coded path looks exactly like this, and
+          they would change what its citizens receive. Until it has a configuration novu-bridge
+          sends it NO complaint notifications (SKIPPED / NB_NO_ROUTING; login OTPs are not
+          affected). Review, then install (one-way):
+          `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
+          python3 migrate-notifications.py plan --tenant {{ notif_seed_tenant | default(state_root) }} --adopt-defaults`,
+          then the same with `apply ... --adopt-defaults --yes`. A fresh install restored from a
+          dump with demo complaints: set `notifications_adopt_defaults: true` in host_vars and
+          re-run `--tags notifications` instead. See docs/2.20/notifications/migration.md.
 
     - name: "notif-seed — WARNING: channel rows were not written"
       when:

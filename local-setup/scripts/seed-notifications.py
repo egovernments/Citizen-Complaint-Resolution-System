@@ -14,11 +14,31 @@ A DEPLOY UPGRADES SOFTWARE ONLY. It never moves a tenant's configuration:
     masters (that added every default notification a customised tenant never had).
   - a tenant already on NOTIFICATIONS.* (any NOTIFICATIONS.Routing row, active or not) is
     left exactly as it is: no default row is added to it either.
-  - a tenant with NO configuration in either namespace (a fresh install) gets the shipped
-    defaults, written STRAIGHT into NOTIFICATIONS.* — never into the legacy masters. There
-    is nothing on such a tenant to review or preserve, so routing it through the legacy
-    masters and a migration would only create a tenant that starts out "not migrated"
-    (read-only in the Configurator) with a second copy of every row.
+  - a tenant with NO configuration in either namespace is one of two very different
+    things, and MDMS alone cannot tell them apart:
+      fresh  a fresh install. Nothing has been sent from it, so there is nothing to review
+             or preserve: it gets the shipped defaults, written STRAIGHT into
+             NOTIFICATIONS.* — never into the legacy masters (that would only create a
+             tenant that starts out "not migrated", read-only in the Configurator, with a
+             second copy of every row).
+      none   a 2.12 tenant that ran on the OLD HARD-CODED path
+             (pgr_notification_config_driven: false — every tenant but Bomet): its wording
+             and audiences came from novu-bridge-endpoint/workflows.js, not from MDMS.
+             Writing the shipped defaults would change what its citizens receive with no
+             plan or preview, so NOTHING is written: it is reported
+             (NOTIFICATIONS-MIGRATION-PENDING) and an operator installs the defaults after
+             reviewing them, with `migrate-notifications.py plan/apply --adopt-defaults` —
+             the same state that script calls `none`.
+    The signal that tells them apart is whether a citizen has ever used the tenant: a
+    tenant is `fresh` only when the caller counted ZERO PGR complaints filed at it and its
+    cities (NOTIF_TENANT_COMPLAINTS=0 — the playbook counts them in the database). There is
+    no reliable "the bootstrap created this tenant during this run" signal: a deploy is
+    re-run, runs with --tags, and onboards a second tenant on a box that already runs one.
+    A count that is missing or unreadable is NOT zero: the tenant is `none`, the safe side —
+    the worst case is a fresh tenant that waits for one reviewed migrate command, never a
+    live tenant whose notifications change unannounced. NOTIF_ADOPT_DEFAULTS=1 is the
+    operator's explicit override for a fresh install whose database arrived with complaints
+    in it (a demo dump); it never touches a tenant that has configuration.
 
 Single source of truth: the SAME committed JSON that ships in the default-data-handler
 image —
@@ -41,8 +61,8 @@ copied blindly from the committed all-off file:
     intended out-of-box default. `gateway` is left out of these rows so the
     deployment's NOVU_BRIDGE_SMS_PROVIDER keeps choosing the SMS transport, as today.
     They go to the namespace the tenant's configuration is in: the legacy master for a
-    tenant still on its 2.12 configuration (the migration copies them), NOTIFICATIONS.Channel
-    otherwise.
+    tenant still on its 2.12 configuration, or one waiting for its defaults (`none`) — the
+    migration copies them — and NOTIFICATIONS.Channel otherwise.
   - a tenant that already has channel rows is left alone entirely: nothing is added
     (a channel without a row is already off) and existing rows are never modified. The
     one exception is finishing an allowlist seed that an earlier run left half done.
@@ -70,9 +90,9 @@ and "upgrade" work from the one task. They run in this order:
                committed definition has is reported as STALE (mdms-v2 cannot update a
                schema in place).
   3. state     which configuration the tenant has (NOTIFICATIONS-STATE: legacy |
-               notifications | fresh), by the rule above.
+               notifications | fresh | none), by the rule above.
   4. channels  channel rows for a tenant that has none, by the rule above.
-  5. defaults  fresh tenants only: the shipped defaults into NOTIFICATIONS.*, the event
+  5. defaults  fresh tenants only (never `none`): the shipped defaults into NOTIFICATIONS.*, the event
                catalogue generated from the tenant's LIVE workflow (the committed file
                when egov-workflow-v2 cannot answer). Routing is written LAST and only when
                every Template and ProviderTemplate write succeeded: the bridge serves a
@@ -102,6 +122,17 @@ Env:
   NOTIF_CHANNELS_ALLOWLIST  the NOVU_BRIDGE_CHANNELS_ENABLED value novu-bridge runs
                      with, e.g. "SMS,EMAIL"; "" = nothing enabled. UNSET = unknown,
                      and a tenant without channel rows gets none (see above).
+  NOTIF_TENANT_COMPLAINTS  how many PGR complaints have ever been filed at NOTIF_TENANT and
+                     its cities, counted by the caller (the playbook reads eg_pgr_service_v2).
+                     Only "0" makes a tenant with no notification configuration `fresh`;
+                     unset, empty or anything else = not provably fresh = `none` (see above).
+  NOTIF_ADOPT_DEFAULTS  1 = seed the shipped defaults into a tenant with NO notification
+                     configuration even though complaints were counted (or none could be):
+                     the operator's decision, e.g. a fresh install restored from a demo dump
+                     (host_vars notifications_adopt_defaults). A tenant WITH configuration is
+                     never affected. For a tenant citizens use, prefer
+                     `migrate-notifications.py plan/apply --adopt-defaults`, which shows the
+                     rows before writing them.                     (default: unset)
   SEED_ACCESS_CONTROL  set to 0 to skip job 1                      (default: 1)
   (COPY_TO_NOTIFICATIONS is no longer read: the deploy never copies a tenant's
    configuration. Migrating it is migrate-notifications.py's job.)
@@ -140,7 +171,11 @@ PHASE = os.environ.get("NOTIF_SEED_PHASE", "all").strip().lower()
 # None (unset) is deliberately different from "" (set, empty): "" is a deployment that
 # enables nothing, None is a caller that did not say — see the module docstring.
 CHANNELS_ALLOWLIST_RAW = os.environ.get("NOTIF_CHANNELS_ALLOWLIST")
-BASIC = "Basic ZWdvdi11c2VyLWNsaWVudDo="  # egov-user-client: (empty secret)
+# The fresh-install evidence for a tenant with no notification configuration (see the
+# module docstring and fresh_install_evidence). Raw strings: validated where they are used.
+TENANT_COMPLAINTS_RAW = os.environ.get("NOTIF_TENANT_COMPLAINTS")
+ADOPT_DEFAULTS_RAW = os.environ.get("NOTIF_ADOPT_DEFAULTS")
+BASIC ="Basic ZWdvdi11c2VyLWNsaWVudDo="  # egov-user-client: (empty secret)
 
 NOTIF_CODES = [
     "RAINMAKER-PGR.NotificationRouting",
@@ -647,14 +682,16 @@ def _utc():
 # ── Which configuration a tenant has ────────────────────────────────────────
 
 def deploy_state(tok, tenant=None):
-    """('notifications' | 'legacy' | 'fresh' | None, {code: row count}).
+    """('notifications' | 'legacy' | 'fresh' | None, {code: row count}) — from MDMS alone.
 
     notifications  at least one NOTIFICATIONS.Routing row (active or not): novu-bridge
                    serves the tenant from NOTIFICATIONS.* — the deploy leaves it alone
     legacy         2.12 rows in RAINMAKER-PGR.Notification{Routing,Template,
                    ProviderTemplate} and no NOTIFICATIONS.Routing: served through the
                    bridge's legacy adapter until migrate-notifications.py moves it
-    fresh          neither: nothing to preserve, the shipped defaults are seeded
+    fresh          neither namespace has configuration. MDMS cannot say more than that:
+                   run_data_phase narrows it to `fresh` (the shipped defaults are seeded)
+                   or `none` (nothing is written) with fresh_install_evidence
     None           a read failed; nothing may be decided (or written) from that
     """
     counts = {}
@@ -668,6 +705,31 @@ def deploy_state(tok, tenant=None):
     if any(counts[c] for c in LEGACY_CONTENT):
         return "legacy", counts
     return "fresh", counts
+
+
+def fresh_install_evidence(complaints_raw, adopt_raw):
+    """(fresh, why) for a tenant with NO notification configuration in either namespace.
+    Pure: the caller passes NOTIF_TENANT_COMPLAINTS and NOTIF_ADOPT_DEFAULTS as read.
+
+    fresh=True   the shipped defaults may be written by this run: no complaint has ever
+                 been filed at the tenant (so nothing was ever sent from it, and nothing a
+                 citizen has seen can change), or the operator said so explicitly.
+    fresh=False  `none`: it may be a 2.12 tenant that ran on the old hard-coded path, whose
+                 wording the defaults would silently replace. Also the answer whenever the
+                 count is missing or is not a number — unknown is never read as zero.
+    """
+    raw = (complaints_raw or "").strip()
+    count = int(raw) if raw.isdigit() else None
+    if count == 0:
+        return True, "no complaint has ever been filed at it (a fresh install)"
+    adopt = str(adopt_raw or "").strip().lower() in ("1", "true", "yes")
+    known = ("%d complaint(s) have been filed at it" % count) if count is not None else (
+        "the number of complaints filed at it is unknown (NOTIF_TENANT_COMPLAINTS %s)"
+        % ("was not supplied" if not raw else "= %r is not a count" % raw))
+    if adopt:
+        return True, "NOTIF_ADOPT_DEFAULTS is set (host_vars notifications_adopt_defaults), " \
+                     "although %s" % known
+    return False, known
 
 
 def event_catalogue_rows(tok, tenant=None):
@@ -799,13 +861,16 @@ def _allowlist_row(default_row, enabled):
     return row
 
 
-def _is_allowlist_seed(data, allowlist):
-    """True when a row looks exactly like one _allowlist_row produced for `allowlist`."""
-    return (not data.get("gateway") and not data.get("provider") and not data.get("senderId")
+def _is_allowlist_seed(data, allowlist, ignore_provider=False):
+    """True when a row looks exactly like one _allowlist_row produced for `allowlist`.
+    ignore_provider: a `provider` pin does not disqualify the row (migrate-notifications.py
+    pins providers into the allowlist rows it creates, so a pin is no sign of an edit)."""
+    return (not data.get("gateway") and (ignore_provider or not data.get("provider"))
+            and not data.get("senderId")
             and bool(data.get("enabled")) == (_channel_code(data) in allowlist))
 
 
-def decide_channel_rows(defaults, legacy_records, new_records, allowlist):
+def decide_channel_rows(defaults, legacy_records, new_records, allowlist, ignore_provider=False):
     """Which channel rows to create, and why. Pure.
 
     Returns {"mode", "create": [row, ...] enabled-first, "lines": [str, ...]}.
@@ -817,6 +882,7 @@ def decide_channel_rows(defaults, legacy_records, new_records, allowlist):
       unknown  no rows and no allowlist supplied: write nothing
       conflict no active rows, but an inactive row exists for an allowlisted channel:
                adding rows would switch that channel off, so write nothing
+    ignore_provider is passed through to _is_allowlist_seed (the migration's resume).
     """
     defaults_by_code = {}
     for row in defaults or []:
@@ -875,7 +941,8 @@ def decide_channel_rows(defaults, legacy_records, new_records, allowlist):
     else:
         every = legacy_rows + new_rows
         resumable = (allowlist is not None and missing
-                     and all(active and _is_allowlist_seed(d, allowlist) for d, active in every))
+                     and all(active and _is_allowlist_seed(d, allowlist, ignore_provider)
+                             for d, active in every))
         mode = "resume" if resumable else "rows"
         for code in order:
             if code in governing:
@@ -913,14 +980,17 @@ def decide_channel_rows(defaults, legacy_records, new_records, allowlist):
 def channel_target(legacy_records, new_records, state):
     """The master new channel rows go to: the one whose rows decide today, else the
     namespace the tenant's configuration is in (legacy for a tenant still on its 2.12
-    masters, so the migration carries them across with the rest; NOTIFICATIONS.Channel
-    otherwise). Writing a lone off-row into NOTIFICATIONS.Channel next to governing
-    legacy rows would make it the governing namespace and switch every channel off."""
+    masters, or one waiting for its defaults — `none` — so the migration carries them
+    across with the rest; NOTIFICATIONS.Channel otherwise). A `none` tenant's rows in
+    NOTIFICATIONS.Channel would make migrate-notifications.py see a half-migrated
+    (`partial`) tenant instead of one with nothing to migrate. Writing a lone off-row into
+    NOTIFICATIONS.Channel next to governing legacy rows would make it the governing
+    namespace and switch every channel off."""
     if _governing(new_records):
         return NEW_CHANNEL
     if _governing(legacy_records):
         return LEGACY_CHANNEL
-    return LEGACY_CHANNEL if state == "legacy" else NEW_CHANNEL
+    return LEGACY_CHANNEL if state in ("legacy", "none") else NEW_CHANNEL
 
 
 def fit_rows_to_stored_schema(tok, code, rows, tenant=None):
@@ -1237,8 +1307,27 @@ def run_data_phase(tok):
               "be read) — nothing written" % TENANT)
         print("DONE: 0 created, 0 already-present.  WARNING: tenant state unreadable")
         return 2
-    print("NOTIFICATIONS-STATE: tenant=%s state=%s (%s)" % (TENANT, state, shown))
-    if state == "legacy":
+    why = ""
+    if state == "fresh":
+        # MDMS says "no configuration"; whether that is a fresh install or a 2.12 tenant on
+        # the old hard-coded path is decided by the caller's complaint count (see the module
+        # docstring). Only a provable fresh install gets defaults written by a deploy.
+        fresh, why = fresh_install_evidence(TENANT_COMPLAINTS_RAW, ADOPT_DEFAULTS_RAW)
+        state = "fresh" if fresh else "none"
+    print("NOTIFICATIONS-STATE: tenant=%s state=%s (%s)%s"
+          % (TENANT, state, shown, (" — " + why) if why else ""))
+    if state == "none":
+        print("NOTIFICATIONS-MIGRATION-PENDING: tenant %s has no notification configuration in "
+              "either namespace, and %s. It is not treated as a fresh install: a 2.12 tenant that "
+              "sent its notifications from the old hard-coded path looks exactly like this, and "
+              "the shipped defaults would change what its citizens receive without a review. "
+              "This deploy wrote no default row. Until it has a configuration, novu-bridge sends "
+              "it no complaint notifications (every event SKIPPED / NB_NO_ROUTING; login OTPs do "
+              "not use this configuration). Review the defaults and install them with "
+              "`migrate-notifications.py plan --tenant %s --adopt-defaults`, then "
+              "`apply --tenant %s --adopt-defaults --yes`."
+              % (TENANT, why, TENANT, TENANT))
+    elif state == "legacy":
         print("NOTIFICATIONS-MIGRATION-PENDING: tenant %s has its 2.12 configuration (%s legacy "
               "Routing/Template/ProviderTemplate rows) and no NOTIFICATIONS.Routing row. This "
               "deploy left it as it is: novu-bridge keeps serving it through the legacy "
@@ -1271,8 +1360,10 @@ def run_data_phase(tok):
         note = "  WARNING: failures in %s" % ", ".join(failed_masters)
     if seed_failed:
         # A fresh tenant whose Routing was held has NO configuration in either namespace,
-        # so it is still "fresh" and the next run finishes the seed. What is lost until
-        # then: its notifications (there is nothing to serve).
+        # so the next run finishes the seed — as long as it is still provably fresh (no
+        # complaint filed in between); otherwise that run reports it `none` and the
+        # operator finishes it with migrate-notifications.py --adopt-defaults. What is lost
+        # until then: its notifications (there is nothing to serve).
         print("NOTIFICATIONS-SEED-INCOMPLETE: %d default row(s) not written for %s%s — re-run "
               "with --tags notifications" % (seed_failed, TENANT,
                                             " (routing held back)" if routing_held else ""))

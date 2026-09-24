@@ -45,7 +45,11 @@ provider serves the whole deployment, so an admin role held only at a city (`ke.
 count. An admin role also satisfies the first tier. Logs and the config-source report answer only
 for your own tenant — for a user at the state tenant, the state and its cities — and
 `403 NB_TENANT_NOT_ALLOWED` for any other. Editing Channels / Routing / Templates / Provider Templates is
-governed by the ordinary MDMS roles (`MDMS_ADMIN`, `ACCOUNT_ADMIN`, `SUPERUSER`).
+governed by the ordinary MDMS roles (`MDMS_ADMIN`, `ACCOUNT_ADMIN`, `SUPERUSER`); the Channels
+card's switches and provider choice, and **Sync WhatsApp templates**, are only offered to those
+roles. Every Configurator save — the Channels card and a provider's Disable/Delete included — runs
+the checker first, blocks on an error it would cause, and waits until the configuration it checks
+against has loaded.
 
 ## 2. Turn the stack on
 
@@ -386,7 +390,7 @@ Checklist:
 | `403 NB_TENANT_NOT_ALLOWED` on Logs, or on Disable / Delete | Looking at another state's tenant, or managing a provider for a state you are not an admin of | Log in at the tenant you mean |
 | `409 NB_PROVIDER_IN_USE` on Disable / Delete | A channel still selects the provider, or MDMS could not be read | Point the channel at another provider; retry if MDMS was down |
 | Banner "not been migrated yet" | Tenant still on its 2.12 configuration | `migrate-notifications.py plan --tenant mycity`, review, then `apply` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
-| Banner "No notification configuration on this tenant" | Defaults never installed | `./deploy.sh mycity` installs them on a tenant with no configuration |
+| Banner "No notification configuration on this tenant" | Defaults never installed | Fresh install: `./deploy.sh mycity --tags notifications`. A tenant with complaints (the deploy printed `notif-seed — ACTION: this tenant has no notification configuration`): `migrate-notifications.py plan --tenant mycity --adopt-defaults`, then `apply --tenant mycity --adopt-defaults --yes` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
 | OTP login stopped | SMS off or its provider broke | [§4](#4-switch-the-channel-on); look for `CORE.SMS.OTP` rows |
 | `{emp_name}` in a message | Placeholder has no value for that event | Use tokens the Events screen lists for it |
 | `SKIPPED / NB_NO_ROUTING` for a complaint in `pg.citya` | Configuration written at a different root than the complaint's | Log in at the complaint's state root and configure there; re-seed that root ([§8.2](#82-whatsapp-server-side)) |
@@ -403,7 +407,8 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | Setting | Meaning | Default |
 |---|---|---|
 | `enable_novu` | Starts the notification stack | `false` |
-| `seed_notifications` | Seed `NOTIFICATIONS.*` masters, access-control rows, and copy legacy rows | `enable_novu` |
+| `seed_notifications` | Create the notification schemas and access-control rows, channel rows for a tenant with none, and the shipped defaults on a fresh install (no configuration, no complaint ever filed). Never copies legacy rows — that is [migrate-notifications.py](./migration.md#3-copy-each-tenants-configuration) | `enable_novu` |
+| `notifications_adopt_defaults` | Also seed the shipped defaults into a tenant with no configuration that already has complaints. Only for a fresh install restored from a dump with demo complaints; otherwise use `migrate-notifications.py plan/apply --adopt-defaults` | `false` |
 | `enable_otp_services` | Real OTP login; requires `enable_novu` | `false` |
 | `novu_bridge_proxy_allowed_roles` / `novu_bridge_proxy_admin_roles` | The two role tiers ([§1](#1-before-you-start)) | see §1 |
 | `novu_admin_email` / `novu_admin_password` | Novu's first account | — |

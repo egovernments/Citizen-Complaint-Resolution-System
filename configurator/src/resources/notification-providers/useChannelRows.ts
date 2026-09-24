@@ -4,11 +4,11 @@
 //
 // TWO MASTERS, ONE ANSWER. The policy moved from `RAINMAKER-PGR.NotificationChannel`
 // to `NOTIFICATIONS.Channel` — same shape, module-neutral content, different
-// namespace. On a tenant whose deploy-time copy has not run, the legacy rows are
-// still what the bridge enforces, so this hook reads both and lets
+// namespace. On a tenant that has not been migrated (migrate-notifications.py), the
+// legacy rows are still what the bridge enforces, so this hook reads both and lets
 // selectNotificationSource decide which one is live. The legacy rows are shown
 // READ-ONLY: writing them would leave the tenant with two policies, and the
-// copy step (create-only) would then keep the pre-edit values.
+// migration's copy (create-only) would then keep the pre-edit values.
 //
 // The decision here is made on the CHANNEL master alone, deliberately, and not
 // on the whole notification configuration: the bridge reads this master through

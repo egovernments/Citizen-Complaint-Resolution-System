@@ -270,6 +270,12 @@ enable_overpass: false
 # integration and workflow inside Novu.
 enable_novu: true
 
+# This box starts from local-setup/db/full-dump.sql, which ships three demo
+# complaints under pg. Without this the deploy would (rightly) not treat pg as a
+# fresh install and would install no default notification configuration. Only for
+# a local box built from the dump — see notifications_adopt_defaults in _example.yml.
+notifications_adopt_defaults: true
+
 # Build a subpath-rebased Novu dashboard so the SPA serves cleanly under /novu.
 # Values: true | false. REQUIRED true when Keycloak shares the domain, because
 # the stock image's nginx workaround hijacks the whole /auth/ prefix.

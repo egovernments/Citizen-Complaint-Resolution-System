@@ -34,6 +34,7 @@ import {
   useDelete,
   useRefresh,
   useNotify,
+  useTranslate,
 } from 'ra-core';
 import { FieldSection } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
@@ -93,7 +94,7 @@ import {
   type PendingChange,
 } from './notificationSaveGuard';
 import { GuardBanner, FindingList } from './NotificationFindings';
-import { useNotificationConfig, type Ided } from './useNotificationGuard';
+import { CONFIG_LOADING_KEY, CONFIG_LOADING_MESSAGE, useNotificationConfig, type Ided } from './useNotificationGuard';
 import { canWrite } from './notificationSource';
 import { OtpWordingSection } from './OtpWordingSection';
 
@@ -278,6 +279,7 @@ function NotificationForm({
   onCancel: () => void;
 }) {
   const notify = useNotify();
+  const translate = useTranslate();
   const [create] = useCreate();
   const [update] = useUpdate();
   const [deleteOne] = useDelete();
@@ -359,8 +361,15 @@ function NotificationForm({
             : undefined,
         },
       ];
-      const guard = snapshot ? checkPendingChanges(snapshot, changes) : null;
-      if (guard && guard.blocking.length > 0) {
+      // Not before the configuration the check needs has loaded: this form only exists for
+      // an event the catalogue lists, so a null snapshot here means "still loading", and a
+      // save now would go through unchecked.
+      if (!snapshot) {
+        notify(translate(CONFIG_LOADING_KEY, { _: CONFIG_LOADING_MESSAGE }), { type: 'warning' });
+        return;   // `finally` clears `saving`
+      }
+      const guard = checkPendingChanges(snapshot, changes);
+      if (guard.blocking.length > 0) {
         setBlocked(guard);
         notify(blockingSummary(guard.blocking), { type: 'error' });
         return;   // `finally` clears `saving`
@@ -562,6 +571,7 @@ function EventRow({
   onChanged: () => void;
 }) {
   const notify = useNotify();
+  const translate = useTranslate();
   const [deleteOne] = useDelete();
   const [adding, setAdding] = useState(false);
   const [editSeed, setEditSeed] = useState<EditSeed | null>(null);
@@ -602,13 +612,16 @@ function EventRow({
     // last template for a still-active routing row leaves the tenant unable to
     // send, so the checker gets a say before the delete is issued.
     const t0 = findTemplate(r);
-    const guard = snapshot
-      ? checkPendingChanges(snapshot, [
-          { resource: 'notifications-routing', op: 'remove', row: r as Record<string, unknown> },
-          ...(t0 ? [{ resource: 'notifications-template' as const, op: 'remove' as const, row: t0 as Record<string, unknown> }] : []),
-        ])
-      : null;
-    if (guard && guard.blocking.length > 0) {
+    if (!snapshot) {
+      // Still loading (a row is only shown for a catalogued event): no unchecked removal.
+      notify(translate(CONFIG_LOADING_KEY, { _: CONFIG_LOADING_MESSAGE }), { type: 'warning' });
+      return;
+    }
+    const guard = checkPendingChanges(snapshot, [
+      { resource: 'notifications-routing', op: 'remove', row: r as Record<string, unknown> },
+      ...(t0 ? [{ resource: 'notifications-template' as const, op: 'remove' as const, row: t0 as Record<string, unknown> }] : []),
+    ]);
+    if (guard.blocking.length > 0) {
       notify(`${blockingSummary(guard.blocking)} ${guard.blocking[0].message}`, { type: 'error' });
       return;
     }

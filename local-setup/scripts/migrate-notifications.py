@@ -21,8 +21,10 @@ plan    read-only. Per state tenant: the category —
           customised  legacy rows that differ: rows only in the tenant, only in the
                       defaults, and every changed field (body, subject, active, ...)
           migrated    already served from NOTIFICATIONS.*
-          partial     NOTIFICATIONS.* rows but no Routing, a copy that did not finish,
-                      no event catalogue, or an interrupted default seed
+          partial     NOTIFICATIONS.* rows but no Routing, a copy that did not finish
+                      (configuration rows, or channel rows: a legacy channel code missing
+                      from a non-empty NOTIFICATIONS.Channel is OFF until it is copied), no
+                      event catalogue, or an interrupted default seed
         — then the rows `apply` would create (after conversion), the event catalogue from
         the tenant's LIVE workflow, the channel policy now and after, the provider pin per
         channel, and warnings (routing for events the live workflow cannot produce,
@@ -37,7 +39,8 @@ apply   copies THE TENANT'S OWN legacy rows through the converter — never the 
         catalogued event and locale; nothing is sent, no ledger row is written). Any
         difference in who / channel / locale / text makes the tenant WARN.
 
-Idempotent: a re-run skips rows already there (reported as present). Each tenant is
+Idempotent: a re-run skips rows already there (reported as present) and finishes what an
+earlier run left undone — channel rows included, per channel code. Each tenant is
 isolated: a failure is reported and the next tenant still runs. `apply` needs --yes;
 with --all it also needs --only, and customised/partial tenants are applied only when
 named with --tenant or listed in --only.
@@ -290,16 +293,31 @@ def bridge_settings(args):
     return out
 
 
-def derive_type(integration):
-    """ProviderCatalog.deriveType: the identifier marker first, then the unambiguous
-    providerId+channel pairs. Unmarked generic-sms stays None (SMSCountry and Ozeki look
-    identical, and a guess would pick the wrong request body)."""
-    ident = str(integration.get("identifier") or "").strip().lower()
+def type_from_identifier(identifier):
+    """ProviderCatalog.typeFromIdentifier: the catalog type an identifier reads back as —
+    `<type>` or `<type>-…`, longest type first (so twilio-whatsapp-… is never twilio-sms),
+    or the pre-catalog `whatsapp-…` marker — else None. novu-bridge refuses to create a
+    provider whose caller-supplied identifier does not read back as its own type (400
+    NB_INVALID_PROVIDER): dispatch picks the request body, and rotation the credential form,
+    from the identifier alone."""
+    ident = str(identifier or "").strip().lower()
+    if not ident:
+        return None
     for kind in TYPES_LONGEST_FIRST:
         if ident == kind or ident.startswith(kind + "-"):
             return kind
     if ident.startswith("whatsapp-"):
         return "twilio-whatsapp"
+    return None
+
+
+def derive_type(integration):
+    """ProviderCatalog.deriveType: the identifier marker first, then the unambiguous
+    providerId+channel pairs. Unmarked generic-sms stays None (SMSCountry and Ozeki look
+    identical, and a guess would pick the wrong request body)."""
+    marked = type_from_identifier(integration.get("identifier"))
+    if marked:
+        return marked
     provider = str(integration.get("providerId") or "").lower()
     channel = str(integration.get("channel") or "").lower()
     if provider == "twilio" and channel == "sms":
@@ -408,6 +426,18 @@ def plan_provider_creation(ctx, args):
         name = str(entry.get("name") or CATALOG_LABEL[kind])
         ident = str(entry.get("identifier") or identifier_for(kind, name))
         existing = [i for i in ctx.integrations if i.get("identifier") == ident]
+        # Checked here, before anything is written, rather than found out mid-apply: the
+        # bridge refuses a caller-supplied identifier that does not read back as its type.
+        # A derived one (identifier_for) always does; an existing provider is not created.
+        if not existing and type_from_identifier(ident) != kind:
+            raise RefuseToStart(
+                "credentials file: identifier %r for provider type %s must start with '%s-' — "
+                "novu-bridge reads the provider type back from the identifier and refuses one "
+                "that %s (400 NB_INVALID_PROVIDER). Fix it, or leave \"identifier\" out to have "
+                "one derived from the name" % (
+                    ident, kind, kind,
+                    "reads as %s" % type_from_identifier(ident) if type_from_identifier(ident)
+                    else "names no type"))
         plans.append({"type": kind, "channel": CATALOG_CHANNEL[kind], "name": name,
                       "identifier": ident, "keys": sorted(values),
                       "state": "exists" if existing else "create",
@@ -576,6 +606,72 @@ def channel_policy_view(records_new, records_legacy, settings):
         settings["allowlist_source"]), "channels": channels}
 
 
+def plan_channel_rows(records, settings, channel_defaults):
+    """The NOTIFICATIONS.Channel rows apply creates, PER CHANNEL CODE. Pure.
+
+    Returns {"rows": [(row, active)], "origin": str, "unfinished": [code, ...]}.
+
+    Never all-or-nothing. NOTIFICATIONS.Channel is keyed on `code` alone, and novu-bridge
+    decides a tenant's channels from it as soon as it holds one active row — a channel
+    without a row there is OFF. So a copy that landed SMS and failed on EMAIL left EMAIL off,
+    and skipping the whole copy because "rows exist" would leave it off for good. Instead:
+      - every legacy channel code missing from NOTIFICATIONS.Channel is copied (a code that
+        is there is kept as it is, never modified — MDMS has no delete, so a code that is
+        missing was never copied);
+      - with no legacy rows, the rows come from NOVU_BRIDGE_CHANNELS_ENABLED by the
+        seeder's own rule (decide_channel_rows), which also finishes an interrupted
+        allowlist seed (mode=resume) and otherwise leaves existing rows to decide.
+    `unfinished` lists the codes whose absence is switching a channel off RIGHT NOW (rows
+    exist in NOTIFICATIONS.Channel, just not these): the tenant is `partial` until they land.
+    """
+    new_records, legacy_records = records[CHANNEL], records[sn.LEGACY_CHANNEL]
+    have = {sn._channel_code(rec.get("data")) for rec in new_records} - {""}
+    allow = settings["allowlist_set"]
+    if legacy_records:
+        conv, _ = nc.convert_records({sn.LEGACY_CHANNEL: legacy_records})
+        rows, seen = [], set()
+        for row in conv.get(CHANNEL, []):
+            code = sn._channel_code(row)
+            if not code or code in have or code in seen:
+                continue  # no code: the schema refuses it; present: kept; duplicate: first wins
+            seen.add(code)
+            rows.append((row, row["active"]))
+        if not have:
+            origin = "copied from RAINMAKER-PGR.NotificationChannel (%d rows)" % len(rows)
+            return {"rows": rows, "origin": origin, "unfinished": []}
+        if not rows:
+            return {"rows": [], "unfinished": [],
+                    "origin": "NOTIFICATIONS.Channel rows exist for every legacy channel: kept as they are"}
+        codes = [sn._channel_code(r) for r, _ in rows]
+        origin = ("NOTIFICATIONS.Channel has %s but not %s, which RAINMAKER-PGR.NotificationChannel "
+                  "has — an earlier copy that did not finish (a channel without a row there is OFF): "
+                  "%s copied, the existing rows kept as they are"
+                  % (", ".join(sorted(have)), ", ".join(codes), "it is" if len(codes) == 1 else "they are"))
+        return {"rows": rows, "origin": origin, "unfinished": codes}
+    if allow is None:
+        origin = ("NOTIFICATIONS.Channel rows exist: kept as they are" if new_records else
+                  "none: the tenant has no channel rows and NOVU_BRIDGE_CHANNELS_ENABLED is unknown "
+                  "(pass --channels-allowlist), so it stays on the env")
+        return {"rows": [], "origin": origin, "unfinished": []}
+    # A migrate-made allowlist row carries a provider pin, so a pin is no sign of an edit here.
+    decision = sn.decide_channel_rows(channel_defaults, [], new_records, allow, ignore_provider=True)
+    rows = [(row, True) for row in decision["create"]]
+    shown = "%s (%s)" % (settings["allowlist"] or '""', settings["allowlist_source"])
+    if decision["mode"] == "env":
+        origin = "from NOVU_BRIDGE_CHANNELS_ENABLED=%s: the tenant has no active channel rows" % shown
+    elif decision["mode"] == "resume":
+        codes = [sn._channel_code(r) for r, _ in rows]
+        origin = ("finishing an interrupted NOVU_BRIDGE_CHANNELS_ENABLED=%s seed: NOTIFICATIONS.Channel "
+                  "has %s but not %s (a channel without a row there is OFF)"
+                  % (shown, ", ".join(sorted(have)), ", ".join(codes)))
+        return {"rows": rows, "origin": origin, "unfinished": codes}
+    elif decision["mode"] == "conflict":
+        origin = "none written (%s)" % "; ".join(decision["lines"])
+    else:
+        origin = "NOTIFICATIONS.Channel rows exist: kept as they are"
+    return {"rows": rows, "origin": origin, "unfinished": []}
+
+
 def transport(ch, info, settings):
     gw = str(info.get("gateway") or "").strip().lower()
     if info.get("provider"):
@@ -647,6 +743,10 @@ def analyse(ctx, tenant, records, missing_schemas, catalogue, catalogue_origin):
     defaults = ctx.defaults
     t["defaultsDiff"] = diff_against_defaults(own, defaults) if legacy_n else None
 
+    # ── channel rows: planned here because an unfinished channel copy decides the category ──
+    settings = ctx.settings
+    channel_plan = plan_channel_rows(records, settings, ctx.channel_defaults)
+
     # ── category ──
     reasons = []
     new_rows = {c: len(records[c]) for c in NEW_ALL}
@@ -671,6 +771,10 @@ def analyse(ctx, tenant, records, missing_schemas, catalogue, catalogue_origin):
         elif not new_rows[CATALOGUE]:
             category = "partial"
             reasons.append("served from NOTIFICATIONS.* but it has no NOTIFICATIONS.EventCatalogue rows")
+        elif channel_plan["unfinished"]:
+            category = "partial"
+            reasons.append("NOTIFICATIONS.Channel lacks %s: %s"
+                           % (", ".join(channel_plan["unfinished"]), channel_plan["origin"]))
         else:
             category = "migrated"
             reasons.append("NOTIFICATIONS.Routing has %d rows: novu-bridge serves NOTIFICATIONS.*"
@@ -694,6 +798,9 @@ def analyse(ctx, tenant, records, missing_schemas, catalogue, catalogue_origin):
         else:
             category = "defaults"
             reasons.append("legacy rows equal the shipped defaults (after conversion)")
+    if channel_plan["unfinished"] and not any(r.startswith("NOTIFICATIONS.Channel lacks") for r in reasons):
+        reasons.append("NOTIFICATIONS.Channel lacks %s: %s"
+                       % (", ".join(channel_plan["unfinished"]), channel_plan["origin"]))
     t["category"], t["reasons"] = category, reasons
 
     # ── what apply writes: content ──
@@ -737,39 +844,32 @@ def analyse(ctx, tenant, records, missing_schemas, catalogue, catalogue_origin):
     catalogue_names = live_names | {k[0] for k in have_cat}
 
     # ── channel rows and provider pins ──
-    settings = ctx.settings
     current = channel_policy_view(records[CHANNEL], records[sn.LEGACY_CHANNEL], settings)
-    if records[CHANNEL]:
-        channel_rows, channel_origin = [], "NOTIFICATIONS.Channel rows exist: kept as they are"
-    elif records[sn.LEGACY_CHANNEL]:
-        conv, _ = nc.convert_records({sn.LEGACY_CHANNEL: records[sn.LEGACY_CHANNEL]})
-        channel_rows = [(row, row["active"]) for row in conv.get(CHANNEL, [])]
-        channel_origin = "copied from RAINMAKER-PGR.NotificationChannel (%d rows)" % len(channel_rows)
-    elif settings["allowlist_set"] is not None:
-        decision = sn.decide_channel_rows(ctx.channel_defaults, [], [], settings["allowlist_set"])
-        channel_rows = [(row, True) for row in decision["create"]]
-        channel_origin = "from NOVU_BRIDGE_CHANNELS_ENABLED=%s (%s): the tenant has no channel rows" % (
-            settings["allowlist"] or '""', settings["allowlist_source"])
-    else:
-        channel_rows = []
-        channel_origin = ("none: the tenant has no channel rows and NOVU_BRIDGE_CHANNELS_ENABLED "
-                          "is unknown (pass --channels-allowlist), so it stays on the env")
-    planned[CHANNEL] = [(dict(row), active) for row, active in channel_rows]
+    planned[CHANNEL] = [(dict(row), active) for row, active in channel_plan["rows"]]
     if planned[CHANNEL]:
-        after = channel_policy_view([{"isActive": a, "data": r} for r, a in planned[CHANNEL]],
+        # What the bridge will read after apply: the rows already there PLUS the ones created.
+        after = channel_policy_view(list(records[CHANNEL]) +
+                                    [{"isActive": a, "data": r} for r, a in planned[CHANNEL]],
                                     records[sn.LEGACY_CHANNEL], settings)
     else:
         after = current
-    t["channels"] = {"now": current, "after": after, "rowsOrigin": channel_origin}
-
     if category == "none" and not ctx.args.adopt_defaults:
         # Nothing of the tenant's to migrate: apply skips it, so plan nothing (not even
-        # the catalogue or channel rows, which would only half-configure it).
+        # the catalogue or channel rows, which would only half-configure it) — and the
+        # channel policy after is the one now.
         planned = {c: [] for c in sn.COPY_ORDER}
+        after = current
         t["catalogue"]["toAdd"] = []
         t["notes"].append("apply skips this tenant: it has no notification configuration. "
                           "--adopt-defaults would seed the shipped defaults (review them in "
                           "utilities/default-data-handler/.../mdmsData-dev/NOTIFICATIONS/)")
+    t["channels"] = {"now": current, "after": after, "rowsOrigin": channel_plan["origin"],
+                     "unfinished": channel_plan["unfinished"] if planned[CHANNEL] else []}
+    for ch in CHANNELS:
+        was, will = current["channels"][ch]["enabled"], after["channels"][ch]["enabled"]
+        if planned[CHANNEL] and was is not None and will is not None and was != will:
+            t["notes"].append("%s is %s now and %s after apply (%s)" % (
+                ch, "ON" if was else "off", "ON" if will else "off", channel_plan["origin"]))
 
     pins, updates = plan_pins(ctx, t, records, planned, after, settings)
     t["providers"], t["_updates"] = pins, updates
@@ -1228,6 +1328,12 @@ def print_tenant(ctx, t, mode):
         print("            %-8s %s  %s" % (ch, state, transport(ch, info, ctx.settings) if info["enabled"] else ""))
     print("            after: %s" % ("unchanged" if not t["plannedCounts"][CHANNEL] else
                                      "NOTIFICATIONS.Channel rows, " + t["channels"]["rowsOrigin"]))
+    if t["plannedCounts"][CHANNEL]:
+        for ch in CHANNELS:
+            was, will = now["channels"][ch]["enabled"], after["channels"][ch]["enabled"]
+            if was != will:
+                print("            %-8s %s → %s" % (ch, {True: "ON", False: "off", None: "?"}[was],
+                                                    {True: "ON", False: "off", None: "?"}[will]))
     print("  providers")
     for ch in CHANNELS:
         dec = t["providers"][ch]

@@ -257,6 +257,36 @@ _svc_env_get() {   # _svc_env_get <service> <VAR> — the value of VAR in the co
     | sed -n "s/^$2=//p" | tail -n1
 }
 
+# _remove_retired_notification_containers — containers of services this release removed.
+# `up -d` leaves them running as orphans, and egov-notification-sms keeps consuming
+# egov.core.notification.sms alongside novu-bridge — every login OTP sent twice, through two
+# providers. So they go BEFORE any step starts a new bridge, not after: the new bridge's
+# first subscription to that topic starts at the latest offset, so an OTP requested in the
+# few seconds it boots is not sent (the user asks again) — never sent twice. Only a
+# container compose made for that service in $DIGIT_HOME is removed. Idempotent.
+_remove_retired_notification_containers() {
+  local svc owner
+  for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
+    [[ "$DRY_RUN" == true ]] && { note "would remove a retired '$svc' container if present"; continue; }
+    sudo docker inspect "$svc" >/dev/null 2>&1 || continue
+    owner="$(sudo docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$svc")"
+    if [[ "$owner" == "$svc|$DIGIT_HOME" ]]; then
+      run "remove retired container $svc" "sudo docker rm -f '$svc' >/dev/null"
+    else
+      warn "left '$svc' alone: not this deployment's compose container ($owner)"
+    fi
+  done
+}
+
+# _tenant_complaints <tenant> — how many PGR complaints have ever been filed at <tenant> and
+# its cities: the seeder's fresh-install signal (NOTIF_TENANT_COMPLAINTS). Prints nothing on
+# any failure, which the seeder reads as "unknown" — never as zero.
+_tenant_complaints() {
+  printf "select count(*) from eg_pgr_service_v2 where tenantid = :'t' or tenantid like :'t' || '.%%';\n" \
+    | sudo docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -v t="$1" -tAq 2>/dev/null \
+    | tr -d '[:space:]' || true
+}
+
 # _restart_accesscontrol — egov-accesscontrol caches role-actions in memory; new rows
 # are invisible to Kong's RBAC until it restarts. Waits for /access/health.
 _restart_accesscontrol() {
@@ -401,6 +431,8 @@ do_step1() {
   # already running — on a first enable there is no old bridge to race, and the thin
   # events wait in Kafka until step 2 starts one.
   if [[ -n "$(container_of novu-bridge)" ]]; then
+    # The new bridge consumes egov.core.notification.sms: the old OTP senders go first.
+    _remove_retired_notification_containers
     log "A bridge is running — recreating it on the same build BEFORE pgr-services…"
     set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
     compose up -d novu-bridge-migration novu-bridge
@@ -453,26 +485,13 @@ do_step2() {
     set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
   fi
 
+  # The retired OTP senders go BEFORE the new bridge starts (see the function).
+  _remove_retired_notification_containers
+
   # Bring up ONLY the Novu stack services + their migrations. Never a bare `up -d`.
   log "Bringing up the Novu stack (named services only — never a bare up -d)…"
   compose up -d novu-mongo novu-api novu-worker novu-ws novu-dashboard novu-bridge \
     digit-config-service novu-bridge-migration digit-config-service-migration
-
-  # Containers of services this release removed. `up -d` leaves them running as
-  # orphans, and egov-notification-sms would keep consuming egov.core.notification.sms
-  # alongside novu-bridge — every login OTP sent twice. Only a container compose made
-  # for that service in $DIGIT_HOME is removed.
-  local svc owner
-  for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
-    [[ "$DRY_RUN" == true ]] && { note "would remove a retired '$svc' container if present"; continue; }
-    sudo docker inspect "$svc" >/dev/null 2>&1 || continue
-    owner="$(sudo docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$svc")"
-    if [[ "$owner" == "$svc|$DIGIT_HOME" ]]; then
-      run "remove retired container $svc" "sudo docker rm -f '$svc' >/dev/null"
-    else
-      warn "left '$svc' alone: not this deployment's compose container ($owner)"
-    fi
-  done
 
   verify "novu-api responds on ${NOVU_API_LOCAL}" "http_reachable '$NOVU_API_LOCAL'"
   verify "novu-bridge container is running" "_svc_running novu-bridge"
@@ -594,7 +613,10 @@ EOF
 #         dir, then run seed-notifications.py twice: the access phase (access-control
 #         rows; egov-accesscontrol is restarted when it created any), then the data
 #         phase (schemas, channel rows, and the shipped defaults into NOTIFICATIONS.*
-#         for a tenant with NO configuration), retried once after another restart if it
+#         for a FRESH tenant — no configuration and no complaint ever filed at it; one
+#         with complaints but no configuration is reported, not seeded, and its defaults
+#         are installed after review with migrate-notifications.py --adopt-defaults),
+#         retried once after another restart if it
 #         hit a 403. Channel rows for a tenant that has none are decided by the bridge's
 #         NOVU_BRIDGE_CHANNELS_ENABLED (the gate step 4 opened): listed = on. Rows a
 #         tenant already has are never changed, and a tenant with 2.12 configuration is
@@ -633,11 +655,19 @@ do_step6() {
   if [[ -z "$(container_of novu-bridge)" ]]; then allowlist="$CHANNELS_ENABLED"; fi
   log "Channel allowlist for tenants without channel rows: '${allowlist}'"
 
+  # Whether a tenant with NO notification configuration is a fresh install (the shipped
+  # defaults are seeded) or a tenant citizens already use — possibly on the old hard-coded
+  # path, whose wording the defaults would silently replace (then nothing is written and
+  # the seed says how to install the defaults after reviewing them). The seeder decides on
+  # this count; empty = the database could not be read = not provably fresh.
+  local complaints; complaints="$(_tenant_complaints "$NOTIF_TENANT")"
+  log "Complaints ever filed at ${NOTIF_TENANT} and its cities: ${complaints:-unknown} (0 = a fresh install)"
+
   # seed-notifications.py env interface: DIGIT_URL/NOTIF_TENANT/DIGIT_USERNAME/
   # DIGIT_PASSWORD/SCHEMA_FILE/NOTIF_SCHEMA_FILE/DATA_DIR/NOTIF_SEED_PHASE/
-  # NOTIF_CHANNELS_ALLOWLIST. It auths with Basic egov-user-client: at /user/oauth/token,
-  # and imports notifications_convert from its own directory. Idempotent.
-  local seedenv="DIGIT_URL='$PUBLIC_URL' NOTIF_TENANT='$NOTIF_TENANT' DIGIT_USERNAME='$ADMIN_USER' DIGIT_PASSWORD='$ADMIN_PASS' SCHEMA_FILE='$seeddir/RAINMAKER-PGR.json' NOTIF_SCHEMA_FILE='$seeddir/NOTIFICATIONS.json' DATA_DIR='$seeddir' NOTIF_CHANNELS_ALLOWLIST='$allowlist'"
+  # NOTIF_CHANNELS_ALLOWLIST/NOTIF_TENANT_COMPLAINTS. It auths with Basic egov-user-client:
+  # at /user/oauth/token, and imports notifications_convert from its own directory. Idempotent.
+  local seedenv="DIGIT_URL='$PUBLIC_URL' NOTIF_TENANT='$NOTIF_TENANT' DIGIT_USERNAME='$ADMIN_USER' DIGIT_PASSWORD='$ADMIN_PASS' SCHEMA_FILE='$seeddir/RAINMAKER-PGR.json' NOTIF_SCHEMA_FILE='$seeddir/NOTIFICATIONS.json' DATA_DIR='$seeddir' NOTIF_CHANNELS_ALLOWLIST='$allowlist' NOTIF_TENANT_COMPLAINTS='$complaints'"
   local out="${TMPDIR:-/tmp}/enable-notifications-seed.$$"
   # Each run is a subshell: `run` evals in THIS shell, and the pipeline's status is the
   # seeder's (pipefail is on), so its exit code (3 = 403) reaches `rc` below.
@@ -664,6 +694,9 @@ do_step6() {
     run "seed-notifications.py (data phase, retry)" \
       "( cd '$scripts' && env $seedenv NOTIF_SEED_PHASE=data python3 seed-notifications.py | tee '$out' )" || rc=$?
   fi
+  # The state the seed decided (fresh | none | legacy | notifications), for the postcondition.
+  local seed_state=""
+  seed_state="$(grep -o 'NOTIFICATIONS-STATE: tenant=[^ ]* state=[a-z]*' "$out" 2>/dev/null | tail -n1 | sed 's/.*state=//')" || true
   rm -f "$out"
   if [[ "$rc" != 0 ]]; then
     err "seed-notifications.py exited ${rc} — see its output above (3 = still 403: check the admin holds MDMS_ADMIN)"
@@ -692,6 +725,15 @@ do_step6() {
 
   # A tenant that still holds its 2.12 configuration is served from it, unchanged, until
   # an operator migrates it — the seed does not. That is a finished step, not a failure.
+  # A tenant with no configuration that is NOT provably fresh (complaints were filed at it)
+  # gets no defaults from a seed: they would replace, unreviewed, what its citizens received
+  # from the old hard-coded path. Also a finished step, not a failure — with the command.
+  if [[ "$seed_state" == "none" ]]; then
+    note "${NOTIF_TENANT} has no notification configuration and complaints have been filed at it (${complaints:-count unknown}); the seed wrote no default row."
+    note "It sends no complaint notifications until you install the defaults after reviewing them: cd '$scripts' && DIGIT_URL='$PUBLIC_URL' python3 migrate-notifications.py plan --tenant ${NOTIF_TENANT} --adopt-defaults (then: apply --tenant ${NOTIF_TENANT} --adopt-defaults --yes)"
+    verify "NOTIFICATIONS.Routing was left empty on a tenant that is not provably fresh (got ${xr})" "[[ '${xr:-0}' -eq 0 ]]"
+    return 0
+  fi
   if [[ "${xr:-0}" -eq 0 && $(( ${nr:-0} + ${nt:-0} + ${np:-0} )) -gt 0 ]]; then
     note "${NOTIF_TENANT} still runs on its 2.12 notification configuration (legacy rows ${nr}/${nt}/${np}); nothing was migrated."
     note "Review, then migrate it (one-way): cd '$scripts' && DIGIT_URL='$PUBLIC_URL' python3 migrate-notifications.py plan --tenant ${NOTIF_TENANT}"

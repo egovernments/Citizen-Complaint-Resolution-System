@@ -237,6 +237,52 @@ export function checkPendingChanges(
   return { ...partitionFindings(before, after, touchedRefs), before, after };
 }
 
+/** Does a channel row's `provider` selection name this integration? Same match as the checker. */
+function selects(channel: ChannelRow, integration: IntegrationRow): boolean {
+  const wanted = String(channel.provider ?? '').trim().toLowerCase();
+  if (!wanted) return false;
+  return [integration.identifier, integration._id, integration.id]
+    .map((v) => String(v ?? '').trim().toLowerCase())
+    .some((v) => !!v && v === wanted);
+}
+
+function sameIntegration(a: IntegrationRow, b: IntegrationRow): boolean {
+  const ids = (i: IntegrationRow) =>
+    [i._id, i.id, i.identifier].map((v) => String(v ?? '').trim().toLowerCase()).filter(Boolean);
+  const theirs = new Set(ids(b));
+  return ids(a).some((v) => theirs.has(v));
+}
+
+/**
+ * Validate a change to a PROVIDER (Novu integration) — disable, enable or delete — the same
+ * way checkPendingChanges validates a master row: run the checker over the configuration as
+ * it would be, and block on an error this change is answerable for. The rows it can break
+ * are the channel rows that select this provider (channel-provider-inactive /
+ * channel-provider-missing), so those channel codes are the touched refs.
+ *
+ * `snapshot.integrationRows` undefined means the list was not readable; the provider itself
+ * then stands in for it, on BOTH sides, so only this change can differ.
+ */
+export function checkIntegrationChange(
+  snapshot: NotificationSnapshot,
+  integration: IntegrationRow,
+  change: { op: 'patch'; patch: Partial<IntegrationRow> } | { op: 'remove' },
+): GuardResult {
+  const base = snapshot.integrationRows ?? [integration];
+  const known = base.some((i) => sameIntegration(i, integration));
+  const current = known ? base : [...base, integration];
+  const next = change.op === 'remove'
+    ? current.filter((i) => !sameIntegration(i, integration))
+    : current.map((i) => (sameIntegration(i, integration) ? { ...i, ...change.patch } : i));
+  const before = validateNotifications({ ...snapshot, integrationRows: current });
+  const after = validateNotifications({ ...snapshot, integrationRows: next });
+  const touchedRefs = (snapshot.channelRows ?? [])
+    .filter((c) => selects(c, integration))
+    .map((c) => norm(c.code))
+    .filter(Boolean);
+  return { ...partitionFindings(before, after, touchedRefs), before, after };
+}
+
 const FIELD_BY_RULE = new Map(NOTIFICATION_RULES.map((r) => [r.id, r.field]));
 
 /** The form field a finding belongs next to, or undefined for the summary. */

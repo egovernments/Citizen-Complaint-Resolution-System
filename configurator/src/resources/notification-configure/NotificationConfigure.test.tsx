@@ -212,4 +212,23 @@ describe('NotificationConfigure (Configure tab)', () => {
     // ...and there is no way to write anything from here.
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
   });
+
+  // Kanav review of #2097 (4079418184): the check was skipped while `snapshot` was loading,
+  // so a quick Save went through unchecked. Roles still loading = not ready.
+  it('refuses to save while the configuration the check needs is still loading', async () => {
+    notifySpy.mockClear();
+    const dataProvider = makeDataProvider();
+    const loaded = dataProvider.getList;
+    dataProvider.getList = vi.fn(async (resource: string, ...rest: unknown[]) =>
+      resource === 'access-roles' ? new Promise(() => {}) : (loaded as (...a: unknown[]) => unknown)(resource, ...rest),
+    ) as typeof dataProvider.getList;
+    renderConfigure(dataProvider);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add' }, { timeout: 5000 }));
+    fireEvent.change(await screen.findByPlaceholderText(/Message body/), { target: { value: 'Hi {id}.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(notifySpy).toHaveBeenCalledWith(expect.stringMatching(/config_loading|still loading/), { type: 'warning' }));
+    expect(dataProvider.create).not.toHaveBeenCalled();
+    expect(dataProvider.update).not.toHaveBeenCalled();
+  });
 });
