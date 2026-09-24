@@ -107,6 +107,22 @@ OTP volume is `-` rather than `0` when no OTP rows exist at all, since that
 means OTP is not routed through novu-bridge on that deployment — unmeasurable
 rather than none.
 
+**Active Cases Beyond SLA** comes from the daily open-state snapshot at the
+week end, not from current complaint state — otherwise regenerating an old week
+would give a different answer once those complaints closed. It reads `-` when
+no snapshot exists for that day, which also means a genuinely empty backlog
+reads `-` rather than `0`: the snapshot writes one row per open complaint, so
+zero rows and no snapshot look identical. Erring toward "not measured" is
+deliberate.
+
+Total Active Cases prefers the same snapshot and falls back to reconstructing
+the backlog from cumulative totals. That fallback is approximate: a complaint
+rejected before the week end and later reopened is subtracted even though it is
+active again.
+
+Counts read from Postgres are scoped to `TENANT_ID` and its sub-tenants, since
+those tables are shared by every tenant on the box.
+
 ## Debugging
 
 | Flag | Effect |

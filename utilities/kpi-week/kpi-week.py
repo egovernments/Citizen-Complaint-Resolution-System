@@ -75,6 +75,8 @@ for label, value in (("week-start", start), ("week-end", end)):
         datetime.date.fromisoformat(value)
     except ValueError:
         sys.exit(f"{label} must be YYYY-MM-DD, got {value!r}")
+if datetime.date.fromisoformat(start) > datetime.date.fromisoformat(end):
+    sys.exit(f"week-start {start} is after week-end {end}")
 token = pos[2] if len(pos) > 2 else os.environ.get("AUTH_TOKEN")
 base = pos[3] if len(pos) > 3 else os.environ.get("BASE_URL")
 tenant = pos[4] if len(pos) > 4 else os.environ.get("TENANT_ID")
@@ -157,6 +159,11 @@ QUERIES = {
     # the snapshot table reports 0 breached rather than "not measured".
     "snapshot_taken":   {"grain": "daily", "measures": [{"name": "n", "agg": "count"}],
                          "filters": {"snapshot_date": end}},
+    # The snapshot IS the end-of-day active set. Preferred over reconstructing
+    # it from cumulative totals, which double-subtracts a complaint that was
+    # rejected and then reopened.
+    "open_at_end":      {"grain": "daily", "measures": [{"name": "n", "agg": "count"}],
+                         "filters": {"snapshot_date": end, "is_open": True}},
     "sla":              {"grain": "facts",
                          "measures": [{"name": "on_time", "agg": "count", "filter": {"sla_breached": False}}],
                          "filters": resolved},
@@ -212,7 +219,7 @@ def mat_pages(page_size=500, max_pages=40):
     form_started() and error_page_views() would report 0 for any route beyond
     the cut-off. max_pages bounds a site with an unbounded URL space.
     """
-    collected, offset = [], 0
+    collected, offset, truncated = [], 0, True
     for _ in range(max_pages):
         batch = mat("Actions.getPageUrls", flat="1",
                     filter_limit=str(page_size), filter_offset=str(offset))
@@ -220,8 +227,13 @@ def mat_pages(page_size=500, max_pages=40):
             break
         collected += batch
         if len(batch) < page_size:
+            truncated = False
             break
         offset += page_size
+    if truncated:
+        # Exhausted the cap: a route past the cut-off is unanswerable, and
+        # reporting 0 visits for it would be a guess.
+        raise RuntimeError(f"Matomo page list exceeded {max_pages * page_size} rows")
     return collected
 
 
@@ -280,8 +292,21 @@ def rows(key):
 PGR_MISS = 0 if res else NA                # unreachable PGR -> "-", reachable-but-zero -> 0
 
 
+def query_failed(key):
+    """True when the batch answered but THIS named query errored.
+
+    The API reports that as partial:true with an {"error": ...} block, leaving
+    the rest of the response intact — so an empty row list here means "failed",
+    not "zero".
+    """
+    block = (res.get("results") or res).get(key)
+    return isinstance(block, dict) and block.get("error") is not None
+
+
 def val(key, col, default=None):
     default = PGR_MISS if default is None else default
+    if query_failed(key):
+        return NA
     r = rows(key)
     if not r:
         return default
@@ -305,9 +330,15 @@ first_action = (f'{hours(val("first_action", "ms"))}   ({_acted} of those filed 
                 if isinstance(_acted, (int, float)) and _acted else NA)
 # A day with no snapshot cannot answer the question; 0 would be a false zero.
 _snapshot = val("snapshot_taken", "n")
-beyond_sla = val("beyond_sla", "n") if isinstance(_snapshot, (int, float)) and _snapshot else NA
+# NA is a string and therefore truthy -- test the type, not the value.
+_have_snapshot = isinstance(_snapshot, (int, float)) and _snapshot > 0
+beyond_sla = val("beyond_sla", "n") if _have_snapshot else NA
 _bk = [val("backlog", "created_before"), val("backlog", "resolved_before"), val("rejected_before", "n")]
-backlog_end = _bk[0] - _bk[1] - _bk[2] if all(isinstance(x, (int, float)) for x in _bk) else NA
+_reconstructed = _bk[0] - _bk[1] - _bk[2] if all(isinstance(x, (int, float)) for x in _bk) else NA
+# Prefer the snapshot; fall back to the reconstruction, which is approximate —
+# a complaint rejected before TO and later reopened is subtracted even though
+# it is active again.
+backlog_end = val("open_at_end", "n") if _have_snapshot else _reconstructed
 
 # ---------------------------------------------------------------- Postgres (optional)
 # Set PG_CONTAINER to the platform Postgres container; queries run via `docker exec psql`.
@@ -342,35 +373,44 @@ def pg(sql, **params):
         return NA
 
 
+# These tables are shared by every tenant on the box. Unscoped, the counts
+# silently include other deployments. Matched as a prefix because DIGIT tenants
+# are hierarchical: TENANT_ID=pg must also cover pg.citya.
+TENANT_SCOPE = "(:'tenant' = '' OR {col} = :'tenant' OR {col} LIKE :'tenant' || '.%')"
+
+
 def failed_logins(user_type):
     return pg("SELECT count(*) FROM eg_user_login_failed_attempts f "
               "JOIN eg_user u ON u.uuid = f.user_uuid "
               "WHERE f.attempt_date >= :'t0' AND f.attempt_date < :'t1' "
-              "AND u.type = :'utype'",
-              t0=FROM, t1=TO, utype=user_type)
+              "AND u.type = :'utype' AND " + TENANT_SCOPE.format(col="u.tenantid"),
+              t0=FROM, t1=TO, utype=user_type, tenant=tenant)
 
 
 failed_citizen = failed_logins("CITIZEN")
 failed_employee = failed_logins("EMPLOYEE")
 # every FE registration goes through OTP, so this gives a floor for the OTP volume
 registrations = pg("SELECT count(*) FROM eg_user WHERE type = 'CITIZEN' "
-                   "AND createddate >= :'from_date' AND createddate < :'to_date'",
+                   "AND createddate >= :'from_date' AND createddate < :'to_date' "
+                   "AND " + TENANT_SCOPE.format(col="tenantid"),
                    from_date=d_start.isoformat(),
-                   to_date=(d_end + datetime.timedelta(days=1)).isoformat())
+                   to_date=(d_end + datetime.timedelta(days=1)).isoformat(), tenant=tenant)
 def nb_count(where):
     """SENT dispatches in the week matching a channel/type predicate; NA if PG unreachable.
 
     `where` is a literal fragment written in this file, never user input.
     """
     return pg("SELECT count(*) FROM nb_dispatch_log WHERE status = 'SENT' "
-              "AND created_time >= :'t0' AND created_time < :'t1' AND " + where,
-              t0=FROM, t1=TO)
+              "AND created_time >= :'t0' AND created_time < :'t1' "
+              "AND " + TENANT_SCOPE.format(col="tenant_id") + " AND " + where,
+              t0=FROM, t1=TO, tenant=tenant)
 
 
 _otp = "(lower(event_name) LIKE '%otp%' OR lower(coalesce(template_key, '')) LIKE '%otp%')"
 otp_sms_sent = nb_count(f"channel = 'SMS' AND {_otp}")
 # no OTP rows ever -> OTP isn't routed through novu-bridge here, so it's unmeasurable, not zero
-if pg("SELECT count(*) FROM nb_dispatch_log WHERE " + _otp) == 0:
+if pg("SELECT count(*) FROM nb_dispatch_log WHERE "
+      + TENANT_SCOPE.format(col="tenant_id") + " AND " + _otp, tenant=tenant) == 0:
     otp_sms_sent = NA
 other_sms = nb_count(f"channel = 'SMS' AND NOT {_otp}")
 whatsapp_notif = nb_count("channel = 'WHATSAPP'")
@@ -381,6 +421,12 @@ email_notif = nb_count("channel = 'EMAIL'")
 # Citizen vs employee is split by the referer (the digit-ui page the token call came from).
 # Longer retention than Loki, but still logrotate-bounded: NA when logs don't reach week start.
 NGINX_GLOB = os.environ.get("NGINX_ACCESS_GLOB", "/var/log/nginx/access.log*")
+# The v2 SPA serves /citizen and /employee; older builds used /digit-ui/<role>.
+# Matching only one silently reports zero logins on the other.
+LOGIN_REFERERS = {
+    "citizen": os.environ.get("CITIZEN_PATHS", "/digit-ui/citizen,/citizen").split(","),
+    "employee": os.environ.get("EMPLOYEE_PATHS", "/digit-ui/employee,/employee").split(","),
+}
 
 
 def nginx_logins():
@@ -401,9 +447,10 @@ def nginx_logins():
                     if not (FROM <= ms < TO and "POST /user/oauth/token" in line
                             and '" 200 ' in line):
                         continue
-                    for role in counts:
-                        if f"/digit-ui/{role}" in line:
+                    for role, prefixes in LOGIN_REFERERS.items():
+                        if any(p.strip() and p.strip() in line for p in prefixes):
                             counts[role] += 1
+                            break
         except OSError:
             continue
     if earliest is None or earliest > FROM:
