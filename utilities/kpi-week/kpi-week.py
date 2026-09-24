@@ -148,17 +148,29 @@ QUERIES = {
     "filed_total":      {"grain": "facts", "measures": [{"name": "n", "agg": "count"}], "filters": filed},
     "filed_assigned":   {"grain": "facts", "measures": [{"name": "n", "agg": "count"}],
                          "filters": {**filed, "assignment_count": {"gte": 1}}},
-    "beyond_sla":       {"grain": "facts", "measures": [{"name": "n", "agg": "count"}],
-                         "filters": {"is_open": True, "sla_breached": True}},
+    # As of the week END, from the daily snapshot. On facts, is_open and
+    # sla_breached describe the complaint NOW, so re-running an old week gives a
+    # different answer once those complaints close.
+    "beyond_sla":       {"grain": "daily", "measures": [{"name": "n", "agg": "count"}],
+                         "filters": {"snapshot_date": end, "is_open": True, "sla_breached": True}},
+    # Did a snapshot exist for that day at all? Without this, a week predating
+    # the snapshot table reports 0 breached rather than "not measured".
+    "snapshot_taken":   {"grain": "daily", "measures": [{"name": "n", "agg": "count"}],
+                         "filters": {"snapshot_date": end}},
     "sla":              {"grain": "facts",
                          "measures": [{"name": "on_time", "agg": "count", "filter": {"sla_breached": False}}],
                          "filters": resolved},
     "avg_resolution":   {"grain": "facts", "measures": [{"name": "ms", "agg": "avg", "column": "resolution_ms"}],
                          "filters": resolved},
-    "first_action":     {"grain": "events",
-                         "measures": [{"name": "n", "agg": "count_distinct", "column": "service_request_id"},
-                                      {"name": "ms", "agg": "avg", "column": "complaint_age_at_event_ms"}],
-                         "filters": {"entered_at": {"gte": FROM, "lt": TO}, "is_assignment": True}},
+    # facts.time_to_assign_ms is the FIRST assignment, one value per complaint.
+    # Averaging events.complaint_age_at_event_ms instead would fold in every
+    # reassignment and overstate the time to first action. Scoped by created_at
+    # because first_assigned_at is not filterable on this grain, so this reads
+    # "complaints filed this week, and how long until someone picked them up".
+    "first_action":     {"grain": "facts",
+                         "measures": [{"name": "n", "agg": "count"},
+                                      {"name": "ms", "agg": "avg", "column": "time_to_assign_ms"}],
+                         "filters": {**filed, "assignment_count": {"gte": 1}}},
     "reopened_in_week": {"grain": "events", "measures": [{"name": "n", "agg": "count_distinct",
                                                           "column": "service_request_id"}],
                          "filters": {"entered_at": {"gte": FROM, "lt": TO}, "is_reopen": True}},
@@ -177,12 +189,40 @@ matomo = {}
 
 
 def mat(method, **extra):
-    params = {"module": "API", "method": method, "idSite": MAT_SITE, "period": "week",
-               "date": start, "format": "JSON", "token_auth": MAT_TOKEN, **extra}
+    # period=range with both dates: period=week would report whichever week
+    # contains `date` and ignore `end`, so an unaligned window would measure a
+    # different interval from the PGR, Postgres and nginx figures.
+    params = {"module": "API", "method": method, "idSite": MAT_SITE, "period": "range",
+              "date": f"{start},{end}", "format": "JSON", "token_auth": MAT_TOKEN, **extra}
     req = urllib.request.Request(MAT_URL, data=urllib.parse.urlencode(params).encode())
     if HOST_HEADER:
         req.add_header("Host", HOST_HEADER)
-    return json.loads(urllib.request.urlopen(req, timeout=60).read())
+    payload = json.loads(urllib.request.urlopen(req, timeout=60).read())
+    # Matomo reports failures as 200 + {"result": "error"}; accepting that as a
+    # report makes later code iterate its keys as if they were rows.
+    if isinstance(payload, dict) and payload.get("result") == "error":
+        raise RuntimeError(f'Matomo {method}: {payload.get("message", "error")}')
+    return payload
+
+
+def mat_pages(page_size=500, max_pages=40):
+    """Every flat page-URL row, fetched in pages.
+
+    A truncated list is indistinguishable from "that route had no visits", so
+    form_started() and error_page_views() would report 0 for any route beyond
+    the cut-off. max_pages bounds a site with an unbounded URL space.
+    """
+    collected, offset = [], 0
+    for _ in range(max_pages):
+        batch = mat("Actions.getPageUrls", flat="1",
+                    filter_limit=str(page_size), filter_offset=str(offset))
+        if not isinstance(batch, list) or not batch:
+            break
+        collected += batch
+        if len(batch) < page_size:
+            break
+        offset += page_size
+    return collected
 
 
 def page_visits(*needles):
@@ -199,7 +239,7 @@ if MAT_URL and MAT_TOKEN:
         matomo["all"] = mat("VisitsSummary.get")
         matomo["employee"] = mat("VisitsSummary.get", segment="pageUrl=@/employee")
         matomo["citizen"] = mat("VisitsSummary.get", segment="pageUrl=@/citizen")
-        matomo["pages"] = mat("Actions.getPageUrls", flat="1", filter_limit="200")
+        matomo["pages"] = mat_pages()
     except Exception as exc:                                   # never let Matomo blank the PGR half
         print(f"# Matomo unavailable: {exc}", file=sys.stderr)
         matomo = {}
@@ -250,14 +290,22 @@ def val(key, col, default=None):
 
 
 by_source = {r.get("source"): r.get("n") for r in rows("filed_by_source")}
+
+
+def filed_via(source):
+    """Complaints filed through one channel; NA when PGR itself was unreachable."""
+    return by_source.get(source, 0) if res else NA
 def hours(ms):
     return round(ms / 3600000, 1) if isinstance(ms, (int, float)) else NA
 
 
 csat = val("csat", "avg_rating")
 _acted = val("first_action", "n")
-first_action = (f'{hours(val("first_action", "ms"))}   ({_acted} assigned this week)'
+first_action = (f'{hours(val("first_action", "ms"))}   ({_acted} of those filed this week)'
                 if isinstance(_acted, (int, float)) and _acted else NA)
+# A day with no snapshot cannot answer the question; 0 would be a false zero.
+_snapshot = val("snapshot_taken", "n")
+beyond_sla = val("beyond_sla", "n") if isinstance(_snapshot, (int, float)) and _snapshot else NA
 _bk = [val("backlog", "created_before"), val("backlog", "resolved_before"), val("rejected_before", "n")]
 backlog_end = _bk[0] - _bk[1] - _bk[2] if all(isinstance(x, (int, float)) for x in _bk) else NA
 
@@ -272,16 +320,21 @@ PG_DB = os.environ.get("PG_DB", "postgres")
 def pg(sql, **params):
     """Single scalar from the platform DB via docker exec psql; NA if unreachable.
 
-    Values go in as psql variables and are referenced :'like_this', so the server
-    quotes them. Never interpolate a value into `sql` -- the dates come from argv.
+    Values go in as psql variables and are referenced :'like_this', so psql
+    quotes them as literals. Never interpolate a value into `sql` -- the dates
+    come from argv.
+
+    The statement goes in on stdin, not via -c: psql substitutes variables in
+    input it reads, but -c hands the string straight to the server, which
+    rejects the :'name' syntax.
     """
     if not PG_CONTAINER:
         return NA
-    argv = ["docker", "exec", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PG_DB]
+    argv = ["docker", "exec", "-i", PG_CONTAINER, "psql", "-U", PG_USER, "-d", PG_DB]
     for key, value in params.items():
         argv += ["-v", f"{key}={value}"]
     try:
-        out = subprocess.run(argv + ["-tAc", sql],
+        out = subprocess.run(argv + ["-tA"], input=sql,
                              capture_output=True, text=True, timeout=60, check=True).stdout.strip()
         return int(out) if out else 0
     except Exception as exc:                                    # never let PG blank the rest
@@ -382,16 +435,19 @@ def form_started(path):
 
 def abandonment(started, filed):
     """percent of started forms not filed; NA if we don't have a start count."""
+    # Both sides must be real numbers. Treating an unknown filed count as 0
+    # would report 100% abandonment for a week nobody measured.
     if not isinstance(started, (int, float)) or not started:
         return NA
-    filed = filed if isinstance(filed, (int, float)) else 0
+    if not isinstance(filed, (int, float)):
+        return NA
     return round(max(started - filed, 0) / started * 100, 1)
 
 
 form_started_citizen = form_started("/citizen/pgr/create-complaint")
 form_started_emp = form_started("/employee/pgr/create-complaint")
-abandon_citizen = abandonment(form_started_citizen, by_source.get("web", 0))
-abandon_emp = abandonment(form_started_emp, by_source.get("inperson", 0))
+abandon_citizen = abandonment(form_started_citizen, filed_via("web"))
+abandon_emp = abandonment(form_started_emp, filed_via("inperson"))
 
 SHEETS = [
     ("Citizen", [
@@ -401,7 +457,7 @@ SHEETS = [
         ("Authentication", [("Successful Authentications", successful_citizen), ("Failed Authentications", failed_citizen),
                             ("OTP SMS Sent", otp_sms_sent), ("New Registrations", registrations)]),
         ("Citizen Journey", [("Avg Session Duration (min)", mins(cit.get("avg_time_on_site"))), ("Complaint Form Started", form_started_citizen),
-                             ("Complaints Filed Online", by_source.get("web", 0)),
+                             ("Complaints Filed Online", filed_via("web")),
                              ("Form Abandonment Rate", abandon_citizen),
                              ("Citizen Satisfaction / 5", csat if csat else NA),
                              ("Survey Responses", val("csat", "responses"))]),
@@ -418,13 +474,13 @@ SHEETS = [
                             ("Dashboard Accesses", page_visits("dashboard")),
                             ("Avg Session Duration (min)", mins(emp.get("avg_time_on_site")))]),
         ("Reception", [("Complaint Form Started", form_started_emp),
-                       ("Complaints Filed by Reception", by_source.get("inperson", 0)),
+                       ("Complaints Filed by Reception", filed_via("inperson")),
                        ("Form Abandonment Rate", abandon_emp)]),
         ("Case Processing", [("Complaints Solved", val("solved", "n")),
                              ("Complaints Rejected", val("rejected_in_week", "n")),
                              ("Complaints Under Processing", val("filed_still_open", "n")),
                              ("Resolved Within SLA", val("sla", "on_time")),
-                             ("Active Cases Beyond SLA", val("beyond_sla", "n")),
+                             ("Active Cases Beyond SLA", beyond_sla),
                              ("Total Active Cases", backlog_end),
                              ("Avg Resolution Time (h)", hours(val("avg_resolution", "ms"))),
                              ("Avg Time to First Action (h)", first_action),
