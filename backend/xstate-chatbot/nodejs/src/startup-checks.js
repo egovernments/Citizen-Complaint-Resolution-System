@@ -38,6 +38,12 @@ function missingConfig() {
     if (!vf.valueFirstPassword || vf.valueFirstPassword === 'demo') missing.push('VALUEFIRST_PASSWORD');
   }
 
+  // reminders-service builds extraInfo.whatsAppBusinessNumber from this; unset,
+  // the sweep sends with an empty sender and fails where no citizen can see it.
+  if (['ValueFirst', 'Kaleyra'].includes(config.whatsAppProvider)) {
+    need(config.whatsAppBusinessNumber, 'WHATSAPP_BUSINESS_NUMBER');
+  }
+
   if (['ValueFirst', 'Kaleyra'].includes(config.whatsAppProvider) && config.webhook.verify) {
     need(config.webhook.sharedSecret, 'WEBHOOK_SHARED_SECRET');
   }
@@ -48,7 +54,7 @@ function missingConfig() {
   // defaults to '91' — so a tenant seeded +258 that never sets the env var gets a silent
   // mismatch between inbound and outbound identity. Demanded explicitly here until those
   // adapters move to mobile-validation-service.
-  if (config.whatsAppProvider !== 'console' && !config.countryExplicitlySet) {
+  if (config.whatsAppProvider !== 'Console' && !config.countryExplicitlySet) {
     missing.push('COUNTRY_CODE', 'MOBILE_NUMBER_LENGTH');
   }
 

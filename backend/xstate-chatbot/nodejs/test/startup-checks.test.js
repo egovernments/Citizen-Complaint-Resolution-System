@@ -16,6 +16,7 @@ function config(overrides = {}) {
     whatsAppProvider: "Twilio",
     serviceAccount: { username: "svc", password: "pw", tenantId: "mz" },
     twilio: { accountSid: "AC1", authToken: "tok", whatsappNumber: "whatsapp:+14155238886", webhookBaseUrl: "https://x.example", verifyWebhookSignature: true },
+    whatsAppBusinessNumber: "whatsapp:+14155238886",
     kaleyra: { sid: "K1", apikey: "KEY" },
     valueFirstWhatsAppProvider: { valueFirstUsername: "vfuser", valueFirstPassword: "vfpass" },
     webhook: { sharedSecret: "s3cret", verify: true },
@@ -42,7 +43,7 @@ test("the service account is required whatever the channel", () => {
   cfg.serviceAccount = { username: "", password: "" };
   assert.deepEqual(missingWith(cfg), ["USER_SERVICE_ACCOUNT_USERNAME", "USER_SERVICE_ACCOUNT_PASSWORD"]);
 
-  const onConsole = config({ whatsAppProvider: "console" });
+  const onConsole = config({ whatsAppProvider: "Console" });
   onConsole.serviceAccount = { username: "", password: "" };
   assert.deepEqual(missingWith(onConsole), ["USER_SERVICE_ACCOUNT_USERNAME", "USER_SERVICE_ACCOUNT_PASSWORD"]);
 });
@@ -61,7 +62,7 @@ test("Twilio credentials are required, and the base url only when verifying", ()
 });
 
 test("the console provider needs no channel credentials", () => {
-  const cfg = config({ whatsAppProvider: "console" });
+  const cfg = config({ whatsAppProvider: "Console" });
   cfg.twilio = { accountSid: "", authToken: "", webhookBaseUrl: "", verifyWebhookSignature: true };
   assert.deepEqual(missingWith(cfg), [], "local development stays runnable");
 });

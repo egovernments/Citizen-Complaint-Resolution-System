@@ -9,7 +9,14 @@ const envVariables = {
 
     contextPath: process.env.CONTEXT_PATH || '/xstate-chatbot',
 
-    whatsAppProvider: process.env.WHATSAPP_PROVIDER || 'Twilio',
+    // Compared by exact string in channel/index.js and startup-checks.js, so it
+    // is canonicalised here. An unrecognised value is kept verbatim for
+    // startup-checks to name and refuse to boot on.
+    whatsAppProvider: (() => {
+        const known = ['Twilio', 'Kaleyra', 'ValueFirst', 'Console'];
+        const raw = String(process.env.WHATSAPP_PROVIDER || 'Twilio').trim();
+        return known.find((p) => p.toLowerCase() === raw.toLowerCase()) || raw;
+    })(),
 
     serviceProvider: process.env.SERVICE_PROVIDER || 'eGov',
 
