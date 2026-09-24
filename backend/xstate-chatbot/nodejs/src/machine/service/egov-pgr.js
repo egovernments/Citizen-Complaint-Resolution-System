@@ -54,7 +54,7 @@ class PGRService {
       },
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
 
     if (!response.ok) {
       throw new Error(`MDMS fetch failed with status ${response.status}`);
@@ -104,7 +104,7 @@ class PGRService {
       }
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
 
     if (!response.ok) {
       throw new Error(`MDMS v2 fetch failed with status ${response.status}`);
@@ -212,6 +212,7 @@ class PGRService {
       const data = await referenceCache.get(`boundary-def:${tenantId}`, async () => {
         const response = await fetch(url, {
           method: "POST",
+          timeout: config.timeouts.request,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             RequestInfo: {},
@@ -276,6 +277,7 @@ class PGRService {
     const data = await referenceCache.get(`boundary-tree:${tenantId}:${hierarchyType}`, async () => {
       const response = await fetch(url, {
         method: "POST",
+        timeout: config.timeouts.request,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ RequestInfo: {} }),
       });
@@ -477,7 +479,7 @@ class PGRService {
         }
       };
 
-      const boundaryResponse = await fetch(boundaryUrl, boundaryOptions);
+      const boundaryResponse = await fetch(boundaryUrl, { ...boundaryOptions, timeout: config.timeouts.request });
 
       if (!boundaryResponse.ok) {
         throw new Error(`Boundary service returned status ${boundaryResponse.status}`);
@@ -530,7 +532,7 @@ class PGRService {
       let localizedMessages = {};
 
       try {
-        const localizationResponse = await fetch(localizationUrl, localizationOptions);
+        const localizationResponse = await fetch(localizationUrl, { ...localizationOptions, timeout: config.timeouts.request });
 
         if (localizationResponse.ok) {
           const localizationData = await localizationResponse.json();
@@ -776,6 +778,7 @@ class PGRService {
 
         const response = await fetch(localizationUrl, {
           method: "POST",
+          timeout: config.timeouts.request,
           body: JSON.stringify(localizationRequest),
           headers: { "Content-Type": "application/json" }
         });
@@ -854,7 +857,7 @@ class PGRService {
       timeout: config.timeouts.request,
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
 
     if (response.status === 200) {
       // the create endpoint wraps its result the same way search does:
@@ -882,7 +885,7 @@ class PGRService {
         "Content-Type": "application/json",
       },
     };
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
     if (!response.ok) {
       return finalPath;
     }
@@ -977,7 +980,7 @@ class PGRService {
       origin: "*",
     };
 
-    let response = await fetch(url, options);
+    let response = await fetch(url, { ...options, timeout: config.timeouts.request });
     response = await response.json();
 
     // Handle the correct response structure based on actual API response

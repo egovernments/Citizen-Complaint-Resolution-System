@@ -118,7 +118,7 @@ class TwilioWhatsAppProvider {
         }
         
         try {
-            let response = await fetch(url, options);
+            let response = await fetch(url, { ...options, timeout: config.timeouts.request });
             
             if (!response.ok) {
                 console.error("Twilio - Filestore API error:", response.status, response.statusText);
@@ -503,6 +503,7 @@ class TwilioWhatsAppProvider {
         try {
             const response = await fetch(this.baseUrl, {
                 method: 'POST',
+                timeout: config.timeouts.request,
                 headers: {
                     'Authorization': this.getAuthHeader(),
                     'Content-Type': 'application/x-www-form-urlencoded'

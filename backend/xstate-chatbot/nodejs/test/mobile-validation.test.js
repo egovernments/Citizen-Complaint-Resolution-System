@@ -22,6 +22,7 @@ function loadService({ fetchImpl, defaultCountryCode = "+91", defaultRegex = "^[
     exports: {
       rootTenantId: "pg",
       mobileValidation: { defaultCountryCode, defaultRegex, cacheTtlMs: 300000 },
+      timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
       egovServices: {
         egovServicesHost: "http://localhost/",
         mdmsV2SearchPath: "mdms-v2/v2/_search",
