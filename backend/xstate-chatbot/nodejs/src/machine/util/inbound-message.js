@@ -49,7 +49,8 @@ class InboundMessage {
   }
 
   isGreeting() {
-    return config.resetWords.includes(this.input.trim().toLowerCase());
+    const input = dialog.normalizeUtterance(this.input);
+    return config.resetWords.some((word) => dialog.normalizeUtterance(word) === input);
   }
 
   isReset() {

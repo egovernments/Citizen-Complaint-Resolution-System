@@ -56,7 +56,7 @@ class InboundRequestParser {
   }
 
   
-  setTenatId(tenantId) { 
+  setTenantId(tenantId) { 
     this.tenantId = tenantId;
   }
 

@@ -71,6 +71,21 @@ function warnings() {
   return found;
 }
 
+function invalidConfig() {
+  const bad = [];
+  const { request, mediaProcessing, dispatchSettle } = config.timeouts || {};
+  if (!dispatchSettle) return bad;
+
+  if (dispatchSettle <= request) {
+    bad.push(`DISPATCH_SETTLE_TIMEOUT_MS (${dispatchSettle}) must exceed REQUEST_TIMEOUT_MS (${request})`);
+  }
+  if (dispatchSettle <= mediaProcessing) {
+    bad.push(`DISPATCH_SETTLE_TIMEOUT_MS (${dispatchSettle}) must exceed MEDIA_PROCESSING_TIMEOUT_MS (${mediaProcessing})`);
+  }
+  return bad;
+}
+
+
 function warnAtStartup() {
   const found = warnings();
   if (!found.length) {
@@ -84,13 +99,19 @@ function warnAtStartup() {
 
 function assertRequiredConfigOrExit() {
   const missing = missingConfig();
-  if (!missing.length) return;
+  const invalid = invalidConfig();
+  if (!missing.length && !invalid.length) return;
 
-  console.error(
-    `Refusing to start: ${missing.length} required setting(s) are unset for ` +
-    `WHATSAPP_PROVIDER=${config.whatsAppProvider} — ${missing.join(', ')}`
-  );
+  if (missing.length) {
+    console.error(
+      `Refusing to start: ${missing.length} required setting(s) are unset for ` +
+      `WHATSAPP_PROVIDER=${config.whatsAppProvider} — ${missing.join(', ')}`
+    );
+  }
+
+  for (const problem of invalid) console.error(`Refusing to start: ${problem}`);
+
   process.exit(1);
 }
 
-module.exports = { assertRequiredConfigOrExit, missingConfig, warnAtStartup, warnings };
+module.exports = { assertRequiredConfigOrExit, missingConfig, warnAtStartup, warnings, invalidConfig };

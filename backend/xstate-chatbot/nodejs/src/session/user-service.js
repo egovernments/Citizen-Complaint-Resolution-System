@@ -113,6 +113,7 @@ class UserService {
     const { response, account } = await this.withServiceAccount(({ authToken, userInfo }) =>
       fetch(url, {
         method: 'POST',
+        timeout: config.timeouts.request,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           RequestInfo: this.serviceRequestInfo(authToken, userInfo),
@@ -141,6 +142,7 @@ class UserService {
     const { response } = await this.withServiceAccount(({ authToken, userInfo }) =>
       fetch(url, {
         method: 'POST',
+        timeout: config.timeouts.request,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           RequestInfo: this.serviceRequestInfo(authToken, userInfo),
@@ -172,6 +174,7 @@ class UserService {
     const url = config.egovServices.userServiceHost + config.egovServices.userServiceOAuthPath;
     const response = await fetch(url, {
       method: 'POST',
+      timeout: config.timeouts.request,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': config.userService.userLoginAuthorizationHeader
@@ -185,6 +188,11 @@ class UserService {
     }
 
     const body = await response.json();
+    if (!body.access_token) {
+      throw new AuthenticationError(
+        'Service account login returned 200 without an access_token; refusing to cache it'
+      );
+    }
     this._serviceAccount = { authToken: body.access_token, userInfo: body.UserRequest };
     this._serviceAccountExpiry = Date.now() + Math.max((body.expires_in || 3600) - 60, 60) * 1000;
     return this._serviceAccount;
@@ -208,8 +216,10 @@ class UserService {
     const { response, account } = await this.withServiceAccount(({ authToken, userInfo }) =>
       fetch(url, {
         method: 'POST',
+        timeout: config.timeouts.request,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // egov-user's create DTO is @JsonProperty("requestInfo"), lowercase — unlike _search.
           requestInfo: this.serviceRequestInfo(authToken, userInfo),
           user: {
             userName: cleanMobileNumber,

@@ -48,3 +48,19 @@ test("leaves non-secret payloads untouched and survives cycles", () => {
   assert.equal(out.self, undefined);
   assert.doesNotThrow(() => JSON.stringify(out));
 });
+
+test("mobile numbers are masked, not published whole", () => {
+  // The topic is read and retained downstream, and a number identifies a person
+  // who filed a grievance. Masked rather than dropped so two events still correlate.
+  const out = redact({
+    user: { mobileNumber: "849904390" },
+    extraInfo: { whatsAppBusinessNumber: "258840000000" },
+    body: { mobile_number: "849904390", From: "849904390" },
+  });
+
+  for (const v of [out.user.mobileNumber, out.extraInfo.whatsAppBusinessNumber,
+                   out.body.mobile_number, out.body.From]) {
+    assert.doesNotMatch(String(v), /849904390|258840000000/, "no whole number survives");
+    assert.match(String(v), /\*/, "but something identifiable-enough to correlate remains");
+  }
+});

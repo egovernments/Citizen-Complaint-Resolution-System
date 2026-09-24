@@ -5,6 +5,16 @@ const config = require("../env-variables");
 const Session = require("./session");
 const { maskMobile } = require("../privacy");
 
+/**
+ * Sandbox multi-organisation login. WORK IN PROGRESS — outside the scope of the
+ * shipped WhatsApp flow, and reachable only under ENABLE_SANDBOX_MODE=true,
+ * which no deployment sets.
+ *
+ * Known gaps, deliberately unaddressed here: no whitelist check before a citizen
+ * is provisioned, the already-authenticated path rebuilds the user from userId
+ * alone, the organisation choice is read with parseInt, and the resolved tenant
+ * is discarded by the channel adapters in favour of the root tenant.
+ */
 class SandboxLoginFlow {
   // `send` is SessionManager.toUser, injected rather than imported: these prompts
   // must go through the same per-user outbound queue as every other reply, or a

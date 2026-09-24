@@ -30,7 +30,7 @@ test("a tenant named in the query is ignored", () => {
 
 test("sandbox still sets the tenant from the citizen's registration", () => {
   const parser = InboundRequestParser.create({ query: {} }, provider);
-  parser.setTenatId("mz.ige");
+  parser.setTenantId("mz.ige");
 
   assert.equal(parser.tenantId, "mz.ige");
 });

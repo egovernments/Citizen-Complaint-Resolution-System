@@ -168,8 +168,10 @@ class ChatService {
     const chatState = this.createChatStateFor(session.user);
     await chatStateRepository.updateState(session.userId, true, chatState.toPersistableState().state, new Date().getTime());
     await chatStateRepository.updateSessionId(session.userId, config.avgSessionTime);
+    
     const stateMachineService = this.getStateMachineServiceFor(chatState, inboundRequestModel);
     stateMachineService.send(event, inboundRequestModel);
+    return pendingPersist(session.userId);
   }
 
 

@@ -3,8 +3,16 @@ const ChatState = require('../chat-state');
 
 class StateRepository {
 
+    // Upsert: user_id is unique, and a citizen whose session was closed
+    // (stalled, cancelled) comes back here with their row still present.
     async insertNewState(userId, active, state, session_id, time_stamp) {
-        const query = 'INSERT INTO eg_chat_state_v2 (user_id, active, state, session_id, time_stamp) VALUES ($1, $2, $3, $4, $5)';
+        const query = `INSERT INTO eg_chat_state_v2 (user_id, active, state, session_id, time_stamp)
+                       VALUES ($1, $2, $3, $4, $5)
+                       ON CONFLICT (user_id) DO UPDATE
+                         SET active = EXCLUDED.active,
+                             state = EXCLUDED.state,
+                             session_id = EXCLUDED.session_id,
+                             time_stamp = EXCLUDED.time_stamp`;
         let result = await pool.query(query, [userId, active, state, session_id, time_stamp]);
         return result;
     }

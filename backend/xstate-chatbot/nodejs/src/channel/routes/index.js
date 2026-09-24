@@ -18,8 +18,15 @@ const { warnings } = require("../../startup-checks");
   standardHeaders: "draft-7",
   legacyHeaders: false,
   // Use the sender or recipient as the key for rate limiting, falling back to the IP address if neither is available.
-  keyGenerator: (req) =>
-    req.body?.From ?? req.body?.To ?? req.query?.From ?? req.query?.To ?? "unattributed",
+  keyGenerator: (req) => {
+    const fields = ["From", "To", "from", "to", "mobile_number"];
+    for (const source of [req.body, req.query]) {
+      for (const field of fields) {
+        if (source?.[field]) return String(source[field]);
+      }
+    }
+    return "unattributed";
+  },
 });
 
 // Reject anything the channel provider cannot vouch for, before it reaches the
@@ -43,7 +50,7 @@ router.post("/message", verifySignature, webhookLimiter, async (req, res) => {
     
     if (config.isSandboxMode) {
       const tenantId = await resolveUploadTenantId(req, config, channelProvider);
-      inboundRequestParser.setTenatId(tenantId);
+      inboundRequestParser.setTenantId(tenantId);
     }
 
     // only valid messages go through
@@ -86,7 +93,7 @@ router.all("/status", verifySignature, webhookLimiter, async (req, res) => {
 
     if (config.isSandboxMode) {
       const tenantId = await resolveUploadTenantId(req, config, channelProvider);
-      inboundRequestParser.setTenatId(tenantId);
+      inboundRequestParser.setTenantId(tenantId);
     }
 
     if (await inboundRequestParser.hasValidMessage()) {

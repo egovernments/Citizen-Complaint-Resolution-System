@@ -24,9 +24,10 @@ function toNationalNumber(value) {
 
 /** Digits only, with exactly one country code on the front. No plus. */
 function toInternationalNumber(value) {
-  const national = toNationalNumber(value);
-  if (!national) return '';   // a bare country code is not a number worth dialling
   const countryCode = String(config.countryCode ?? '').replace(/\D/g, '');
+  const national = toNationalNumber(value);
+
+  if (!national || national === countryCode) return '';
   return `${countryCode}${national}`;
 }
 

@@ -18,6 +18,7 @@ function config(overrides = {}) {
     twilio: { accountSid: "AC1", authToken: "tok", webhookBaseUrl: "https://x.example", verifyWebhookSignature: true },
     webhook: { sharedSecret: "s3cret", verify: true },
     countryExplicitlySet: true,
+    timeouts: { request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 },
   };
   return { ...base, ...overrides };
 }
@@ -94,4 +95,30 @@ test("Twilio settings are not demanded of a ValueFirst deployment", () => {
   const cfg = config({ whatsAppProvider: "ValueFirst" });
   cfg.twilio = { accountSid: "", authToken: "", webhookBaseUrl: "", verifyWebhookSignature: true };
   assert.deepEqual(missingWith(cfg), []);
+});
+
+test("a settle deadline at or below a call deadline is fatal", () => {
+  // Abandoning a turn whose backend call is still running releases the
+  // per-citizen lock, so a retry can file the same complaint twice.
+  const invalidWith = (timeouts) => {
+    const cfg = config();
+    cfg.timeouts = timeouts;
+    stub("src/env-variables.js", cfg);
+    delete require.cache[p("src/startup-checks.js")];
+    return require(p("src/startup-checks.js")).invalidConfig();
+  };
+
+  assert.match(
+    invalidWith({ request: 20000, mediaProcessing: 13000, dispatchSettle: 20000 })[0],
+    /must exceed REQUEST_TIMEOUT_MS/
+  );
+  assert.match(
+    invalidWith({ request: 5000, mediaProcessing: 13000, dispatchSettle: 10000 })[0],
+    /must exceed MEDIA_PROCESSING_TIMEOUT_MS/
+  );
+  assert.deepEqual(
+    invalidWith({ request: 20000, mediaProcessing: 13000, dispatchSettle: 30000 }),
+    [],
+    "the shipped defaults are ordered correctly"
+  );
 });
