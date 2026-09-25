@@ -178,6 +178,56 @@ class EmployeeContextServiceTest {
     }
 
     @Test
+    void reportsWhetherTheEmployeeHasSomeoneToEscalateTo() {
+        // #2129: AD_LME_DIR sits at the top of the ADMIN_PUBLIC_SVC chain, so Escalate could
+        // only ever return ESCALATION_TOP_OF_HIERARCHY. The UI has no other way to know.
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of(
+                        "code", "AD_LME",
+                        "assignments", List.of(Map.of(
+                                "isCurrentAssignment", true,
+                                "department", "ADMIN_PUBLIC_SVC",
+                                "reportingTo", "a37e6345-a9dd-469e-bcf6-4ca9601c04e1")))))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("PGR_LME", "Complaint Resolver", TENANT)), TENANT);
+
+        assertTrue(context.isHasReportingTo());
+    }
+
+    @Test
+    void reportsNoOneToEscalateToAtTheTopOfTheChain() {
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of(
+                        "code", "AD_LME_DIR",
+                        "assignments", List.of(Map.of(
+                                "isCurrentAssignment", true,
+                                "department", "ADMIN_PUBLIC_SVC")))))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("PGR_LME", "Complaint Resolver", TENANT)), TENANT);
+
+        assertFalse(context.isHasReportingTo(), "top of chain has nobody to escalate to");
+    }
+
+    @Test
+    void aBlankReportingToIsNotSomeoneToEscalateTo() {
+        // HRMS writes "" rather than omitting the field for some records.
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of(
+                        "code", "AD_LME_DIR",
+                        "assignments", List.of(Map.of(
+                                "isCurrentAssignment", true,
+                                "department", "ADMIN_PUBLIC_SVC",
+                                "reportingTo", "   ")))))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("PGR_LME", "Complaint Resolver", TENANT)), TENANT);
+
+        assertFalse(context.isHasReportingTo());
+    }
+
+    @Test
     void classifiesRolesFromConfigurationRatherThanHardCodedLists() {
         when(config.getEmployeeContextResolverRoleCodes()).thenReturn(List.of(" case_worker "));
         when(config.getEmployeeContextCitizenRoleCodes()).thenReturn(List.of("resident"));

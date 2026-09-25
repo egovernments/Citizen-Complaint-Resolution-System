@@ -316,6 +316,10 @@ const PGRDetails = () => {
 
   // Fetch complaint details
   const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
+  // Only used to decide whether Escalate can succeed: the service moves the complaint to
+  // the assignee's HRMS reportingTo, so an employee at the top of their chain has nowhere
+  // to escalate to. See canEscalate below for why this is not a hard gate.
+  const { data: workingContext } = Digit.Hooks.pgr.useEmployeeWorkingContext(tenantId);
 
   // Use the complaint's tenantId for workflow queries (complaints live at city level,
   // but getCurrentTenantId() may return root tenant for root-level ADMIN users)
@@ -555,6 +559,18 @@ const PGRDetails = () => {
     return [...set].filter((r) => !NON_ASSIGNEE_ROLES.has(r));
   };
 
+  // Escalate is offered only to the employee holding the complaint (#2129), and only while
+  // a rung above them exists. hasReportingTo comes from the same working-context call the
+  // employee shell already makes, so this costs no extra request.
+  //
+  // Deliberately fails OPEN on an unknown context: the flag is only trusted when it says
+  // false. An unavailable or still-loading context must not hide a legitimate action, and
+  // the service re-checks the chain anyway — a dead button is a worse bug than one that is
+  // briefly offered, but silently hiding the only way to escalate would be worse than both.
+  const canEscalate = (currentAssignees) =>
+    isCurrentAssignee(currentAssignees, userInfo?.info?.uuid)
+    && workingContext?.hasReportingTo !== false;
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
@@ -571,8 +587,7 @@ const PGRDetails = () => {
         // every PENDINGATLME complaint, including ones that had already moved past them,
         // and clicking it advanced somebody else's ladder (#2129). Offer it only to the
         // person actually holding the complaint.
-        .filter((action) => action.action !== "ESCALATE"
-          || isCurrentAssignee(currentAssignees, userInfo?.info?.uuid))
+        .filter((action) => action.action !== "ESCALATE" || canEscalate(currentAssignees))
         .map((action) => ({
           action: action.action,
           roles: action.roles,
