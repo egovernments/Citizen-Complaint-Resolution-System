@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { SideNav, Loader } from "@egovernments/digit-ui-components";
+import React, { useCallback, useLayoutEffect, useState } from "react";
+import { SideNav } from "@egovernments/digit-ui-components";
 import { useHistory } from "react-router-dom";
 import MediaQuery from "react-responsive";
 import { useEmployeeNavItems, navigateToEmployeeUrl } from "./employeeNavItems";
+import { SidebarHead, SidebarFoot } from "./SidebarBrand";
 
 /**
  * A pinned sidebar is a display preference, not user data: it survives a
@@ -14,18 +15,29 @@ import { useEmployeeNavItems, navigateToEmployeeUrl } from "./employeeNavItems";
  */
 const PINNED_STORAGE_KEY = "ccrs.employee.sidebar-pinned";
 
+/**
+ * The user's own choice wins. Without one, open where there is room for it:
+ * with hover-to-open gone, a first visit to a closed rail shows a column of
+ * unlabelled icons, and open, the labels teach the icons. Below 1280px the
+ * open rail's 240px costs the page too much (an 834px tablet keeps 548px of
+ * content), so there it starts closed.
+ */
+const OPEN_BY_DEFAULT_MIN_WIDTH = 1280;
+
 function readPinned() {
+  const fallback = typeof window !== "undefined" && window.innerWidth >= OPEN_BY_DEFAULT_MIN_WIDTH;
   try {
-    return window.localStorage.getItem(PINNED_STORAGE_KEY) === "true";
+    const stored = window.localStorage.getItem(PINNED_STORAGE_KEY);
+    return stored === null ? fallback : stored === "true";
   } catch {
     // Private windows and blocked site data throw on access rather than
     // returning null, so the read has to be guarded, not just null-checked.
-    return false;
+    return fallback;
   }
 }
 
-const EmployeeSideBar = () => {
-  const { isLoading, items } = useEmployeeNavItems();
+const EmployeeSideBar = ({ t, crestUrl, crestAlt }) => {
+  const { items } = useEmployeeNavItems();
   const [pinned, setPinned] = useState(readPinned);
 
   /**
@@ -33,12 +45,15 @@ const EmployeeSideBar = () => {
    * own — the page simply disappears underneath. Publishing the state on the
    * root element lets the stylesheet inset the employee surface by the same
    * width, over the same duration, so the content travels with the panel
-   * instead of being covered by it (#2038 review).
+   * instead of being covered by it (#2038 review). The top bar keys off the
+   * same attribute, since it now starts where the rail ends.
    *
-   * Only the pinned state moves content. A hover peek stays an overlay: the
-   * pointer is a transient thing to reflow a whole page behind.
+   * A layout effect, so the attribute is there before the first paint. As a
+   * plain effect it landed a frame late: every load painted the collapsed
+   * layout first and then animated open, which read as the page loading
+   * broken.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.employeeSidebarPinned = pinned ? "true" : "false";
     return () => {
       delete document.documentElement.dataset.employeeSidebarPinned;
@@ -63,10 +78,9 @@ const EmployeeSideBar = () => {
     }
   };
 
-  if (isLoading) {
-    return <Loader />;
-  }
-
+  // No early return while the nav items load. A spinner in place of the rail
+  // meant the crest, the toggle and the rail's width all arrived late; the
+  // rail renders at once and its rows fill in.
   return (
     <MediaQuery minWidth={768}>
       <SideNav
@@ -94,6 +108,20 @@ const EmployeeSideBar = () => {
         pinnable={true}
         pinned={pinned}
         onPinnedChange={onPinnedChange}
+        // The toggle beside the crest is the only way to open or close the
+        // rail now; the foot control and hover-to-open both go (#2038 review).
+        hoverExpand={false}
+        pinPlacement="none"
+        renderHeader={({ expanded }) => (
+          <SidebarHead
+            t={t}
+            crestUrl={crestUrl}
+            crestAlt={crestAlt}
+            expanded={expanded}
+            onToggle={() => onPinnedChange(!pinned)}
+          />
+        )}
+        renderFooter={({ expanded }) => <SidebarFoot expanded={expanded} />}
         onBottomItemClick={() => {}}
       />
     </MediaQuery>

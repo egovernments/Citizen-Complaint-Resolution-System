@@ -27,6 +27,14 @@ const SideNav = ({
   pinnable = false,
   pinned = false,
   onPinnedChange,
+  // Also opt-in. `hoverExpand={false}` makes the pinned state the only thing
+  // that opens the panel: a rail whose width follows the pointer cannot also
+  // be one whose width the user chose. `pinPlacement="none"` drops the foot
+  // control for callers that put their own toggle in `renderHeader`.
+  hoverExpand = true,
+  pinPlacement = "foot",
+  renderHeader,
+  renderFooter,
 }) => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -38,7 +46,7 @@ const SideNav = ({
    * pinning has to hold the wide presentation open after the pointer leaves.
    * `hovered` keeps its original meaning and still only tracks the pointer.
    */
-  const expanded = (pinnable && pinned) || hovered;
+  const expanded = (pinnable && pinned) || (hoverExpand && hovered);
   const pinLabel = pinned
     ? t("CORE_SIDEBAR_COLLAPSE", "Collapse")
     : t("CORE_SIDEBAR_PIN", "Keep open");
@@ -178,23 +186,45 @@ const SideNav = ({
     );
   };
 
-  const renderItems = (items, parentIndex = -1) => 
+  /**
+   * A section is a label, not a row: nothing to select or expand. Its rows
+   * render as top-level rows so they keep their icons at 3rem, where a label
+   * has no room and a divider marks the group instead.
+   */
+  const renderSection = (section, index) => (
+    <div className={`digit-sidebar-section ${theme || ""}`} key={`section-${section.key || index}`}>
+      {expanded ? (
+        <div className="digit-sidebar-section-label">{section.label}</div>
+      ) : (
+        <hr className="digit-sidebar-section-divider" aria-hidden="true" />
+      )}
+      {renderItems(section.children, index, true)}
+    </div>
+  );
+
+  const renderItems = (items, parentIndex = -1, flat = false) =>
     items?.map((item, index) => {
+      if (item?.type === "section") return renderSection(item, index);
       const currentIndex = parentIndex >= 0 ? `${parentIndex}-${index}` : index;
       const isExpanded = expandedItems[currentIndex];
       const isSelected = selectedItem.item === item;
-      const isTopLevel = parentIndex === -1;
+      const isTopLevel = parentIndex === -1 || flat;
 
       return (
         <div className={"item-child-wrapper"} key={currentIndex}>
           <div
             className={`digit-sidebar-item ${theme || ""} ${variant || ""} ${
               selectedItem.item === item ? "selected" : ""
-            } ${parentIndex === -1 ? "parentLevel" : ""} ${
+            } ${isTopLevel ? "parentLevel" : ""} ${
               isParentOfSelectedItem(currentIndex) ? "selectedAsParent" : ""
             } ${expanded ? "hovered" : "collapsed"}`}
             onClick={() => handleItemClick(item, currentIndex, parentIndex)}
             tabIndex={0}
+            // At 3rem the label is gone; without hover-to-open it is the only
+            // way to learn what an icon is.
+            title={expanded ? undefined : item.label}
+            aria-label={item.label}
+            aria-current={isSelected ? "page" : undefined}
           >
             {(isTopLevel || expanded) && (
               <span className="icon">
@@ -296,9 +326,10 @@ const SideNav = ({
         transition: `width ${transitionDuration || 0.5}s cubic-bezier(0.4, 0, 0.2, 1)`,
         ...styles,
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={hoverExpand ? () => setHovered(true) : undefined}
+      onMouseLeave={hoverExpand ? () => setHovered(false) : undefined}
     >
+      {renderHeader && renderHeader({ expanded })}
       {enableSearch && renderSearch()}
       <div
         className={`digit-sidebar-items-container ${theme || ""} ${
@@ -308,7 +339,10 @@ const SideNav = ({
         {filteredItems.length > 0 ? (
           renderItems(filteredItems)
         ) : (
-          expanded && <div className="digit-msb-no-results">{t("No Results Found")}</div>
+          // Only a search can come up empty. Before the items have loaded
+          // there is nothing to report, and saying "No Results Found" then
+          // flashed a false message on every page load.
+          expanded && search && <div className="digit-msb-no-results">{t("No Results Found")}</div>
         )}
       </div>
       {/* Foot of the rail, after the items. Placing it above them meant every
@@ -318,7 +352,8 @@ const SideNav = ({
 
           Only rendered once open: at 3rem the rail is an icon strip and has no
           room for an affordance whose whole purpose is to keep it wide. */}
-      {pinnable && expanded && (
+      {renderFooter && renderFooter({ expanded })}
+      {pinnable && pinPlacement === "foot" && expanded && (
         <div className={`digit-sidebar-pin-row ${theme || ""}`}>
           <button
             type="button"
@@ -395,6 +430,10 @@ SideNav.propTypes = {
   pinnable: PropTypes.bool,
   pinned: PropTypes.bool,
   onPinnedChange: PropTypes.func,
+  hoverExpand: PropTypes.bool,
+  pinPlacement: PropTypes.oneOf(["foot", "none"]),
+  renderHeader: PropTypes.func,
+  renderFooter: PropTypes.func,
   expandedWidth: PropTypes.string,
   transitionDuration: PropTypes.number,
   styles: PropTypes.object,
