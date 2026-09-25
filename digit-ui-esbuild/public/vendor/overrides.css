@@ -8276,3 +8276,128 @@ html .header-dropdown-option:focus-visible {
   box-shadow: inset 2px 0 0 var(--color-primary-1, #204F37);
   outline: none;
 }
+
+/* ======================================================================
+ * Inbox top row: the search card is as tall as the card beside it
+ * (#2038 review: "align boxes on search page").
+ *
+ * The links card sits at the height of its content (149px on a laptop),
+ * but the search card beside it came out at 210px. Three things made it
+ * tall, none of them content:
+ *   - the actions had a row of their own under the fields,
+ *   - the Date Range field carries the legacy select's `margin-bottom:
+ *     24px`, which set the height of the whole field row,
+ *   - vendor gives every `.digit-section` a `min-height: 10rem` floor.
+ *
+ * With the actions inline and the other two cleared, the search card is
+ * shorter than the links card, and both stretch to the row so their edges
+ * meet whichever one is taller. That also covers widths where the links
+ * title wraps to three lines.
+ *
+ * Inline actions need room: three fields of about 170px plus the two
+ * buttons. The rail and a pinned sidebar both take width from this card
+ * independently of the viewport, so the switch is a container query on the
+ * card itself rather than a media query. Below it the actions keep their
+ * own row, full width and right-aligned.
+ * ---------------------------------------------------------------------- */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.search {
+  min-height: 0 !important;
+  container: pgr-inbox-search / inline-size;
+}
+/* Supersedes the `align-self: start` above. That was written while the
+ * search card stood 210px tall; now that it is compact, sharing the row
+ * height is what lines the two cards up. */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.links {
+  align-self: stretch !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-label-field-pair .digit-employee-select-wrap {
+  margin-bottom: 0 !important;
+}
+
+/* Tablet and up. Vendor pins the actions to `grid-column: 3 / -1`, so the
+ * third track took the buttons' 234px and squeezed Complaint No and Mobile
+ * No to about 108px each at 834px, the phone input to about 30px. Equal
+ * tracks, and the actions span the row under them. Phones have their own
+ * stacked layout (section 58). */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    row-gap: 16px !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    grid-column: 1 / -1 !important;
+    justify-content: flex-end !important;
+  }
+}
+
+@container pgr-inbox-search (min-width: 50rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto !important;
+    align-items: end !important;
+  }
+  /* 40px buttons centred on the 44px fields beside them. */
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    grid-column: auto !important;
+    margin-bottom: 2px !important;
+  }
+}
+
+/* The filter card was padded twice: 20px on the card, then 24px again on
+ * its header and on its content, so the fields started 45px in while the
+ * cards above start 24px in. One inset, the same as theirs. */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.filter {
+  padding: 24px !important;
+}
+.v2-pgr-inbox .digit-section.filter .filter-header {
+  padding: 0 !important;
+  margin-bottom: 16px !important;
+}
+.v2-pgr-inbox .digit-section.filter .content-container {
+  padding: 0 !important;
+}
+
+/* The module icon belongs to the title's first line. Centred on the whole
+ * block, it floated between the lines once the title wrapped, and lower
+ * still because the title carries a bottom margin. 1px centres the 20px
+ * glyph on the 22.4px line. */
+.v2-pgr-inbox .digit-section.links .digit-inbox-search-links-header {
+  align-items: flex-start !important;
+}
+.v2-pgr-inbox .digit-section.links .digit-inbox-search-links-header-logo {
+  margin-top: 1px !important;
+}
+
+/* ======================================================================
+ * Employee page gutters between 600px and 768px (#2038 review).
+ *
+ * Vendor reserves the sidebar rail from 640px up (`.employee .main {
+ * margin-left: 72px; width: calc(100% - 83px) }`), but EmployeeSideBar only
+ * renders the rail from 768px (`MediaQuery minWidth={768}`). The phone rule
+ * that gives the space back stops at 600px. In between, every employee page
+ * kept a 72px gutter for a rail that is not there: 100px of left gap against
+ * 27px on the right, measured on the inbox at 697px.
+ *
+ * Same three resets as the phone block, over the whole range without a rail.
+ * Scoped to `.employee`; citizen pages have their own shell.
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .employee .main.digit-home-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  .employee .ground-container.digit-home-ground {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .employee .digit-landing-page-wrapper {
+    margin-left: 16px !important;
+    margin-right: 16px !important;
+  }
+  /* Home's module cards stop at 480px wide. Beside the old 72px gutter that
+   * happened to look centred; without it they sat 28px from the left and
+   * 189px from the right. Full width here, as they already are on phones. */
+  .employee .digit-landing-page-card {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
