@@ -426,13 +426,8 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
         </Route>
         <Route path={`${path}/otp`}>
           <SelectOtp
-            config={{
-              ...stepItems[1],
-              texts: {
-                ...stepItems[1].texts,
-                cardText: `${stepItems[1].texts.cardText} ${params.mobileNumber || params.userName || ""}`,
-              },
-            }}
+            config={stepItems[1]}
+            recipient={params.mobileNumber || params.userName || ""}
             onOtpChange={handleOtpChange}
             onResend={resendOtp}
             onSelect={selectOtp}

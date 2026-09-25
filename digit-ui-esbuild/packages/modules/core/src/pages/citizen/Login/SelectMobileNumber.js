@@ -25,6 +25,7 @@ import {
   Field as V2Field,
 } from "@egovernments/digit-ui-components-v2";
 import { Phone } from "lucide-react";
+import Header from "../../../components/Header";
 
 const SelectMobileNumber = ({
   t,
@@ -74,52 +75,12 @@ const SelectMobileNumber = ({
     return v === key ? fallback : v;
   };
 
-  const headerText = config?.texts?.header
-    ? tr(config.texts.header, "Sign in")
-    : "Sign in";
-  const cardText = config?.texts?.cardText
-    ? tr(config.texts.cardText, "We'll send you a one-time password to verify your number.")
-    : null;
+  const headerText = stepText(config?.texts?.header, "Sign in");
+  const cardText = stepText(config?.texts?.cardText, "We'll send you a one-time password to verify your number.");
 
   return (
     <V2LoginShell>
-      <V2Card
-        style={{
-          width: "100%",
-          maxWidth: "440px",
-          padding: "32px 28px 28px 28px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "20px",
-        }}
-      >
-        <header style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              color:
-                "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-              lineHeight: 1.2,
-            }}
-          >
-            {headerText}
-          </h1>
-          {cardText ? (
-            <p
-              style={{
-                margin: 0,
-                fontSize: "0.875rem",
-                color: "var(--color-text-secondary, #6B7280)",
-                lineHeight: 1.5,
-              }}
-            >
-              {cardText}
-            </p>
-          ) : null}
-        </header>
-
+      <SignInCard title={headerText} text={cardText}>
         <form
           onSubmit={handleSubmit}
           style={{ display: "flex", flexDirection: "column", gap: "16px" }}
@@ -207,14 +168,22 @@ const SelectMobileNumber = ({
             disabled={!isMobileValid || !canSubmit}
             width="full"
           >
-            {tr(config?.texts?.nextText || "CS_COMMONS_NEXT", "Continue")}
+            {stepText(config?.texts?.nextText, "Continue")}
           </V2Button>
         </form>
-
-      </V2Card>
+      </SignInCard>
     </V2LoginShell>
   );
 };
+
+/**
+ * A sign-in step's own text. Login/index.js hands every step its texts already
+ * translated, and these cards used to put them through t() a second time: a
+ * translated sentence is not a key, so that lookup always missed and every
+ * language got the English fallback, and the OTP step lost the number it
+ * names. A text still in key form (the tenant has not seeded it) falls back.
+ */
+export const stepText = (text, fallback) => (text && !/^[A-Z][A-Z0-9_.]*$/.test(text) ? text : fallback);
 
 /**
  * Centered full-viewport shell. Used by SelectMobileNumber, SelectOtp,
@@ -237,6 +206,65 @@ export function V2LoginShell({ children }) {
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * The card every sign-in step sits in, built as the employee sign-in card is:
+ * the tenant's crest and name on top, a centred title in the heading colour
+ * (a title is not a control, so not the brand colour), and a soft lift off
+ * the navy ground rather than a hairline border.
+ */
+export function SignInCard({ title, text, children }) {
+  return (
+    <V2Card
+      className="citizen-sign-in-card"
+      style={{
+        width: "100%",
+        maxWidth: "420px",
+        padding: "32px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        borderRadius: "14px",
+        border: "none",
+        boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)",
+      }}
+    >
+      {/* The employee card's crest wrapper, so both crests take its sizing. */}
+      <div className="v2-employee-login-top-logos" style={{ display: "flex", justifyContent: "center" }}>
+        <Header />
+      </div>
+      {/* A div, not <header>: the app sets <header> in the condensed heading
+          face, which the line under the title inherited. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", textAlign: "center" }}>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: "1.5rem",
+            fontWeight: 700,
+            color: "var(--color-text-heading, #1D2433)",
+            lineHeight: 1.2,
+          }}
+        >
+          {title}
+        </h1>
+        {text ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.875rem",
+              fontWeight: 400,
+              color: "var(--color-text-secondary, #6B7280)",
+              lineHeight: 1.5,
+            }}
+          >
+            {text}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </V2Card>
   );
 }
 

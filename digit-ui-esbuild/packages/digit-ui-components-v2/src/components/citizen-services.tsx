@@ -70,7 +70,12 @@ export interface CitizenServicesProps {
   title?: React.ReactNode;
 }
 
-function ModuleCard({
+/**
+ * One module's card: icon, title and its service rows. Exported so a
+ * module's own landing page (`/citizen/<module>-home`) shows the card the
+ * citizen already met on All Services, not a second design of it.
+ */
+export function CitizenServiceCard({
   code,
   data,
   renderIcon,
@@ -280,7 +285,7 @@ export function CitizenServices({ modules, renderIcon, title }: CitizenServicesP
             }}
           >
             {codes.map((code) => (
-              <ModuleCard
+              <CitizenServiceCard
                 key={code}
                 code={code}
                 data={modules[code] as CitizenServiceModule}
