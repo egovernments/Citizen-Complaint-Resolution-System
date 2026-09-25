@@ -91,7 +91,9 @@ The payload is validated only when `preferenceCode` is `USER_NOTIFICATION_PREFER
 | `/user-preference/v1/_search` | POST | Search preferences by criteria |
 | `/health` | GET | Health check |
 
-`/health` is served at the **container root**, not under the context path. The compose healthcheck, the Kubernetes liveness/readiness probes and both Gatus catalogues all probe `/health`, so the context path is applied per-controller rather than through `server.servlet.context-path`. Actuator stays at its default `/actuator` base path.
+`/health` is served at the **container root**, not under the context path. The compose healthcheck, the Kubernetes liveness/readiness probes and both Gatus catalogues all probe `/health`, so the context path is applied per-controller rather than through `server.servlet.context-path`.
+
+Health comes from actuator, mapped at `/` with a single `database` component supplied by `DatabaseHealthIndicator` (the repository's own `SELECT 1`, not `DataSourceHealthIndicator`). That reproduces the shape the Go service published, `{"status":"UP","components":{"database":{"status":"UP"}}}`, with 503 when the database is unreachable.
 
 ### Upsert
 
@@ -269,7 +271,7 @@ Location: [`devops/deploy-as-code/charts/common-services/digit-user-preferences-
 
 `appType: java-spring` makes the common Helm chart inject its `extraEnv.java` block into the deployment, and an environment variable outranks `application.properties`. Two of those injected values would otherwise change this service's behaviour, so the chart overrides both (its own `env` renders after `extraEnv.java`, and a later duplicate wins):
 
-- **`MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/`** maps actuator's health endpoint onto `/health`, where it is ordered ahead of the controller and answers instead. The probe then gets `{"status":"UP"}` rather than the documented `components.database.status` shape, and liveness starts reflecting `DataSourceHealthIndicator` instead of the repository check. The chart pins it back to `/actuator`; `ActuatorBasePathTest` covers both halves.
+- **`MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/`** is what this service wants, so nothing overrides it. Health is actuator's, mapped at the root, and `application.properties` sets the same value for local and compose runs. An earlier revision of this branch served `/health` from a hand-written controller, which that injected value silently shadowed; the controller is gone and actuator produces the identical response, so the conflict cannot recur.
 - **`SPRING_DATASOURCE_URL`** comes from `egov-config`'s `db-url`, which carries no `sslmode`, so it replaces the URL composed from `DB_*` and drops TLS. `sslmode` is therefore applied as a driver property (`spring.datasource.hikari.data-source-properties.sslmode`), which survives whatever URL is injected. An explicit `sslmode` in the URL still wins, so local and compose runs are unaffected.
 
 The datasource url, username and password otherwise come from the platform, as they do for every sibling Java service, so the chart does not restate them.

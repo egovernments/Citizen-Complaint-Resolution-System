@@ -73,23 +73,11 @@ env: |
   # Both endpoints key on the userId in the request body, and this route is
   # exposed through the gateway, so the service holds a citizen principal to
   # its own record. Roles listed here may act on someone else's record within
-  # their own tenant. EMPLOYEE is excluded on purpose: HRMS forces it onto
-  # every employee, so it would cover every field worker and CSR.
+  # their own tenant, and are overridable per environment from env.yaml.
   - name: ENFORCE_OWNERSHIP
-    value: "true"
+    value: {{ index .Values "enforce-ownership" | quote }}
   - name: PRIVILEGED_ROLES
-    value: "SUPERUSER,ACCOUNT_ADMIN,SYSTEM"
-  # appType: java-spring makes the common chart inject its extraEnv.java block
-  # AHEAD of this one (charts/common/templates/_deployment.yaml), and that
-  # block sets MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/. At that base path
-  # actuator's health endpoint is mapped on /health and, being ordered before
-  # the controller mapping, it answers instead of HealthController: the probe
-  # then returns actuator's {"status":"UP"} rather than this service's
-  # {"status":...,"components":{"database":{"status":...}}}, and liveness
-  # starts reflecting DataSourceHealthIndicator instead of isReachable().
-  # A duplicate later in the list wins, so this puts actuator back.
-  - name: MANAGEMENT_ENDPOINTS_WEB_BASE_PATH
-    value: "/actuator"
+    value: {{ index .Values "privileged-roles" | quote }}
   # The datasource url, username and password all arrive from extraEnv.java
   # (egov-config's db-url plus the db secret), as they do for every sibling
   # Java service, so this chart does not restate them. DB_SSL_MODE is the
@@ -98,5 +86,10 @@ env: |
   - name: DB_SSL_MODE
     value: {{ index .Values "db-ssl-mode" | quote }}
 
-# Default values
+# Default values, overridable per environment from charts/environments/env.yaml
 db-ssl-mode: "require"
+enforce-ownership: "true"
+# EMPLOYEE is excluded on purpose: HRMS forces that role onto every employee it
+# creates, so including it would cover every field worker and CSR rather than
+# administrators.
+privileged-roles: "SUPERUSER,ACCOUNT_ADMIN,SYSTEM"

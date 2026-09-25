@@ -26,6 +26,10 @@ All notable changes to this module will be documented in this file.
 - Database TLS restored. `appType: java-spring` makes the common chart inject `SPRING_DATASOURCE_URL` from `egov-config`, which carries no `sslmode` and silently overrode `db-ssl-mode: require`; the chart never injected that block while this was a Go service, so the switch to a JVM workload had turned TLS off. `sslmode` is now a driver property that survives the injected URL
 - Actuator pinned to `/actuator` in the chart. The same injected block sets the base path to `/`, where actuator answers `/health` ahead of `HealthController`, replacing the documented response shape and the `isReachable()` check with `DataSourceHealthIndicator`
 
+### Fixed (review round 3, PR #2081)
+- `/health` is served by actuator with a named `database` health indicator instead of a hand-written controller. The response is byte-identical, including the 503 on an unreachable database, and it removes both the controller and the chart override that had been added to stop actuator shadowing it
+- `PRIVILEGED_ROLES` and `ENFORCE_OWNERSHIP` are chart values overridable per environment from `env.yaml`, not literals in the service chart
+
 ### Preserved
 - HTTP contract byte for byte: endpoint paths, request envelopes (including the case-insensitive `RequestInfo`/`requestInfo` both callers rely on), response key casing, which keys are omitted when empty, error codes, messages and statuses
 - `/health` remains at the container root rather than under the API context path, so the compose healthcheck, both Kubernetes probes and both Gatus catalogues keep working
