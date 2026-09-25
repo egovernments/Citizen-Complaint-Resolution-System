@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,7 +50,7 @@ class EmployeeContextServiceTest {
     void setUp() {
         lenient().when(config.getHrmsHost()).thenReturn("http://egov-hrms:8092");
         lenient().when(config.getHrmsEndPoint()).thenReturn("/egov-hrms/employees/_search");
-        lenient().when(config.getEmployeeContextResolverRoleCodes()).thenReturn(List.of("PGR_LME", "GRO", "DGRO"));
+        lenient().when(config.getEmployeeContextResolverRoleCodes()).thenReturn(List.of("PGR_LME"));
         lenient().when(config.getEmployeeContextCitizenRoleCodes()).thenReturn(List.of("CITIZEN"));
         lenient().when(config.getEmployeeContextAdminRoleCodes()).thenReturn(List.of(
                 "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN", "STADMIN",
@@ -175,6 +176,76 @@ class EmployeeContextServiceTest {
         assertFalse(context.isAvailable());
         assertTrue(context.getRoles().isEmpty());
         assertTrue(context.getRoleContexts().isEmpty());
+    }
+
+    @Test
+    void reportsWhetherTheEmployeeHasSomeoneToEscalateTo() {
+        // #2129: AD_LME_DIR sits at the top of the ADMIN_PUBLIC_SVC chain, so Escalate could
+        // only ever return ESCALATION_TOP_OF_HIERARCHY. The UI has no other way to know.
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of(
+                        "code", "AD_LME",
+                        "assignments", List.of(Map.of(
+                                "isCurrentAssignment", true,
+                                "department", "ADMIN_PUBLIC_SVC",
+                                "reportingTo", "a37e6345-a9dd-469e-bcf6-4ca9601c04e1")))))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("PGR_LME", "Complaint Resolver", TENANT)), TENANT);
+
+        assertTrue(context.isHasReportingTo());
+    }
+
+    @Test
+    void reportsNoOneToEscalateToAtTheTopOfTheChain() {
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of(
+                        "code", "AD_LME_DIR",
+                        "assignments", List.of(Map.of(
+                                "isCurrentAssignment", true,
+                                "department", "ADMIN_PUBLIC_SVC")))))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("PGR_LME", "Complaint Resolver", TENANT)), TENANT);
+
+        assertFalse(context.isHasReportingTo(), "top of chain has nobody to escalate to");
+    }
+
+    @Test
+    void aBlankReportingToIsNotSomeoneToEscalateTo() {
+        // HRMS writes "" rather than omitting the field for some records.
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of(
+                        "code", "AD_LME_DIR",
+                        "assignments", List.of(Map.of(
+                                "isCurrentAssignment", true,
+                                "department", "ADMIN_PUBLIC_SVC",
+                                "reportingTo", "   ")))))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("PGR_LME", "Complaint Resolver", TENANT)), TENANT);
+
+        assertFalse(context.isHasReportingTo());
+    }
+
+    @Test
+    void aGrievanceOfficerIsNotAResolver() {
+        // #2125: GRO routes a complaint and can reject it, but the canonical workflow
+        // authorizes only PGR_LME on PENDINGATLME. Classifying GRO as RESOLVER made the
+        // working-context header call a grievance officer "Resolver", because the context
+        // label wins over the role's own name (ACCESSCONTROL_ROLES_ROLES_GRO).
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of("code", "AD_GRO")))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("GRO", "Grievance Routing Officer", TENANT)), TENANT);
+
+        // Empty, not merely "not RESOLVER": the frontend only falls back to the role's own
+        // name when roleContexts is empty, so classifying GRO as anything else (ADMIN, say)
+        // would still show the wrong label.
+        assertTrue(context.getRoleContexts().isEmpty(),
+                "a GRO-only employee must carry no working context at all, got "
+                        + context.getRoleContexts());
     }
 
     @Test
