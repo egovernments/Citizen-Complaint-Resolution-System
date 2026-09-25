@@ -1,8 +1,6 @@
-import { Hamburger, TopBar as TopBarComponent } from "@egovernments/digit-ui-react-components";
 import { Dropdown } from "@egovernments/digit-ui-components";
 import { EmployeeWorkingContext } from "./EmployeeWorkingContext";
 import React, { Fragment } from "react";
-import { useHistory, useLocation } from "react-router-dom";
 import ChangeCity, { showTenantIndicator } from "../ChangeCity";
 import ChangeLanguage from "../ChangeLanguage";
 import { Header as TopBarComponentMain } from "@egovernments/digit-ui-components";
@@ -95,70 +93,15 @@ const TopBar = ({
     // until a hard reload.
   }, [userDetails?.info?.uuid, Digit.UserService.getUser()?.info?.photo]);
 
-  const CitizenHomePageTenantId = Digit.ULBService.getCitizenCurrentTenant(true);
-
-  let history = useHistory();
-  const { pathname } = useLocation();
-
-  const conditionsToDisableNotificationCountTrigger = () => {
-    if (Digit.UserService?.getUser()?.info?.type === "EMPLOYEE") return false;
-    if (Digit.UserService?.getUser()?.info?.type === "CITIZEN") {
-      if (!CitizenHomePageTenantId) return false;
-      else return true;
-    }
-    return false;
-  };
-
-  const { data: { unreadCount: unreadNotificationCount } = {}, isSuccess: notificationCountLoaded } = Digit.Hooks.useNotificationCount({
-    tenantId: CitizenHomePageTenantId,
-    config: {
-      enabled: conditionsToDisableNotificationCountTrigger(),
-    },
-  });
-
-  const updateSidebar = () => {
-    if (!Digit.clikOusideFired) {
-      toggleSidebar(true);
-    } else {
-      Digit.clikOusideFired = false;
-    }
-  };
-
-  function onNotificationIconClick() {
-    history.push(`/${window?.contextPath}/citizen/engagement/notifications`);
-  }
-
-  const urlsToDisableNotificationIcon = (pathname) =>
-    !!Digit.UserService?.getUser()?.access_token
-      ? false
-      : [`/${window?.contextPath}/citizen/select-language`, `/${window?.contextPath}/citizen/select-location`].includes(pathname);
-
-  if (CITIZEN) {
-    return (
-      <div>
-        <TopBarComponent
-          img={stateInfo?.logoUrlWhite}
-          isMobile={true}
-          toggleSidebar={updateSidebar}
-          logoUrl={stateInfo?.logoUrlWhite}
-          onLogout={handleLogout}
-          userDetails={userDetails}
-          notificationCount={unreadNotificationCount < 99 ? unreadNotificationCount : 99}
-          notificationCountLoaded={notificationCountLoaded}
-          cityOfCitizenShownBesideLogo={t(CitizenHomePageTenantId)}
-          onNotificationIconClick={onNotificationIconClick}
-          hideNotificationIconOnSomeUrlsWhenNotLoggedIn={urlsToDisableNotificationIcon(pathname)}
-          changeLanguage={!mobileView ? <ChangeLanguage dropdown={true} /> : null}
-        />
-      </div>
-    );
-  }
+  // Citizens get this same bar (#2038 review): the legacy citizen header had
+  // its own height, gutters, carets and a notifications bell that opened a
+  // blank page, since this deployment does not enable the engagement module.
   const loggedin = userDetails?.access_token ? true : false;
 
   //checking for custom topbar components
   const CustomEmployeeTopBar = Digit.ComponentRegistryService?.getComponent("CustomEmployeeTopBar");
 
-  if (CustomEmployeeTopBar) {
+  if (CustomEmployeeTopBar && !CITIZEN) {
     return (
       <CustomEmployeeTopBar
         {...{
@@ -239,7 +182,7 @@ const TopBar = ({
         onHamburgerClick={() => {
           toggleSidebar();
         }}
-        className={`digit-employee-header${
+        className={`digit-employee-header${CITIZEN ? " digit-citizen-header" : ""}${
           ulbLogoDuplicatesHeaderImg ? " digit-employee-header--single-mark" : ""
         }`}
         img={logoUrl}

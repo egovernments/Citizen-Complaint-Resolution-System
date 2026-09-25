@@ -1049,12 +1049,14 @@ html .digit-topbar:not(.digit-employee-header) {
  * land on the same y-line, just above "Powered by DIGIT".
  * -------------------------------------------------------------------- */
 :root {
-  --v2-page-footer-height: 38px;
-  /* PR #99 reduced the topbar from the legacy ~82px to 56px (see
-   * `.employee .digit-topbar` rules earlier in this file). The var
-   * was left at 82px which made the citizen sidebar end ~26px above
-   * the viewport bottom. Aligned to the actual topbar height. */
-  --v2-topbar-height: 56px;
+  /* The footer renders 40px tall (see the `.citizen-home-footer` rules); at
+   * 38 every page sized from this overran the window by 2px and grew a
+   * scrollbar for nothing. */
+  --v2-page-footer-height: 40px;
+  /* The citizen layout's own name for the top bar height. Citizens now get
+   * the shared bar (#2038 review), so this follows --employee-header-h
+   * rather than restating a number that drifted twice before (82px, 56px). */
+  --v2-topbar-height: var(--employee-header-h, 76px);
 }
 
 /* Vendor sets `.citizen .main { padding-top: 82px; min-height: calc(100vh - 90px) }`.
@@ -1078,31 +1080,19 @@ html .digit-topbar:not(.digit-employee-header) {
   ) !important;
 }
 
-/* Some citizen surfaces (e.g. /user/profile, edit profile) mount under
- * the `.employee` wrapper because of how `useRouteSubscription` flips on
- * those paths. Vendor css then pins the citizen page footer with
- * `.employee .citizen-home-footer { position: fixed; bottom: 0 }`,
- * which on a modernized route lays the "Powered by DIGIT" bar OVER the
- * v2 sidebar/form column instead of below them. Whenever the v2 sidebar
- * is present in main, force the footer back to normal flow + clear the
- * 72px legacy margin so it parks flush below the v2 column. */
-body:has(.main.center-container.citizen-home-container > aside.v2-scope) .citizen-home-footer {
-  position: static !important;
-  bottom: auto !important;
-  margin-bottom: 0 !important;
-  /* Reserve the 260px sidebar gutter on the left so the "Powered by
-   * DIGIT" text lands in the centre of the right-side content area
-   * (the same column the form / module list sits in) rather than the
-   * centre of the full viewport — which would put it visually under
-   * the sidebar's right edge. Only kicks in when the v2 sidebar is
-   * actually mounted (via the body :has() guard above). */
-  padding-left: 260px !important;
-}
-@media (max-width: 47.99rem) {
-  /* Mobile: sidebar is hidden, drop the gutter so the footer text is
-   * centred to the full viewport again. */
-  body:has(.main.center-container.citizen-home-container > aside.v2-scope) .citizen-home-footer {
-    padding-left: 0 !important;
+/* "Powered by DIGIT" centres on the content column, as it does on employee
+ * pages, whose footer sits inside the rail-inset `.main`. The citizen footer
+ * is a full-width sibling of the page that runs under the fixed rail, so it
+ * is inset by the rail's width (the page's own left and right gutters are
+ * equal, so this is the column's centre) and travels with the rail. Only
+ * where a rail is mounted: the signed-out pages have none. */
+@media (min-width: 48rem) {
+  .citizen:has(> .center-container.citizen-home-container > .digit-sidebar) > .citizen-home-footer {
+    padding-left: calc(3rem + 16px) !important;
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-sidebar-pinned="true"] .citizen:has(> .center-container.citizen-home-container > .digit-sidebar) > .citizen-home-footer {
+    padding-left: calc(15rem + 16px) !important;
   }
 }
 
@@ -2099,8 +2089,8 @@ button[class*="toast-close"] svg,
    * on a phone, so this takes a smaller lift than the desktop bar. */
   :root { --employee-header-h: 64px; }
 }
-.employee .digit-topbar,
-.employee .digit-topbar.digit-employee-header {
+:is(.employee, .citizen) .digit-topbar,
+:is(.employee, .citizen) .digit-topbar.digit-employee-header {
   height: var(--employee-header-h) !important;
   min-height: var(--employee-header-h) !important;
   align-items: center !important;
@@ -2117,8 +2107,8 @@ button[class*="toast-close"] svg,
   padding-right: 24px !important;
 }
 @media (max-width: 47.99rem) {
-  .employee .digit-topbar,
-  .employee .digit-topbar.digit-employee-header {
+  :is(.employee, .citizen) .digit-topbar,
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header {
     padding-left: 16px !important;
     padding-right: 16px !important;
   }
@@ -2141,14 +2131,14 @@ button[class*="toast-close"] svg,
  * short bar; an image taller than that overflowed an inline box and sat 11px
  * off centre. Letting both wrapper and slot size to their content is what
  * actually centres the lockup, rather than nudging it with margins. */
-.employee .digit-topbar .digit-logo-ulb-wrapper,
-.employee .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-logo {
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper,
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-logo {
   height: auto !important;
   max-height: none !important;
   display: flex !important;
   align-items: center !important;
 }
-.employee .digit-topbar .digit-header-logo-img {
+:is(.employee, .citizen) .digit-topbar .digit-header-logo-img {
   height: 28px !important;
   width: auto !important;
   max-height: 28px !important;
@@ -2161,15 +2151,15 @@ button[class*="toast-close"] svg,
  * box. Taking it out of inline flow removes the phantom descender, which is
  * what actually centres it; nudging it with a margin would only have hidden
  * the gap at this one font size. */
-.employee .digit-topbar img.state,
-.employee .digit-topbar .digit-topbar-ulb img,
-.employee .digit-topbar .digit-logo-ulb-wrapper img.state {
+:is(.employee, .citizen) .digit-topbar img.state,
+:is(.employee, .citizen) .digit-topbar .digit-topbar-ulb img,
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper img.state {
   height: 38px !important;
   max-height: 38px !important;
   width: auto !important;
   display: block !important;
 }
-.employee .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-ulb {
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-ulb {
   display: flex !important;
   align-items: center !important;
 }
@@ -2177,21 +2167,21 @@ button[class*="toast-close"] svg,
  * notifications, etc.) — vendor renders 24×24 SVGs that read tiny
  * vs the bumped left-hand logos. Lift to 28px so the topbar feels
  * balanced left-to-right. */
-.employee .digit-topbar [class*="header-action"] svg,
-.employee .digit-topbar [class*="topbar-action"] svg,
-.employee .digit-topbar [class*="topbar-icon"] svg,
-.employee .digit-topbar [class*="header-right"] svg,
-.employee .digit-topbar [class*="profile"] svg,
-.employee .digit-topbar [class*="notification"] svg,
-.employee .digit-topbar > div > svg,
-.employee .digit-topbar > div > div > svg {
+:is(.employee, .citizen) .digit-topbar [class*="header-action"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="topbar-action"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="topbar-icon"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="header-right"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="profile"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="notification"] svg,
+:is(.employee, .citizen) .digit-topbar > div > svg,
+:is(.employee, .citizen) .digit-topbar > div > div > svg {
   width: 28px !important;
   height: 28px !important;
 }
 /* Right-side branding image (`.digit-header-img` — tenant secondary
  * wordmark on naipepea). Same uplift as the left-hand state logo. */
-.employee .digit-topbar img.digit-header-img,
-.employee .digit-topbar .digit-header-img {
+:is(.employee, .citizen) .digit-topbar img.digit-header-img,
+:is(.employee, .citizen) .digit-topbar .digit-header-img {
   height: 28px !important;
   max-height: 28px !important;
   width: auto !important;
@@ -2204,7 +2194,7 @@ button[class*="toast-close"] svg,
  * the initial sits at the optical centre regardless of letter width.
  * Closes the avatar-centering point on egovernments/CCRS#505. */
 .employee .topbar .right .user-img-txt,
-.employee .digit-topbar .user-img-txt,
+:is(.employee, .citizen) .digit-topbar .user-img-txt,
 .user-img-txt {
   width: 36px !important;
   height: 36px !important;
@@ -2240,20 +2230,20 @@ button[class*="toast-close"] svg,
  * green) + brand-tinted active state. Uses the legacy `--color-sidebar-*`
  * tokens so a tenant's MDMS theme drives every shade. Falls back to the
  * Nairobi green when a tenant ships nothing. */
-.employee .digit-sidebar,
-.employee .digit-sidebar.dark {
+:is(.employee, .citizen) .digit-sidebar,
+:is(.employee, .citizen) .digit-sidebar.dark {
   background: var(--color-sidebar-bg, var(--color-header-bg, var(--color-primary-1, #204F37))) !important;
   color: var(--color-sidebar-text-default, #D1D5DB) !important;
   border-right: 1px solid var(--color-sidebar-bg, var(--color-border, #d6d5d4)) !important;
 }
-.employee .digit-sidebar svg,
-.employee .digit-sidebar .digit-sidebar-item svg,
-.employee .digit-sidebar .digit-sidebar-item svg path {
+:is(.employee, .citizen) .digit-sidebar svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item svg path {
   fill: var(--color-sidebar-icon-default, var(--color-sidebar-text-default, #D1D5DB)) !important;
 }
-.employee .digit-sidebar .digit-sidebar-item,
-.employee .digit-sidebar .digit-sidebar-item .digit-sidebar-link,
-.employee .digit-sidebar .digit-sidebar-item-label {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item .digit-sidebar-link,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-label {
   color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 /* Sidebar item hover — every state-class combination the vendor
@@ -2268,12 +2258,12 @@ button[class*="toast-close"] svg,
  * fallback chain `hover-text → primary-1 → sidebar-bg` lands the
  * text at the sidebar's own dark green on naipepea (#204F37) and
  * a sensible brand-toned dark on other tenants. */
-.employee .digit-sidebar .digit-sidebar-item:hover,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel:hover,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover,
-.employee .digit-sidebar .digit-sidebar-item.collapsed:hover,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.collapsed:hover {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.collapsed:hover {
   background-color: var(--color-sidebar-hover-bg, var(--color-primary-selected-bg, #FFF4D6)) !important;
   color: var(--color-sidebar-hover-text, var(--color-primary-1, var(--color-sidebar-bg, #204F37))) !important;
 }
@@ -2285,50 +2275,50 @@ button[class*="toast-close"] svg,
  * reads dark-on-yellow instead of white-on-yellow
  * (egov/CCRS#562 follow-up). Both `.item-label` and the legacy
  * `.digit-sidebar-item-label` are covered for defensive parity. */
-.employee .digit-sidebar .digit-sidebar-item:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item:active:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-item-label,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-item-label,
-.employee .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-link,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-link {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:active:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-link,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-link {
   color: var(--color-sidebar-hover-text, var(--color-primary-1, var(--color-sidebar-bg, #204F37))) !important;
 }
-.employee .digit-sidebar .digit-sidebar-item.active,
-.employee .digit-sidebar .digit-sidebar-item-active,
-.employee .digit-sidebar .digit-sidebar-item.selected {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.active,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-active,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected {
   background-color: var(--color-sidebar-selected-bg, var(--color-primary-1, #c84c0e)) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
 /* SVG icon colours follow the row's foreground via the fallback
  * chain. Hover state matches the dark hover text; idle/selected
  * matches the white selected text. */
-.employee .digit-sidebar .digit-sidebar-item:hover svg,
-.employee .digit-sidebar .digit-sidebar-item:hover svg path,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover svg,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover svg path,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg path {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg path {
   fill: var(--color-sidebar-hover-text, var(--color-primary-1, var(--color-sidebar-bg, #204F37))) !important;
 }
-.employee .digit-sidebar .digit-sidebar-item.active svg,
-.employee .digit-sidebar .digit-sidebar-item.active svg path,
-.employee .digit-sidebar .digit-sidebar-item-active svg,
-.employee .digit-sidebar .digit-sidebar-item-active svg path,
-.employee .digit-sidebar .digit-sidebar-item.selected svg,
-.employee .digit-sidebar .digit-sidebar-item.selected svg path {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.active svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.active svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-active svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-active svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected svg path {
   fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
 /* Search input inside the expanded sidebar — translucent on dark surface */
-.employee .digit-sidebar .digit-sidebar-search-container,
-.employee .digit-sidebar .digit-sidebar-search-container input {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container input {
   background: rgba(255, 255, 255, 0.06) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
-.employee .digit-sidebar .digit-sidebar-search-container ::placeholder {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container ::placeholder {
   color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.55)) !important;
 }
 /* CCRS#1469: typed text was invisible in the sidebar's nav filter.
@@ -2341,8 +2331,8 @@ button[class*="toast-close"] svg,
  *
  * Keep the wrapper and its inner container transparent so the translucent
  * container behind them shows through and the white text stays legible. */
-.employee .digit-sidebar .digit-sidebar-search-container .digit-text-input-field,
-.employee .digit-sidebar .digit-sidebar-search-container .input-container {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container .digit-text-input-field,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container .input-container {
   background: transparent !important;
   background-color: transparent !important;
   border: none !important;
@@ -2355,7 +2345,7 @@ button[class*="toast-close"] svg,
  * Derived from --employee-header-h, not restated. It was pinned to a literal
  * 56px, so raising the bar to 76px hid the rail's top 20px behind it and left
  * the column 20px too tall. The literal is why the breakage existed at all. */
-.employee .digit-sidebar {
+:is(.employee, .citizen) .digit-sidebar {
   top: var(--employee-header-h, 56px) !important;
   height: calc(100vh - var(--employee-header-h, 56px)) !important;
   margin-top: 0 !important;
@@ -4788,14 +4778,14 @@ label .required, label sup,
  * matched `.digit-popup-heading`, which is the title TEXT, so the rule drew a
  * short rule under the word itself — the stray underline beneath "Logout"
  * (#2038). Colour still applies to both; only the border is row-scoped. */
-.employee .digit-popup-header,
-.employee .digit-modal-header,
-.employee .digit-dialog-header {
+:is(.employee, .citizen) .digit-popup-header,
+:is(.employee, .citizen) .digit-modal-header,
+:is(.employee, .citizen) .digit-dialog-header {
   border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
 }
-.employee .digit-popup-header,
-.employee .digit-modal-header,
-.employee .digit-dialog-header,
+:is(.employee, .citizen) .digit-popup-header,
+:is(.employee, .citizen) .digit-modal-header,
+:is(.employee, .citizen) .digit-dialog-header,
 .employee [class*="popup-heading"] {
   color: var(--color-text-heading, var(--color-primary-1, #204F37));
 }
@@ -5639,8 +5629,8 @@ html .digit-back-link-icon {
    * (◂) used by `.back-btn2` on /pgr/* surfaces. mask-image lets the
    * glyph inherit currentColor / theme so MDMS theming keeps working. */
   background-color: var(--color-button-tertiary-text, var(--color-primary-1, #204F37));
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M14 7l-5 5 5 5V7z'/></svg>");
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M14 7l-5 5 5 5V7z'/></svg>");
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   -webkit-mask-size: contain;
   mask-size: contain;
   -webkit-mask-repeat: no-repeat;
@@ -6560,7 +6550,7 @@ header.digit-header .digit-dropdown-master {
  * action field let the avatar collapse into an oval. If :has() is unsupported
  * the rule is simply skipped, which degrades to the clipping it replaces
  * rather than to broken controls. */
-.employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
+:is(.employee, .citizen) .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
 .employee .digit-working-context {
   position: relative;
   display: inline-flex;
@@ -6570,9 +6560,9 @@ header.digit-header .digit-dropdown-master {
 }
 .employee .digit-working-context-trigger { min-width: 0; max-width: 100%; }
 /* Circular avatar must keep its aspect ratio regardless of flex pressure. */
-.employee .digit-header-action-fields .digit-profile-image,
-.employee .digit-header-action-fields img[alt="Profile"],
-.employee .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
+:is(.employee, .citizen) .digit-header-action-fields .digit-profile-image,
+:is(.employee, .citizen) .digit-header-action-fields img[alt="Profile"],
+:is(.employee, .citizen) .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
 .employee .digit-working-context-trigger {
   background: none;
   border: none;
@@ -6689,11 +6679,11 @@ header.digit-header .digit-dropdown-master {
    * resizing down from desktop leaves the inline copy rendered and both would
    * show. Hide it explicitly rather than relying on that. */
   .employee .digit-working-context-mobile { display: block; }
-  .employee .digit-header-action-fields .digit-working-context { display: none; }
+  :is(.employee, .citizen) .digit-header-action-fields .digit-working-context { display: none; }
   /* …and collapse the wrapper Header.js puts around it so it leaves no gap.
    * Layered: the rule above always hides the content, this one removes the
    * empty slot where :has() is supported. */
-  .employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
+  :is(.employee, .citizen) .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
 }
 .employee .digit-working-context-mobile {
   position: sticky;
@@ -7275,7 +7265,7 @@ header.digit-header .digit-dropdown-master {
  *     edge. A hairline at the boundary is enough — it keeps both surfaces
  *     the tenant's navy rather than inventing a second shade.
  * -------------------------------------------------------------------- */
-.employee .digit-topbar.digit-employee-header {
+:is(.employee, .citizen) .digit-topbar.digit-employee-header {
   border-bottom: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
 }
 
@@ -7422,18 +7412,18 @@ header.digit-header .digit-dropdown-master {
  * weight dropped out from under them. 12px is the system shell radius, so
  * that one is safe to apply to any employee dialog. */
 html .employee .digit-popup-overlay .digit-popup-wrapper,
-html .employee .digit-popup-wrapper,
-html .employee .digit-popup-wrapper.digit-logout-popup-wrapper.default {
+html :is(.employee, .citizen) .digit-popup-wrapper,
+html :is(.employee, .citizen) .digit-popup-wrapper.digit-logout-popup-wrapper.default {
   border-radius: 12px !important;
 }
-.employee .digit-logout-popup-wrapper button,
-.employee .digit-logout-popup-wrapper [class*="popup-footer"] button {
+:is(.employee, .citizen) .digit-logout-popup-wrapper button,
+:is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"] button {
   border-radius: 6px !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
-.employee .digit-logout-popup-wrapper button .digit-button-label,
-.employee .digit-logout-popup-wrapper [class*="popup-footer"] button .digit-button-label {
+:is(.employee, .citizen) .digit-logout-popup-wrapper button .digit-button-label,
+:is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"] button .digit-button-label {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
@@ -7441,8 +7431,8 @@ html .employee .digit-popup-wrapper.digit-logout-popup-wrapper.default {
 /* The dialog's footer carries no ground of its own in vendor CSS, so it shows
  * whatever is behind the card. Paint it with the card surface so the action
  * row is unambiguously part of the dialog (#2038). */
-html .employee .digit-logout-popup-wrapper .digit-popup-footer,
-html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
+html :is(.employee, .citizen) .digit-logout-popup-wrapper .digit-popup-footer,
+html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"] {
   background: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
@@ -7482,11 +7472,11 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * page's near-black stroke — these are stroke-drawn (lucide) glyphs, so a
  * `fill` would not have touched them. Take the same foreground every other
  * filled primary control uses (#2038). */
-.employee .v2-profile-camera-btn {
+:is(.employee, .citizen) .v2-profile-camera-btn {
   color: var(--color-button-primary-text, #FFFFFF) !important;
 }
-.employee .v2-profile-camera-btn svg,
-.employee .v2-profile-camera-btn svg * {
+:is(.employee, .citizen) .v2-profile-camera-btn svg,
+:is(.employee, .citizen) .v2-profile-camera-btn svg * {
   stroke: var(--color-button-primary-text, #FFFFFF) !important;
 }
 
@@ -7725,13 +7715,15 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *     deviation: `/citizen/all-services` paints a white `div.v2-scope`
  *     route root over the grey `.body-container`, so the page reads as a
  *     white slab with the ground surviving only below the fold and the
- *     card invisible on it.
+ *     card invisible on it. The complaint pages mount theirs one level
+ *     down, inside `.pgr-citizen-wrapper`, which is why My Complaints, a
+ *     complaint and the File a Complaint form each sat in a white panel of
+ *     their own, cards nested inside it, where employee pages put white
+ *     cards straight on the grey.
  *
- *     Guarded with the same `:has(> aside.v2-scope)` test the layout rules
- *     above use, because the citizen login / OTP surfaces don't mount the
- *     sidebar and do want their own white ground. `div.v2-scope` (not bare
- *     `.v2-scope`) so the navy sidebar `aside` keeps its background. */
-.center-container.citizen-home-container:has(> aside.v2-scope) > div.v2-scope {
+ *     The sign-in card (`.citizen-form-wrapper`) keeps its own ground. */
+.citizen .center-container.citizen-home-container > .v2-scope:not(.citizen-form-wrapper),
+.citizen .pgr-citizen-wrapper > .v2-scope {
   background-color: transparent !important;
 }
 
@@ -7944,7 +7936,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
     transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
                 width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  html[data-employee-sidebar-pinned="true"] .employee .main {
+  html[data-sidebar-pinned="true"] .employee .main {
     margin-left: calc(72px + (15rem - 3rem)) !important;
     width: calc(100% - 83px - (15rem - 3rem)) !important;
   }
@@ -7967,8 +7959,8 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *
  * SideNav now supplies both widths inline, so the vendor's minimum has no job
  * left to do. Releasing it is what lets the open direction animate at all. */
-.employee .digit-sidebar.hovered,
-.employee .digit-sidebar.pinned {
+:is(.employee, .citizen) .digit-sidebar.hovered,
+:is(.employee, .citizen) .digit-sidebar.pinned {
   min-width: 0 !important;
 }
 
@@ -8044,9 +8036,9 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * `--single-mark` is set by TopBar.js, which is the only place the two URLs
  * can be compared; a tenant whose marks differ never gets the class and keeps
  * both images. */
-.employee .digit-topbar.digit-employee-header--single-mark
+:is(.employee, .citizen) .digit-topbar.digit-employee-header--single-mark
   .digit-header-img-ulb-wrapper-mobileview .digit-header-img,
-.employee .digit-topbar.digit-employee-header--single-mark
+:is(.employee, .citizen) .digit-topbar.digit-employee-header--single-mark
   .digit-header-img-ulb-wrapper-mobileview .topbar-divider {
   display: none !important;
 }
@@ -8062,14 +8054,14 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *
  * 18px matches the label's own optical weight, and taking the caret out of
  * inline flow is what actually centres it. Measured before: 28px, 4px low. */
-.employee .digit-topbar .header-dropdown-arrow {
+:is(.employee, .citizen) .digit-topbar .header-dropdown-arrow {
   display: inline-flex !important;
   align-items: center !important;
   /* The caret reads as part of its label, so it sits closer to it than the
      8px the action row uses between separate controls. */
   margin-left: 2px !important;
 }
-.employee .digit-topbar .header-dropdown-arrow svg {
+:is(.employee, .citizen) .digit-topbar .header-dropdown-arrow svg {
   width: 18px !important;
   height: 18px !important;
   display: block !important;
@@ -8080,7 +8072,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * pill away from the header's right edge for no reason. 16px still separates
  * them clearly at this size; the caret rule above already tightens each label
  * to its own caret, so the only gaps left are the ones between controls. */
-.employee .digit-topbar .digit-header-action-fields {
+:is(.employee, .citizen) .digit-topbar .digit-header-action-fields {
   gap: 16px !important;
 }
 
@@ -8092,9 +8084,9 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * for both states fixes the column in place; 12px is what centres a 24px icon
  * in the 48px collapsed rail, so the closed state is unchanged and only the
  * open state stops moving. */
-.employee .digit-sidebar .digit-sidebar-item,
-.employee .digit-sidebar.hovered .digit-sidebar-item,
-.employee .digit-sidebar.collapsed .digit-sidebar-item {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item,
+:is(.employee, .citizen) .digit-sidebar.hovered .digit-sidebar-item,
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-item {
   padding: 8px 12px !important;
 }
 
@@ -8116,7 +8108,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * `display: none` element and moves nothing. The cluster's left edge is not
  * aligned to anything, so shifting the whole thing only shows at the edge that
  * needed correcting. */
-.employee .digit-topbar .digit-header-action-fields {
+:is(.employee, .citizen) .digit-topbar .digit-header-action-fields {
   /* 11px, not the caret's 5.25px alone: the trailing field carries its own
    * padding past the glyph as well. Measured from the rendered result rather
    * than derived — left ink 24px, right ink 24px. */
@@ -8137,9 +8129,9 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * if the box stops being a flex container. 4px rather than either original —
  * 24 is airy for a labelled list and 0 leaves the rows touching, and the point
  * is that the rail should not re-space itself just because it got wider. */
-.employee .digit-sidebar .digit-sidebar-items-container,
-.employee .digit-sidebar.hovered .digit-sidebar-items-container,
-.employee .digit-sidebar.collapsed .digit-sidebar-items-container {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-items-container,
+:is(.employee, .citizen) .digit-sidebar.hovered .digit-sidebar-items-container,
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-items-container {
   display: flex !important;
   flex-direction: column !important;
   gap: 4px !important;
@@ -8195,10 +8187,10 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *
  * Hover takes the brand tint every other outline control in this UI uses,
  * rather than a second opaque fill. */
-.employee .digit-button-secondary {
+:is(.employee, .citizen) .digit-button-secondary {
   background-color: transparent !important;
 }
-.employee .digit-button-secondary:hover:not(.disabled):not(:disabled) {
+:is(.employee, .citizen) .digit-button-secondary:hover:not(.disabled):not(:disabled) {
   background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08)) !important;
 }
 
@@ -8376,33 +8368,35 @@ html .header-dropdown-option:focus-visible {
  * are the same height for the same reason.
  * ---------------------------------------------------------------------- */
 @media (min-width: 48rem) {
-  .employee .digit-sidebar {
+  :is(.employee, .citizen) .digit-sidebar {
     top: 0 !important;
     height: 100vh !important;
   }
   /* Same widths and curve as the rail, so the bar's edge travels with it. */
-  .employee .digit-topbar.digit-employee-header {
+  /* Keyed on the flag's presence: it exists only while a rail is mounted, so
+   * pages without one (the citizen sign-in) keep a full-width bar. */
+  html[data-sidebar-pinned] :is(.employee, .citizen) .digit-topbar.digit-employee-header {
     left: 3rem !important;
     width: calc(100% - 3rem) !important;
     max-width: none !important;
     transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
                 width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  html[data-employee-sidebar-pinned="true"] .employee .digit-topbar.digit-employee-header {
+  html[data-sidebar-pinned="true"] :is(.employee, .citizen) .digit-topbar.digit-employee-header {
     left: 15rem !important;
     width: calc(100% - 15rem) !important;
   }
   /* Crest and lockup now live in the rail. With the brand block gone, the
    * actions keep their place at the right. */
-  .employee .digit-topbar.digit-employee-header .digit-logo-ulb-wrapper {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-logo-ulb-wrapper {
     display: none !important;
   }
-  .employee .digit-topbar.digit-employee-header .digit-header-action-fields {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-action-fields {
     margin-left: auto !important;
   }
 }
 
-.employee .digit-sidebar .digit-sidebar-head {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head {
   flex: 0 0 auto;
   height: var(--employee-header-h, 76px);
   box-sizing: border-box;
@@ -8413,24 +8407,24 @@ html .header-dropdown-option:focus-visible {
   padding: 0 12px 0 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
-.employee .digit-sidebar .digit-sidebar-head.closed {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head.closed {
   flex-direction: column;
   justify-content: center;
   gap: 6px;
   padding: 0;
 }
-.employee .digit-sidebar .digit-sidebar-crest {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-crest {
   width: 36px;
   height: 36px;
   object-fit: contain;
   border-radius: 4px;
   flex: 0 0 auto;
 }
-.employee .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-crest {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-crest {
   width: 26px;
   height: 26px;
 }
-.employee .digit-sidebar .digit-sidebar-toggle {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8444,21 +8438,21 @@ html .header-dropdown-option:focus-visible {
   cursor: pointer;
   transition: background-color 0.12s ease, color 0.12s ease;
 }
-.employee .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-toggle {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-toggle {
   width: 28px;
   height: 28px;
 }
 /* Stroke-only glyph; the rail's blanket `svg { fill }` rules would fill it solid. */
-.employee .digit-sidebar .digit-sidebar-toggle svg,
-.employee .digit-sidebar .digit-sidebar-toggle svg * {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle svg * {
   fill: none !important;
   stroke: currentColor !important;
 }
-.employee .digit-sidebar .digit-sidebar-toggle:hover {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--color-sidebar-selected-text, #FFFFFF);
 }
-.employee .digit-sidebar .digit-sidebar-toggle:focus-visible {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle:focus-visible {
   outline: 2px solid var(--color-sidebar-selected-text, #FFFFFF);
   outline-offset: 2px;
 }
@@ -8467,29 +8461,29 @@ html .header-dropdown-option:focus-visible {
  * It also closes with a rule. Without one, the row after the section
  * (Dashboard) read as the section's third entry. Same height open or closed,
  * so nothing below it moves. */
-.employee .digit-sidebar .digit-sidebar-section {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.employee .digit-sidebar .digit-sidebar-section::after {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section::after {
   content: "";
   display: block;
   height: 1px;
   margin: 8px 12px 4px;
   background: rgba(255, 255, 255, 0.18);
 }
-.employee .digit-sidebar.collapsed .digit-sidebar-section::after {
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-section::after {
   margin-left: 10px;
   margin-right: 10px;
 }
-.employee .digit-sidebar .digit-sidebar-section-label,
-.employee .digit-sidebar .digit-sidebar-section-divider {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-divider {
   height: 28px;
   box-sizing: border-box;
   margin: 0;
 }
-.employee .digit-sidebar .digit-sidebar-section-label {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-label {
   display: flex;
   align-items: flex-end;
   padding: 0 12px 6px;
@@ -8503,7 +8497,7 @@ html .header-dropdown-option:focus-visible {
   opacity: 0.7;
 }
 /* Closed, there is no room for words: a hairline in the same 28px. */
-.employee .digit-sidebar .digit-sidebar-section-divider {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-divider {
   border: 0;
   margin: 0 10px;
   background: linear-gradient(
@@ -8514,7 +8508,7 @@ html .header-dropdown-option:focus-visible {
   );
 }
 
-.employee .digit-sidebar .digit-sidebar-foot {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot {
   margin-top: auto;
   flex: 0 0 auto;
   padding: 16px;
@@ -8529,27 +8523,27 @@ html .header-dropdown-option:focus-visible {
 /* Phones: the eGov lockup moves to the drawer's foot, and the crest keeps the
  * bar. The drawer is the Hamburger, not SideNav, hence its own selectors. */
 @media (max-width: 47.99rem) {
-  .employee .digit-topbar.digit-employee-header .digit-topbar-logo.mobileview {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-logo.mobileview {
     display: none !important;
   }
   /* The phone bar renders the crest twice (the wrapper's image and the ulb
    * block) and older rules hid one or the other depending on width, which left
    * no crest at all under 600px once the lockup went. One crest, from the
    * wrapper, at every phone width. */
-  .employee .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview {
     height: auto !important;
     align-self: center !important;
     display: flex !important;
     align-items: center !important;
   }
-  .employee .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
     display: block !important;
     height: 32px !important;
     max-height: 32px !important;
     width: auto !important;
     max-width: none !important;
   }
-  .employee .digit-topbar.digit-employee-header .digit-topbar-ulb-mobileview {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb-mobileview {
     display: none !important;
   }
 }
@@ -8558,18 +8552,18 @@ html .header-dropdown-option:focus-visible {
  * the page's dark text colour: #1D2433 on #0B1F3A, about 1.1:1, and the word
  * all but vanished. On a dark surface it takes the drawer's own light text,
  * the same as the rows above it. */
-.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
   border-color: rgba(255, 255, 255, 0.5) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
-.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
-.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
-.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
   fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
-.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
 }
 .digit-msb-sidebar .digit-sidebar-foot {
@@ -8591,4 +8585,134 @@ html .header-dropdown-option:focus-visible {
   text-transform: uppercase;
   color: var(--color-sidebar-text-default, #D1D5DB);
   opacity: 0.7;
+}
+
+/* ======================================================================
+ * Citizen shell on the employee rail and top bar (#2038 review).
+ *
+ * Citizen pages now render the same SideNav and Header as employee pages,
+ * and the rules above that style those were widened to `:is(.employee,
+ * .citizen)`. What is citizen-specific is the layout they sit in: the
+ * content is `.citizen-home-container`, a padded flex row, where the
+ * employee surface is a margined `.main`. The old gutter was a fixed 260px
+ * keyed on the v2 sidebar (`aside.v2-scope`), which no longer renders.
+ *
+ * The rail is a direct child of the row (MediaQuery adds no wrapper), so
+ * `:has(> .digit-sidebar)` is exactly "a rail is on this page": the signed-
+ * out sign-in pages keep a centred layout. Widths and curve are the rail's,
+ * so the page travels with it.
+ * ---------------------------------------------------------------------- */
+/* "Powered by DIGIT" sat 74px above the bottom of the window on short pages:
+ * the row's min-height subtracts the bar's height as well as the footer's,
+ * but the row's own padding already makes room for the bar. A column that
+ * fills the window, with the row taking the slack, parks the footer at the
+ * bottom whatever either height is, the way employee pages end. */
+.citizen:has(> .center-container.citizen-home-container) {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.citizen > .center-container.citizen-home-container {
+  flex: 1 0 auto;
+}
+
+/* Vendor pads `.citizen .main` 82px (58px from 640px), sized for the legacy
+ * citizen bar. Content now clears the shared bar by the same distance as on
+ * employee pages. */
+.citizen .main.center-container.citizen-home-container {
+  padding-top: var(--employee-header-h, 76px) !important;
+}
+@media (min-width: 48rem) {
+  /* The right gutter mirrors the 20px left of the page, so a card sits as
+   * far from the window's edge as from the rail. */
+  .center-container.citizen-home-container:has(> .digit-sidebar) {
+    padding-left: calc(3rem + 20px) !important;
+    padding-right: 20px !important;
+    align-items: flex-start !important;
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-sidebar-pinned="true"] .center-container.citizen-home-container:has(> .digit-sidebar) {
+    padding-left: calc(15rem + 20px) !important;
+  }
+}
+
+/* A module's landing page (/citizen/pgr-home): the Back row the module's
+ * pages open with, then its All Services card at the same 434px cap. */
+.citizen .citizen-module-home {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding: 0 16px 24px;
+}
+/* The column's gap already spaces the Back row from the card. */
+.citizen .citizen-module-home > .back-btn2 {
+  margin-bottom: 0;
+}
+.citizen-module-home__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 434px));
+  gap: 16px;
+  align-items: start;
+}
+
+/* Back reads as a link in the action colour, like the card rows and the
+ * tertiary buttons it sits among, but its glyph was a small filled
+ * triangle where every other chevron in the app (card rows, the account
+ * menu, list cards) is an outline. Same outline chevron here, masked so it
+ * takes the link colour and its hover. */
+.back-btn2 > svg {
+  display: none !important;
+}
+.back-btn2::before {
+  content: "";
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / contain no-repeat;
+}
+
+/* One inset for every citizen page: heading, cards and Back 24px in from the
+ * content column, as on All Services and Edit Profile. The complaint pages
+ * sat 16px further in, their wrapper's own `padding: 0 16px` stacked on the
+ * 24px their headers and cards already carry, with Back left between the
+ * two. */
+.citizen .pgr-citizen-wrapper {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+.citizen .pgr-citizen-wrapper > .back-btn2 {
+  margin-left: 24px;
+}
+.citizen .citizen-module-home {
+  padding: 0 24px 24px !important;
+}
+
+/* Citizen sign-in (mobile number, OTP): the employee sign-in's ground, the
+ * tenant's navy from edge to edge with the card lifted off it, where it was a
+ * white page with a hairline card. The top bar stays for its language picker
+ * (citizens have no language step of their own) and, being the same navy,
+ * reads as part of the ground; "Powered by DIGIT" sits on the navy too. */
+.citizen:has(.citizen-form-wrapper) {
+  background-color: var(--color-digitv2-header-sidenav, #0B4B66);
+}
+.citizen .citizen-form-wrapper {
+  background-color: transparent !important;
+}
+.citizen:has(.citizen-form-wrapper) > .citizen-home-footer {
+  background-color: transparent !important;
+  border-top: 0 !important;
+}
+.citizen:has(.citizen-form-wrapper) .digit-topbar.digit-employee-header {
+  box-shadow: none !important;
+  border-bottom: 0 !important;
+}
+/* On a phone the bar carries the crest too, right above the card's own. The
+ * menu button stays: it is where a phone reaches Language. */
+.citizen:has(.citizen-form-wrapper) .digit-topbar .digit-header-img-ulb-wrapper-mobileview {
+  display: none !important;
 }

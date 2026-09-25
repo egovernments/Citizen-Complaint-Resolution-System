@@ -59,7 +59,8 @@ export const processLinkData = (newData, code, t) => {
 
   return newObj;
 };
-const iconSelector = (code) => {
+/** A module's mark on its citizen card, on All Services and its own landing page. */
+export const moduleIcon = (code) => {
   switch (code) {
     case "PT":
       return <CustomSVG.PTIcon className="fill-path-primary-main" />;
@@ -102,7 +103,7 @@ const CitizenHome = ({ getCitizenMenu, isLoading }) => {
   return (
     <CitizenServicesV2
       modules={v2Modules}
-      renderIcon={(code) => iconSelector(code)}
+      renderIcon={moduleIcon}
     />
   );
 };
