@@ -31,8 +31,11 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // ASSIGN is the only action that hands the complaint to a named owner, and
+              // PENDINGATLME has no queue behind it. Submitting without one produced a
+              // complaint nobody held and escalation could never rescue (#2132).
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -232,6 +235,14 @@ const ACTION_CONFIGS = [
     },
   },
 ];
+
+/**
+ * Actions whose target state expects a concrete owner. ASSIGN lands on PENDINGATLME,
+ * which no queue backs, so an assignee-less ASSIGN orphans the complaint. REASSIGN and
+ * ESCALATE are deliberately absent: REASSIGN returns the complaint to a queue the
+ * grievance officer owns, and ESCALATE resolves its target from HRMS server-side.
+ */
+const ACTIONS_REQUIRING_ASSIGNEE = new Set(["ASSIGN"]);
 
 const PGRDetails = () => {
   // Hooks for local state management
@@ -451,6 +462,14 @@ const PGRDetails = () => {
     // reflects WHERE it was routed — instead of the stale type department / "NA"
     // carried over from filing time. Only applied when an assignee with a
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
+    // isMandatory renders the required marker but does not stop a custom component's
+    // submit, so the rule is enforced here too. Without it the request went through with
+    // assignes: null and the complaint left the unassigned queue owned by nobody.
+    if (ACTIONS_REQUIRING_ASSIGNEE.has(selectedAction.action) && !_data?.SelectedAssignee?.uuid) {
+      setToast({ show: true, label: t("CS_PGR_ASSIGNEE_REQUIRED"), type: "error" });
+      return;
+    }
+
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
     const baseAdditionalDetail =
