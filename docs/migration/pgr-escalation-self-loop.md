@@ -45,11 +45,47 @@ Do not remove a legacy state while an active complaint still occupies it.
    - `utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json`
    - `utilities/crs_dataloader/templates/PgrWorkflowConfig.json`
    - `local-setup/dataloader/templates/PgrWorkflowConfig.json`
-4. Confirm the `PENDINGATLME` `ESCALATE` action points to its own current-state UUID, authorizes `SYSTEM`, and does not authorize `GRO`. An already-provisioned tenant keeps its old role list until the BusinessService is reinstalled or its `eg_wf_action.roles` row is updated.
+4. Confirm the `PENDINGATLME` actions carry the canonical role lists: `ESCALATE` points to its own current-state UUID and authorizes `PGR_LME`, `PGR_VIEWER`, `SYSTEM`; `RESOLVE` and `REASSIGN` authorize `PGR_LME`, `PGR_VIEWER`. None of the three authorizes `GRO`.
+
+   **Mandatory on every already-provisioned tenant.** `DataHandlerService.createPgrWorkflowConfig` only POSTs a workflow `_create`; for a tenant whose PGR BusinessService exists that call fails and the failure is deliberately swallowed ("workflow may already be POSTed"). Nothing in the seed rewrites a live graph, so `eg_wf_action_v2.roles` keeps whatever it was provisioned with.
+
+   ```sql
+   -- Verify first. Expect three rows per tenant.
+   SELECT a.uuid, a.action, a.roles
+     FROM eg_wf_action_v2 a
+     JOIN eg_wf_state_v2 s ON s.uuid = a.currentstate
+     JOIN eg_wf_businessservice_v2 b ON b.uuid = s.businessserviceid
+    WHERE b.businessservice = 'PGR' AND a.tenantid = '<tenant>'
+      AND s.state = 'PENDINGATLME'
+      AND a.action IN ('ESCALATE', 'RESOLVE', 'REASSIGN');
+
+   -- Guarded on the old values, so a re-run is a no-op.
+   UPDATE eg_wf_action_v2 a
+      SET roles = 'PGR_LME,PGR_VIEWER,SYSTEM',
+          lastmodifiedtime = (extract(epoch from now())*1000)::bigint
+     FROM eg_wf_state_v2 s, eg_wf_businessservice_v2 b
+    WHERE a.currentstate = s.uuid AND s.businessserviceid = b.uuid
+      AND b.businessservice = 'PGR' AND a.tenantid = '<tenant>'
+      AND s.state = 'PENDINGATLME' AND a.action = 'ESCALATE'
+      AND a.roles = 'GRO,PGR_LME,PGR_VIEWER,SYSTEM';
+
+   UPDATE eg_wf_action_v2 a
+      SET roles = 'PGR_LME,PGR_VIEWER',
+          lastmodifiedtime = (extract(epoch from now())*1000)::bigint
+     FROM eg_wf_state_v2 s, eg_wf_businessservice_v2 b
+    WHERE a.currentstate = s.uuid AND s.businessserviceid = b.uuid
+      AND b.businessservice = 'PGR' AND a.tenantid = '<tenant>'
+      AND s.state = 'PENDINGATLME' AND a.action IN ('RESOLVE', 'REASSIGN')
+      AND a.roles = 'GRO,PGR_LME,PGR_VIEWER';
+   ```
+
+   `roles` is a comma-separated string, not an array. Scope by `businessserviceid` as well as `tenantid`: a deployment that has run the integration suite carries throwaway `pwauto*`/`pwgen*` tenants with their own stale rows.
+
+   **egov-workflow-v2 caches the BusinessService graph in-JVM.** The updated roles stay invisible to `businessservice/_search` and to every caller until the service is restarted — there is no Redis key to evict. Restart it, then re-read through the API rather than the database to confirm.
 5. Confirm `FORWARD`, `ASSIGNEDBYAUTOESCALATION`, `RESOLVEBYSUPERVISOR`, `PENDINGATSUPERVISOR`, and `RESOLVEDBYSUPERVISOR` are absent from the active BusinessService.
 
 Keep legacy localization strings so historical timelines remain readable.
-Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive non-notifiable-audience handling: they are shared access-control vocabulary. The active PGR workflow no longer grants either role an escalation action; the scheduler acts as `SYSTEM`. Canonical `PENDINGATLME` still authorizes `GRO` for `RESOLVE` and `REASSIGN`, so a typical `reportingTo` target can act on the complaint without acquiring a literal supervisor role, but `ESCALATE` is restricted to `PGR_LME`, `PGR_VIEWER`, and `SYSTEM`: escalation follows the resolver's own `reportingTo` chain, and lateral movement by the grievance officer is `REASSIGN`.
+Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive non-notifiable-audience handling: they are shared access-control vocabulary. The active PGR workflow no longer grants either role an escalation action; the scheduler acts as `SYSTEM`. Canonical `PENDINGATLME` authorizes `PGR_LME` and `PGR_VIEWER` only, for every action on the state. `GRO` routes a complaint and can reject it, but once it is assigned it belongs to the resolver: the grievance officer neither resolves, reassigns nor escalates it. A resolver who cannot act uses `REASSIGN`, which returns the complaint to `PENDINGFORREASSIGNMENT` where the grievance officer picks someone else.
 
 ## Deploy and validate
 
