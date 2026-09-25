@@ -26,7 +26,16 @@ const EmployeeMobileSideBar = (props) => {
   return <CitizenSideBar {...props} employeeNavItems={forHamburger(items)} />;
 };
 
-const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobileView, userDetails, modules, linkData, islinkDataLoading,userProfile}) => {
+/**
+ * The crest the sidebar head shows, named for assistive tech by the tenant it
+ * belongs to. Same key convention as the logout dialog's tenant line.
+ */
+const crestAltFor = (t) => {
+  const stateId = Digit.ULBService.getStateId?.();
+  return stateId ? t(`TENANT_TENANTS_${String(stateId).toUpperCase().replace(/\./g, "_")}`) : "";
+};
+
+const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobileView, userDetails, modules, linkData, islinkDataLoading, userProfile, crestUrl }) => {
   if (CITIZEN)
     return (
       <CitizenSideBar
@@ -43,7 +52,7 @@ const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobil
     else {
       return !isSidebarOpen && userDetails?.access_token ? (
         <div className="digit-employeeSidebar">
-          <EmployeeSideBar {...{ mobileView, userDetails, modules }} />
+          <EmployeeSideBar {...{ t, mobileView, userDetails, modules, crestUrl }} crestAlt={crestAltFor(t)} />
         </div>
       ) : (
         <div className="digit-citizenSidebar">

@@ -24,7 +24,11 @@ const Hamburger = ({
   onLogout,
   reopenOnLogout,
   closeOnClickOutside,
-  onOutsideClick
+  onOutsideClick,
+  // Opt-in slots, matching SideNav's, so the drawer can carry the same head
+  // and foot as the desktop rail. Absent, the drawer renders as before.
+  renderHeader,
+  renderFooter,
 }) => {
   const { t } = useTranslation();
   const [searchTerms, setSearchTerms] = useState({});
@@ -152,10 +156,20 @@ const Hamburger = ({
       )
     )
   }
-  const renderItems = (items, parentIndex = -1) => items?.map((item, index) => {
+  // A section is a label over rows, as in SideNav: not selectable, not
+  // expandable, and its rows sit at the top level rather than folded away.
+  const renderSection = (section, index) => (
+    <div className={`digit-msb-section ${theme || ""}`} key={`section-${section.key || index}`}>
+      <div className="digit-msb-section-label">{section.label}</div>
+      {renderItems(section.children, index, true)}
+    </div>
+  );
+
+  const renderItems = (items, parentIndex = -1, flat = false) => items?.map((item, index) => {
+      if (item?.type === "section") return renderSection(item, index);
       const currentIndex = parentIndex >= 0 ? `${parentIndex}-${index}` : index;
       const isExpanded = expandedItems[currentIndex];
-      const isTopLevel = parentIndex === -1;
+      const isTopLevel = parentIndex === -1 || flat;
       return (
         <>
           <div
@@ -294,6 +308,7 @@ const Hamburger = ({
       style={styles}
       ref={sidebarRef}
     >
+      {renderHeader && renderHeader()}
       <div className="digit-msb-profile">
         {!profile && <CustomSVG.ProfileIcon width={"3.875rem"} height={"4rem"} />}
         {profile && (
@@ -344,6 +359,7 @@ const Hamburger = ({
       {localStorage.getItem("token") && <div className={`digit-msb-sidebar-bottom ${theme || ""}`}>
         <Button onClick={onLogoutClick} label={t("Logout")} icon={"Logout"} variation={"secondary"} size={"medium"} />
       </div>}
+      {renderFooter && renderFooter()}
     </div>
   ) :  null;
 };
@@ -360,7 +376,9 @@ Hamburger.propTypes = {
   profileNumber: PropTypes.string,
   isSearchable:PropTypes.bool,
   userManualLabel:PropTypes.string,
-  reopenOnLogout:PropTypes.bool
+  reopenOnLogout:PropTypes.bool,
+  renderHeader: PropTypes.func,
+  renderFooter: PropTypes.func,
 };
 
 export default Hamburger;
