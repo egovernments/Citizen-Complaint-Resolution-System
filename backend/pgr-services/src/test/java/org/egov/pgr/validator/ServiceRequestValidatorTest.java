@@ -184,6 +184,75 @@ public class ServiceRequestValidatorTest {
         return root;
     }
 
+    // ── ASSIGN must name an assignee (#2132) ──────────────────────────────────
+
+    /**
+     * ASSIGN is the only transition that hands a complaint to a named owner, and
+     * PENDINGATLME has no queue behind it. Submitting one without an assignee produced a
+     * complaint nobody held: it left PENDINGFORASSIGNMENT so no GRO saw it, and automatic
+     * escalation skipped it forever because there was no assignee whose reportingTo could
+     * be resolved. PG-PGR-2026-09-23-284904 is the reported case; 160 more were found in
+     * that state during the PENDINGATSUPERVISOR migration.
+     *
+     * <p>Driven through validateUpdate rather than the private method, so the call site
+     * is covered too — removing or reordering it must fail these.</p>
+     */
+    @Test
+    void assign_withoutAnAssignee_isRejected() {
+        ServiceRequest req = assignRequest(null);
+        stubPersisted(req, "citizen-uuid", System.currentTimeMillis());
+        assertCode("ASSIGNEE_REQUIRED", () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void assign_withAnEmptyAssigneeList_isRejected() {
+        ServiceRequest req = assignRequest(Collections.emptyList());
+        stubPersisted(req, "citizen-uuid", System.currentTimeMillis());
+        assertCode("ASSIGNEE_REQUIRED", () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void assign_whoseOnlyAssigneeIsBlank_isRejected() {
+        ServiceRequest req = assignRequest(Arrays.asList("   ", null));
+        stubPersisted(req, "citizen-uuid", System.currentTimeMillis());
+        assertCode("ASSIGNEE_REQUIRED", () -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    @Test
+    void assign_withAnAssignee_passes() {
+        ServiceRequest req = assignRequest(
+                Collections.singletonList("53d85ed2-445c-42cb-8b2b-c84861a1143c"));
+        stubPersisted(req, "citizen-uuid", System.currentTimeMillis());
+        // The assignee's department must match the complaint type's, or validateDepartment
+        // refuses the assignment for its own reasons.
+        when(hrmsUtil.getDepartment(any(), any(), any()))
+                .thenReturn(Collections.singletonList("ROADS"));
+        assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")));
+    }
+
+    /**
+     * ESCALATE deliberately omits assignes so the server can resolve reportingTo, and
+     * REASSIGN returns the complaint to a queue the grievance officer owns. Neither may be
+     * caught by this rule.
+     */
+    @Test
+    void otherActionsMayOmitTheAssignee() {
+        for (String action : new String[] {"ESCALATE", "REASSIGN", "RESOLVE"}) {
+            ServiceRequest req = assignRequest(null);
+            req.getWorkflow().setAction(action);
+            stubPersisted(req, "citizen-uuid", System.currentTimeMillis());
+            assertDoesNotThrow(() -> validator.validateUpdate(req, buildMdmsData("POTHOLE")),
+                    action + " must not require an assignee");
+        }
+    }
+
+    private ServiceRequest assignRequest(List<String> assignes) {
+        ServiceRequest req = buildRequest("LOC1", "POTHOLE");
+        req.getWorkflow().setAction("ASSIGN");
+        req.getWorkflow().setAssignes(assignes);
+        return req;
+    }
+
     // ── validateReOpen: window source and anti-forgery (#925, #1252) ───────────
 
     private static final long WINDOW_MS = 6 * 60 * 60 * 1000L;   // MDMS REOPENSLA

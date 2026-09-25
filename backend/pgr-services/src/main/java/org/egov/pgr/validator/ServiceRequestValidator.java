@@ -16,6 +16,7 @@ import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -79,6 +80,10 @@ public class ServiceRequestValidator {
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
         validateMDMS(request, mdmsData);
+        // Before validateDepartment: a malformed ASSIGN must be refused on its own terms
+        // rather than reaching HRMS and failing as INVALID_ASSIGNMENT for an empty
+        // department, which is what the caller would then have to debug.
+        validateAssignee(request);
         // ESCALATE is server-targeted after validation. Validating an optional
         // caller-supplied UUID here can reject the correct cross-department
         // reportingTo, while omitting the UUID succeeds. EscalationService owns
@@ -103,7 +108,6 @@ public class ServiceRequestValidator {
                     "serviceRequestId does not match the complaint id");
         }
         validateReOpen(request, persistedService);
-        validateAssignee(request);
 
         // TO DO
 
@@ -183,7 +187,7 @@ public class ServiceRequestValidator {
         }
         List<String> assignes = request.getWorkflow().getAssignes();
         if (CollectionUtils.isEmpty(assignes)
-                || assignes.stream().allMatch(a -> a == null || a.isBlank())) {
+                || assignes.stream().noneMatch(StringUtils::hasText)) {
             throw new CustomException("ASSIGNEE_REQUIRED",
                     "ASSIGN must name the employee the complaint is being assigned to");
         }
