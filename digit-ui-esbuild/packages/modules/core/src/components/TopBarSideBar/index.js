@@ -86,6 +86,8 @@ const TopBarSideBar = ({
               linkData={linkData}
               userProfile={userProfile}
               islinkDataLoading={islinkDataLoading}
+              // The tenant crest moves from the top bar into the sidebar head.
+              crestUrl={logoUrl}
             />
           )
         : CITIZEN

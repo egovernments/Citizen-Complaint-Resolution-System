@@ -7927,9 +7927,9 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * root element by EmployeeSideBar, which is what lets this stylesheet inset
  * the surface by the same distance over the same duration.
  *
- * Pinned moves content; a hover peek deliberately does not. Reflowing a
- * whole page because a pointer crossed a 48px rail would be worse than the
- * overlay it replaces.
+ * Round 3 removed the hover peek altogether: the toggle in the rail's head is
+ * now the only way to open or close it (see the full-height block at the end
+ * of this file), so "pinned" and "open" are the same state.
  * ---------------------------------------------------------------------- */
 
 /* The sidebar only exists at >=768px (EmployeeSideBar renders inside
@@ -7950,9 +7950,8 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   }
 }
 
-/* A pinned rail keeps the expanded padding even while the pointer is away;
- * without this the vendor's collapsed `padding: 0 .75rem` fights the open
- * layout the moment the mouse leaves. */
+/* An open rail keeps the expanded padding; without this the vendor's
+ * collapsed `padding: 0 .75rem` fights the open layout. */
 .digit-sidebar.pinned {
   padding: 0;
 }
@@ -7971,48 +7970,6 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 .employee .digit-sidebar.hovered,
 .employee .digit-sidebar.pinned {
   min-width: 0 !important;
-}
-
-/* Pin control. Sits at the FOOT of the rail, not above the items: rendered
- * above them, every expand pushed the whole nav list down a row, and watching
- * the destinations jump is worse than the control is worth.
- *
- * `margin-top: auto` in the sidebar's existing flex column is what parks it at
- * the bottom, so it costs the items nothing when it appears. */
-.digit-sidebar-pin-row {
-  margin-top: auto;
-  display: flex;
-  padding: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
-.digit-sidebar-pin {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.5rem;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0.72;
-  text-align: left;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
-}
-.digit-sidebar-pin:hover,
-.digit-sidebar-pin:focus-visible {
-  opacity: 1;
-  background-color: rgba(255, 255, 255, 0.12);
-}
-.digit-sidebar-pin.pinned {
-  opacity: 1;
-}
-/* Label rides with the icon, matching the nav items' own type so the control
- * reads as part of the rail rather than pasted onto it. */
-.digit-sidebar-pin-label {
-  font-size: 0.875rem;
-  color: var(--color-sidebar-text-default, #D1D5DB);
-  white-space: nowrap;
 }
 
 /* Logout dialog account card — avatar, name, and the identifying line inside
@@ -8400,4 +8357,238 @@ html .header-dropdown-option:focus-visible {
     max-width: 100% !important;
     width: 100% !important;
   }
+}
+
+/* ======================================================================
+ * Employee sidebar: full height, crest and toggle at its head, eGov at its
+ * foot, and a Complaints section (#2038 review, round 3).
+ *
+ * The rail used to sit under the top bar and open on hover. It now runs the
+ * full height of the window, the top bar starts where it ends, and the toggle
+ * beside the crest is the only thing that opens or closes it (SideNav's
+ * `hoverExpand={false}`). The crest and the eGov lockup leave the top bar for
+ * the rail's head and foot.
+ *
+ * The nav icons must not move between the two states (#2038: "the icon size
+ * or gap or position should ideally not jitter"), so the head keeps the top
+ * bar's height either way: crest and toggle share one row when open, and stack
+ * a size smaller when closed. The section label and its closed-state divider
+ * are the same height for the same reason.
+ * ---------------------------------------------------------------------- */
+@media (min-width: 48rem) {
+  .employee .digit-sidebar {
+    top: 0 !important;
+    height: 100vh !important;
+  }
+  /* Same widths and curve as the rail, so the bar's edge travels with it. */
+  .employee .digit-topbar.digit-employee-header {
+    left: 3rem !important;
+    width: calc(100% - 3rem) !important;
+    max-width: none !important;
+    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-employee-sidebar-pinned="true"] .employee .digit-topbar.digit-employee-header {
+    left: 15rem !important;
+    width: calc(100% - 15rem) !important;
+  }
+  /* Crest and lockup now live in the rail. With the brand block gone, the
+   * actions keep their place at the right. */
+  .employee .digit-topbar.digit-employee-header .digit-logo-ulb-wrapper {
+    display: none !important;
+  }
+  .employee .digit-topbar.digit-employee-header .digit-header-action-fields {
+    margin-left: auto !important;
+  }
+}
+
+.employee .digit-sidebar .digit-sidebar-head {
+  flex: 0 0 auto;
+  height: var(--employee-header-h, 76px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.employee .digit-sidebar .digit-sidebar-head.closed {
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+}
+.employee .digit-sidebar .digit-sidebar-crest {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+.employee .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-crest {
+  width: 26px;
+  height: 26px;
+}
+.employee .digit-sidebar .digit-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-sidebar-text-default, #D1D5DB);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.employee .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-toggle {
+  width: 28px;
+  height: 28px;
+}
+/* Stroke-only glyph; the rail's blanket `svg { fill }` rules would fill it solid. */
+.employee .digit-sidebar .digit-sidebar-toggle svg,
+.employee .digit-sidebar .digit-sidebar-toggle svg * {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+.employee .digit-sidebar .digit-sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-sidebar-selected-text, #FFFFFF);
+}
+.employee .digit-sidebar .digit-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--color-sidebar-selected-text, #FFFFFF);
+  outline-offset: 2px;
+}
+
+/* A section is a label over its rows; the rows keep the list's own 4px rhythm.
+ * It also closes with a rule. Without one, the row after the section
+ * (Dashboard) read as the section's third entry. Same height open or closed,
+ * so nothing below it moves. */
+.employee .digit-sidebar .digit-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.employee .digit-sidebar .digit-sidebar-section::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 8px 12px 4px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.employee .digit-sidebar.collapsed .digit-sidebar-section::after {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+.employee .digit-sidebar .digit-sidebar-section-label,
+.employee .digit-sidebar .digit-sidebar-section-divider {
+  height: 28px;
+  box-sizing: border-box;
+  margin: 0;
+}
+.employee .digit-sidebar .digit-sidebar-section-label {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--color-sidebar-text-default, #D1D5DB);
+  opacity: 0.7;
+}
+/* Closed, there is no room for words: a hairline in the same 28px. */
+.employee .digit-sidebar .digit-sidebar-section-divider {
+  border: 0;
+  margin: 0 10px;
+  background: linear-gradient(
+    transparent 13px,
+    rgba(255, 255, 255, 0.18) 13px,
+    rgba(255, 255, 255, 0.18) 14px,
+    transparent 14px
+  );
+}
+
+.employee .digit-sidebar .digit-sidebar-foot {
+  margin-top: auto;
+  flex: 0 0 auto;
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.digit-sidebar-foot .digit-sidebar-egov {
+  display: block;
+  height: 22px;
+  width: auto;
+}
+
+/* Phones: the eGov lockup moves to the drawer's foot, and the crest keeps the
+ * bar. The drawer is the Hamburger, not SideNav, hence its own selectors. */
+@media (max-width: 47.99rem) {
+  .employee .digit-topbar.digit-employee-header .digit-topbar-logo.mobileview {
+    display: none !important;
+  }
+  /* The phone bar renders the crest twice (the wrapper's image and the ulb
+   * block) and older rules hid one or the other depending on width, which left
+   * no crest at all under 600px once the lockup went. One crest, from the
+   * wrapper, at every phone width. */
+  .employee .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview {
+    height: auto !important;
+    align-self: center !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  .employee .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
+    display: block !important;
+    height: 32px !important;
+    max-height: 32px !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  .employee .digit-topbar.digit-employee-header .digit-topbar-ulb-mobileview {
+    display: none !important;
+  }
+}
+/* The drawer's Logout is a secondary button on the drawer's own navy. Since
+ * secondary buttons went transparent (#2038 round 2), its label and icon kept
+ * the page's dark text colour: #1D2433 on #0B1F3A, about 1.1:1, and the word
+ * all but vanished. On a dark surface it takes the drawer's own light text,
+ * the same as the rows above it. */
+.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
+.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
+.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
+.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
+  fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
+.employee .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+.digit-msb-sidebar .digit-sidebar-foot {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.digit-msb-sidebar .digit-msb-section::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 8px 16px 4px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.digit-msb-sidebar .digit-msb-section-label {
+  padding: 16px 16px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-sidebar-text-default, #D1D5DB);
+  opacity: 0.7;
 }
