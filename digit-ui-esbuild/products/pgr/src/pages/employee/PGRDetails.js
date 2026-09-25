@@ -34,6 +34,12 @@ const ACTION_CONFIGS = [
               // ASSIGN is the only action that hands the complaint to a named owner, and
               // PENDINGATLME has no queue behind it. Submitting without one produced a
               // complaint nobody held and escalation could never rescue (#2132).
+              //
+              // isMandatory only draws the required marker here — FormComposer does not
+              // enforce it for a custom component. It is also what ACTIONS_REQUIRING_ASSIGNEE
+              // is derived from, and the explicit check in the submit handler is what
+              // actually blocks the request. Do not remove either on the strength of this
+              // flag alone.
               type: "component",
               isMandatory: true,
               component: "PGRAssigneeComponent",
@@ -237,12 +243,24 @@ const ACTION_CONFIGS = [
 ];
 
 /**
- * Actions whose target state expects a concrete owner. ASSIGN lands on PENDINGATLME,
- * which no queue backs, so an assignee-less ASSIGN orphans the complaint. REASSIGN and
- * ESCALATE are deliberately absent: REASSIGN returns the complaint to a queue the
- * grievance officer owns, and ESCALATE resolves its target from HRMS server-side.
+ * Actions whose target state expects a concrete owner, derived from ACTION_CONFIGS so the
+ * rule and the form cannot drift apart: an action requires an assignee exactly when its
+ * own form marks the assignee field mandatory.
+ *
+ * Today that is ASSIGN alone. ASSIGN lands on PENDINGATLME, which no queue backs, so an
+ * assignee-less ASSIGN orphans the complaint (#2132). REASSIGN and ESCALATE are absent by
+ * the same rule rather than by a second list: REASSIGN returns the complaint to a queue
+ * the grievance officer owns, and ESCALATE resolves its target from HRMS server-side.
  */
-const ACTIONS_REQUIRING_ASSIGNEE = new Set(["ASSIGN"]);
+const ACTIONS_REQUIRING_ASSIGNEE = new Set(
+  ACTION_CONFIGS.filter((config) =>
+    (config.formConfig?.form || []).some((section) =>
+      (section.body || []).some(
+        (field) => field.key === "SelectedAssignee" && field.isMandatory === true
+      )
+    )
+  ).map((config) => config.actionType)
+);
 
 const PGRDetails = () => {
   // Hooks for local state management
