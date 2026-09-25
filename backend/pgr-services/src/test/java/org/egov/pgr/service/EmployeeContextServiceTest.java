@@ -1,6 +1,8 @@
 package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.io.InputStream;
+import java.util.Properties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -189,8 +192,35 @@ class EmployeeContextServiceTest {
         EmployeeWorkingContext context = service.getContext(
                 employeeRequest(role("GRO", "Grievance Routing Officer", TENANT)), TENANT);
 
-        assertFalse(context.getRoleContexts().contains("RESOLVER"),
-                "a GRO-only employee must not be labelled Resolver");
+        // Empty, not merely "not RESOLVER": the frontend only falls back to the role's own
+        // name when roleContexts is empty, so classifying GRO as anything else (ADMIN, say)
+        // would still show the wrong label.
+        assertTrue(context.getRoleContexts().isEmpty(),
+                "a GRO-only employee must carry no working context at all, got "
+                        + context.getRoleContexts());
+    }
+
+    /**
+     * The tests above stub {@link PGRConfiguration}, so they verify the classifier, not what
+     * deployments actually run. The original widening shipped unnoticed precisely because
+     * the stub and the shipped default were kept in sync by hand — this reads the packaged
+     * application.properties so the two cannot drift again.
+     */
+    @Test
+    void theShippedResolverDefaultIsPgrLmeAlone() throws Exception {
+        Properties properties = new Properties();
+        try (InputStream in = getClass().getResourceAsStream("/application.properties")) {
+            assertNotNull(in, "application.properties must ship on the classpath");
+            properties.load(in);
+        }
+        String raw = properties.getProperty("pgr.employee.context.resolver-role-codes");
+        assertNotNull(raw, "the resolver-role-codes default must be declared");
+
+        // ${ENV_VAR:default} — the part after the first colon is what a deployment gets
+        // when the env var is unset, which is every deployment today.
+        String shipped = raw.substring(raw.indexOf(':') + 1).replace("}", "").trim();
+        assertEquals("PGR_LME", shipped,
+                "GRO must not be classified as a resolver (#2125)");
     }
 
     @Test
