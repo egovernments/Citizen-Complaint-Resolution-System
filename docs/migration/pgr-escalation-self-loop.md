@@ -49,7 +49,7 @@ Do not remove a legacy state while an active complaint still occupies it.
 5. Confirm `FORWARD`, `ASSIGNEDBYAUTOESCALATION`, `RESOLVEBYSUPERVISOR`, `PENDINGATSUPERVISOR`, and `RESOLVEDBYSUPERVISOR` are absent from the active BusinessService.
 
 Keep legacy localization strings so historical timelines remain readable.
-Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive non-notifiable-audience handling: they are shared access-control vocabulary. The active PGR workflow no longer grants either role an escalation action; the scheduler acts as `SYSTEM`. Canonical `PENDINGATLME` still authorizes `GRO` for `RESOLVE` and `REASSIGN`, so a typical `reportingTo` target can act on the complaint without acquiring a literal supervisor role, but `ESCALATE` is restricted to `PGR_LME`, `PGR_VIEWER`, and `SYSTEM`: escalation follows the resolver's own `reportingTo` chain, and lateral movement by the grievance officer is `REASSIGN`.
+Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive non-notifiable-audience handling: they are shared access-control vocabulary. The active PGR workflow no longer grants either role an escalation action; the scheduler acts as `SYSTEM`. Canonical `PENDINGATLME` authorizes `PGR_LME` and `PGR_VIEWER` only, for every action on the state. `GRO` routes a complaint and can reject it, but once it is assigned it belongs to the resolver: the grievance officer neither resolves, reassigns nor escalates it. A resolver who cannot act uses `REASSIGN`, which returns the complaint to `PENDINGFORREASSIGNMENT` where the grievance officer picks someone else.
 
 ## Deploy and validate
 
