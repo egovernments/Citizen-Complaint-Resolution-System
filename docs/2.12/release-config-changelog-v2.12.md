@@ -63,7 +63,7 @@ This lists every config key, master data change, and infra change in this releas
 | `egov.enc.host` / `.encrypt.endpoint` / `.decrypt.endpoint` | Encryption Service integration (mandatory) | `http://egov-enc-service:1234` |
 | `dashboard_metrics_enabled` (Ansible) / `DASHBOARD_METRICS_ENABLED` (globalConfigs) | Dashboard client-side loading-speed telemetry | `true` |
 | `novu.bridge.integration.id.whatsapp` (env `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP`, ansible `novu_bridge_integration_id_whatsapp`) *(landed after 2026-08-25)* | Which Novu provider integration a WhatsApp dispatch actually uses. Without it, WhatsApp — modeled in Novu as an "sms"-channel step — silently resolves to the primary (non-WhatsApp) SMS integration and Twilio rejects it | blank — must be set to your WhatsApp integration's ID (e.g. `twilio-whatsapp`) before WhatsApp delivery works |
-| `pgr.employee.context.resolver-role-codes` / `.citizen-role-codes` / `.admin-role-codes` (env `PGR_EMPLOYEE_CONTEXT_*`) *(landed after 2026-08-25)* | Which roles the new employee working-context switcher treats as resolver / citizen-facing / admin | `PGR_LME,GRO,DGRO` / `CITIZEN` / `PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR` |
+| `pgr.employee.context.resolver-role-codes` / `.citizen-role-codes` / `.admin-role-codes` (env `PGR_EMPLOYEE_CONTEXT_*`) *(landed after 2026-08-25)* | Which roles the new employee working-context switcher treats as resolver / citizen-facing / admin | `PGR_LME` / `CITIZEN` / `PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR` |
 
 #### Changed defaults
 
