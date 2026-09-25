@@ -32,7 +32,7 @@ Base: `http://localhost:18080/digit-ui/citizen/` (or `https://naipepea.digit.org
 | Route | Purpose |
 |---|---|
 | `/citizen/` | Redirects to `/citizen/all-services` |
-| `/citizen/all-services` | **Default post-login landing.** "Citizen Complaint Resolution System" header + 2 yellow text links (File a Complaint, My Complaints). |
+| `/citizen/all-services` | **Default post-login landing.** "Complaint Management System" header + 2 yellow text links (File a Complaint, My Complaints). |
 | `/citizen/pgr-home` | **Branded "Nai Pepea" PGR module home.** Hero with "Report a grievance, track the resolution" tagline. The sidebar "Citizen Complaint R…" item links here. |
 | `/citizen/login` | Mobile-number entry (form titled "Provide your mobile number"). |
 | `/citizen/login/otp` | OTP entry (6 single-digit inputs). |
@@ -103,14 +103,14 @@ There is **no** header user-dropdown on this build. Header has only the language
 
 - **Route**: `/digit-ui/citizen/all-services` (`/digit-ui/citizen/` redirects here).
 - **Page component**: `Allservices` (`packages/modules/core/src/pages/citizen/Allservices/index.js`).
-- **Content**: Title "Citizen Complaint Resolution System" + 2 yellow text links: **File a Complaint** (→ wizard step 1), **My Complaints** (→ list).
+- **Content**: Title "Complaint Management System" + 2 yellow text links: **File a Complaint** (→ wizard step 1), **My Complaints** (→ list).
 - **User actions**: tile click → respective module home.
 - **Note**: This is the post-login default landing on this build, not a deep aux page.
 
 ### Story 2.2: PGR module home (branded)
 
 - **Route**: `/digit-ui/citizen/pgr-home`
-- **Content**: Hero banner with "**Nai Pepea**" headline, subtitle "Report a grievance, track the resolution", "Nairobi City County Government" tagline, "PGR" badge top-left. Below: "Citizen Complaint Resolution System" section with `My Complaints` and `File a Complaint` underline-style links.
+- **Content**: Hero banner with "**Nai Pepea**" headline, subtitle "Report a grievance, track the resolution", "Nairobi City County Government" tagline, "PGR" badge top-left. Below: "Complaint Management System" section with `My Complaints` and `File a Complaint` underline-style links.
 - **User actions**: deep-link entry to PGR; the sidebar "Citizen Complaint R…" item routes here.
 
 ### Story 2.3: Header language pill

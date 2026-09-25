@@ -103,13 +103,13 @@
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_ADMIN",
-        "message": "CCRS Administrator",
+        "message": "CMS Administrator",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACCESSCONTROL_ROLES_ROLES_PGR_LME",
-        "message": "CCRS Last Mile Employee",
+        "message": "CMS Last Mile Employee",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -349,7 +349,7 @@
     },
     {
         "code": "ACTION_TEST_MANAGE_PGR_SERVICE_DEF_MASTER",
-        "message": "CCRS Service Def Master",
+        "message": "CMS Service Def Master",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -391,25 +391,25 @@
     },
     {
         "code": "ACTION_TEST_PGRSERVICEDEFS",
-        "message": "Citizen Complaint Resolution System Services",
+        "message": "Complaint Management System Services",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGR_DASHBOARD",
-        "message": "Citizen Complaint Resolution System Dashboard",
+        "message": "Complaint Management System Dashboard",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGR_REPORTS",
-        "message": "Citizen Complaint Resolution System Reports",
+        "message": "Complaint Management System Reports",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_PGR_ULB_DASHBOARD",
-        "message": "Citizen Complaint Resolution System ULB Dashboard",
+        "message": "Complaint Management System ULB Dashboard",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },

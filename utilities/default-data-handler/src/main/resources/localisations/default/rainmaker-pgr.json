@@ -2749,7 +2749,7 @@
     },
     {
         "code": "CS_PGR_REPORTS_HEADER",
-        "message": "Citizen Complaint Resolution System Reports",
+        "message": "Complaint Management System Reports",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
