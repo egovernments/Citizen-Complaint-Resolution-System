@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useRouteMatch } from "react-router-dom";
 import { default as EmployeeApp } from "./pages/employee";
 import PGRCard from "./components/PGRCard";
+import { getPGRSidebarSection } from "./utils/employeeLinks";
 import { overrideHooks, updateCustomConfigs } from "./utils";
 import { ProviderContext } from "./utils/context";
 import BoundaryComponent from "./components/BoundaryComponent";
@@ -102,6 +103,9 @@ const componentsToRegister = {
   PGRModule,
   PGRLinks,
   PGRCard,
+  // Not a component: the core sidebar looks up `${code}SidebarSection` the way
+  // the home page looks up `${code}Card`, and calls it for its rows.
+  PGRSidebarSection: getPGRSidebarSection,
   PGRBoundaryComponent: BoundaryComponent,
   PGRComplaintHierarchyComponent: ComplaintHierarchyComponent,
   PGRComplaintDetails: PGRDetails,
