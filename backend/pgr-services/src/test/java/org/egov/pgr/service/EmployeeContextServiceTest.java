@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,7 +50,7 @@ class EmployeeContextServiceTest {
     void setUp() {
         lenient().when(config.getHrmsHost()).thenReturn("http://egov-hrms:8092");
         lenient().when(config.getHrmsEndPoint()).thenReturn("/egov-hrms/employees/_search");
-        lenient().when(config.getEmployeeContextResolverRoleCodes()).thenReturn(List.of("PGR_LME", "GRO", "DGRO"));
+        lenient().when(config.getEmployeeContextResolverRoleCodes()).thenReturn(List.of("PGR_LME"));
         lenient().when(config.getEmployeeContextCitizenRoleCodes()).thenReturn(List.of("CITIZEN"));
         lenient().when(config.getEmployeeContextAdminRoleCodes()).thenReturn(List.of(
                 "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN", "STADMIN",
@@ -175,6 +176,26 @@ class EmployeeContextServiceTest {
         assertFalse(context.isAvailable());
         assertTrue(context.getRoles().isEmpty());
         assertTrue(context.getRoleContexts().isEmpty());
+    }
+
+    @Test
+    void aGrievanceOfficerIsNotAResolver() {
+        // #2125: GRO routes a complaint and can reject it, but the canonical workflow
+        // authorizes only PGR_LME on PENDINGATLME. Classifying GRO as RESOLVER made the
+        // working-context header call a grievance officer "Resolver", because the context
+        // label wins over the role's own name (ACCESSCONTROL_ROLES_ROLES_GRO).
+        when(restTemplate.postForObject(any(String.class), any(), eq(JsonNode.class)))
+                .thenReturn(mapper.valueToTree(Map.of("Employees", List.of(Map.of("code", "AD_GRO")))));
+
+        EmployeeWorkingContext context = service.getContext(
+                employeeRequest(role("GRO", "Grievance Routing Officer", TENANT)), TENANT);
+
+        // Empty, not merely "not RESOLVER": the frontend only falls back to the role's own
+        // name when roleContexts is empty, so classifying GRO as anything else (ADMIN, say)
+        // would still show the wrong label.
+        assertTrue(context.getRoleContexts().isEmpty(),
+                "a GRO-only employee must carry no working context at all, got "
+                        + context.getRoleContexts());
     }
 
     @Test
