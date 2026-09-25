@@ -1465,7 +1465,7 @@
     },
     {
         "code": "P G R. Service Defs",
-        "message": "CCRS Service Defs",
+        "message": "CMS Service Defs",
         "module": "rainmaker-workbench",
         "locale": "en_IN"
     },
