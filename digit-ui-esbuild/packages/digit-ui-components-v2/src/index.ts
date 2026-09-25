@@ -45,6 +45,7 @@ export {
 } from "./components/layout/citizen-sidebar";
 export {
   CitizenServices,
+  CitizenServiceCard,
   type CitizenServiceModule,
   type CitizenServicesProps,
 } from "./components/citizen-services";

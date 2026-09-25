@@ -15,7 +15,10 @@ const ICON_SIZE = "1.5rem";
 const normalizeUrl = (url = "") => String(url).replace(/\/+$/, "");
 
 /** The employee landing route, with or without a trailing slash. */
-const isEmployeeHome = (item) => /\/employee$/.test(normalizeUrl(item?.navigationUrl));
+export const isEmployeeHome = (item) => /\/employee$/.test(normalizeUrl(item?.navigationUrl));
+
+/** The citizen landing route. */
+export const isCitizenHome = (item) => /\/citizen\/all-services$/.test(normalizeUrl(item?.navigationUrl));
 
 const toSectionItem = (section) => ({
   type: "section",
@@ -31,12 +34,13 @@ const toSectionItem = (section) => ({
 
 /**
  * Insert sections directly after Home, or first when there is no Home row.
+ * `isHome` says which row is Home; each app's landing route differs.
  *
  * A tenant whose access-control data already carries one of these routes as
  * its own row would otherwise list it twice, so any access-control leaf whose
  * URL a section also offers is dropped in favour of the section's.
  */
-export const insertModuleSections = (items = [], sections = []) => {
+export const insertModuleSections = (items = [], sections = [], isHome = isEmployeeHome) => {
   const usable = sections.filter((s) => s && Array.isArray(s.items) && s.items.length > 0);
   if (usable.length === 0) return items;
 
@@ -52,7 +56,7 @@ export const insertModuleSections = (items = [], sections = []) => {
       });
 
   const base = withoutDuplicates(items);
-  const homeIndex = base.findIndex(isEmployeeHome);
+  const homeIndex = base.findIndex(isHome);
   const at = homeIndex >= 0 ? homeIndex + 1 : 0;
   return [...base.slice(0, at), ...usable.map(toSectionItem), ...base.slice(at)];
 };
