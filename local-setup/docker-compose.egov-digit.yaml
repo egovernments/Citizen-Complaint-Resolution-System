@@ -3279,6 +3279,9 @@ services:
       STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
       # Per-tenant recipient for OTP routing; set in host_vars when wiring SMS.
       OTP_RECIPIENT_USER_ID: ${OTP_RECIPIENT_USER_ID:-}
+      # Resolves the username the employee Forgot Password screen sends to the
+      # account's mobile number (the request carries no mobileNumber).
+      EGOV_USER_HOST: http://egov-user:8107
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s

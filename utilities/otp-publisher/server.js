@@ -14,7 +14,8 @@
 // Response shapes mirror the previous Kong mock so the digit-ui SPA
 // doesn't notice anything has changed:
 //   _send  → { ResponseInfo:{...}, otp:{otp:"", UUID:"<id>", isValidationSuccessful:true} }
-//   _validate → same shape; isValidationSuccessful reflects the Redis check
+//   _validate → same shape; isValidationSuccessful reflects the Redis check,
+//     and a failed check is HTTP 400 (egov-otp's status for a bad OTP)
 //
 // Env:
 //   PORT (default 3030)
@@ -26,6 +27,9 @@
 //   STATIC_OTP (optional — when set, every _send returns this code
 //     and _validate accepts it. Useful for dev / CI without flipping to
 //     a separate mock. Mirrors CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE.)
+//   EGOV_USER_HOST (default http://egov-user:8107 — used to resolve a
+//     username to the account's mobile number when _send carries no
+//     mobileNumber, as on the employee Forgot Password screen)
 
 import express from 'express';
 import { randomInt, randomUUID } from 'node:crypto';
@@ -40,6 +44,8 @@ const OTP_TTL_SECONDS = Number(process.env.OTP_TTL_SECONDS || 600);
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || 'ke';
 const STATIC_OTP = process.env.STATIC_OTP || null;
 const REDIS_KEY_PREFIX = process.env.REDIS_KEY_PREFIX || 'otp:';
+const EGOV_USER_HOST = (process.env.EGOV_USER_HOST || 'http://egov-user:8107').replace(/\/+$/, '');
+const USER_LOOKUP_TIMEOUT_MS = 5000;
 
 const redis = new Redis(REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 3 });
 redis.on('error', (e) => console.error('[redis] error:', e.message));
@@ -124,13 +130,60 @@ const extractType = (body) => {
   const otp = body?.otp || body?.Otp || {};
   return (otp.type || otp.userType || body?.userType || 'login').trim();
 };
+const extractUserName = (body) => {
+  const otp = body?.otp || body?.Otp || {};
+  return (otp.userName || body?.userName || '').trim();
+};
+const extractUserType = (body) => {
+  const otp = body?.otp || body?.Otp || {};
+  return (otp.userType || body?.userType || '').trim().toUpperCase();
+};
+
+// The employee Forgot Password screen sends the username only, never the
+// mobile number. Resolve it the way the stock user-otp service does: search
+// egov-user and deliver to the number registered on the account.
+const lookupUser = async ({ userName, tenantId, userType }) => {
+  const res = await fetch(`${EGOV_USER_HOST}/user/_search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userName, tenantId, userType: userType || undefined }),
+    signal: AbortSignal.timeout(USER_LOOKUP_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`user search returned HTTP ${res.status}`);
+  const { user = [] } = await res.json();
+  return user[0] || null;
+};
+
+// Returns { mobile, tenantId } for the OTP recipient, or { status } when the
+// request can't be served. egov-user validates a password-reset OTP against
+// the account's own mobile number and tenantId, so a resolved user's values
+// are what the Redis key must be built from.
+const resolveRecipient = async (body) => {
+  const mobile = extractMobile(body);
+  const tenantId = extractTenant(body);
+  if (mobile) return { mobile, tenantId };
+  const userName = extractUserName(body);
+  if (!userName) return { status: 400 };
+  let user;
+  try {
+    user = await lookupUser({ userName, tenantId, userType: extractUserType(body) });
+  } catch (e) {
+    log('error', 'otp.user_lookup.failed', { tenantId, err: e.message });
+    return { status: 502 };
+  }
+  const resolved = (user?.mobileNumber || '').trim();
+  if (!resolved) {
+    log('warn', 'otp.user_lookup.no_mobile', { tenantId, found: !!user });
+    return { status: 400 };
+  }
+  return { mobile: resolved, tenantId: user.tenantId || tenantId };
+};
 
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
 app.post('/user-otp/v1/_send', async (req, res) => {
-  const mobile = extractMobile(req.body);
-  const tenantId = extractTenant(req.body);
-  if (!mobile) return res.status(400).json(mockOk({ isValidationSuccessful: false }));
+  const { mobile, tenantId, status } = await resolveRecipient(req.body);
+  if (status) return res.status(status).json(mockOk({ isValidationSuccessful: false }));
   const otp = generateOtp();
   try {
     await redis.set(keyFor(mobile, tenantId), otp, 'EX', OTP_TTL_SECONDS);
@@ -157,7 +210,10 @@ app.post('/otp/v1/_validate', async (req, res) => {
     const cached = await redis.get(keyFor(mobile, tenantId));
     const ok = cached && cached === supplied;
     if (ok) await redis.del(keyFor(mobile, tenantId)); // single-use
-    res.json(mockOk({ isValidationSuccessful: !!ok }));
+    // A failed check must be a 4xx, as egov-otp answers it: egov-user's
+    // password-reset path discards the isValidationSuccessful flag and only
+    // rejects when the validate call itself fails.
+    res.status(ok ? 200 : 400).json(mockOk({ isValidationSuccessful: !!ok }));
   } catch (e) {
     log('error', 'otp.validate.failed', { err: e.message });
     res.status(500).json(mockOk({ isValidationSuccessful: false }));
