@@ -15,6 +15,7 @@ import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
 import { trackEvent } from "../../utils/analytics";
+import { isCurrentAssignee } from "./escalationVisibility";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -31,8 +32,17 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // ASSIGN is the only action that hands the complaint to a named owner, and
+              // PENDINGATLME has no queue behind it. Submitting without one produced a
+              // complaint nobody held and escalation could never rescue (#2132).
+              //
+              // isMandatory only draws the required marker here — FormComposer does not
+              // enforce it for a custom component. It is also what ACTIONS_REQUIRING_ASSIGNEE
+              // is derived from, and the explicit check in the submit handler is what
+              // actually blocks the request. Do not remove either on the strength of this
+              // flag alone.
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -233,6 +243,26 @@ const ACTION_CONFIGS = [
   },
 ];
 
+/**
+ * Actions whose target state expects a concrete owner, derived from ACTION_CONFIGS so the
+ * rule and the form cannot drift apart: an action requires an assignee exactly when its
+ * own form marks the assignee field mandatory.
+ *
+ * Today that is ASSIGN alone. ASSIGN lands on PENDINGATLME, which no queue backs, so an
+ * assignee-less ASSIGN orphans the complaint (#2132). REASSIGN and ESCALATE are absent by
+ * the same rule rather than by a second list: REASSIGN returns the complaint to a queue
+ * the grievance officer owns, and ESCALATE resolves its target from HRMS server-side.
+ */
+const ACTIONS_REQUIRING_ASSIGNEE = new Set(
+  ACTION_CONFIGS.filter((config) =>
+    (config.formConfig?.form || []).some((section) =>
+      (section.body || []).some(
+        (field) => field.key === "SelectedAssignee" && field.isMandatory === true
+      )
+    )
+  ).map((config) => config.actionType)
+);
+
 const PGRDetails = () => {
   // Hooks for local state management
   const [openModal, setOpenModal] = useState(false);
@@ -315,6 +345,10 @@ const PGRDetails = () => {
 
   // Fetch complaint details
   const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
+  // Only used to decide whether Escalate can succeed: the service moves the complaint to
+  // the assignee's HRMS reportingTo, so an employee at the top of their chain has nowhere
+  // to escalate to. See canEscalate below for why this is not a hard gate.
+  const { data: workingContext } = Digit.Hooks.pgr.useEmployeeWorkingContext(tenantId);
 
   // Use the complaint's tenantId for workflow queries (complaints live at city level,
   // but getCurrentTenantId() may return root tenant for root-level ADMIN users)
@@ -451,6 +485,14 @@ const PGRDetails = () => {
     // reflects WHERE it was routed — instead of the stale type department / "NA"
     // carried over from filing time. Only applied when an assignee with a
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
+    // isMandatory renders the required marker but does not stop a custom component's
+    // submit, so the rule is enforced here too. Without it the request went through with
+    // assignes: null and the complaint left the unassigned queue owned by nobody.
+    if (ACTIONS_REQUIRING_ASSIGNEE.has(selectedAction.action) && !_data?.SelectedAssignee?.uuid) {
+      setToast({ show: true, label: t("CS_PGR_ASSIGNEE_REQUIRED"), type: "error" });
+      return;
+    }
+
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
     const baseAdditionalDetail =
@@ -554,6 +596,18 @@ const PGRDetails = () => {
     return [...set].filter((r) => !NON_ASSIGNEE_ROLES.has(r));
   };
 
+  // Escalate is offered only to the employee holding the complaint (#2129), and only while
+  // a rung above them exists. hasReportingTo comes from the same working-context call the
+  // employee shell already makes, so this costs no extra request.
+  //
+  // Deliberately fails OPEN on an unknown context: the flag is only trusted when it says
+  // false. An unavailable or still-loading context must not hide a legitimate action, and
+  // the service re-checks the chain anyway — a dead button is a worse bug than one that is
+  // briefly offered, but silently hiding the only way to escalate would be worse than both.
+  const canEscalate = (currentAssignees) =>
+    isCurrentAssignee(currentAssignees, userInfo?.info?.uuid)
+    && workingContext?.hasReportingTo !== false;
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
@@ -564,7 +618,13 @@ const PGRDetails = () => {
     return matchingState.actions
       ? matchingState.actions
         .filter((action) => action.roles.some((role) => userRoles.includes(role)))
-        .filter((action) => action.action !== "ESCALATE" || currentAssignees.length > 0)
+        // ESCALATE moves the work up the CURRENT assignee's own reportingTo chain, and
+        // the server picks the target — the caller never chooses it. The transition is
+        // role-gated, so without this every PGR_LME in the tenant was offered Escalate on
+        // every PENDINGATLME complaint, including ones that had already moved past them,
+        // and clicking it advanced somebody else's ladder (#2129). Offer it only to the
+        // person actually holding the complaint.
+        .filter((action) => action.action !== "ESCALATE" || canEscalate(currentAssignees))
         .map((action) => ({
           action: action.action,
           roles: action.roles,

@@ -9,11 +9,11 @@ a `PENDINGATSUPERVISOR` state participates. The canonical workflow exposes the
 self-loop only on assigned `PENDINGATLME`, not on unassigned queue states.
 
 Manual `ESCALATE` is authorized for `PGR_LME` and `PGR_VIEWER`; the scheduler
-acts as `SYSTEM`. `GRO` is deliberately not on the transition: escalation walks
-the resolver's own `reportingTo` chain, and the grievance officer already owns
-`ASSIGN`/`REASSIGN` for moving work laterally. `GRO` keeps `RESOLVE` and
-`REASSIGN` on `PENDINGATLME`. A `GRO` who is also the escalation target must
-hold `PGR_LME` to escalate further up the chain.
+acts as `SYSTEM`. `GRO` is deliberately not on the transition, nor on any other
+`PENDINGATLME` action: escalation walks the resolver's own `reportingTo` chain,
+and the grievance officer's job ends when the complaint is assigned. A `GRO`
+who is also an escalation target must hold `PGR_LME` to act on the complaint at
+all.
 
 The policy is the singleton `code: DEFAULT` record in MDMS v2
 `RAINMAKER-PGR.EscalationConfig`. Resolution is complete city record, then

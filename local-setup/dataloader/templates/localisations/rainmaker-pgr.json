@@ -3492,6 +3492,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_PGR_ASSIGNEE_REQUIRED",
+        "message": "Select the employee this complaint is being assigned to.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "FILTER_BY",
         "message": "FILTER BY",
         "module": "rainmaker-pgr",

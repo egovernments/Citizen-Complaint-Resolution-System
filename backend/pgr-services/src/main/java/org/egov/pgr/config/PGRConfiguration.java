@@ -152,7 +152,14 @@ public class PGRConfiguration {
 
     // Display-only employee working-context classification. Deployments can map their own
     // functional role codes to the three product-level contexts without a service code change.
-    @Value("#{'${pgr.employee.context.resolver-role-codes:PGR_LME,GRO,DGRO}'.split(',')}")
+    //
+    // GRO is not a resolver. It routes a complaint and can reject it; once assigned, the
+    // complaint belongs to PGR_LME, which is the only role the canonical workflow authorizes
+    // on PENDINGATLME. Listing GRO here made the working-context header label a grievance
+    // officer "Resolver" (#2125), because the context wins over the role's own name.
+    // No inline fallback: application.properties is always on the classpath, so a default
+    // here could never take effect and would only be a second place to keep in sync.
+    @Value("#{'${pgr.employee.context.resolver-role-codes}'.split(',')}")
     private List<String> employeeContextResolverRoleCodes;
 
     @Value("#{'${pgr.employee.context.citizen-role-codes:CITIZEN}'.split(',')}")
