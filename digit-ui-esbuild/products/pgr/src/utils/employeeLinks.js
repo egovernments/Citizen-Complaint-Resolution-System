@@ -46,3 +46,22 @@ export const getPGRSidebarSection = (t) => {
     items: links.map(({ key, label, link, icon }) => ({ key, label, navigationUrl: link, icon })),
   };
 };
+
+/**
+ * The citizen rail's Complaints section, registered as
+ * `PGRCitizenSidebarSection`. Every citizen can file and follow complaints
+ * (a signed-out visitor is sent to sign in first), so there is no role gate;
+ * the labels are the ones the citizen home card already uses for the same
+ * two links.
+ */
+export const getPGRCitizenSidebarSection = (t) => {
+  const base = `/${window?.contextPath}/citizen/pgr`;
+  return {
+    key: "pgr",
+    label: t("CORE_SIDEBAR_SECTION_COMPLAINTS", "Complaints"),
+    items: [
+      { key: "file", label: t("CS_COMMON_FILE_A_COMPLAINT"), navigationUrl: `${base}/create-complaint`, icon: "NoteAdd" },
+      { key: "mine", label: t("CS_HOME_MY_COMPLAINTS"), navigationUrl: `${base}/complaints`, icon: "ListAlt" },
+    ],
+  };
+};

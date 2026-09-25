@@ -25,7 +25,7 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { insertModuleSections } = require(OUT);
+const { insertModuleSections, isCitizenHome } = require(OUT);
 
 const HOME = { label: "Home", navigationUrl: "/digit-ui/employee", icon: { icon: "Home" } };
 const DASHBOARD = { label: "Dashboard", navigationUrl: "/digit-ui/employee/dashboard", icon: { icon: "Dashboard" } };
@@ -77,4 +77,11 @@ test("no usable sections leaves the items untouched", () => {
   const items = [HOME, DASHBOARD];
   assert.equal(insertModuleSections(items, []), items);
   assert.equal(insertModuleSections(items, [null, { key: "x", label: "X", items: [] }]), items);
+});
+
+test("the citizen app anchors on its own Home", () => {
+  const home = { label: "Home", navigationUrl: "/digit-ui/citizen/all-services" };
+  const helpline = { label: "Helpline", navigationUrl: "tel:0700000000" };
+  const out = insertModuleSections([home, helpline], [COMPLAINTS], isCitizenHome);
+  assert.deepEqual(out.map((i) => i.label), ["Home", "Complaints", "Helpline"]);
 });

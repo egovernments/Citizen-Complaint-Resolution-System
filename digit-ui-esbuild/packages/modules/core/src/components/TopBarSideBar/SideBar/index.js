@@ -2,6 +2,8 @@ import React from "react";
 import { CitizenSideBar } from "./CitizenSideBar";
 import EmployeeSideBar from "./EmployeeSideBar";
 import { useEmployeeNavItems } from "./employeeNavItems";
+import { useCitizenNavItems } from "./citizenNavItems";
+import { crestAltFor } from "./SidebarBrand";
 
 // The employee mobile drawer needs the same nav tree the desktop SideNav
 // renders. Fetching it in a wrapper keeps the hook out of CitizenSideBar,
@@ -23,22 +25,18 @@ const forHamburger = (items = []) =>
 
 const EmployeeMobileSideBar = (props) => {
   const { items } = useEmployeeNavItems();
-  return <CitizenSideBar {...props} employeeNavItems={forHamburger(items)} />;
+  return <CitizenSideBar {...props} navItems={forHamburger(items)} />;
 };
 
-/**
- * The crest the sidebar head shows, named for assistive tech by the tenant it
- * belongs to. Same key convention as the logout dialog's tenant line.
- */
-const crestAltFor = (t) => {
-  const stateId = Digit.ULBService.getStateId?.();
-  return stateId ? t(`TENANT_TENANTS_${String(stateId).toUpperCase().replace(/\./g, "_")}`) : "";
+const CitizenMobileSideBar = (props) => {
+  const { items } = useCitizenNavItems();
+  return <CitizenSideBar {...props} navItems={forHamburger(items)} />;
 };
 
 const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobileView, userDetails, modules, linkData, islinkDataLoading, userProfile, crestUrl }) => {
   if (CITIZEN)
     return (
-      <CitizenSideBar
+      <CitizenMobileSideBar
         isOpen={isSidebarOpen}
         isMobile={true}
         toggleSidebar={toggleSidebar}

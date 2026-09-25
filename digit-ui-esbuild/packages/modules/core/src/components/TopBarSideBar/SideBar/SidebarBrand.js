@@ -2,6 +2,15 @@ import React from "react";
 import { DEFAULT_EGOV_LOGO_ON_DARK } from "../brandLogos";
 
 /**
+ * The crest the sidebar head shows, named for assistive tech by the tenant it
+ * belongs to. Same key convention as the logout dialog's tenant line.
+ */
+export const crestAltFor = (t) => {
+  const stateId = Digit.ULBService.getStateId?.();
+  return stateId ? t(`TENANT_TENANTS_${String(stateId).toUpperCase().replace(/\./g, "_")}`) : "";
+};
+
+/**
  * The panel icon every sidebar toggle people already use draws: a frame with
  * the rail marked off on the left, and a chevron pointing the way the rail will
  * move. Drawn inline so it takes `currentColor` from the sidebar's own text.
