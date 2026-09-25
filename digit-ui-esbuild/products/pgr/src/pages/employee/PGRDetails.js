@@ -31,8 +31,17 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // ASSIGN is the only action that hands the complaint to a named owner, and
+              // PENDINGATLME has no queue behind it. Submitting without one produced a
+              // complaint nobody held and escalation could never rescue (#2132).
+              //
+              // isMandatory only draws the required marker here — FormComposer does not
+              // enforce it for a custom component. It is also what ACTIONS_REQUIRING_ASSIGNEE
+              // is derived from, and the explicit check in the submit handler is what
+              // actually blocks the request. Do not remove either on the strength of this
+              // flag alone.
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -232,6 +241,26 @@ const ACTION_CONFIGS = [
     },
   },
 ];
+
+/**
+ * Actions whose target state expects a concrete owner, derived from ACTION_CONFIGS so the
+ * rule and the form cannot drift apart: an action requires an assignee exactly when its
+ * own form marks the assignee field mandatory.
+ *
+ * Today that is ASSIGN alone. ASSIGN lands on PENDINGATLME, which no queue backs, so an
+ * assignee-less ASSIGN orphans the complaint (#2132). REASSIGN and ESCALATE are absent by
+ * the same rule rather than by a second list: REASSIGN returns the complaint to a queue
+ * the grievance officer owns, and ESCALATE resolves its target from HRMS server-side.
+ */
+const ACTIONS_REQUIRING_ASSIGNEE = new Set(
+  ACTION_CONFIGS.filter((config) =>
+    (config.formConfig?.form || []).some((section) =>
+      (section.body || []).some(
+        (field) => field.key === "SelectedAssignee" && field.isMandatory === true
+      )
+    )
+  ).map((config) => config.actionType)
+);
 
 const PGRDetails = () => {
   // Hooks for local state management
@@ -451,6 +480,14 @@ const PGRDetails = () => {
     // reflects WHERE it was routed — instead of the stale type department / "NA"
     // carried over from filing time. Only applied when an assignee with a
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
+    // isMandatory renders the required marker but does not stop a custom component's
+    // submit, so the rule is enforced here too. Without it the request went through with
+    // assignes: null and the complaint left the unassigned queue owned by nobody.
+    if (ACTIONS_REQUIRING_ASSIGNEE.has(selectedAction.action) && !_data?.SelectedAssignee?.uuid) {
+      setToast({ show: true, label: t("CS_PGR_ASSIGNEE_REQUIRED"), type: "error" });
+      return;
+    }
+
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
     const baseAdditionalDetail =
