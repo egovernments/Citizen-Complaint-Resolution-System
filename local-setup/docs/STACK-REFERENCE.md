@@ -390,7 +390,7 @@ local-setup/
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
 ├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
-├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
+├── Tiltfile                        # Tilt with PGR hot reload + ui-dev server (requires Maven, Node)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
 ├── ansible/                        # Config-driven remote deploy — see ansible/README.md
 │   ├── deploy.sh                   # Entrypoint: ./deploy.sh <tenant> [flags]
@@ -446,6 +446,6 @@ local-setup/
     └── …                           # Local/hybrid/remote setup guides
 
 ../backend/pgr-services/            # PGR Java source (hot reload target)
-../frontend/micro-ui/               # DIGIT UI React source (hot reload target)
+../digit-ui-esbuild/                # DIGIT UI source (Tilt ui-dev live-reload target)
 ../configs/assets/                  # Runtime configs (globalConfigs.js)
 ```
