@@ -12,7 +12,9 @@ load('ext://uibutton', 'cmd_button', 'location')
 # Path to CCRS code (for live UI and PGR development)
 CCRS_PATH = os.getenv('CCRS_PATH', '..')
 
-FRONTEND_PATH = CCRS_PATH + '/frontend/micro-ui'
+# The UI docker-compose.yml actually runs (egovio/digit-ui-esbuild). frontend/micro-ui is the
+# legacy webpack app: building it here swapped a different UI in under Tilt.
+UI_PATH = CCRS_PATH + '/digit-ui-esbuild'
 PGR_PATH = CCRS_PATH + '/backend/pgr-services'
 
 # Detect CI mode - use full Docker builds without live reload
@@ -21,28 +23,22 @@ CI_MODE = os.getenv('CI', '') != '' or os.getenv('TILT_CI', '') != ''
 
 # ==================== PGR Services ====================
 if CI_MODE:
-    # CI Mode: Use pre-built images from Docker Hub (much faster)
-    # Images should be pulled and tagged before running Tilt
-    # If not available, fall back to building
-    # The pulled tag MUST match the pgr-services pin in docker-compose.yml. docker-compose.tilt.yml
-    # repoints the service to pgr-services-dev, so whatever is tagged here is what CI actually runs.
-    pgr_image_exists = str(local('docker images -q pgr-services-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
-    if pgr_image_exists == '' or 'missing' in pgr_image_exists:
-        print('pgr-services-dev not found, pulling from Docker Hub...')
-        local('docker pull egovio/pgr-services:2.12-5137119 && docker tag egovio/pgr-services:2.12-5137119 pgr-services-dev:latest')
+    # CI Mode: run the registry images pinned in docker-compose.yml as-is. docker-compose.tilt.yml
+    # is not loaded (see docker_compose() below), so there is no second copy of the image tags
+    # here to drift from the compose pins.
+    pass
 else:
     # Local Dev Mode: Compile Java locally, then sync to container for fast hot reload
-    # Requires: mvn installed locally
-    # Check if Maven is available
-    maven_check = str(local('which mvn || echo "not_found"', quiet=True))
-    if 'not_found' in maven_check:
-        fail('''
-Maven not found! For local development with hot reload, install Maven:
+    # Requires: mvn and unzip installed locally
+    for tool in ['mvn', 'unzip']:
+        if 'not_found' in str(local('which ' + tool + ' || echo "not_found"', quiet=True)):
+            fail('''
+''' + tool + ''' not found! Local development with PGR hot reload needs Maven (JDK 17 or 21) and unzip:
   - macOS: brew install maven
-  - Ubuntu: sudo apt install maven
+  - Ubuntu: sudo apt install maven unzip
 
-Or run in CI mode without hot reload:
-  TILT_CI=1 tilt up
+Or run without hot reload (pre-built images only):
+  tilt up -f Tiltfile.db-dump
 ''')
 
     # Initial Maven build if target/extracted doesn't exist yet
@@ -64,62 +60,57 @@ Or run in CI mode without hot reload:
     docker_build(
         'pgr-services-dev',
         context=PGR_PATH + '/target/extracted',
+        # sh -c so JAVA_OPTS from docker-compose.yml (-Xmx256m) applies, as it does for the
+        # registry image's start.sh. A bare `java` ENTRYPOINT ignored it and sized the heap
+        # off the container limit instead.
         dockerfile_contents='''
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY . /app
-ENTRYPOINT ["java", "-cp", ".:BOOT-INF/lib/*:BOOT-INF/classes", "org.egov.pgr.PGRApp"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -cp .:BOOT-INF/lib/*:BOOT-INF/classes org.egov.pgr.PGRApp"]
 ''',
         live_update=[
-            sync(PGR_PATH + '/target/extracted/BOOT-INF/lib', '/app/BOOT-INF/lib'),
-            sync(PGR_PATH + '/target/extracted/BOOT-INF/classes', '/app/BOOT-INF/classes'),
-            sync(PGR_PATH + '/target/extracted/META-INF', '/app/META-INF'),
+            # The whole tree: `unzip -o` in pgr-compile rewrites every file, including the Spring
+            # Boot loader under org/. A file outside every sync makes Tilt abandon the live update
+            # ("Found file(s) not matching any sync") and rebuild the image instead.
+            sync(PGR_PATH + '/target/extracted', '/app'),
+            restart_container(),
         ],
     )
 
 # ==================== DIGIT UI ====================
-if CI_MODE:
-    # CI Mode: Use pre-built images from Docker Hub (much faster)
-    digit_ui_exists = str(local('docker images -q digit-ui-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
-    if digit_ui_exists == '' or 'missing' in digit_ui_exists:
-        print('digit-ui-dev not found, pulling from Docker Hub...')
-        local('docker pull egovio/digit-ui:dev-ff0db90 && docker tag egovio/digit-ui:dev-ff0db90 digit-ui-dev:latest')
-else:
-    # Local Dev Mode: Build with live sync for hot reload
-    # Check if yarn is available for UI watching
-    yarn_check = str(local('which yarn || echo "not_found"', quiet=True))
-    if 'not_found' not in yarn_check:
-        # UI watcher - recompiles on source changes
-        # This runs webpack in watch mode for hot reload
+# The digit-ui container always runs the pinned registry image (:18080, behind Kong on :18000).
+# For UI work, start 'ui-dev': the repo's esbuild dev server with live reload, on :18180. It
+# proxies API calls to Kong on :18000 and serves the same globalConfigs.js as the container.
+if not CI_MODE:
+    npm_check = str(local('which npm || echo "not_found"', quiet=True))
+    if 'not_found' not in npm_check:
         local_resource(
-            'ui-watch',
-            serve_cmd='cd ' + FRONTEND_PATH + '/web && yarn build:webpack --watch',
-            deps=[FRONTEND_PATH + '/web/src'],
+            'ui-dev',
+            serve_cmd='cd ' + UI_PATH + ' && ([ -d node_modules ] || npm install --legacy-peer-deps) && npm run dev',
+            serve_env={
+                'PORT': '18180',
+                'PROXY_PORT': '18000',
+                'GLOBAL_CONFIGS': os.path.abspath('./nginx/globalConfigs.js'),
+            },
             labels=['frontend'],
-            resource_deps=['digit-ui'],
+            resource_deps=['kong'],
             auto_init=False,  # Don't auto-start, trigger manually or enable via Tilt UI
+            links=[link('http://localhost:18180/digit-ui/employee', 'UI dev server (live reload)')],
         )
-
-    docker_build(
-        'digit-ui-dev',
-        context=FRONTEND_PATH,
-        dockerfile=FRONTEND_PATH + '/web/docker/Dockerfile',
-        build_args={'WORK_DIR': '.'},
-        live_update=[
-            # Sync built JS/CSS (after local webpack build --watch)
-            # Note: Don't sync public/ - it would overwrite the built index.html which has bundle script tags
-            sync(FRONTEND_PATH + '/web/build/', '/var/web/digit-ui/'),
-        ],
-    )
 
 # Load docker-compose configuration
 # Note: wait=True blocks until ALL containers are healthy, which is too slow
 # Instead, rely on docker-compose depends_on with service_healthy conditions
 #
-# docker-compose.tilt.yml repoints pgr-services and digit-ui at the *-dev image names built above.
-# Without it those docker_build calls bind to nothing and Tilt runs the registry images instead —
-# silently, with no warning. See the comments in that file.
-docker_compose(['./docker-compose.yml', './docker-compose.tilt.yml'])
+# docker-compose.tilt.yml repoints pgr-services at the pgr-services-dev image built above.
+# Without it that docker_build binds to nothing and Tilt runs the registry image instead —
+# silently, with no warning. See the comments in that file. CI mode builds nothing, so it
+# runs docker-compose.yml alone.
+if CI_MODE:
+    docker_compose('./docker-compose.yml')
+else:
+    docker_compose(['./docker-compose.yml', './docker-compose.tilt.yml'])
 
 # ==================== Infrastructure ====================
 dc_resource('postgres-db', labels=['infrastructure'])
@@ -220,10 +211,14 @@ dc_resource('kong', labels=['gateway'],
 
 # ==================== PGR Services ====================
 dc_resource('pgr-services', labels=['pgr'],
-    resource_deps=['egov-idgen', 'egov-user', 'egov-workflow-v2', 'egov-localization'],
+    resource_deps=['pgr-services-migration', 'egov-idgen', 'egov-user', 'egov-workflow-v2', 'egov-localization'],
     links=[
         link('http://localhost:18083/pgr-services/health', 'Health'),
     ])
+
+# One-shot Flyway run for PGR's schema; pgr-services waits for it to complete (see compose).
+dc_resource('pgr-services-migration', labels=['pgr'],
+    resource_deps=['postgres-db', 'boundary-service', 'egov-user', 'mdms-backend', 'egov-workflow-v2'])
 
 # One-shot seed container — auto_init=False prevents tilt ci from failing on exit
 dc_resource('pgr-workflow-seed', labels=['pgr'],
@@ -241,7 +236,7 @@ dc_resource('digit-ui', labels=['frontend'],
 dc_resource('egov-hrms', labels=['hrms'],
     resource_deps=['egov-mdms-service', 'egov-idgen', 'egov-user'],
     links=[
-        link('http://localhost:18092/egov-hrms/employees/_search', 'Health'),
+        link('http://localhost:18092/egov-hrms/actuator/health', 'Health'),
     ])
 
 # ==================== Additional Services ====================
@@ -252,12 +247,12 @@ dc_resource('minio-init', labels=['infrastructure'],
 dc_resource('egov-filestore', labels=['core-services'],
     resource_deps=['minio-init', 'egov-mdms-service'],
     links=[
-        link('http://localhost:18083/filestore/health', 'Health'),
+        link('http://localhost:18084/filestore/health', 'Health'),
     ])
 dc_resource('egov-bndry-mgmnt', labels=['core-services'],
     resource_deps=['boundary-service', 'egov-filestore'],
     links=[
-        link('http://localhost:18081/boundary-management/actuator/health', 'Health'),
+        link('http://localhost:18086', 'Service'),
     ])
 
 # ==================== Telemetry ====================
@@ -268,7 +263,7 @@ dc_resource('telemetry', labels=['infrastructure'])
 # Database reset - manually triggered only
 local_resource(
     'nuke-db',
-    cmd='docker compose down -v && docker compose up -d postgres redis redpanda',
+    cmd='docker compose down -v && docker compose up -d postgres-db redis redpanda',
     auto_init=False,
     labels=['maintenance'],
 )
@@ -278,7 +273,7 @@ local_resource(
 # Nuke Database button - removes all data and restarts infrastructure
 cmd_button(
     name='nuke-db-btn',
-    argv=['sh', '-c', 'docker compose down -v && docker compose up -d postgres redis redpanda'],
+    argv=['sh', '-c', 'docker compose down -v && docker compose up -d postgres-db redis redpanda'],
     location=location.NAV,
     icon_name='delete_forever',
     text='Nuke DB',
@@ -302,15 +297,6 @@ cmd_button(
     text='Smoke Tests',
 )
 
-# Re-seed MDMS button (useful after restart)
-cmd_button(
-    name='reseed-mdms',
-    argv=['sh', '-c', 'docker exec -i docker-postgres psql -U egov -d egov < ./db/seed.sql'],
-    location=location.NAV,
-    icon_name='refresh',
-    text='Re-seed MDMS',
-)
-
 # Kong API Gateway test button
 cmd_button(
     name='kong-test',
@@ -329,15 +315,6 @@ cmd_button(
     location=location.NAV,
     icon_name='tag',
     text='Test idgen',
-)
-
-# Start Gatus Health Dashboard button
-cmd_button(
-    name='gatus-start',
-    argv=['sh', '-c', 'docker compose --profile tools up -d gatus && echo "Gatus Dashboard: http://localhost:18889"'],
-    location=location.NAV,
-    icon_name='monitor_heart',
-    text='Start Gatus',
 )
 
 # ==================== Port Summary ====================
@@ -359,11 +336,14 @@ cmd_button(
 #   - User:          18107
 #   - Workflow:      18109
 #   - Localization:  18096
-#   - Location:      18084
+#   - Filestore:     18084
 #   - Boundary-v2:   18081
+#   - Bndry-mgmnt:   18086
+#   - HRMS:          18092
 #   - AccessControl: 18090
 #   - Persister:     18091
 #
 # PGR & Frontend:
 #   - PGR-Services:  18083
-#   - DIGIT-UI:      18080
+#   - DIGIT-UI:      18080 (container)
+#   - ui-dev:        18180 (esbuild dev server, live reload — start it in the Tilt UI)
