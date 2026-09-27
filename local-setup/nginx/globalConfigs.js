@@ -1,5 +1,8 @@
 var globalConfigs = (function () {
-  var stateTenantId = "ke";
+  // Must be a root tenant in db/full-dump.sql — this file is mounted as-is only by the
+  // compose stacks that boot from that dump. With "ke" (not in the dump) the login City
+  // dropdown was empty. Ansible deploys render their own copy from globalConfigs.js.j2.
+  var stateTenantId = "pg";
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
