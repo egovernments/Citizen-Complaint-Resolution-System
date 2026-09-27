@@ -23,6 +23,7 @@ Environment variables:
 import os
 import sys
 import json
+import time
 import requests
 
 # Add dataloader directory to path
@@ -88,6 +89,31 @@ def lookup_service_def(base_url, state_tenant):
     return svc.get("code"), dept_code, dept_name
 
 
+def lookup_city_service_def(base_url, city_tenant):
+    """Leaf complaint type from the city's OWN ComplaintHierarchy rows, or (None, None, None).
+
+    Reads MDMS v2 search, which has no tenant inheritance: an empty answer means the city
+    has no rows of its own (yet). v1 is not usable here — mdms-v2 persists creates
+    asynchronously, so right after step 3 v1 answers with the INHERITED state rows. Picking
+    a state leaf gives CI-ADMIN a department the city's complaint types don't use, and PGR
+    then rejects Assign with INVALID_ASSIGNMENT.
+    """
+    resp = requests.post(f"{base_url}/mdms-v2/v2/_search",
+        json={"MdmsCriteria": {"tenantId": city_tenant, "limit": 500,
+                               "schemaCode": "RAINMAKER-PGR.ComplaintHierarchy"},
+              "RequestInfo": {"apiId": "Rainmaker"}},
+        headers={"Content-Type": "application/json"}, timeout=30)
+    if not resp.ok:
+        return None, None, None
+    leaves = [m["data"] for m in resp.json().get("mdms", [])
+              if m.get("tenantId") == city_tenant and m.get("isActive", True)
+              and m.get("data", {}).get("department")]
+    if not leaves:
+        return None, None, None
+    svc = leaves[0]
+    return svc.get("code"), svc.get("department"), svc.get("department")
+
+
 def ensure_department_for_tenant(loader, dept_code, dept_name, city_tenant):
     """Create a department at city tenant level so HRMS v1 can see it."""
     headers = {"Content-Type": "application/json"}
@@ -106,6 +132,31 @@ def ensure_department_for_tenant(loader, dept_code, dept_name, city_tenant):
         print(f"   {dept_code} already exists for {city_tenant}")
     else:
         print(f"   Warning: could not create {dept_code}: {resp.text[:200]}")
+
+
+# Locality the complaints-demo Postman collection files its complaint under.
+CI_LOCALITY_CODE = "JLC477"
+
+
+def ensure_locality_for_tenant(loader, city_tenant):
+    """Create the boundary the Postman collection's PGR Create uses.
+
+    full-dump.sql ships no boundaries for pg.citest, so PGR Create fails with
+    INVALID_BOUNDARY_CODE. Same seed as the Ansible post-bootstrap task on
+    fix/ansible-doc-validation (c0ed248b); an existing boundary is fine.
+    """
+    headers = {"Content-Type": "application/json"}
+    resp = requests.post(f"{loader.base_url}/boundary-service/boundary/_create",
+        json={"RequestInfo": {"apiId": "Rainmaker", "authToken": loader.auth_token,
+                              "userInfo": loader.user_info},
+              "Boundary": [{"tenantId": city_tenant, "code": CI_LOCALITY_CODE, "geometry": None}]},
+        headers=headers, timeout=30)
+    if resp.ok:
+        print(f"   Created boundary {CI_LOCALITY_CODE} for {city_tenant}")
+    elif "already exists" in resp.text.lower() or "DUPLICATE" in resp.text.upper():
+        print(f"   Boundary {CI_LOCALITY_CODE} already exists for {city_tenant}")
+    else:
+        print(f"   Warning: could not create boundary {CI_LOCALITY_CODE}: {resp.text[:200]}")
 
 
 def main():
@@ -139,7 +190,17 @@ def main():
 
     # Step 4: Look up a leaf complaint type and ensure its department exists at city level
     print("\n[4/6] Look up complaint type department")
-    service_code, dept_code, dept_name = lookup_service_def(BASE_URL, state_tenant)
+    # City tenant first: PGR Create validates the serviceCode against the complaint's own
+    # tenant, and a city with its own ComplaintHierarchy (pg.citest in full-dump.sql) does
+    # not see the state's leaves — a state pick fails with INVALID_SERVICECODE.
+    # Retry: step 3's rows reach the store asynchronously (see lookup_city_service_def).
+    for _ in range(10):
+        service_code, dept_code, dept_name = lookup_city_service_def(BASE_URL, TARGET_TENANT)
+        if service_code and dept_code:
+            break
+        time.sleep(3)
+    if not service_code or not dept_code:
+        service_code, dept_code, dept_name = lookup_service_def(BASE_URL, state_tenant)
     if not service_code or not dept_code:
         print("FATAL: No leaf complaint types found in RAINMAKER-PGR.ComplaintHierarchy")
         return 1
@@ -147,6 +208,7 @@ def main():
     # HRMS validates departments via MDMS v1 which has no tenant inheritance.
     # State-level departments aren't visible at city level, so create it explicitly.
     ensure_department_for_tenant(loader, dept_code, dept_name, TARGET_TENANT)
+    ensure_locality_for_tenant(loader, TARGET_TENANT)
 
     # Step 5: Create CI user via HRMS in the complaint type's department
     print("\n[5/6] Create HRMS employee")
@@ -154,6 +216,9 @@ def main():
         tenant=TARGET_TENANT, username=CI_USER, password=CI_PASSWORD,
         name="CI Admin", mobile=CI_MOBILE, roles=CI_ROLES,
         department=dept_code,
+        # PGR scopes employee search to the jurisdiction; it must cover the locality
+        # the Postman collection files its complaint under, or PGR Search returns [].
+        jurisdiction_boundary=CI_LOCALITY_CODE,
     ):
         print("FATAL: Failed to create HRMS employee")
         return 1

@@ -1203,7 +1203,8 @@ class CRSLoader:
     def create_employee(self, tenant: str, username: str, password: str,
                         name: str = None, mobile: str = "9999999999",
                         roles: list = None, department: str = None,
-                        designation: str = None) -> bool:
+                        designation: str = None,
+                        jurisdiction_boundary: str = None) -> bool:
         """Create a single HRMS employee programmatically.
 
         Creates both the user account AND the HRMS employee record.
@@ -1218,6 +1219,9 @@ class CRSLoader:
             roles: List of role codes (defaults to ["EMPLOYEE"])
             department: Department code (auto-detected if not provided)
             designation: Designation code (auto-detected if not provided)
+            jurisdiction_boundary: Boundary code the employee's jurisdiction covers
+                (defaults to the tenant). PGR scopes employee search to it, so a
+                complaint outside it is invisible to this employee.
 
         Returns:
             bool: True if employee was created or already exists
@@ -1253,7 +1257,8 @@ class CRSLoader:
             'assignments': [{'fromDate': 1704067200000, 'isCurrentAssignment': True,
                              'department': department, 'designation': designation}],
             'jurisdictions': [{'hierarchy': 'REVENUE', 'boundaryType': 'City',
-                               'boundary': tenant, 'tenantId': tenant, 'roles': role_objects}],
+                               'boundary': jurisdiction_boundary or tenant, 'tenantId': tenant,
+                               'roles': role_objects}],
             'user': {'name': name, 'userName': username, 'mobileNumber': mobile,
                      'active': True, 'type': 'EMPLOYEE', 'tenantId': tenant,
                      'roles': role_objects, 'password': 'TempHRMS@999', 'otpReference': '12345'},
@@ -1303,6 +1308,13 @@ class CRSLoader:
                                 f"dept {prev_dept} -> {department}, "
                                 f"desig {prev_desig} -> {designation}"
                             )
+                    # Same for the jurisdiction: _create being a no-op leaves the
+                    # seed's boundary in place, which PGR search scoping reads.
+                    if jurisdiction_boundary:
+                        for j in emp.get("jurisdictions") or []:
+                            if j.get("isActive", True) and j.get("boundary") != jurisdiction_boundary:
+                                print(f"   Reconciling jurisdiction: {j.get('boundary')} -> {jurisdiction_boundary}")
+                                j["boundary"] = jurisdiction_boundary
                     requests.post(f"{self.base_url}{hrms_svc}/employees/_update",
                         json={"RequestInfo": {"apiId": "Rainmaker", "authToken": self.auth_token,
                               "userInfo": self.user_info}, "Employees": [emp]},
