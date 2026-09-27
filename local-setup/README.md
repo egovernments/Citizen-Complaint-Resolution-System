@@ -56,11 +56,10 @@ For Options A and B:
 | Tool | Install Link | When you need it |
 |------|-------------|------------------|
 | [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#step-1-install-tilt) | Only if using Option B |
-| [Node.js 20+](https://nodejs.org/en/download/) | [Download](https://nodejs.org/) | Running Postman tests with Newman (`npx`) |
+| [Node.js 20+](https://nodejs.org/en/download/) (with npm) | [Download](https://nodejs.org/) | Running Postman tests with Newman (`npx`); the live-reload UI dev server (Tilt `ui-dev`) |
 | [Python 3.8+](https://www.python.org/downloads/) | [Download](https://www.python.org/downloads/) | Running the CI dataloader script |
-| **JDK 17 or 21** | [Temurin 17](https://adoptium.net/temurin/releases/?version=17) | Hot reload for PGR Java code (Tilt only) — see note below |
-| [Maven 3.9+](https://maven.apache.org/download.cgi) | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (Tilt only) |
-| [Yarn](https://yarnpkg.com/getting-started/install) | [Download](https://yarnpkg.com/) | Hot reload for DIGIT UI (Tilt only) |
+| **JDK 17 or 21** | [Temurin 17](https://adoptium.net/temurin/releases/?version=17) | Hot reload for PGR Java code (default `Tiltfile` only) — see note below |
+| [Maven](https://maven.apache.org/download.cgi) + `unzip` | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (default `Tiltfile` only). Validated with Maven 3.8.7 |
 
 > **JDK version matters.** `backend/pgr-services` sets `<java.version>17</java.version>` and builds only on
 > **JDK 17 or 21**. JDK 23 and 25 fail: Lombok 1.18.30 (inherited from the Spring Boot 3.2.2 parent) cannot
@@ -89,25 +88,42 @@ cd Citizen-Complaint-Resolution-System/local-setup
 docker compose up -d
 ```
 
-This pulls ~20 container images and starts them. First run takes 5-10 minutes to download images.
+This pulls 30 container images (about 13 GB on disk) and starts them. Pulling takes
+5–10 minutes on a first run. `docker compose up -d` itself returns only once the database,
+the core services and PGR's schema migration are up, so expect it to sit for several minutes.
+
+> **Apple Silicon:** the MinIO images come from the `egovio` Docker Hub mirror, which is
+> amd64-only, so Docker runs them under emulation. They work, just more slowly.
 
 ### Step 3: Wait for services to become healthy
 
 ```bash
-# Watch containers until all show "healthy" (~3-5 minutes after images are pulled)
-watch 'docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -v "Exited"'
+# Watch containers until nothing shows "starting" (~10 minutes from a cold start)
+watch 'docker compose ps -a --format "table {{.Name}}\t{{.Status}}"'
 ```
 
-**What to expect**: You'll see containers transition from `starting` to `healthy` one by one. All containers (except `digit-ui` which may show `unhealthy` initially) should show `(healthy)` within 5 minutes.
+**What to expect**: containers move from `health: starting` to `(healthy)` one by one.
+Some never show `(healthy)`, and that is correct:
 
-**How to know it's ready**: When you see all services show `(healthy)`, press `Ctrl+C` to exit the watch. Then verify:
+| Container | Status you will see | Why |
+|---|---|---|
+| `egov-accesscontrol`, `user-otp`, `egov-notification-sms`, `digit-gatus` | `Up` | No health check: the access-control image has no shell to run one in, and the others don't declare one |
+| `pgr-services-migration`, `digit-minio-init`, `pgr-workflow-seed`, `*-localization-seed-1`, `*-localization-cache-bust-1` | `Exited (0)` | One-shot setup jobs. `Exited (0)` means they succeeded; any other exit code is a failure |
+
+**How to know it's ready**: nothing shows `starting` or `unhealthy`. Press `Ctrl+C`, then verify:
 
 ```bash
-# Run the health check script to confirm all services are up
-bash scripts/health-check.sh http://localhost
+# Every service, checked through the Kong gateway on :18000
+bash scripts/health-check.sh
 ```
 
-Expected output: each service prints `OK` or `healthy`.
+Expected output: `=== Summary: 13/13 services healthy ===`.
+
+> **Upgrading an existing checkout?** The database is loaded from `db/full-dump.sql` only
+> when the `postgres_data` volume is first created. If yours predates this version, the
+> seeded logins in Step 4 will fail with `Invalid login credentials`, because the old seed
+> passwords expired in August 2026. Recreate the volume with
+> `docker compose down -v && docker compose up -d`. **This deletes all local data.**
 
 ### Step 4: Access the application
 
@@ -159,9 +175,15 @@ tilt version
 > (`/root/code/tilt-fork/web`) instead of embedded assets. `--web-mode=prod` fails too, so there is no
 > workaround short of rebuilding and re-releasing the fork.
 >
-> Consequence of using upstream: Tilt may show a service as ready before its health check passes. The
-> stack still comes up — `docker-compose.yml` enforces ordering via `depends_on: service_healthy` — but
-> don't trust the dashboard's "ready" as "healthy". Check the `gatus` resource for real health.
+> Consequence of using upstream: Tilt shows a service as ready as soon as its container *starts*, not
+> when its health check passes. Tilt also starts each service on its own (`docker compose up --no-deps`),
+> so the `depends_on: service_healthy` gates in `docker-compose.yml` do **not** apply under Tilt. Ordering
+> comes from the Tiltfile's `resource_deps`, and services that race a dependency at boot recover through
+> their `restart: on-failure` policy. For example, `egov-hrms` typically restarts once. So:
+>
+> - don't trust the dashboard's green as "healthy". Check `docker compose ps` or the `gatus` resource;
+> - `tilt ci` goes green within a minute or so, long before the JVMs are serving. Wait for health before
+>   calling the APIs.
 
 ### Step 2: Clone and start
 
@@ -177,19 +199,22 @@ tilt up -f Tiltfile.db-dump
 
 | File | Use the `-f` flag | What it does |
 |------|-------------------|-------------|
-| `Tiltfile.db-dump` | `tilt up -f Tiltfile.db-dump` | Pre-built images only. No Maven/Yarn needed. Best for getting started. |
-| `Tiltfile` | `tilt up` (default) | Hot reload for PGR Java and UI code. Requires Maven + Yarn. |
+| `Tiltfile.db-dump` | `tilt up -f Tiltfile.db-dump` | Pre-built images only. No local toolchain needed. Best for getting started. |
+| `Tiltfile` | `tilt up` (default) | Builds PGR from `backend/pgr-services` with hot reload, plus an optional live-reload UI dev server. Needs JDK 17/21, Maven and `unzip`; Node 20 + npm for the UI server. `TILT_CI=1 tilt up` runs it with pre-built images instead (what CI does). |
 
 ### Step 3: Open the Tilt dashboard
 
 Open http://localhost:10350 in your browser. You'll see:
 
-- Services grouped by category: **infrastructure**, **core-services**, **pgr**, **frontend**, **gateway**, **tools**
+- Services grouped by category: **infrastructure**, **core-services**, **pgr**, **frontend**, **gateway**, **hrms**, **maintenance** (`Tiltfile.db-dump` also has **tools**)
 - Health check links next to each service
-- Utility buttons in the top nav: **Nuke DB**, **Health Check**, **Smoke Tests**
+- Utility buttons in the top nav: **Nuke DB**, **Health Check**, **Smoke Tests** (the default `Tiltfile` adds **Kong Test** and **Test idgen**)
 - Live streaming logs for each service
 
-Wait for all services to turn green (healthy). This takes ~3-5 minutes.
+Everything turns green within a minute or two, but that only means the containers started (see
+the note in Step 1). The stack is really up when `docker compose ps` shows no `starting`, which
+takes about 6–10 minutes from a cold start. Then run `bash scripts/health-check.sh`. The same
+containers stay at `Up` / `Exited (0)` as in [Option A, Step 3](#step-3-wait-for-services-to-become-healthy).
 
 ### Step 4: Access the application
 
@@ -199,6 +224,8 @@ Same URLs as Docker Compose:
 |------|-----|
 | DIGIT UI (Employee login) | http://localhost:18000/digit-ui/employee |
 | Tilt Dashboard | http://localhost:10350 |
+
+Log in the same way as [Option A, Step 4](#step-4-access-the-application).
 
 ### Step 5: Stop
 
@@ -215,14 +242,26 @@ If you're actively editing PGR Java or UI code, use the default `Tiltfile` inste
 tilt up    # uses the default Tiltfile with hot reload
 ```
 
-**PGR Services (Java)** — requires Maven installed:
-- Edit files in `backend/pgr-services/src/main/java/...`
-- Tilt automatically recompiles with Maven and syncs the JAR
+The first `tilt up` runs a full `mvn package` of PGR before anything starts, which takes a few minutes.
 
-**DIGIT UI (React)** — requires Node.js + Yarn:
-- Enable "ui-watch" in the Tilt dashboard, or:
+**PGR Services (Java)**: needs JDK 17/21, Maven and `unzip`.
+- Edit files in `backend/pgr-services/src/main/java/...`
+- The `pgr-compile` resource rebuilds the jar. Tilt then copies the changed files into the running
+  `pgr-services` container and restarts it, with no image rebuild. Expect about 30 seconds from save
+  to the new code serving.
+- `pgr-services` runs the locally built `pgr-services-dev` image (via `docker-compose.tilt.yml`), not
+  the registry image.
+
+**DIGIT UI (React)**: needs Node 20 + npm.
+- The `digit-ui` container always serves the pinned release build on :18000/:18080.
+- For UI work, click ▶ on the **`ui-dev`** resource (it is not started automatically). It runs the
+  `digit-ui-esbuild` dev server with live reload on **http://localhost:18180/digit-ui/employee**,
+  proxies API calls to Kong on :18000, and uses the same `nginx/globalConfigs.js`. The first start
+  runs `npm install`, which takes a few minutes.
+- Without Tilt, the same thing is:
   ```bash
-  cd ../frontend/micro-ui/web && yarn install && yarn build:webpack --watch
+  cd ../digit-ui-esbuild && npm install --legacy-peer-deps
+  PORT=18180 GLOBAL_CONFIGS=../local-setup/nginx/globalConfigs.js npm run dev
   ```
 
 ---
