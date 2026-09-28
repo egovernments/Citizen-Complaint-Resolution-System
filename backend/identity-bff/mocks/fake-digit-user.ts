@@ -41,6 +41,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     "common-masters.IdFormat", "common-masters.Department", "DataSecurity.DecryptionABAC",
     "DataSecurity.EncryptionPolicy", "DataSecurity.SecurityPolicy", "DataSecurity.MaskingPatterns",
     "common-masters.Designation", "common-masters.StateInfo", "common-masters.GenderType",
+    "common-masters.MobileNumberValidation",
     "common-masters.ThemeConfig", "egov-hrms.EmployeeStatus", "egov-hrms.EmployeeType",
     "egov-hrms.DeactivationReason", "Workflow.BusinessService", "INBOX.InboxQueryConfiguration",
     "dss.DashboardConfig",
@@ -135,6 +136,12 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
         .map((record) => record.data?.code));
       if (user.roles.some((role: Role) => role.tenantId !== user.tenantId || !validRoles.has(role.code))) {
         return res.status(400).json({ error: "INVALID_ROLE" });
+      }
+      const mobileRule = (mdms.get(mdmsKey(user.tenantId, "common-masters.MobileNumberValidation")) || [])
+        .find((record) => record.isActive !== false && record.data?.default === true)?.data;
+      if (!mobileRule?.mobileNumberRegex || mobileRule.countryCode !== user.countryCode ||
+          !new RegExp(mobileRule.mobileNumberRegex).test(user.mobileNumber)) {
+        return res.status(400).json({ error: "INVALID_MOBILE_NUMBER" });
       }
     }
     if ([...accounts.values()].some((account) => account.userName === user.userName && account.tenantId === user.tenantId)) {

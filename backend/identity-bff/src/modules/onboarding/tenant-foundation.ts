@@ -6,6 +6,7 @@ import { clearTenantCaches, isActiveDigitTenant } from "../access-context/tenant
 export interface TenantFoundationSignup {
   requestedTenantId: string;
   accountName: string;
+  countryCode: string;
 }
 
 interface SchemaDefinition {
@@ -21,6 +22,17 @@ interface MdmsRecord {
 }
 
 const ROLE_SCHEMA_CODE = "ACCESSCONTROL-ROLES.roles";
+const MOBILE_VALIDATION_SCHEMA_CODE = "common-masters.MobileNumberValidation";
+
+// Product-owned rules that are already backed by deployment data in this
+// repository. Adding a country to signup starts here; an arbitrary browser-
+// supplied regular expression must never become egov-user policy.
+const MOBILE_VALIDATION_RULES: Record<string, { countryCode: string; mobileNumberRegex: string }> = {
+  KE: { countryCode: "+254", mobileNumberRegex: "^0?[17][0-9]{8}$" },
+  IN: { countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$" },
+  ET: { countryCode: "+251", mobileNumberRegex: "^[79][0-9]{8}$" },
+  MZ: { countryCode: "+258", mobileNumberRegex: "^8[0-9]{8}$" },
+};
 
 function requestInfo(token: string) {
   return { apiId: "digit-identity-bff", ver: "1.0", ts: Date.now(), authToken: token };
@@ -99,22 +111,31 @@ async function ensureTenantSchema(token: string, target: string): Promise<void> 
   await ensureSchema(token, target, "tenant.tenants");
 }
 
+async function mdmsRecords(
+  token: string,
+  tenantId: string,
+  schemaCode: string,
+  limit: number,
+): Promise<MdmsRecord[]> {
+  const body = await post(config.digitMdmsV2SearchUrl, {
+    RequestInfo: requestInfo(token),
+    MdmsCriteria: {
+      tenantId,
+      schemaCode,
+      limit,
+      offset: 0,
+    },
+  }, `${schemaCode} search`);
+  return Array.isArray(body.mdms) ? body.mdms as MdmsRecord[] : [];
+}
+
 async function roleRecords(
   token: string,
   tenantId: string,
   roleCodes: string[],
 ): Promise<MdmsRecord[]> {
   if (!roleCodes.length) return [];
-  const body = await post(config.digitMdmsV2SearchUrl, {
-    RequestInfo: requestInfo(token),
-    MdmsCriteria: {
-      tenantId,
-      schemaCode: ROLE_SCHEMA_CODE,
-      limit: Math.max(roleCodes.length, 1000),
-      offset: 0,
-    },
-  }, "role search");
-  return Array.isArray(body.mdms) ? body.mdms as MdmsRecord[] : [];
+  return mdmsRecords(token, tenantId, ROLE_SCHEMA_CODE, Math.max(roleCodes.length, 1000));
 }
 
 function roleCode(record: MdmsRecord): string {
@@ -192,6 +213,60 @@ async function ensureTenantAdminRoles(token: string, target: string): Promise<vo
   throw new DigitUnavailableError("DIGIT accepted tenant roles but they are not visible yet");
 }
 
+async function ensureMobileValidation(
+  token: string,
+  target: string,
+  selectedCountry: string,
+): Promise<void> {
+  const rule = MOBILE_VALIDATION_RULES[selectedCountry.trim().toUpperCase()];
+  if (!rule) {
+    throw new DigitUnavailableError(
+      `No mobile validation rule is configured for country ${selectedCountry}`, 409,
+    );
+  }
+  await ensureSchema(token, target, MOBILE_VALIDATION_SCHEMA_CODE);
+
+  const records = () => mdmsRecords(token, target, MOBILE_VALIDATION_SCHEMA_CODE, 100);
+  const ruleIsVisible = (record: MdmsRecord) =>
+    record.isActive !== false &&
+    record.data?.countryCode === rule.countryCode &&
+    record.data?.mobileNumberRegex === rule.mobileNumberRegex &&
+    record.data?.default === true;
+  const matches = (await records()).filter((record) =>
+    record.isActive !== false && record.data?.countryCode === rule.countryCode);
+  if (matches.some(ruleIsVisible)) return;
+  if (matches.length) {
+    throw new DigitUnavailableError(
+      `Tenant ${target} already has a conflicting mobile validation rule for ${rule.countryCode}`, 409,
+    );
+  }
+
+  try {
+    await post(`${config.digitMdmsCreateUrl.replace(/\/$/, "")}/${MOBILE_VALIDATION_SCHEMA_CODE}`, {
+      RequestInfo: requestInfo(token),
+      Mdms: {
+        tenantId: target,
+        schemaCode: MOBILE_VALIDATION_SCHEMA_CODE,
+        uniqueIdentifier: rule.countryCode,
+        isActive: true,
+        data: { ...rule, default: true },
+      },
+    }, "mobile validation create");
+  } catch (error) {
+    if (!(error instanceof DigitUnavailableError) ||
+        (error.status !== 400 && error.status !== 409) ||
+        !(await records()).some(ruleIsVisible)) throw error;
+  }
+
+  // egov-user reads MDMS during the next saga step. Do not race the async
+  // projection and accidentally fall back to the deployment-wide regex.
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if ((await records()).some(ruleIsVisible)) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new DigitUnavailableError("DIGIT accepted mobile validation but it is not visible yet");
+}
+
 async function ensureTenantRecord(
   token: string,
   signup: TenantFoundationSignup,
@@ -264,6 +339,7 @@ export async function ensureTenantFoundation(
     await ensureTenantSchema(token, signup.requestedTenantId);
     await ensureTenantRecord(token, signup, options.adoptExisting);
     await ensureTenantAdminRoles(token, signup.requestedTenantId);
+    await ensureMobileValidation(token, signup.requestedTenantId, signup.countryCode);
   });
   await ensureEncryptionKey(signup);
 }

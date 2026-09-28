@@ -2,6 +2,7 @@ import { Loader } from "@egovernments/digit-ui-components";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { selectPlaceholder, translateOr } from "../utils/selectPlaceholder";
 import { complaintLabel } from "../utils/complaintLabel";
 
 /**
@@ -183,7 +184,12 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
               // threshold, which hid the search box on sub-types with <8 options.
               searchable
               searchPlaceholder={t("CS_COMMON_SEARCH") === "CS_COMMON_SEARCH" ? "Search" : t("CS_COMMON_SEARCH")}
-              placeholder={disabled ? "Select the level above first" : `Select ${labelFor(lvl)}`}
+              // Same key the citizen flow already uses for this sentence.
+              placeholder={
+                disabled
+                  ? translateOr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
+                  : selectPlaceholder(t, labelFor(lvl))
+              }
             />
           </V2Field>
         );

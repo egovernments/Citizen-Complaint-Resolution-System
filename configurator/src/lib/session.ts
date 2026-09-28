@@ -1,9 +1,11 @@
 import { apiClient } from '@/api';
 import { digitClient, resetProviders } from '@/providers/bridge';
 import { clearUser } from '@/lib/telemetry';
+import { API_ORIGIN, type DigitContext, type SessionUser } from '@/api/onboarding';
 
 /** The one blob App restores a DIGIT session from. */
 export const AUTH_STORAGE_KEY = 'crs-auth-state';
+export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 /**
  * Drop the DIGIT half of a session: the stored token, both API clients and the
@@ -34,4 +36,37 @@ export function clearLocalSession(): void {
       // In-memory teardown, and one failing must not skip the rest.
     }
   }
+}
+
+/**
+ * Install the ordinary DIGIT session returned by the BFF. Both Configurator
+ * sign-in and self-serve signup end here, so keeping this in one place prevents
+ * the two surfaces from drifting on identity fields or tenant scope.
+ */
+export function installDigitContext(
+  context: DigitContext,
+  identityUser?: Pick<SessionUser, 'name' | 'email'> | null,
+): void {
+  const { UserRequest: user, access_token: authToken } = context;
+  window.localStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({
+      isAuthenticated: true,
+      user: {
+        name: user.name || identityUser?.name || user.userName,
+        email: user.emailId || identityUser?.email || '',
+        roles: user.roles?.map((role) => role.code) ?? [],
+        uuid: user.uuid,
+        id: user.id,
+        mobileNumber: user.mobileNumber,
+      },
+      environment: API_ORIGIN || window.location.origin,
+      tenant: user.tenantId,
+      targetTenant: user.tenantId,
+      mode: 'management',
+      currentPhase: 1,
+      completedPhases: [],
+      authToken,
+    }),
+  );
 }

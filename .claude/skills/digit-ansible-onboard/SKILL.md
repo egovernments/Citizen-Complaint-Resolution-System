@@ -15,6 +15,14 @@ NEVER GUESS A SECRET. NEVER FILL IN bootstrap_secrets WITHOUT ASKING THE OPERATO
 
 If a question's answer is non-trivial (a secret, a tenant code, a domain), ASK. The operator-facing UX is a small, ordered list of prompts — not an autopilot.
 
+**db_fast_path never writes `db_fast_path: true` alone.** The templates ship
+`db_fast_path_ack_data_wipe: false` on purpose (issue #2082), so a host_vars with the
+flag but not the ack fails `deploy.sh` at preflight in two seconds. Write both, and
+only after the operator has confirmed the target holds no database worth keeping — if
+it does, the answer is `docs/2.12/operations/postgres-volume-migration.md` first, not
+the ack. The playbook independently inspects the box and refuses if it finds one, so
+acking it anyway does not get past the check.
+
 **IRON LAW exception — db_fast_path-pinned secrets are NOT "secrets to guess".** When `db_fast_path: true`, `elasticsearch_master_password` (`asd@#$@$!132123`), `postgres_password` (`egov123`), and `minio_root_password`/`minio_root_user` (`minioadmin`) are FIXED by the prebuilt dump + compose defaults — the pg/minio volumes initialise with the compose default on the first converge *before OpenBao exists*, and OpenBao's seed is first-write-wins, so any other value makes the post-OpenBao recreate fail with `FATAL: password authentication failed for user "egov"` (cost a 10-iteration validation to pin down). Use these exact values verbatim; don't refuse-to-fill them and don't let the operator pick alternatives unless they regenerated the dump. They're config constants, not chosen secrets.
 
 ## Inputs
@@ -61,8 +69,8 @@ Ask **one at a time**, in order. Show the default in parentheses. Don't proceed 
 | 5 | **Country mobile prefix and regex** — e.g. Kenya = 9 digits starting with `1` or `7`. | inferred from `state_tenant_id` if `ke` | `core_mobile_configs` |
 | 6 | **Country/region for PGR boundary** — e.g. `Kenya / Nairobi County / Bomet County`. | inferred from `state_tenant_id` | `pgr_boundary_country`, `pgr_boundary_region` |
 | 7 | **S3 bucket for assets** (logo, banner). Skip if no bucket yet. | empty | `asset_s3_bucket` |
-| 8 | **Enable opt-in features?** Multi-select from {`mcp`, `configurator`, `search`, `claude_code`, `ci_tests`, `db_fast_path`, `nairobi_mdms`}. | `mcp`, `configurator`, `db_fast_path`, `ci_tests` (the four that make a deploy genuinely *usable* + verified) | `enable_mcp`, `nginx_features.configurator`, `enable_search_stack`, `install_claude_code`, `run_ci_tests`, `db_fast_path`, `requires_nairobi_mdms` |
-| 9 | **db_fast_path-pinned secrets.** When `db_fast_path: true` (the default), THREE `bootstrap_secrets` are pinned to the dump/compose defaults — they are NOT free choices and a custom value silently breaks the deploy (see "IRON LAW exception" below). Confirm the operator understands, don't invent. | `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_password: minioadmin` (+ `minio_root_user: minioadmin`) | `bootstrap_secrets.{elasticsearch_master_password,postgres_password,minio_root_password,minio_root_user}` |
+| 8 | **Enable opt-in features?** Multi-select from {`mcp`, `configurator`, `search`, `claude_code`, `ci_tests`, `db_fast_path`, `nairobi_mdms`}. Choosing `db_fast_path` means the shipped dump REPLACES any database already on the target — ask the operator to confirm the box holds none they want to keep, then write the ack too. Without it `deploy.sh` stops at preflight. | `mcp`, `configurator`, `db_fast_path`, `ci_tests` (the four that make a deploy genuinely *usable* + verified) | `enable_mcp`, `nginx_features.configurator`, `enable_search_stack`, `install_claude_code`, `run_ci_tests`, `db_fast_path`, `db_fast_path_ack_data_wipe`, `requires_nairobi_mdms` |
+| 9 | **db_fast_path-pinned secrets.** When `db_fast_path: true`, THREE `bootstrap_secrets` are pinned to the dump/compose defaults — they are NOT free choices and a custom value silently breaks the deploy (see "IRON LAW exception" below). Confirm the operator understands, don't invent. | `elasticsearch_master_password: asd@#$@$!132123`, `postgres_password: egov123`, `minio_root_password: minioadmin` (+ `minio_root_user: minioadmin`) | `bootstrap_secrets.{elasticsearch_master_password,postgres_password,minio_root_password,minio_root_user}` |
 | 10 | **Target reach.** Linux: SSH alias / `user@host` (verify `ssh <alias>` works). **macOS**: not SSH — set `ansible_connection: local` (see "macOS target" below). | Linux: from ssh config · macOS: `localhost` + `ansible_connection: local` | `ansible_host`, `ansible_connection` |
 
 After asking all 10, summarise the answers back and confirm before writing the file.

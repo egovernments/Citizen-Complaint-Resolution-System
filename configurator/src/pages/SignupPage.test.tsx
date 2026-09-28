@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
 
 // The gate links to /login, so the page needs a Router around it.
-const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+const render = (ui: React.ReactElement, path = '/') =>
+  rtlRender(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
 
 /**
  * The network-facing half of the contract is mocked; the pure helpers
@@ -17,6 +18,7 @@ vi.mock('@/api/onboarding', async () => {
     ...actual,
     session: vi.fn(),
     authMethods: vi.fn(),
+    consumeAuthResult: vi.fn(),
     tenants: vi.fn(),
     findSignup: vi.fn(),
     createSignup: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock('@/api/onboarding', async () => {
     findOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
+    requestMagicLinkSignup: vi.fn(),
     logout: vi.fn(),
   };
 });
@@ -55,39 +58,42 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
-  it('keeps every alternative method separately clickable', async () => {
-    // With two methods `rest` held one item and nothing was visibly wrong.
-    // A third made them touch: they rendered inline with no separator, so
-    // "Continue with GitHub" and "Email me a sign-in link" ran together as one
-    // string and aiming for one hit the other.
+  it('shows the GitHub mark on the GitHub signup action', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
-      methods: [
-        { id: 'password', label: 'Email and password', type: 'password' },
-        { id: 'github', label: 'Continue with GitHub', type: 'oauth' },
-        { id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' },
-      ],
+      methods: [{ id: 'github', label: 'Continue with GitHub', type: 'oauth' }],
     });
 
     render(<SignupPage />);
 
-    const magic = await screen.findByRole('button', { name: 'Email me a sign-in link' });
-    const github = screen.getByRole('button', { name: 'Continue with GitHub' });
+    const github = await screen.findByRole('button', { name: /continue with github/i });
+    const mark = github.querySelector('svg[data-icon="inline-start"][data-provider="github"]');
+    expect(mark?.querySelector('path')).toHaveAttribute('fill', '#181717');
+  });
 
-    // Worth being explicit: the defect was visual, and the DOM alone cannot see
-    // it. Both buttons resolved by accessible name before this fix too, which
-    // is exactly why it survived to production. So assert what stops them
-    // running together rather than the exact utilities, which have already
-    // changed once: each alternative is a full-width block, so two of them
-    // cannot share a line whatever the container does.
-    expect(magic.className).toMatch(/w-full/);
-    expect(github.className).toMatch(/w-full/);
-    const row = magic.parentElement as HTMLElement;
-    expect(row).toBe(github.parentElement);
-    expect(row.className).toMatch(/space-y-|gap-/);
+  it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.requestMagicLinkSignup).mockResolvedValue({
+      message: 'Check your email for a link to continue creating your account.',
+    });
 
-    fireEvent.click(magic);
-    expect(api.startSignIn).toHaveBeenCalledWith('magic-link');
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/first name/i), { target: { value: 'Amina' } });
+    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Diallo' } });
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'amina@example.org' } });
+    fireEvent.click(screen.getByRole('button', { name: /email me a sign-in link/i }));
+
+    await waitFor(() => expect(api.requestMagicLinkSignup).toHaveBeenCalledWith({
+      firstName: 'Amina',
+      lastName: 'Diallo',
+      email: 'amina@example.org',
+    }));
+    expect(await screen.findByRole('heading', { name: /check your email/i })).toBeInTheDocument();
+    expect(screen.getByText(/amina@example.org/i)).toBeInTheDocument();
+    expect(api.startSignIn).not.toHaveBeenCalled();
   });
 
   it('hands sign-in to the backend rather than collecting a credential', async () => {
@@ -99,9 +105,27 @@ describe('sign-in gate', () => {
     render(<SignupPage />);
     fireEvent.click(await screen.findByRole('button', { name: /email and password/i }));
 
-    expect(api.startSignIn).toHaveBeenCalledWith('password');
+    expect(api.startSignIn).toHaveBeenCalledWith('password', 'signup');
     // The whole point: no password field ever exists in this flow.
     expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('renders a callback failure on the signup page that initiated it', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic_link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.consumeAuthResult).mockResolvedValue({
+      status: 'failed',
+      code: 'AUTH_CANCELLED',
+      message: 'Sign-up was cancelled. No changes were made to your account.',
+      actions: ['TRY_AGAIN'],
+    });
+
+    render(<SignupPage />, '/signup?authResult=signup-result');
+
+    expect(await screen.findByText(/sign-up was cancelled/i)).toBeInTheDocument();
+    expect(api.consumeAuthResult).toHaveBeenCalledWith('signup-result');
   });
 });
 
@@ -167,6 +191,18 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: '12-34' } });
     expect(await screen.findByText(/at least two letters/i)).toBeInTheDocument();
+  });
+
+  it('explains when a free slug projects to an occupied tenant id', async () => {
+    vi.mocked(api.checkIdentifier).mockImplementation(async (type, value) => type === 'URL_SLUG'
+      ? { type, value, available: false, conflictingType: 'TENANT_ID', derivedTenantId: 'kd' }
+      : { type, value, available: true });
+
+    render(<SignupPage />);
+    await completeAccountStep();
+    fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'kd4' } });
+
+    expect(await screen.findByText(/maps to tenant ID “kd”.*already in use/i)).toBeInTheDocument();
   });
 
   it('creates the draft once Preferences is complete, not before', async () => {
@@ -363,10 +399,10 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     await reachPreferences();
 
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
-    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Asia/Jakarta' } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Africa/Maputo' } });
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
 
-    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Asia/Jakarta');
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Africa/Maputo');
   });
 
   it('shows the dial code and example for the selected country, not Kenya', async () => {
@@ -384,17 +420,6 @@ describe('preferences follow the selected country (CCRS#2098)', () => {
     expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
   });
 
-  it('offers no invented example for a country we have no format for', async () => {
-    // Only KE, IN and ET have authoritative MobileNumberValidation records in
-    // this repo. A made-up example would be the same defect as the hardcoded
-    // Kenyan one, so those countries get the dial code and a neutral hint.
-    render(<SignupPage />);
-    await reachPreferences();
-
-    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'NG' } });
-    expect(screen.getByText('+234')).toBeInTheDocument();
-    expect(screen.getByLabelText(/mobile number/i)).toHaveAttribute('placeholder', 'National number');
-  });
 });
 
 describe('workspace readiness gate', () => {

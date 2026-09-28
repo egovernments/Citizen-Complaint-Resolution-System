@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { insertModuleSections } from "./navSections";
 
 /**
  * Employee navigation items, derived from the access-control tree.
@@ -82,6 +83,7 @@ export const navigateToEmployeeUrl = (history, url, { isMultiRootTenant, tenantI
 export const useEmployeeNavItems = () => {
   const { isLoading, data } = Digit.Hooks.useAccessControl();
   const { t } = useTranslation();
+  const { data: initData } = Digit.Hooks.useStore.getInitData();
 
   // Filter out top-level modules the deployment wants to hide from the
   // employee sidebar. Driven by `globalConfigs.EMPLOYEE_MODULE_DENYLIST`
@@ -173,6 +175,18 @@ export const useEmployeeNavItems = () => {
     return data;
   };
 
-  const items = sortDataByOrderNumber(transformData(splitKeyValue(configEmployeeSideBar)));
-  return { isLoading, items, hasItems: Object.keys(configEmployeeSideBar).length > 0 };
+  // Each enabled module may contribute a labelled section (PGR: Create and
+  // Search complaints), looked up as `${code}SidebarSection` the same way the
+  // home page finds `${code}Card`. The module decides the rows and applies its
+  // own role checks, so the sidebar and the home card cannot disagree.
+  const sections = (initData?.modules || [])
+    .map(({ code }) => Digit.ComponentRegistryService.getComponent(`${code}SidebarSection`))
+    .filter((getSection) => typeof getSection === "function")
+    .map((getSection) => getSection(t));
+
+  const items = insertModuleSections(
+    sortDataByOrderNumber(transformData(splitKeyValue(configEmployeeSideBar))),
+    sections
+  );
+  return { isLoading, items, hasItems: items.length > 0 };
 };

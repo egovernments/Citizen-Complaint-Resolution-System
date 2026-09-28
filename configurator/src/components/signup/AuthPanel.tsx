@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { themeVariables } from '@/themes';
 
 /**
  * Backdrop layers, taken from the reference implementation rather than
@@ -147,6 +148,76 @@ export function AuthBackdrop() {
         .signup-backdrop-drift { animation: signupBackdropDrift 46s ease-in-out infinite; will-change: transform; }
         @media (prefers-reduced-motion: reduce) { .signup-backdrop-drift { animation: none; } }
       `}</style>
+    </div>
+  );
+}
+
+const AUTH_THEME: CSSProperties = {
+  ...(themeVariables('cms-blue') as CSSProperties),
+  fontFamily: 'Inter, Roboto, system-ui, sans-serif',
+};
+
+/**
+ * One visual boundary for sign-in, sign-up, tenant choice and recovery. Auth
+ * pages provide only card content; palette, backdrop, dimensions and brand
+ * chrome live here so a new auth state cannot quietly invent another system.
+ */
+export function AuthShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen w-full bg-background text-foreground" style={AUTH_THEME}>
+      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[45fr_55fr] xl:grid-cols-2">
+        {/* The narrative block sits at the bottom of the panel rather than
+            floating in the middle of it: `mt-auto` on that block absorbs the
+            free space, so the headline, the lede and the strap-line read as one
+            group resting just above the copyright line. `justify-between` used
+            to spread all three children apart, which left the narrative
+            stranded mid-panel on tall viewports. */}
+        <div className="relative hidden min-h-[320px] flex-col overflow-hidden p-10 text-white lg:flex">
+          <AuthBackdrop />
+
+          <div className="relative z-[1] flex flex-col gap-6">
+            <img
+              src="/configurator/brand/egov-logo-white.png"
+              alt="eGov Foundation"
+              width={180}
+              height={37}
+              className="h-auto w-[140px] self-start sm:w-[160px] xl:w-[180px]"
+              style={{ filter: 'drop-shadow(0 2px 10px rgba(4,12,34,0.35))' }}
+            />
+            <div>
+              <p className="text-[28px] font-semibold leading-snug">DIGIT Complaint Management</p>
+              <p className="mt-2 text-xs uppercase tracking-widest text-white/70">
+                Digital infrastructure for public services
+              </p>
+            </div>
+          </div>
+
+          <div className="relative z-[1] mt-auto">
+            <h1 className="text-5xl font-semibold leading-[1.1] tracking-[-0.01em]">
+              Manage complaints from intake to closure.
+            </h1>
+            <p className="mt-6 max-w-md text-sm leading-relaxed text-white/80">
+              Set up your account to receive complaints, assign them to the right team, track service
+              timelines, record actions and evidence, and monitor resolution across departments and
+              localities.
+            </p>
+            <RotatingNarrative />
+          </div>
+
+          <p className="relative z-[1] mt-10 text-xs text-white/50">
+            © 2026 eGovernments Foundation · DIGIT
+          </p>
+        </div>
+
+        <main id="main-content" className="flex flex-col items-center justify-center bg-background px-5 py-10 sm:p-10">
+          <div
+            className="w-full max-w-[460px] border bg-card/95 p-8"
+            style={{ borderRadius: 16, boxShadow: '0 12px 36px rgba(32,55,140,0.08)' }}
+          >
+            <div className="space-y-6">{children}</div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

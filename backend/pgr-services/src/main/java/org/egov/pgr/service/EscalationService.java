@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,6 +36,9 @@ import static org.egov.pgr.util.PGRConstants.ESCALATE;
 @Component
 @Slf4j
 public class EscalationService {
+
+    /** Bounds the workflow history fetch; workflow-v2 otherwise defaults to 10 rows. */
+    private static final int PROCESS_HISTORY_LIMIT = 200;
 
     public static final String ASSIGNMENT_CHANGED_AT = "assignmentChangedAt";
     public static final String ASSIGNMENT_CHANGE_SOURCE = "assignmentChangeSource";
@@ -237,10 +241,35 @@ public class EscalationService {
         }
     }
 
-    /** Gets current assignees from the workflow process-instance source of truth. */
+    /**
+     * Who currently holds this complaint, per the workflow source of truth.
+     *
+     * <p>PGR keeps no assignee on the complaint itself — `eg_pgr_service_v2` has no such
+     * column — so ownership has to be derived from workflow. Workflow does not model an
+     * owner either: it records transitions, each carrying the assignees that transition was
+     * given. Most carry none. On the live `ke` tenant, 778 RESOLVE rows have 76 assignee
+     * rows between them, and COMMENT, APPLY, REJECT and RATE have none at all.</p>
+     *
+     * <p>Reading `ProcessInstances[0].assignes` therefore answers "who did the last
+     * transition name", not "who holds this". Any action submitted without assignees — a
+     * citizen COMMENT, an ESCALATE, an ASSIGN the operator left blank — makes a complaint
+     * with a real owner look unassigned, so the scheduler skips it and the UI hides the
+     * actions only its holder should have (#2129, #2138).</p>
+     *
+     * <p>The holder is instead the assignee named by the most recent transition <em>within
+     * the complaint's current state occupancy</em>. Walking back stops the moment the state
+     * changes, because leaving a state relinquishes ownership: REASSIGN and REOPEN return
+     * the complaint to a queue on purpose, and resurrecting the pre-queue assignee would
+     * re-own a complaint nobody has picked up. A complaint that entered its current state
+     * without an assignee is genuinely unowned, and still reports empty.</p>
+     */
     public List<String> getCurrentAssignees(String serviceRequestId, String tenantId,
                                             RequestInfo requestInfo) {
         StringBuilder url = workflowService.getprocessInstanceSearchURL(tenantId, serviceRequestId);
+        // History, because the holder may have been named several transitions ago. Bounded
+        // explicitly: egov-workflow-v2 defaults egov.wf.default.limit to 10, and a silently
+        // truncated history would drop the very row that names the holder.
+        url.append("&history=true&limit=").append(PROCESS_HISTORY_LIMIT);
         RequestInfoWrapper wrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
         Object result = serviceRequestRepository.fetchResult(url, wrapper);
 
@@ -249,18 +278,45 @@ public class EscalationService {
             if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
                 return Collections.emptyList();
             }
-            ProcessInstance instance = response.getProcessInstances().get(0);
-            if (CollectionUtils.isEmpty(instance.getAssignes())) {
-                return Collections.emptyList();
-            }
-            return instance.getAssignes().stream()
-                    .map(User::getUuid)
-                    .filter(uuid -> uuid != null && !uuid.isBlank())
-                    .collect(Collectors.toList());
+            return assigneesInCurrentOccupancy(response.getProcessInstances());
         } catch (Exception e) {
             log.error("Failed to read workflow assignees for complaint {}", serviceRequestId, e);
             return Collections.emptyList();
         }
+    }
+
+    /**
+     * Walks newest-first through one state occupancy and returns the first assignees found.
+     * The list is ordered newest-first by egov-workflow-v2.
+     */
+    private List<String> assigneesInCurrentOccupancy(List<ProcessInstance> instances) {
+        String currentState = stateOf(instances.get(0));
+        for (ProcessInstance instance : instances) {
+            if (!Objects.equals(currentState, stateOf(instance))) {
+                // Left the current state: anything older belongs to a previous occupancy.
+                return Collections.emptyList();
+            }
+            List<String> assignees = uuidsOf(instance);
+            if (!assignees.isEmpty()) {
+                return assignees;
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /** The state UUID an instance landed in, or null when workflow did not populate it. */
+    private String stateOf(ProcessInstance instance) {
+        return instance == null || instance.getState() == null ? null : instance.getState().getUuid();
+    }
+
+    private List<String> uuidsOf(ProcessInstance instance) {
+        if (instance == null || CollectionUtils.isEmpty(instance.getAssignes())) {
+            return Collections.emptyList();
+        }
+        return instance.getAssignes().stream()
+                .map(User::getUuid)
+                .filter(uuid -> uuid != null && !uuid.isBlank())
+                .collect(Collectors.toList());
     }
 
     /** Cheap scheduler preflight; the locked update repeats this authoritative check. */

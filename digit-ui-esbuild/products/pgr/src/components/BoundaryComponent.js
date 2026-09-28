@@ -1,4 +1,5 @@
 import { Loader } from "@egovernments/digit-ui-components";
+import { selectPlaceholder } from "../utils/selectPlaceholder";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -477,7 +478,9 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
           if (picked) onChange(picked);
         }}
         options={options}
-        placeholder={t("CS_COMMON_SELECT") === "CS_COMMON_SELECT" ? `Select ${t(label)}` : t("CS_COMMON_SELECT")}
+        // A tenant that seeds CS_COMMON_SELECT still gets its own text; otherwise
+        // the verb is translated too, not just the field name.
+        placeholder={t("CS_COMMON_SELECT") === "CS_COMMON_SELECT" ? selectPlaceholder(t, t(label)) : t("CS_COMMON_SELECT")}
         disabled={!!disabled}
       />
     </V2Field>

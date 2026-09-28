@@ -227,7 +227,7 @@ Lets an employee holding more than one department/role see and switch which one 
 | | |
 |---|---|
 | Enable | Ships with the employee UI and complaints service; no flag. |
-| Service settings | `pgr.employee.context.resolver-role-codes` / `.citizen-role-codes` / `.admin-role-codes` (env `PGR_EMPLOYEE_CONTEXT_*`) — which roles the switcher treats as resolver / citizen-facing / admin. Defaults: `PGR_LME,GRO,DGRO` / `CITIZEN` / `PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR`. |
+| Service settings | `pgr.employee.context.resolver-role-codes` / `.citizen-role-codes` / `.admin-role-codes` (env `PGR_EMPLOYEE_CONTEXT_*`) — which roles the switcher treats as resolver / citizen-facing / admin. Defaults: `PGR_LME` (was `PGR_LME,GRO,DGRO` — see *Changed defaults* in the config changelog; needs a rebuild) / `CITIZEN` / `PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR`. |
 
 ### 12. Other Optional Add-Ons (deployment flags)
 

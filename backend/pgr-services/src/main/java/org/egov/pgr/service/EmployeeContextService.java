@@ -92,6 +92,7 @@ public class EmployeeContextService {
                 .roles(roles)
                 .roleContexts(roleContexts)
                 .jurisdictions(jurisdictions)
+                .hasReportingTo(hasReportingTo(employee))
                 .build();
     }
 
@@ -127,6 +128,27 @@ public class EmployeeContextService {
             throw new CustomException("PGR_EMPLOYEE_CONTEXT_UNAVAILABLE",
                     "Employee working context is temporarily unavailable");
         }
+    }
+
+    /**
+     * True when any current assignment names a reportingTo officer. Mirrors the rung the
+     * escalation service would resolve, without exposing who it is.
+     */
+    private boolean hasReportingTo(JsonNode employee) {
+        JsonNode assignments = employee.path("assignments");
+        if (!assignments.isArray()) {
+            return false;
+        }
+        for (JsonNode assignment : assignments) {
+            if (!HrmsScopeSemantics.isCurrentAssignment(assignment)) {
+                continue;
+            }
+            String reportingTo = text(assignment, "reportingTo");
+            if (reportingTo != null && !reportingTo.isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<EmployeeWorkingContext.Department> currentDepartments(JsonNode employee) {

@@ -115,7 +115,19 @@
      * resolves to one of these variables. Update colors here only.
      * ============================================================ */
   /* Surfaces & text */
-  --background: lab(98.2586% -0.2231 -0.716782);
+  /* The employee app paints its page `#EEEEEE` and floats white cards on it.
+     * The dashboard used a near-white of its own, which showed as a seam: the
+     * 16px of page visible between the fixed header and the dashboard surface
+     * was a different colour from the surface below it. Matching the app makes
+     * the surface continuous, and gives the white cards the same contrast they
+     * have on every other page.
+     *
+     * Not `--color-page-bg`: the tenant theme does define that, but as
+     * `#FFFFFF` — it names the card/page surface, not the ground those cards
+     * sit on. Chaining to it painted the dashboard white and left the seam
+     * exactly where it was. The value below is the one `.body-container`
+     * actually paints. */
+  --background: #EEEEEE;
   --foreground: lab(5.23127% -1.15929 -6.2068);
   --surface: lab(100% 0 0);
   --surface-2: lab(97.097% -0.443935 -1.43216);
@@ -124,8 +136,18 @@
   --card-foreground: lab(5.23127% -1.15929 -6.2068);
   --popover: lab(100% 0 0);
   --popover-foreground: lab(5.23127% -1.15929 -6.2068);
-  /* Brand / interactive */
-  --primary: lab(35.8817% -24.1734 -2.46631);
+  /* Brand / interactive.
+     *
+     * The brand entries below resolve from the tenant's own theme first, with
+     * the dashboard's historical palette kept as the final fallback. They were
+     * fixed teal, so the dashboard rendered in a palette unrelated to the
+     * chrome around it — navy on Bomet, green and yellow on naipepea.
+     *
+     * A var() chain rather than a JS read: applyTheme publishes `--color-*`
+     * from an MDMS record fetched over the network, so anything sampling them
+     * at mount races the fetch and captures DIGIT's defaults. CSS resolves
+     * them whenever they land. */
+  --primary: var(--color-primary-2, var(--color-primary-1, lab(35.8817% -24.1734 -2.46631)));
   --primary-foreground: lab(98.84% 0.0000298023 -0.0000119209);
   --secondary: lab(94.2798% -2.53278 -1.0635);
   --secondary-foreground: lab(9.71627% -6.29769 -2.60819);
@@ -136,13 +158,13 @@
   --destructive: lab(45.6933% 66.2056 47.555);
   --destructive-foreground: lab(98.84% 0.0000298023 -0.0000119209);
   /* Lines & focus */
-  --border: lab(88.4492% -2.04447 -1.97053);
-  --input: lab(88.4492% -2.04447 -1.97053);
-  --ring: lab(35.8817% -24.1734 -2.46631);
+  --border: var(--color-card-border, var(--color-border, lab(88.4492% -2.04447 -1.97053)));
+  --input: var(--color-card-border, var(--color-border, lab(88.4492% -2.04447 -1.97053)));
+  --ring: var(--color-primary-2, var(--color-primary-1, lab(35.8817% -24.1734 -2.46631)));
   /* Chrome (top bar / nav) */
-  --chrome: lab(12.1586% -9.80562 -2.97114);
+  --chrome: var(--color-primary-1, var(--color-header-bg, lab(12.1586% -9.80562 -2.97114)));
   --chrome-foreground: lab(96.5699% -1.58328 -0.665271);
-  --chrome-muted: lab(56.1186% -6.32274 -2.64311);
+  --chrome-muted: var(--color-text-secondary, lab(56.1186% -6.32274 -2.64311));
   /* Status (foreground + tinted background pairs) */
   --status-open: lab(36.6287% -20.0702 -21.1027);
   --status-open-bg: lab(94.3508% -6.32584 -6.12073);
@@ -161,6 +183,15 @@
   --status-breach: lab(37.1998% 71.0423 26.7454);
   --status-breach-bg: lab(93.7677% 13.0259 4.10725);
   /* Chart series */
+  /* The series ramp stays as authored, deliberately.
+     *
+     * Chart colours encode data, not brand: these five have to stay tellable
+     * apart from each other, and inside a stacked bar they are the only thing
+     * saying which segment is which. Re-pointing the lead series at the tenant
+     * brand made the surface match its chrome, and made two segments of the
+     * same bar harder to separate — the wrong trade. The brand now reaches the
+     * dashboard through --primary, --chrome and --border instead, which is
+     * chrome rather than data. */
   --chart-1: lab(36.1215% -31.3433 -3.14357);
   --chart-2: lab(48.7634% -31.2502 -12.8129);
   --chart-3: lab(60.588% -31.0205 5.71432);
@@ -234,10 +265,6 @@
   text-overflow: unset;
   white-space: normal;
   overflow-wrap: anywhere;
-}
-
-.dashboard-filter-inline-select-wrap.dashboard-widget-group-by-wrap::after {
-  content: none !important;
 }
 
 .dashboard-drag-handle-title{
@@ -921,15 +948,6 @@
   padding: 0;
 }
 
-.dashboard-filter-inline-select-wrap{
-  position: relative;
-  display: inline-flex;
-  height: 1.75rem;
-  flex-shrink: 0;
-  align-items: center;
-  align-self: center;
-}
-
 .dashboard-filter-inline-select{
   margin: 0px;
   box-sizing: border-box;
@@ -965,21 +983,6 @@
 
 .dashboard-filter-inline-select:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
-}
-
-.dashboard-filter-inline-select-wrap::after {
-  content: none;
-}
-
-.dashboard-filter-inline-chevron {
-  position: absolute;
-  right: 0.35rem;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  width: 10px;
-  height: 10px;
-  color: var(--dashboard-muted-foreground, #6b6860);
 }
 
 .dashboard-filters-clear-inline{
@@ -3867,7 +3870,27 @@
   overflow-x: clip;
   box-sizing: border-box;
   --digit-sidebar-width: 3rem;
-  --dashboard-embedded-inset: 12px;
+  /* Matches the employee app's own content inset. An internal page — Create
+   * Complaint is the honest comparison, not the landing screen — clears the
+   * nav rail by 52px before its first card begins. At 12px the dashboard read
+   * as pinned to the edges while every page around it breathed. */
+  --dashboard-embedded-inset: 52px;
+  /* Brand variables resolve from the tenant's own theme, with the dashboard's
+   * historical palette only as a last resort.
+   *
+   * These were hardcoded teal and overridable solely through DASHBOARD_BRAND_*
+   * globalConfigs keys, which almost no deployment sets — so the dashboard
+   * rendered teal inside chrome painted from an entirely different palette.
+   * Bomet's is navy `#0B1F3A`; the charts were teal.
+   *
+   * Expressed as a var() chain rather than read in JS on purpose: applyTheme
+   * publishes `--color-*` from an MDMS record fetched over the network, and
+   * anything that samples those at mount races the fetch. CSS resolves them
+   * whenever they arrive. An explicit DASHBOARD_BRAND_* override still wins,
+   * because DashboardLayout writes it inline. */
+  --brand-teal: var(--color-primary-2, var(--color-primary-1, lab(35.8817% -24.1734 -2.46631)));
+  --brand-dark: var(--color-primary-1, var(--color-header-bg, lab(12.1586% -9.80562 -2.97114)));
+  --brand-slate: var(--color-text-secondary, lab(56.1186% -6.32274 -2.64311));
 }
 
 .dashboard-root.dashboard-embedded > div {
@@ -3940,13 +3963,97 @@
 
 .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
   margin-left: 0 !important;
+  /* Clears the collapsed nav rail, which is `position: fixed` and so takes no
+   * flow of its own. Only below 48rem — EmployeeSideBar renders inside
+   * `MediaQuery minWidth={768}`, so under that there is no rail to clear and
+   * this was reserving 48px for something that is not on screen. At 420px that
+   * is a ninth of the viewport, and it showed as a lopsided left gutter
+   * (60px left against 23px right). */
   padding-left: var(--digit-sidebar-width, 3rem) !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  padding-top: 56px !important;
+  /* Clears the fixed employee header, PLUS the same breathing room every other
+   * employee page leaves under it. Read from the properties the header's own
+   * height and gap are declared with (see public/vendor/overrides.css) so this
+   * cannot drift from them — the literal 56px here outlived two changes to the
+   * bar and left the dashboard title tucked 19px underneath it.
+   *
+   * The gap matters on its own: clearing only the header height made the
+   * dashboard the one page whose content started hard against the bar while
+   * every other surface had 16px under it. */
+  padding-top: calc(
+    var(--employee-header-h, 56px) + var(--employee-header-gap, 16px)
+  ) !important;
   box-sizing: border-box !important;
+}
+
+@media (max-width: 47.99rem) {
+  .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+    padding-left: 0 !important;
+  }
+
+  /* The 52px inset exists to clear the desktop nav rail, and a phone has no
+   * rail. Left at 52px it took about a quarter of a 390px screen as dead margin.
+   * 16px lines the dashboard up with the topbar's own gutter below 48rem and
+   * with Create Complaint's card. */
+
+  .dashboard-root.dashboard-embedded {
+    --dashboard-embedded-inset: 16px;
+  }
+}
+
+/* A pinned nav rail has to move the dashboard too.
+ *
+ * The rule above pins this surface to `margin-left: 0` and insets it with
+ * padding instead, so the employee chrome's pinned rule — which moves
+ * `.employee .main` by its margin — cannot reach it. The dashboard would sit
+ * still while every other employee page slid across.
+ *
+ * Distance and easing are taken from the same 3rem/15rem pair SideNav
+ * animates between, so the surface and the panel travel together. */
+
+@media (min-width: 48rem) {
+  .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html[data-employee-sidebar-pinned="true"]
+    .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+    padding-left: 15rem !important;
+  }
+}
+
+/* The header row must grow to its content, at every width.
+ *
+ * `.dashboard-header-top` carries `tw-h-12` — a fixed 48px built for the
+ * one-line desktop arrangement — while being a flex row with `align-items:
+ * center` and `overflow: visible`. Both of its children can exceed 48px: the
+ * title block wraps its title and date range onto two lines, and the controls
+ * wrap "+ Add KPI / Reset / Export" onto two rows. A taller child centred in a
+ * short box overflows EQUALLY above and below, and the header sits directly
+ * under the fixed topbar, so the overflow above slides underneath it. Measured
+ * at 962px: a 75.5px title block in a 48px box put the title at y=62 against a
+ * topbar bottom edge of 76, clipping it.
+ *
+ * This is not a phone case. It happens at any width where either child wraps,
+ * which is why scoping the first fix to `max-width: 47.99rem` left it broken
+ * through the whole tablet-to-small-desktop range. A flex row that may wrap
+ * cannot also be a fixed height.
+ *
+ * `min-height` keeps the single-line desktop rhythm identical: where the
+ * content fits one row, auto resolves to the same 3rem it had before. */
+
+.dashboard-root .dashboard-header,
+.dashboard-root .dashboard-header-top {
+  height: auto !important;
+  min-height: 3rem;
+}
+
+.dashboard-root .dashboard-header-top {
+  row-gap: 0.5rem;
+  padding-bottom: 0.25rem;
 }
 
 /* Block digit-ui global heading colors (h2[class*="title"] etc.) inside the dashboard. */
@@ -4064,9 +4171,11 @@
 }
 
 .dashboard-root .dashboard-header-controls .dashboard-header-btn {
-  height: 2rem !important;
-  min-height: 2rem !important;
-  max-height: 2rem !important;
+  /* 36px. At 32 these read as toolbar affordances beside a 28px page title,
+   * and the app's own controls sit at 40. */
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
   box-sizing: border-box !important;
 }
 
@@ -4099,6 +4208,95 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* No full-width band behind the dashboard header.
+ *
+ * Two elements paint it, which is why clearing one left the band in place:
+ * `.dashboard-header` carries `tw-bg-background`, and the `.dashboard-header-top`
+ * row inside it paints pure white over that. Both run the whole width of the
+ * surface while their content is inset by 52px like everything else, so the
+ * result read as a white strip bleeding to both edges with the title floating
+ * in it.
+ *
+ * Nothing depends on the fill: the page behind is already the dashboard
+ * surface, and the header is separated from the content by spacing rather
+ * than by a block of colour. */
+
+.dashboard-root .dashboard-header,
+.dashboard-root .dashboard-header-top {
+  background: transparent !important;
+  /* The rule underneath goes with the fill. Once the band was gone it was the
+   * only thing left drawing the header as a separate slab, running the full
+   * width while its content sat 52px in — the same mismatch, one pixel tall.
+   * The header is already separated from the filters card by spacing. */
+  border-bottom: 0 !important;
+}
+
+/* Header controls, on DIGIT's button scale.
+ *
+ * They were all one shape: a neutral grey stroke with near-black text, which
+ * the design system does not have and which gave three buttons of different
+ * consequence the same weight.
+ *
+ * Reset and Export are DIGIT Primary — filled, white label. Add KPI is
+ * Secondary — primary stroke, primary label, transparent ground — because it
+ * only opens a picker; the act of adding happens inside the panel. All of it
+ * reads from the tenant theme rather than restating a hex.
+ */
+
+.dashboard-root .dashboard-header-controls .dashboard-header-btn {
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  /* The label follows the theme's own button-text token, like the v2 Button
+   * does, so a tenant whose brand surface is light does not end up with white
+   * on near-white. White is only the fallback. */
+  color: var(--color-button-primary-text, #ffffff);
+  border: 1px solid var(--color-primary-2, var(--color-primary-1, var(--primary)));
+  background: var(--color-primary-2, var(--color-primary-1, var(--primary)));
+}
+
+.dashboard-root .dashboard-header-controls .dashboard-header-btn:hover {
+  background: var(--color-primary-1, var(--primary));
+  border-color: var(--color-primary-1, var(--primary));
+  color: var(--color-button-primary-text, #ffffff);
+}
+
+/* Add KPI: same stroke, no fill. A solid border, not a dashed one — the dash
+   was doing no work the label was not already doing. */
+
+.dashboard-root .dashboard-header-controls .dashboard-add-kpi-trigger,
+.dashboard-root .dashboard-header-controls .dashboard-add-kpi-trigger:hover {
+  border-style: solid;
+  border-color: var(--color-primary-2, var(--color-primary-1, var(--primary)));
+  color: var(--color-primary-2, var(--color-primary-1, var(--primary)));
+  background: transparent;
+}
+
+.dashboard-root .dashboard-header-controls .dashboard-add-kpi-trigger:hover {
+  background: var(--color-primary-1-bg, transparent);
+}
+
+/* Add-KPI panel — room for the longest label, and a radius that belongs to the
+ * same family as the app's cards.
+ *
+ * "Department-wise resolution rate" needed 201px inside a 176px slot and was
+ * ellipsised, which hides exactly the words that distinguish one KPI from
+ * another. Widening the panel is the honest fix; wrapping is kept as the
+ * backstop for whatever the next catalog adds. */
+
+.dashboard-root .dashboard-add-kpi-panel {
+  width: 360px;
+  border-radius: 8px;
+  border-color: var(--color-card-border, var(--border));
+}
+
+.dashboard-root .dashboard-add-kpi-panel .dashboard-add-kpi-label,
+.dashboard-root .dashboard-add-kpi-panel button > span:first-child {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{

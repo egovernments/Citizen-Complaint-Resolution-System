@@ -18,14 +18,20 @@ Keycloak access, ID, and refresh tokens never reach the frontend. The BFF is
 not in the business-API hot path and has no hard dependency on PGR. Its optional
 onboarding worker is disabled unless explicitly configured.
 
-See [the full API and operations guide](docs/identity-bff.md).
+Start with the [architecture one-pager](docs/architecture.md), then use the
+[full API and operations guide](docs/identity-bff.md) or the repository-level
+[deployment and integration setup](../../docs/identity-bff-deployment.md).
 
 ## Browser API
 
 ```http
-GET  /identity/v1/auth-methods
-GET  /identity/v1/authorize?method=password
+GET  /identity/v1/auth-methods?intent=signin
+GET  /identity/v1/authorize?method=password&intent=signin&returnTo=/configurator/login
+POST /identity/v1/authentication/magic-link-requests
 GET  /identity/v1/callback
+GET  /identity/v1/auth-results/:id
+POST /identity/v1/password/setup-requests
+GET  /identity/v1/password/setup-complete/:state
 GET  /identity/v1/session
 GET  /identity/v1/tenants
 POST /identity/v1/contexts/_select
@@ -37,6 +43,11 @@ POST /identity/v1/logout
 Organization memberships and active BFF-managed DIGIT accounts. Selecting a
 tenant returns the existing egov-user login shape, including `access_token` and
 `UserRequest`; existing DIGIT API calls continue unchanged.
+
+These routes are application-neutral. A caller supplies a validated `returnTo`
+path (or an absolute URL on `IDENTITY_ALLOWED_ORIGINS`), and the deployment
+configures Keycloak hosts, clients, and callbacks. Configurator is one client,
+not a route or redirect embedded in the BFF.
 
 ## Internal API
 
@@ -97,7 +108,14 @@ The `keycloak` Compose profile starts:
 - `identity-bff`, built from this folder; and
 - the existing dedicated Keycloak Postgres container.
 
+The current Configurator login is an Identity-BFF client, so deployments that
+publish `/configurator/` must also enable this `keycloak` profile and publish
+the `keycloak` nginx feature when rolling out this Configurator build. It does
+not silently fall back to the legacy direct egov-user password form. Older
+Configurator images remain deployable without the identity profile, so the
+shared playbook does not impose this requirement on every historical image.
+
 Ansible runs `deploy/digit-compose/configure-keycloak.sh` after Keycloak is
 healthy. The script idempotently enables Organizations and reconciles the BFF,
-magic-link, admin, role, Google, and GitHub configuration. Kong publishes only
+magic-link resource client, admin, role, Google, and GitHub configuration. Kong publishes only
 `/identity/v1`; `/internal/identity/v1` remains private.

@@ -16,6 +16,14 @@ import MediaQuery from 'react-responsive';
 import _ from "lodash";
 import HeaderComponent from "../atoms/HeaderComponent";
 import { useTranslation } from "react-i18next";
+
+// The phone inbox's Filter / Search / Sort buttons used `t("Filter")` and
+// friends: keys literally named after the English word, which no locale seeds,
+// so they never translated. These are the seeded keys for the same words.
+const translateOr = (t, key, fallback) => {
+  const value = t(key);
+  return value && value !== key ? value : fallback;
+};
 import { Button, Footer } from "../atoms";
 import ResultsDataTableWrapper from "./ResultsDataTableWrapper";
 
@@ -343,7 +351,7 @@ const InboxSearchComposer = ({configs,additionalConfig,onFormValueChange=()=>{},
                 <div className="searchBox">
                 {configs?.sections?.filter?.show && (
                     <FilterAction
-                    text={t("Filter")}
+                    text={translateOr(t, "CS_COMMON_FILTER", "Filter")}
                       handleActionClick={() => {
                         setType("FILTER");
                         setPopup(true);
@@ -352,7 +360,7 @@ const InboxSearchComposer = ({configs,additionalConfig,onFormValueChange=()=>{},
                   )}
                   {configs?.sections?.search?.show && (
                     <SearchAction
-                    text={t("Search")}
+                    text={translateOr(t, "CS_INBOX_SEARCH", "Search")}
                       handleActionClick={() => {
                         setType("SEARCH");
                         setPopup(true);
@@ -368,7 +376,7 @@ const InboxSearchComposer = ({configs,additionalConfig,onFormValueChange=()=>{},
                   {configs?.sections?.sort?.show !== false &&
                     getSortableColumns(configs?.sections?.searchResult?.uiConfig?.columns).length > 0 && (
                       <SortAction
-                        text={t("Sort")}
+                        text={translateOr(t, "COMMON_TABLE_SORT", "Sort")}
                         handleActionClick={() => {
                           setType("SORT");
                           setPopup(true);

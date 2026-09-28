@@ -55,6 +55,10 @@ enable_mcp: true               # REQUIRED on a cold box — bootstraps ke.
 build_mcp: true                #   (kit has false because the real Bomet DB
                                #    already contains ke; a pg-dump box doesn't)
 db_fast_path: true
+db_fast_path_ack_data_wipe: true   # bomet.yml.example ships this false; preflight
+                                   # refuses until you set it. Only true because this
+                                   # is a REBUILD onto a fresh box — never set it on a
+                                   # machine already carrying Bomet's database.
 ```
 
 ### 1.3 Deploy

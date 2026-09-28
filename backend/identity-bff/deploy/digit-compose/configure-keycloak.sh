@@ -16,8 +16,14 @@ readonly BFF_CLIENT=digit-identity-bff
 readonly RETIRED_ASSERTION_AUDIENCE=digit-identity-exchange
 readonly ADMIN_CLIENT=digit-identity-admin
 readonly ROLE_CLIENT=digit-ui
-readonly MAGIC_LINK_FLOW=digit-magic-link-browser
-readonly MAGIC_LINK_FORMS=digit-magic-link-forms
+readonly FIRST_BROKER_FLOW=digit-first-broker-login
+# The Keycloakify login theme shipped in the Keycloak image
+# (keycloak/theme-src, built by keycloak/Dockerfile.magic-link). Selected per
+# client rather than on the shared realm.
+readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-configurator-blue}
+# Realm-level theme names this deployment set itself and may therefore clear.
+# `digit` is the name earlier revisions used before the theme was renamed.
+readonly OWNED_REALM_THEMES="$LOGIN_THEME digit"
 
 # Standalone installs keep these values in identity-bff.env. Ansible deployments
 # pass them as task-scoped environment variables so no second secrets file has
@@ -31,6 +37,14 @@ fi
 readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
+# Journey policy belongs to the OIDC client. The BFF reads these attributes
+# live; these values are installer inputs, not BFF runtime configuration.
+readonly BFF_SIGNIN_METHODS=${KEYCLOAK_BFF_SIGNIN_METHODS:-password,google,github}
+readonly BFF_SIGNUP_METHODS=${KEYCLOAK_BFF_SIGNUP_METHODS:-magic_link,google,github}
+# Keycloak's execute-actions redirect validation matches this path wildcard but
+# does not treat a trailing wildcard as matching a query string.
+readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete/*"
+readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
   'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
@@ -94,7 +108,12 @@ ensure_client() {
 }
 
 ensure_social_provider() {
-  local alias=$1 provider=$2 client_id=$3 client_secret=$4
+  local alias=$1 provider=$2 client_id=$3 client_secret=$4 display_name
+  case "$alias" in
+    google) display_name=Google ;;
+    github) display_name=GitHub ;;
+    *) display_name=$alias ;;
+  esac
   [ -n "$client_id" ] || return 0
   [ -n "$client_secret" ] || {
     printf 'missing client secret for configured %s identity provider\n' "$alias" >&2
@@ -102,12 +121,14 @@ ensure_social_provider() {
   }
   if kc get "identity-provider/instances/$alias" -r "$REALM" >/dev/null 2>&1; then
     kc update "identity-provider/instances/$alias" -r "$REALM" \
-      -s enabled=true -s trustEmail=false -s storeToken=false \
+      -s enabled=true -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   else
     kc create identity-provider/instances -r "$REALM" \
-      -s "alias=$alias" -s "providerId=$provider" -s enabled=true \
+      -s "alias=$alias" -s "providerId=$provider" -s "displayName=$display_name" -s enabled=true \
       -s trustEmail=false -s storeToken=false \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   fi
 }
@@ -131,25 +152,36 @@ flow_uuid() {
     jq -r --arg alias "$1" '.[] | select(.alias == $alias) | .id' | head -1
 }
 
-ensure_execution() {
-  local flow=$1 provider=$2 requirement=$3 execution
-  execution=$(kc get "authentication/flows/$flow/executions" -r "$REALM" |
-    jq -c --arg provider "$provider" '.[] | select(.providerId == $provider)' | head -1)
-  if [ -z "$execution" ]; then
-    kc create "authentication/flows/$flow/executions/execution" -r "$REALM" \
-      -s "provider=$provider" >/dev/null
-    execution=$(kc get "authentication/flows/$flow/executions" -r "$REALM" |
-      jq -c --arg provider "$provider" '.[] | select(.providerId == $provider)' | head -1)
+configure_first_broker_login() {
+  # Pin the account-linking behaviour instead of inheriting whatever a realm's
+  # default happens to contain. Keycloak 26's built-in flow already has the
+  # exact safety properties required here: confirm linking, then prove the
+  # existing account by email or re-authentication before attaching the IdP.
+  if [ -z "$(flow_uuid "$FIRST_BROKER_FLOW")" ]; then
+    kc create 'authentication/flows/first%20broker%20login/copy' -r "$REALM" \
+      -s "newName=$FIRST_BROKER_FLOW" >/dev/null
   fi
-  printf '%s' "$execution" | jq --arg requirement "$requirement" \
-    '.requirement = $requirement' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-      update "authentication/flows/$flow/executions" -r "$REALM" -f - \
-      --config "$KC_CONFIG" >/dev/null
+  local executions
+  executions=$(kc get "authentication/flows/$FIRST_BROKER_FLOW/executions" -r "$REALM")
+  local invariant provider requirement
+  for invariant in \
+    idp-create-user-if-unique:ALTERNATIVE \
+    idp-confirm-link:REQUIRED \
+    idp-email-verification:ALTERNATIVE \
+    idp-username-password-form:REQUIRED; do
+    provider=${invariant%%:*}
+    requirement=${invariant#*:}
+    if ! printf '%s' "$executions" | jq -e \
+      --arg provider "$provider" --arg requirement "$requirement" \
+      'any(.[]; .providerId == $provider and .requirement == $requirement)' >/dev/null; then
+      printf 'first broker flow execution invariant failed: %s must be %s\n' \
+        "$provider" "$requirement" >&2
+      return 1
+    fi
+  done
 }
 
-configure_magic_link() {
-  : "${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:?set KEYCLOAK_MAGIC_LINK_CLIENT_SECRET}"
+configure_smtp() {
   : "${KEYCLOAK_SMTP_HOST:?set KEYCLOAK_SMTP_HOST}"
   : "${KEYCLOAK_SMTP_FROM:?set KEYCLOAK_SMTP_FROM}"
 
@@ -175,56 +207,24 @@ configure_magic_link() {
        if $password != "" then .smtpServer.password = $password else . end' |
     docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
       update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
+}
 
-  if [ -z "$(flow_uuid "$MAGIC_LINK_FLOW")" ]; then
-    kc create authentication/flows -r "$REALM" \
-      -s "alias=$MAGIC_LINK_FLOW" \
-      -s 'description=Passwordless email magic-link browser flow' \
-      -s providerId=basic-flow -s topLevel=true -s builtIn=false >/dev/null
-  fi
-  ensure_execution "$MAGIC_LINK_FLOW" auth-cookie ALTERNATIVE
-
-  local forms_execution
-  forms_execution=$(kc get "authentication/flows/$MAGIC_LINK_FLOW/executions" -r "$REALM" |
-    jq -c --arg display "$MAGIC_LINK_FORMS" '.[] | select(.displayName == $display)' | head -1)
-  if [ -z "$forms_execution" ]; then
-    kc create "authentication/flows/$MAGIC_LINK_FLOW/executions/flow" -r "$REALM" \
-      -s "alias=$MAGIC_LINK_FORMS" -s 'description=Magic link email form' \
-      -s provider=registration-page -s type=basic-flow >/dev/null
-  fi
-  forms_execution=$(kc get "authentication/flows/$MAGIC_LINK_FLOW/executions" -r "$REALM" |
-    jq -c --arg display "$MAGIC_LINK_FORMS" '.[] | select(.displayName == $display)' | head -1)
-  printf '%s' "$forms_execution" | jq '.requirement = "ALTERNATIVE"' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-      update "authentication/flows/$MAGIC_LINK_FLOW/executions" -r "$REALM" -f - \
-      --config "$KC_CONFIG" >/dev/null
-
-  ensure_execution "$MAGIC_LINK_FORMS" ext-magic-form REQUIRED
-  local magic_execution magic_execution_id magic_config_id
-  magic_execution=$(kc get "authentication/flows/$MAGIC_LINK_FORMS/executions" -r "$REALM" |
-    jq -c '.[] | select(.providerId == "ext-magic-form")' | head -1)
-  magic_execution_id=$(printf '%s' "$magic_execution" | jq -r .id)
-  magic_config_id=$(printf '%s' "$magic_execution" | jq -r '.authenticationConfig // empty')
-  if [ -z "$magic_config_id" ]; then
-    kc create "authentication/executions/$magic_execution_id/config" -r "$REALM" \
-      -s alias=digit-magic-link-config \
-      -s 'config."ext-magic-create-nonexistent-user"=true' \
-      -s 'config."ext-magic-update-profile-action"=false' \
-      -s 'config."ext-magic-update-password-action"=false' \
-      -s 'config."ext-magic-allow-token-reuse"=false' \
-      -s 'config."ext-magic-token-life-span"=600' >/dev/null
-  fi
-
-  local magic_uuid magic_flow_id
+configure_magic_link() {
+  : "${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:?set KEYCLOAK_MAGIC_LINK_CLIENT_SECRET}"
+  # The client application collects the identity draft and the BFF calls the extension's
+  # authenticated /magic-link resource. Its action token skips browser flows,
+  # so this client must not retain the old hosted email-form binding.
+  local magic_uuid
   magic_uuid=$(ensure_client "$MAGIC_LINK_CLIENT" "$KEYCLOAK_MAGIC_LINK_CLIENT_SECRET" false)
-  magic_flow_id=$(flow_uuid "$MAGIC_LINK_FLOW")
   kc update "clients/$magic_uuid" -r "$REALM" \
     -s standardFlowEnabled=true \
+    -s "baseUrl=$POST_LOGIN_REDIRECT" \
     -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s 'attributes."pkce.code.challenge.method"=S256' \
     -s 'attributes."post.logout.redirect.uris"=+' \
-    -s "authenticationFlowBindingOverrides.browser=$magic_flow_id" >/dev/null
+    -s "attributes.\"login_theme\"=$LOGIN_THEME" \
+    -s 'authenticationFlowBindingOverrides={}' >/dev/null
 
   ensure_mapper "clients/$magic_uuid" digit-identity-bff-audience oidc-audience-mapper \
     -s "config.\"included.client.audience\"=$BFF_CLIENT" \
@@ -233,8 +233,8 @@ configure_magic_link() {
     -r "$REALM" -n >/dev/null
 }
 
-# A new realm gets conservative defaults; an existing realm is only switched
-# to Organizations so operator-tuned settings are preserved.
+# A new realm gets conservative defaults; the small set of identity invariants
+# applied below is also pinned on existing realms.
 if kc get "realms/$REALM" >/dev/null 2>&1; then
   kc update "realms/$REALM" -s organizationsEnabled=true \
     -s "sslRequired=$SSL_REQUIRED" >/dev/null
@@ -245,6 +245,30 @@ else
     -s "sslRequired=$SSL_REQUIRED" -s accessTokenLifespan=300 \
     -s ssoSessionIdleTimeout=1800 -s ssoSessionMaxLifespan=604800 >/dev/null
 fi
+
+# These are identity invariants, not magic-link settings. Pin them on both new
+# and existing realms even when the optional magic-link resource is disabled.
+kc update "realms/$REALM" -s organizationsEnabled=true \
+  -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
+  -s resetPasswordAllowed=false \
+  -s "sslRequired=$SSL_REQUIRED" >/dev/null
+
+# The DIGIT theme is selected per client below (CCRS #2108) so that a client
+# that is not part of the Configurator journey keeps its own theme. Earlier
+# revisions pinned it on the shared realm, where every client inherits it, so
+# undo exactly that: a realm-level theme an operator chose is left alone.
+#
+# kcadm drops an empty `-s` value, so clearing has to go through the JSON body.
+realm_theme=$(kc get "realms/$REALM" | jq -r '.loginTheme // ""')
+for owned_theme in $OWNED_REALM_THEMES; do
+  if [ "$realm_theme" = "$owned_theme" ]; then
+    kc get "realms/$REALM" | jq '.loginTheme = ""' |
+      docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+        update "realms/$REALM" -f - --config "$KC_CONFIG" >/dev/null
+    break
+  fi
+done
+configure_smtp
 
 # Organization-group client roles are published under this client and filtered
 # by the DIGIT projection allowlist. It is a role container, not a login client.
@@ -257,10 +281,14 @@ fi
 bff_uuid=$(ensure_client "$BFF_CLIENT" "$KEYCLOAK_BFF_CLIENT_SECRET" false)
 kc update "clients/$bff_uuid" -r "$REALM" \
   -s standardFlowEnabled=true \
-  -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
+  -s "baseUrl=$POST_LOGIN_REDIRECT" \
+  -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
   -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
   -s 'attributes."pkce.code.challenge.method"=S256' \
   -s 'attributes."post.logout.redirect.uris"=+' \
+  -s "attributes.\"login_theme\"=$LOGIN_THEME" \
+  -s "attributes.\"digit.auth.signin.methods\"=$BFF_SIGNIN_METHODS" \
+  -s "attributes.\"digit.auth.signup.methods\"=$BFF_SIGNUP_METHODS" \
   -s 'attributes."standard.token.exchange.enabled"=false' >/dev/null
 
 retired_uuid=$(client_uuid "$RETIRED_ASSERTION_AUDIENCE")
@@ -299,8 +327,14 @@ kc update "clients/$bff_uuid/optional-client-scopes/$organization_scope" -r "$RE
 
 if [ "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" = true ]; then
   configure_magic_link
+else
+  magic_uuid=$(client_uuid "$MAGIC_LINK_CLIENT")
+  if [ -n "$magic_uuid" ]; then
+    kc update "clients/$magic_uuid" -r "$REALM" -s enabled=false >/dev/null
+  fi
 fi
 
+configure_first_broker_login
 ensure_social_provider google google \
   "${KEYCLOAK_GOOGLE_CLIENT_ID:-}" "${KEYCLOAK_GOOGLE_CLIENT_SECRET:-}"
 ensure_social_provider github github \

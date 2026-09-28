@@ -2749,7 +2749,7 @@
     },
     {
         "code": "CS_PGR_REPORTS_HEADER",
-        "message": "Citizen Complaint Resolution System Reports",
+        "message": "Complaint Management System Reports",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -3482,6 +3482,12 @@
     {
         "code": "FAILED_TO_UPDATE_COMPLAINT",
         "message": "Failed to update the complaint, please try again later.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_PGR_ASSIGNEE_REQUIRED",
+        "message": "Select the employee this complaint is being assigned to.",
         "module": "rainmaker-pgr",
         "locale": "default"
     },

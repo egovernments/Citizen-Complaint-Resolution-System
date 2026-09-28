@@ -26,9 +26,13 @@ password.
 
 | Method | Route | Result |
 |---|---|---|
-| `GET` | `/identity/v1/auth-methods` | Methods configured here and enabled in Keycloak |
-| `GET` | `/identity/v1/authorize?method=...` | Starts Authorization Code + PKCE with state and nonce |
+| `GET` | `/identity/v1/auth-methods?intent=signin\|signup` | Client journey policy intersected with live Keycloak capabilities |
+| `GET` | `/identity/v1/authorize?method=...&intent=...&returnTo=...` | Starts Authorization Code + PKCE with state and nonce |
+| `POST` | `/identity/v1/authentication/magic-link-requests` | Saves a short-lived identity profile draft and sends the non-enumerating signup verification link |
 | `GET` | `/identity/v1/callback` | Validates the callback and creates an opaque cookie session |
+| `GET` | `/identity/v1/auth-results/:id` | Consumes a one-time, browser-safe callback result |
+| `POST` | `/identity/v1/password/setup-requests` | Sends a non-enumerating password setup/recovery email |
+| `GET` | `/identity/v1/password/setup-complete/:state` | One-time Keycloak action completion redirect |
 | `GET` | `/identity/v1/session` | Authentication state, opaque-session expiry, and selected tenant; never tokens |
 | `GET` | `/identity/v1/tenants` | Tenants in both Keycloak membership and DIGIT grants |
 | `POST` | `/identity/v1/contexts/_select` | Records the tenant and returns the normal DIGIT login response |
@@ -65,11 +69,15 @@ Frontend calls:
 1. Navigate the browser, rather than making an AJAX request, to:
 
    ```http
-   GET /identity/v1/authorize?method=password
+   GET /identity/v1/authorize?method=password&intent=signin&returnTo=/configurator/login
    ```
 
-   `magic_link`, `google`, and `github` use the same endpoint when advertised
-   by `GET /identity/v1/auth-methods`.
+   `google` and `github` use the same endpoint when advertised for `signin`.
+   Signup asks for `intent=signup`, where the provisioned policy normally orders
+   magic link, Google, and GitHub. Google and GitHub use `/authorize`; the client application starts
+   email signup by posting first name, last name, and email to
+   `POST /identity/v1/authentication/magic-link-requests`. The backend owns ordering
+   and availability; the UI does not keep a second provider list.
 
 2. Keycloak returns to `GET /identity/v1/callback?code=...&state=...`. The BFF
    consumes the code, stores Keycloak tokens server-side, sets the opaque
@@ -112,26 +120,76 @@ Frontend calls:
 tenant is no longer available to that user, and `503` means a required identity
 dependency is temporarily unavailable.
 
-Password, magic link, Google, and GitHub all enter the same Keycloak browser
-flow (brokered methods use `kc_idp_hint`) and converge on one callback. Keycloak
-tokens stay in Redis behind a random HttpOnly cookie. `SameSite=Lax` is the
+Password, Google, and GitHub enter Keycloak's browser flow (brokered methods use
+`kc_idp_hint`). Signup magic link does not render a Keycloak page: the BFF saves
+the client-collected name/email as a short-lived Redis login attempt and
+calls the extension's authenticated magic-link resource. Its emailed,
+single-use action token returns an Authorization Code + PKCE result directly to
+the same callback. Only then does the BFF mark the matching Keycloak profile
+complete and create the opaque session. Keycloak tokens stay in Redis behind a
+random HttpOnly cookie. `SameSite=Lax` is the
 default; a cross-site development frontend may set `IDENTITY_COOKIE_SAME_SITE=None`
 with a Secure cookie and an explicit `IDENTITY_ALLOWED_ORIGINS` entry.
 
 Password accepts either username or email. Magic link uses a second confidential
-Keycloak client bound to an email-only browser flow; this keeps the realm's
-normal password flow unchanged. The BFF stores the selected OIDC client with the
-one-time login attempt and opaque session, so callback exchange, refresh, and
-logout use the correct client without exposing either client secret. The method
-is advertised only when that Keycloak client exists, is enabled, and
-`KEYCLOAK_MAGIC_LINK_CLIENT_SECRET` is configured.
+Keycloak client and the extension's server-side resource, keeping the realm's
+normal password flow unchanged. The BFF stores the selected OIDC client with
+the one-time login attempt and opaque session, so callback exchange, refresh,
+and logout use the correct client without exposing either client secret. The
+method is advertised only when client policy includes it, that Keycloak client
+exists and is enabled, and `KEYCLOAK_MAGIC_LINK_CLIENT_SECRET` is configured.
+Password and OAuth methods are likewise derived from the BFF client policy and
+live Keycloak client/provider state; there is no BFF runtime environment catalog
+of login methods.
+
+Google and GitHub are pinned to the realm's `digit-first-broker-login` flow.
+When a provider returns an email already owned by a local account, Keycloak
+does not create a duplicate: it asks the person to confirm linking and prove
+control of the existing account by verified email or re-authentication. The
+realm keeps duplicate emails disabled and does not trust broker-provided email
+without that proof. Once linked, password, Google, and GitHub are credentials
+of the same Keycloak user and therefore see the same Organization memberships.
+
+Callback failures that Keycloak returns to the BFF are sent to the validated `returnTo` destination with only an
+opaque `authResult` id. The UI consumes that id once through
+`auth-results/:id`; provider details, tokens, and email addresses are never put
+in the URL. Both relative paths and absolute URLs from
+`IDENTITY_ALLOWED_ORIGINS` are accepted, so redirect and CORS policy have one
+deployment source of truth.
+
+Password setup is non-enumerating: every request gets the same `202` response,
+whether the account exists, has a password, or only has federated credentials.
+Eligible users receive Keycloak's one-use `UPDATE_PASSWORD` action (preceded by
+`VERIFY_EMAIL` when needed). Requests are rate-limited by IP and an HMAC of the
+normalized email (or the signed-in subject); raw identifiers are not logged.
+The deployed BFF trusts exactly the configured host-nginx and Kong proxy hops,
+so unrelated clients do not collapse into one gateway-IP bucket. Provider-only accounts
+whose email has not yet been verified must first sign in with that provider;
+the live BFF session then authorizes password setup without trusting an
+unverified email claim. The completion state and its browser result are each
+one-time and expire independently. Keycloak's execute-actions flow does not
+append a completion flag, so first-password completion is confirmed against
+the credential Admin API; a reset of an existing password is complete when its
+one-use action returns through the configured application link.
+
+The hosted Keycloak password screen keeps the configured Google and GitHub
+choices visible after a generic invalid-credential error. It wears the
+`configurator-blue` login theme (`keycloak/theme-src`, CCRS #2108), a Keycloakify
+build of the Configurator's auth shell that covers every screen in this journey
+and links back to the OIDC client's configured base URL for non-enumerating
+password help. An OAuth-first user can therefore switch to the provider that
+owns the account or return to recovery without the client application publicly
+inspecting an email's credential types. Keycloak's native forgot-password entry remains disabled so
+it cannot bypass the unverified-federated-account check above.
 
 Magic-link email is a single-use bearer credential valid for 10 minutes by
-default. Keycloak may create a previously unknown email user, but DIGIT account
+default. The BFF may create an unverified Keycloak user record before sending
+it, but DIGIT account
 creation and tenant access still require Organization membership and the normal
 managed-account rules; receiving a link grants no tenant by itself. A newly
-created Keycloak user completes the standard first-name/last-name profile screen
-once before the callback. Existing users go directly from the link to callback.
+created user goes directly from the email link to the callback without a hosted
+profile screen; the BFF applies the submitted name only after the matching email
+claim is verified. Existing users follow the same callback path.
 
 `contexts/_select` response:
 
@@ -260,8 +318,11 @@ calls.
 - **Mobile required:** egov-user requires a mobile number to create an employee.
   Login-time creation uses a `phone_number` claim. The worker uses
   `tenantMetadata.tenantAdmin.{mobileNumber,countryCode}` and separates an E.164
-  dial prefix before calling egov-user. The state tenant must contain a matching
-  `common-masters.MobileNumberValidation` rule. `memberships/_ensure` accepts
+  dial prefix before calling egov-user. For a newly onboarded root, tenant
+  foundation installs the selected country's default
+  `common-masters.MobileNumberValidation` rule and waits for it to become
+  readable before `DIGIT_ACCOUNT`; this prevents egov-user from using the host
+  deployment's fallback regex. `memberships/_ensure` accepts
   `mobileNumber` plus `countryCode` and otherwise reuses them from an existing
   managed account. Without a valid contact, that tenant's account is not created.
 - **Separate accounts per tenant:** a person in two Organizations has two DIGIT
@@ -329,9 +390,11 @@ Enabled only with `ONBOARDING_WORKER_ENABLED=true` plus `PGR_ONBOARDING_WORKER_U
    - `TENANT_FOUNDATION`: creates an independent root with the copied
      `tenant.tenants` schema, a root self-record, the tenant-local
      `ACCESSCONTROL-ROLES.roles` schema and only the roles required by the first
-     tenant-admin account, plus the encryption key needed by egov-user. Role
-     visibility is confirmed before account creation so asynchronous MDMS
-     persistence cannot race egov-user validation. It uses a separate
+     tenant-admin account, the selected country's default
+     `common-masters.MobileNumberValidation` record, plus the encryption key
+     needed by egov-user. Role and mobile-rule visibility are confirmed before
+     account creation so asynchronous MDMS persistence cannot race egov-user
+     validation or trigger its host-wide fallback. It uses a separate
      `DIGIT_PROVISIONER_*` credential and `DIGIT_MDMS_SCHEMA_*`,
      `DIGIT_MDMS_CREATE_URL`, `DIGIT_MDMS_V2_SEARCH_URL`,
      `DIGIT_FOUNDATION_SOURCE_TENANT`, and `DIGIT_ENC_GENERATE_KEY_URL`;
@@ -350,7 +413,8 @@ Enabled only with `ONBOARDING_WORKER_ENABLED=true` plus `PGR_ONBOARDING_WORKER_U
 Transient Keycloak/DIGIT/tenant-visibility errors are retryable. Conflicts
 (alias taken, colliding legacy account, missing tenant-admin mobile) are terminal.
 No application bootstrap is performed. Apart from the technical tenant schema,
-self-record, minimum tenant-admin role definitions and encryption key, the root
+self-record, minimum tenant-admin role definitions, prerequisite mobile rule,
+and encryption key, the root
 is empty: boundaries, departments, service definitions, actions/role-actions,
 workflow, localization and dashboard configuration are deferred to the
 management/configuration flow. The PGR signup
@@ -371,7 +435,13 @@ Setting `enable_keycloak: true` starts the BFF, Keycloak 26.7.3 and its dedicate
 Postgres database. Ansible runs `configure-keycloak.sh` with task-scoped secrets
 after Keycloak is healthy. It creates or updates the shared Organizations realm,
 confidential clients, protocol mappers, service-account permissions, roles,
-magic-link flow, and configured Google/GitHub providers.
+the magic-link resource client, journey-policy client attributes, and configured
+Google/GitHub providers.
+
+Realm SMTP is mandatory for the identity stack, not only for optional magic
+links. Password setup/reset, invitation activation, and email proof in the
+first-broker linking flow all depend on it; Ansible fails before bootstrap when
+the mail settings are incomplete.
 
 Kong publishes `/identity/v1` and `/auth`; the internal control plane is not
 registered with Kong. `deploy/digit-compose/` remains a standalone overlay and

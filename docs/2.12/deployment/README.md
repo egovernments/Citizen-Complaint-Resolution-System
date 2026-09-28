@@ -25,6 +25,7 @@ cd Citizen-Complaint-Resolution-System
 ```bash
 cd local-setup/scripts
 ./install-prereqs.sh
+export PATH="$HOME/.local/bin:$PATH"     # add to ~/.bashrc to keep it
 ```
 
 ## Configure Ansible Variables
@@ -38,6 +39,12 @@ cp inventory/host_vars/quickstart.yml.example inventory/host_vars/mycity.yml
 ```
 
 ### Update the variables listed below for deployment (rest are best defaults)
+
+`db_fast_path_ack_data_wipe` is not in the table below but must be set to `true` before the
+first deploy — preflight refuses to run until it is. It confirms the target holds no database
+you want to keep, because the DB fast path loads the shipped dump over whatever is there. If
+the box does hold a live database, see
+[postgres-volume-migration.md](../operations/postgres-volume-migration.md) first.
 
  Setting | What it is | Example |
 |---|---|---|
@@ -74,7 +81,7 @@ It takes around 60 minutes, use `tail -f /opt/digit/digit-stack-up.mycity.progre
 | Employee app | http://localhost/digit-ui/employee | Admin Username, Admin Password |
 | Citizen app | http://localhost/digit-ui/citizen | Mobile Number with OTP (default otp 123456 if unchanged) |
 | Configurator | http://localhost/configurator/ | Admin Username, Admin Password, State Tenant ID |
-| Health dashboard | http://localhost/status/ | |
+| Health dashboard | http://localhost/status/ | Username - digit-status, for password use `sudo docker exec -e BAO_TOKEN="$(sudo jq -r .root_token /opt/digit/.openbao/init.json)" openbao bao kv get -field=status_basic_auth_password kv/digit/mycity`, or the `status_basic_auth_password` you set in `mycity.yml` |
 | Dashboards (Grafana) | http://localhost/grafana/ | Username - admin, for password use `sudo docker exec -e BAO_TOKEN="$(sudo jq -r .root_token /opt/digit/.openbao/init.json)" openbao bao kv get -field=grafana_admin_password kv/digit/mycity` |
 
 Use domain name instead of localhost, if used one during configuration.

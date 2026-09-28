@@ -121,7 +121,7 @@ afterAll(async () => {
 });
 
 describe("onboarding worker", () => {
-  it("provisions tenant foundation, Organization, tenant-admin membership, roles and DIGIT account", async () => {
+  it("provisions the tenant prerequisites before creating its DIGIT account", async () => {
     const tenantAdmin = await kcUser("tenant-admin-one");
     pgr.queue.push(operation("op-1", tenantAdmin, "riverside", "+254712345678", "+254"));
 
@@ -143,7 +143,7 @@ describe("onboarding worker", () => {
       ]);
     expect(digit.encKeys.has("riverside")).toBe(true);
     expect([...digit.schemas.get("riverside")!.keys()].sort()).toEqual([
-      "ACCESSCONTROL-ROLES.roles", "tenant.tenants",
+      "ACCESSCONTROL-ROLES.roles", "common-masters.MobileNumberValidation", "tenant.tenants",
     ]);
     const tenantRecord = digit.mdms.get("riverside|tenant.tenants")?.[0]?.data;
     expect(tenantRecord).toMatchObject({

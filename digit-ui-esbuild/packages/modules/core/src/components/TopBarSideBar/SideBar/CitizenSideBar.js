@@ -8,6 +8,7 @@ import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
+import { SidebarFoot } from "./SidebarBrand";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
@@ -468,6 +469,10 @@ export const CitizenSideBar = ({
       closeOnClickOutside={true}
       onOutsideClick={() => toggleSidebar(false)}
       onSelect={({ item, index, parentIndex }) => onItemSelect({ item, index, parentIndex })}
+      // Employee only. On a phone the crest stays in the top bar right above
+      // the drawer, so the drawer takes just the eGov foot; a crest here too
+      // would show the same mark twice.
+      renderFooter={isEmployee ? () => <SidebarFoot expanded /> : undefined}
     />
   ) : (
     <StaticCitizenSideBar logout={onLogout} />

@@ -32,13 +32,18 @@ const DashboardLayout = ({
   readOnly = false,
   publicMode = false,
 }) => {
+  // Only the explicitly-configured overrides become inline variables. Writing
+  // the others as empty strings would still count as declarations and would
+  // shadow the stylesheet's tenant-theme fallback chain.
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
-    return {
-      "--brand-teal": theme.teal,
-      "--brand-dark": theme.dark,
-      "--brand-slate": theme.slate,
-    };
+    return Object.fromEntries(
+      Object.entries({
+        "--brand-teal": theme.teal,
+        "--brand-dark": theme.dark,
+        "--brand-slate": theme.slate,
+      }).filter(([, value]) => Boolean(value))
+    );
   }, []);
 
   return (

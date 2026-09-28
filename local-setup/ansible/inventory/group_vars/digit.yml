@@ -228,7 +228,13 @@ nginx_features:
   brand_assets: false       # /brand/ alias — requires /var/www/brand on host
   configurator: false       # /configurator + /configurator/assets
   configurator_caching: false  # /configurator/assets/ long-cache headers
-  status: false             # /status/ Gatus board (sub_filter rewrites)
+  status: true              # /status/ Gatus board (sub_filter rewrites). Default
+                            # on since the board is never served unauthenticated:
+                            # its nginx location always requires basic auth, and
+                            # the password is generated into OpenBao when the
+                            # operator does not pin status_basic_auth_password.
+                            # Read it with:
+                            #   bao kv get -field=status_basic_auth_password <secrets_path>
   grafana: true             # /grafana/ dashboards — the only public path to
                             # Grafana (#1604). Default on: it carries a real
                             # login since #1602. Set false to take Grafana off

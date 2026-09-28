@@ -213,7 +213,6 @@
               "action": "REASSIGN",
               "nextState": "PENDINGFORREASSIGNMENT",
               "roles": [
-                "GRO",
                 "PGR_LME",
                 "PGR_VIEWER"
               ],
@@ -235,7 +234,6 @@
               "action": "RESOLVE",
               "nextState": "RESOLVED",
               "roles": [
-                "GRO",
                 "PGR_LME",
                 "PGR_VIEWER"
               ],
