@@ -171,8 +171,13 @@
             "exec": [
               "var jsonData = pm.response.json();",
               "",
-              "// Get the list of ServiceDefs",
-              "var serviceDefs = jsonData.MdmsRes['RAINMAKER-PGR'].ServiceDefs;",
+              "// Complaint types live in RAINMAKER-PGR.ComplaintHierarchy (ServiceDefs is gone).",
+              "// Leaf rows carry a department and their code IS the serviceCode — same rule as",
+              "// scripts/ci-dataloader.py lookup_service_def. Mapped to the old ServiceDef shape.",
+              "var rows = (jsonData.MdmsRes['RAINMAKER-PGR'] || {}).ComplaintHierarchy || [];",
+              "var serviceDefs = rows.filter(function(r) { return r.department; }).map(function(r) {",
+              "    return { serviceCode: r.code, name: r.name || r.code, department: r.department };",
+              "});",
               "",
               "console.log(\"Total ServiceDefs:\", serviceDefs.length);",
               "",
@@ -186,7 +191,7 @@
               "    if (selected) {",
               "        console.log(\"Using serviceCode override:\", overrideCode);",
               "    } else {",
-              "        console.warn(\"serviceCode '\" + overrideCode + \"' not found in ServiceDefs, falling back to random\");",
+              "        console.warn(\"serviceCode '\" + overrideCode + \"' not found in ComplaintHierarchy, falling back to random\");",
               "    }",
               "}",
               "",
@@ -212,7 +217,7 @@
         "header": [],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"search with from and to values\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"moduleDetails\": [\n            {\n                \"moduleName\": \"RAINMAKER-PGR\",\n                \"masterDetails\": [\n                    {\n                        \"name\": \"ServiceDefs\"\n                    }\n                ]\n            }\n        ]\n    }\n}",
+          "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"search with from and to values\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{cityTenant}}\",\n        \"moduleDetails\": [\n            {\n                \"moduleName\": \"RAINMAKER-PGR\",\n                \"masterDetails\": [\n                    {\n                        \"name\": \"ComplaintHierarchy\"\n                    }\n                ]\n            }\n        ]\n    }\n}",
           "options": {
             "raw": {
               "language": "json"

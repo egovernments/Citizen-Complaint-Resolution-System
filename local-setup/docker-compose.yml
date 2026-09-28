@@ -1,5 +1,12 @@
+# `restart: on-failure:10` on the application services is for Tilt (Option B). Tilt starts each
+# service on its own with `docker compose up --no-deps`, so the `depends_on: service_healthy`
+# gates below only apply to a plain `docker compose up`. A service that calls a dependency at
+# boot (egov-hrms -> egov-user, for one) can start before that dependency is ready, exit 1, and
+# stay dead. The retry turns that race into a restart. Under plain Compose the gates still hold
+# and it only fires on a genuine crash. (Tilt's docker_compose(wait=True) is not an alternative:
+# `up --wait` fails on every one-shot job below that exits 0.)
 services:
-  # PostgreSQL with pre-loaded data (no migrations needed)
+  # PostgreSQL with pre-loaded data. Only PGR's schema is migrated on top (pgr-services-migration).
   postgres-db:
     image: postgres:16
     container_name: docker-postgres
@@ -127,7 +134,10 @@ services:
           - kafka-v2.kafka-cluster
 
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    # egovio mirror, not minio/minio: the upstream minio/minio and minio/mc repos are gone
+    # from Docker Hub ("object not found"), so a fresh `docker compose up` failed to pull.
+    # Same pins docker-compose.egov-digit.yaml already uses. The mirror is amd64-only.
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -152,7 +162,8 @@ services:
       - egov-network
 
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
+    restart: on-failure:10
     container_name: digit-minio-init
     depends_on:
       minio:
@@ -170,6 +181,7 @@ services:
   # MDMS Backend
   mdms-backend:
     image: egovio/mdms-v2:maven-jdk21-f3a7c13
+    restart: on-failure:10
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -206,6 +218,7 @@ services:
 
   egov-mdms-service:
     image: nginx:alpine
+    restart: on-failure:10
     container_name: egov-mdms-service
     depends_on:
       mdms-backend:
@@ -230,6 +243,7 @@ services:
 
   egov-enc-service:
     image: egovio/egov-enc-service:2.12-87e13fe
+    restart: on-failure:10
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -273,6 +287,7 @@ services:
 
   egov-idgen:
     image: egovio/egov-idgen:maven-jdk21-9f83afb
+    restart: on-failure:10
     container_name: egov-idgen
     depends_on:
       pgbouncer:
@@ -320,6 +335,7 @@ services:
 
   egov-user:
     image: egovio/egov-user:2.12-68f707e
+    restart: on-failure:10
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -385,6 +401,7 @@ services:
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
     image: egovio/nginx:alpine
+    restart: on-failure:10
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -402,6 +419,7 @@ services:
 
   egov-otp:
     image: egovio/egov-otp:v2.9.2-4a60f20
+    restart: on-failure:10
     container_name: egov-otp
     depends_on:
       pgbouncer:
@@ -439,6 +457,7 @@ services:
 
   user-otp:
     image: egovio/user-otp:master-e22c7c5
+    restart: on-failure:10
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -488,6 +507,7 @@ services:
 
   egov-notification-sms:
     image: egovio/egov-notification-sms:master-e22c7c5
+    restart: on-failure:10
     container_name: egov-notification-sms
     depends_on:
       redpanda:
@@ -520,6 +540,7 @@ services:
 
   egov-workflow-v2:
     image: egovio/egov-workflow-v2:2.12-87e13fe
+    restart: on-failure:10
     container_name: egov-workflow-v2
     depends_on:
       pgbouncer:
@@ -570,6 +591,7 @@ services:
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
     image: egovio/nginx:alpine
+    restart: on-failure:10
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -587,6 +609,7 @@ services:
 
   egov-localization:
     image: egovio/egov-localization:2.12-87e13fe
+    restart: on-failure:10
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -630,6 +653,7 @@ services:
 
   boundary-service:
     image: egovio/boundary-service:maven-jdk21-9f83afb
+    restart: on-failure:10
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -680,6 +704,7 @@ services:
 
   egov-accesscontrol:
     image: egovio/egov-accesscontrol:abac-changes-cb6a372
+    restart: on-failure:10
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -704,12 +729,11 @@ services:
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     ports:
       - 18090:8090
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 240s
+    # No healthcheck: this image is distroless — no /bin/sh, wget or curl — so any
+    # CMD-SHELL check sits at "health: starting" forever while the app serves traffic
+    # (same finding as egov-accesscontrol in docker-compose.egov-digit.yaml). Dependents
+    # must use `condition: service_started`. Real health is probed from outside the
+    # container by Gatus and scripts/health-check.sh.
     deploy:
       resources:
         limits:
@@ -720,6 +744,7 @@ services:
 
   egov-persister:
     image: egovio/egov-persister:maven-jdk21-9f83afb
+    restart: on-failure:10
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -762,6 +787,7 @@ services:
 
   egov-filestore:
     image: egovio/egov-filestore:maven-jdk21-9f83afb
+    restart: on-failure:10
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -808,6 +834,7 @@ services:
 
   egov-hrms:
     image: egovio/egov-hrms:2.12-beta-dd641a6
+    restart: on-failure:10
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -864,6 +891,7 @@ services:
 
   egov-bndry-mgmnt:
     image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+    restart: on-failure:10
     container_name: egov-bndry-mgmnt
     depends_on:
       pgbouncer:
@@ -914,6 +942,7 @@ services:
 
   egov-url-shortening:
     image: egovio/egov-url-shortening:maven-jdk21-983e8b2
+    restart: on-failure:10
     container_name: egov-url-shortening
     depends_on:
       pgbouncer:
@@ -947,10 +976,47 @@ services:
     networks:
       - egov-network
 
+  # One-shot Flyway run for PGR's schema — same image and settings as
+  # pgr-services-migration in docker-compose.migrations.yml. full-dump.sql's PGR
+  # history stops at 2020, but the pinned app image writes columns added since
+  # (e.g. eg_pgr_service_v2.extended_attributes); without this the persister's
+  # INSERT fails and every complaint is lost after PGR has already answered 200.
+  # Keep the tag in lockstep with the pgr-services image below.
+  # Connects to postgres-db directly: pgbouncer's transaction mode breaks Flyway.
+  pgr-services-migration:
+    image: egovio/pgr-services-db:2.12-5137119
+    container_name: pgr-services-migration
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      # pgr's analytics migrations build materialized views over these services' tables.
+      boundary-service:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      mdms-backend:
+        condition: service_healthy
+      egov-workflow-v2:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_TABLE: pgr_services_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    # Retries until postgres-db accepts connections: under Tilt, depends_on is not applied.
+    restart: on-failure:10
+    networks:
+      - egov-network
+
   pgr-services:
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
+    restart: on-failure:10
     container_name: pgr-services
     depends_on:
+      pgr-services-migration:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
       redpanda:
@@ -965,6 +1031,9 @@ services:
         condition: service_healthy
       egov-localization:
         condition: service_healthy
+      egov-accesscontrol:
+        # service_started, not service_healthy: accesscontrol has no healthcheck (see its block).
+        condition: service_started
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
@@ -985,7 +1054,15 @@ services:
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_ENC_HOST: http://egov-enc-service:1234
+      # PGR's ABAC lookup (MDMSUtils#fetchAccessControlActions). The application.properties
+      # default is localhost:8080 — PGR itself — so without this every employee search fails
+      # with "access-control call failed". Kept in step with docker-compose.egov-digit.yaml.
+      EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_UI_APP_HOST: http://localhost:18080
+      # EscalationScheduler reads the state tenant from the keys of this map; unset, it
+      # falls back to the default SLA and auto-escalation never fires.
+      EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
       NEW_COMPLAINT_ENABLED: 'true'
@@ -1042,6 +1119,7 @@ services:
 
   kong:
     image: kong:3.6
+    restart: on-failure:10
     container_name: kong-gateway
     environment:
       KONG_DATABASE: "off"

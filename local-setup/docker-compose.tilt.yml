@@ -1,28 +1,24 @@
-# Image overrides for the hot-reload Tiltfile (Option B, `tilt up`).
+# Image override for the hot-reload Tiltfile (Option B, `tilt up`).
 #
 # Why this file exists:
-#   docker-compose.yml pins pgr-services and digit-ui to published registry images so that
-#   Option A (`docker compose up`) works with no local toolchain. The default Tiltfile, however,
-#   builds those two services from source via docker_build('pgr-services-dev') and
-#   docker_build('digit-ui-dev').
+#   docker-compose.yml pins pgr-services to a published registry image so that Option A
+#   (`docker compose up`) works with no local toolchain. The default Tiltfile, however, builds
+#   pgr-services from source via docker_build('pgr-services-dev').
 #
 #   Tilt binds a docker_build to a Compose service by matching the built image name against the
-#   service's `image:` field. Registry pins never match the *-dev names, so Tilt built both images
-#   and then silently ran the registry images instead — hot reload appeared to work and did not.
+#   service's `image:` field. The registry pin never matches the -dev name, so Tilt built the image
+#   and then silently ran the registry image instead — hot reload appeared to work and did not.
 #   Tilt reports no warning for this (the resource simply ends up with zero image targets).
 #
-#   Loading this override alongside docker-compose.yml makes the names match, so the images Tilt
-#   builds are the images that actually run.
+#   Loading this override alongside docker-compose.yml makes the names match, so the image Tilt
+#   builds is the image that actually runs.
 #
-# Only the default `Tiltfile` loads this. Option A and Tiltfile.db-dump are unaffected and keep
-# using the registry pins in docker-compose.yml.
+# digit-ui is deliberately NOT overridden: the container keeps the registry image, and UI work
+# goes through the Tiltfile's 'ui-dev' resource (esbuild dev server with live reload).
 #
-# In CI mode (TILT_CI=1) the Tiltfile pulls the registry images and re-tags them to these same
-# *-dev names, so these overrides resolve correctly there too.
+# Only the default `Tiltfile` loads this, and only outside CI mode. Option A, Tiltfile.db-dump
+# and `TILT_CI=1 tilt up` / `tilt ci` keep the registry pins in docker-compose.yml.
 
 services:
   pgr-services:
     image: pgr-services-dev
-
-  digit-ui:
-    image: digit-ui-dev

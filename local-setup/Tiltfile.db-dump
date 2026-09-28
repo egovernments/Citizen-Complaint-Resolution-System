@@ -4,8 +4,8 @@
 # All services use pre-built images; no local builds or hot reload.
 #
 # Usage:
-#   cp Tiltfile.db-dump Tiltfile   # or: TILT_FILE=Tiltfile.db-dump tilt up
-#   tilt up
+#   tilt up -f Tiltfile.db-dump
+#   tilt down -f Tiltfile.db-dump    # same -f flag to stop
 
 allow_k8s_contexts(k8s_context())
 load('ext://uibutton', 'cmd_button', 'location')
@@ -75,6 +75,9 @@ dc_resource('egov-notification-sms', labels=['core-services'],
     links=[link('http://localhost:18093/notification-sms/actuator/health', 'Health')])
 
 # ==================== PGR ====================
+dc_resource('pgr-services-migration', labels=['pgr'],
+    resource_deps=['postgres-db', 'boundary-service', 'egov-user', 'mdms-backend', 'egov-workflow-v2'])
+
 dc_resource('pgr-services', labels=['pgr'],
     links=[link('http://localhost:18083/pgr-services/health', 'Health')])
 
