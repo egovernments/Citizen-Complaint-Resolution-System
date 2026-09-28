@@ -286,12 +286,12 @@ tree has a name — the **hierarchy**.
 
 You choose one of two sources:
 
-| | **Fetch from OpenStreetMap** | **Upload from Excel** |
+| | **Fetch boundaries** | **Upload from Excel** |
 |---|---|---|
 | Effort | search for your city, click | fill in a spreadsheet |
 | You get | real map polygons, so map pins resolve to the right ward | names and codes; polygons only if you also supply a GeoJSON file |
-| Control | whatever OSM has | exactly your official list |
-| Good for | a quick start, or a city OSM covers well | official boundaries that must match a government list |
+| Control | the official government sets (OCHA COD-AB / geoBoundaries) when the boundary server has them, otherwise OpenStreetMap | exactly your official list |
+| Good for | a quick start, with official levels down to wards or villages in many countries | boundaries that must match your own list exactly |
 
 Both then ask for the **hierarchy**: either create a new one — give it a name
 (`ADMIN` unless you have a reason) and list your levels top to bottom — or
