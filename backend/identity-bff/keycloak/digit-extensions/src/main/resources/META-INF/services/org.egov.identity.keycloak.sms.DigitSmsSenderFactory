@@ -1,0 +1,3 @@
+org.egov.identity.keycloak.sms.LogSmsSenderFactory
+org.egov.identity.keycloak.sms.MailpitSmsSenderFactory
+org.egov.identity.keycloak.sms.HttpSmsSenderFactory

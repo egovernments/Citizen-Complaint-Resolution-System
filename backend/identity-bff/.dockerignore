@@ -9,3 +9,4 @@ tests
 mocks
 docs
 deploy
+**/target
