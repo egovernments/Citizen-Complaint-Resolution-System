@@ -1,24 +1,16 @@
-# Binaries
-/server
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary
-*.test
-
-# Output of the go coverage tool
-coverage.out
-coverage.html
-
-# Dependency directories
-vendor/
+# Maven build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
 
 # IDE
 .idea/
+*.iml
+*.ipr
+*.iws
 .vscode/
+.settings/
+.classpath
+.project
 *.swp
 *.swo
 *~
@@ -32,14 +24,5 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Build output
-dist/
-build/
-
-# Temporary files
-tmp/
-*.tmp
+# Logs
 *.log
-
-# Air (hot reload)
-tmp/

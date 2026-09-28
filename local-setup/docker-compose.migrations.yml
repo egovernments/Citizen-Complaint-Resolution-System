@@ -151,6 +151,38 @@ services:
       digit-config-service-migration:
         condition: service_completed_successfully
 
+  # Was absent while this service was a Go binary that self-migrated with GORM
+  # AutoMigrate. It is now Spring Boot + Flyway, so it joins the same pattern:
+  # the migrator owns the schema and the app's embedded Flyway is off.
+  digit-user-preferences-service-migration:
+    image: egovio/digit-user-preferences-service-db:2.12-5137119
+    container_name: digit-user-preferences-service-migration
+    profiles: ["notifications"]   # active exactly when digit-user-preferences-service is
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      db-history-normalize:
+        condition: service_completed_successfully
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      # This service's migrate.sh sets currentSchema per SCHEMA_NAME.
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: digit_user_preferences_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
+
+  digit-user-preferences-service:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      digit-user-preferences-service-migration:
+        condition: service_completed_successfully
+
   # ── Phase 3 · core services ─────────────────────────────────────────────────
   # Pull the EXACT egovio/<service>-db:<tag> images K8s pins (image-level parity).
   # The dump is re-baked so its Flyway history carries these images' real
