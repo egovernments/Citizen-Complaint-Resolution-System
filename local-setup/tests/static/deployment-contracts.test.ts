@@ -123,6 +123,21 @@ describe('ansible playbook-deploy.yml', () => {
     expect(task).toMatch(/\(\['otp'\]\s+if \(enable_otp_services \| default\(false\)\) or\s+\(\(enable_keycloak \| default\(false\)\) and\s+'phone_otp' in \(identity_citizen_signin_methods/);
   });
 
+  // #2167 review: every IDENTITY_SMS_* the compose file reads is rendered, and
+  // the Mailpit hints name a host that can exist (local-setup ships none).
+  test('renders every citizen SMS sender setting and no dangling Mailpit host', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    for (const name of new Set(compose.match(/\$\{(IDENTITY_SMS_[A-Z_]+)/g)!.map((m) => m.slice(2)))) {
+      expect(env).toMatch(new RegExp(`^${name}=`, 'm'));
+    }
+    for (const file of ['local-setup/ansible/playbook-deploy.yml',
+      'local-setup/ansible/inventory/group_vars/digit.yml',
+      'local-setup/ansible/inventory/host_vars/_example.yml']) {
+      expect(read(file)).not.toContain('http://mailpit:8025');
+    }
+  });
+
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
   // must reach the MCP tenant_bootstrap on BOTH passes (root + city);
   // `default(omit)` keeps it absent — the only valid off state.

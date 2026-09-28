@@ -705,10 +705,13 @@ identity_citizen_signin_methods: [phone_otp]
 # Citizen SMS OTP sender: log (default) | mailpit (DEV ONLY) | http.
 # `log` delivers no SMS: with phone_otp sign-in enabled the deploy fails unless
 # identity_sms_log_acknowledged: true.
-# For a dev box with Mailpit on the Docker network:
+# For a dev box, start a Mailpit on the stack's egov-network (local-setup
+# ships none; see group_vars/digit.yml for a one-line `docker run` that names
+# it identity-mailpit with MP_WEBROOT=/mailpit), then:
 #   identity_sms_sender: mailpit
 #   identity_sms_allow_dev: true
-#   identity_sms_mailpit_url: "http://mailpit:8025/mailpit"
+#   identity_sms_mailpit_url: "http://identity-mailpit:8025/mailpit"
+# `http` also takes identity_sms_http_token (bearer; keep it out of git).
 identity_sms_sender: log
 identity_sms_log_acknowledged: false
 identity_sms_allow_dev: false

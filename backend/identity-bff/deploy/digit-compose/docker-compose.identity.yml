@@ -14,7 +14,9 @@
 # enable it on a deployment real citizens use.
 services:
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-digit-keycloak-magic-link:26.7.3-0.75}
+    # Same default as local-setup (build/build-config.yml publishes
+    # keycloak/Dockerfile.magic-link as identity-keycloak).
+    image: ${KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
     command: ["start"]
     # Replace the legacy start-dev environment: no KEYCLOAK_ADMIN bootstrap
     # account is created from a persisted file. A temporary admin is created

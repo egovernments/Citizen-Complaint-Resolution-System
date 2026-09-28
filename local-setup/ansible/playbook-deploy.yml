@@ -5582,7 +5582,8 @@
         fail_msg: >-
           identity_sms_sender must be log, mailpit or http. `mailpit` is
           development-only and needs identity_sms_allow_dev: true plus
-          identity_sms_mailpit_url (e.g. http://mailpit:8025/mailpit);
+          identity_sms_mailpit_url (a Mailpit you run on egov-network, e.g.
+          http://identity-mailpit:8025/mailpit; local-setup ships none);
           `http` needs identity_sms_http_url. `log` delivers no SMS, so with
           citizen phone_otp sign-in enabled it needs
           identity_sms_log_acknowledged: true.
