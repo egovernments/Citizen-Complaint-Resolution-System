@@ -219,6 +219,14 @@ describe("digit-citizen login-sms-otp.ftl", () => {
         expect(next).toBeEnabled();
         expect(container.querySelector("#kc-otp-form")).toContainElement(hidden);
     });
+
+    it("replaces the digit when typing into an already-filled box", async () => {
+        const { container } = await renderDigit("digit-citizen", "login-sms-otp.ftl");
+        const boxes = container.querySelectorAll<HTMLInputElement>(".dg-otp__box");
+        const hidden = container.querySelector<HTMLInputElement>("input[name='otp']")!;
+        fireEvent.paste(container.querySelector(".dg-otp")!, {
+            clipboardData: { getData: () => "123456" }
+        });
         // The first box keeps the old digit and the new one side by side.
         fireEvent.change(boxes[0]!, { target: { value: "17" } });
         expect(hidden.value).toBe("723456");

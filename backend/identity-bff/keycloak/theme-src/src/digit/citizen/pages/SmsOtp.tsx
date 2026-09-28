@@ -21,7 +21,14 @@ function OtpBoxes(props: { length: number; value: string; onChange: (value: stri
     }, []);
 
     const handleInput = (index: number, raw: string) => {
-        const digits = raw.replace(/\D/g, "");
+        let digits = raw.replace(/\D/g, "");
+        // Typing into a filled box (the first one accepts a whole code, for
+        // autofill) leaves the old digit beside the new one: replace it
+        // rather than treating the pair as a paste that clears the rest.
+        const previous = chars[index];
+        if (digits.length === 2 && previous && digits.includes(previous)) {
+            digits = digits.startsWith(previous) ? digits.slice(1) : digits.slice(0, 1);
+        }
         // Autofill (one-time-code) and some keyboards deliver the whole code
         // into one box; treat that as a paste.
         if (digits.length > 1) {
