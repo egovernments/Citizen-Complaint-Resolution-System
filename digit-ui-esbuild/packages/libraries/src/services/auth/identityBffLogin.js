@@ -17,7 +17,24 @@ export function surfaceBase(tenant, surface) {
   return `/${tenant.appBasePath}/${surface}`;
 }
 
-/** Only same-tenant, same-surface relative paths are accepted as `from`. */
+// Sign-in entry pages per surface. A `from` pointing back at one of them would
+// make the login page redirect to itself after every session exchange.
+const SIGNIN_ENTRY_PATHS = Object.freeze({
+  employee: Object.freeze(["user/login", "user/language-selection"]),
+  citizen: Object.freeze(["login", "register", "select-language"]),
+});
+
+const isSigninEntry = (requested, base) => {
+  const surface = base.endsWith("/employee") ? "employee" : "citizen";
+  const path = requested.split(/[?#]/)[0].replace(/\/+$/, "");
+  return SIGNIN_ENTRY_PATHS[surface].some((entry) =>
+    path === `${base}/${entry}` || path.startsWith(`${base}/${entry}/`));
+};
+
+/**
+ * Only same-tenant, same-surface relative paths are accepted as `from`; the
+ * surface's own login/register/language pages collapse to the surface base.
+ */
 export function restrictDestination(requested, base) {
   if (typeof requested !== "string") return base;
   if (requested === base || requested.startsWith(`${base}/`) || requested.startsWith(`${base}?`)) {
@@ -30,6 +47,7 @@ export function restrictDestination(requested, base) {
       return decoded === "." || decoded === "..";
     };
     if (segments.some(isDotSegment)) return base;
+    if (isSigninEntry(requested, base)) return base;
     return requested;
   }
   return base;

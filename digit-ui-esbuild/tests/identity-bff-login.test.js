@@ -152,6 +152,29 @@ test("`from` is restricted to the same tenant and surface", () => {
   rejected.forEach((from) => assert.equal(restrictDestination(from, citizenBase), citizenBase, String(from)));
 });
 
+test("`from` pointing at the surface's own sign-in pages collapses to the base", () => {
+  const citizenBase = surfaceBase(TENANT, "citizen");
+  const employeeBase = surfaceBase(TENANT, "employee");
+  [
+    "/bomet-county/digit-ui/citizen/login",
+    "/bomet-county/digit-ui/citizen/login/",
+    "/bomet-county/digit-ui/citizen/login?from=%2Fbomet-county%2Fdigit-ui%2Fcitizen%2Flogin",
+    "/bomet-county/digit-ui/citizen/login/otp",
+    "/bomet-county/digit-ui/citizen/register/name",
+    "/bomet-county/digit-ui/citizen/select-language",
+  ].forEach((from) => assert.equal(restrictDestination(from, citizenBase), citizenBase, from));
+  [
+    "/bomet-county/digit-ui/employee/user/login",
+    "/bomet-county/digit-ui/employee/user/login?from=x",
+    "/bomet-county/digit-ui/employee/user/language-selection",
+  ].forEach((from) => assert.equal(restrictDestination(from, employeeBase), employeeBase, from));
+  // Pages that merely share a prefix are still honoured.
+  assert.equal(restrictDestination("/bomet-county/digit-ui/citizen/login-help", citizenBase),
+    "/bomet-county/digit-ui/citizen/login-help");
+  assert.equal(restrictDestination("/bomet-county/digit-ui/employee/pgr/inbox", employeeBase),
+    "/bomet-county/digit-ui/employee/pgr/inbox");
+});
+
 // ------------------------------------------------------------ employee session
 
 test("employee session exchange passes surface=employee and scopes roles to the route tenant", async () => {
