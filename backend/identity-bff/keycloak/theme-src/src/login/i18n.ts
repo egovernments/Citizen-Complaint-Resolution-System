@@ -42,7 +42,16 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitVerification: "Verification",
             digitSessionEyebrow: "Session",
             digitNonEnumerating:
-                "If an eligible account exists, we will email a secure one-use link. We never reveal which sign-in methods an email uses."
+                "If an eligible account exists, we will email a secure one-use link. We never reveal which sign-in methods an email uses.",
+            // digit-citizen phone + SMS OTP authenticator errors (#2167). The
+            // SPI sets these keys; Keycloak resolves them from this bundle and
+            // the theme maps each to the legacy digit-ui text where one exists.
+            digitInvalidPhone: "Please enter a valid mobile number",
+            digitInvalidOtp: "The OTP you entered is invalid.",
+            digitOtpExpired: "The OTP has expired. Request a new one.",
+            digitTooManyAttempts: "Too many attempts. Please try again later.",
+            digitResendTooSoon: "Please wait before requesting another OTP.",
+            digitSmsSendFailed: "Failed to send OTP. Please try again."
         },
         fr: {
             digitErrorTitle: "Un problème est survenu",
@@ -74,7 +83,13 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitVerification: "Vérification",
             digitSessionEyebrow: "Session",
             digitNonEnumerating:
-                "Si un compte éligible existe, nous enverrons un lien sécurisé à usage unique. Nous ne révélons jamais les méthodes de connexion associées à une adresse."
+                "Si un compte éligible existe, nous enverrons un lien sécurisé à usage unique. Nous ne révélons jamais les méthodes de connexion associées à une adresse.",
+            digitInvalidPhone: "Veuillez saisir un numéro de mobile valide",
+            digitInvalidOtp: "Le code OTP saisi n'est pas valide.",
+            digitOtpExpired: "Le code OTP a expiré. Demandez-en un nouveau.",
+            digitTooManyAttempts: "Trop de tentatives. Veuillez réessayer plus tard.",
+            digitResendTooSoon: "Veuillez patienter avant de demander un nouveau code OTP.",
+            digitSmsSendFailed: "Échec de l'envoi du code OTP. Veuillez réessayer."
         }
     })
     .build();

@@ -1,4 +1,19 @@
-# Configurator Blue — Keycloak login theme
+# DIGIT Keycloak login themes
+
+One Keycloakify build, one jar (`configurator-blue-login-theme.jar`), three
+login themes selected per client by `login_theme`:
+
+| Theme | For | Source |
+| --- | --- | --- |
+| `configurator-blue` | the Configurator (`digit-identity-bff`, magic link) | `src/login` |
+| `digit-employee` | digit-ui employee sign-in (`digit-ui-employee`, #2167) | `src/digit/employee` |
+| `digit-citizen` | digit-ui citizen phone + SMS OTP (`digit-ui-citizen`, #2167) | `src/digit/citizen` |
+
+`src/login/KcPage.tsx` dispatches on `kcContext.themeName`; each theme is a
+separate lazy chunk, so one theme's stylesheet never loads for another.
+The digit themes are described at the end of this file.
+
+## Configurator Blue
 
 A [Keycloakify](https://keycloakify.dev) login theme so that the screens
 Keycloak owns look like the Configurator. It exists because password sign-in
@@ -120,3 +135,64 @@ matching the image's Keycloak 26.7.3. When Keycloak is upgraded:
    re-check the overridden pages against the new `keycloak.v2` sources;
 3. run `npm test` and `npm run screenshots`;
 4. rebuild the image — `kc.sh build` fails loudly if the jar does not fit.
+
+## digit-employee and digit-citizen
+
+The legacy digit-ui login pages, rendered by Keycloak (#2167):
+`pages/employee/Login/login.js` (V2LoginShell + V2Card, privacy consent,
+carousel variant) and `pages/citizen/Login/{SelectMobileNumber,SelectOtp,SelectName}.js`
+in the citizen top bar and footer. `src/digit/styles/digit.css` restates the
+*computed* styles measured on the running legacy pages rather than vendoring
+digit-ui's stylesheets; each block names the legacy selector it mirrors.
+
+### Tenant branding
+
+- The tenant slug comes from `kcContext.digitTenant` (set by the DIGIT
+  FreeMarker provider from the `digit_tenant` authorization parameter), else
+  from `digit_tenant` on the page URL, remembered in sessionStorage under the
+  login tab's `tab_id`.
+- The theme fetches `GET {DIGIT_IDENTITY_BFF_BASE_URL}/identity/v1/tenant-contexts/{slug}/branding`
+  (`?locale=fr_FR` etc. for a non-English Keycloak locale) and caches it for
+  the browser session. Nothing tenant-coloured paints until it resolves; on any
+  failure the pages render the default DIGIT look.
+- `themeConfig` is applied by `src/digit/theme/applyTheme.ts`, a port of
+  digit-ui-esbuild `src/theme/applyTheme.js` (default theme first, tenant record
+  on top). `tests/digit/applyTheme.test.ts` checks it against output recorded
+  from the original (`node scripts/generate-applytheme-golden.cjs`).
+- Strings come from `branding.messages`; `src/digit/branding/strings.ts`
+  lists every key the pages read with digit-ui's own English fallback. The BFF
+  must also include `TENANT_TENANTS_{CODE}`, the keys a PrivacyPolicy record
+  refers to (`privacyMessageKeys`) and carousel titles/descriptions.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DIGIT_IDENTITY_BFF_BASE_URL` | empty (same origin) | Where the identity BFF's public branding endpoint is served. |
+
+### Keycloak contract
+
+- Custom pages (emitted because `src/login/KcContext.ts` declares them):
+  `login-phone-number.ftl` (posts `phoneNumber`, the national digits; reads
+  `countryCode`, `mobileNumberRegex`), `login-sms-otp.ftl` (posts `otp`, or
+  `resend=true`; reads `maskedPhoneNumber`, `resendAvailableInSeconds`,
+  `otpLength`), `login-phone-profile.ftl` (posts `firstName`).
+- Error keys the SPI sets are defined in `src/login/i18n.ts`
+  (`digitInvalidPhone`, `digitInvalidOtp`, `digitOtpExpired`,
+  `digitTooManyAttempts`, `digitResendTooSoon`, `digitSmsSendFailed`).
+  Invalid phone / OTP show inline the way digit-ui does; the rest, and every
+  other Keycloak error, raise the legacy toast.
+
+### Working on them
+
+```bash
+npm run dev
+# http://localhost:5173/dev.html?theme=digit-employee&page=login.ftl
+# http://localhost:5173/dev.html?theme=digit-citizen&page=login-sms-otp.ftl&state=invalid-otp
+```
+
+`state` is one of `invalid-credentials`, `account-disabled`, `invalid-phone`,
+`invalid-otp`, `resend-ready`, `sms-failed`; `tenant=none` drops the slug
+(default look), `tenant=bomet-carousel` shows the carousel layout. The dev
+server answers the branding endpoint from `tests/digit/fixtures/branding-{slug}.json`
+(Bomet County's real ThemeConfig v3 and login strings, a placeholder crest) and
+serves digit-ui's "Powered by DIGIT" wordmarks at `/digit-ui/brand/`.
+Screenshot baselines for both themes are in `tests/visual/digit.spec.ts`.

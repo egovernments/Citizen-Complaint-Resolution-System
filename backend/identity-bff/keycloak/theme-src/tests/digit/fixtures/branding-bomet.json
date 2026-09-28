@@ -1,0 +1,239 @@
+{
+  "tenant": {
+    "urlSlug": "bomet",
+    "tenantId": "ke",
+    "name": "Bomet County"
+  },
+  "stateInfo": {
+    "code": "ke",
+    "name": "Bomet County",
+    "logoUrl": "/dev-fixtures/bomet-county-logo.svg",
+    "logoUrlWhite": "/dev-fixtures/bomet-county-logo.svg",
+    "bannerUrl": "",
+    "languages": [
+      {
+        "label": "ENGLISH",
+        "value": "en_IN"
+      },
+      {
+        "label": "FRANÇAIS",
+        "value": "fr_FR"
+      }
+    ],
+    "defaultLocale": "en_IN"
+  },
+  "themeConfig": {
+    "code": "bomet-county",
+    "name": "Bomet County Blue",
+    "colors": {
+      "grey": {
+        "bg": "#E6E6E6",
+        "mid": "#EEEEEE",
+        "dark": "#787878",
+        "light": "#FAFAFA",
+        "lighter": "#F2F2F2",
+        "disabled": "#C5C5C5"
+      },
+      "link": {
+        "hover": "#1D4FD8",
+        "normal": "#2563EB"
+      },
+      "text": {
+        "muted": "#6B7280",
+        "heading": "#1D2433",
+        "primary": "#1D2433",
+        "secondary": "#4B5563"
+      },
+      "error": "#E02D3A",
+      "border": "#D6D5D4",
+      "loader": "#2563EB",
+      "chart-1": "#2563EB",
+      "chart-2": "#E5202A",
+      "chart-3": "#128F21",
+      "chart-4": "#FEC931",
+      "chart-5": "#F58831",
+      "digitv2": {
+        "chart-1": "#2563EB",
+        "chart-2": "#E5202A",
+        "chart-3": "#128F21",
+        "chart-4": "#FEC931",
+        "chart-5": "#F58831",
+        "alert-info": "#1D4ED8",
+        "primary-bg": "#EFF6FF",
+        "alert-info-bg": "#EFF6FF",
+        "alert-error-bg": "#FEF1F2",
+        "header-sidenav": "#0B1F3A",
+        "alert-success-bg": "#E0F2E1",
+        "text-color-disabled": "#B1B4B6"
+      },
+      "page-bg": "#FFFFFF",
+      "primary": {
+        "dark": "#0B1F3A",
+        "main": "#2563EB",
+        "light": "#EFF6FF",
+        "accent": "#0B1F3A",
+        "selected-bg": "#EFF6FF"
+      },
+      "success": "#128F21",
+      "input-bg": "#FFFFFF",
+      "progress": "#2563EB",
+      "header-bg": "#0B1F3A",
+      "info-dark": "#1D4ED8",
+      "primary-1": "#0B1F3A",
+      "primary-2": "#2563EB",
+      "secondary": "#0B1F3A",
+      "card-error": "#C62828",
+      "error-dark": "#8B0000",
+      "input-text": "#1D2433",
+      "sidebar-bg": "#0B1F3A",
+      "text-muted": "#6B7280",
+      "tooltip-bg": "#0B1F3A",
+      "card-border": "#E5E7EB",
+      "header-icon": "#FFFFFF",
+      "header-text": "#FFFFFF",
+      "input-label": "#1D2433",
+      "table-hover": "#EFF6FF",
+      "card-divider": "#E5E7EB",
+      "card-success": "#2E7D32",
+      "input-border": "#E1E6EF",
+      "input-helper": "#6B7280",
+      "primary-1-bg": "#EFF6FF",
+      "primary-2-bg": "#EFF6FF",
+      "table-border": "#E5E7EB",
+      "table-row-bg": "#FFFFFF",
+      "text-heading": "#1D2433",
+      "text-primary": "#1D2433",
+      "tooltip-text": "#FFFFFF",
+      "warning-dark": "#9E5F00",
+      "table-alt-row": "#FAFAFA",
+      "text-disabled": "#C5C5C5",
+      "status-info-bg": "#EFF6FF",
+      "table-row-text": "#1D2433",
+      "table-selected": "#EFF6FF",
+      "text-secondary": "#4B5563",
+      "status-error-bg": "#FEF1F2",
+      "table-header-bg": "#F3F4F6",
+      "sidebar-hover-bg": "#16305A",
+      "status-info-text": "#1D4ED8",
+      "table-hover-text": "#1D2433",
+      "input-placeholder": "#9CA3AF",
+      "page-secondary-bg": "#FAFAFA",
+      "status-error-text": "#E02D3A",
+      "status-success-bg": "#E0F2E1",
+      "table-header-text": "#1D2433",
+      "input-border-error": "#C62828",
+      "input-border-focus": "#2563EB",
+      "sidebar-hover-text": "#FFFFFF",
+      "button-primary-text": "#FFFFFF",
+      "sidebar-icon-active": "#FFFFFF",
+      "sidebar-selected-bg": "#2563EB",
+      "sidebar-text-active": "#FFFFFF",
+      "status-success-text": "#128F21",
+      "status-warning-text": "#9E5F00",
+      "table-selected-text": "#1D2433",
+      "button-tertiary-text": "#2563EB",
+      "input-border-default": "#E1E6EF",
+      "sidebar-text-default": "#C7D2E3",
+      "button-primary-border": "#2563EB",
+      "button-secondary-text": "#2563EB",
+      "sidebar-selected-text": "#FFFFFF",
+      "button-primary-bg-hover": "#1D4FD8",
+      "button-secondary-border": "#2563EB",
+      "button-primary-bg-default": "#2563EB",
+      "button-primary-bg-pressed": "#1E40AF",
+      "button-secondary-bg-hover": "#F9FAFB",
+      "button-primary-disabled-bg": "#E5E7EB",
+      "button-secondary-bg-default": "#FFFFFF",
+      "button-secondary-bg-pressed": "#F3F4F6",
+      "button-primary-disabled-text": "#9CA3AF"
+    },
+    "version": "3"
+  },
+  "mobileValidation": {
+    "countryCode": "+254",
+    "mobileNumberRegex": "^(0?[17][0-9]{8}|[6-9][0-9]{9})$"
+  },
+  "loginConfig": null,
+  "privacyPolicy": {
+    "module": "HCM",
+    "header": "DIGIT_PRIVACY_POLICY",
+    "contents": [
+      {
+        "header": "DIGIT_PRIVACY_POLICY_SECTION_DATA",
+        "descriptions": [
+          {
+            "text": "DIGIT_PRIVACY_POLICY_DATA_1",
+            "type": "points"
+          },
+          {
+            "text": "DIGIT_PRIVACY_POLICY_DATA_2",
+            "type": "points"
+          }
+        ]
+      },
+      {
+        "header": "DIGIT_PRIVACY_POLICY_SECTION_USE",
+        "descriptions": [
+          {
+            "text": "DIGIT_PRIVACY_POLICY_USE_1",
+            "type": "step",
+            "isBold": true
+          },
+          {
+            "text": "DIGIT_PRIVACY_POLICY_USE_2",
+            "type": "step"
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "digitFooter": "/digit-ui/brand/digit-footer.png",
+    "digitFooterBw": "/digit-ui/brand/digit-footer-bw.png",
+    "digitHomeUrl": "https://www.digit.org/"
+  },
+  "messages": {
+    "CORE_COMMON_CHANGE_PASSWORD": "Change Password",
+    "CORE_COMMON_CONTINUE": "Continue",
+    "CORE_COMMON_FORGOT_PASSWORD": "Forgot Password?",
+    "CORE_COMMON_LOGIN": "Login",
+    "CORE_COMMON_MOBILE_NUMBER": "Mobile Number",
+    "CORE_COMMON_NAME": "Name",
+    "CORE_COMMON_NAME_VALIDMSG": "Please enter a valid Name",
+    "CORE_COMMON_REQUIRED_ERRMSG": "Required",
+    "CORE_LOGIN_CONFIRM_NEW_PASSWORD": "Confirm New Password ",
+    "CORE_LOGIN_NEW_PASSWORD": "New Password ",
+    "CORE_LOGIN_PASSWORD": "Password",
+    "CORE_LOGIN_USERNAME": "User Name",
+    "CS_COMMONS_NEXT": "Next",
+    "CS_INVALID_OTP": "Invalid OTP",
+    "CS_LOGIN_NAME_TEXT": "Provide the name of the person to make your experience more personalised",
+    "CS_LOGIN_OTP": "OTP Verification",
+    "CS_LOGIN_OTP_TEXT": "Enter the OTP sent to",
+    "CS_LOGIN_PROVIDE_MOBILE_NUMBER": "Provide your mobile number",
+    "CS_LOGIN_PROVIDE_NAME": "Provide your Name",
+    "CS_LOGIN_TEXT": "All the communications regarding the application will be sent to this mobile number.",
+    "CS_RESEND_ANOTHER_OTP": "Resend another OTP",
+    "CS_RESEND_OTP": "Resend OTP",
+    "CS_RESEND_SECONDS": "secs",
+    "DIGIT_I_ACCEPT": "I accept",
+    "DIGIT_I_DO_NOT_ACCEPT": "I do not accept",
+    "DIGIT_PRIVACY_POLICY": "Privacy Policy",
+    "DIGIT_PRIVACY_POLICY_DATA_1": "Your name, mobile number and the details of the complaints you file.",
+    "DIGIT_PRIVACY_POLICY_DATA_2": "The location you attach to a complaint.",
+    "DIGIT_PRIVACY_POLICY_SECTION_DATA": "What we collect",
+    "DIGIT_PRIVACY_POLICY_SECTION_USE": "How we use it",
+    "DIGIT_PRIVACY_POLICY_USE_1": "To route your complaint to the right department.",
+    "DIGIT_PRIVACY_POLICY_USE_2": "To tell you when its status changes.",
+    "DIGIT_TABLE_OF_CONTENTS": "Privacy Policy",
+    "ERR_INVALID_MOBILE_NUMBER": "Please enter a valid mobile number",
+    "ES_BY_CLICKING": "I agree to the DIGIT's",
+    "ES_ERROR_USER_NOT_PERMITTED": "User not permitted to log in.",
+    "ES_PRIVACY_POLICY": "Privacy Policy",
+    "INVALID_LOGIN_CREDENTIALS": "Invalid username or password. Please try again.",
+    "MOBILE_VALIDATION_AT_LEAST": "at least",
+    "MOBILE_VALIDATION_DIGITS": "digits",
+    "MOBILE_VALIDATION_STARTING_WITH": "starting with",
+    "TENANT_TENANTS_KE": "Bomet County"
+  }
+}
