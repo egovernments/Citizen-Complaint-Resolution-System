@@ -31,6 +31,7 @@ import {
 import {
   citizenDigitRoles,
   citizenIdentity,
+  digitCitizenTenantId,
   managedIdentity,
 } from "../../src/modules/managed-accounts/managed-account-service.js";
 
@@ -143,8 +144,26 @@ describe("citizen phone numbers and registrations", () => {
     expect(citizen.userType).toBe("CITIZEN");
     expect(citizen.username).toMatch(/^kcbffc-[0-9a-f]{40}$/);
     expect(citizen.key).not.toBe(employee.key);
-    expect(citizen.marker).toMatch(/^keycloak-bff:citizen:v1:[0-9a-f]{64}:ke\.bomet$/);
-    expect(citizenDigitRoles("ke.bomet")).toEqual([{ code: "CITIZEN", name: "CITIZEN", tenantId: "ke.bomet" }]);
+    // egov-user keeps citizens at the first dotted segment, so the account
+    // (username, marker, token cache) is per state root, not per city.
+    expect(citizen.tenantId).toBe("ke");
+    expect(citizen.marker).toMatch(/^keycloak-bff:citizen:v1:[0-9a-f]{64}:ke$/);
+    expect(citizenDigitRoles(citizen.tenantId)).toEqual([{ code: "CITIZEN", name: "CITIZEN", tenantId: "ke" }]);
+  });
+
+  it("derives the citizen account tenant the way egov-user does", () => {
+    expect(digitCitizenTenantId("ke")).toBe("ke");
+    expect(digitCitizenTenantId("ke.bomet")).toBe("ke");
+    expect(digitCitizenTenantId("ke.bomet.ulb1")).toBe("ke");
+    const root = citizenIdentity("iss", "sub", "ke");
+    for (const city of ["ke.bomet", "ke.bomet.ulb1", "ke.kisumu"]) {
+      const identity = citizenIdentity("iss", "sub", city);
+      expect(identity.username).toBe(root.username);
+      expect(identity.key).toBe(root.key);
+      expect(identity.marker).toBe(root.marker);
+    }
+    expect(citizenIdentity("iss", "sub", "pg.citya").username).not.toBe(root.username);
+    expect(citizenIdentity("iss", "other", "ke.bomet").username).not.toBe(root.username);
   });
 });
 

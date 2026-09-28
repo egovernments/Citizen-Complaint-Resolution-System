@@ -21,6 +21,16 @@ interface Account {
 }
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+/**
+ * egov-user's `UserUtils.getStateLevelTenantForCitizen`: a CITIZEN on a dotted
+ * tenant is searched, logged in, uniqueness-checked AND stored (in
+ * `UserRepository.create`) at the first dotted segment. Other types keep the
+ * tenant they are given. Explicit role tenantIds are kept as sent.
+ */
+const citizenTenant = (tenantId: string, userType: unknown) =>
+  userType === "CITIZEN" && typeof tenantId === "string" && tenantId.includes(".")
+    ? tenantId.split(".")[0]
+    : tenantId;
 const POLICY = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])\S{8,15}$/;
 
 /**
@@ -119,8 +129,9 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
   app.post("/user/oauth/token", express.urlencoded({ extended: false }), (req, res) => {
     // isInternal skips credential validation in egov-user; the BFF must never send it.
     if (req.body.isInternal !== undefined) stats.internalLogins += 1;
+    const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
     const account = [...accounts.values()].find((candidate) =>
-      candidate.userName === req.body.username && candidate.tenantId === req.body.tenantId &&
+      candidate.userName === req.body.username && candidate.tenantId === tenantId &&
       candidate.type === req.body.userType);
     // Mirrors egov-user with citizen.login.password.otp.enabled=true: a
     // CITIZEN password is validated (and consumed) as an egov-otp code for
@@ -155,8 +166,9 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
 
   app.post("/user/_search", (req, res) => {
     if (!requireAdmin(req, res)) return;
+    const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
     const matches = [...accounts.values()].filter((account) =>
-      account.userName === req.body.userName && account.tenantId === req.body.tenantId &&
+      account.userName === req.body.userName && account.tenantId === tenantId &&
       account.type === req.body.userType && account.active === (req.body.active !== false));
     return res.json({ user: matches.map(publicAccount).map((user) => maskSearchMobileNumbers && user.mobileNumber
       ? { ...user, mobileNumber: `******${user.mobileNumber.slice(-4)}` }
@@ -183,12 +195,14 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
         return res.status(400).json({ error: "INVALID_MOBILE_NUMBER" });
       }
     }
-    if ([...accounts.values()].some((account) => account.userName === user.userName && account.tenantId === user.tenantId)) {
+    const tenantId = citizenTenant(user.tenantId, user.type);
+    if ([...accounts.values()].some((account) => account.userName === user.userName &&
+        account.tenantId === tenantId && account.type === user.type)) {
       return res.status(400).json({ error: "duplicate" });
     }
     receivedPasswords.push(user.password);
     stats.creates += 1;
-    const account = addAccount({ ...user, password: user.password });
+    const account = addAccount({ ...user, tenantId, password: user.password });
     return res.json({ user: [publicAccount(account)] });
   });
 

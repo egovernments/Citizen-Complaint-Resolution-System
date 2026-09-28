@@ -38,7 +38,9 @@ export const MANAGED_USER_TYPE = "EMPLOYEE";
  * Citizen accounts (#2167) follow the same ownership rule in their own
  * namespace: `kcbffc-` usernames and a `keycloak-bff:citizen:v1:` marker,
  * derived from a key that can never equal an employee key. A legacy citizen
- * whose username is a mobile number is never adopted.
+ * whose username is a mobile number is never adopted. Unlike employees, a
+ * citizen account lives at egov-user's citizen tenant (the state root, see
+ * `digitCitizenTenantId`), shared by every city route under it.
  */
 export const CITIZEN_USER_TYPE = "CITIZEN";
 export type ManagedUserType = typeof MANAGED_USER_TYPE | typeof CITIZEN_USER_TYPE;
@@ -83,8 +85,30 @@ export function managedIdentity(issuer: string, subject: string, tenantId: strin
   };
 }
 
-/** The BFF-managed DIGIT CITIZEN account of (issuer, subject) at one tenant. */
-export function citizenIdentity(issuer: string, subject: string, tenantId: string): ManagedIdentity {
+/**
+ * The tenant egov-user keeps a CITIZEN at: the first dotted segment of the
+ * tenant it is given, exactly like `UserUtils.getStateLevelTenantForCitizen`
+ * (`ke.bomet.ulb1` -> `ke`). egov-user applies this to CITIZEN search, login
+ * lookup, uniqueness and the stored row, and issues the token for it.
+ *
+ * This is NOT necessarily the BFF's `rootTenantId`: that is the Keycloak
+ * Organization's mapped tenant, which may itself be dotted (an Organization
+ * mapped to `ke.bomet` has rootTenantId `ke.bomet`, but its citizens live at
+ * `ke`). Derive from egov-user's rule, never from the Organization mapping.
+ */
+export function digitCitizenTenantId(tenantId: string): string {
+  return tenantId.split(".")[0];
+}
+
+/**
+ * The BFF-managed DIGIT CITIZEN account of (issuer, subject) for a route
+ * tenant. There is ONE account per (subject, egov-user citizen tenant): every
+ * city route under `ke` resolves to the same `ke` account, so the username,
+ * marker and token cache are all derived from `digitCitizenTenantId`, not
+ * from the route tenant. The route tenant stays on the CitizenRegistration.
+ */
+export function citizenIdentity(issuer: string, subject: string, routeTenantId: string): ManagedIdentity {
+  const tenantId = digitCitizenTenantId(routeTenantId);
   const subjectKey = createHash("sha256").update(`${issuer}\n${subject}`).digest("hex");
   const key = createHash("sha256")
     .update(`citizen\n${issuer}\n${subject}\n${tenantId}`)
@@ -421,7 +445,11 @@ export async function revokeManagedUserLogins(
   }
 }
 
-/** Citizen logout: releases this session's claim on its one bound-tenant token. */
+/**
+ * Citizen logout: releases this session's claim on the token of the citizen
+ * account behind its bound tenant. Sessions on other city routes under the
+ * same root hold the same token and keep it until they log out too.
+ */
 export async function revokeCitizenLogin(
   issuer: string,
   subject: string,

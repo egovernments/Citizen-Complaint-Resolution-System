@@ -3,6 +3,7 @@ import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import {
+  digitCitizenTenantId,
   ManagedAccountError,
   managedIdentity,
   managedUserLogin,
@@ -200,13 +201,21 @@ export function registerAccessContextRoutes(app: express.Application): void {
         ...phone,
       });
       const login = await managedUserLogin(identity, current.sessionId, phone.mobileNumber);
-      if (login.user.type !== "CITIZEN" || login.user.tenantId !== boundTenant.tenantId) {
-        // Fail closed: never hand the browser a token for another user type
-        // or tenant than the session is bound to.
+      // egov-user issues every CITIZEN token at the state root, so the token
+      // tenant is the bound tenant's citizen tenant (`identity.tenantId`),
+      // never the city itself. Fail closed on anything else: another user
+      // type, or a token for a different root than the session is bound to.
+      if (login.user.type !== "CITIZEN" || login.user.tenantId !== identity.tenantId ||
+          login.user.tenantId !== digitCitizenTenantId(boundTenant.tenantId)) {
         console.error("Citizen context: DIGIT returned a token for an unexpected account");
         return response.status(502).json({ error: "Citizen context is temporarily unavailable" });
       }
-      return response.json(tokenResponse(login));
+      // `tenant` is the bound route tenant: the client keeps using it for
+      // business requests even though the token's home tenant is the root.
+      return response.json({
+        ...tokenResponse(login),
+        tenant: { urlSlug: boundTenant.urlSlug, tenantId: boundTenant.tenantId },
+      });
     } catch (error) {
       if (error instanceof IdentityAdminError) {
         console.warn("Citizen context failed:", error.message);

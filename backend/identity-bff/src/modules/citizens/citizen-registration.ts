@@ -34,8 +34,14 @@ import type { BoundTenant } from "../authentication/surfaces.js";
  *   `v1|<rootTenantId>|<tenantId>|<status>|<digitUserUuid>`
  * For a root route `tenantId === rootTenantId`, which is exactly the
  * contract record. A subtenant route keeps the same root and adds its own
- * tenant-local projection, because a DIGIT token only authorizes its
- * account's home tenant.
+ * tenant-local projection, so access can be granted or disabled per route
+ * tenant.
+ *
+ * The DIGIT account behind it is NOT tenant-local: egov-user keeps every
+ * CITIZEN at its state root (`digitCitizenTenantId`, the first dotted
+ * segment) and issues the token there. So `digitUserUuid` is the one
+ * root-level CITIZEN account of this principal, shared by every registration
+ * under that root, and business requests still target the route tenant.
  */
 export type CitizenRegistrationStatus = "ACTIVE" | "DISABLED";
 
@@ -112,8 +118,11 @@ export function splitE164(
 
 /**
  * Ensures the principal's registration at `tenant` and its BFF-managed DIGIT
- * CITIZEN account. Existing accounts are never re-roled (`createOnly`), and a
- * DISABLED registration or deactivated account is refused.
+ * CITIZEN account at egov-user's citizen tenant (created there explicitly, so
+ * egov-user validates, encrypts and stores it at the tenant it will later
+ * search and log in at). Existing accounts are never re-roled
+ * (`createOnly`), and a DISABLED registration or deactivated account is
+ * refused.
  */
 export async function ensureCitizenRegistration(input: {
   subject: string;

@@ -45,11 +45,13 @@ function requestInfo() {
  * taken from the verified session phone rather than a possibly-masked
  * search response. `userName` remains available as an override.
  *
- * Still UNVERIFIED against a live egov-user. The live spike must confirm:
- * - that egov-user does not move a CITIZEN on a dotted tenant to the
- *   state-level root, which would make the returned UserRequest.tenantId
- *   differ from the bound tenant (the BFF then refuses the token);
- * - that `DIGIT_OTP_CREATE_URL` is reachable only on the internal network.
+ * The OTP tenant is the account's own tenant: citizen accounts live at the
+ * state root (`digitCitizenTenantId`), which is also where egov-user looks the
+ * user up and validates the OTP, whatever city route the citizen came from.
+ *
+ * Still UNVERIFIED against a live egov-user: the live spike must confirm the
+ * OTP grant end to end and that `DIGIT_OTP_CREATE_URL` is reachable only on
+ * the internal network.
  * The OTP value is never logged, cached or returned.
  */
 export class EgovOtpCitizenTokenMinter implements CitizenTokenMinter {

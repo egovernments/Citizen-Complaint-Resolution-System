@@ -367,18 +367,43 @@ requires the citizen client as `azp` and `phone_number_verified === true`
    the regex rejects gets `403`, a tenant without a rule `503`;
 2. ensures the **CitizenRegistration** of `(issuer, sub)` at the tenant
    (#2071). It is not Organization membership and never creates one;
-3. ensures the BFF-managed DIGIT `CITIZEN` account, created once and never
-   re-roled (`DIGIT_CITIZEN_ROLES`, default `CITIZEN`, at the bound tenant);
+3. ensures the BFF-managed DIGIT `CITIZEN` account at the bound tenant's
+   **citizen tenant** (see below), created once and never re-roled
+   (`DIGIT_CITIZEN_ROLES`, default `CITIZEN`, scoped to that citizen tenant);
 4. mints (or reuses) a DIGIT token through the `CitizenTokenMinter` and
-   returns `{access_token, token_type, expires_in, scope, UserRequest}` only
-   when `UserRequest.type === "CITIZEN"` and its tenant is the bound tenant
-   (otherwise `502`).
+   returns `{access_token, token_type, expires_in, scope, UserRequest, tenant}`
+   only when `UserRequest.type === "CITIZEN"` and `UserRequest.tenantId` is
+   the bound tenant's citizen tenant (otherwise `502`). `tenant` is
+   `{urlSlug, tenantId}` of the bound **route** tenant.
+
+**Tenant model.** egov-user keeps every `CITIZEN` at the first dotted segment
+of the tenant it is given (`UserUtils.getStateLevelTenantForCitizen`): CITIZEN
+search, login lookup, username uniqueness and the stored row all use it, and
+the token's `UserRequest.tenantId` is that root. The BFF follows the same rule
+(`digitCitizenTenantId`): `/bomet-county/...` (`ke.bomet`),
+`/bomet-ulb-one/...` (`ke.bomet.ulb1`) and `/kisumu/...` (`ke.kisumu`) all use
+the one `ke` citizen account of that principal. The citizen tenant is derived
+from the bound tenant id, NOT from the Organization's `rootTenantId`, which can
+itself be dotted (an Organization mapped to `ke.bomet`). The account is created
+at the citizen tenant explicitly, so egov-user validates the mobile number and
+encrypts the record with that tenant rather than the city's. The
+CitizenRegistration stays tenant-local (per route tenant) and records the
+shared account's uuid. digit-ui accepts a citizen token only when
+`UserRequest.tenantId` is its route tenant's first segment and the echoed
+`tenant` is its route; it stores the route tenant as the citizen tenant
+(`Citizen.tenant-id`, `Citizen.tenantId`, `CITIZEN.COMMON.HOME.CITY`) and
+keeps `UserRequest` unchanged, like the legacy OTP login, so business
+requests such as complaint creation target the URL tenant.
 
 Citizen accounts use their own namespace and never adopt a legacy DIGIT
 citizen whose username is a mobile number:
 
-- username `kcbffc-<sha256("citizen"\nissuer\nsubject\ntenant)[:40]>`;
-- `identificationMark` `keycloak-bff:citizen:v1:<sha256(issuer\nsubject)>:<tenantId>`.
+- username `kcbffc-<sha256("citizen"\nissuer\nsubject\ncitizenTenant)[:40]>`;
+- `identificationMark` `keycloak-bff:citizen:v1:<sha256(issuer\nsubject)>:<citizenTenant>`.
+
+`citizenTenant` is the citizen tenant above, so there is one DIGIT account per
+(principal, root) and one cached token shared by that principal's sessions on
+every route under the root (logout releases only this session's claim).
 
 They are deliberately left out of `digit.managedTenants` and the Redis
 managed-account index, so Organization reconciliation never deactivates a
@@ -400,8 +425,9 @@ or Keycloak drops the attribute. An operator disables a citizen at a tenant by
 changing that value's status to `DISABLED` (and logging the citizen out so the
 cached token is revoked); an existing DISABLED value is never reactivated by
 sign-in. For a root route `tenantId == rootTenantId`. A subtenant route keeps
-the same root and adds its own projection and DIGIT account, because DIGIT
-tokens only authorize their account's home tenant.
+the same root and adds its own projection; every projection under one
+citizen tenant carries the same `digitUserUuid`, and disabling one route
+tenant's projection does not affect the others.
 
 ### Citizen token minting
 
@@ -420,8 +446,10 @@ implementation:
    `UserService.validateOtp` checks the code against `user.getMobileNumber()`
    and `user.getTenantId()`. Search responses can mask the stored number, so
    it is not read from them. `userName` is available as an override;
+   `tenantId` is the account's citizen tenant, which is where egov-user
+   looks the user up and validates the code;
 2. `POST /user/oauth/token` password grant with `username=<kcbffc-...>`,
-   `password=<that OTP>`, `tenantId=<bound tenant>`, `userType=CITIZEN`.
+   `password=<that OTP>`, `tenantId=<citizen tenant>`, `userType=CITIZEN`.
 
 It never sends egov-user's `isInternal` parameter, and the OTP is never logged,
 cached or returned. The token is cached and revoked exactly like employee
@@ -430,12 +458,14 @@ session's claim).
 
 > **Unverified against a live egov-user.** The tests prove the BFF side
 > against a mock that encodes these assumptions. A live spike must confirm
-> (a) which identity and tenant egov-user sends to egov-otp `_validate` for a
-> CITIZEN grant, (b) that egov-user does not move a CITIZEN on a dotted tenant
-> to the state-level root (the BFF would then refuse the token because its
-> tenant differs from the bound tenant), (c) that `_createnovalidate` accepts
-> a `CITIZEN` with a non-mobile `kcbffc-` username, and (d) that egov-otp is
-> reachable only internally. Until then leave `DIGIT_OTP_CREATE_URL` empty
+> (a) the OTP grant end to end (the code reading says identity = mobile
+> number, tenant = the stored user's root tenant), (b) that the root tenant
+> has a `MobileNumberValidation` rule egov-user accepts for the citizen's
+> number (it validates at the root; the BFF splits with the route rule),
+> (c) that `_createnovalidate` accepts a `CITIZEN` with a non-mobile `kcbffc-`
+> username, and (d) that egov-otp is reachable only internally. The fake
+> egov-user in `mocks/fake-digit-user.ts` now applies egov-user's CITIZEN
+> root coercion to search, login, uniqueness and storage. Until then leave `DIGIT_OTP_CREATE_URL` empty
 > outside test environments: citizen `_select` then answers `503`.
 
 ### Public login branding

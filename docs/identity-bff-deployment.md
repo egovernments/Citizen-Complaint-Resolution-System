@@ -82,6 +82,14 @@ internal `/otp/v1/_create` (`DIGIT_OTP_CREATE_URL`). egov-otp only runs under
 the Compose `otp` profile, so with `enable_keycloak: true` the deploy starts
 that profile even when `enable_otp_services` is false. That does not switch
 egov-user off its fixed citizen OTP; only `enable_otp_services: true` does.
+Citizen DIGIT accounts live at the state root, like every egov-user CITIZEN:
+a citizen signing in on `/<city>/digit-ui/citizen/` gets one BFF-managed
+`kcbffc-` account at the first dotted segment of the city's tenant (for
+example `ke` for `ke.bomet`), shared by every city route under that root, and
+a token whose `UserRequest.tenantId` is that root. digit-ui keeps the URL's
+tenant for complaints and other business requests. The root tenant therefore
+needs a `common-masters.MobileNumberValidation` rule that accepts the
+citizens' numbers, because egov-user validates new citizen accounts there.
 Note that while `local-setup/kong/kong.yml` keeps its `/otp` validation mock,
 egov-user's OTP check for a CITIZEN password grant is answered by that mock,
 not by egov-otp (see "TO ENABLE REAL OTP VALIDATION" there).

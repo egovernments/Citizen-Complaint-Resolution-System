@@ -3,7 +3,14 @@ import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { getRedis } from "../../src/infrastructure/redis.js";
-import { managedAccountsKey } from "../../src/modules/managed-accounts/managed-account-service.js";
+import {
+  citizenIdentity,
+  managedAccountsKey,
+} from "../../src/modules/managed-accounts/managed-account-service.js";
+import {
+  citizenTokenMinter,
+  setCitizenTokenMinter,
+} from "../../src/modules/managed-accounts/citizen-token-minter.js";
 import {
   createIdentitySession,
   saveSelectedIdentityContext,
@@ -1291,9 +1298,10 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     surface: "employee" | "citizen",
     profile = "",
     returnTo = `/bomet-county/digit-ui/${surface}/`,
+    tenantSlug = "bomet-county",
   ): Promise<string> {
     const { state, nonce, loginCookie } = await startSignIn(
-      `surface=${surface}&tenantSlug=bomet-county&returnTo=${encodeURIComponent(returnTo)}`,
+      `surface=${surface}&tenantSlug=${tenantSlug}&returnTo=${encodeURIComponent(returnTo)}`,
     );
     const callback = await fetch(
       `${app()}/identity/v1/callback?code=valid-code${profile ? `-${profile}` : ""}:${encodeURIComponent(nonce)}&state=${encodeURIComponent(state)}`,
@@ -1599,22 +1607,27 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     const selected = await citizenSelect(cookie, { tenantId: "ke.kisumu" }).finally(() =>
       digit.setMaskSearchMobileNumbers(false));
     expect(selected.status).toBe(200);
-    expect(digit.otps.has("712345678|ke.bomet")).toBe(true);
+    // Bomet's Organization maps `ke.bomet`, but egov-user keeps citizens at
+    // the state root `ke`: the account, OTP and token all live there.
+    expect(digit.otps.has("712345678|ke")).toBe(true);
     expect([...digit.otps.keys()].some((key) => key.startsWith("kcbffc-"))).toBe(false);
     const body = await selected.json();
-    expect(Object.keys(body).sort()).toEqual(["UserRequest", "access_token", "expires_in", "scope", "token_type"]);
+    expect(Object.keys(body).sort())
+      .toEqual(["UserRequest", "access_token", "expires_in", "scope", "tenant", "token_type"]);
     expect(body).toMatchObject({
       token_type: "bearer",
       scope: "read",
       UserRequest: {
-        type: "CITIZEN", tenantId: "ke.bomet", name: "Wanjiku Citizen",
+        type: "CITIZEN", tenantId: "ke", name: "Wanjiku Citizen",
         mobileNumber: "712345678", countryCode: "+254",
       },
+      tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet" },
     });
     expect(body.UserRequest.userName).toMatch(/^kcbffc-[0-9a-f]{40}$/);
     expect(JSON.stringify(body)).not.toContain("must-not-leak");
     const account = digit.accounts.get(body.UserRequest.uuid)!;
-    expect(account.roles).toEqual([{ code: "CITIZEN", name: "CITIZEN", tenantId: "ke.bomet" }]);
+    expect(account.tenantId).toBe("ke");
+    expect(account.roles).toEqual([{ code: "CITIZEN", name: "CITIZEN", tenantId: "ke" }]);
     expect(account.identificationMark).toMatch(/^keycloak-bff:citizen:v1:/);
     expect(digit.accounts.size).toBe(accountsBefore + 1);
     expect(digit.tokens.get(body.access_token)?.uuid).toBe(account.uuid);
@@ -1703,5 +1716,84 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+
+  it("reuses one root CITIZEN account across the root, subtenant and sibling-city routes", async () => {
+    // Kisumu is another Organization under the same `ke` root.
+    digit.mdms.set(digit.mdmsKey("ke.kisumu", "common-masters.MobileNumberValidation"), [{
+      tenantId: "ke.kisumu", schemaCode: "common-masters.MobileNumberValidation", uniqueIdentifier: "mnv",
+      data: { countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$", default: true }, isActive: true,
+    }]);
+    const accountsBefore = digit.accounts.size;
+    const select = async (slug: string) => {
+      const cookie = await signIn("citizen", "", `/${slug}/digit-ui/citizen/`, slug);
+      const response = await citizenSelect(cookie);
+      expect(response.status, slug).toBe(200);
+      return { cookie, body: await response.json() };
+    };
+    const root = await select("bomet-county");
+    const subtenant = await select("bomet-ulb-one");
+    const sibling = await select("kisumu");
+
+    expect(root.body.tenant).toEqual({ urlSlug: "bomet-county", tenantId: "ke.bomet" });
+    expect(subtenant.body.tenant).toEqual({ urlSlug: "bomet-ulb-one", tenantId: "ke.bomet.ulb1" });
+    expect(sibling.body.tenant).toEqual({ urlSlug: "kisumu", tenantId: "ke.kisumu" });
+    for (const { body } of [root, subtenant, sibling]) {
+      expect(body.UserRequest).toMatchObject({ type: "CITIZEN", tenantId: "ke" });
+      expect(body.UserRequest.uuid).toBe(root.body.UserRequest.uuid);
+      expect(body.UserRequest.userName).toBe(root.body.UserRequest.userName);
+    }
+    // One DIGIT account per (subject, root); no orphan rows at city tenants.
+    expect(digit.accounts.size).toBe(accountsBefore);
+    expect([...digit.accounts.values()].filter((account) =>
+      account.type === "CITIZEN" && account.tenantId !== "ke")).toEqual([]);
+
+    const uuid = root.body.UserRequest.uuid;
+    const user = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/citizen-user-1`,
+    )).json();
+    // Registrations stay keyed on the route tenant, all pointing at the root account.
+    expect(user.attributes["digit.citizenRegistrations"]).toEqual([
+      `v1|ke.bomet|ke.bomet.ulb1|ACTIVE|${uuid}`,
+      `v1|ke.bomet|ke.bomet|ACTIVE|${uuid}`,
+      `v1|ke.kisumu|ke.kisumu|ACTIVE|${uuid}`,
+    ]);
+
+    // Logging out of one city keeps the shared token alive for the others.
+    const logout = await fetch(`${app()}/identity/v1/logout`, {
+      method: "POST",
+      headers: { Cookie: subtenant.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "citizen" }),
+    });
+    expect(logout.status).toBe(204);
+    expect(digit.tokens.has(root.body.access_token)).toBe(true);
+    expect((await citizenSelect(sibling.cookie)).status).toBe(200);
+  });
+
+  it("refuses a citizen token issued for a tenant other than the bound root", async () => {
+    const original = citizenTokenMinter();
+    const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet.ulb1");
+    expect(identity.tenantId).toBe("ke");
+    const tokenCache = `${config.cachePrefix}:digit-user-token:${identity.key}`;
+    for (const tenantId of ["ke.bomet", "zz", "ke.kisumu"]) {
+      await getRedis().del(tokenCache);
+      setCitizenTokenMinter({
+        async mint(account) {
+          return {
+            accessToken: `forged-${tenantId}`,
+            expiresAt: Date.now() + 600_000,
+            user: { uuid: account.uuid, type: "CITIZEN", tenantId },
+          };
+        },
+      });
+      try {
+        const response = await citizenSelect(await signIn("citizen"));
+        expect(response.status, tenantId).toBe(502);
+        expect(JSON.stringify(await response.json())).not.toContain("forged-");
+      } finally {
+        setCitizenTokenMinter(original);
+      }
+    }
+    await getRedis().del(tokenCache);
   });
 });
