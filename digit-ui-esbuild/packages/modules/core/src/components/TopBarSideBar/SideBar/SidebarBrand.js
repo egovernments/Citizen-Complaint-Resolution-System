@@ -86,15 +86,12 @@ export const SidebarFoot = ({ t, expanded, onLogout }) => (
 );
 
 /**
- * Foot of the phone drawer: the eGov lockup with "Powered by DIGIT" under it.
- * The drawer's own Logout row follows it (the stylesheet puts it last).
+ * Foot of the phone drawer: the eGov lockup, as at the foot of the desktop
+ * rail. The drawer's own Logout row sits above it (the stylesheet orders it),
+ * and "Powered by DIGIT" is the page footer's, not repeated here.
  */
-export const DrawerFoot = () => {
-  const poweredBy = window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW") || window?.globalConfigs?.getConfig?.("DIGIT_FOOTER");
-  return (
-    <div className="digit-sidebar-foot digit-drawer-foot">
-      <img className="digit-sidebar-egov" src={DEFAULT_EGOV_LOGO_ON_DARK} alt="eGov Foundation" />
-      {poweredBy ? <img className="digit-drawer-powered" src={poweredBy} alt="Powered by DIGIT" /> : null}
-    </div>
-  );
-};
+export const DrawerFoot = () => (
+  <div className="digit-sidebar-foot digit-drawer-foot">
+    <img className="digit-sidebar-egov" src={DEFAULT_EGOV_LOGO_ON_DARK} alt="eGov Foundation" />
+  </div>
+);
