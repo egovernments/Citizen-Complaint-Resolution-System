@@ -1,0 +1,155 @@
+/**
+ * Identity BFF login helpers shared by the employee and citizen adapters on
+ * canonical tenant routes (`/{tenantSlug}/digit-ui/{employee|citizen}/...`).
+ *
+ * The tenant comes only from the route. The BFF binds the Keycloak login to
+ * `surface` + `tenantSlug` server-side; these helpers build the requests and
+ * validate the DIGIT session it hands back. They are framework-free so they
+ * can be unit tested without React.
+ */
+
+export const IDENTITY_BFF_SURFACES = Object.freeze({
+  employee: Object.freeze({ method: "password", userType: "EMPLOYEE", selectPath: "/identity/v1/contexts/_select" }),
+  citizen: Object.freeze({ method: "phone_otp", userType: "CITIZEN", selectPath: "/identity/v1/contexts/citizen/_select" }),
+});
+
+export function surfaceBase(tenant, surface) {
+  return `/${tenant.appBasePath}/${surface}`;
+}
+
+/** Only same-tenant, same-surface relative paths are accepted as `from`. */
+export function restrictDestination(requested, base) {
+  if (typeof requested !== "string") return base;
+  if (requested === base || requested.startsWith(`${base}/`) || requested.startsWith(`${base}?`)) {
+    // Reject dot segments (plain or percent-encoded) that would let the
+    // browser normalise the path back out of the surface base.
+    const segments = requested.split(/[?#]/)[0].split(/[/\\]/);
+    const isDotSegment = (segment) => {
+      let decoded = segment;
+      try { decoded = decodeURIComponent(segment); } catch (e) { return true; }
+      return decoded === "." || decoded === "..";
+    };
+    if (segments.some(isDotSegment)) return base;
+    return requested;
+  }
+  return base;
+}
+
+export function buildAuthorizeUrl({ surface, tenant, pathname, destination }) {
+  const base = surfaceBase(tenant, surface);
+  const returnParams = new URLSearchParams();
+  if (destination && destination !== base) returnParams.set("from", destination);
+  const query = returnParams.toString();
+  const returnTo = `${pathname}${query ? `?${query}` : ""}`;
+  const params = new URLSearchParams({
+    surface,
+    tenantSlug: tenant.urlSlug,
+    method: IDENTITY_BFF_SURFACES[surface].method,
+    intent: "signin",
+    returnTo,
+  });
+  return `/identity/v1/authorize?${params.toString()}`;
+}
+
+const requestJson = async (fetchImpl, url, init) => {
+  const response = await fetchImpl(url, {
+    ...init,
+    credentials: "include",
+    headers: { Accept: "application/json", ...(init?.headers || {}) },
+  });
+  const body = response.status === 204 ? null : await response.json().catch(() => null);
+  return { response, body };
+};
+
+/**
+ * Runs authResult → session → context select for `surface` on `tenant`.
+ *
+ * Resolves to one of:
+ *   { status: "authenticated", user: { info, ...tokens } }
+ *   { status: "signed-out", fromAuthResult, messageKey?, message? }
+ *   { status: "forbidden" | "error", messageKey, message }
+ * `message` is a BFF-supplied or English fallback text for `messageKey`.
+ */
+export async function establishIdentityBffSession({ surface, tenant, authResultId, fetchImpl }) {
+  const config = IDENTITY_BFF_SURFACES[surface];
+  if (!config) throw new Error(`Unsupported identity surface: ${surface}`);
+  const request = (url, init) => requestJson(fetchImpl, url, init);
+
+  if (authResultId) {
+    const { response, body } = await request(
+      `/identity/v1/auth-results/${encodeURIComponent(authResultId)}`,
+    );
+    if (!response.ok || body?.status === "failed") {
+      return {
+        status: "signed-out",
+        fromAuthResult: true,
+        messageKey: "CORE_IDENTITY_SIGNIN_FAILED",
+        message: body?.message || "Sign-in could not be completed. Please try again.",
+      };
+    }
+  }
+
+  const session = await request(`/identity/v1/session?surface=${encodeURIComponent(surface)}`);
+  if (session.response.status === 401) {
+    return { status: "signed-out", fromAuthResult: Boolean(authResultId) };
+  }
+  if (!session.response.ok || !session.body?.authenticated) {
+    return {
+      status: "error",
+      messageKey: "CORE_IDENTITY_SIGNIN_UNAVAILABLE",
+      message: "Sign-in is temporarily unavailable. Please try again.",
+    };
+  }
+
+  const selected = await request(config.selectPath, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(surface === "employee" ? { tenantId: tenant.tenantId } : {}),
+  });
+  if (selected.response.status === 401) {
+    return { status: "signed-out", fromAuthResult: Boolean(authResultId) };
+  }
+  if (selected.response.status === 403) {
+    return {
+      status: "forbidden",
+      messageKey: "CORE_IDENTITY_TENANT_FORBIDDEN",
+      message: `Your account does not have access to ${tenant.name}.`,
+    };
+  }
+  if (!selected.response.ok) {
+    return {
+      status: "error",
+      messageKey: "CORE_IDENTITY_CONTEXT_FAILED",
+      message: "Your tenant session could not be prepared. Please try again.",
+    };
+  }
+
+  const { UserRequest: info, ...tokens } = selected.body || {};
+  if (!info || info.type !== config.userType || info.tenantId !== tenant.tenantId || !tokens.access_token) {
+    return {
+      status: "error",
+      messageKey: "CORE_IDENTITY_INVALID_SESSION",
+      message: `The signed-in account did not produce a valid ${surface} session for this tenant.`,
+    };
+  }
+  const scopedInfo = surface === "employee"
+    ? { ...info, roles: (info.roles || []).filter((role) => role.tenantId === tenant.tenantId) }
+    : info;
+  return { status: "authenticated", user: { info: scopedInfo, ...tokens } };
+}
+
+/** Where to land after logout for `surface` under `appBasePath`. */
+export function identityBffLogoutRedirect(appBasePath, surface) {
+  return surface === "citizen"
+    ? `/${appBasePath}/citizen/login`
+    : `/${appBasePath}/employee/user/login`;
+}
+
+export function identityBffLogout({ surface, fetchImpl }) {
+  return fetchImpl("/identity/v1/logout", {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ surface: surface === "citizen" ? "citizen" : "employee" }),
+  });
+}

@@ -5,7 +5,6 @@ import {
   Button as V2Button,
   Card as V2Card,
 } from "@egovernments/digit-ui-components-v2";
-
 import {
   buildIdentityBffAuthorizeUrl,
   establishIdentityBffSession,
@@ -13,8 +12,8 @@ import {
   restrictIdentityBffDestination,
 } from "@egovernments/digit-ui-libraries";
 
-import Header from "../../../components/Header";
-import { setEmployeeDetail, V2LoginShell } from "./login";
+import { setCitizenDetail } from "./index";
+import { V2LoginShell } from "./SelectMobileNumber";
 
 const cleanAuthResult = () => {
   const url = new URL(window.location.href);
@@ -23,21 +22,21 @@ const cleanAuthResult = () => {
 };
 
 /**
- * Employee sign-in on canonical tenant routes. The Identity BFF sends the
- * browser to the `digit-ui-employee` Keycloak client, whose theme looks like
- * the legacy DIGIT login, so a signed-out visitor is redirected straight
- * there. This card is only shown for failures, a 403 on the route tenant, or
- * after an unsuccessful round trip (to avoid redirect loops).
+ * Citizen sign-in on canonical tenant routes. Phone number + SMS OTP happen
+ * inside the `digit-ui-citizen` Keycloak client (themed like the legacy
+ * citizen login); this adapter only exchanges the resulting BFF session for a
+ * DIGIT CITIZEN token on the route tenant. Signed-out visitors are sent
+ * straight to Keycloak; the card below only renders for failures.
  */
-const IdentityBffEmployeeLogin = ({ t }) => {
+const IdentityBffCitizenLogin = ({ t }) => {
   const location = useLocation();
   const [status, setStatus] = useState("checking");
   const [message, setMessage] = useState("");
   const tenant = window.__digitTenantContext;
-  const employeeBase = identityBffSurfaceBase(tenant, "employee");
+  const citizenBase = identityBffSurfaceBase(tenant, "citizen");
   const destination = restrictIdentityBffDestination(
     location.state?.from || new URLSearchParams(location.search).get("from"),
-    employeeBase,
+    citizenBase,
   );
   const tr = (key, fallback) => {
     const value = t(key);
@@ -47,7 +46,7 @@ const IdentityBffEmployeeLogin = ({ t }) => {
   const beginSignIn = () => {
     window.location.assign(
       buildIdentityBffAuthorizeUrl({
-        surface: "employee",
+        surface: "citizen",
         tenant,
         pathname: window.location.pathname,
         destination,
@@ -55,14 +54,14 @@ const IdentityBffEmployeeLogin = ({ t }) => {
     );
   };
 
-  const establishTenantSession = async () => {
+  const establishCitizenSession = async () => {
     setStatus("checking");
     setMessage("");
 
     const authResultId = new URLSearchParams(window.location.search).get("authResult");
     if (authResultId) cleanAuthResult();
     const result = await establishIdentityBffSession({
-      surface: "employee",
+      surface: "citizen",
       tenant,
       authResultId,
       fetchImpl: window.fetch.bind(window),
@@ -79,17 +78,15 @@ const IdentityBffEmployeeLogin = ({ t }) => {
     }
 
     const { user } = result;
-    const { info, ...tokens } = user;
-    Digit.SessionStorage.set("Employee.tenantId", tenant.tenantId);
     Digit.SessionStorage.set("citizen.userRequestObject", user);
-    Digit.UserService.setType("employee");
+    Digit.UserService.setType("citizen");
     Digit.UserService.setUser(user);
-    setEmployeeDetail(info, tokens.access_token);
+    setCitizenDetail(user.info, user.access_token, tenant.tenantId);
     window.location.replace(`${window.location.origin}${destination}`);
   };
 
   useEffect(() => {
-    establishTenantSession().catch(() => {
+    establishCitizenSession().catch(() => {
       setStatus("error");
       setMessage(tr("CORE_IDENTITY_SIGNIN_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again."));
     });
@@ -104,24 +101,26 @@ const IdentityBffEmployeeLogin = ({ t }) => {
       <V2Card
         style={{
           width: "100%",
-          maxWidth: "420px",
-          padding: "32px",
+          maxWidth: "440px",
+          padding: "32px 28px 28px 28px",
           display: "flex",
           flexDirection: "column",
           gap: "20px",
-          borderRadius: "14px",
-          border: "none",
-          boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <Header />
-        </div>
-        <header style={{ textAlign: "center" }}>
-          <h1 style={{ margin: 0, fontSize: "1.5rem", color: "var(--color-text-heading, #1D2433)" }}>
+        <header style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+              lineHeight: 1.2,
+            }}
+          >
             {tr("CORE_COMMON_LOGIN", "Sign in")}
           </h1>
-          <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary, #505A5F)" }}>
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--color-text-secondary, #6B7280)" }}>
             {tenant.name}
           </p>
         </header>
@@ -142,7 +141,7 @@ const IdentityBffEmployeeLogin = ({ t }) => {
             status === "forbidden"
               ? Digit.UserService.logout
               : status === "error"
-                ? establishTenantSession
+                ? establishCitizenSession
                 : beginSignIn
           }
         >
@@ -157,4 +156,4 @@ const IdentityBffEmployeeLogin = ({ t }) => {
   );
 };
 
-export default IdentityBffEmployeeLogin;
+export default IdentityBffCitizenLogin;
