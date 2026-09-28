@@ -8387,11 +8387,13 @@ html .header-dropdown-option:focus-visible {
     width: calc(100% - 15rem) !important;
   }
   /* Crest and lockup now live in the rail. With the brand block gone, the
-   * actions keep their place at the right. */
-  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-logo-ulb-wrapper {
+   * actions keep their place at the right. Only where a rail is mounted: a
+   * page without one (the citizen language and location pickers) would
+   * otherwise show no tenant mark at all. */
+  html[data-sidebar-pinned] :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-logo-ulb-wrapper {
     display: none !important;
   }
-  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-action-fields {
+  html[data-sidebar-pinned] :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-action-fields {
     margin-left: auto !important;
   }
 }
@@ -8711,8 +8713,13 @@ html .header-dropdown-option:focus-visible {
   box-shadow: none !important;
   border-bottom: 0 !important;
 }
-/* On a phone the bar carries the crest too, right above the card's own. The
- * menu button stays: it is where a phone reaches Language. */
+/* The sign-in card carries the crest, so the bar does not repeat it: on
+ * desktop its brand block, on a phone the crest beside the menu button (the
+ * button stays; it is where a phone reaches Language). */
+.citizen:has(.citizen-form-wrapper) .digit-topbar .digit-logo-ulb-wrapper,
 .citizen:has(.citizen-form-wrapper) .digit-topbar .digit-header-img-ulb-wrapper-mobileview {
   display: none !important;
+}
+.citizen:has(.citizen-form-wrapper) .digit-topbar .digit-header-action-fields {
+  margin-left: auto !important;
 }

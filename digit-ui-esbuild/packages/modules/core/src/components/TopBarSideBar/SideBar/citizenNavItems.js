@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { insertModuleSections, isCitizenHome } from "./navSections";
+import { insertModuleSections, isCitizenHome, mdmsLinkRows } from "./navSections";
 
 const iconOf = (icon) => ({ icon, width: "1.5rem", height: "1.5rem" });
 
@@ -9,11 +9,12 @@ const iconOf = (icon) => ({ icon, width: "1.5rem", height: "1.5rem" });
  *
  * Home, then each enabled module's section (the complaints module registers
  * `PGRCitizenSidebarSection`, the citizen twin of `PGRSidebarSection`), then
- * Helpline, and Login for a visitor who is not signed in. Edit Profile and
+ * the links a tenant configures in MDMS (`linkData`, the same rows the home
+ * page reads), then Helpline, and Login for a visitor who is not signed in. Edit Profile and
  * Logout are not rows here: on desktop they live in the top bar's account
  * menu, as they do for employees, and the phone drawer adds its own.
  */
-export const useCitizenNavItems = () => {
+export const useCitizenNavItems = (linkData) => {
   const { t } = useTranslation();
   const { data: initData } = Digit.Hooks.useStore.getInitData();
   const contextPath = window?.contextPath;
@@ -28,6 +29,8 @@ export const useCitizenNavItems = () => {
   const ownCodes = [Digit.ULBService.getCurrentTenantId?.(), Digit.ULBService.getStateId?.()];
   const helpline = ownCodes.map((code) => tenants.find((tenant) => tenant.code === code)?.contactNumber).find(Boolean);
 
+  const sectionFor = (code) => Digit.ComponentRegistryService.getComponent(`${code}CitizenSidebarSection`);
+
   const base = [
     {
       key: "home",
@@ -35,6 +38,11 @@ export const useCitizenNavItems = () => {
       icon: iconOf("Home"),
       navigationUrl: `/${contextPath}/citizen/all-services`,
     },
+    ...mdmsLinkRows(linkData, {
+      contextPath,
+      labelFor: (code) => t(`ACTION_TEST_${Digit.Utils.locale.getTransformedLocale(code)}`),
+      hasOwnSection: (code) => typeof sectionFor(code) === "function",
+    }),
     // The number itself is part of the row, as it was on the old sidebar, so
     // the citizen can read it off as well as tap it.
     ...(helpline
@@ -46,7 +54,7 @@ export const useCitizenNavItems = () => {
   ];
 
   const sections = (initData?.modules || [])
-    .map(({ code }) => Digit.ComponentRegistryService.getComponent(`${code}CitizenSidebarSection`))
+    .map(({ code }) => sectionFor(code))
     .filter((getSection) => typeof getSection === "function")
     .map((getSection) => getSection(t));
 

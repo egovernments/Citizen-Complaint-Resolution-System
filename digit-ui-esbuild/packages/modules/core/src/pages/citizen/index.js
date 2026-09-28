@@ -187,7 +187,7 @@ const Home = ({
       />
 
       <div className={`main center-container citizen-home-container mb-25`}>
-        {hideSidebar ? null : <CitizenNavSideBar t={t} crestUrl={logoUrl} />}
+        {hideSidebar ? null : <CitizenNavSideBar t={t} crestUrl={logoUrl} linkData={linkData} />}
 
         <Switch>
           <Route exact path={path}>

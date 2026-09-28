@@ -29,7 +29,7 @@ const EmployeeMobileSideBar = (props) => {
 };
 
 const CitizenMobileSideBar = (props) => {
-  const { items } = useCitizenNavItems();
+  const { items } = useCitizenNavItems(props.linkData);
   return <CitizenSideBar {...props} navItems={forHamburger(items)} />;
 };
 

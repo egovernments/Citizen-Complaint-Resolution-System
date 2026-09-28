@@ -433,8 +433,9 @@ export const CitizenSideBar = ({
         },
       ]
     : []),
-    // Only for a caller without rail rows: with them, the modules' own
-    // sections are already above and this group would repeat them.
+    // Only for a caller without rail rows: with them, the modules' sections,
+    // the MDMS-configured links and Login are already above, and this group
+    // would repeat them.
     ...(isEmployee || navItems.length
       ? []
       : [

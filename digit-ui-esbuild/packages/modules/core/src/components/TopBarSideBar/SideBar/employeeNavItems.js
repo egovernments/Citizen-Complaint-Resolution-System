@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { insertModuleSections } from "./navSections";
+import { insertModuleSections, withTenantSegment } from "./navSections";
 
 /**
  * Employee navigation items, derived from the access-control tree.
@@ -83,7 +83,7 @@ export const navigateToEmployeeUrl = (history, url, { isMultiRootTenant, tenantI
       window.location.href = updatedUrl;
     }
   } else {
-    history.push(url);
+    history.push(isMultiRootTenant ? withTenantSegment(url, window?.contextPath, tenantId) : url);
   }
 };
 
