@@ -132,10 +132,9 @@ public class ProviderController {
 
     /**
      * The bridge resolves Novu provider id, channel, credential mapping and a typed identifier. A
-     * caller's own identifier must read back as the same type (start {@code <type>-}): dispatch
-     * picks the request body, and rotation the credential form, from the identifier alone, so
-     * {@code ozeki-x} on a twilio-sms integration would get Ozeki's body and a prefix-less one
-     * could never be rotated.
+     * caller's own identifier must read back as the same type (start {@code <type>-}): rotation
+     * picks the credential form from the identifier alone, so {@code ozeki-x} on a twilio-sms
+     * integration would be rotated with Ozeki's form and a prefix-less one could never be rotated.
      */
     private ResponseEntity<ProviderCreateResponse> createFromCatalog(Map<String, Object> body) {
         ProviderType type = catalog.require(str(body.get("type")));
@@ -186,6 +185,16 @@ public class ProviderController {
                                 + ": its provider type cannot be derived. Re-create it from the catalog.");
             }
             ProviderType type = catalog.require(derived);
+            // Novu cannot change an integration's provider, and PUT replaces credentials wholesale:
+            // rotating an SMSCountry/Ozeki integration made before they became native providers
+            // (generic-sms) would store keys generic-sms cannot read.
+            String existingProvider = str(existing.get("providerId"));
+            if (StringUtils.hasText(existingProvider) && !type.getNovuProviderId().equalsIgnoreCase(existingProvider.trim())) {
+                throw new CustomException("NB_INVALID_PROVIDER", "Integration " + id + " is a Novu '"
+                        + existingProvider.trim() + "' integration, but the " + type.getType() + " provider type is now Novu's '"
+                        + type.getNovuProviderId() + "' provider. Novu cannot change an integration's provider: "
+                        + "add a new " + type.getLabel() + " provider, select it on the channel, then delete this one.");
+            }
             catalog.validateRequired(type, credentials);
             novuCredentials = catalog.toNovuCredentials(type, credentials);
         }
@@ -442,18 +451,15 @@ public class ProviderController {
         String txnInput = str(body.get("transactionId"));
         String tenantId = StringUtils.hasText(str(body.get("tenantId"))) ? str(body.get("tenantId")) : "TEST";
 
-        // `id` pins the trigger to one integration (and its type's gateway body); `type` alone fills in the channel.
+        // `id` pins the trigger to one integration; `type` alone fills in the channel.
         String integrationId = firstText(str(body.get("integrationId")), str(body.get("id")));
         String integrationIdentifier = null;
-        String providerType = null;
         if (StringUtils.hasText(integrationId)) {
             Map<String, Object> integration = findIntegration(integrationId);
             integrationIdentifier = str(integration.get("identifier"));
-            providerType = ProviderCatalog.deriveType(integration);
         }
         if (StringUtils.hasText(str(body.get("type")))) {
             ProviderType type = catalog.require(str(body.get("type")));
-            providerType = type.getType();
             if (!StringUtils.hasText(channel)) {
                 channel = type.getChannel();
             }
@@ -479,10 +485,9 @@ public class ProviderController {
                 .contentVariables(toContentVariables(asList(body.get("variables"))))
                 .workflowOverride(workflow)
                 .integrationIdentifier(integrationIdentifier)
-                .providerType(providerType)
                 .build();
-        // A named integration is a Novu integration by construction (even SMSCountry, which is
-        // generic-sms at our adapter), so the direct-gateway route must not swallow it.
+        // A named integration is a Novu integration by construction (SMSCountry included), so the
+        // legacy direct-gateway route must not swallow it.
         DeliveryProvider transport = StringUtils.hasText(integrationIdentifier)
                 ? providers.novu() : providers.select(null, upperChannel);
         DeliveryResult result = transport.send(dispatch);

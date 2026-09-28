@@ -44,7 +44,7 @@ public class NovuDeliveryProvider implements DeliveryProvider {
                 d.getSubscriberId(), contact, d.getChannel(),
                 d.getBody(), d.getSubject(), d.getTransactionId(), d.getData(),
                 d.getTemplateId(), d.getContentVariables(),
-                d.getIntegrationIdentifier(), d.getProviderType());
+                d.getIntegrationIdentifier());
         return toResult(r, d.getIntegrationIdentifier());
     }
 
@@ -64,10 +64,6 @@ public class NovuDeliveryProvider implements DeliveryProvider {
                 : null;
         overrides = novuClient.applyWhatsappIntegrationOverride(overrides, d.getChannel());
         overrides = NovuClient.applyIntegrationOverride(overrides, d.getChannel(), d.getIntegrationIdentifier());
-        if (!whatsapp) {
-            overrides = NovuClient.applyGatewayBody(overrides, d.getProviderType(),
-                    d.getTransactionId(), phone, d.getBody());
-        }
         NovuClient.NovuResponse r = novuClient.trigger(d.getWorkflowOverride(), d.getSubscriberId(),
                 whatsapp ? whatsappAddress(phone) : phone, email, payload, d.getTransactionId(), overrides);
         return toResult(r, d.getIntegrationIdentifier());

@@ -10,12 +10,16 @@ import java.util.List;
 @Builder
 public class ProviderType {
 
-    /** Catalog id: {@code twilio-sms} | {@code twilio-whatsapp} | {@code smtp} | {@code smscountry} | {@code ozeki}. */
+    /** Catalog id: {@code twilio-sms} | {@code twilio-whatsapp} | {@code smtp} | {@code smscountry} | {@code ozeki} | {@code jasmin}. */
     String type;
     String label;
     /** Business channel: {@code SMS} | {@code EMAIL} | {@code WHATSAPP}. */
     String channel;
-    /** {@code novu} (Twilio, nodemailer) | {@code novu-generic-sms} (Ozeki) | {@code bridge-adapter} (SMSCountry via our adapter). */
+    /**
+     * {@code novu}: Novu's worker calls the gateway through the provider named by
+     * {@link #novuProviderId}. Every current type is {@code novu}; SMSCountry, Ozeki and Jasmin
+     * need the DIGIT fork's worker image (see {@link ProviderCatalog}).
+     */
     String transport;
     /** The Novu {@code providerId} the integration is created with. */
     String novuProviderId;

@@ -16,7 +16,12 @@ import type { Channel } from './channelStatus';
 
 export type { Channel };
 
-/** How the bridge delivers for a provider type. Informational for the UI. */
+/**
+ * How the bridge delivers for a provider type. Informational for the UI. Current
+ * bridges answer `novu` for every type (SMSCountry, Ozeki and Jasmin are native
+ * providers of the DIGIT Novu worker); the other two values come from bridges
+ * built before that, which drove those gateways through Novu's generic-sms.
+ */
 export type ProviderTransport = 'novu' | 'novu-generic-sms' | 'bridge-adapter';
 
 /** One credential input the operator must fill for a provider type. */

@@ -69,7 +69,7 @@ class DispatchPipelineWhatsappNoProviderTest {
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
@@ -126,7 +126,7 @@ class DispatchPipelineWhatsappNoProviderTest {
         // resolving the complaints-whatsapp workflow id internally.
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("WHATSAPP"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any(), any(), any(), any(), any());
+                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any(), any(), any(), any());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
     }
 

@@ -116,10 +116,9 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
             return true;
         }
         String path = pathOf(request);
-        // Machine callers with their own authentication (receipt secret; adapter credential
-        // headers + apiUrl allowlist), and the public contract documents (no tenant data).
+        // Machine callers with their own authentication (receipt secret), and the public contract
+        // documents (no tenant data).
         if (path.startsWith("/novu-adapter/v1/receipts")
-                || path.startsWith("/novu-adapter/v1/gateways")
                 || path.startsWith("/novu-adapter/v1/contract")) {
             return true;
         }

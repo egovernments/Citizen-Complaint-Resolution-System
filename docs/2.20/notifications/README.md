@@ -9,7 +9,7 @@ text, from the `NOTIFICATIONS.*` MDMS masters that operators edit in the Configu
 | Set notifications up and run them (operators, deployers) | [setup-guide.md](./setup-guide.md) |
 | Upgrade a 2.12 deployment | [migration.md](./migration.md) |
 | Connect a module, swap the DIGIT seams (developers) | [developer-guide.md](./developer-guide.md) |
-| Understand the provider adapters, or add a provider | [providers.md](./providers.md) — [How the adapters work](./providers.md#how-the-adapters-work), [Adding a provider](./providers.md#adding-a-provider) |
+| Understand the providers, the DIGIT Novu worker, or add a provider | [providers.md](./providers.md) — [How providers work](./providers.md#how-providers-work), [The DIGIT Novu worker](./providers.md#the-digit-novu-worker), [Adding a provider](./providers.md#adding-a-provider) |
 | Configure the Kafka / Redpanda topics novu-bridge consumes | [kafka-events.md](./kafka-events.md) |
 | Integrate against the published interface | [contract/](./contract/README.md) — schemas, OpenAPI, [error codes](./contract/error-codes.md), [outputs](./contract/outputs.md) |
 

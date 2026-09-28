@@ -2,8 +2,8 @@
 //
 // The operator picks a provider type (grouped by channel), fills the credential
 // fields that type declares, names it, and saves. Nothing about Twilio, SMTP,
-// SMSCountry or Ozeki is hardcoded here: if the bridge adds a provider type it
-// appears in this dialog with its own fields.
+// SMSCountry, Ozeki or Jasmin is hardcoded here: if the bridge adds a provider
+// type it appears in this dialog with its own fields.
 //
 // Credentials live only in this form's local state and are dropped the moment the
 // dialog closes; they are sent once, on submit, straight to the bridge over TLS

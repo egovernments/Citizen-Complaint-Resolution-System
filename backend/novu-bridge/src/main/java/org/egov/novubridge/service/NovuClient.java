@@ -21,8 +21,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -46,13 +44,12 @@ public class NovuClient {
      * Upsert the subscriber, then trigger the channel's workflow with the pre-rendered body.
      *
      * @param integrationIdentifier the Novu integration the tenant pinned for this channel; blank = Novu's primary
-     * @param providerType          catalog type of that integration, so a gateway needing its own body (Ozeki) gets it
      */
     public NovuResponse identifyThenTrigger(String subscriberId, Contact contact, String channel,
                                             String renderedBody, String renderedSubject,
                                             String transactionId, Map<String, Object> data,
                                             String templateId, Map<String, Object> contentVariables,
-                                            String integrationIdentifier, String providerType) {
+                                            String integrationIdentifier) {
         // Channel-scoped subscriber: SMS wants "+E164" and WhatsApp "whatsapp:+E164" in the same
         // phone field; one shared subscriber would let the two legs clobber each other.
         String scopedSubscriberId = StringUtils.hasText(channel) ? subscriberId + ":" + channel : subscriberId;
@@ -74,7 +71,6 @@ public class NovuClient {
         overrides = applyWhatsappIntegrationOverride(overrides, channel);
         // The tenant's pick wins over the deployment-wide WhatsApp pin: it is more specific and needs no redeploy.
         overrides = applyIntegrationOverride(overrides, channel, integrationIdentifier);
-        overrides = applyGatewayBody(overrides, providerType, transactionId, phone, renderedBody);
         return trigger(config.getNovuWorkflowId(channel), scopedSubscriberId, phone, email, payload,
                 transactionId, overrides);
     }
@@ -92,32 +88,6 @@ public class NovuClient {
         Map<String, Object> channelOverride = new HashMap<>();
         channelOverride.put("integrationIdentifier", integrationIdentifier);
         merged.put("EMAIL".equalsIgnoreCase(channel) ? "email" : "sms", channelOverride);
-        return merged;
-    }
-
-    /**
-     * Ozeki's API wants {@code {messages:[{message_id, to_address, text}]}}, which generic-sms
-     * cannot express. Novu deep-merges {@code _passthrough.body} verbatim (no key-casing), but only
-     * under the Novu provider id ({@code generic-sms}), and never templates it, so {@code text}
-     * must already be rendered. SMSCountry needs nothing here: its adapter does the translating.
-     */
-    public static Map<String, Object> applyGatewayBody(Map<String, Object> overrides, String providerType,
-                                                       String transactionId, String toAddress, String text) {
-        if (!"ozeki".equalsIgnoreCase(providerType == null ? "" : providerType.trim())) {
-            return overrides;
-        }
-        Map<String, Object> message = new LinkedHashMap<>();
-        message.put("message_id", transactionId);
-        message.put("to_address", toAddress);
-        message.put("text", text);
-
-        Map<String, Object> merged = overrides == null ? new HashMap<>() : overrides;
-        @SuppressWarnings("unchecked")
-        Map<String, Object> providers = merged.get("providers") instanceof Map
-                ? (Map<String, Object>) merged.get("providers") : new HashMap<>();
-        providers.put("generic-sms", Map.of("_passthrough", Map.of("body",
-                Map.of("messages", List.of(message)))));
-        merged.put("providers", providers);
         return merged;
     }
 
@@ -152,7 +122,7 @@ public class NovuClient {
                         "Failed to serialize contentVariables for Twilio: " + e.getMessage());
             }
         }
-        // Mutable all the way down: applyGatewayBody may add to "providers" later.
+        // Mutable all the way down: a caller may add to "providers" later.
         Map<String, Object> passthrough = new HashMap<>();
         passthrough.put("body", body);
         Map<String, Object> twilio = new HashMap<>();

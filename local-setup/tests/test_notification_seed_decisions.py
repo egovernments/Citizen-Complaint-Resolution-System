@@ -201,6 +201,7 @@ class ProviderIdentifier(unittest.TestCase):
             "twilio-sms-abc": "twilio-sms",
             "SMSCountry-Main": "smscountry",
             " ozeki ": "ozeki",
+            "jasmin-0011aabbccddeeff": "jasmin",
             "smtp-1": "smtp",
             "whatsapp-legacy": "twilio-whatsapp",       # the pre-catalog marker
             "twilio-smsx": None,                        # a prefix needs the dash
@@ -212,7 +213,14 @@ class ProviderIdentifier(unittest.TestCase):
             with self.subTest(identifier=ident):
                 self.assertEqual(mn.type_from_identifier(ident), expected)
 
-    def plan(self, entry, integrations=()):
+    def test_derive_type_reads_unmarked_native_gateways_but_not_generic_sms(self):
+        # ProviderCatalog.deriveType: SMSCountry/Ozeki/Jasmin are native Novu providers now.
+        for provider in ("smscountry", "ozeki", "jasmin"):
+            with self.subTest(provider=provider):
+                self.assertEqual(mn.derive_type({"providerId": provider, "channel": "sms"}), provider)
+        self.assertIsNone(mn.derive_type({"providerId": "generic-sms", "channel": "sms"}))
+
+    def plan(self, entry, integrations=(), worker_image=None):
         import stat
         import tempfile
         fd, path = tempfile.mkstemp(suffix=".json")
@@ -222,13 +230,35 @@ class ProviderIdentifier(unittest.TestCase):
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
         ctx = types.SimpleNamespace(integrations=list(integrations), integrations_error=None)
         args = types.SimpleNamespace(create_provider=["smscountry"], create_smscountry_provider=False,
-                                     credentials_file=path)
+                                     credentials_file=path,
+                                     worker_container="novu-worker" if worker_image else None)
         original = mn.catalog_required
         mn.catalog_required = lambda _ctx: dict(mn.CATALOG_REQUIRED)  # no bridge call in a unit test
         self.addCleanup(setattr, mn, "catalog_required", original)
+        original_image = mn.container_image
+        mn.container_image = lambda _name: worker_image  # no docker call in a unit test
+        self.addCleanup(setattr, mn, "container_image", original_image)
         return mn.plan_provider_creation(ctx, args)
 
-    CREDS = {"user": "u", "password": "p", "senderId": "S"}
+    # The SMSCountry form is the fork provider's credential keys.
+    CREDS = {"user": "u", "password": "p", "from": "S"}
+
+    def test_the_pre_native_smscountry_keys_are_refused_with_their_new_names(self):
+        with self.assertRaises(mn.RefuseToStart) as caught:
+            self.plan({"credentials": {"user": "u", "password": "p", "senderId": "S"}})
+        self.assertIn("lack required key(s): from", str(caught.exception))
+        self.assertIn("senderId is now from", str(caught.exception))
+
+    def test_an_smscountry_provider_is_refused_while_the_worker_is_upstream(self):
+        with self.assertRaises(mn.RefuseToStart) as caught:
+            self.plan({"credentials": self.CREDS}, worker_image="ghcr.io/novuhq/novu/worker:2.3.0")
+        self.assertIn("DIGIT Novu worker", str(caught.exception))
+        self.assertIn("ghcr.io/novuhq/novu/worker:2.3.0", str(caught.exception))
+
+    def test_an_smscountry_provider_is_planned_on_the_fork_worker(self):
+        plans = self.plan({"credentials": self.CREDS}, worker_image="novu-worker:2.3.0-digit.1")
+        self.assertEqual(plans[0]["state"], "create")
+        self.assertEqual(plans[0]["keys"], ["from", "password", "user"])
 
     def test_a_prefixless_identifier_is_refused_before_any_write(self):
         with self.assertRaises(mn.RefuseToStart) as caught:

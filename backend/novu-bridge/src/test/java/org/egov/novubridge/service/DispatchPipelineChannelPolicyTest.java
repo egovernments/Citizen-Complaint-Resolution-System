@@ -90,7 +90,7 @@ class DispatchPipelineChannelPolicyTest {
 
     @Test
     void whatsappEnabledByTenantPolicy_isDelivered_evenThoughEnvEnablesNothing() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any(), any())).thenReturn(ok());
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any(), any())).thenReturn(ok());
         service.process(event("WHATSAPP", "HX1234567890abcdef1234567890abcdef"), true, null);
         ArgumentCaptor<DispatchLogEntry> row = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository).upsert(row.capture());

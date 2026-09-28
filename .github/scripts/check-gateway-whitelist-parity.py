@@ -91,9 +91,9 @@ KONG_ONLY_AUTH_OPTIONAL = {
     "/xstate-chatbot/status",
 }
 # NOT whitelisted and NOT routed on purpose: /novu-bridge/novu-adapter/v1/gateways/**
-# (the internal SMSCountry send adapter Novu's worker calls over the container
-# network, carrying provider credentials in headers). Kong terminates it — see
-# novu-bridge-internal-gateways-deny in kong.yml.
+# (formerly the internal SMSCountry send adapter, which carried provider credentials
+# in headers; an older novu-bridge image may still serve it). Kong terminates it —
+# see novu-bridge-internal-gateways-deny in kong.yml.
 
 
 def _find_value(node, key):

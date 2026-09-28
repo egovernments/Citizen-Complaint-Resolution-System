@@ -8,9 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
 
-import java.net.URI;
 import java.util.List;
-import java.util.Locale;
 import java.util.TimeZone;
 
 /** Property reference and defaults: {@code application.properties}. */
@@ -187,15 +185,6 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.smscountry.password:}")
     private String smsCountryPassword;
 
-    // Hosts the SMSCountry adapter may post credentials to (plus the smscountry.url host). The
-    // adapter's apiUrl comes from its caller, so anything else would make it an internal proxy.
-    @Value("#{'${novu.bridge.smscountry.allowed.hosts:api.smscountry.com,www.smscountry.com}'.split(',')}")
-    private List<String> smsCountryAllowedHosts;
-
-    // Must be reachable FROM the Novu worker: an in-cluster URL, never the public gateway.
-    @Value("${novu.bridge.smscountry.adapter.url:http://novu-bridge:8080/novu-bridge/novu-adapter/v1/gateways/smscountry/send}")
-    private String smsCountryAdapterUrl;
-
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;
 
@@ -206,45 +195,6 @@ public class NovuBridgeConfiguration {
 
     public boolean isSmsCountryDirect() {
         return "smscountry".equalsIgnoreCase(smsProvider == null ? "" : smsProvider.trim());
-    }
-
-    /** The configured gateway's own host is always allowed; the rest come from the allowlist. */
-    public boolean isSmsCountryHostAllowed(String host) {
-        if (host == null || host.isBlank()) {
-            return false;
-        }
-        String wanted = host.trim().toLowerCase(Locale.ROOT);
-        if (wanted.equals(hostOf(smsCountryUrl))) {
-            return true;
-        }
-        return smsCountryAllowedHosts != null && smsCountryAllowedHosts.stream()
-                .anyMatch(h -> h != null && wanted.equals(h.trim().toLowerCase(Locale.ROOT)));
-    }
-
-    /**
-     * Where a caller-supplied SMSCountry gateway URL may send the operator's credentials: an
-     * absolute http(s) URL on an allowed host ({@link #isSmsCountryHostAllowed}).
-     */
-    public boolean isSmsCountryUrlAllowed(String url) {
-        if (url == null || url.isBlank()) {
-            return false;
-        }
-        try {
-            URI uri = URI.create(url.trim());
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            return (scheme.equals("http") || scheme.equals("https")) && isSmsCountryHostAllowed(uri.getHost());
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
-    }
-
-    private static String hostOf(String url) {
-        try {
-            String host = url == null ? null : URI.create(url.trim()).getHost();
-            return host == null ? null : host.toLowerCase(Locale.ROOT);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 
     public boolean isChannelEnabled(String channel) {

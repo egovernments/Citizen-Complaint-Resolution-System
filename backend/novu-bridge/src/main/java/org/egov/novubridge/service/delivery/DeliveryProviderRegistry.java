@@ -32,8 +32,8 @@ public class DeliveryProviderRegistry {
     }
 
     public DeliveryProvider select(@Nullable String tenantId, String channel) {
-        // A pinned provider is a Novu integration by construction (even SMSCountry, via our adapter),
-        // so it outranks `gateway`.
+        // A pinned provider is a Novu integration by construction (SMSCountry included: the DIGIT
+        // Novu worker carries it natively), so it outranks `gateway`.
         String provider = policy.provider(tenantId, channel);
         if (provider != null) {
             return novu;

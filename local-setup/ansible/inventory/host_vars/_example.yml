@@ -525,6 +525,15 @@ build_novu_dashboard: false
 # novu_base_path: "/novu"           # subpath to bake into the rebased dist
 # novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
 
+# The Novu worker (the process that calls the SMS/email gateways). Unset = upstream
+# ghcr.io/novuhq/novu/worker:2.3.0, which carries Twilio, SMTP and Novu's other
+# built-in providers. SMSCountry, Ozeki and Jasmin providers need the DIGIT fork's
+# worker instead: upstream v2.3.0 + those provider classes, from
+# github.com/dhruv-1001/novu (branch digit/v2.3.0). It is not in a registry yet:
+# build it ON THIS BOX (docs/2.20/notifications/providers.md, "The DIGIT Novu
+# worker") and name the local tag here. The deploy warns while this is upstream.
+# novu_worker_image: "novu-worker:2.3.0-digit.1"
+
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
@@ -544,28 +553,23 @@ twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 
 
 # ────────── Ordinary SMS through a NON-Twilio gateway (optional) ──────────
-# For deployments that cannot use Twilio for SMS — e.g. the account has no SMS
-# compliance registration — the bridge can route the SMS leg through another
-# gateway using Novu's built-in "generic-sms" provider. WhatsApp is unaffected
-# and keeps using Twilio.
+# SMS gateways are Novu providers, added on Configurator -> Notifications ->
+# Providers and selected per tenant on Channels: Twilio SMS, SMSCountry, Ozeki,
+# Jasmin. SMSCountry / Ozeki / Jasmin need novu_worker_image (above) to be the
+# DIGIT fork's worker. Nothing here is needed for them.
 #
-# Novu has no built-in provider for most regional gateways: setting an
-# integration's providerId to the gateway's own name fails at trigger time with
-# "Sms handler for provider <name> is not found". So the integration is created
-# in Novu with providerId "generic-sms", pointed at the gateway's REST endpoint
-# with its auth, and the bridge supplies the gateway-specific request body.
-#
-# Leave blank for Twilio SMS (the default). Set to "ozeki" (a gateway you run) or
-# "smscountry" (a bulk provider). The bootstrap does NOT create this integration —
-# add it in Novu or the Configurator first, then name its identifier here.
-# novu_bridge_sms_sender_id is used by smscountry only; Ozeki takes the sender
-# from its own gateway configuration.
+# novu_bridge_sms_provider is only for the LEGACY direct SMSCountry route of 2.12
+# deployments: "smscountry" makes novu-bridge post the SMS leg straight to
+# SMSCountry's legacy bulk API with the panel login below, bypassing Novu (no
+# credential store, activity log or Configurator management). Blank (default) =
+# SMS goes through Novu. Any other value is ignored. Use the direct route OR a
+# Configurator SMSCountry provider on a channel, not both.
+# novu_bridge_sms_sender_id is the direct route's registered sender id.
 novu_bridge_sms_provider: ""
 novu_bridge_sms_sender_id: ""
 
-# SMSCountry only. Its legacy bulk API authenticates with the SMSCountry PANEL
-# LOGIN — that account type issues no API key — and the bridge posts to it
-# directly, so no Novu integration is needed for this gateway.
+# Legacy direct route only. SMSCountry's legacy bulk API authenticates with the
+# PANEL LOGIN — that account type issues no API key.
 novu_bridge_smscountry_user: ""
 novu_bridge_smscountry_password: ""
 
@@ -662,12 +666,6 @@ novu_bridge_smscountry_password: ""
 # Country code prefixed to OTP numbers that arrive without one (core SMS from
 # user-otp / egov-user), e.g. "254". Blank = numbers are sent as received.
 # novu_bridge_core_sms_country_code: ""
-
-# Hosts the SMSCountry adapter may post to when a provider's Gateway URL names
-# one (comma-separated). The host of NOVU_BRIDGE_SMSCOUNTRY_URL is always allowed.
-# A mock gateway MUST be listed, or the send goes to the configured default URL —
-# with the real credentials. Unset = "api.smscountry.com,www.smscountry.com".
-# novu_bridge_smscountry_allowed_hosts: "api.smscountry.com,www.smscountry.com,sms-mock"
 
 # Per-channel Novu workflow ids the bridge triggers (the rendered message travels
 # in payload.body — the workflow is just the delivery shell). Defaults match the

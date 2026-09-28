@@ -239,9 +239,9 @@ plugins:
           -- delete writes join the same bucket. Same auth boundary as the rest of the
           -- proxy set — ProxyAuthFilter inside novu-bridge, Bearer header, no body token.
           -- NOTE: /novu-bridge/novu-adapter/v1/gateways/** is deliberately NOT here and
-          -- NOT routed: it is the internal SMSCountry adapter Novu's worker calls over
-          -- the container network, and it carries provider credentials in headers. Kong
-          -- terminates it (see novu-bridge-internal-gateways-deny below).
+          -- NOT routed: it was the internal SMSCountry adapter, which took provider
+          -- credentials in headers. Kong still terminates it (see
+          -- novu-bridge-internal-gateways-deny below).
           ["/novu-bridge/novu-adapter/v1/providers/catalog"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/_update"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/_delete"]=true,
@@ -1051,10 +1051,15 @@ services:
     - /novu-bridge/novu-adapter/v1/dispatch/_resolve
     strip_path: false
 # ── INTERNAL-ONLY: /novu-bridge/novu-adapter/v1/gateways/** ──────────────────
-# The SMSCountry send adapter (POST .../gateways/smscountry/send) exists so Novu's
-# WORKER can hand an SMS to SMSCountry's bulk API. The worker calls novu-bridge
-# DIRECTLY on the compose network (http://novu-bridge:8080/...), never through Kong,
-# and the request carries the provider's panel username/password in headers.
+# This prefix held the SMSCountry send adapter (POST .../gateways/smscountry/send),
+# which Novu's worker called on the compose network with the provider's panel
+# username/password in headers. SMSCountry is now a native provider of the DIGIT
+# Novu worker and current novu-bridge builds have no /gateways endpoint at all.
+#
+# The deny route STAYS: kong.yml and the novu-bridge image are deployed
+# independently (NOTIFICATION_STACK_TAG / novu_bridge_image pins), so a box can run
+# this Kong config in front of an older bridge that still has the adapter, and a
+# future adapter must not become reachable by accident. It costs nothing.
 #
 # So this prefix must never be reachable from the internet. It is blocked THREE ways,
 # deliberately redundant because each one alone is a single point of failure:

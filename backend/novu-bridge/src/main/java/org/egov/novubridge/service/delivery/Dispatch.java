@@ -34,6 +34,4 @@ public class Dispatch {
     String workflowOverride;
     /** Novu integration the tenant pinned for this channel; blank = the transport picks. */
     String integrationIdentifier;
-    /** Catalog type of {@link #integrationIdentifier}, so a transport can attach a gateway's own body. */
-    String providerType;
 }

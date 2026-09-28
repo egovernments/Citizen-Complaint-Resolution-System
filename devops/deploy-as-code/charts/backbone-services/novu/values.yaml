@@ -273,6 +273,13 @@ worker:
   labels:
     app: "novu-worker"
     group: "novu"
+  # Upstream by default. SMSCountry, Ozeki and Jasmin providers need the DIGIT fork's
+  # worker (upstream v2.3.0 + those SMS provider classes; github.com/dhruv-1001/novu,
+  # branch digit/v2.3.0): on this image their integrations save and every send fails
+  # inside Novu. The fork image is built locally for now and not in a registry, so a
+  # cluster that needs it must push it to a registry its nodes can pull from and
+  # override both fields, e.g. repository: "<registry>/novu-worker", tag: "2.3.0-digit.1".
+  # See docs/2.20/notifications/providers.md, "The DIGIT Novu worker".
   image:
     repository: "ghcr.io/novuhq/novu/worker"
     tag: "2.3.0"

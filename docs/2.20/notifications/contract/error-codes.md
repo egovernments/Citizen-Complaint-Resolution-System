@@ -72,8 +72,8 @@ Channel `NONE`, `recipient_value` `none`, `transaction_id` `<seed>:NONE` — exc
 |---|---|---|---|
 | `NB_NOVU_TRIGGER_FAILED` | Novu trigger failed or answered non-2xx (DLQ when thrown) | yes | Check Novu and `NOVU_API_KEY`; replay |
 | `NB_DELIVERY_ERROR` | A provider threw an unexpected exception (also DLQ) | yes | Read `last_error_message` |
-| `NB_SMSCOUNTRY_UNREACHABLE` | SMSCountry bulk API unreachable | yes | Check egress and `novu.bridge.smscountry.url` |
-| `NB_SMSCOUNTRY_REJECTED` | SMSCountry answered anything but `OK:<jobid>`; HTTP 502 from the adapter | no / config | Usually credentials, sender id or (India) DLT template; the gateway's reply is in the bridge log (by the masked txn quoted in `last_error_message`), redacted, not in `last_error_message` |
+| `NB_SMSCOUNTRY_UNREACHABLE` | Legacy direct route (`novu.bridge.sms.provider=smscountry`): SMSCountry bulk API unreachable | yes | Check egress and `novu.bridge.smscountry.url` |
+| `NB_SMSCOUNTRY_REJECTED` | Legacy direct route: SMSCountry answered anything but `OK:<jobid>` | no / config | Usually credentials, sender id or (India) DLT template; the gateway's reply is in the bridge log (by the masked txn quoted in `last_error_message`), redacted, not in `last_error_message` |
 | `NB_PROCESSING_ERROR` | Uncoded failure caught by the consumer. DLQ only | yes | Bridge log has the stack trace |
 | `NB_PROVIDER_FAILED` | A receipt reported final failure (`UNDELIV`, `REJECTD`, `EXPIRED`, `failed`, `…error…`) | no | `last_error_message` holds the provider's word |
 | `NB_PROVIDER_BOUNCED` | A receipt reported a bounce (status `BOUNCED`) | no | Correct the address |
@@ -84,31 +84,19 @@ Body: `{"ResponseInfo": …, "Errors": [{"code", "message"}]}`.
 
 | Code | HTTP | Meaning / action |
 |---|---|---|
-| `NB_INVALID_PROVIDER` | 400 | Missing `id` / `providerId`, empty `_update`, a required credential missing (see `GET /providers/catalog`), a catalog-form `identifier` that does not start with `<type>-`, or no `tenantId` on `_delete` / `_update` with `active: false` |
-| `NB_UNKNOWN_PROVIDER_TYPE` | 400 | `type` not one of `twilio-sms`, `twilio-whatsapp`, `smtp`, `smscountry`, `ozeki`, or an existing integration's type cannot be derived for a rotation — re-create it from the catalog |
+| `NB_INVALID_PROVIDER` | 400 | Missing `id` / `providerId`, empty `_update`, a required credential missing (see `GET /providers/catalog`), a catalog-form `identifier` that does not start with `<type>-`, no `tenantId` on `_delete` / `_update` with `active: false`, or a credential rotation on an integration whose Novu provider is not its type's (an SMSCountry / Ozeki provider made as `generic-sms` before they became native): add a new provider, select it, delete the old one |
+| `NB_UNKNOWN_PROVIDER_TYPE` | 400 | `type` not one of `twilio-sms`, `twilio-whatsapp`, `smtp`, `smscountry`, `ozeki`, `jasmin`, or an existing integration's type cannot be derived for a rotation — re-create it from the catalog |
 | `NB_INVALID_CHANNEL` | 400 | `channel` blank or not SMS / WHATSAPP / EMAIL |
 | `NB_PROVIDER_NOT_FOUND` | 400 | No integration with that `_id` / identifier |
 | `NB_PROVIDER_IN_USE` | 409 | Delete or disable refused: a channel still selects it (by identifier or Novu `_id`) — select another first. Also when a state's channel rows could not be read: nothing changed, retry once MDMS answers |
 | `NB_ADMIN_ROLE_REQUIRED` | 403 | Create / `_update` / `_delete` / `test-send` / `/dispatch/_dry-run` / `/dispatch/_resolve` without a role from `novu.bridge.proxy.admin.roles` held at a state tenant (a city-level admin role does not count) |
 | `NB_TENANT_NOT_ALLOWED` | 403 | `/logs` or `/config/source` for a tenant that is not the caller's own, nor a city of its state; or `_delete` / disable for a `tenantId` whose state the caller holds no admin role at |
-| `NB_ADAPTER_URL_NOT_ALLOWED` | 400 | An SMSCountry Gateway URL off `novu.bridge.smscountry.allowed.hosts`, refused at create / rotate |
 | `NB_NO_TWILIO_INTEGRATION` | 400 | Template sync found no Twilio integration with credentials |
 | `NB_TWILIO_CONTENT_FETCH_FAILED` | 400 | Twilio ContentAndApprovals call failed; check credentials and egress (retryable) |
 | `NB_TWILIO_CONTENT_VARS_SERIALIZE` | 400 | `contentVariables` values must be plain scalars |
 | `NB_NOVU_INTEGRATIONS_FAILED` | 400 / 502 | Listing Novu integrations failed; check Novu and the API key |
 | `NB_NOVU_INTEGRATION_CREATE_FAILED` / `NB_NOVU_INTEGRATION_UPDATE_FAILED` / `NB_NOVU_INTEGRATION_DELETE_FAILED` | 400 | Novu refused; read the message (e.g. SMTP port must be text) |
 | `NB_NOVU_WORKFLOWS_FAILED` | 400 | Listing Novu workflows failed |
-
-## Internal gateway adapter (HTTP only)
-
-`POST /novu-adapter/v1/gateways/smscountry/send`, called by the Novu worker; body
-`{"error": "<code>", "message": …}`.
-
-| Code | HTTP | Meaning / action |
-|---|---|---|
-| `NB_ADAPTER_UNAUTHENTICATED` | 401 | `X-SMSCountry-User` / `X-SMSCountry-Password` missing — re-save the provider from the Configurator |
-| `NB_ADAPTER_BAD_REQUEST` | 400 | No recipient or text — check the integration's `baseUrl` points at the adapter |
-| `NB_ADAPTER_URL_NOT_ALLOWED` | 400 | The integration's `?apiUrl=` is not an http(s) URL on the SMSCountry host or `novu.bridge.smscountry.allowed.hosts`. Nothing was sent (the bridge no longer falls back to the default gateway with these credentials) — list the host, or re-save the provider with a blank Gateway URL |
 
 ## Contract documents (HTTP only)
 

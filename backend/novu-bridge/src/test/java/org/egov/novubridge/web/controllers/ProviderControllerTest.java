@@ -58,7 +58,6 @@ class ProviderControllerTest {
         TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
         NovuBridgeConfiguration config = new NovuBridgeConfiguration();
         config.setSmsCountryUrl("http://api.smscountry.com/SMSCwebservice_bulk.aspx");
-        config.setSmsCountryAdapterUrl("http://novu-bridge:8080/novu-bridge/novu-adapter/v1/gateways/smscountry/send");
         controller = new ProviderController(novuClient,
                 new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
                 dispatchLogRepository, twilioTemplateSyncService,
@@ -203,6 +202,99 @@ class ProviderControllerTest {
 
         controller.createProvider(twilioSmsCatalogBody(null));
         assertTrue(createdIdentifier().startsWith("twilio-sms-"), createdIdentifier());
+    }
+
+    @Test
+    void createFromCatalog_forkGatewaysAreCreatedAsTheirOwnNovuProvider_withNativeCredentials() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9"))));
+        Map<String, Map<String, Object>> forms = new LinkedHashMap<>();
+        forms.put("smscountry", Map.of("user", "u", "password", "p", "from", "KEGOV"));
+        forms.put("ozeki", Map.of("baseUrl", "http://ozeki:9509/api?action=sendmsg", "user", "u", "password", "p"));
+        forms.put("jasmin", Map.of("baseUrl", "http://jasmin:1401/send", "user", "u", "password", "p"));
+
+        for (Map.Entry<String, Map<String, Object>> e : forms.entrySet()) {
+            Map<String, Object> req = new LinkedHashMap<>();
+            req.put("type", e.getKey());
+            req.put("name", e.getKey() + " main");
+            req.put("credentials", e.getValue());
+            controller.createProvider(req);
+
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            ArgumentCaptor<Map<String, Object>> creds = ArgumentCaptor.forClass((Class) Map.class);
+            ArgumentCaptor<String> identifier = ArgumentCaptor.forClass(String.class);
+            verify(novuClient).createIntegration(eq(e.getKey() + " main"), identifier.capture(),
+                    eq(e.getKey()), eq("sms"), creds.capture(), eq(true));
+            assertEquals(e.getValue(), creds.getValue(), e.getKey());
+            assertEquals(e.getKey(), ProviderCatalog.typeFromIdentifier(identifier.getValue()));
+        }
+    }
+
+    private void stubIntegration(String identifier, String providerId) {
+        Map<String, Object> integ = new LinkedHashMap<>();
+        integ.put("_id", "i7");
+        integ.put("identifier", identifier);
+        integ.put("providerId", providerId);
+        integ.put("channel", "sms");
+        integ.put("active", true);
+        when(novuClient.listIntegrations()).thenReturn(novuResp(200, Map.of("data", List.of(integ))));
+    }
+
+    @Test
+    void rotate_refusesAnSmsCountryIntegrationStillOnGenericSms_insteadOfStoringKeysItCannotRead() {
+        stubIntegration("smscountry-0011aabbccddeeff", "generic-sms");
+        // Novu itself would accept the PUT: the refusal has to be the bridge's own.
+        when(novuClient.updateIntegration(anyString(), nullable(String.class), nullable(Map.class),
+                nullable(Boolean.class))).thenReturn(novuResp(200, Map.of("data", Map.of("_id", "i7"))));
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id", "i7");
+        req.put("credentials", Map.of("user", "u", "password", "p", "from", "KEGOV"));
+
+        CustomException ex = assertThrows(CustomException.class, () -> controller.updateProvider(req));
+        assertEquals("NB_INVALID_PROVIDER", ex.getCode());
+        assertTrue(ex.getMessage().contains("generic-sms"), ex.getMessage());
+        verify(novuClient, never()).updateIntegration(anyString(), nullable(String.class),
+                nullable(Map.class), nullable(Boolean.class));
+    }
+
+    @Test
+    void rotate_writesNativeCredentialsToANativeSmsCountryIntegration() {
+        stubIntegration("smscountry-0011aabbccddeeff", "smscountry");
+        when(novuClient.updateIntegration(anyString(), nullable(String.class), nullable(Map.class),
+                nullable(Boolean.class))).thenReturn(novuResp(200, Map.of("data", Map.of("_id", "i7"))));
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id", "i7");
+        req.put("credentials", Map.of("user", "u2", "password", "p2", "from", "KEGOV"));
+
+        controller.updateProvider(req);
+
+        verify(novuClient).updateIntegration(eq("i7"), isNull(),
+                eq(Map.of("user", "u2", "password", "p2", "from", "KEGOV")), isNull());
+    }
+
+    @Test
+    void testSend_throughAnOzekiProvider_pinsTheIntegration_andAddsNoGatewayBody() {
+        stubIntegration("ozeki-0011aabbccddeeff", "ozeki");
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
+                .thenReturn(novuResp(201, Map.of("acknowledged", true)));
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id", "i7");
+        req.put("channel", "SMS");
+        req.put("to", Map.of("phone", "+15550100"));
+        req.put("body", "hello");
+        controller.testSend(req);
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        ArgumentCaptor<Map<String, Object>> overrides = ArgumentCaptor.forClass((Class) Map.class);
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), eq("+15550100"),
+                nullable(String.class), anyMap(), anyString(), overrides.capture());
+        // The fork's Ozeki provider builds its own {messages:[…]} body; a generic-sms
+        // passthrough here would be dead weight at best.
+        assertEquals(Map.of("sms", Map.of("integrationIdentifier", "ozeki-0011aabbccddeeff")),
+                overrides.getValue());
     }
 
     // ---- GET /providers/templates ---------------------------------------

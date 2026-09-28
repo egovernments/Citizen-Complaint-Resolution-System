@@ -11,7 +11,6 @@ import org.egov.novubridge.service.delivery.DeliveryResult;
 import org.egov.novubridge.service.delivery.Dispatch;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
 import org.egov.novubridge.service.provider.ProviderAvailability;
-import org.egov.novubridge.service.provider.ProviderCatalog;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.util.Values;
 import org.egov.novubridge.web.models.*;
@@ -177,7 +176,6 @@ public class DispatchPipelineService {
                 .templateId(event.getTemplateId())
                 .contentVariables(event.getContentVariables())
                 .integrationIdentifier(integrationIdentifier)
-                .providerType(ProviderCatalog.typeFromIdentifier(integrationIdentifier))
                 .build();
         DeliveryProvider provider = providers.select(event.getTenantId(), channel);
 

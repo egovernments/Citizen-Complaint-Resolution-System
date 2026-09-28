@@ -473,7 +473,7 @@ describe('Novu workflow creation deployment contract', () => {
     );
   });
 
-  test('the SMSCountry settings are rendered AND handed to the container', () => {
+  test('the legacy direct SMSCountry settings are rendered AND handed to the container', () => {
     const vars = [
       'NOVU_BRIDGE_SMS_PROVIDER',
       'NOVU_BRIDGE_SMS_SENDER_ID',
@@ -499,8 +499,38 @@ describe('Novu workflow creation deployment contract', () => {
       expect(bridgeBlock).toContain(`${v}: \${${v}`);
     }
 
-    // nothing routes SMSCountry through Novu — it is a direct client
+    // the direct route is a client of its own, not a Novu integration
     expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
+  });
+
+  // SMSCountry / Ozeki / Jasmin providers are native to the DIGIT Novu fork's worker. The
+  // bridge-side SMSCountry adapter (and its apiUrl allow-list) is gone: settings for it
+  // would be dead config that reads as if something still consumed it.
+  test('no bridge-side gateway adapter settings are left', () => {
+    for (const text of [composeFile, composeEnv]) {
+      expect(text).not.toContain('SMSCOUNTRY_ALLOWED_HOSTS');
+      expect(text).not.toContain('SMSCOUNTRY_ADAPTER');
+    }
+  });
+
+  test('the Novu worker image is configurable, upstream by default, and the deploy warns on upstream', () => {
+    const start = composeFile.indexOf('\n  novu-worker:');
+    expect(start).toBeGreaterThan(-1);
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const workerBlock = next === -1 ? rest : rest.slice(0, next);
+    expect(workerBlock).toMatch(/^ {4}image: \$\{NOVU_WORKER_IMAGE:-ghcr\.io\/novuhq\/novu\/worker:2\.3\.0\}$/m);
+    expect(composeEnv).toMatch(/^NOVU_WORKER_IMAGE=\{\{ novu_worker_image \| default\('', true\) \}\}$/m);
+
+    const warn = playbookFile.slice(
+      playbookFile.indexOf('preflight — Novu worker: warn when it is the upstream image'),
+      playbookFile.indexOf('preflight — reject UPPERCASE host_vars keys')
+    );
+    expect(warn.length).toBeGreaterThan(0);
+    expect(warn).toContain('enable_novu');
+    expect(warn).toContain('novu_worker_image');
+    expect(warn).toContain('ghcr\\.io/novuhq/novu/worker');
+    expect(warn).toContain('novu-worker:2.3.0-digit.1');
   });
 
   // These were documented as "add them to /opt/digit/.env by hand" — and every deploy
@@ -512,7 +542,6 @@ describe('Novu workflow creation deployment contract', () => {
       'NOVU_BRIDGE_PREFERENCE_ENABLED',
       'NOVU_BRIDGE_PREFERENCE_FAIL_OPEN',
       'NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE',
-      'NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS',
     ];
     const start = composeFile.indexOf('\n  novu-bridge:');
     const rest = composeFile.slice(start + 1);

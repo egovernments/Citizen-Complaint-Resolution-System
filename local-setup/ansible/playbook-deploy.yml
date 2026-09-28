@@ -136,6 +136,28 @@
           all of them: notification_stack_tag: "develop-<sha8>" (or a release tag). Tracking
           develop on purpose (a dev or nightly box)? Then this is expected.
 
+    # SMSCountry, Ozeki and Jasmin are provider classes of the DIGIT fork of Novu v2.3.0
+    # (upstream + added SMS providers). The upstream worker has no handler for them, and
+    # nothing fails loudly: the Configurator saves the provider, novu-bridge's trigger is
+    # accepted (the row reads SENT), and the step dies inside Novu with "Sms handler for
+    # provider … is not found". Warn, not fail: Twilio/SMTP-only boxes need no fork.
+    - name: "preflight — Novu worker: warn when it is the upstream image"
+      when:
+        - enable_novu | default(false)
+        - _worker == '' or _worker is match('^ghcr\.io/novuhq/novu/worker(:|@|$)')
+      vars:
+        _worker: "{{ novu_worker_image | default('', true) | string | trim }}"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: the Novu worker is the upstream image
+          ({{ _worker or 'ghcr.io/novuhq/novu/worker:2.3.0, the compose default' }}).
+          SMSCountry, Ozeki and Jasmin providers need the DIGIT fork's worker: on this one they
+          save fine and every send through them fails inside Novu while the bridge records SENT.
+          Twilio and SMTP are unaffected. Build it on this box (github.com/dhruv-1001/novu,
+          branch digit/v2.3.0; docs/2.20/notifications/providers.md "The DIGIT Novu worker")
+          and set novu_worker_image: "novu-worker:2.3.0-digit.1". The legacy direct SMSCountry
+          route (novu_bridge_sms_provider: smscountry) does not need it.
+
     - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
       ansible.builtin.assert:
         that: uppercase_host_vars_keys | length == 0

@@ -77,10 +77,6 @@ public class ConfigurationSanityCheck {
             warn.add("novu.bridge.localization.host is blank — placeholder values sent as localization "
                     + "codes will never resolve, and those tokens will ship as literal braces");
         }
-        if (!StringUtils.hasText(config.getSmsCountryAdapterUrl())) {
-            warn.add("novu.bridge.smscountry.adapter.url is blank — an SMSCountry provider added from the "
-                    + "configurator would be created with no baseUrl and every send through it would fail");
-        }
         if (config.getNovuApiKey() == null || PLACEHOLDER_KEYS.contains(config.getNovuApiKey().trim())) {
             warn.add("novu.api.key is a placeholder — Novu deliveries will be rejected until a real key is set");
         }

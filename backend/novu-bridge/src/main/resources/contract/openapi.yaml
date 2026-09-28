@@ -20,7 +20,6 @@ info:
     | Operator (read) | `/config/source`, `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `POST /dispatch/_validate` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent). `/logs` and `/config/source` answer only for the caller's own tenants: see below |
     | Admin (credentials, sends) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /providers/test-send`, `POST /dispatch/_dry-run`, `POST /dispatch/_resolve` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (`ke`, not `ke.bomet`); otherwise `403 NB_ADMIN_ROLE_REQUIRED` |
     | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
-    | Internal only (never routed by the gateway) | `/gateways/smscountry/send` | the provider credential headers Novu's worker sends; Kong terminates this prefix with 404 |
     | Unauthenticated | `/contract/envelope`, `/contract/thin-event`, `/contract/openapi` | anyone who can reach the service |
 
     **Tenant scope.** egov-user returns every role with its own `tenantId`. The caller's
@@ -48,8 +47,7 @@ info:
 
     Most failures are thrown as DIGIT `CustomException`s and rendered by the shared tracer
     error handler as `{"ResponseInfo": …, "Errors": [{"code": "NB_…", "message": …}]}`.
-    `ProxyAuthFilter` and the SMSCountry adapter write their own bodies — see each response
-    schema below. Every `NB_*` code is catalogued in `error-codes.md`.
+    `ProxyAuthFilter` writes its own bodies — see each response schema below. Every `NB_*` code is catalogued in `error-codes.md`.
 
 servers:
   - url: https://<gateway-host>
@@ -70,8 +68,6 @@ tags:
     description: Diagnostics. Not routed publicly.
   - name: receipts
     description: Provider delivery reports.
-  - name: gateways
-    description: Internal adapters for gateways Novu cannot drive directly.
 
 security:
   - digitBearer: []
@@ -327,12 +323,13 @@ paths:
         is the one the Configurator uses: the bridge resolves the Novu provider id, the Novu
         channel, the credential mapping and a round-trippable `<type>-<sha256(name)[0:16]>`
         identifier, and validates the type's required credentials BEFORE anything reaches Novu.
-        A caller-supplied `identifier` must start with `<type>-`, because dispatch and rotation
-        read the type back from it; anything else is `400 NB_INVALID_PROVIDER`.
+        A caller-supplied `identifier` must start with `<type>-`, because rotation reads the
+        type back from it; anything else is `400 NB_INVALID_PROVIDER`.
         `active` absent means true. The LEGACY form `{channel, providerId, name, identifier,
         credentials}` remains the escape hatch for a Novu provider the catalog does not cover.
-        An `smscountry` Gateway URL (`credentials.apiUrl`) off the allowed hosts is refused here
-        (`NB_ADAPTER_URL_NOT_ALLOWED`), since the adapter would refuse every send through it.
+        `smscountry`, `ozeki` and `jasmin` are native providers of the DIGIT Novu fork's worker:
+        on the upstream worker the integration is created but every send through it fails
+        inside Novu.
 
         Credentials POST straight through to Novu over TLS. They are never persisted here,
         never logged (only key NAMES are) and never echoed back.
@@ -354,7 +351,7 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/Integration" }
         "400":
-          description: "`NB_UNKNOWN_PROVIDER_TYPE`, `NB_INVALID_PROVIDER`, `NB_INVALID_CHANNEL`, `NB_ADAPTER_URL_NOT_ALLOWED`"
+          description: "`NB_UNKNOWN_PROVIDER_TYPE`, `NB_INVALID_PROVIDER`, `NB_INVALID_CHANNEL`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -403,7 +400,7 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/Integration" }
         "400":
-          description: "`NB_INVALID_PROVIDER` (no id, an empty change set, or `active: false` without `tenantId`), `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_NOT_FOUND`, `NB_ADAPTER_URL_NOT_ALLOWED`"
+          description: "`NB_INVALID_PROVIDER` (no id, an empty change set, or `active: false` without `tenantId`), `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_NOT_FOUND`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -773,77 +770,6 @@ paths:
                 type: object
                 properties: { error: { type: string } }
 
-  /novu-bridge/novu-adapter/v1/gateways/smscountry/send:
-    post:
-      tags: [gateways]
-      summary: "INTERNAL: the JSON face this service wears for SMSCountry"
-      description: |
-        **Never reachable from outside.** Kong terminates `/novu-adapter/v1/gateways/**` with
-        404 and the upstream is a dead address; the Novu WORKER calls this directly on the
-        container network.
-
-        SMSCountry's legacy bulk API takes form-encoded parameters and answers in plain text
-        (`OK:<jobid>`), always with HTTP 200 — no Novu provider can express that. So an
-        `smscountry` provider is really a Novu `generic-sms` integration pointed here, and this
-        endpoint does the translating.
-
-        The credential HEADERS are the authentication: without both, nothing is sent anywhere.
-        A success MUST answer with a non-empty `id`, because Novu's worker marks the step
-        failed unless `result.id` is truthy. A gateway rejection answers non-2xx on purpose, so
-        the worker records PROVIDER_ERROR instead of a phantom send.
-      security:
-        - smsCountryUser: []
-          smsCountryPassword: []
-      parameters:
-        - name: apiUrl
-          in: query
-          schema: { type: string, format: uri }
-          description: |
-            Per-integration upstream gateway URL, carried on the integration's `baseUrl` query
-            string. Honoured only when it is http(s) and its host is the configured gateway's
-            or listed in `novu.bridge.smscountry.allowed.hosts`; anything else is refused with
-            `400 NB_ADAPTER_URL_NOT_ALLOWED` and nothing is sent (it never falls back to
-            `novu.bridge.smscountry.url` with these credentials). Absent = that URL.
-      requestBody:
-        required: false
-        description: "Novu's `generic-sms` body."
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              properties:
-                to: { type: string, description: "Recipient. `recipient`/`phone`/`mobilenumber` also accepted." }
-                content: { type: string, description: "Message text. `text`/`message`/`body` also accepted." }
-                from: { type: string, description: "Sender id. `sender`/`senderId` also accepted; falls back to `novu.bridge.sms.sender.id`." }
-                sender: { type: string }
-                id: { type: string, description: "Novu's message `_id` — the only correlator the gateway call carries into the ledger." }
-      responses:
-        "200":
-          description: Queued by the gateway. NOT delivered — the DR callback is the only proof of delivery.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id: { type: string, description: "The gateway job id. Non-empty, or Novu marks the step failed." }
-                  date: { type: string, format: date-time }
-        "400":
-          description: "`NB_ADAPTER_BAD_REQUEST` — no recipient or no message; `NB_ADAPTER_URL_NOT_ALLOWED` — `apiUrl` is not an http(s) URL on an allowed host"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdapterError" }
-        "401":
-          description: "`NB_ADAPTER_UNAUTHENTICATED` — a credential header is missing"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdapterError" }
-        "502":
-          description: "The gateway rejected the message (`NB_SMSCOUNTRY_REJECTED`, `NB_SMSCOUNTRY_UNREACHABLE`, or the gateway's own code). Non-2xx on purpose."
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdapterError" }
-
 components:
 
   securitySchemes:
@@ -860,14 +786,6 @@ components:
       in: header
       name: X-Receipt-Secret
       description: "`novu.bridge.receipts.secret`. May also be sent as the `secret` query parameter."
-    smsCountryUser:
-      type: apiKey
-      in: header
-      name: X-SMSCountry-User
-    smsCountryPassword:
-      type: apiKey
-      in: header
-      name: X-SMSCountry-Password
 
   responses:
     Unauthorized:
@@ -949,13 +867,6 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Error" }
 
-    AdapterError:
-      type: object
-      description: The internal gateway adapter's own flat error body.
-      properties:
-        error: { type: string, description: "The `NB_*` code." }
-        message: { type: string }
-
     DispatchStatus:
       type: string
       enum: [RECEIVED, SENT, DELIVERED, BOUNCED, FAILED, SKIPPED, REJECTED]
@@ -1010,7 +921,7 @@ components:
       description: Allowlist projection of a Novu integration. No credentials, ever.
       properties:
         _id: { type: string }
-        providerId: { type: string, description: "Novu's provider id, e.g. `twilio`, `nodemailer`, `generic-sms`." }
+        providerId: { type: string, description: "Novu's provider id, e.g. `twilio`, `nodemailer`, `smscountry`." }
         channel: { type: string, description: "Novu's channel — `sms` or `email`. WhatsApp rides `sms`." }
         name: { type: string }
         identifier: { type: string, description: "`<catalog type>-<sha256(name)[0:16]>`; this is what makes the type round-trippable." }
@@ -1026,17 +937,17 @@ components:
       type: object
       description: One out-of-the-box provider the operator can configure without an env edit.
       properties:
-        type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki] }
+        type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki, jasmin] }
         label: { type: string }
         channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
         transport:
           type: string
-          enum: [novu, novu-generic-sms, bridge-adapter]
+          enum: [novu]
           description: |
-            How the message reaches the gateway. `novu` — a first-class Novu provider.
-            `novu-generic-sms` — Novu's generic-sms posting straight at the gateway's own JSON
-            API. `bridge-adapter` — Novu's generic-sms posting at this service's adapter, which
-            translates to a non-JSON API.
+            How the message reaches the gateway. `novu` — Novu's worker calls it through the
+            provider named by `novuProviderId`. `smscountry`, `ozeki` and `jasmin` are provider
+            classes of the DIGIT Novu fork (v2.3.0 + added SMS providers), so they need its
+            worker image.
         novuProviderId: { type: string }
         credentialFields:
           type: array
@@ -1071,7 +982,7 @@ components:
       type: object
       required: [type, credentials]
       properties:
-        type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki] }
+        type: { type: string, enum: [twilio-sms, twilio-whatsapp, smtp, smscountry, ozeki, jasmin] }
         name: { type: string, description: "Defaults to the type's label. Also seeds the identifier." }
         identifier: { type: string, description: "Overrides the derived `<type>-<hash>` identifier. Must start with `<type>-`, else `400 NB_INVALID_PROVIDER`." }
         active: { type: boolean, default: true, description: "Absent means true." }

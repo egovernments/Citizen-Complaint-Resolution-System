@@ -279,10 +279,10 @@ ACL_ROLES_ABSENT = {}
 # that ships with CSR/GRO/PGR_LME grants in full-dump.sql and on every already-deployed
 # tenant. Changing it is out of scope; the bridge's admin check is the effective gate.
 #
-# Deliberately absent: /novu-bridge/novu-adapter/v1/gateways/** — the internal
-# SMSCountry send adapter is called by Novu's worker over the container network and
-# must never be gateway-reachable. Kong terminates it; seeding an action for it
-# would be the one change that could make it reachable.
+# Deliberately absent: /novu-bridge/novu-adapter/v1/gateways/** — formerly the
+# internal SMSCountry send adapter (an older novu-bridge image may still serve it),
+# which must never be gateway-reachable. Kong terminates it; seeding an action for
+# it would be the one change that could make it reachable.
 MDMS_ROLES = ["MDMS_ADMIN", "ACCOUNT_ADMIN", "SUPERUSER"]
 BRIDGE_ROLES = ["ACCOUNT_ADMIN", "SUPERUSER", "MDMS_ADMIN", "CSR", "GRO", "PGR_LME"]
 # Order matters only for reviewability: it is the order the same rows appear in

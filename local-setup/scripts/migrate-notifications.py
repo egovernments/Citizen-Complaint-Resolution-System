@@ -56,6 +56,9 @@ or NOVU_BRIDGE_SMS_PROVIDER=smscountry) is kept as it is unless you ask otherwis
 --create-smscountry-provider (or --create-provider <type>) creates a catalog provider
 through POST /novu-bridge/novu-adapter/v1/providers from --credentials-file (JSON, mode
 0600 or stricter; values are never printed or written to the report) and pins it.
+SMSCountry, Ozeki and Jasmin providers are native to the DIGIT Novu fork's worker: creating
+one is refused while the running novu-worker container is the upstream image, because every
+send through it would fail inside Novu (set novu_worker_image and redeploy first).
 
 Exit: 0 ok · 1 finished with warnings (preview differences, verification mismatch, a
 required operator action) · 2 a tenant failed or could not be read · 3 a write was
@@ -111,16 +114,27 @@ EVENT_TYPE = "COMPLAINTS_WORKFLOW_TRANSITIONED"
 
 # ── The provider catalog, mirrored from novu-bridge's ProviderCatalog.java ────
 CATALOG_CHANNEL = {"twilio-sms": "SMS", "twilio-whatsapp": "WHATSAPP", "smtp": "EMAIL",
-                   "smscountry": "SMS", "ozeki": "SMS"}
+                   "smscountry": "SMS", "ozeki": "SMS", "jasmin": "SMS"}
 CATALOG_LABEL = {"twilio-sms": "Twilio SMS", "twilio-whatsapp": "Twilio WhatsApp",
-                 "smtp": "Email (SMTP)", "smscountry": "SMSCountry", "ozeki": "Ozeki SMS Gateway"}
-# Used only when the bridge's GET /providers/catalog cannot be read.
+                 "smtp": "Email (SMTP)", "smscountry": "SMSCountry", "ozeki": "Ozeki SMS Gateway",
+                 "jasmin": "Jasmin SMS Gateway"}
+# Used only when the bridge's GET /providers/catalog cannot be read. The keys are the Novu
+# credential keys of each provider (SMSCountry/Ozeki/Jasmin: the DIGIT Novu fork's).
 CATALOG_REQUIRED = {"twilio-sms": ["accountSid", "token", "from"],
                     "twilio-whatsapp": ["accountSid", "token", "from"],
                     "smtp": ["host", "port", "user", "password", "from", "senderName"],
-                    "smscountry": ["user", "password", "senderId"],
-                    "ozeki": ["baseUrl", "username", "password"]}
-TYPES_LONGEST_FIRST = ("twilio-whatsapp", "smscountry", "twilio-sms", "ozeki", "smtp")
+                    "smscountry": ["user", "password", "from"],
+                    "ozeki": ["baseUrl", "user", "password"],
+                    "jasmin": ["baseUrl", "user", "password"]}
+TYPES_LONGEST_FIRST = ("twilio-whatsapp", "smscountry", "twilio-sms", "jasmin", "ozeki", "smtp")
+# Unmarked integrations whose Novu provider id names exactly one type (ProviderCatalog).
+TYPE_BY_NOVU_SMS_PROVIDER = {"twilio": "twilio-sms", "smscountry": "smscountry",
+                             "ozeki": "ozeki", "jasmin": "jasmin"}
+# Types whose Novu provider exists only in the DIGIT fork's worker image.
+FORK_WORKER_TYPES = ("smscountry", "ozeki", "jasmin")
+UPSTREAM_WORKER_IMAGE = re.compile(r"^ghcr\.io/novuhq/novu/worker(:|@|$)")
+# Credential keys the SMSCountry/Ozeki forms used before they became native providers.
+RENAMED_CREDENTIAL_KEYS = {"senderId": "from", "username": "user", "apiUrl": "baseUrl"}
 
 # Synthetic people for the preview. Carrying name/phone/email makes the bridge use them
 # as-is (ActorRecipientResolver), so nothing is looked up and nobody real is addressed.
@@ -270,6 +284,18 @@ def container_env(name):
     return dict(p.split("=", 1) for p in pairs if "=" in p)
 
 
+def container_image(name):
+    """The image a container was created from, or None (no docker, no container)."""
+    if not name:
+        return None
+    try:
+        out = subprocess.run(["docker", "inspect", "--format", "{{.Config.Image}}", name],
+                             capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() or None if out.returncode == 0 else None
+
+
 def bridge_settings(args):
     """The bridge env the channel policy falls back to, and where each value came from."""
     env = container_env(args.bridge_container)
@@ -313,15 +339,15 @@ def type_from_identifier(identifier):
 
 def derive_type(integration):
     """ProviderCatalog.deriveType: the identifier marker first, then the unambiguous
-    providerId+channel pairs. Unmarked generic-sms stays None (SMSCountry and Ozeki look
-    identical, and a guess would pick the wrong request body)."""
+    providerId+channel pairs. Anything else (a hand-made generic-sms, say) stays None: it
+    has no catalog form."""
     marked = type_from_identifier(integration.get("identifier"))
     if marked:
         return marked
     provider = str(integration.get("providerId") or "").lower()
     channel = str(integration.get("channel") or "").lower()
-    if provider == "twilio" and channel == "sms":
-        return "twilio-sms"
+    if channel == "sms" and provider in TYPE_BY_NOVU_SMS_PROVIDER:
+        return TYPE_BY_NOVU_SMS_PROVIDER[provider]
     if provider == "nodemailer" and channel == "email":
         return "smtp"
     return None
@@ -410,6 +436,15 @@ def plan_provider_creation(ctx, args):
     if ctx.integrations is None:
         raise RefuseToStart("cannot create providers: the bridge's integration list is "
                             "unavailable (%s)" % ctx.integrations_error)
+    fork_kinds = [k for k in kinds if k in FORK_WORKER_TYPES]
+    worker = getattr(args, "worker_container", None)
+    image = container_image(worker) if fork_kinds and worker else None
+    if image and UPSTREAM_WORKER_IMAGE.match(image):
+        raise RefuseToStart(
+            "%s provider(s) need the DIGIT Novu worker, but the %s container runs the upstream "
+            "image %s: the provider would save and every send through it would fail inside Novu "
+            "while the bridge records SENT. Build the fork worker, set novu_worker_image and "
+            "redeploy first (docs/2.20/notifications/providers.md)" % (", ".join(fork_kinds), worker, image))
     creds = read_credentials_file(args.credentials_file)
     required = catalog_required(ctx)
     plans = []
@@ -422,7 +457,10 @@ def plan_provider_creation(ctx, args):
         missing = [k for k in required.get(kind, CATALOG_REQUIRED.get(kind, []))
                    if not str(values.get(k) or "").strip()]
         if missing:
-            raise RefuseToStart("credentials for %s lack required key(s): %s" % (kind, ", ".join(missing)))
+            renamed = ["%s is now %s" % (old, new) for old, new in RENAMED_CREDENTIAL_KEYS.items()
+                       if old in values and new in missing]
+            raise RefuseToStart("credentials for %s lack required key(s): %s%s" % (
+                kind, ", ".join(missing), (" (" + "; ".join(renamed) + ")") if renamed else ""))
         name = str(entry.get("name") or CATALOG_LABEL[kind])
         ident = str(entry.get("identifier") or identifier_for(kind, name))
         existing = [i for i in ctx.integrations if i.get("identifier") == ident]
@@ -1471,7 +1509,7 @@ def parse_args(argv):
 
 credentials file (only the types you create; values are never printed or reported):
   {"smscountry": {"name": "SMSCountry", "credentials": {"user": "...", "password": "...",
-                  "senderId": "...", "apiUrl": "(optional)"}},
+                  "from": "<sender id>", "baseUrl": "(optional)"}},
    "twilio-sms": {"credentials": {"accountSid": "AC...", "token": "...", "from": "+1..."}}}
 
 env: DIGIT_URL, DIGIT_USERNAME (ADMIN), DIGIT_PASSWORD (eGov@123), DIGIT_LOGIN_TENANT,
@@ -1508,6 +1546,9 @@ exit: 0 ok · 1 warnings · 2 a tenant failed · 3 403 · 4 refused to start""")
     ap.add_argument("--default-locale", help="NOVU_BRIDGE_DEFAULT_LOCALE (default: container, else en_IN)")
     ap.add_argument("--bridge-container", default="novu-bridge",
                     help="container to read the bridge env from ('' = do not ask docker)")
+    ap.add_argument("--worker-container", default="novu-worker",
+                    help="Novu worker container whose image is checked before creating an "
+                         "SMSCountry/Ozeki/Jasmin provider ('' = do not ask docker)")
     ap.add_argument("--bridge-url", help="novu-bridge base URL (default: DIGIT_URL, through Kong)")
     ap.add_argument("--digit-url", default=os.environ.get("DIGIT_URL", ""))
     ap.add_argument("--login-tenant", default=os.environ.get("DIGIT_LOGIN_TENANT"))

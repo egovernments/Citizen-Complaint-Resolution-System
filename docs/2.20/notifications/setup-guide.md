@@ -97,8 +97,11 @@ credential fields, **Create Provider**.
 | Twilio SMS | SMS | Account SID (`AC…`), Auth token, From number (E.164, e.g. `+14155238886`) |
 | Twilio WhatsApp | WHATSAPP | Account SID, Auth token, WhatsApp sender (`whatsapp:+14155238886`; the sandbox number works after `join <code>` from your handset) |
 | Email (SMTP) | EMAIL | SMTP host, SMTP port (`587`), Username, Password (app password), From address (usually = username), From name, Use TLS on connect (port 465) |
-| SMSCountry | SMS | Panel username, Panel password, Registered sender id, Gateway URL (blank = standard bulk endpoint). Legacy bulk API only; a panel showing AuthKey/AuthToken is the unsupported REST API. A Gateway URL on any other host (a mock, a regional endpoint) must be listed in `novu_bridge_smscountry_allowed_hosts` ([§8.1](#81-deployment-settings)): otherwise saving is refused (`NB_ADAPTER_URL_NOT_ALLOWED`), and a provider saved earlier with such a URL fails every send rather than posting these credentials to the standard endpoint |
-| Ozeki SMS Gateway | SMS | HTTP API URL (e.g. `https://ozeki.example.org:9509/api?action=sendmessage`), Username, Password, Sender id (optional) |
+| SMSCountry ¹ | SMS | Panel username, Panel password, Registered sender id, Gateway URL (blank = standard bulk endpoint). Legacy bulk API only; a panel showing AuthKey/AuthToken is the unsupported REST API |
+| Ozeki SMS Gateway ¹ | SMS | HTTP API URL (e.g. `http://ozeki.example.org:9509/api?action=sendmsg`), Username (the gateway's HTTP API user), Password, Sender id (optional) |
+| Jasmin SMS Gateway ¹ | SMS | Send URL (e.g. `http://jasmin.example.org:1401/send`), Username, Password, Sender id (optional). Text outside the GSM alphabet (Amharic, emoji) goes as UCS-2: **70 characters per SMS segment, not 160** |
+
+¹ These three need the **DIGIT Novu worker** (`novu_worker_image`, [§8.1](#81-deployment-settings)). On the upstream worker the provider saves, **Test** and dispatch report the message as sent, and every send fails inside Novu (`Sms handler for provider … is not found` in Novu's activity feed). The deploy prints a warning while the worker is upstream. See [providers.md](./providers.md#the-digit-novu-worker) for the gateway specifics.
 
 Email traps:
 
@@ -419,7 +422,7 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `novu_bridge_receipts_secret` | Enables delivery receipts ([§8.3](#83-delivery-receipts)); a secret | blank = off |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | Consent gate; allow delivery when the preference service is down | `false` / `true` |
 | `novu_bridge_core_sms_country_code` | Country code for OTP numbers sent without one, e.g. `+254` (`254` works too); a leading trunk `0` is dropped. Blank: numbers go out as given, which gateways will not route, and the bridge warns at startup | blank |
-| `novu_bridge_smscountry_allowed_hosts` | Hosts an SMSCountry provider's Gateway URL may name; the default endpoint's host is always allowed | `api.smscountry.com,www.smscountry.com` |
+| `novu_worker_image` | The Novu worker image. SMSCountry / Ozeki / Jasmin providers need the DIGIT fork's worker, e.g. `novu-worker:2.3.0-digit.1`, built on the box ([providers.md](./providers.md#build-it)); the deploy warns while it is upstream | `ghcr.io/novuhq/novu/worker:2.3.0` |
 | `twilio_account_sid` / `twilio_auth_token` / `twilio_whatsapp_from` | Bootstrap the `twilio-whatsapp` Novu integration at deploy | — |
 | `novu_bridge_workflow_id_sms` / `_whatsapp` / `_email` | Novu workflow ids | `complaints-*` |
 | `novu_bridge_integration_id_whatsapp` | Only if a second Twilio integration exists | blank |
@@ -436,7 +439,6 @@ set them in host_vars, not in `.env`); on Helm set them in
 | `NOVU_BRIDGE_RECEIPTS_SECRET` | Enables delivery receipts ([§8.3](#83-delivery-receipts)) | blank = off |
 | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `NOVU_BRIDGE_PREFERENCE_FAIL_OPEN` | Consent gate; allow delivery when the preference service is down | Compose `false` / `true` |
 | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` | Country code for OTP numbers sent without one (see `novu_bridge_core_sms_country_code`) | blank |
-| `NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS` | Hosts the SMSCountry adapter may post to ([providers.md](./providers.md#the-smscountry-adapter)) | `api.smscountry.com,www.smscountry.com` |
 
 Any other property in `backend/novu-bridge/src/main/resources/application.properties` must be
 added to the service's `environment:` block — Compose reads `.env` only for interpolation. One

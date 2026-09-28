@@ -219,13 +219,20 @@ each channel that is on:
 | on through `NOVU_BRIDGE_CHANNELS_ENABLED`, no channel row | no pin (nowhere to store one) |
 
 `--create-smscountry-provider` (or `--create-provider <type>`, for `twilio-sms`,
-`twilio-whatsapp`, `smtp`, `ozeki`, `smscountry`) creates a catalog provider through
+`twilio-whatsapp`, `smtp`, `smscountry`, `ozeki`, `jasmin`) creates a catalog provider through
 `POST /novu-bridge/novu-adapter/v1/providers` and pins it for the tenants in the run.
-Credentials are read only from `--credentials-file`, a JSON object keyed by type:
+Credentials are read only from `--credentials-file`, a JSON object keyed by type, with the
+catalog's field keys (the Novu provider's credential keys):
 
 ```json
-{"smscountry": {"name": "SMSCountry", "credentials": {"user": "…", "password": "…", "senderId": "…"}}}
+{"smscountry": {"name": "SMSCountry", "credentials": {"user": "…", "password": "…", "from": "<sender id>"}}}
 ```
+
+An SMSCountry, Ozeki or Jasmin provider is a native provider of the **DIGIT Novu worker**
+([providers.md](./providers.md#the-digit-novu-worker)): build it, set `novu_worker_image` and
+redeploy **before** moving a tenant onto one. While the `novu-worker` container runs the upstream
+image the script refuses to create them (exit `4`; `--worker-container ''` skips the check).
+The direct SMSCountry route needs no Novu worker at all.
 
 The file must be mode `0600` or stricter, or it is refused. Values are never printed or written
 to the report. The identifier is derived from the name, so a re-run finds the provider rather
@@ -332,7 +339,6 @@ on the next deploy:
 | `novu_bridge_receipts_secret` | `NOVU_BRIDGE_RECEIPTS_SECRET` |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | `NOVU_BRIDGE_PREFERENCE_ENABLED` / `_FAIL_OPEN` |
 | `novu_bridge_core_sms_country_code` | `NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE` |
-| `novu_bridge_smscountry_allowed_hosts` | `NOVU_BRIDGE_SMSCOUNTRY_ALLOWED_HOSTS` |
 | `notification_stack_tag`, `pgr_services_db_image`, `novu_bridge_db_image` | `NOTIFICATION_STACK_TAG`, `PGR_SERVICES_DB_IMAGE`, `NOVU_BRIDGE_DB_IMAGE` |
 
 ## Rollback

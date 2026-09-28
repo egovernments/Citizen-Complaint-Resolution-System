@@ -2,9 +2,6 @@
 # Machine-readable twin of docs/2.20/notifications/contract/error-codes.md, which has the
 # meaning, surface, retryability and operator action for each. Add a code here, and to
 # that page, in the same change that first emits it.
-NB_ADAPTER_BAD_REQUEST
-NB_ADAPTER_UNAUTHENTICATED
-NB_ADAPTER_URL_NOT_ALLOWED
 NB_ADMIN_ROLE_REQUIRED
 NB_CONFIG_UNAVAILABLE
 NB_CONTACT_MISSING

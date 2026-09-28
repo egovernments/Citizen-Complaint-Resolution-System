@@ -148,7 +148,7 @@ Outcome words, case-insensitive substring, first match wins: `undeliv`, `fail`, 
 | Provider path | Typical report |
 |---|---|
 | `/receipts/novu` | `{"type": "message.delivered", "data": {"transactionId": "…"}}` |
-| `/receipts/smscountry` | `GET …/receipts/smscountry?jobno=4689&status=DELIVRD&secret=…` (`jobno` = the adapter's returned `id`, stored as `provider_ref`) |
+| `/receipts/smscountry` | `GET …/receipts/smscountry?jobno=4689&status=DELIVRD&secret=…` (`jobno` = the job id SMSCountry returned to the legacy direct route, stored as `provider_ref`. A message sent through an SMSCountry *provider* has Novu's `transactionId` as its `provider_ref` — the job id stays in Novu's message record — so a DR for it matches no row) |
 
 Other path segments are parsed the same way but need a Kong route. The response is always
 `200` once authenticated, e.g.

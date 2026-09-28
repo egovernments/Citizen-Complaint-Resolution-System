@@ -18,8 +18,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * SMSCountry's legacy bulk API: form-encoded request, plain-text reply. No Novu provider can
- * express that, hence a direct client.
+ * The legacy DIRECT SMSCountry route ({@code novu.bridge.sms.provider=smscountry}): novu-bridge
+ * posts to SMSCountry's legacy bulk API itself, with the deployment's credentials from env. Kept
+ * for 2.12 deployments; a catalog SMSCountry provider goes through Novu's native provider instead.
+ * Form-encoded request, plain-text reply.
  *
  * <p>HTTP 200 is not success (malformed requests get 200 plus an ASP.NET stack trace); only a body
  * starting {@code OK:} is. And accepted is not delivered: an unregistered DLT template still gets
@@ -41,18 +43,8 @@ public class SmsCountryClient {
 
     /** @param senderId registered sender id for THIS send (per-tenant policy may override the env default) */
     public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId) {
-        return send(phone, text, transactionId, senderId,
-                config.getSmsCountryUser(), config.getSmsCountryPassword(), config.getSmsCountryUrl());
-    }
-
-    /**
-     * Send with per-call credentials (the adapter endpoint receives them from Novu).
-     *
-     * @param apiUrl gateway endpoint for THIS send; blank = the configured one. Callers must have
-     *               vetted it: this client posts credentials to whatever it is given.
-     */
-    public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId,
-                                        String user, String password, String apiUrl) {
+        String user = config.getSmsCountryUser();
+        String password = config.getSmsCountryPassword();
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("User", user);
         form.add("passwd", password);
@@ -64,7 +56,7 @@ public class SmsCountryClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-        String url = StringUtils.hasText(apiUrl) ? apiUrl.trim() : config.getSmsCountryUrl();
+        String url = config.getSmsCountryUrl();
         String body;
         try {
             body = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(form, headers), String.class).getBody();
@@ -80,8 +72,8 @@ public class SmsCountryClient {
     }
 
     /**
-     * {@code OK:<jobid>} is the only accepted response. The upstream body is never returned
-     * (the adapter's caller would read it back); a redacted snippet is logged instead.
+     * {@code OK:<jobid>} is the only accepted response. The upstream body is never returned (it
+     * ends up in the dispatch row, which operators read); a redacted snippet is logged instead.
      */
     NovuClient.NovuResponse parse(String body, String transactionId, String phone, String... secrets) {
         String trimmed = body == null ? "" : body.trim();
