@@ -179,6 +179,9 @@ const TopBar = ({
             />
           ),
         ].filter(Boolean)}
+        // The phone bar has room for one control beside the marks: the
+        // language pill, as in the design. The drawer no longer lists Language.
+        mobileActionFields={showLanguageChange ? [<ChangeLanguage compact={true} />] : undefined}
         onHamburgerClick={() => {
           toggleSidebar();
         }}

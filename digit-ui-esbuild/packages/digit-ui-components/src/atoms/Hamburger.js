@@ -91,6 +91,9 @@ const Hamburger = ({
   
   const filterItems = (items, searchTerm) => {
     return items?.filter((item) => {
+      // A divider has no label to match; it separates groups only while the
+      // list is unfiltered.
+      if (item?.type === "divider") return !searchTerm;
       if (item?.label?.toLowerCase().includes(searchTerm.toLowerCase())) {
         return true;
       }
@@ -167,6 +170,8 @@ const Hamburger = ({
 
   const renderItems = (items, parentIndex = -1, flat = false) => items?.map((item, index) => {
       if (item?.type === "section") return renderSection(item, index);
+      // Opt-in: a hairline between groups of rows. Not selectable.
+      if (item?.type === "divider") return <div className="digit-msb-divider" role="separator" key={`divider-${item.key || index}`} />;
       const currentIndex = parentIndex >= 0 ? `${parentIndex}-${index}` : index;
       const isExpanded = expandedItems[currentIndex];
       const isTopLevel = parentIndex === -1 || flat;
