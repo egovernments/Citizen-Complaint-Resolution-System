@@ -19,6 +19,8 @@ export class HealthController {
       locationsLoaded: this.searchService.getLocationsLoaded(),
       sources: this.boundaryService.sources(),
       overture: this.boundaryService.overtureInfo(),
+      // Per country: which official set is in use, its licence and levels.
+      official: this.boundaryService.officialInfo(),
     };
   }
 }

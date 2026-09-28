@@ -94,6 +94,10 @@ export interface BoundaryRow {
   country: string | null;
   admin_level: number | null;
   parent_id: string | null;
+  /** overture | cod | geoboundaries; absent on DBs built before official.py. */
+  source?: string | null;
+  /** Licence of the dataset (level) the row came from; official sets only. */
+  licence?: string | null;
 }
 
 export interface BoundaryHit {
@@ -105,7 +109,7 @@ export interface BoundaryHit {
   country_name: string | null;
   /** Immediate parent (via parent_id), whatever its level. */
   parent_name: string | null;
-  /** Nearest `region` ancestor (admin_level 1), when it isn't the place itself. */
+  /** Nearest first-level ancestor (Overture `region`, official `ADM1`), when it isn't the place itself. */
   region_name: string | null;
   descendant_count: number;
   /** How the name matched: exact, prefix, substring, or fuzzy (typo-tolerant). */
@@ -116,6 +120,8 @@ export interface BoundaryHit {
   score: number;
   /** Disambiguating display label, e.g. "Delhi — region, India". */
   formatted: string;
+  source: string | null;
+  licence: string | null;
 }
 
 const TYPE_RANK: Record<MatchMode, number> = {
@@ -166,6 +172,10 @@ interface Scored {
 }
 
 const levelOf = (r: BoundaryRow) => r.admin_level ?? Number.MAX_SAFE_INTEGER;
+
+// The level right under the country: Overture calls it `region`; the official
+// sets (official.py) name their levels ADM1, ADM2, ...
+const FIRST_LEVEL = new Set(['region', 'ADM1']);
 
 function classify(
   entry: Entry,
@@ -332,7 +342,7 @@ export class BoundaryIndex {
       a && hops < 32;
       a = a.parent_id ? this.byId.get(a.parent_id) : undefined, hops++
     ) {
-      if (!region && a.subtype === 'region') region = a;
+      if (!region && FIRST_LEVEL.has(a.subtype ?? '')) region = a;
       if (a.subtype === 'country') {
         countryName = a.name;
         break;
@@ -359,6 +369,8 @@ export class BoundaryIndex {
         region?.name,
         row.subtype === 'country' ? null : countryName,
       ]),
+      source: row.source ?? null,
+      licence: row.licence ?? null,
     };
   }
 }

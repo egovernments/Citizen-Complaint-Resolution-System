@@ -12,7 +12,7 @@ import {
 import { intFromEnv } from './config';
 import { RateLimiter } from './rate-limiter';
 
-// Columns the name index reads; see buildIndex().
+// Columns the name indexes read; see buildIndexes().
 const INDEX_COLUMNS = [
   'id',
   'division_id',
@@ -22,7 +22,54 @@ const INDEX_COLUMNS = [
   'country',
   'admin_level',
   'parent_id',
+  'source',
+  'licence',
+  'official',
 ];
+
+/**
+ * Sources served from the offline DB. `overture` is the Overture Maps build;
+ * `cod` (OCHA COD-AB) and `geoboundaries` are the government-derived sets that
+ * official.py adds; `official` is, per country, whichever of those two nests
+ * deepest (#1994).
+ */
+export const OFFLINE_SOURCES = [
+  'overture',
+  'official',
+  'cod',
+  'geoboundaries',
+] as const;
+export type OfflineSource = (typeof OFFLINE_SOURCES)[number];
+
+export function isOfflineSource(v: string): v is OfflineSource {
+  return (OFFLINE_SOURCES as readonly string[]).includes(v);
+}
+
+interface IndexRow extends BoundaryRow {
+  official: number | null;
+}
+
+/** Which offline index a row belongs to; `official` rows also sit in their own source's. */
+export function offlineSourcesOf(row: IndexRow): OfflineSource[] {
+  const own: OfflineSource =
+    row.source === 'cod' || row.source === 'geoboundaries'
+      ? row.source
+      : 'overture';
+  return row.official === 1 ? [own, 'official'] : [own];
+}
+
+interface OfficialDatasetRow {
+  country: string;
+  source: string;
+  chosen: number;
+  usable: number;
+  licence: string | null;
+  dataset_date: string | null;
+  quality: string | null;
+  url: string | null;
+  levels: string | null;
+  note: string | null;
+}
 
 interface TableColumn {
   name: string;
@@ -64,8 +111,9 @@ export function toGeoJsonBbox(
 export class BoundaryService {
   private readonly logger = new Logger(BoundaryService.name);
   private db: any;
-  // In-memory name index for source=overture search — see boundary-matcher.ts.
-  private index: BoundaryIndex | null = null;
+  // In-memory name index per offline source — see boundary-matcher.ts. A
+  // source the DB holds no rows for has no entry.
+  private indexes = new Map<OfflineSource, BoundaryIndex>();
   // Outbound Geoapify calls per rolling minute, across all callers: the key's
   // quota is the project's, so the cap is global (GEOAPIFY_RATE_LIMIT; 0 = off).
   private readonly geoapifyLimiter = new RateLimiter(
@@ -94,7 +142,7 @@ export class BoundaryService {
         ? path.resolve(process.env.OVERTURE_DB_PATH)
         : path.resolve(process.cwd(), '../overture-data/boundaries.sqlite');
       this.db = new Database(dbPath, { readonly: true });
-      this.index = this.buildIndex();
+      this.indexes = this.buildIndexes();
     } catch (e) {
       console.warn(
         'Overture SQLite database not found or cannot be opened. Overture fallback will be disabled.',
@@ -104,50 +152,121 @@ export class BoundaryService {
   }
 
   // Names only (no geometry). Tolerates DBs that predate a pipeline step: a
-  // column the table lacks (e.g. parent_id before build_hierarchy.py ran) is
-  // read as NULL instead of failing the whole source.
-  private buildIndex(): BoundaryIndex {
+  // column the table lacks (e.g. parent_id before build_hierarchy.py ran, or
+  // source before official.py) is read as NULL instead of failing the source.
+  private buildIndexes(): Map<OfflineSource, BoundaryIndex> {
     const db = this.db as Database.Database;
     const info = db.prepare('PRAGMA table_info(boundaries)');
     const have = new Set((info.all() as TableColumn[]).map((c) => c.name));
     const cols = INDEX_COLUMNS.map((c) => (have.has(c) ? c : `NULL AS ${c}`));
     const started = Date.now();
     const select = db.prepare(`SELECT ${cols.join(', ')} FROM boundaries`);
-    const index = new BoundaryIndex(select.all() as BoundaryRow[]);
+    const bySource = new Map<OfflineSource, IndexRow[]>();
+    for (const row of select.all() as IndexRow[]) {
+      for (const src of offlineSourcesOf(row)) {
+        const list = bySource.get(src);
+        if (list) list.push(row);
+        else bySource.set(src, [row]);
+      }
+    }
+    const indexes = new Map<OfflineSource, BoundaryIndex>();
+    for (const [src, rows] of bySource) {
+      indexes.set(src, new BoundaryIndex(rows));
+    }
     const ms = Date.now() - started;
-    this.logger.log(`Overture name index: ${index.size} places in ${ms}ms`);
-    return index;
+    const sizes = [...indexes].map(([src, idx]) => `${src} ${idx.size}`);
+    this.logger.log(`Name indexes: ${sizes.join(', ')} places in ${ms}ms`);
+    return indexes;
   }
 
   // Search results carry no polygons — the configurator reads only their
   // properties, and /boundary/fetch serves geometry for the place picked.
   /** Which boundary sources this server can answer right now. */
-  sources(): { overture: boolean; geoapify: boolean } {
+  sources(): Record<OfflineSource | 'geoapify', boolean> {
     return {
-      overture: !!this.index,
+      overture: this.indexes.has('overture'),
+      official: this.indexes.has('official'),
+      cod: this.indexes.has('cod'),
+      geoboundaries: this.indexes.has('geoboundaries'),
       geoapify: !!this.configService.get<string>('GEOAPIFY_API_KEY'),
     };
   }
 
   /** What the offline DB holds (the bootstrap's meta table), or null without one. */
   overtureInfo(): Record<string, string | number> | null {
-    if (!this.db || !this.index) return null;
-    const db = this.db as Database.Database;
-    const hasMeta = db
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'",
-      )
-      .get();
-    const meta = hasMeta
-      ? (db.prepare('SELECT key, value FROM meta').all() as {
+    const index = this.indexes.get('overture');
+    if (!this.db || !index) return null;
+    const meta = this.hasTable('meta')
+      ? (this.db.prepare('SELECT key, value FROM meta').all() as {
           key: string;
           value: string;
         }[])
       : [];
     return {
-      places: this.index.size,
+      places: index.size,
       ...Object.fromEntries(meta.map((m) => [m.key, m.value])),
     };
+  }
+
+  /**
+   * Per country: the official set in use, where it comes from, its licence
+   * (attribution is a condition of every one of them) and the levels kept.
+   * Null when the DB has no official sets.
+   */
+  officialInfo(): Record<string, unknown> | null {
+    if (!this.db || !this.hasTable('official_datasets')) return null;
+    const rows = this.db
+      .prepare('SELECT * FROM official_datasets ORDER BY country, source')
+      .all() as OfficialDatasetRow[];
+    const out: Record<string, unknown> = {};
+    for (const r of rows) {
+      if (!r.chosen) continue;
+      let levels: {
+        level: string;
+        areas: number;
+        areas_kept?: number;
+        kept: boolean;
+      }[] = [];
+      try {
+        levels = JSON.parse(r.levels || '[]');
+      } catch {
+        levels = [];
+      }
+      out[r.country] = {
+        source: r.source,
+        licence: r.licence,
+        dataset_date: r.dataset_date,
+        quality: r.quality,
+        url: r.url,
+        levels: levels
+          .filter((l) => l.kept)
+          .map((l) => ({ level: l.level, areas: l.areas_kept ?? l.areas })),
+        skipped: rows
+          .filter((o) => o.country === r.country && !o.chosen)
+          .map((o) => ({ source: o.source, note: o.note })),
+      };
+    }
+    return out;
+  }
+
+  private hasTable(name: string): boolean {
+    return !!(this.db as Database.Database)
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(name);
+  }
+
+  /** The loaded index for an offline source, or a 503 that says what is missing. */
+  private offlineIndex(source: OfflineSource): BoundaryIndex {
+    const index = this.db ? this.indexes.get(source) : undefined;
+    if (!index) {
+      throw new HttpException(
+        source === 'overture'
+          ? 'Overture database is not available locally.'
+          : `This server's boundary DB has no '${source}' boundaries — rebuild it with the turbopass bootstrap (OFFICIAL_SOURCES).`,
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    return index;
   }
 
   private takeGeoapify(): void {
@@ -172,7 +291,7 @@ export class BoundaryService {
     return new Map(rows.map((r) => [r.id, r]));
   }
 
-  // `match` and `limit` shape the overture search only; geoapify ignores them.
+  // `match` and `limit` shape the offline searches only; geoapify ignores them.
   async search(
     query: string,
     source: string,
@@ -203,15 +322,10 @@ export class BoundaryService {
           error.response?.status || HttpStatus.BAD_GATEWAY,
         );
       }
-    } else if (source === 'overture') {
-      if (!this.db || !this.index) {
-        throw new HttpException(
-          'Overture database is not available locally.',
-          HttpStatus.SERVICE_UNAVAILABLE,
-        );
-      }
+    } else if (isOfflineSource(source)) {
+      const index = this.offlineIndex(source);
       try {
-        const hits = this.index.search(query, match, limit, minDescendants);
+        const hits = index.search(query, match, limit, minDescendants);
         if (hits.length === 0) {
           return { type: 'FeatureCollection', features: [] };
         }
@@ -238,6 +352,8 @@ export class BoundaryService {
                 descendant_count: h.descendant_count,
                 match_type: h.match_type,
                 score: h.score,
+                source: h.source ?? 'overture',
+                licence: h.licence,
               },
               bbox: toGeoJsonBbox(b?.bbox),
               geometry: null,
@@ -256,6 +372,19 @@ export class BoundaryService {
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  /** `b.col` for each column the table has, `NULL AS col` for the rest. */
+  private optionalColumns(names: string[]): string {
+    const db = this.db as Database.Database;
+    const have = new Set(
+      (db.prepare('PRAGMA table_info(boundaries)').all() as TableColumn[]).map(
+        (c) => c.name,
+      ),
+    );
+    return names
+      .map((n) => (have.has(n) ? `b.${n}` : `NULL AS ${n}`))
+      .join(', ');
   }
 
   async fetchBoundaries(id: string, source: string): Promise<any> {
@@ -310,18 +439,20 @@ export class BoundaryService {
         type: 'FeatureCollection',
         features: allFeatures,
       };
-    } else if (source === 'overture') {
-      if (!this.db) {
+    } else if (isOfflineSource(source)) {
+      const index = this.offlineIndex(source);
+      const under = index.descendantsOf(id);
+      if (under === undefined) {
         throw new HttpException(
-          'Overture database is not available locally.',
-          HttpStatus.SERVICE_UNAVAILABLE,
+          `No place with id '${id}' in the '${source}' boundaries.`,
+          HttpStatus.NOT_FOUND,
         );
       }
 
-      const total = 1 + (this.index?.descendantsOf(id) ?? 0);
+      const total = 1 + under;
       if (this.maxFetchFeatures > 0 && total > this.maxFetchFeatures) {
         throw new HttpException(
-          `"${this.index?.nameOf(id) ?? id}" has ${total - 1} areas under it — more than this server returns in one fetch (${this.maxFetchFeatures}). Pick a smaller area inside it.`,
+          `"${index.nameOf(id) ?? id}" has ${total - 1} areas under it — more than this server returns in one fetch (${this.maxFetchFeatures}). Pick a smaller area inside it.`,
           HttpStatus.PAYLOAD_TOO_LARGE,
         );
       }
@@ -335,7 +466,8 @@ export class BoundaryService {
               SELECT b.id FROM boundaries b
               JOIN children c ON b.parent_id = c.id
           )
-          SELECT b.id, b.name, b.country, b.subtype, b.admin_level, b.geometry 
+          SELECT b.id, b.name, b.country, b.subtype, b.admin_level, b.geometry,
+                 ${this.optionalColumns(['source', 'licence', 'pcode'])}
           FROM boundaries b
           WHERE b.id IN children
         `);
@@ -351,6 +483,9 @@ export class BoundaryService {
               formatted: `${r.name}, ${r.country}`,
               admin_level: r.admin_level || 0,
               subtype: r.subtype,
+              source: r.source ?? 'overture',
+              licence: r.licence,
+              pcode: r.pcode,
             },
             geometry: JSON.parse(r.geometry || '{}'),
           })),
