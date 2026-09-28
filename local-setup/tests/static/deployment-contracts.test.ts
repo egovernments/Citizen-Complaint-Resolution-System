@@ -335,6 +335,34 @@ describe('tenant-scoped digit-ui routing', () => {
   });
 });
 
+// #2167 review (Fable M3): Keycloak (KC_PROXY_HEADERS=xforwarded) takes the
+// LEFTMOST X-Forwarded-For entry as the client IP and Kong always appends its
+// peer, so the outermost nginx must SET the header for Keycloak, never append
+// a client-supplied one; otherwise rotating it bypasses the per-IP OTP limit.
+describe('Keycloak sees the real client IP', () => {
+  const locationBlock = (conf: string, marker: string) => {
+    const start = conf.indexOf(marker);
+    expect(start).toBeGreaterThan(-1);
+    // End at the block's closing-brace line; Jinja `{{ }}` sit inside it.
+    const end = conf.slice(start).search(/\n\s*\}\s*\n/);
+    return conf.slice(start, start + end);
+  };
+
+  test('host nginx sets X-Forwarded-For for /auth/realms/ before Kong', () => {
+    const block = locationBlock(
+      read('local-setup/ansible/templates/nginx-site.conf.j2'), 'location ^~ /auth/realms/ {');
+    expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block).not.toContain('$proxy_add_x_forwarded_for');
+  });
+
+  test('the identity compose nginx sets it for Keycloak too', () => {
+    const block = locationBlock(
+      read('backend/identity-bff/deploy/digit-compose/nginx-identity.conf'), 'location /auth/realms/ {');
+    expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block).not.toContain('$proxy_add_x_forwarded_for');
+  });
+});
+
 describe('Novu workflow creation deployment contract', () => {
   const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
   const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));
