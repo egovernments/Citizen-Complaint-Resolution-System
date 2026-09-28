@@ -6,18 +6,15 @@ import {
   Card as V2Card,
 } from "@egovernments/digit-ui-components-v2";
 
+import {
+  buildIdentityBffAuthorizeUrl,
+  establishIdentityBffSession,
+  identityBffSurfaceBase,
+  restrictIdentityBffDestination,
+} from "@egovernments/digit-ui-libraries";
+
 import Header from "../../../components/Header";
 import { setEmployeeDetail, V2LoginShell } from "./login";
-
-const requestJson = async (url, init) => {
-  const response = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: { Accept: "application/json", ...(init?.headers || {}) },
-  });
-  const body = response.status === 204 ? null : await response.json().catch(() => null);
-  return { response, body };
-};
 
 const cleanAuthResult = () => {
   const url = new URL(window.location.href);
@@ -25,83 +22,65 @@ const cleanAuthResult = () => {
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 };
 
+/**
+ * Employee sign-in on canonical tenant routes. The Identity BFF sends the
+ * browser to the `digit-ui-employee` Keycloak client, whose theme looks like
+ * the legacy DIGIT login, so a signed-out visitor is redirected straight
+ * there. This card is only shown for failures, a 403 on the route tenant, or
+ * after an unsuccessful round trip (to avoid redirect loops).
+ */
 const IdentityBffEmployeeLogin = ({ t }) => {
   const location = useLocation();
   const [status, setStatus] = useState("checking");
   const [message, setMessage] = useState("");
   const tenant = window.__digitTenantContext;
-  const employeeBase = `/${tenant.appBasePath}/employee`;
-  const requestedDestination =
-    location.state?.from || new URLSearchParams(location.search).get("from");
-  const destination =
-    typeof requestedDestination === "string" &&
-    (requestedDestination === employeeBase ||
-      requestedDestination.startsWith(`${employeeBase}/`) ||
-      requestedDestination.startsWith(`${employeeBase}?`))
-      ? requestedDestination
-      : employeeBase;
+  const employeeBase = identityBffSurfaceBase(tenant, "employee");
+  const destination = restrictIdentityBffDestination(
+    location.state?.from || new URLSearchParams(location.search).get("from"),
+    employeeBase,
+  );
   const tr = (key, fallback) => {
     const value = t(key);
     return value === key ? fallback : value;
+  };
+
+  const beginSignIn = () => {
+    window.location.assign(
+      buildIdentityBffAuthorizeUrl({
+        surface: "employee",
+        tenant,
+        pathname: window.location.pathname,
+        destination,
+      }),
+    );
   };
 
   const establishTenantSession = async () => {
     setStatus("checking");
     setMessage("");
 
-    const resultId = new URLSearchParams(window.location.search).get("authResult");
-    if (resultId) {
-      const { response, body } = await requestJson(
-        `/identity/v1/auth-results/${encodeURIComponent(resultId)}`,
-      );
-      cleanAuthResult();
-      if (!response.ok || body?.status === "failed") {
-        setStatus("signed-out");
-        setMessage(body?.message || "Sign-in could not be completed. Please try again.");
-        return;
-      }
-    }
-
-    const session = await requestJson("/identity/v1/session");
-    if (session.response.status === 401) {
-      setStatus("signed-out");
-      return;
-    }
-    if (!session.response.ok || !session.body?.authenticated) {
-      setStatus("error");
-      setMessage("Sign-in is temporarily unavailable. Please try again.");
-      return;
-    }
-
-    const selected = await requestJson("/identity/v1/contexts/_select", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantId: tenant.tenantId }),
+    const authResultId = new URLSearchParams(window.location.search).get("authResult");
+    if (authResultId) cleanAuthResult();
+    const result = await establishIdentityBffSession({
+      surface: "employee",
+      tenant,
+      authResultId,
+      fetchImpl: window.fetch.bind(window),
     });
-    if (selected.response.status === 401) {
-      setStatus("signed-out");
+
+    if (result.status === "signed-out" && !result.fromAuthResult && !result.messageKey) {
+      beginSignIn();
       return;
     }
-    if (selected.response.status === 403) {
-      setStatus("forbidden");
-      setMessage(`Your account does not have access to ${tenant.name}.`);
-      return;
-    }
-    if (!selected.response.ok) {
-      setStatus("error");
-      setMessage("Your tenant session could not be prepared. Please try again.");
+    if (result.status !== "authenticated") {
+      setStatus(result.status);
+      setMessage(result.messageKey ? tr(result.messageKey, result.message) : "");
       return;
     }
 
-    const { UserRequest: info, ...tokens } = selected.body || {};
-    if (!info || info.type !== "EMPLOYEE" || info.tenantId !== tenant.tenantId) {
-      setStatus("error");
-      setMessage("The signed-in account did not produce a valid employee session for this tenant.");
-      return;
-    }
-    info.roles = (info.roles || []).filter((role) => role.tenantId === tenant.tenantId);
+    const { user } = result;
+    const { info, ...tokens } = user;
     Digit.SessionStorage.set("Employee.tenantId", tenant.tenantId);
-    const user = { info, ...tokens };
     Digit.SessionStorage.set("citizen.userRequestObject", user);
     Digit.UserService.setType("employee");
     Digit.UserService.setUser(user);
@@ -112,22 +91,11 @@ const IdentityBffEmployeeLogin = ({ t }) => {
   useEffect(() => {
     establishTenantSession().catch(() => {
       setStatus("error");
-      setMessage("Sign-in is temporarily unavailable. Please try again.");
+      setMessage(tr("CORE_IDENTITY_SIGNIN_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again."));
     });
     // Tenant context is immutable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const beginSignIn = () => {
-    const returnUrl = new URL(window.location.pathname, window.location.origin);
-    if (destination !== employeeBase) {
-      returnUrl.searchParams.set("from", destination);
-    }
-    const returnTo = `${returnUrl.pathname}${returnUrl.search}`;
-    window.location.assign(
-      `/identity/v1/authorize?method=password&intent=signin&returnTo=${encodeURIComponent(returnTo)}`,
-    );
-  };
 
   if (status === "checking") return <Loader page={true} variant="PageLoader" />;
 
@@ -164,7 +132,7 @@ const IdentityBffEmployeeLogin = ({ t }) => {
         ) : null}
         {status === "forbidden" ? (
           <p style={{ margin: 0, color: "var(--color-text-secondary, #505A5F)" }}>
-            Sign out if you need to use a different account.
+            {tr("CORE_IDENTITY_SIGN_OUT_HINT", "Sign out if you need to use a different account.")}
           </p>
         ) : null}
         <V2Button
@@ -178,7 +146,11 @@ const IdentityBffEmployeeLogin = ({ t }) => {
                 : beginSignIn
           }
         >
-          {status === "forbidden" ? "Sign out" : status === "error" ? "Try again" : "Sign in →"}
+          {status === "forbidden"
+            ? tr("CORE_IDENTITY_SIGN_OUT", "Sign out")
+            : status === "error"
+              ? tr("CORE_IDENTITY_TRY_AGAIN", "Try again")
+              : tr("CORE_IDENTITY_SIGN_IN", "Sign in →")}
         </V2Button>
       </V2Card>
     </V2LoginShell>
