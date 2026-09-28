@@ -104,7 +104,9 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
   const selected = await request(config.selectPath, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(surface === "employee" ? { tenantId: tenant.tenantId } : {}),
+    // The BFF reads the session cookie for `surface`; without it the employee
+    // select defaults to the Configurator surface and answers 401.
+    body: JSON.stringify(surface === "employee" ? { surface, tenantId: tenant.tenantId } : {}),
   });
   if (selected.response.status === 401) {
     return { status: "signed-out", fromAuthResult: Boolean(authResultId) };

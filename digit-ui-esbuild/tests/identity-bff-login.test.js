@@ -161,7 +161,7 @@ test("employee session exchange passes surface=employee and scopes roles to the 
   });
   const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
   assert.equal(result.status, "authenticated");
-  assert.deepEqual(calls[1].body, { tenantId: "ke.bomet" });
+  assert.deepEqual(calls[1].body, { surface: "employee", tenantId: "ke.bomet" });
   assert.equal(calls[1].init.credentials, "include");
   assert.deepEqual(result.user.info.roles.map((r) => r.tenantId), ["ke.bomet"]);
   assert.equal(result.user.access_token, "emp-token");
