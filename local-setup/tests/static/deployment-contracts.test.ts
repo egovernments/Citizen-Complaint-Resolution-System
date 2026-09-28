@@ -322,9 +322,12 @@ describe('tenant-scoped digit-ui routing', () => {
   );
 
   test('Compose nginx keeps the public slug and rewrites only the internal UI mount', () => {
-    expect(nginx).toContain('location ~ ^/([a-z0-9-]{2,63})/digit-ui$');
+    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block
+    // opener and reject the config (#2127).
+    expect(nginx).toContain('location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {');
+    expect(nginx).toContain('location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {');
     expect(nginx).toContain(
-      'rewrite ^/[a-z0-9-]{2,63}/digit-ui/(.*)$ /digit-ui/$1 last;'
+      'rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;'
     );
   });
 
