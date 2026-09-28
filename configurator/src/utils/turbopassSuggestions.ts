@@ -106,7 +106,29 @@ export function pickPromptMessage(result: Pick<PickResult, 'reason' | 'exactCoun
   }
 }
 
-/** /boundary/search URL. `onboardableOnly` asks the overture source for places
+/** Sources the search-api serves from its own DB (no API key): Overture, and
+ *  the government-derived sets — `official` picks, per country, whichever of
+ *  OCHA COD-AB / geoBoundaries nests deepest (#1994). */
+export const OFFLINE_SOURCES = ['official', 'overture', 'cod', 'geoboundaries'] as const;
+
+export function isOfflineSource(source: string): boolean {
+  return (OFFLINE_SOURCES as readonly string[]).includes(source);
+}
+
+/** The source Phase 2 uses: the build-time VITE_TURBOPASS_SOURCE when set,
+ *  else `official` when the server has official sets, else `overture`.
+ *  `sources` is /health's map of what the server can answer (null when
+ *  /health couldn't be read — then the long-standing default stands). */
+export function chooseTurbopassSource(
+  configured: string | undefined,
+  sources: Record<string, unknown> | null | undefined,
+): string {
+  const fixed = (configured ?? '').trim();
+  if (fixed) return fixed;
+  return sources?.official === true ? 'official' : 'overture';
+}
+
+/** /boundary/search URL. `onboardableOnly` asks an offline source for places
  *  with at least one area inside them (min_descendants=1): a place with nothing
  *  inside can never form a hierarchy. Geoapify has no such filter. */
 export function turbopassSearchUrl(
@@ -117,8 +139,36 @@ export function turbopassSearchUrl(
   onboardableOnly: boolean,
 ): string {
   const qs = new URLSearchParams({ q: term, source, match });
-  if (onboardableOnly && source === 'overture') qs.set('min_descendants', '1');
+  if (onboardableOnly && isOfflineSource(source)) qs.set('min_descendants', '1');
   return `${base}/boundary/search?${qs.toString()}`;
+}
+
+const DATASET_NAMES: Record<string, string> = {
+  cod: 'OCHA COD-AB',
+  geoboundaries: 'geoBoundaries',
+  overture: 'Overture Maps',
+};
+
+/** "Boundary data: OCHA COD-AB (CC BY-IGO)" for the fetched features, or null
+ *  when they carry no source. The official sets' licences require attribution,
+ *  and a set can mix licences across levels (geoBoundaries does). */
+export function attributionLine(features: SuggestionFeature[] | null | undefined): string | null {
+  const bySource = new Map<string, Set<string>>();
+  for (const f of features ?? []) {
+    const src = str(f?.properties?.source);
+    if (!src) continue;
+    const licences = bySource.get(src) ?? new Set<string>();
+    const licence = str(f?.properties?.licence);
+    if (licence) licences.add(licence);
+    bySource.set(src, licences);
+  }
+  if (bySource.size === 0) return null;
+  const parts = [...bySource].map(([src, licences]) => {
+    const name = DATASET_NAMES[src] ?? src;
+    if (src === 'overture') return `${name} (ODbL)`;
+    return licences.size ? `${name} (${[...licences].sort().join('; ')})` : name;
+  });
+  return `Boundary data: ${parts.join(', ')}`;
 }
 
 /** Why a place can't be onboarded on its own: nothing lies inside it (#1016
@@ -134,6 +184,9 @@ export function deadEndMessage(item: SuggestionFeature | null | undefined): stri
 
 export function sourceLabel(source: string): string {
   if (source === 'overture') return 'the offline boundary service';
+  if (source === 'official') return 'the official boundary sets (OCHA COD-AB / geoBoundaries)';
+  if (source === 'cod') return 'OCHA COD-AB';
+  if (source === 'geoboundaries') return 'geoBoundaries';
   if (source === 'geoapify') return 'Geoapify';
   return source;
 }

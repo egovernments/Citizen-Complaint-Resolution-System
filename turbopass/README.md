@@ -11,7 +11,7 @@ DIGIT box, which suits a single box or local testing.
 | Path | What |
 |---|---|
 | `search-api/` | NestJS service: `/boundary/search`, `/boundary/fetch`, `/health`, and the legacy `/search`. Port 3000. |
-| `overture-scraper/` | Builds the offline boundary DB from Overture Maps (`bootstrap.sh`); `coverage.py` |
+| `overture-scraper/` | Builds the offline boundary DB from Overture Maps plus the official sets (`bootstrap.sh`); `coverage.py` |
 | `data/`, `scraper/` | Name hierarchies for the legacy Trie `/search`, vendored from dhruv-1001/osm-mapped-data |
 | `docker-compose.yml` | The one-shot `bootstrap` and the `search-api` |
 
@@ -19,8 +19,25 @@ DIGIT box, which suits a single box or local testing.
 
 | `source=` | Backed by | Needs |
 |---|---|---|
-| `overture` (default) | Offline SQLite DB built from Overture Maps divisions | The DB (below). No network or key at query time. |
+| `overture` (API default) | Offline SQLite DB built from Overture Maps divisions | The DB (below). No network or key at query time. |
+| `official` | Per country, whichever of `cod` / `geoboundaries` nests deepest | The DB, built with the official step (on by default) |
+| `cod` | OCHA COD-AB from HDX — national statistics / mapping offices, curated by OCHA | same |
+| `geoboundaries` | geoBoundaries gbOpen | same |
 | `geoapify` | Hosted Geoapify API | `GEOAPIFY_API_KEY` on the service; every call spends that key's quota |
+
+**Why the official sets.** Evaluated for the 12 priority countries (#1994), COD-AB and
+geoBoundaries nest perfectly (no orphans, full coverage) and go 1–2 levels deeper than
+Overture, whose divisions are largely OpenStreetMap and stop at county level in most of
+Africa. Neither is always better: COD wins in Burundi (only source with the 2025 reform),
+Mozambique and Ethiopia; geoBoundaries in Rwanda (COD's ADM4 is cut off at 1,000 rows),
+Kenya, Benin and India (no COD). The bootstrap measures this per country instead of
+hard-coding it, so `official` follows the data when either source updates.
+
+**Licences travel with the data.** Every official row carries its dataset's licence
+(`licence` in search and fetch results, per country in `/health`). COD-AB is CC BY-IGO;
+geoBoundaries varies by level — public domain, CC BY, or ODbL (share-alike). Credit the
+source wherever the boundaries are shown; the configurator prints the line on its level
+screen.
 
 ## Run it
 
@@ -37,7 +54,7 @@ from the checkout instead.
 
 ## Build the boundary DB
 
-`overture-scraper/bootstrap.sh`, the bootstrap image's entrypoint, runs four steps and exits
+`overture-scraper/bootstrap.sh`, the bootstrap image's entrypoint, runs five steps and exits
 non-zero if any fails — it never reports "ready" over an empty DB:
 
 1. `scrape.py` reads Overture's `division_area` parquet on S3 for the requested countries.
@@ -47,8 +64,19 @@ non-zero if any fails — it never reports "ready" over an empty DB:
    coastal regions twice under one division, land plus territorial sea, and the land area is
    kept. It then links each area to its parent (centroid inside the polygon, same country,
    nearest shallower level), simplifies the geometry and indexes the table.
-4. `verify_db.py` checks every requested country is present with a root, at least 90% of
-   areas have a parent, and no division has two areas.
+4. `official.py` adds OCHA COD-AB (HDX package `cod-ab-<iso3>`) and geoBoundaries (gbOpen
+   API) for the same countries. Each level is kept only if it covers at least
+   `MIN_LEVEL_COVERAGE` of the level above (equal-area, slivers under 100 m ignored) with at
+   most `MAX_LEVEL_ORPHANS` of its areas outside it; a failed level is dropped and the next
+   one is checked against the last level kept. ADM1 hangs off the country; below that, COD
+   links by parent P-code and anything else by the polygon holding the area's interior
+   point. The source whose kept levels go deepest becomes the country's `official` set
+   (ties: more areas, then an "enhanced" COD, then COD). COD sets built from GADM, whose
+   licence forbids commercial use, are skipped unless `ALLOW_GADM_DERIVED=1`. What was
+   kept, dropped and why is in the `official_datasets` table and the log.
+5. `verify_db.py` checks every requested country is present with a root, at least 90% of
+   Overture areas have a parent, no division has two areas, and — unless
+   `OFFICIAL_SOURCES=none` — each country has an official set whose rows all reach a parent.
 
 | Variable | Default | |
 |---|---|---|
@@ -56,6 +84,11 @@ non-zero if any fails — it never reports "ready" over an empty DB:
 | `OVERTURE_RELEASE` | newest in the bucket | Overture keeps only its last few releases; a pinned release that has gone is a hard error |
 | `SIMPLIFY_TOLERANCE` | `0.0001` (about 11 m) | `0` keeps full resolution |
 | `OVERTURE_DB_PATH` | `../overture-data/boundaries.sqlite` | |
+| `OFFICIAL_SOURCES` | `cod,geoboundaries` | `none` skips step 4 |
+| `MIN_LEVEL_COVERAGE` | `0.90` | Share of the parent level a level must cover to be kept |
+| `MAX_LEVEL_ORPHANS` | `0.02` | Share of a level's areas allowed outside every parent (they are dropped) |
+| `MAX_LEVEL_FEATURES` | `100000` | A geoBoundaries level with more areas is skipped without downloading (India ADM5: 649,771 areas, 1 GB) |
+| `ALLOW_GADM_DERIVED` | `0` | `1` keeps GADM-derived COD sets (Djibouti) — not for commercial use |
 
 `overture-data/` is gitignored.
 
@@ -74,23 +107,28 @@ A country whose data stops at region level gives operators a two-level hierarchy
 
 | Param | Default | |
 |---|---|---|
-| `source` | `overture` | or `geoapify` |
+| `source` | `overture` | `official`, `cod`, `geoboundaries`, or `geoapify` |
 | `match` | `substring` | `exact`, `prefix`, `substring`, or `fuzzy` (one typo up to 6 letters, two beyond) |
 | `limit` | `10` | 1–50 |
 | `min_descendants` | `0` | Only places with at least this many areas inside. The configurator sends `1`: a place with nothing inside can't form a hierarchy. |
 
-`match`, `limit` and `min_descendants` apply to `overture`. Results rank exact → prefix →
+`match`, `limit` and `min_descendants` apply to the offline sources. Results rank exact → prefix →
 substring → fuzzy, then broadest place first; matching ignores case and accents. Each result
 carries `place_id`, `name`, `subtype`, `admin_level`, `parent_name`, `region_name`,
-`country_name`, `descendant_count`, `match_type`, and a `formatted` label that tells
-same-name places apart ("Delhi — region, India"). Search results have a GeoJSON `bbox`
+`country_name`, `descendant_count`, `match_type`, `source`, `licence`, and a `formatted`
+label that tells same-name places apart ("Delhi — region, India", "Westlands — ADM2,
+Nairobi, Kenya"). Official places are named `ADM1`, `ADM2`, ... with ids
+`<source>:<ISO3>:<P-code or shapeID>`. Search results have a GeoJSON `bbox`
 (`[west, south, east, north]`) but no polygons — `geometry` is `null`.
 
-`GET /boundary/fetch?id=<place_id>` — the place and every area inside it, with polygons. A
-place with more than `FETCH_MAX_FEATURES` areas inside is refused with `413`, naming the count.
+`GET /boundary/fetch?id=<place_id>&source=<source>` — the place and every area inside it, with
+polygons, `source`, `licence` and (official sets) `pcode`. A place with more than
+`FETCH_MAX_FEATURES` areas inside is refused with `413`, naming the count; an id that isn't in
+that source answers `404`.
 
-`GET /health` — `sources` (which of `overture` / `geoapify` can answer here) and `overture`
-(release, countries, build time, number of places).
+`GET /health` — `sources` (which of `overture` / `official` / `cod` / `geoboundaries` /
+`geoapify` can answer here), `overture` (release, countries, build time, number of places) and
+`official` (per country: source, licence, dataset date, levels kept, the set not chosen).
 
 ## Configuration
 
@@ -108,7 +146,7 @@ place with more than `FETCH_MAX_FEATURES` areas inside is refused with `413`, na
 | Build variable | Default | |
 |---|---|---|
 | `VITE_TURBOPASS_URL` | `/turbopass` | Same-origin path (nginx proxies it), or the central service's URL |
-| `VITE_TURBOPASS_SOURCE` | `overture` | |
+| `VITE_TURBOPASS_SOURCE` | — | Unset: `official` when the server's `/health` lists it, else `overture`. Set it to pin a source. |
 | `VITE_TURBOPASS_MATCH` | `substring` | The `match` mode the configurator sends |
 
 ## Adding countries

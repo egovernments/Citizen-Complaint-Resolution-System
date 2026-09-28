@@ -38,8 +38,12 @@ export class BoundaryController {
   //   min_descendants: only places with at least this many areas under them
   //          (default 0). The configurator sends 1 — a place with nothing under
   //          it can't form a hierarchy.
-  // All three apply to source=overture; the geoapify passthrough ignores them.
-  // source defaults to overture, the offline source that needs no API key.
+  // source: overture (default) | official | cod | geoboundaries — all served
+  //          from the offline DB, no API key — or geoapify (hosted, keyed).
+  //          official = per country, whichever of cod / geoboundaries nests
+  //          deepest; results carry `source` and `licence` for attribution.
+  // match, limit and min_descendants apply to the offline sources; the
+  // geoapify passthrough ignores them.
   @Get('search')
   async search(
     @Query('q') query: string,

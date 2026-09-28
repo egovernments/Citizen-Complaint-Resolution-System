@@ -36,8 +36,13 @@ dropped = cur.execute(
 conn.commit()
 print(f'Dropped {dropped} maritime duplicate(s) of land divisions.')
 
+# Official sets (official.py) carry their own parent links; a re-run on a DB
+# that already holds them must leave those rows alone.
+columns = {row[1] for row in cur.execute('PRAGMA table_info(boundaries)')}
+overture_only = " WHERE source = 'overture' OR source IS NULL" if 'source' in columns else ''
+
 print('Loading geometries...')
-df = pd.read_sql('SELECT id, country, admin_level, geometry FROM boundaries', conn)
+df = pd.read_sql('SELECT id, country, admin_level, geometry FROM boundaries' + overture_only, conn)
 df['geometry'] = df['geometry'].apply(lambda g: shape(json.loads(g)))
 gdf = gpd.GeoDataFrame(df, geometry='geometry')
 
@@ -53,10 +58,9 @@ valid['parent_area'] = gdf.geometry.area.reindex(valid['index_right']).values
 parents = valid.sort_values(['admin_level_right', 'parent_area'], ascending=[False, True])
 parent_map = parents.drop_duplicates(subset='id_left').set_index('id_left')['id_right'].to_dict()
 
-columns = {row[1] for row in cur.execute('PRAGMA table_info(boundaries)')}
 if 'parent_id' not in columns:
     cur.execute('ALTER TABLE boundaries ADD COLUMN parent_id VARCHAR')
-cur.execute('UPDATE boundaries SET parent_id = NULL')
+cur.execute('UPDATE boundaries SET parent_id = NULL' + overture_only)
 cur.executemany('UPDATE boundaries SET parent_id = ? WHERE id = ?', [(p, c) for c, p in parent_map.items()])
 print(f'Linked {len(parent_map)} of {len(gdf)} boundaries to a parent.')
 

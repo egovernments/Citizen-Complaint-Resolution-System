@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attributionLine,
+  chooseTurbopassSource,
+  isOfflineSource,
   formatSuggestionLabel,
   matchesNameFamily,
   normalizePlaceName,
@@ -110,6 +113,13 @@ describe('turbopassSearchUrl', () => {
     expect(turbopassSearchUrl('/turbopass', 'Delhi', 'geoapify', 'substring', true)).not.toContain('min_descendants');
   });
 
+  it('filters the official sets like overture — they are offline too', () => {
+    for (const src of ['official', 'cod', 'geoboundaries']) {
+      expect(turbopassSearchUrl('/turbopass', 'Nairobi', src, 'substring', true)).toContain('min_descendants=1');
+    }
+    expect(isOfflineSource('geoapify')).toBe(false);
+  });
+
   it('encodes the term', () => {
     expect(turbopassSearchUrl('', 'São Tomé & X', 'overture', 'exact', false)).toContain('q=S%C3%A3o+Tom%C3%A9+%26+X');
   });
@@ -147,5 +157,37 @@ describe('turbopassErrorMessage', () => {
 
   it('covers an unreachable service', () => {
     expect(turbopassErrorMessage({ kind: 'network', source: 'overture' })).toMatch(/Couldn't reach the offline boundary service/);
+  });
+});
+
+describe('chooseTurbopassSource', () => {
+  it('uses the build-time source when one is set', () => {
+    expect(chooseTurbopassSource('geoapify', { official: true })).toBe('geoapify');
+  });
+
+  it('prefers the official sets when the server has them', () => {
+    expect(chooseTurbopassSource(undefined, { overture: true, official: true })).toBe('official');
+    expect(chooseTurbopassSource('', { overture: true, official: false })).toBe('overture');
+  });
+
+  it('falls back to overture when /health is unreadable', () => {
+    expect(chooseTurbopassSource(undefined, null)).toBe('overture');
+  });
+});
+
+describe('attributionLine', () => {
+  const f = (source?: string, licence?: string) => ({ properties: { source, licence } });
+
+  it('credits each dataset with its licences', () => {
+    expect(attributionLine([f('cod', 'CC BY-IGO'), f('cod', 'CC BY-IGO')])).toBe('Boundary data: OCHA COD-AB (CC BY-IGO)');
+    expect(attributionLine([f('geoboundaries', 'Public Domain'), f('geoboundaries', 'CC BY 4.0')])).toBe(
+      'Boundary data: geoBoundaries (CC BY 4.0; Public Domain)',
+    );
+    expect(attributionLine([f('overture')])).toBe('Boundary data: Overture Maps (ODbL)');
+  });
+
+  it('says nothing for features without a source (Geoapify, older servers)', () => {
+    expect(attributionLine([f()])).toBeNull();
+    expect(attributionLine(null)).toBeNull();
   });
 });

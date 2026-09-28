@@ -54,11 +54,19 @@ jobs:
           npx tsc --noEmit -p tsconfig.build.json
           npm test
 
-      - name: overture-scraper — scripts compile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'  # the bootstrap image's base
+          cache: pip
+          cache-dependency-path: turbopass/overture-scraper/requirements.txt
+
+      - name: overture-scraper — scripts compile + unit tests
         working-directory: turbopass/overture-scraper
         run: |
-          python3 -m py_compile scrape.py apply_admin_levels.py build_hierarchy.py verify_db.py coverage.py
+          python3 -m py_compile scrape.py apply_admin_levels.py build_hierarchy.py official.py verify_db.py coverage.py test_official.py
           bash -n bootstrap.sh
+          pip install -r requirements.txt
+          python3 -m unittest -v test_official
 
   tag:
     name: Resolve tag

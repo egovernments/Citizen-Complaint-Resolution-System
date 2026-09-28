@@ -175,7 +175,14 @@ describe('BoundaryService overture search', () => {
       get: (k: string) => (k === 'GEOAPIFY_API_KEY' ? 'key' : undefined),
     };
     const svc = new BoundaryService({} as any, config as any);
-    expect(svc.sources()).toEqual({ overture: true, geoapify: true });
+    expect(svc.sources()).toEqual({
+      overture: true,
+      official: false,
+      cod: false,
+      geoboundaries: false,
+      geoapify: true,
+    });
+    expect(svc.officialInfo()).toBeNull();
     expect(svc.overtureInfo()).toMatchObject({
       places: 3,
       release: '2026-08-19.0',
@@ -185,5 +192,158 @@ describe('BoundaryService overture search', () => {
   it('answers 503 when the DB is missing', async () => {
     const svc = serviceOn(path.join(dir, 'does-not-exist.sqlite'));
     expect(await statusOf(svc.search('Delhi', 'overture'))).toBe(503);
+  });
+});
+
+// A DB after official.py: the Overture rows plus a COD set for Kenya that won
+// the country (official = 1) and a geoBoundaries set that didn't.
+function makeOfficialDb(file: string): void {
+  makeDb(file, true);
+  const db = new Database(file);
+  db.exec(`
+    ALTER TABLE boundaries ADD COLUMN source VARCHAR;
+    ALTER TABLE boundaries ADD COLUMN licence VARCHAR;
+    ALTER TABLE boundaries ADD COLUMN pcode VARCHAR;
+    ALTER TABLE boundaries ADD COLUMN official INTEGER;
+    UPDATE boundaries SET source = 'overture', official = 0;
+    CREATE TABLE official_datasets (country VARCHAR, source VARCHAR, chosen INTEGER, usable INTEGER,
+      licence VARCHAR, dataset_date VARCHAR, quality VARCHAR, url VARCHAR, levels JSON, note VARCHAR);
+  `);
+  const square = JSON.stringify({
+    type: 'Polygon',
+    coordinates: [
+      [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 0],
+      ],
+    ],
+  });
+  const insert = db.prepare(
+    `INSERT INTO boundaries (id, division_id, subtype, class, country, name, admin_level, bbox, geometry,
+       parent_id, source, licence, pcode, official) VALUES (?, ?, ?, 'land', 'KE', ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+  );
+  const cod = 'CC BY-IGO';
+  for (const [id, subtype, name, level, parent, pcode] of [
+    ['cod:KEN:KE', 'country', 'Kenya', 0, null, 'KE'],
+    ['cod:KEN:KE047', 'ADM1', 'Nairobi', 1, 'cod:KEN:KE', 'KE047'],
+    ['cod:KEN:KE047001', 'ADM2', 'Westlands', 2, 'cod:KEN:KE047', 'KE047001'],
+  ] as const) {
+    insert.run(id, id, subtype, name, level, square, parent, 'cod', cod, pcode, 1);
+  }
+  insert.run('geoboundaries:KEN:X1', 'geoboundaries:KEN:X1', 'country', 'Kenya', 0, square, null, 'geoboundaries', 'Public Domain', null, 0);
+  insert.run('geoboundaries:KEN:X2', 'geoboundaries:KEN:X2', 'ADM1', 'Nairobi', 1, square, 'geoboundaries:KEN:X1', 'geoboundaries', 'Public Domain', null, 0);
+  const levels = JSON.stringify([
+    { level: 'ADM0', areas: 1, kept: true },
+    { level: 'ADM1', areas: 47, kept: true },
+    { level: 'ADM2', areas: 291, areas_kept: 290, kept: true },
+    { level: 'ADM3', areas: 1000, kept: false, coverage: 37.3 },
+  ]);
+  db.prepare('INSERT INTO official_datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    'KE', 'cod', 1, 1, cod, '2019-10-31', 'cod-enhanced', 'https://data.humdata.org/dataset/cod-ab-ken', levels, '');
+  db.prepare('INSERT INTO official_datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    'KE', 'geoboundaries', 0, 1, 'Public Domain', '2020', '', '', '[]', '');
+  db.close();
+}
+
+describe('BoundaryService official sources', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'turbopass-official-'));
+  const savedPath = process.env.OVERTURE_DB_PATH;
+  const file = path.join(dir, 'official.sqlite');
+  makeOfficialDb(file);
+  process.env.OVERTURE_DB_PATH = file;
+  const svc = new BoundaryService({} as any, { get: () => undefined } as any);
+
+  afterAll(() => {
+    process.env.OVERTURE_DB_PATH = savedPath;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('keeps each source to its own rows', async () => {
+    const names = async (source: string) =>
+      (await svc.search('Nairobi', source)).features.map(
+        (f: any) => f.properties.place_id,
+      );
+    expect(await names('official')).toEqual(['cod:KEN:KE047']);
+    expect(await names('cod')).toEqual(['cod:KEN:KE047']);
+    expect(await names('geoboundaries')).toEqual(['geoboundaries:KEN:X2']);
+    expect(await names('overture')).toEqual([]);
+    expect(
+      (await svc.search('Delhi', 'overture')).features[0].properties.name,
+    ).toBe('Delhi');
+  });
+
+  it('labels official hits with their ADM1 and carries source + licence', async () => {
+    const res = await svc.search('Westlands', 'official');
+    expect(res.features[0].properties).toMatchObject({
+      place_id: 'cod:KEN:KE047001',
+      subtype: 'ADM2',
+      admin_level: 2,
+      region_name: 'Nairobi',
+      formatted: 'Westlands — ADM2, Nairobi, Kenya',
+      source: 'cod',
+      licence: 'CC BY-IGO',
+    });
+    const overture = await svc.search('Delhi', 'overture');
+    expect(overture.features[0].properties).toMatchObject({
+      source: 'overture',
+      licence: null,
+    });
+  });
+
+  it('fetches an official subtree with licence and P-codes', async () => {
+    const res = await svc.fetchBoundaries('cod:KEN:KE047', 'official');
+    expect(
+      res.features.map((f: any) => [
+        f.properties.place_id,
+        f.properties.admin_level,
+        f.properties.pcode,
+        f.properties.licence,
+      ]),
+    ).toEqual([
+      ['cod:KEN:KE047', 1, 'KE047', 'CC BY-IGO'],
+      ['cod:KEN:KE047001', 2, 'KE047001', 'CC BY-IGO'],
+    ]);
+  });
+
+  it("answers 404 for a place that isn't in the requested source", async () => {
+    expect(await statusOf(svc.fetchBoundaries('dl', 'official'))).toBe(404);
+    expect(
+      await statusOf(svc.fetchBoundaries('cod:KEN:KE047', 'overture')),
+    ).toBe(404);
+  });
+
+  it('reports the official sets per country', () => {
+    expect(svc.sources()).toMatchObject({
+      overture: true,
+      official: true,
+      cod: true,
+      geoboundaries: true,
+    });
+    expect(svc.officialInfo()).toEqual({
+      KE: {
+        source: 'cod',
+        licence: 'CC BY-IGO',
+        dataset_date: '2019-10-31',
+        quality: 'cod-enhanced',
+        url: 'https://data.humdata.org/dataset/cod-ab-ken',
+        levels: [
+          { level: 'ADM0', areas: 1 },
+          { level: 'ADM1', areas: 47 },
+          { level: 'ADM2', areas: 290 },
+        ],
+        skipped: [{ source: 'geoboundaries', note: '' }],
+      },
+    });
+  });
+
+  it('answers 503 for official on a DB built without official sets', async () => {
+    const plain = path.join(dir, 'plain.sqlite');
+    makeDb(plain, true);
+    process.env.OVERTURE_DB_PATH = plain;
+    const old = new BoundaryService({} as any, { get: () => undefined } as any);
+    expect(await statusOf(old.search('Nairobi', 'official'))).toBe(503);
+    expect(await statusOf(old.search('Nairobi', 'nowhere'))).toBe(400);
   });
 });

@@ -19,6 +19,12 @@ services:
       # Empty → the newest release in the bucket.
       OVERTURE_RELEASE: ${OVERTURE_RELEASE:-}
       SIMPLIFY_TOLERANCE: ${SIMPLIFY_TOLERANCE:-0.0001}
+      # OCHA COD-AB + geoBoundaries next to Overture (#1994); "none" skips them.
+      OFFICIAL_SOURCES: ${OFFICIAL_SOURCES:-cod,geoboundaries}
+      MIN_LEVEL_COVERAGE: ${MIN_LEVEL_COVERAGE:-0.90}
+      MAX_LEVEL_ORPHANS: ${MAX_LEVEL_ORPHANS:-0.02}
+      MAX_LEVEL_FEATURES: ${MAX_LEVEL_FEATURES:-100000}
+      ALLOW_GADM_DERIVED: ${ALLOW_GADM_DERIVED:-0}
       OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
     volumes:
       - ./overture-data:/overture-data
