@@ -25,17 +25,20 @@ Start with the [architecture one-pager](docs/architecture.md), then use the
 ## Browser API
 
 ```http
-GET  /identity/v1/auth-methods?intent=signin
+GET  /identity/v1/auth-methods?surface=employee&intent=signin
 GET  /identity/v1/authorize?method=password&intent=signin&returnTo=/configurator/login
+GET  /identity/v1/authorize?surface=citizen&tenantSlug=bomet&returnTo=/bomet/digit-ui/citizen/
 POST /identity/v1/authentication/magic-link-requests
 GET  /identity/v1/callback
 GET  /identity/v1/auth-results/:id
 POST /identity/v1/password/setup-requests
 GET  /identity/v1/password/setup-complete/:state
-GET  /identity/v1/session
+GET  /identity/v1/session?surface=employee
 GET  /identity/v1/tenant-contexts/:urlSlug
+GET  /identity/v1/tenant-contexts/:urlSlug/branding?locale=en_IN
 GET  /identity/v1/tenants
 POST /identity/v1/contexts/_select
+POST /identity/v1/contexts/citizen/_select
 POST /identity/v1/organization-members/_invite
 POST /identity/v1/logout
 ```
@@ -52,6 +55,19 @@ authorize a tenant; authenticated employee access is still enforced by
 `POST /identity/v1/contexts/_select`. The response carries the immutable
 `tenantId`, explicit `rootTenantId`, nullable `parentTenantId`, and ordered
 `fallbackTenantIds`; clients never infer hierarchy from the slug or tenant id.
+
+Sign-in has three surfaces. `configurator` is the default whenever `surface`
+is absent and behaves exactly as before. digit-ui's `employee` and `citizen`
+surfaces each use their own Keycloak client, flow, theme and session cookie,
+and their tenant comes only from the `/{tenantSlug}/digit-ui/{surface}/`
+route: `/authorize` resolves `tenantSlug` server-side and binds it to the
+login attempt and session. An employee session can select only that tenant;
+`POST /identity/v1/contexts/citizen/_select` takes it from the session, ensures
+the citizen's registration and BFF-managed DIGIT `CITIZEN` account, and
+returns a `CITIZEN` token. The public `.../branding` route gives the Keycloak
+themes the tenant's legacy login branding and texts. Citizen token minting is
+not yet verified against a live egov-user; see
+[the guide](docs/identity-bff.md#digit-ui-employee-and-citizen-sign-in-2167).
 
 These routes are application-neutral. A caller supplies a validated `returnTo`
 path (or an absolute URL on `IDENTITY_ALLOWED_ORIGINS`), and the deployment
@@ -101,7 +117,9 @@ Read the code in this order:
 1. `src/app/create-app.ts` — composition and public/internal route registration.
 2. `src/infrastructure/config.ts` — runtime contract.
 3. `src/modules/authentication` and `src/modules/sessions` — OIDC and opaque sessions.
-4. `src/modules/access-context` — tenant list and selection.
+4. `src/modules/access-context` — tenant routes, tenant list and selection
+   (employee and citizen contexts); `src/modules/citizens` — citizen
+   registrations; `src/modules/branding` — public login branding.
 5. `src/modules/managed-accounts` — per-tenant egov-user accounts and DIGIT tokens.
 6. `src/modules/organizations` — Organizations, membership, roles, and invites.
 7. `src/modules/reconciliation` — startup and periodic Keycloak-to-DIGIT sync.
