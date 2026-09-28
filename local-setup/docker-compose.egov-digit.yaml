@@ -3169,6 +3169,10 @@ services:
       KC_SPI_DIGIT_SMS_SENDER_HTTP_TOKEN: ${IDENTITY_SMS_HTTP_TOKEN:-}
       # Tenant MobileNumberValidation comes from the BFF's public branding API.
       KC_SPI_DIGIT_PHONE_OTP_TENANT_CONTEXT_URL: http://identity-bff:3000
+      # Fallback when a tenant has no MobileNumberValidation: the deployment's
+      # core_mobile_configs (empty = Keycloak's +91 / ^[6-9][0-9]{9}$ default).
+      KC_SPI_DIGIT_PHONE_OTP_DEFAULT_COUNTRY_CODE: ${IDENTITY_PHONE_DEFAULT_COUNTRY_CODE:-}
+      KC_SPI_DIGIT_PHONE_OTP_DEFAULT_MOBILE_REGEX: ${IDENTITY_PHONE_DEFAULT_MOBILE_REGEX:-}
     ports:
       - "${BIND_IP:-127.0.0.1}:18180:8180"
     healthcheck:
@@ -3271,6 +3275,12 @@ services:
       # (the response carries the OTP). egov-otp runs under the `otp` profile;
       # without it citizen context selection answers 503.
       DIGIT_OTP_CREATE_URL: ${IDENTITY_DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
+      # Login-page branding, rendered by Ansible from the values that feed
+      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
+      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
+      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
+      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
+      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
     ports:
       - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:

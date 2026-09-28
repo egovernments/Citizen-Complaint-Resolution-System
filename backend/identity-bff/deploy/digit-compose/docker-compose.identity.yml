@@ -8,6 +8,8 @@
 #   KEYCLOAK_PUBLIC_URL   public Keycloak base, e.g. https://example.org/auth
 #   IDENTITY_ENV_DIR      directory holding the env files below
 #   IDENTITY_SMS_*        citizen SMS OTP sender (see identity-bff.env.example)
+#   IDENTITY_PHONE_DEFAULT_COUNTRY_CODE / _MOBILE_REGEX  phone fallback for
+#                         tenants without MobileNumberValidation
 #
 # `--profile dev-mail` adds identity-mailpit, a local catcher for both the
 # Keycloak SMTP mail and (with IDENTITY_SMS_SENDER=mailpit) citizen OTPs. Never
@@ -40,6 +42,9 @@ services:
       KC_SPI_DIGIT_SMS_SENDER_HTTP_URL: ${IDENTITY_SMS_HTTP_URL:-}
       KC_SPI_DIGIT_SMS_SENDER_HTTP_TOKEN: ${IDENTITY_SMS_HTTP_TOKEN:-}
       KC_SPI_DIGIT_PHONE_OTP_TENANT_CONTEXT_URL: http://identity-bff:3000
+      # Fallback for tenants without MobileNumberValidation (empty = +91 default).
+      KC_SPI_DIGIT_PHONE_OTP_DEFAULT_COUNTRY_CODE: ${IDENTITY_PHONE_DEFAULT_COUNTRY_CODE:-}
+      KC_SPI_DIGIT_PHONE_OTP_DEFAULT_MOBILE_REGEX: ${IDENTITY_PHONE_DEFAULT_MOBILE_REGEX:-}
     ports: !override
       - "127.0.0.1:18180:8180"
     healthcheck:

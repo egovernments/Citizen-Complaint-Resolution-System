@@ -138,6 +138,30 @@ describe('ansible playbook-deploy.yml', () => {
     }
   });
 
+  // #2167 review: the Keycloak login branding and phone fallback come from the
+  // same Ansible values as globalConfigs.js, so the two cannot drift.
+  test('login branding and phone fallback share the globalConfigs sources', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+    const pairs: Array<[string, string, string]> = [
+      ['IDENTITY_DIGIT_FOOTER_URL', 'footer_logo_url', 'DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-'],
+      ['IDENTITY_DIGIT_FOOTER_BW_URL', 'footer_bw_logo_url', 'DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-'],
+      ['IDENTITY_DIGIT_HOME_URL', 'digit_home_url', 'DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-'],
+      ['IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME', 'config_module_name',
+        'DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-'],
+      ['IDENTITY_PHONE_DEFAULT_COUNTRY_CODE', 'core_mobile_configs',
+        'KC_SPI_DIGIT_PHONE_OTP_DEFAULT_COUNTRY_CODE: ${IDENTITY_PHONE_DEFAULT_COUNTRY_CODE:-}'],
+      ['IDENTITY_PHONE_DEFAULT_MOBILE_REGEX', 'core_mobile_configs',
+        'KC_SPI_DIGIT_PHONE_OTP_DEFAULT_MOBILE_REGEX: ${IDENTITY_PHONE_DEFAULT_MOBILE_REGEX:-}'],
+    ];
+    for (const [envName, ansibleVar, composeLine] of pairs) {
+      expect(env).toMatch(new RegExp(`^${envName}='?\\{\\{ \\(?${ansibleVar}\\b`, 'm'));
+      expect(globalConfig).toContain(`{{ ${ansibleVar} | to_json }}`);
+      expect(compose).toContain(composeLine);
+    }
+  });
+
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
   // must reach the MCP tenant_bootstrap on BOTH passes (root + city);
   // `default(omit)` keeps it absent — the only valid off state.
