@@ -55,6 +55,12 @@ public final class PhoneNumbers {
         } else {
             return Optional.empty();
         }
+        // A rule that tolerates the trunk prefix (Kenya's ^0?[17][0-9]{8}$)
+        // matches 0712345678 as-is; drop the 0 so it and 712345678 are one
+        // E.164 number (one destination, one rate-limit bucket).
+        if (national.startsWith("0") && validation.matchesNational(national.substring(1))) {
+            national = national.substring(1);
+        }
 
         if (!DIGITS.matcher(national).matches() || !validation.matchesNational(national)) {
             return Optional.empty();

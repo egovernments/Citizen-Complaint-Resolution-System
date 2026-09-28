@@ -37,6 +37,15 @@ class PhoneNumbersTest {
         assertNull(PhoneNumbers.national("+919876543210", kenya.countryCode()));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"712345678", "0712345678", "0712 345 678", "254712345678", "+254712345678",
+            "+2540712345678", "00254712345678", "002540712345678"})
+    void stripsTheTrunkPrefixWhenTheRuleAllowsIt(String input) {
+        // Kenya's live rule accepts the trunk 0; it must not end up in E.164.
+        MobileValidation trunkTolerant = MobileValidation.of("+254", "^0?[17][0-9]{8}$", null);
+        assertEquals(Optional.of("+254712345678"), PhoneNumbers.normalize(input, trunkTolerant));
+    }
+
     @Test
     void rejectsNull() {
         assertEquals(Optional.empty(), PhoneNumbers.normalize(null, kenya));
