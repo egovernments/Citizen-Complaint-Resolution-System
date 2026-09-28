@@ -25,8 +25,8 @@ SPA → Kong → otp-publisher → /otp/v1/_validate → Redis lookup → 200/40
 
 | Path | What it does |
 |---|---|
-| `POST /user-otp/v1/_send` | Generates a 6-digit OTP, caches `otp:<tenantId>:<mobile>` with `OTP_TTL_SECONDS` TTL, publishes `OTP.SEND` to Kafka, responds with the legacy mock-shape envelope so the SPA notices nothing. |
-| `POST /otp/v1/_validate` | Looks up the cached OTP and confirms (single-use — deletes on success). Falls back to `STATIC_OTP` if set. |
+| `POST /user-otp/v1/_send` | Generates a 6-digit OTP, caches `otp:<tenantId>:<mobile>` with `OTP_TTL_SECONDS` TTL, publishes `OTP.SEND` to Kafka, responds with the legacy mock-shape envelope so the SPA notices nothing. When the body has no `mobileNumber` but has a `userName` (the employee Forgot Password screen), the mobile number and tenantId are looked up from egov-user `/user/_search`, as the stock user-otp service does. Unknown user or no mobile on the account → 400; egov-user unreachable → 502. |
+| `POST /otp/v1/_validate` | Looks up the cached OTP and confirms (single-use — deletes on success). Falls back to `STATIC_OTP` if set. A wrong, expired or already-used OTP is HTTP 400, as egov-otp answers it — egov-user's password-reset path rejects on the status code, not the `isValidationSuccessful` flag. |
 | `GET  /healthz` | Liveness — returns `{"ok":true}` when Redis + Kafka are up. |
 
 ## Env
@@ -41,6 +41,7 @@ SPA → Kong → otp-publisher → /otp/v1/_validate → Redis lookup → 200/40
 | `DEFAULT_TENANT_ID` | `ke` | Used when the request body omits `tenantId` (digit-ui sometimes does). |
 | `STATIC_OTP` | _unset_ | Optional fixed OTP. When set, every send returns this code and validate accepts it. Mirrors `CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE` on egov-user — handy for CI / dev. |
 | `REDIS_KEY_PREFIX` | `otp:` | Namespace for OTP keys. |
+| `EGOV_USER_HOST` | `http://egov-user:8107` | egov-user base URL, used to resolve a `userName` to the account's mobile number when `_send` has no `mobileNumber`. |
 
 ## Event envelope on Kafka
 
@@ -104,6 +105,7 @@ curl -X POST http://localhost:3030/user-otp/v1/_send \
 |---|---|
 | Redis down | `_send` still returns 200 (citizen UI doesn't lock up); `_validate` returns 500. Re-send needed once Redis is back. |
 | Kafka down | `_send` returns 200 (OTP still cached, can be validated locally); the SMS just doesn't go out. Visible in `digit-redpanda` logs. |
+| egov-user down | `_send` by `userName` returns 502 after a 5 s timeout (no number to send to). `_send` by `mobileNumber` is unaffected. |
 | Twilio rejects (trial / unverified) | The publisher doesn't know — the bridge logs the failure to its DLQ topic. Verify recipient in Twilio console for trial accounts. |
 | `STATIC_OTP` set in production | Big footgun. Don't. Only set in dev / CI. |
 
