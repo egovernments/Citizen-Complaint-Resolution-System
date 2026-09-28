@@ -176,7 +176,7 @@ TASK [validate — summary]
     "All containers:        HEALTHY",
     "Public UI:             200 OK",
     "Configurator:          200 OK",
-    "Gatus /status/:        SKIPPED (disabled)",
+    "Gatus /status/:        200 OK",
     "MCP /mcp:              200 OK",
     "Auth flow:             access_token minted",
     "MDMS StateInfo:        non-empty",
@@ -191,35 +191,51 @@ mybox : ok=144  changed=34  unreachable=0  failed=0  skipped=240
 
 ## 6. Verify + log in (from your Windows browser)
 
-| What | URL |
-|------|-----|
-| Employee UI | http://localhost/digit-ui/ — `ADMIN` / `eGov@123`, select **City A** |
-| Citizen SPA | http://localhost/citizen/ |
-| Configurator (DIGIT Studio) | http://localhost/configurator/ |
-| Grafana | http://localhost/**grafana**/ |
+Use these URLs exactly as written, trailing slash included:
+
+| What | URL | Log in with |
+|------|-----|-------------|
+| Employee UI | http://localhost/digit-ui/ | `ADMIN` / `eGov@123`, city **City A** |
+| Citizen SPA | http://localhost/citizen/ | — |
+| Configurator (DIGIT Studio) | http://localhost/configurator/ | `ADMIN` / `eGov@123`, tenant code **`pg`** |
+| Grafana | http://localhost/grafana/ | `admin` / generated password (below) |
+| Gatus health board | http://localhost/status/ | `digit-status` / generated password (below) |
+
+**Configurator tenant code:** the prebuilt configurator image is not tied to
+any tenant, so its **Tenant code** field starts empty. Type `pg` (the
+state-level tenant). The form won't submit with the field empty.
+
+**Generated passwords:** the deploy generates the Grafana and Gatus passwords
+and stores them in OpenBao. Read them from a root shell inside WSL:
+
+```bash
+TOKEN=$(python3 -c 'import json; print(json.load(open("/opt/digit/.openbao/init.json"))["root_token"])')
+for k in grafana_admin_password status_basic_auth_password; do
+  printf '%-28s ' "$k"
+  docker exec -e BAO_TOKEN="$TOKEN" openbao bao kv get -field="$k" kv/digit/pg.citya; echo
+done
+```
+
+Quick check from PowerShell:
 
 ```powershell
-foreach ($u in 'digit-ui','citizen','configurator','grafana') {
-  $url = "http://localhost/$u/"
+foreach ($u in 'digit-ui/','citizen/','configurator/','grafana/','status/') {
+  $url = "http://localhost/$u"
   try   { "{0,-14} {1}" -f $u, (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 20).StatusCode }
   catch { "{0,-14} {1}" -f $u, $_.Exception.Response.StatusCode.value__ }
 }
 ```
 
-All four return `200`.
+The first four return `200`. `status/` returns `401` until you log in, which is
+expected.
 
-> **The Gatus health board is off by default.** `nginx_features.status` is
-> `false` in both localhost templates — the board maps every internal component
-> and its health, so it is no longer published without a password. To enable
-> it, set `nginx_features.status: true` **and** `status_basic_auth_password`
-> in your host_vars (the deploy asserts on the second), then browse
-> `/status/` and authenticate.
-
-> **Grafana is at `/grafana/`, not `localhost:13000`.** Docker publishes
-> Grafana and OpenBao to the WSL VM's loopback only, and WSL2's NAT-mode relay
-> doesn't forward those to Windows. Everything you need is proxied through
-> nginx on port 80. If you want the raw ports, add `networkingMode=mirrored`
-> to `[wsl2]`, or curl them from inside WSL.
+> **Use only `http://localhost/...` URLs (port 80) from Windows.** Docker
+> publishes these ports to the WSL VM's loopback only (Kong `18000`,
+> employee UI `18080`, configurator `18890`, Grafana `13000`, OpenBao `18200`).
+> WSL2's NAT-mode relay doesn't forward those to Windows, so
+> `localhost:18890` and similar URLs show "not reachable" in a Windows browser.
+> nginx on port 80 proxies everything you need. For the raw ports, add
+> `networkingMode=mirrored` to `[wsl2]`, or curl them from inside WSL.
 
 ## Day-to-day
 
