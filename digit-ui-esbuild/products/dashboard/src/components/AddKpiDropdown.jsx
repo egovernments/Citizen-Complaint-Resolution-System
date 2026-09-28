@@ -111,7 +111,8 @@ const AddKpiDropdown = ({
   );
 
   // Close the picker and return focus to the + Add KPI trigger so keyboard
-  // users do not land on <body> after Escape / add / drag-end / outside click.
+  // users do not land on <body> after Escape / add / drag-end. Not used for an
+  // outside click: see handleClick below.
   const closePicker = () => {
     onOpenChange(false);
     requestAnimationFrame(() => {
@@ -157,7 +158,10 @@ const AddKpiDropdown = ({
         containerRef?.current && containerRef.current.contains(event.target);
       const insidePanel = panelRef.current && panelRef.current.contains(event.target);
       if (insideTrigger || insidePanel) return;
-      closePicker();
+      // The click already put focus where the user wanted it (a filter, a date
+      // input, a tile's menu); pulling it back to the trigger would make that
+      // click look swallowed.
+      onOpenChange(false);
     };
     const handleKey = (event) => {
       if (event.key === "Escape") {

@@ -81,6 +81,14 @@ test("AddKpiDropdown uses a non-modal dialog with Add buttons (not menu/listbox)
   assert.match(source, /trigger\.focus/);
 });
 
+test("an outside click closes the picker without pulling focus back to the trigger", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "components", "AddKpiDropdown.jsx"), "utf8");
+  const handleClick = source.match(/const handleClick = \(event\) => \{([\s\S]*?)\n    \};/);
+  assert.ok(handleClick, "handleClick not found");
+  assert.match(handleClick[1], /onOpenChange\(false\)/);
+  assert.doesNotMatch(handleClick[1], /closePicker\(/);
+});
+
 test("Add KPI trigger advertises dialog popup", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "components", "DashboardHeader.jsx"), "utf8");
   assert.match(
