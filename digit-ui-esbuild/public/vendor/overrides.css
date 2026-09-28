@@ -8676,6 +8676,14 @@ html .header-dropdown-option:focus-visible {
     transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
+/* The rail renders beside the page now, not inside it, and the vendor sheet
+ * lifts this container to z-index 100 in the citizen flex column: its left
+ * padding sat over the rail and took every click on it. With a rail on the
+ * page the container takes no stacking level of its own, so the rail stays
+ * clickable and a dialog opened in the page can cover the bar too. */
+html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container {
+  z-index: auto;
+}
 
 /* A module's landing page (/citizen/pgr-home): the Back row the module's
  * pages open with, then its All Services card at the same 434px cap. */
