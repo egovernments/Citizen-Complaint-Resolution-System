@@ -5,8 +5,9 @@ import { parseTenantRoute } from "../tenant/tenantRoute";
  *
  * DIGIT serves two surfaces from a single bundle: citizen
  * (`/<contextPath>/citizen/...`) and employee (`/<contextPath>/employee/...`).
- * Canonical tenant-scoped employee routes always use the Identity BFF. Legacy
- * routes retain their per-surface provider settings during migration.
+ * Canonical tenant-scoped routes (`/{tenantSlug}/digit-ui/{employee|citizen}`)
+ * always use the Identity BFF on both surfaces. Legacy routes retain their
+ * per-surface provider settings during migration.
  *
  * Config keys (globalConfigs):
  *   CITIZEN_AUTH_PROVIDER  - provider for the citizen surface
@@ -35,7 +36,8 @@ export function getAuthSurface(pathname) {
 export function getAuthProvider(pathname) {
   const path = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
   const cfg = (key) => typeof window !== "undefined" && window.globalConfigs?.getConfig(key);
-  if (parseTenantRoute(path)?.surface === "employee") {
+  const tenantSurface = parseTenantRoute(path)?.surface;
+  if (tenantSurface === "employee" || tenantSurface === "citizen") {
     return "identity-bff";
   }
   if (getAuthSurface(path) === "employee") {

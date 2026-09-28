@@ -70,6 +70,26 @@ test("canonical employee routes use the Identity BFF without a global-config tog
   delete global.window;
 });
 
+test("canonical citizen routes also use the Identity BFF; legacy citizen routes keep their provider", () => {
+  global.window = {
+    location: { pathname: "/bomet-county/digit-ui/citizen/login" },
+    globalConfigs: { getConfig: (key) => (key === "CITIZEN_AUTH_PROVIDER" ? "digit" : undefined) },
+  };
+  assert.equal(getAuthProvider(), "identity-bff");
+  assert.equal(isIdentityBffAuth("/bomet-county/digit-ui/citizen/register"), true);
+  assert.equal(getAuthProvider("/digit-ui/citizen/login"), "digit");
+  window.globalConfigs = { getConfig: (key) => (key === "AUTH_PROVIDER" ? "keycloak" : undefined) };
+  assert.equal(getAuthProvider("/digit-ui/citizen/login"), "keycloak");
+  assert.equal(getAuthProvider("/bomet-county/digit-ui/citizen/login"), "identity-bff");
+  delete global.window;
+});
+
+test("tenant routes without a surface segment do not force the Identity BFF", () => {
+  global.window = { location: { pathname: "/" }, globalConfigs: { getConfig: () => undefined } };
+  assert.equal(getAuthProvider("/bomet-county/digit-ui/"), "digit");
+  delete global.window;
+});
+
 test("tenant route resolver keeps the slug separate from the tenant id", async () => {
   const calls = [];
   const resolved = await resolveTenantRoute(

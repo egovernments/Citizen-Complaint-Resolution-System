@@ -41,6 +41,12 @@ import { subFormRegistry } from "./subFormRegistry";
 import AccessControlService from "./services/elements/Access";
 import { getAuthAdapter, initAuthAdapter, AuthAdapter } from "./services/auth/index";
 import { isIdentityBffAuth } from "./services/auth/authSurface";
+import {
+  buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
+  establishIdentityBffSession,
+  restrictDestination as restrictIdentityBffDestination,
+  surfaceBase as identityBffSurfaceBase,
+} from "./services/auth/identityBffLogin";
 
 const setupLibraries = (Library, props) => {
   window.Digit = window.Digit || {};
@@ -94,4 +100,5 @@ const initLibraries = () => {
 
 export * from "./constants/mobileValidation";
 
-export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter, isIdentityBffAuth };
+export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter, isIdentityBffAuth,
+  buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase };
