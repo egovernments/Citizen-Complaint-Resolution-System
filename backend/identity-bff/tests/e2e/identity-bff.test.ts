@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
@@ -15,6 +15,7 @@ import {
   isOrganizationGroupMember,
   readOrganizationGroupReconciliation,
   readTenantMappingForTenant,
+  updateCitizenRegistrationValues,
 } from "../../src/modules/organizations/organization-service.js";
 import {
   getIdentityAppPort as getAppPort,
@@ -1676,5 +1677,31 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       body: JSON.stringify({ surface: "citizen" }),
     });
     expect((await citizenSelect(await signIn("citizen", "other"))).status).toBe(403);
+  });
+
+  it("writes citizen registrations without replaying the stale user representation", async () => {
+    const created = await kcAdmin("/users", {
+      id: "citizen-put-1", username: "+254700000001", email: "c1@example.test",
+      firstName: "Achieng", enabled: true,
+      attributes: { phoneNumber: ["+254700000001"], "digit.managedTenants": ["ke.bomet"] },
+    });
+    expect(created.status).toBe(201);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      await updateCitizenRegistrationValues("citizen-put-1", (values) => [...values, "v1|ke|ke|ACTIVE|u-1"]);
+      const put = fetchSpy.mock.calls.find(([, init]) => init?.method === "PUT");
+      const body = JSON.parse(String(put?.[1]?.body));
+      // No `enabled` (or other stale top-level state): a concurrent admin
+      // disable must survive. Profile fields ride along because Keycloak 26
+      // clears them when a PUT carries `attributes` without them.
+      expect(Object.keys(body).sort()).toEqual(["attributes", "email", "firstName"]);
+      expect(body.attributes).toEqual({
+        phoneNumber: ["+254700000001"],
+        "digit.managedTenants": ["ke.bomet"],
+        "digit.citizenRegistrations": ["v1|ke|ke|ACTIVE|u-1"],
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

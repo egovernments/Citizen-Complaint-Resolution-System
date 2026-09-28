@@ -103,10 +103,17 @@ export async function updateCitizenRegistrationValues(
   const current = [...(user.attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
   const next = update(current);
   if (!next) return current;
+  // Send only the user-profile fields, never the stale `enabled` and friends:
+  // an admin disabling the user between the GET and this PUT must stick.
+  // Keycloak 26 leaves absent top-level fields alone, but a PUT that carries
+  // `attributes` treats email/firstName/lastName as profile attributes and
+  // clears them when absent, and replaces the whole attribute map.
   await request(`/users/${encodeURIComponent(userId)}`, {
     method: "PUT",
     body: JSON.stringify({
-      ...user,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
       attributes: { ...user.attributes, [CITIZEN_REGISTRATIONS_ATTRIBUTE]: next },
     }),
   });
