@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="Placeholder banner (test fixture)">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#16305a"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>
+  <rect width="1200" height="900" fill="url(#g)"/>
+  <circle cx="900" cy="250" r="180" fill="#ffffff" fill-opacity="0.08"/>
+  <circle cx="250" cy="700" r="260" fill="#ffffff" fill-opacity="0.06"/>
+</svg>

@@ -12,7 +12,12 @@ const kcContextExtension: KcContextExtension = {
     client: { baseUrl: "https://digit.example.org/configurator/" }
 };
 
-const kcContextExtensionPerPage: KcContextExtensionPerPage = {};
+// The phone/OTP pages belong to digit-citizen (src/digit/KcContextMock.ts).
+const kcContextExtensionPerPage: KcContextExtensionPerPage = {
+    "login-phone-number.ftl": {},
+    "login-sms-otp.ftl": {},
+    "login-phone-profile.ftl": {}
+};
 
 export const { getKcContextMock } = createGetKcContextMock({
     kcContextExtension,

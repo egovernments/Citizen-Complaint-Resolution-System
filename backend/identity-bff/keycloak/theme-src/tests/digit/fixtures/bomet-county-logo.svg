@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112" role="img" aria-label="Placeholder county crest (test fixture)">
+  <circle cx="56" cy="56" r="54" fill="#ffffff" stroke="#c62828" stroke-width="4"/>
+  <circle cx="56" cy="56" r="44" fill="#0b1f3a"/>
+  <path d="M56 22 L80 40 L74 74 L56 88 L38 74 L32 40 Z" fill="#128f21"/>
+  <path d="M56 34 L70 46 L66 68 L56 76 L46 68 L42 46 Z" fill="#fec931"/>
+  <text x="56" y="63" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#0b1f3a">BC</text>
+</svg>
