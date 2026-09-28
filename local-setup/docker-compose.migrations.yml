@@ -43,7 +43,7 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/pgr-services-db:2.12-5137119
+    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:2.12-5137119}
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
@@ -91,7 +91,7 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/novu-bridge-db:2.12-5137119
+    image: ${NOVU_BRIDGE_DB_IMAGE:-egovio/novu-bridge-db:2.12-5137119}
     container_name: novu-bridge-migration
     profiles: ["notifications"]   # active exactly when novu-bridge is
     depends_on:
@@ -123,7 +123,7 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/digit-config-service-db:2.12-5137119
+    image: ${DIGIT_CONFIG_SERVICE_DB_IMAGE:-egovio/digit-config-service-db:2.12-5137119}
     container_name: digit-config-service-migration
     profiles: ["notifications"]   # active exactly when digit-config-service is
     depends_on:

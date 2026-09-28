@@ -194,6 +194,76 @@ describe('ansible.cfg — executable has a matching shell plugin (#2111)', () =>
     expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
   });
 });
+
+describe('one-tag deploys (#1729)', () => {
+  // `./deploy.sh <tenant> --image-tag=<tag>` moves every image listed in
+  // group_vars ccrs_image_catalog to <tag>. An image the deploy runs but the
+  // catalog misses would silently stay on its old default under a deploy
+  // everyone believes is on the new tag — the manual per-service edit this
+  // flow replaced, just invisible. These pin the three places that must agree.
+  const groupVars = read('local-setup/ansible/inventory/group_vars/digit.yml');
+  const envTemplate = read('local-setup/ansible/templates/digit.env.j2');
+  const deploySh = read('local-setup/ansible/deploy.sh');
+  // The compose files the playbook passes to every `docker compose` call.
+  const deployedCompose = [
+    'local-setup/docker-compose.egov-digit.yaml',
+    'local-setup/docker-compose.fast-path.yml',
+    'local-setup/docker-compose.migrations.yml',
+    'local-setup/docker-compose.monitoring.yml',
+    'local-setup/docker-compose.matomo.yml',
+  ].map((f) => [f, read(f)] as const);
+
+  const catalog = [...groupVars.matchAll(/^  - \{image: ([\w-]+), env: (\w+), var: (\w+)/gm)]
+    .map(([, image, env, v]) => ({ image, env, var: v }));
+  const ciImages = new Set(
+    [...read('build/build-config.yml').matchAll(/image-name:\s*"?([\w.-]+)"?/g)].map((m) => m[1])
+  );
+
+  test('the catalog parses and names only images CI publishes under one tag', () => {
+    expect(catalog.length).toBeGreaterThanOrEqual(12);
+    for (const { image } of catalog) expect(ciImages).toContain(image);
+  });
+
+  test('every catalog image is parameterised in a deployed compose file', () => {
+    for (const { image, env } of catalog) {
+      const pattern = new RegExp(`image: \\$\\{${env}:-egovio/${image}:[^}]+\\}`);
+      const hits = deployedCompose.filter(([, body]) => pattern.test(body));
+      expect({ image, found: hits.length > 0 }).toEqual({ image, found: true });
+    }
+  });
+
+  test('no CI-built image in a deployed compose file escapes the catalog', () => {
+    const catalogued = new Set(catalog.map((c) => c.image));
+    const escaped: string[] = [];
+    for (const [file, body] of deployedCompose) {
+      for (const m of body.matchAll(/^\s*image:\s*(.+)$/gm)) {
+        const ref = m[1].trim();
+        const bare = ref.match(/^egovio\/([\w.-]+):/);
+        const wrapped = ref.match(/^\$\{(\w+):-egovio\/([\w.-]+):/);
+        if (bare && ciImages.has(bare[1])) escaped.push(`${file}: ${ref} (hardcoded)`);
+        if (wrapped && ciImages.has(wrapped[2]) && !catalogued.has(wrapped[2])) {
+          escaped.push(`${file}: ${ref} (not in ccrs_image_catalog)`);
+        }
+      }
+    }
+    expect(escaped).toEqual([]);
+  });
+
+  test('digit.env.j2 writes every catalog env var from the resolved plan, once', () => {
+    expect(envTemplate).toContain('{% for e in ccrs_image_catalog %}');
+    expect(envTemplate).toContain('{{ e.env }}={{ ccrs_image_env[e.env] }}');
+    // A second hand-written line would be a duplicate .env key (last one wins)
+    // and could quietly undo the tag.
+    for (const { env } of catalog) expect(envTemplate).not.toMatch(new RegExp(`^${env}=`, 'm'));
+  });
+
+  test('deploy.sh forwards --image-tag / --image-tag-services as extra vars', () => {
+    expect(deploySh).toMatch(/--image-tag=\*\)/);
+    expect(deploySh).toMatch(/--image-tag-services=\*\)/);
+    expect(deploySh).toContain('\\"image_tag\\": \\"${image_tag}\\"');
+  });
+});
+
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
 

@@ -4,6 +4,15 @@
 #   ./deploy.sh mytenant              # full deploy
 #   ./deploy.sh mytenant --tags=nginx # subset
 #   ./deploy.sh mytenant --check      # dry-run + diff
+#   ./deploy.sh mytenant --image-tag=develop-1a2b3c4d
+#                                     # deploy the images CI pushed under one tag
+#   ./deploy.sh mytenant --image-tag=master-3f9e2a1 --image-tag-services=pgr-services
+#                                     # ...for only some images (+ their -db image)
+#
+# --image-tag / --image-tag-services (or IMAGE_TAG / IMAGE_TAG_SERVICES in the
+# environment) set `image_tag` / `image_tag_services` for this run only; see
+# "One-tag deploys" in inventory/group_vars/digit.yml. Without them every image
+# keeps its compose-file default (or its host_vars pin).
 #
 # Tenants are defined in inventory/host_vars/<name>.yml. The inventory
 # (inventory/hosts.yml) is regenerated on every run from whatever
@@ -217,8 +226,49 @@ if [[ "${SKIP_PREFLIGHT:-0}" != "1" ]]; then
 fi
 
 shift
+
+# One-tag deploys (#1729). Pull our two flags out of the argument list (every
+# other argument still goes to ansible-playbook untouched) and hand them over
+# as JSON extra vars, which outrank host_vars. Validated here as well as in the
+# playbook so a typo fails before ansible ever connects to the box.
+# The ${arr[@]+...} expansions below keep `set -u` happy on macOS's bash 3.2,
+# which treats an empty array as unbound.
+image_tag="${IMAGE_TAG:-}"
+image_tag_services="${IMAGE_TAG_SERVICES:-}"
+passthrough=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image-tag=*)          image_tag="${1#*=}"; shift ;;
+    --image-tag)            image_tag="${2:?--image-tag needs a value}"; shift 2 ;;
+    --image-tag-services=*) image_tag_services="${1#*=}"; shift ;;
+    --image-tag-services)   image_tag_services="${2:?--image-tag-services needs a value}"; shift 2 ;;
+    *)                      passthrough+=("$1"); shift ;;
+  esac
+done
+
+extra_vars=()
+if [[ -n "$image_tag" || -n "$image_tag_services" ]]; then
+  # Same rule build-images.yml applies before it pushes a tag.
+  if [[ ! "$image_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+    echo "ERROR: --image-tag '${image_tag}' is not a Docker tag (letters, digits, . _ -; max 128)." >&2
+    [[ -z "$image_tag" ]] && echo "  --image-tag-services needs --image-tag too." >&2
+    exit 1
+  fi
+  services_json=""
+  if [[ -n "$image_tag_services" ]]; then
+    if [[ ! "$image_tag_services" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]]; then
+      echo "ERROR: --image-tag-services '${image_tag_services}' must be comma-separated image names, e.g. pgr-services,novu-bridge." >&2
+      exit 1
+    fi
+    services_json="\"${image_tag_services//,/\",\"}\""
+  fi
+  extra_vars=(-e "{\"image_tag\": \"${image_tag}\", \"image_tag_services\": [${services_json}]}")
+  echo "──── image tag: ${image_tag}${image_tag_services:+ (only: ${image_tag_services})} ────" >&2
+fi
+
 ansible-playbook \
   -i inventory/hosts.yml \
   --limit "$host" \
   playbook-deploy.yml \
-  "$@"
+  ${extra_vars[@]+"${extra_vars[@]}"} \
+  ${passthrough[@]+"${passthrough[@]}"}

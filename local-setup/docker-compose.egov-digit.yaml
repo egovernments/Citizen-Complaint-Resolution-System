@@ -2667,7 +2667,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/novu-bridge-endpoint:latest@sha256:15ece70b86a7cdac29111d3a13c22e08f1337e985eb8417a06976baf98411b5d
+    image: ${NOVU_BRIDGE_ENDPOINT_IMAGE:-egovio/novu-bridge-endpoint:latest@sha256:15ece70b86a7cdac29111d3a13c22e08f1337e985eb8417a06976baf98411b5d}
     container_name: novu-bridge-endpoint
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2711,7 +2711,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/digit-config-service:2.12-5137119
+    image: ${DIGIT_CONFIG_SERVICE_IMAGE:-egovio/digit-config-service:2.12-5137119}
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2769,7 +2769,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/digit-user-preferences-service:2.12-5137119
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:2.12-5137119}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
