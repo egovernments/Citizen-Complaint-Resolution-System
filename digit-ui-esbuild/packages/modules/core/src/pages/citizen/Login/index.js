@@ -13,7 +13,7 @@ const DEFAULT_USER = "digit-user";
 let DEFAULT_REDIRECT_URL = `/${window?.contextPath || window?.globalConfigs?.getConfig("CONTEXT_PATH")}/citizen`;
 
 /* set citizen details to enable backward compatiable */
-const setCitizenDetail = (userObject, token, tenantId) => {
+export const setCitizenDetail = (userObject, token, tenantId) => {
   if (Digit.Utils.getMultiRootTenant()) {
     return;
   }

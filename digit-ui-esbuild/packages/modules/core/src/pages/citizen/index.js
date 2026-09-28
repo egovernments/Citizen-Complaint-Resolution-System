@@ -16,6 +16,8 @@ import LocationSelection from "./Home/LocationSelection";
 import UserProfile from "./Home/UserProfile";
 import HowItWorks from "./HowItWorks/howItWorks";
 import Login from "./Login";
+import IdentityBffCitizenLogin from "./Login/IdentityBffCitizenLogin";
+import { isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
 import Search from "./SearchApp";
 import StaticDynamicCard from "./StaticDynamicComponent/StaticDynamicCard";
 import ImageComponent from "../../components/ImageComponent";
@@ -353,12 +355,19 @@ const Home = ({
             />
           </Route>
 
+          {/* Canonical tenant routes sign citizens in through the Identity
+              BFF (phone + SMS OTP in Keycloak); registration is the same
+              flow, since Keycloak creates the account after OTP. */}
           <Route path={`${path}/login`}>
-            <Login stateCode={stateCode} />
+            {isIdentityBffAuth() ? <IdentityBffCitizenLogin t={t} /> : <Login stateCode={stateCode} />}
           </Route>
 
           <Route path={`${path}/register`}>
-            <Login stateCode={stateCode} isUserRegistered={false} />
+            {isIdentityBffAuth() ? (
+              <IdentityBffCitizenLogin t={t} />
+            ) : (
+              <Login stateCode={stateCode} isUserRegistered={false} />
+            )}
           </Route>
 
           {/* /user/profile must require an active citizen session. The
