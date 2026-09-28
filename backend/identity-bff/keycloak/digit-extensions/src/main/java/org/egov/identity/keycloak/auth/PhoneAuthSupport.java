@@ -84,9 +84,19 @@ final class PhoneAuthSupport {
         PhoneOtpRuntime runtime = PhoneOtpRuntime.get();
         KeycloakSession session = context.getSession();
         RealmModel realm = context.getRealm();
+        SendRateLimiter.SlotStore slots = new SendRateLimiter.SlotStore() {
+            @Override
+            public boolean putIfAbsent(String key, long lifespanSeconds) {
+                return session.singleUseObjects().putIfAbsent(key, lifespanSeconds);
+            }
+
+            @Override
+            public boolean contains(String key) {
+                return session.singleUseObjects().contains(key);
+            }
+        };
         SendRateLimiter limiter = new SendRateLimiter(
-                (key, lifespan) -> session.singleUseObjects().putIfAbsent(key, lifespan),
-                runtime.settings, Clock.systemUTC(), realm.getId());
+                slots, runtime.settings, Clock.systemUTC(), realm.getId());
         String ip = context.getConnection() == null ? null : context.getConnection().getRemoteAddr();
         switch (limiter.tryAcquire(e164, ip)) {
             case RESEND_TOO_SOON:
