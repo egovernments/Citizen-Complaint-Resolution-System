@@ -14,8 +14,18 @@
 # driven from the host.
 #
 # The citizen pages are rendered with KEYCLOAK_CITIZEN_LOGIN_THEME, default
-# `digit-phone-base` (the FreeMarker fallback shipped in the extension jar),
-# because the form actions are scraped from server-rendered HTML.
+# `digit-phone-base` (the FreeMarker fallback shipped in the extension jar).
+# With `digit-citizen` (the Keycloakify theme) the same flow is driven from
+# the kcContext each page embeds (pageId, url.loginAction, SPI attributes and
+# the message Keycloak resolved from the theme's own bundle), so the SPI <->
+# theme names are checked against the real theme jar.
+#
+# SMOKE_BFF_STUB=1 (default) serves the BFF's public branding contract
+# (GET /identity/v1/tenant-contexts/{slug}/branding) from a static stub on the
+# network alias identity-bff, with Keycloak's own default rule set to
+# something else (+91), so the tenant mobile-rule fetch is what makes +254
+# work; an unknown slug must fall back to the default. SMOKE_BFF_STUB=0 has no
+# BFF at all and exercises only the fallback.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -33,6 +43,26 @@ network=digit-otp-smoke-$suffix
 kc=keycloak-otp-smoke-$suffix
 pg=keycloak-pg-otp-smoke-$suffix
 mailpit=mailpit-otp-smoke-$suffix
+bff=identity-bff-stub-otp-smoke-$suffix
+bff_stub=${SMOKE_BFF_STUB:-1}
+case "$theme" in
+    digit-phone-base | keycloak) keycloakify=0 ;;
+    *) keycloakify=1 ;;
+esac
+if [ "$keycloakify" = 1 ]; then
+    # digit-citizen's bundle (keycloak/theme-src/src/login/i18n.ts).
+    invalid_phone_text='Please enter a valid mobile number'
+    invalid_otp_text='The OTP you entered is invalid.'
+else
+    # digit-phone-base's messages_en.properties.
+    invalid_phone_text='Enter a valid mobile number'
+    invalid_otp_text='The code is not correct'
+fi
+if [ "$bff_stub" = 1 ]; then
+    default_cc=+91 default_regex='^[6-9][0-9]{9}$'
+else
+    default_cc=+254 default_regex='^[71][0-9]{8}$'
+fi
 kc_url="http://127.0.0.1:$kc_port"
 mailpit_url="http://127.0.0.1:$mailpit_port"
 redirect_uri=http://localhost/identity/v1/callback
@@ -41,7 +71,7 @@ work=$(mktemp -d)
 
 cleanup() {
     if [ "${KEEP_SMOKE:-0}" != "1" ]; then
-        docker rm -f "$kc" "$pg" "$mailpit" >/dev/null 2>&1 || true
+        docker rm -f "$kc" "$pg" "$mailpit" "$bff" >/dev/null 2>&1 || true
         docker network rm "$network" >/dev/null 2>&1 || true
     fi
     rm -rf "$work"
@@ -66,14 +96,34 @@ docker run -d --name "$pg" --network "$network" --network-alias keycloak-postgre
 docker run -d --name "$mailpit" --network "$network" --network-alias mailpit \
     -p "127.0.0.1:$mailpit_port:8025" "$mailpit_image" >/dev/null
 
+if [ "$bff_stub" = 1 ]; then
+    # The BFF contract's shape (backend/identity-bff branding route) with the
+    # fields the SPI reads; everything else is what the real BFF would send.
+    mkdir -p "$work/www/identity/v1/tenant-contexts/$tenant"
+    cat >"$work/www/identity/v1/tenant-contexts/$tenant/branding" <<JSON
+{"tenant":{"urlSlug":"$tenant","tenantId":"ke.bomet","name":"Bomet County"},
+ "stateInfo":{"code":"ke","name":"Kenya","logoUrl":null,"logoUrlWhite":null,"bannerUrl":null,
+              "languages":[{"label":"ENGLISH","value":"en_IN"}],"defaultLocale":"en_IN"},
+ "themeConfig":null,
+ "mobileValidation":{"countryCode":"+254","mobileNumberRegex":"^[71][0-9]{8}\$","errorMessage":"MOBILE_VALIDATION_KE"},
+ "loginConfig":null,"privacyPolicy":null,
+ "footer":{"digitFooter":"","digitFooterBw":"","digitHomeUrl":""},"messages":{}}
+JSON
+    jq -e '.mobileValidation.mobileNumberRegex == "^[71][0-9]{8}$"' \
+        "$work/www/identity/v1/tenant-contexts/$tenant/branding" >/dev/null || fail "bad branding stub"
+    docker create --name "$bff" --network "$network" --network-alias identity-bff \
+        busybox:1.37 httpd -f -p 3000 -h /www >/dev/null
+    docker cp "$work/www" "$bff:/" >/dev/null
+    docker start "$bff" >/dev/null
+fi
+
 for _ in $(seq 1 30); do
     docker exec "$pg" pg_isready -U keycloak >/dev/null 2>&1 && break
     sleep 1
 done
 
 # The same runtime options the Compose stack sets (docker-compose.egov-digit.yaml).
-# There is no BFF here, so the tenant lookup fails and the configured default
-# (+254, ^[71][0-9]{8}$) applies: that is the fallback path under test.
+# The default rule is what a tenant without a usable BFF answer gets.
 docker run -d --name "$kc" --network "$network" -p "127.0.0.1:$kc_port:8180" \
     -e KC_DB=postgres -e KC_DB_URL=jdbc:postgresql://keycloak-postgres:5432/keycloak \
     -e KC_DB_USERNAME=keycloak -e KC_DB_PASSWORD=keycloak \
@@ -85,8 +135,8 @@ docker run -d --name "$kc" --network "$network" -p "127.0.0.1:$kc_port:8180" \
     -e KC_SPI_DIGIT_SMS_SENDER_MAILPIT_URL=http://mailpit:8025 \
     -e KC_SPI_DIGIT_SMS_SENDER_HTTP_URL= -e KC_SPI_DIGIT_SMS_SENDER_HTTP_TOKEN= \
     -e KC_SPI_DIGIT_PHONE_OTP_TENANT_CONTEXT_URL=http://identity-bff:3000 \
-    -e KC_SPI_DIGIT_PHONE_OTP_DEFAULT_COUNTRY_CODE=+254 \
-    -e 'KC_SPI_DIGIT_PHONE_OTP_DEFAULT_MOBILE_REGEX=^[71][0-9]{8}$' \
+    -e KC_SPI_DIGIT_PHONE_OTP_DEFAULT_COUNTRY_CODE="$default_cc" \
+    -e KC_SPI_DIGIT_PHONE_OTP_DEFAULT_MOBILE_REGEX="$default_regex" \
     -e KC_SPI_DIGIT_PHONE_OTP_RESEND_SECONDS=2 \
     "$image" start --optimized >/dev/null
 
@@ -145,8 +195,32 @@ pass "flows, clients, user profile and realm invariants"
 jar="$work/cookies"
 page="$work/page.html"
 
-form_action() { # <form id>
-    grep -o "id=\"$1\"[^>]*action=\"[^\"]*\"" "$page" | sed -e 's/.*action="//' -e 's/"$//' -e 's/&amp;/\&/g' | head -1
+form_action() { # <form id> (digit-phone-base) -- or kcContext url.loginAction (Keycloakify)
+    if [ "$keycloakify" = 1 ]; then
+        grep -o '"loginAction": "[^"]*"' "$page" | head -1 | sed -e 's/^"loginAction": "//' -e 's/"$//'
+    else
+        grep -o "id=\"$1\"[^>]*action=\"[^\"]*\"" "$page" | sed -e 's/.*action="//' -e 's/"$//' -e 's/&amp;/\&/g' | head -1
+    fi
+}
+
+on_page() { # <ftl page id> <digit-phone-base form id>
+    if [ "$keycloakify" = 1 ]; then
+        grep -qF "kcContext.pageId = \"$1\"" "$page" && grep -qF "kcContext.themeName = \"$theme\"" "$page"
+    else
+        grep -q "id=\"$2\"" "$page"
+    fi
+}
+
+has_attr() { # <attribute> <value>: an SPI page attribute as the theme receives it
+    if [ "$keycloakify" = 1 ]; then
+        grep -qF "\"$1\": \"$2\"" "$page"
+    else
+        case "$1" in
+            digitTenant) grep -qF "id=\"digit-tenant\" value=\"$2\"" "$page" ;;
+            countryCode) grep -qF "$2" "$page" ;;
+            *) grep -qF "id=\"$1\"" "$page" && grep -qF "value=\"$2\"" "$page" ;;
+        esac
+    fi
 }
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
@@ -159,7 +233,7 @@ mailpit_code() { # <digits> -> newest OTP sent to that number
     curl -fsS "$mailpit_url/api/v1/message/$id" | jq -r '.Subject + "\n" + .Text'
 }
 
-start_login() {
+start_login() { # [tenant slug]
     rm -f "$jar"
     verifier=$(openssl rand -hex 32)
     challenge=$(printf '%s' "$verifier" | openssl dgst -sha256 -binary | b64url)
@@ -171,7 +245,7 @@ start_login() {
         --data-urlencode "code_challenge=$challenge" \
         --data-urlencode code_challenge_method=S256 \
         --data-urlencode state=smoke --data-urlencode prompt=login \
-        --data-urlencode "digit_tenant=$tenant"
+        --data-urlencode "digit_tenant=${1:-$tenant}"
 }
 
 post() { # <url> <curl args...>; follows nothing, writes the page, prints the redirect target
@@ -181,19 +255,29 @@ post() { # <url> <curl args...>; follows nothing, writes the page, prints the re
 }
 
 start_login
-grep -q 'id="kc-digit-phone-form"' "$page" || fail "phone page not rendered"
-grep -q "id=\"digit-tenant\" value=\"$tenant\"" "$page" || fail "digitTenant attribute missing"
-grep -q '+254' "$page" || fail "countryCode attribute missing"
-pass "phone page rendered with digitTenant=$tenant and countryCode"
+on_page login-phone-number.ftl kc-digit-phone-form || fail "phone page not rendered by $theme"
+has_attr digitTenant "$tenant" || fail "digitTenant attribute missing"
+has_attr countryCode +254 || fail "countryCode +254 missing (tenant rule not applied)"
+if [ "$keycloakify" = 1 ]; then
+    has_attr mobileNumberRegex '^[71][0-9]{8}$' || fail "mobileNumberRegex attribute missing"
+fi
+pass "phone page ($theme) rendered with digitTenant=$tenant and countryCode +254"
 
 post "$(form_action kc-digit-phone-form)" --data-urlencode phoneNumber=12345 >/dev/null
-grep -q 'Enter a valid mobile number' "$page" || fail "invalid phone accepted"
-pass "invalid phone rejected (digitInvalidPhone)"
+on_page login-phone-number.ftl kc-digit-phone-form || fail "invalid phone left the phone page"
+grep -qF "$invalid_phone_text" "$page" || fail "invalid phone accepted"
+has_attr phoneNumber 12345 || fail "phoneNumber not handed back for refill"
+pass "invalid phone rejected (digitInvalidPhone) and refilled"
 
-post "$(form_action kc-digit-phone-form)" --data-urlencode 'phoneNumber=0712 345 678' >/dev/null
-grep -q 'id="kc-digit-otp-form"' "$page" || fail "OTP page not rendered"
+# digit-citizen posts only the national digits typed after its +254 prefix.
+post "$(form_action kc-digit-phone-form)" --data-urlencode 'phoneNumber=712345678' >/dev/null
+on_page login-sms-otp.ftl kc-digit-otp-form || fail "OTP page not rendered"
 grep -q '678' "$page" || fail "masked phone missing"
-pass "OTP page rendered for +254712345678"
+if [ "$keycloakify" = 1 ]; then
+    grep -q '"otpLength": 6' "$page" || fail "otpLength attribute missing"
+    grep -q '"resendAvailableInSeconds": [0-9]' "$page" || fail "resendAvailableInSeconds missing"
+fi
+pass "national digits 712345678 -> OTP page for +254712345678"
 
 sms=""
 for _ in $(seq 1 10); do sms=$(mailpit_code 254712345678) && break; sleep 1; done
@@ -205,12 +289,32 @@ pass "SMS read back from Mailpit /api/v1/search"
 
 wrong=$([ "$code" = 000000 ] && echo 111111 || echo 000000)
 post "$(form_action kc-digit-otp-form)" --data-urlencode "otp=$wrong" >/dev/null
-grep -q 'The code is not correct' "$page" || fail "wrong OTP accepted"
+grep -qF "$invalid_otp_text" "$page" || fail "wrong OTP accepted"
 pass "wrong OTP rejected (digitInvalidOtp)"
 
+sleep 3 # KC_SPI_DIGIT_PHONE_OTP_RESEND_SECONDS=2
+post "$(form_action kc-digit-otp-form)" --data-urlencode resend=true >/dev/null
+on_page login-sms-otp.ftl kc-digit-otp-form || fail "resend left the OTP page"
+resent=""
+for _ in $(seq 1 10); do
+    [ "$(curl -fsS -G "$mailpit_url/api/v1/search" \
+        --data-urlencode 'query=to:254712345678@sms.local' | jq '.messages_count')" -ge 2 ] &&
+        resent=$(mailpit_code 254712345678 | tail -n +2 | grep -oE '\b[0-9]{6}\b' | head -1) && break
+    sleep 1
+done
+[ -n "$resent" ] || fail "resend=true sent no new SMS"
+code=$resent
+pass "resend=true sent a new code"
+
 post "$(form_action kc-digit-otp-form)" --data-urlencode "otp=$code" >/dev/null
-grep -q 'id="kc-digit-profile-form"' "$page" || fail "new user was not asked for a name"
+on_page login-phone-profile.ftl kc-digit-profile-form || fail "new user was not asked for a name"
 pass "new citizen asked for a name"
+
+post "$(form_action kc-digit-profile-form)" --data-urlencode firstName= --data-urlencode lastName=Kip >/dev/null
+on_page login-phone-profile.ftl kc-digit-profile-form || fail "empty name accepted"
+has_attr lastName Kip || fail "lastName not handed back for refill"
+grep -qF 'Please specify first name' "$page" || fail "missingFirstNameMessage not shown"
+pass "empty name rejected (missingFirstNameMessage) and refilled"
 
 location=$(post "$(form_action kc-digit-profile-form)" --data-urlencode firstName=Asha)
 case "$location" in
@@ -235,12 +339,12 @@ pass "token: azp=digit-ui-citizen, aud has digit-identity-bff, phone_number(_ver
 sleep 3 # KC_SPI_DIGIT_PHONE_OTP_RESEND_SECONDS=2
 start_login
 post "$(form_action kc-digit-phone-form)" --data-urlencode phoneNumber=+254712345678 >/dev/null
-grep -q 'id="kc-digit-otp-form"' "$page" || fail "second login: OTP page not rendered"
+on_page login-sms-otp.ftl kc-digit-otp-form || fail "second login: OTP page not rendered"
 code2=""
 for _ in $(seq 1 10); do
     code2=$(mailpit_code 254712345678 | tail -n +2 | grep -oE '\b[0-9]{6}\b' | head -1) || true
     [ -n "$code2" ] && [ "$(curl -fsS -G "$mailpit_url/api/v1/search" \
-        --data-urlencode 'query=to:254712345678@sms.local' | jq '.messages_count')" -ge 2 ] && break
+        --data-urlencode 'query=to:254712345678@sms.local' | jq '.messages_count')" -ge 3 ] && break
     sleep 1
 done
 location=$(post "$(form_action kc-digit-otp-form)" --data-urlencode "otp=$code2")
@@ -251,5 +355,12 @@ esac
 [ "$(kcadm get users -r $realm -q 'q=phoneNumber:+254712345678' | jq length)" = 1 ] ||
     fail "expected exactly one user for the phone"
 pass "returning citizen reused the same user and skipped the name step"
+
+if [ "$bff_stub" = 1 ]; then
+    start_login nowhere-county
+    on_page login-phone-number.ftl kc-digit-phone-form || fail "unknown tenant: phone page not rendered"
+    has_attr countryCode "$default_cc" || fail "unknown tenant did not fall back to $default_cc"
+    pass "tenant without branding falls back to the configured default ($default_cc)"
+fi
 
 echo "PASS citizen phone OTP smoke"

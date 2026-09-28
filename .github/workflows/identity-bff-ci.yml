@@ -56,6 +56,26 @@ jobs:
           IDENTITY_KEYCLOAK_IMAGE: identity-keycloak:test
           SKIP_BUILD: "1"
         run: scripts/keycloak-smoke.sh
+      # Citizen phone + SMS OTP (#2167) end to end on the same image: phone ->
+      # OTP from Mailpit -> resend -> name -> tokens, against a static stub of
+      # the BFF branding contract. Once through the real Keycloakify
+      # digit-citizen pages (SPI <-> theme names), once through the FreeMarker
+      # fallback theme shipped in the extension jar.
+      - name: Smoke-test citizen phone OTP with the digit-citizen theme
+        working-directory: backend/identity-bff/keycloak/theme-src
+        env:
+          IDENTITY_KEYCLOAK_IMAGE: identity-keycloak:test
+          SKIP_BUILD: "1"
+          KEYCLOAK_CITIZEN_LOGIN_THEME: digit-citizen
+          SMOKE_DEBUG: "1"
+        run: scripts/keycloak-phone-otp-smoke.sh
+      - name: Smoke-test citizen phone OTP with the fallback theme
+        working-directory: backend/identity-bff/keycloak/theme-src
+        env:
+          IDENTITY_KEYCLOAK_IMAGE: identity-keycloak:test
+          SKIP_BUILD: "1"
+          SMOKE_DEBUG: "1"
+        run: scripts/keycloak-phone-otp-smoke.sh
 
   login-theme:
     runs-on: ubuntu-latest
