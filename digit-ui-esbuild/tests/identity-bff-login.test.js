@@ -82,12 +82,15 @@ const employeeUser = (tenantId = TENANT.tenantId) => ({
   },
 });
 
-const citizenUser = (tenantId = TENANT.tenantId, type = "CITIZEN") => ({
+// egov-user issues citizen tokens at the root (`ke`); the BFF echoes the
+// bound route tenant alongside.
+const citizenUser = (tenantId = "ke", type = "CITIZEN", tenant = { urlSlug: TENANT.urlSlug, tenantId: TENANT.tenantId }) => ({
   access_token: "cit-token",
   token_type: "bearer",
   expires_in: 3600,
   scope: "read",
   UserRequest: { type, tenantId, uuid: "u-1", mobileNumber: "712345678" },
+  ...(tenant && { tenant }),
 });
 
 // ---------------------------------------------------------------- authorize
@@ -264,17 +267,49 @@ test("citizen session exchange uses surface=citizen and the citizen _select with
   ]);
   assert.deepEqual(calls[1].body, {});
   assert.equal(result.user.info.type, "CITIZEN");
+  assert.equal(result.user.info.tenantId, "ke");
   assert.equal(result.user.access_token, "cit-token");
+  assert.equal("tenant" in result.user, false, "the echoed route tenant is not a token field");
 });
 
-test("citizen session rejects a token for another tenant", async () => {
-  const { fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=citizen": json(200, SESSION),
-    "POST /identity/v1/contexts/citizen/_select": json(200, citizenUser("ke.nairobi")),
-  });
-  const result = await establishIdentityBffSession({ surface: "citizen", tenant: TENANT, fetchImpl });
-  assert.equal(result.status, "error");
-  assert.equal(result.messageKey, "CORE_IDENTITY_INVALID_SESSION");
+test("citizen tokens are accepted at the root of root and city routes", async () => {
+  const routes = [
+    { urlSlug: "kenya", appBasePath: "kenya/digit-ui", tenantId: "ke", rootTenantId: "ke", name: "Kenya" },
+    TENANT,
+    { urlSlug: "bomet-ulb-one", appBasePath: "bomet-ulb-one/digit-ui", tenantId: "ke.bomet.ulb1", rootTenantId: "ke.bomet", name: "ULB" },
+  ];
+  for (const route of routes) {
+    const { fetchImpl } = stubBff({
+      "GET /identity/v1/session?surface=citizen": json(200, {
+        authenticated: true, tenant: { urlSlug: route.urlSlug, tenantId: route.tenantId, name: route.name },
+      }),
+      "POST /identity/v1/contexts/citizen/_select": json(200, citizenUser("ke", "CITIZEN", {
+        urlSlug: route.urlSlug, tenantId: route.tenantId,
+      })),
+    });
+    const result = await establishIdentityBffSession({ surface: "citizen", tenant: route, fetchImpl });
+    assert.equal(result.status, "authenticated", route.tenantId);
+    assert.equal(result.user.info.tenantId, "ke", route.tenantId);
+  }
+});
+
+test("citizen session rejects a token for anything but the route tenant's root", async () => {
+  for (const [label, body] of [
+    ["city-level token", citizenUser(TENANT.tenantId)],
+    ["other root", citizenUser("mz")],
+    ["employee token", citizenUser("ke", "EMPLOYEE")],
+    ["no bound tenant echoed", citizenUser("ke", "CITIZEN", null)],
+    ["other bound tenant", citizenUser("ke", "CITIZEN", { urlSlug: "nairobi", tenantId: "ke.nairobi" })],
+    ["other slug", citizenUser("ke", "CITIZEN", { urlSlug: "other", tenantId: TENANT.tenantId })],
+  ]) {
+    const { fetchImpl } = stubBff({
+      "GET /identity/v1/session?surface=citizen": json(200, SESSION),
+      "POST /identity/v1/contexts/citizen/_select": json(200, body),
+    });
+    const result = await establishIdentityBffSession({ surface: "citizen", tenant: TENANT, fetchImpl });
+    assert.equal(result.status, "error", label);
+    assert.equal(result.messageKey, "CORE_IDENTITY_INVALID_SESSION", label);
+  }
 });
 
 test("a session bound to another tenant starts a fresh sign-in without selecting", async () => {

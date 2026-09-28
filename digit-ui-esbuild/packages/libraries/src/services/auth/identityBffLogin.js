@@ -13,6 +13,16 @@ export const IDENTITY_BFF_SURFACES = Object.freeze({
   citizen: Object.freeze({ method: "phone_otp", userType: "CITIZEN", selectPath: "/identity/v1/contexts/citizen/_select" }),
 });
 
+/**
+ * The tenant egov-user keeps a CITIZEN account at: the first dotted segment
+ * of the route tenant (egov-user `getStateLevelTenantForCitizen`), so
+ * `ke.bomet.ulb1` -> `ke`. The citizen token's `UserRequest.tenantId` is this
+ * root; business requests still use the route tenant.
+ */
+export function citizenAccountTenantId(tenantId) {
+  return typeof tenantId === "string" ? tenantId.split(".")[0] : "";
+}
+
 export function surfaceBase(tenant, surface) {
   return `/${tenant.appBasePath}/${surface}`;
 }
@@ -158,8 +168,15 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
     };
   }
 
-  const { UserRequest: info, ...tokens } = selected.body || {};
-  if (!info || info.type !== config.userType || info.tenantId !== tenant.tenantId || !tokens.access_token) {
+  const { UserRequest: info, tenant: selectedTenant, ...tokens } = selected.body || {};
+  // Employees get a token at the route tenant itself. A citizen token is
+  // issued at the route tenant's root (one DIGIT citizen account per root),
+  // and the BFF echoes the bound route tenant, which must be this route.
+  const tokenTenantOk = surface === "citizen"
+    ? info?.tenantId === citizenAccountTenantId(tenant.tenantId) &&
+      selectedTenant?.tenantId === tenant.tenantId && selectedTenant?.urlSlug === tenant.urlSlug
+    : info?.tenantId === tenant.tenantId;
+  if (!info || info.type !== config.userType || !tokenTenantOk || !tokens.access_token) {
     return {
       status: "error",
       messageKey: "CORE_IDENTITY_INVALID_SESSION",

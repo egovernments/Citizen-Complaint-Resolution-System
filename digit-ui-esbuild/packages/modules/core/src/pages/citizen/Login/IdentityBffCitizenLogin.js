@@ -25,8 +25,9 @@ const cleanAuthResult = () => {
  * Citizen sign-in on canonical tenant routes. Phone number + SMS OTP happen
  * inside the `digit-ui-citizen` Keycloak client (themed like the legacy
  * citizen login); this adapter only exchanges the resulting BFF session for a
- * DIGIT CITIZEN token on the route tenant. Signed-out visitors are sent
- * straight to Keycloak; the card below only renders for failures.
+ * DIGIT CITIZEN token (issued at the route tenant's root) bound to the route
+ * tenant. Signed-out visitors are sent straight to Keycloak; the card below
+ * only renders for failures.
  */
 const IdentityBffCitizenLogin = ({ t }) => {
   const location = useLocation();
@@ -77,6 +78,10 @@ const IdentityBffCitizenLogin = ({ t }) => {
       return;
     }
 
+    // `user.info.tenantId` is the root the DIGIT citizen account lives at
+    // (as with the legacy OTP login); the stored citizen tenant is the route
+    // tenant, so complaints and other business requests stay on this URL's
+    // tenant.
     const { user } = result;
     Digit.SessionStorage.set("citizen.userRequestObject", user);
     Digit.UserService.setType("citizen");
