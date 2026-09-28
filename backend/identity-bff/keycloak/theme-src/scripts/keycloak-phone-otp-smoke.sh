@@ -72,6 +72,8 @@ for _ in $(seq 1 30); do
 done
 
 # The same runtime options the Compose stack sets (docker-compose.egov-digit.yaml).
+# There is no BFF here, so the tenant lookup fails and the configured default
+# (+254, ^[71][0-9]{8}$) applies: that is the fallback path under test.
 docker run -d --name "$kc" --network "$network" -p "127.0.0.1:$kc_port:8180" \
     -e KC_DB=postgres -e KC_DB_URL=jdbc:postgresql://keycloak-postgres:5432/keycloak \
     -e KC_DB_USERNAME=keycloak -e KC_DB_PASSWORD=keycloak \
@@ -81,6 +83,8 @@ docker run -d --name "$kc" --network "$network" -p "127.0.0.1:$kc_port:8180" \
     -e KC_SPI_DIGIT_SMS_SENDER_MODE=mailpit \
     -e KC_SPI_DIGIT_SMS_SENDER_ALLOW_DEV=true \
     -e KC_SPI_DIGIT_SMS_SENDER_MAILPIT_URL=http://mailpit:8025 \
+    -e KC_SPI_DIGIT_SMS_SENDER_HTTP_URL= -e KC_SPI_DIGIT_SMS_SENDER_HTTP_TOKEN= \
+    -e KC_SPI_DIGIT_PHONE_OTP_TENANT_CONTEXT_URL=http://identity-bff:3000 \
     -e KC_SPI_DIGIT_PHONE_OTP_DEFAULT_COUNTRY_CODE=+254 \
     -e 'KC_SPI_DIGIT_PHONE_OTP_DEFAULT_MOBILE_REGEX=^[71][0-9]{8}$' \
     -e KC_SPI_DIGIT_PHONE_OTP_RESEND_SECONDS=2 \
