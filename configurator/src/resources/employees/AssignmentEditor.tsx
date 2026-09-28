@@ -28,6 +28,12 @@ interface NamedRecord extends RaRecord {
   name?: string;
 }
 
+interface OriginalRow {
+  fromDate: number;
+  toDate?: number;
+  isCurrentAssignment: boolean;
+}
+
 function toAssignmentRow(entry: unknown): EmployeeAssignment {
   const r = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
   return {
@@ -35,7 +41,7 @@ function toAssignmentRow(entry: unknown): EmployeeAssignment {
     position: typeof r.position === 'string' ? r.position : undefined,
     department: typeof r.department === 'string' ? r.department : '',
     designation: typeof r.designation === 'string' ? r.designation : '',
-    fromDate: typeof r.fromDate === 'number' ? r.fromDate : Date.now(),
+    fromDate: typeof r.fromDate === 'number' ? r.fromDate : todayUtc(),
     toDate: typeof r.toDate === 'number' ? r.toDate : undefined,
     govtOrderNumber: typeof r.govtOrderNumber === 'string' ? r.govtOrderNumber : undefined,
     reportingTo: typeof r.reportingTo === 'string' ? r.reportingTo : undefined,
@@ -62,6 +68,31 @@ function inputDateToEpoch(value: string): number | undefined {
 }
 
 /**
+ * Today at 00:00 UTC.
+ *
+ * Every date this component writes has to round-trip through
+ * `<input type="date">`, which renders at day granularity and parses back to
+ * midnight UTC. A raw `Date.now()` carries the time of day with it, so
+ * re-selecting the same visible date in the picker silently moves the value
+ * backwards by up to 24h. On a promoted assignment that drops its fromDate
+ * below the toDate just stamped on the demoted row, and the save 400s on
+ * ERR_HRMS_OVERLAPPING_ASSGN_CURRENT, which is the error this editor exists to
+ * avoid. Generating at the same grain the UI edits makes the round-trip a no-op.
+ *
+ * Only values this component generates are normalised. Dates already stored by
+ * HRMS are passed through untouched, since re-grinding them could reorder
+ * records the server has already accepted.
+ */
+function startOfUtcDay(epoch: number): number {
+  const d = new Date(epoch);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function todayUtc(): number {
+  return startOfUtcDay(Date.now());
+}
+
+/**
  * A toDate for an assignment that has none, closing it today unless a later
  * assignment already occupies that window. egov-hrms's
  * EmployeeValidator.validateAssignments needs the value to be:
@@ -77,7 +108,7 @@ function inputDateToEpoch(value: string): number | undefined {
  */
 function closeDateFor(all: EmployeeAssignment[], index: number): number {
   const row = all[index];
-  const ceilings = [Date.now()];
+  const ceilings = [todayUtc()];
   for (let i = 0; i < all.length; i++) {
     if (i === index) continue;
     if (all[i].fromDate > row.fromDate) ceilings.push(all[i].fromDate);
@@ -96,6 +127,15 @@ export function AssignmentEditor({
       const row = toAssignmentRow(entry);
       if (!row.department) return 'Each assignment must have a department selected';
       if (!row.designation) return 'Each assignment must have a designation selected';
+      // HRMS rejects a non-current assignment with no toDate
+      // (ERR_HRMS_INVALID_ASSIGNMENT_NOT_CURRENT_TO_DATE). setCurrent always
+      // stamps one on the rows it demotes, but Add assignment creates a row that
+      // is non-current from birth, so an operator who adds a department without
+      // touching a radio still reaches that 400. Catch it in the form, where the
+      // message can name the field, rather than in a toast.
+      if (!row.isCurrentAssignment && row.toDate == null) {
+        return 'Each assignment that is not the current one must have a To Date';
+      }
     }
     return undefined;
   };
@@ -146,6 +186,30 @@ export function AssignmentEditor({
   const record = useRecordContext<Employee>();
   const ownUuid = record?.uuid;
 
+  // The dates each assignment is stored with, read off the record rather than
+  // off the live form value, so form edits cannot move the baseline.
+  //
+  // setCurrent has to rewrite fromDate/toDate to satisfy HRMS's ordering rules,
+  // which would otherwise make the radio a one-way door: promote a row, change
+  // your mind, promote the original back, and the original would be saved as
+  // starting today. Keyed by id, so only rows HRMS has actually stored are
+  // restorable, which is exactly the set with history worth preserving. Empty on
+  // the create form, where nothing is persisted yet and nothing needs restoring.
+  const originalRows = useMemo(() => {
+    const byId = new Map<string, OriginalRow>();
+    for (const entry of record?.assignments ?? []) {
+      const r = toAssignmentRow(entry);
+      if (r.id) {
+        byId.set(r.id, {
+          fromDate: r.fromDate,
+          toDate: r.toDate,
+          isCurrentAssignment: !!r.isCurrentAssignment,
+        });
+      }
+    }
+    return byId;
+  }, [record]);
+
   const writeRows = (next: EmployeeAssignment[]) => {
     field.onChange(next);
   };
@@ -169,6 +233,38 @@ export function AssignmentEditor({
   const setCurrent = (index: number) => {
     const target = rows[index];
     if (!target) return;
+
+    // Putting the radio back on the row that was current when the form loaded is
+    // an undo, so replay the stored dates instead of computing fresh ones. This
+    // is what makes the radio reversible: the shape being restored is one HRMS
+    // already accepted, so it needs no clamping. Rows the operator added in this
+    // session have no stored shape to go back to and are closed normally.
+    const targetOriginal = target.id ? originalRows.get(target.id) : undefined;
+    if (targetOriginal?.isCurrentAssignment) {
+      writeRows(
+        rows.map((r, i) => {
+          if (i === index) {
+            return {
+              ...r,
+              isCurrentAssignment: true,
+              fromDate: targetOriginal.fromDate,
+              toDate: undefined,
+            };
+          }
+          const original = r.id ? originalRows.get(r.id) : undefined;
+          return original
+            ? {
+                ...r,
+                isCurrentAssignment: false,
+                fromDate: original.fromDate,
+                toDate: original.toDate ?? closeDateFor(rows, i),
+              }
+            : { ...r, isCurrentAssignment: false, toDate: r.toDate ?? closeDateFor(rows, i) };
+        }),
+      );
+      return;
+    }
+
     // Close date for every row that will end up non-current. An existing toDate
     // is kept, but clamped: the To Date input is blanked and disabled while a
     // row is current, so a stored current row can carry a stale value the
@@ -199,7 +295,7 @@ export function AssignmentEditor({
       {
         department: '',
         designation: '',
-        fromDate: Date.now(),
+        fromDate: todayUtc(),
         isCurrentAssignment: false,
       },
     ]);
@@ -252,8 +348,14 @@ export function AssignmentEditor({
             // it demotes, including a throwaway row the operator added and is
             // about to delete — which has no history to be retained in.
             const isEnded = isPersisted && !isCurrent && row.toDate != null;
-            // Dropping the only current row would leave HRMS without one.
-            const blockRemove = isCurrent && currentCount <= 1 && rows.length > 1;
+            // Dropping the only current row would leave HRMS without one. Gated
+            // on !isPersisted because both the control this disables and the
+            // hint that explains it hang off the remove button, which saved rows
+            // do not render: without the gate every saved employee's current
+            // assignment showed instructions for removing a row it has no button
+            // to remove.
+            const blockRemove =
+              !isPersisted && isCurrent && currentCount <= 1 && rows.length > 1;
             const fromValue = epochToInputDate(row.fromDate);
             const toValue = epochToInputDate(row.toDate);
             const radioName = `${id}-current`;
@@ -333,7 +435,7 @@ export function AssignmentEditor({
                       type="date"
                       value={fromValue}
                       onChange={(e) =>
-                        updateRow(index, { fromDate: inputDateToEpoch(e.target.value) ?? Date.now() })
+                        updateRow(index, { fromDate: inputDateToEpoch(e.target.value) ?? todayUtc() })
                       }
                     />
                   </div>

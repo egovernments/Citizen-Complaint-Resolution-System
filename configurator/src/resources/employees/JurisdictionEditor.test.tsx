@@ -320,4 +320,19 @@ describe('JurisdictionEditor — #1957 revoking an assigned jurisdiction', () =>
     expect(submittedJurisdictions(onSubmit)).toHaveLength(1);
     expect(screen.queryByText('Revoked on save')).not.toBeInTheDocument();
   });
+
+  // PR #2152 review, nit: contradictory copy when every saved row is revoked.
+  it('says the jurisdictions are revoked, not that none were ever added', async () => {
+    // The empty state and the "Revoked on save" panel render together once the
+    // last active row is revoked, so "No jurisdictions added yet" sat directly
+    // above a list of the jurisdictions that had in fact been added.
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 1' }));
+
+    await waitFor(() => expect(screen.getByText('Revoked on save')).toBeInTheDocument());
+    expect(screen.queryByText(/No jurisdictions added yet/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/every one below is revoked/i)).toBeInTheDocument();
+  });
 });

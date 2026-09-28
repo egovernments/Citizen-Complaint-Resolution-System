@@ -295,3 +295,116 @@ describe('AssignmentEditor — #1957 revoking an assigned department', () => {
     expect(submitted(onSubmit).map((a) => a.id)).toEqual(['asg-admin']);
   });
 });
+
+// Review round on PR #2152. Each case below is a reviewer finding, kept in its
+// own block because none of them is about revoking as such: they are about the
+// radio staying reversible, and about the editor not generating shapes HRMS
+// rejects.
+describe('AssignmentEditor — PR #2152 review findings', () => {
+  it('returning `current` to the row that had it restores the dates it arrived with', async () => {
+    // setCurrent rewrites fromDate to clear every close date on the record, so
+    // without a snapshot the radio was a one-way door: promote a row, change
+    // your mind, promote the original back, and the original would be saved as
+    // having started today. HRMS then permanently records the wrong start date,
+    // and re-typing the old one is refused with ERR_HRMS_OVERLAPPING_ASSGN_CURRENT.
+    const onSubmit = vi.fn();
+    renderEditor([HISTORICAL, CURRENT], onSubmit);
+
+    const radios = await screen.findAllByRole('radio');
+    fireEvent.click(radios[0]); // promote the historical row
+    fireEvent.click((await screen.findAllByRole('radio'))[1]); // and change your mind
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const sent = submitted(onSubmit);
+    const historical = sent.find((a) => a.id === 'asg-dept9')!;
+    const current = sent.find((a) => a.id === 'asg-admin')!;
+
+    expect(current.isCurrentAssignment).toBe(true);
+    expect(current.fromDate).toBe(CURRENT.fromDate);
+    expect(current.toDate ?? null).toBeNull();
+    expect(historical.isCurrentAssignment).toBe(false);
+    expect(historical.fromDate).toBe(HISTORICAL.fromDate);
+    expect(historical.toDate).toBe(HISTORICAL.toDate);
+    expectHrmsAccepts(sent);
+  });
+
+  it('generates dates at midnight UTC, so re-picking the same visible day is a no-op', async () => {
+    // The inputs are <input type="date">: they render a day and parse back to
+    // 00:00 UTC. A ms-precision Date.now() in fromDate/toDate therefore moves
+    // backwards by up to 24h the moment an operator re-selects the date already
+    // showing, dropping the promoted row below the toDate just stamped on the
+    // row it demoted and 400ing on ERR_HRMS_OVERLAPPING_ASSGN_CURRENT.
+    const onSubmit = vi.fn();
+    const older = { id: 'a1', department: 'DEPT_1', designation: 'DESIG_58', fromDate: 1788048000000, toDate: 1788048000000 + DAY, isCurrentAssignment: false };
+    const current = { id: 'a2', department: 'DEPT_2', designation: 'DESIG_58', fromDate: 1788048000000 + DAY, isCurrentAssignment: true };
+    const { container } = renderEditor([older, current], onSubmit);
+
+    fireEvent.click((await screen.findAllByRole('radio'))[0]);
+
+    // Re-select the date the From Date box is already showing: a no-op to the
+    // operator, and the exact gesture that used to break the save.
+    const dateInputs = container.querySelectorAll('input[type="date"]');
+    const promotedFrom = dateInputs[0] as HTMLInputElement;
+    fireEvent.change(promotedFrom, { target: { value: promotedFrom.value } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const sent = submitted(onSubmit);
+
+    for (const a of sent) {
+      expect(a.fromDate % DAY).toBe(0);
+      if (a.toDate != null) expect(a.toDate % DAY).toBe(0);
+    }
+    expectHrmsAccepts(sent);
+  });
+
+  it('does not tell a saved row to mark another current in order to remove it', async () => {
+    // The remove button is suppressed on saved rows, but the hint explaining
+    // why it is disabled sat outside that gate, so every saved employee's
+    // current assignment carried instructions for a control it does not render.
+    renderEditor([HISTORICAL, CURRENT]);
+
+    await waitFor(() => expect(screen.getAllByRole('radio')).toHaveLength(2));
+    expect(screen.queryByText(/Mark another assignment as current first/i)).not.toBeInTheDocument();
+  });
+
+  it('numbers the remove button by the position of the card it sits on', async () => {
+    // Unlike JurisdictionEditor, this editor renders every row: suppressing the
+    // button does not hide the card, so the payload index and the visible
+    // position stay in step. Two saved rows plus one added row means the only
+    // trash icon belongs to the third card on screen, and says so. Locked down
+    // with three rows because a single-saved-row fixture cannot tell the two
+    // numbering schemes apart.
+    renderEditor([HISTORICAL, CURRENT]);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add assignment' }));
+
+    await waitFor(() => expect(screen.getAllByRole('radio')).toHaveLength(3));
+    const removeButtons = screen.getAllByRole('button', { name: /^Remove assignment/ });
+    expect(removeButtons).toHaveLength(1);
+    expect(removeButtons[0]).toHaveAccessibleName('Remove assignment 3');
+  });
+
+  it('blocks a save that would send a non-current assignment with no To Date', async () => {
+    // Add assignment creates exactly the shape HRMS always rejects
+    // (ERR_HRMS_INVALID_ASSIGNMENT_NOT_CURRENT_TO_DATE): non-current from birth,
+    // no toDate. setCurrent covers the rows it demotes, but an operator who adds
+    // a department and saves without touching a radio never goes through it.
+    const onSubmit = vi.fn();
+    renderEditor(
+      [
+        CURRENT,
+        { department: 'DEPT_3', designation: 'DESIG_58', fromDate: CURRENT.fromDate + DAY, isCurrentAssignment: false },
+      ],
+      onSubmit,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/must have a To Date/i),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});

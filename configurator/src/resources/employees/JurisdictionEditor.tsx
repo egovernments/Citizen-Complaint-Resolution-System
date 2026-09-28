@@ -292,7 +292,13 @@ export function JurisdictionEditor({
 
       {visibleRows.length === 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-dashed p-3">
-          <p className="text-sm text-muted-foreground">No jurisdictions added yet</p>
+          {/* "added yet" is wrong when rows exist but are all revoked, which the
+              panel below is simultaneously listing. Name the actual state. */}
+          <p className="text-sm text-muted-foreground">
+            {revokedRows.length > 0
+              ? 'No active jurisdictions: every one below is revoked'
+              : 'No jurisdictions added yet'}
+          </p>
           <Button type="button" variant="outline" size="sm" onClick={addRow}>
             <Plus className="w-4 h-4" />
             Add jurisdiction
