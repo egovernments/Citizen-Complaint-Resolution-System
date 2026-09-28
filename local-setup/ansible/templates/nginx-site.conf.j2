@@ -603,11 +603,11 @@ server {
   # Identity BFF; only the internal asset/document lookup is rewritten to the
   # existing /digit-ui mount. This works in static, container and HMR modes and
   # deliberately does not treat the slug itself as authorization.
-  location ~ ^/([a-z0-9-]{2,63})/digit-ui$ {
+  location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {
     return 302 /$1/digit-ui/;
   }
-  location ~ ^/[a-z0-9-]{2,63}/digit-ui/(.*)$ {
-    rewrite ^/[a-z0-9-]{2,63}/digit-ui/(.*)$ /digit-ui/$1 last;
+  location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {
+    rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;
   }
 
 {% if digit_ui_mode == "static" %}
