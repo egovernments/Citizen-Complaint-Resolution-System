@@ -1825,6 +1825,9 @@
           the deploy rather than shrinking it.
       when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
 
+    # `otp` also runs for citizen phone sign-in (#2167): the BFF mints DIGIT
+    # CITIZEN tokens through egov-otp's internal _create, even when
+    # enable_otp_services (real SMS OTP, no fixed 123456) is off.
     - name: "Compute compose profiles for this tenant"
       vars:
         _obs: "{{ observability_level | default('traces') }}"
@@ -1848,7 +1851,10 @@
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['chatbot']       if enable_chatbot       | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
-              + (['otp']           if enable_otp_services  | default(false) else [])
+              + (['otp']           if (enable_otp_services | default(false)) or
+                                      ((enable_keycloak | default(false)) and
+                                       'phone_otp' in (identity_citizen_signin_methods | default(['phone_otp'])))
+                                   else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
               + _obs_profiles
             ) | join(',')

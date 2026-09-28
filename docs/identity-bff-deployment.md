@@ -76,6 +76,16 @@ bootstrap_secrets:
   identity_smtp_password: "<SMTP password>"
 ```
 
+Citizen phone sign-in (`identity_citizen_signin_methods` containing
+`phone_otp`, the default) mints each DIGIT CITIZEN token through egov-otp's
+internal `/otp/v1/_create` (`DIGIT_OTP_CREATE_URL`). egov-otp only runs under
+the Compose `otp` profile, so with `enable_keycloak: true` the deploy starts
+that profile even when `enable_otp_services` is false. That does not switch
+egov-user off its fixed citizen OTP; only `enable_otp_services: true` does.
+Note that while `local-setup/kong/kong.yml` keeps its `/otp` validation mock,
+egov-user's OTP check for a CITIZEN password grant is answered by that mock,
+not by egov-otp (see "TO ENABLE REAL OTP VALIDATION" there).
+
 The deploy derives separate stable BFF-client and workload secrets from the
 Keycloak admin secret and writes them only to the mode-0600 Compose environment.
 A Keycloak admin-password rotation therefore also rotates those credentials on

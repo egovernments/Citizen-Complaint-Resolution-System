@@ -114,6 +114,15 @@ describe('ansible playbook-deploy.yml', () => {
       .toMatch(/^identity_sms_log_acknowledged: false$/m);
   });
 
+  // #2167 review (Fable M4): the citizen token minter calls egov-otp, which
+  // only runs under the `otp` profile; without it citizens got a 503 after
+  // Keycloak's SMS step on every default Keycloak deploy.
+  test('citizen phone sign-in starts the otp profile', () => {
+    const start = playbook.indexOf('- name: "Compute compose profiles for this tenant"');
+    const task = playbook.slice(start, playbook.indexOf('- name: "Show active compose profiles"', start));
+    expect(task).toMatch(/\(\['otp'\]\s+if \(enable_otp_services \| default\(false\)\) or\s+\(\(enable_keycloak \| default\(false\)\) and\s+'phone_otp' in \(identity_citizen_signin_methods/);
+  });
+
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
   // must reach the MCP tenant_bootstrap on BOTH passes (root + city);
   // `default(omit)` keeps it absent — the only valid off state.
