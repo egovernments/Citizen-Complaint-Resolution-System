@@ -63,6 +63,19 @@ public final class PhoneNumbers {
         return E164.matcher(e164).matches() ? Optional.of(e164) : Optional.empty();
     }
 
+    /**
+     * The national part of an E.164 number for the tenant's country code
+     * ({@code +254712345678} -> {@code 712345678}), which is what the citizen
+     * theme shows after its fixed country-code prefix. Null if it does not
+     * carry that country code.
+     */
+    public static String national(String e164, String countryCode) {
+        if (e164 == null || countryCode == null || !e164.startsWith(countryCode)) {
+            return null;
+        }
+        return e164.substring(countryCode.length());
+    }
+
     /** {@code +254712345678} -> {@code +254 ••••• 678}; never reveals more than the last three digits. */
     public static String mask(String e164, String countryCode) {
         if (e164 == null || e164.length() < 4) {

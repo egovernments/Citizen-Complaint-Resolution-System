@@ -30,6 +30,14 @@ class PhoneNumbersTest {
     }
 
     @Test
+    void themeSubmitsNationalDigitsWhichTakeTheTenantCountryCode() {
+        // digit-citizen posts only the digits typed after its "+254" prefix.
+        assertEquals(Optional.of("+254712345678"), PhoneNumbers.normalize("712345678", kenya));
+        assertEquals("712345678", PhoneNumbers.national("+254712345678", kenya.countryCode()));
+        assertNull(PhoneNumbers.national("+919876543210", kenya.countryCode()));
+    }
+
+    @Test
     void rejectsNull() {
         assertEquals(Optional.empty(), PhoneNumbers.normalize(null, kenya));
         assertEquals(Optional.empty(), PhoneNumbers.normalize("712345678", null));

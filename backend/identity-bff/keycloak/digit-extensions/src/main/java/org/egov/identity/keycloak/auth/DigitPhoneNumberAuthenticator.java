@@ -44,6 +44,8 @@ public class DigitPhoneNumberAuthenticator implements Authenticator {
             return;
         }
         String phone = e164.get();
+        // Re-shown after an error in the theme's national-number field.
+        String refill = PhoneNumbers.national(phone, validation.countryCode());
         OtpChallenge challenge = PhoneAuthSupport.challenge(context);
         switch (PhoneAuthSupport.sendNewCode(context, phone)) {
             case SENT:
@@ -55,16 +57,16 @@ public class DigitPhoneNumberAuthenticator implements Authenticator {
                 if (phone.equals(challenge.phone()) && challenge.hasActiveCode()) {
                     context.success();
                 } else {
-                    context.challenge(form(context, PhoneAuthSupport.MSG_RESEND_TOO_SOON, raw));
+                    context.challenge(form(context, PhoneAuthSupport.MSG_RESEND_TOO_SOON, refill));
                 }
                 return;
             case LIMITED:
                 context.getEvent().error(Errors.ACCESS_DENIED);
-                context.challenge(form(context, PhoneAuthSupport.MSG_TOO_MANY, raw));
+                context.challenge(form(context, PhoneAuthSupport.MSG_TOO_MANY, refill));
                 return;
             default:
                 context.getEvent().error(Errors.EMAIL_SEND_FAILED);
-                context.challenge(form(context, PhoneAuthSupport.MSG_SMS_FAILED, raw));
+                context.challenge(form(context, PhoneAuthSupport.MSG_SMS_FAILED, refill));
         }
     }
 
