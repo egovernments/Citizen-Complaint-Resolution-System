@@ -405,7 +405,10 @@ gatus_slack_webhook_url: ""
 # identity_sms_http_url. Real SMS delivery is not wired yet.
 # Point identity_sms_mailpit_url at the Mailpit HTTP root on the Docker
 # network, including any MP_WEBROOT, e.g. http://mailpit:8025/mailpit.
+# `log` delivers NOTHING; with citizen phone_otp sign-in enabled the deploy
+# refuses it unless identity_sms_log_acknowledged is true.
 identity_sms_sender: log
+identity_sms_log_acknowledged: false
 identity_sms_allow_dev: false
 identity_sms_mailpit_url: ""
 identity_sms_http_url: ""

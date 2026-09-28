@@ -102,6 +102,18 @@ describe('ansible playbook-deploy.yml', () => {
     expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
   });
 
+  // #2167 review (Fable L2): `log` reports SENT while delivering nothing, so
+  // citizen phone_otp sign-in with it must be acknowledged explicitly.
+  test('refuses citizen phone sign-in on the log SMS sender without an acknowledgement', () => {
+    const start = playbook.indexOf('identity-bootstrap — validate citizen SMS OTP sender');
+    expect(start).toBeGreaterThan(-1);
+    const task = playbook.slice(start, start + 2000);
+    expect(task).toContain("'phone_otp' not in (identity_citizen_signin_methods | default(['phone_otp']))");
+    expect(task).toContain('(identity_sms_log_acknowledged | default(false) | bool)');
+    expect(read('local-setup/ansible/inventory/group_vars/digit.yml'))
+      .toMatch(/^identity_sms_log_acknowledged: false$/m);
+  });
+
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
   // must reach the MCP tenant_bootstrap on BOTH passes (root + city);
   // `default(omit)` keeps it absent — the only valid off state.

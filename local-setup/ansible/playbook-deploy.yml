@@ -5561,6 +5561,8 @@
     # Keycloak's digit-sms-sender refuses to boot in `mailpit` mode without the
     # explicit dev acknowledgement, which would surface as an unhealthy
     # keycloak container ten minutes into compose-up. Fail here instead.
+    # `log` reports every send as successful while delivering nothing, so
+    # citizen phone sign-in with it needs an explicit acknowledgement.
     - name: "identity-bootstrap — validate citizen SMS OTP sender"
       ansible.builtin.assert:
         that:
@@ -5568,11 +5570,16 @@
           - (identity_sms_sender | default('log')) != 'mailpit' or
             ((identity_sms_allow_dev | default(false) | bool) and (identity_sms_mailpit_url | default('')) | length > 0)
           - (identity_sms_sender | default('log')) != 'http' or (identity_sms_http_url | default('')) | length > 0
+          - (identity_sms_sender | default('log')) != 'log' or
+            'phone_otp' not in (identity_citizen_signin_methods | default(['phone_otp'])) or
+            (identity_sms_log_acknowledged | default(false) | bool)
         fail_msg: >-
           identity_sms_sender must be log, mailpit or http. `mailpit` is
           development-only and needs identity_sms_allow_dev: true plus
           identity_sms_mailpit_url (e.g. http://mailpit:8025/mailpit);
-          `http` needs identity_sms_http_url.
+          `http` needs identity_sms_http_url. `log` delivers no SMS, so with
+          citizen phone_otp sign-in enabled it needs
+          identity_sms_log_acknowledged: true.
       when: enable_keycloak | default(false)
 
     - name: "identity-bootstrap — reconcile Organizations realm and BFF clients"

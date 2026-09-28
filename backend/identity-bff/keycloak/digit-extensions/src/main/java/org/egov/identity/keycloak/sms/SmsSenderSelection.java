@@ -43,6 +43,20 @@ public final class SmsSenderSelection {
         return selected;
     }
 
+    /**
+     * The startup warning for {@code log} mode, which reports every send as
+     * successful while delivering nothing; null for the other modes.
+     */
+    public static String logModeWarning(Function<String, String> spiScope) {
+        if (!LOG.equals(selected(spiScope))) {
+            return null;
+        }
+        return "digit-sms-sender mode is 'log': SMS one-time codes are NOT delivered to phones"
+                + (allowDev(spiScope) ? " (codes are written to this log because allow-dev=true)" : "")
+                + ". Citizen phone sign-in cannot work for real users. Set KC_SPI_DIGIT_SMS_SENDER_MODE"
+                + " to 'http' (or 'mailpit' for development).";
+    }
+
     public static boolean allowDev(Function<String, String> spiScope) {
         return Boolean.parseBoolean(String.valueOf(spiScope.apply("allow-dev")).trim());
     }

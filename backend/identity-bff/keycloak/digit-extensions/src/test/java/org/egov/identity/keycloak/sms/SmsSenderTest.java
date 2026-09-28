@@ -49,6 +49,16 @@ class SmsSenderTest {
     }
 
     @Test
+    void logModeWarnsThatNothingIsDelivered() {
+        String warning = SmsSenderSelection.logModeWarning(key -> null);
+        assertTrue(warning.contains("NOT delivered"), warning);
+        assertTrue(SmsSenderSelection.logModeWarning(Map.of("mode", "log", "allow-dev", "true")::get)
+                .contains("allow-dev=true"));
+        assertEquals(null, SmsSenderSelection.logModeWarning(Map.of("mode", "http")::get));
+        assertEquals(null, SmsSenderSelection.logModeWarning(Map.of("mode", "mailpit")::get));
+    }
+
+    @Test
     void allowDevIsOffUnlessExplicitlyTrue() {
         assertFalse(SmsSenderSelection.allowDev(key -> null));
         assertFalse(SmsSenderSelection.allowDev(Map.of("allow-dev", "yes")::get));
