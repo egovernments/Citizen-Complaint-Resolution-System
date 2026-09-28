@@ -3,19 +3,32 @@ import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js"
 import type { PublicTenantRoute } from "../access-context/tenant-route.js";
 
 /**
- * Every i18n key the legacy digit-ui employee and citizen login screens use
- * (#2167). The Keycloak `digit-employee` / `digit-citizen` themes render
- * from exactly these, so this list is the single place to add a key.
+ * Every static i18n key the Keycloak `digit-employee` / `digit-citizen`
+ * themes read from `messages` (#2167) — the keys of `LOGIN_MESSAGE_FALLBACKS`
+ * in `keycloak/theme-src/src/digit/branding/strings.ts`. The theme owns the
+ * list (it also carries each key's English fallback); the BFF image cannot
+ * import it, so `tests/unit/login-message-keys.test.ts` fails on drift.
+ * Tenant-specific keys are derived from the fetched records instead
+ * (`dynamicMessageKeys`).
  */
 export const LOGIN_MESSAGE_KEYS = [
-  // Employee (pages/employee/Login)
+  // Employee (pages/employee/Login/login.js, PrivacyComponent.js)
   "CORE_COMMON_LOGIN",
   "CORE_LOGIN_USERNAME",
   "CORE_LOGIN_PASSWORD",
   "CORE_COMMON_FORGOT_PASSWORD",
   "ES_BY_CLICKING",
   "ES_PRIVACY_POLICY",
+  "DIGIT_I_ACCEPT",
+  "DIGIT_I_DO_NOT_ACCEPT",
+  "DIGIT_TABLE_OF_CONTENTS",
   "INVALID_LOGIN_CREDENTIALS",
+  "ES_ERROR_USER_NOT_PERMITTED",
+  "CORE_COMMON_CONTINUE",
+  "CORE_COMMON_CHANGE_PASSWORD",
+  "CORE_LOGIN_NEW_PASSWORD",
+  "CORE_LOGIN_CONFIRM_NEW_PASSWORD",
+  "CORE_COMMON_GO_BACK",
   "CORE_COMMON_REQUIRED_ERRMSG",
   // Citizen (pages/citizen/Login: SelectMobileNumber, SelectOtp, SelectName)
   "CS_LOGIN_PROVIDE_MOBILE_NUMBER",
@@ -28,9 +41,13 @@ export const LOGIN_MESSAGE_KEYS = [
   "CS_LOGIN_OTP_TEXT",
   "CS_INVALID_OTP",
   "CS_RESEND_ANOTHER_OTP",
+  "CS_RESEND_SECONDS",
   "CS_RESEND_OTP",
+  "OTP_RESEND_ERROR",
   "CS_LOGIN_PROVIDE_NAME",
+  "CS_LOGIN_NAME_TEXT",
   "CORE_COMMON_NAME",
+  "CORE_COMMON_NAME_VALIDMSG",
   // Shared chrome
   "CORE_COMMON_LANGUAGE",
   "CS_COMMON_CHOOSE_LANGUAGE",
@@ -40,7 +57,13 @@ export const LOGIN_MESSAGE_KEYS = [
 export const LOGIN_MESSAGE_KEY_PREFIXES = ["MOBILE_VALIDATION_"] as const;
 
 const LOCALE = /^[a-z]{2,3}_[A-Z]{2}$/;
-const I18N_KEY = /^[A-Z][A-Z0-9_]{2,127}$/;
+/** Keycloak/BCP-47 tags as the themes and `ui_locales` send them: fr, fr-FR, pt_mz. */
+const LANGUAGE_TAG = /^([a-zA-Z]{2,3})(?:[-_]([a-zA-Z]{2}))?$/;
+/** Region DIGIT seeds for a bare language (matches the theme's `digitLocaleOf`). */
+const DEFAULT_LOCALE_REGION: Record<string, string> = {
+  en: "IN", fr: "FR", pt: "PT", sw: "KE", hi: "IN", es: "ES",
+};
+const MAX_KEY_LENGTH = 128;
 const MAX_REFERENCED_KEYS = 200;
 /** Locale is caller-chosen, so the per-(tenant, locale) cache is bounded. */
 const MAX_BRANDING_CACHE_ENTRIES = 500;
@@ -238,31 +261,70 @@ async function searchLocalization(
       : []);
 }
 
+/** `TENANT_TENANTS_{CODE}` as digit-ui's getTransformedLocale spells it. */
 export function tenantMessageKey(tenantId: string): string {
-  return `TENANT_TENANTS_${tenantId.toUpperCase().replace(/[.-]/g, "_")}`;
+  return `TENANT_TENANTS_${tenantId}`.toUpperCase().replace(/[.:\-\s/]/g, "_");
 }
 
-/** UPPER_SNAKE strings inside a raw MDMS record, e.g. privacy-policy headings. */
-function referencedKeys(value: unknown, into: Set<string>, depth = 0): void {
-  if (into.size >= MAX_REFERENCED_KEYS || depth > 8) return;
-  if (typeof value === "string") {
-    if (I18N_KEY.test(value)) into.add(value);
-  } else if (Array.isArray(value)) {
-    for (const item of value) referencedKeys(item, into, depth + 1);
-  } else if (value && typeof value === "object") {
-    for (const item of Object.values(value)) referencedKeys(item, into, depth + 1);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asList(value: unknown): Record<string, unknown>[] {
+  return (Array.isArray(value) ? value : [value]).filter(isRecord);
+}
+
+/**
+ * Localization keys the themes look up for this tenant's records, read the
+ * way the theme reads them: the header `TENANT_TENANTS_{CODE}`, the mobile
+ * rule's `errorMessage`, `LoginConfig.texts.*` and `bannerImages[].title /
+ * description` (Carousel), and every heading/text of the PrivacyPolicy
+ * records (Privacy popup). Bounded so an oversized MDMS record cannot grow
+ * the response without limit.
+ */
+export function dynamicMessageKeys(
+  route: Pick<PublicTenantRoute, "tenantId" | "rootTenantId">,
+  masters: Pick<TenantMasters, "stateInfo" | "mobileValidation" | "loginConfig" | "privacyPolicy">,
+): Set<string> {
+  const keys = new Set<string>();
+  const add = (value: unknown) => {
+    if (keys.size < MAX_REFERENCED_KEYS && typeof value === "string" && value.trim() &&
+        value.length <= MAX_KEY_LENGTH) {
+      keys.add(value);
+    }
+  };
+  add(tenantMessageKey(route.tenantId));
+  add(tenantMessageKey(route.rootTenantId));
+  const stateCode = masters.stateInfo?.code;
+  if (typeof stateCode === "string" && stateCode) add(tenantMessageKey(stateCode));
+  add(masters.mobileValidation?.errorMessage);
+
+  for (const loginConfig of asList(masters.loginConfig)) {
+    const texts = isRecord(loginConfig.texts) ? loginConfig.texts : {};
+    add(texts.header);
+    add(texts.submitButtonLabel);
+    add(texts.secondaryButtonLabel);
+    for (const banner of asList(loginConfig.bannerImages)) {
+      add(banner.title);
+      add(banner.description);
+    }
   }
+  for (const policy of asList(masters.privacyPolicy)) {
+    add(policy.header);
+    for (const content of asList(policy.contents)) {
+      add(content.header);
+      for (const description of asList(content.descriptions)) {
+        add(description.text);
+        for (const sub of asList(description.subDescriptions)) add(sub.text);
+      }
+    }
+  }
+  return keys;
 }
 
 function wantedKeys(route: PublicTenantRoute, masters: TenantMasters): (key: string) => boolean {
-  const exact = new Set<string>(LOGIN_MESSAGE_KEYS);
-  exact.add(tenantMessageKey(route.tenantId));
-  exact.add(tenantMessageKey(route.rootTenantId));
-  const stateCode = masters.stateInfo?.code;
-  if (typeof stateCode === "string" && stateCode) exact.add(tenantMessageKey(stateCode));
-  if (masters.mobileValidation?.errorMessage) exact.add(masters.mobileValidation.errorMessage);
-  referencedKeys(masters.loginConfig, exact);
-  referencedKeys(masters.privacyPolicy, exact);
+  const exact = dynamicMessageKeys(route, masters);
+  for (const key of LOGIN_MESSAGE_KEYS) exact.add(key);
   return (key) => exact.has(key) ||
     LOGIN_MESSAGE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
@@ -305,12 +367,26 @@ function languages(value: unknown): Array<{ label: string; value: string }> {
     : [];
 }
 
+/**
+ * The DIGIT locale (`fr_FR`) for a `locale` query value. DIGIT codes pass
+ * through; Keycloak/BCP-47 tags (`fr`, `fr-FR`) are mapped the same way the
+ * theme maps them, so either spelling hits the same cache entry.
+ */
 export function requestedBrandingLocale(value: unknown): string {
-  if (value === undefined) return config.identityBrandingDefaultLocale;
-  if (typeof value !== "string" || !LOCALE.test(value)) {
-    throw new BrandingRequestError("Unsupported locale");
+  if (value === undefined || value === "") return config.identityBrandingDefaultLocale;
+  if (typeof value !== "string") throw new BrandingRequestError("Unsupported locale");
+  if (LOCALE.test(value)) return value;
+  const tag = LANGUAGE_TAG.exec(value);
+  if (!tag) throw new BrandingRequestError("Unsupported locale");
+  const language = tag[1].toLowerCase();
+  const region = tag[2]?.toUpperCase() ?? DEFAULT_LOCALE_REGION[language];
+  if (!region) throw new BrandingRequestError("Unsupported locale");
+  const locale = `${language}_${region}`;
+  if (language === "en" && !tag[2] &&
+      config.identityBrandingDefaultLocale.startsWith("en_")) {
+    return config.identityBrandingDefaultLocale;
   }
-  return value;
+  return locale;
 }
 
 /**

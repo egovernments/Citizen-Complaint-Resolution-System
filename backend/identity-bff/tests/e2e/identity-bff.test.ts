@@ -1346,7 +1346,10 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     ]);
     digit.mdms.get(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"))![0].isActive = false;
     digit.mdms.set(digit.mdmsKey("ke.bomet", "commonMDMSConfig.LoginConfig"), [record(
-      "ke.bomet", "commonMDMSConfig.LoginConfig", { bannerImages: [], texts: { header: "CORE_COMMON_LOGIN" } },
+      "ke.bomet", "commonMDMSConfig.LoginConfig", {
+        bannerImages: [{ id: 1, image: "https://cdn.example/b1.png", title: "BOMET_BANNER_TITLE" }],
+        texts: { header: "CORE_COMMON_LOGIN" },
+      },
     )]);
     digit.mdms.set(digit.mdmsKey("ke.bomet", "commonMDMSConfig.PrivacyPolicy"), [record(
       "ke.bomet", "commonMDMSConfig.PrivacyPolicy", {
@@ -1363,9 +1366,15 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       ["ke.bomet", "rainmaker-ke.bomet", "CS_LOGIN_TEXT", "Bomet citizens"],
       ["ke.bomet", "other-module", "CORE_LOGIN_USERNAME", "Must not be read"],
       ["ke.bomet.ulb1", "rainmaker-ke.bomet.ulb1", "CORE_COMMON_LOGIN", "Ingia"],
+      ["ke.bomet", "rainmaker-ke.bomet", "BOMET_BANNER_TITLE", "Report it"],
+      ["ke.bomet", "rainmaker-common", "DIGIT_I_ACCEPT", "I accept"],
     ]) {
       digit.localization.push({ tenantId, locale: "en_IN", module, code, message });
     }
+    digit.localization.push({
+      tenantId: "ke.bomet", locale: "fr_FR", module: "rainmaker-common",
+      code: "CORE_COMMON_LOGIN", message: "Connexion",
+    });
   });
 
   it("serves public, cached tenant login branding", async () => {
@@ -1385,7 +1394,10 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       mobileValidation: {
         countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$", errorMessage: "MOBILE_VALIDATION_KE",
       },
-      loginConfig: { bannerImages: [], texts: { header: "CORE_COMMON_LOGIN" } },
+      loginConfig: {
+        bannerImages: [{ id: 1, image: "https://cdn.example/b1.png", title: "BOMET_BANNER_TITLE" }],
+        texts: { header: "CORE_COMMON_LOGIN" },
+      },
       privacyPolicy: [{
         module: "HCM", header: "ES_PRIVACY_POLICY_HEADER", contents: [{ header: "ES_PRIVACY_SECTION_1" }],
       }],
@@ -1395,8 +1407,10 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         digitHomeUrl: "https://www.digit.org/",
       },
       messages: {
+        BOMET_BANNER_TITLE: "Report it",
         CORE_COMMON_LOGIN: "Login",
         CS_LOGIN_OTP: "Enter OTP",
+        DIGIT_I_ACCEPT: "I accept",
         CS_LOGIN_TEXT: "Bomet citizens",
         ES_PRIVACY_POLICY_HEADER: "Privacy",
         MOBILE_VALIDATION_KE: "Enter 9 digits",
@@ -1418,6 +1432,13 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     });
     expect(subtenantBody.mobileValidation).toMatchObject({ countryCode: "+254" });
     expect(subtenantBody.messages.CORE_COMMON_LOGIN).toBe("Ingia");
+
+    // The theme sends Keycloak locales; `fr` and `fr_FR` are the same DIGIT locale.
+    for (const locale of ["fr_FR", "fr"]) {
+      const french = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=${locale}`);
+      expect(french.status).toBe(200);
+      expect((await french.json()).messages).toEqual({ CORE_COMMON_LOGIN: "Connexion" });
+    }
 
     expect((await fetch(`${app()}/identity/v1/tenant-contexts/missing-county/branding`)).status).toBe(404);
     expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=..%2Fx`)).status)

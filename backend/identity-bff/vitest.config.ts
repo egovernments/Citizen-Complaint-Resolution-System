@@ -13,6 +13,7 @@ export default defineConfig({
       "tests/unit/managed-digit-users.test.ts",
       "tests/unit/config.test.ts",
       "tests/unit/surfaces.test.ts",
+      "tests/unit/login-message-keys.test.ts",
       "tests/e2e/identity-bff.test.ts",
       "tests/e2e/onboarding-worker.test.ts",
     ],
