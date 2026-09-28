@@ -22,9 +22,6 @@ var globalConfigs = (function () {
   var mdmsContext = "{{ .Values.globalConfigs.mdmsContext }}";
   var hrmsContext = "{{ .Values.globalConfigs.hrmsContext }}";
   var invalidEmployeeRoles = {{ .Values.globalConfigs.invalidEmployeeRoles | toJson }};
-  var authProvider = "{{ .Values.globalConfigs.authProvider }}";
-  var citizenAuthProvider = "{{ .Values.globalConfigs.citizenAuthProvider }}";
-  var employeeAuthProvider = "{{ .Values.globalConfigs.employeeAuthProvider }}";
   var pgrBoundaryHighestLevel = "{{ .Values.globalConfigs.pgrBoundaryHighestLevel }}";
   var pgrBoundaryLowestLevel = "{{ .Values.globalConfigs.pgrBoundaryLowestLevel }}";
   var boundaryType = "{{ .Values.globalConfigs.boundaryType }}";
@@ -36,10 +33,6 @@ var globalConfigs = (function () {
   var coreMobileConfigs = {{ .Values.globalConfigs.coreMobileConfigs | toJson }};
   var corePostalConfigs = {{ .Values.globalConfigs.corePostalConfigs | toJson }};
   var dashboardMetricsEnabled = {{ .Values.globalConfigs.dashboardMetricsEnabled }};
-  var keycloakUrl = "{{ .Values.globalConfigs.keycloakUrl }}";
-  var keycloakRealm = "{{ .Values.globalConfigs.keycloakRealm }}";
-  var keycloakClientId = "{{ .Values.globalConfigs.keycloakClientId }}";
-  var tokenExchangeUrl = "{{ .Values.globalConfigs.tokenExchangeUrl }}";
 
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") { return stateTenantId; }
@@ -57,9 +50,6 @@ var globalConfigs = (function () {
     else if (key === "MDMS_CONTEXT_PATH") { return mdmsContext; }
     else if (key === "HRMS_CONTEXT_PATH") { return hrmsContext; }
     else if (key === "INVALIDROLES") { return invalidEmployeeRoles; }
-    else if (key === "AUTH_PROVIDER") { return authProvider; }
-    else if (key === "CITIZEN_AUTH_PROVIDER") { return citizenAuthProvider; }
-    else if (key === "EMPLOYEE_AUTH_PROVIDER") { return employeeAuthProvider; }
     else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") { return pgrBoundaryHighestLevel; }
     else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") { return pgrBoundaryLowestLevel; }
     else if (key === "BOUNDARYTYPE") { return boundaryType; }
@@ -71,10 +61,6 @@ var globalConfigs = (function () {
     else if (key === "CORE_MOBILE_CONFIGS") { return coreMobileConfigs; }
     else if (key === "CORE_POSTAL_CONFIGS") { return corePostalConfigs; }
     else if (key === "DASHBOARD_METRICS_ENABLED") { return dashboardMetricsEnabled; }
-    else if (key === "KEYCLOAK_URL") { return keycloakUrl; }
-    else if (key === "KEYCLOAK_REALM") { return keycloakRealm; }
-    else if (key === "KEYCLOAK_CLIENT_ID") { return keycloakClientId; }
-    else if (key === "TOKEN_EXCHANGE_URL") { return tokenExchangeUrl; }
   };
 
   return { getConfig };

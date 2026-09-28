@@ -15,8 +15,6 @@ var globalConfigs = (function () {
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
 
-  var authProvider = "digit";
-
   // Runtime locale fallback for local setup
   try {
     var parseMaybeJSON = function (value) {
@@ -80,7 +78,6 @@ var globalConfigs = (function () {
     else if (key === "MDMS_V1_CONTEXT_PATH") return mdmsContext;
     else if (key === "HRMS_CONTEXT_PATH") return hrmsContext;
     else if (key === "INVALIDROLES") return invalidEmployeeRoles;
-    else if (key === "AUTH_PROVIDER") return authProvider;
     else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") return pgrBoundaryLowestLevel;
     else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") return pgrBoundaryHighestLevel;
     else if (key === "HIERARCHY_TYPE") return hierarchyType;

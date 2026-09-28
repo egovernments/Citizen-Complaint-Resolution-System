@@ -19,7 +19,7 @@
 # full catalogue with every knob the playbook supports; this file is the
 # subset you actually need on day one.
 #
-# ── The seven CHANGE ME lines ──────────────────────────────────────
+# ── The CHANGE ME settings ─────────────────────────────────────────
 #   state_root, state_tenant_id, tenant_id, boot_tenant,
 #   ui_state_tenant_id                           → your tenant name
 #   map_center                                   → your city's coordinates
@@ -89,7 +89,6 @@ boot_tenant: mycountry.mycity
 # citizen, employee and complaint screens all have to read the same tenant.
 ui_state_tenant_id: mycountry.mycity
 
-# CHANGE ME — which tenants appear in the login screen's City dropdown.
 # Hide employee-UI modules you are not running. `IM` is the inbox, which
 # needs the Elasticsearch search stack (off below) — leaving it visible
 # would show employees a screen that always errors.

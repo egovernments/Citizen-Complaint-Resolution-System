@@ -384,6 +384,32 @@ describe('tenant-scoped digit-ui routing', () => {
     expect(globalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
     expect(helmGlobalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
   });
+
+  // #2072 Step 1: digit-ui-esbuild signs in by route (Identity BFF on tenant
+  // routes, DIGIT auth on legacy ones) and defaults every one of these keys
+  // to `digit` when absent, so no deployment surface may emit them.
+  test('no browser auth-provider or direct-Keycloak keys in globalConfigs', () => {
+    const REMOVED = ['AUTH_PROVIDER', 'KEYCLOAK_URL', 'KEYCLOAK_REALM',
+      'KEYCLOAK_CLIENT_ID', 'TOKEN_EXCHANGE_URL', 'authProvider',
+      'keycloakUrl', 'keycloakRealm', 'keycloakClientId', 'tokenExchangeUrl'];
+    const sources = {
+      'globalConfigs.js.j2': globalConfig,
+      'helm globalConfigs.js.tpl': helmGlobalConfig,
+      'helm values.yaml': read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml'),
+      'digit-ui-esbuild dev stub': read('digit-ui-esbuild/public/globalConfigs.js'),
+      'local-setup nginx stub': read('local-setup/nginx/globalConfigs.js'),
+    };
+    for (const [name, body] of Object.entries(sources)) {
+      for (const key of REMOVED) {
+        // AUTH_PROVIDER also covers CITIZEN_/EMPLOYEE_AUTH_PROVIDER;
+        // authProvider covers citizenAuthProvider/employeeAuthProvider.
+        expect({ name, key, found: body.includes(key) }).toEqual({ name, key, found: false });
+      }
+    }
+    // digit-ui-v2 (/citizen) still bakes auth_provider at build time.
+    expect(read('local-setup/ansible/playbook-deploy.yml'))
+      .toContain('VITE_AUTH_PROVIDER="{{ auth_provider | default(\'\') }}"');
+  });
 });
 
 // #2167 review (Fable M3): Keycloak (KC_PROXY_HEADERS=xforwarded) takes the

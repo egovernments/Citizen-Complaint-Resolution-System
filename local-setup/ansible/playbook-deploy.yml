@@ -386,15 +386,15 @@
     # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
     # route in front of token-exchange-svc, the per-tenant realm template and
     # its `digit-ui` public client were all removed in favour of the Identity
-    # BFF at `/identity/v1`. Both frontends still resolve `auth_provider:
-    # keycloak` to that old path — digit-ui-esbuild through
-    # globalConfigs.tokenExchangeUrl (`/kc`) and digit-ui-v2 through its
-    # baked VITE_TOKEN_EXCHANGE_URL (`/token-exchange`) plus a realm named
-    # after state_tenant_id — so a tenant that sets it now gets 404s at login
-    # instead of SSO. The frontend cutover is a separate change; until it
-    # lands, refuse the combination rather than ship a login that cannot work.
+    # BFF at `/identity/v1`. digit-ui-esbuild no longer reads any of these
+    # keys (#2072: globalConfigs.js carries no auth-provider or Keycloak
+    # settings; tenant routes use the BFF). digit-ui-v2 still bakes
+    # auth_provider in as VITE_AUTH_PROVIDER and resolves `keycloak` to its
+    # removed VITE_TOKEN_EXCHANGE_URL (`/token-exchange`) plus a realm named
+    # after state_tenant_id, so a tenant that sets it gets 404s at login.
+    # Refuse the combination rather than ship a login that cannot work.
     # (Dhruv review, #2088.)
-    - name: "preflight — Keycloak UI login is unavailable until the frontend cutover"
+    - name: "preflight — refuse the removed Keycloak UI login path"
       vars:
         _keycloak_login_surfaces: >-
           {{ {'auth_provider': auth_provider | default(''),
@@ -408,16 +408,17 @@
           {{ _keycloak_login_surfaces | join(', ') }}
 
           That path no longer exists. #2088 replaced it with the Identity BFF
-          (`/identity/v1`) and removed what the old auth-adapter called:
-            - the `/kc` Kong route in front of token-exchange-svc,
+          (`/identity/v1`) and removed what the old auth-adapters called:
+            - the `/kc` and `/token-exchange` token-exchange routes,
             - the per-tenant Keycloak realm named after state_tenant_id,
             - the `digit-ui` public client in that realm.
-          Deploying this would give every user a 404 at login.
+          digit-ui-esbuild ignores these keys (#2072) and signs in through the
+          Identity BFF on /{tenant}/digit-ui/... routes; digit-ui-v2 would
+          still send users to the removed path, a 404 at login.
 
-          Leave these keys unset (or 'digit') until the frontend cutover lands.
-          `enable_keycloak: true` on its own is fine and is what stands up
-          Keycloak, the Identity BFF and `/identity/v1` — it does not require
-          flipping auth_provider.
+          Leave these keys unset (or 'digit'). `enable_keycloak: true` on its
+          own is fine and is what stands up Keycloak, the Identity BFF and
+          `/identity/v1` — it does not require flipping auth_provider.
       when: _keycloak_login_surfaces | length > 0
 
     # ==================== WSL2 resource config (.wslconfig) ====================
