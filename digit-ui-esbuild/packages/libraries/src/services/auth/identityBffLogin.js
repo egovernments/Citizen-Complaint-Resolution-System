@@ -118,6 +118,20 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
       message: "Sign-in is temporarily unavailable. Please try again.",
     };
   }
+  // The session cookie is per surface, not per tenant: a session bound to
+  // another tenant must not be exchanged here. Start a fresh sign-in for the
+  // route tenant instead; after an authResult round trip, stop (no loop).
+  const boundTenant = session.body.tenant;
+  if (boundTenant?.tenantId !== tenant.tenantId || boundTenant?.urlSlug !== tenant.urlSlug) {
+    return authResultId
+      ? {
+        status: "signed-out",
+        fromAuthResult: true,
+        messageKey: "CORE_IDENTITY_TENANT_SESSION_MISMATCH",
+        message: `Sign in again to continue to ${tenant.name}.`,
+      }
+      : { status: "signed-out", fromAuthResult: false };
+  }
 
   const selected = await request(config.selectPath, {
     method: "POST",

@@ -48,6 +48,12 @@ const TENANT = Object.freeze({
   name: "Bomet County Government",
 });
 
+// `/session` for employee/citizen reports the tenant the session is bound to.
+const SESSION = Object.freeze({
+  authenticated: true,
+  tenant: { urlSlug: TENANT.urlSlug, tenantId: TENANT.tenantId, name: TENANT.name },
+});
+
 const json = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
 /** Fake BFF: routes "METHOD path" to a response; records every call. */
@@ -179,7 +185,7 @@ test("`from` pointing at the surface's own sign-in pages collapses to the base",
 
 test("employee session exchange passes surface=employee and scopes roles to the route tenant", async () => {
   const { calls, fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=employee": json(200, { authenticated: true }),
+    "GET /identity/v1/session?surface=employee": json(200, SESSION),
     "POST /identity/v1/contexts/_select": json(200, employeeUser()),
   });
   const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
@@ -192,7 +198,7 @@ test("employee session exchange passes surface=employee and scopes roles to the 
 
 test("employee session rejects a token for a different tenant", async () => {
   const { fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=employee": json(200, { authenticated: true }),
+    "GET /identity/v1/session?surface=employee": json(200, SESSION),
     "POST /identity/v1/contexts/_select": json(200, employeeUser("ke.nairobi")),
   });
   const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
@@ -202,7 +208,7 @@ test("employee session rejects a token for a different tenant", async () => {
 
 test("employee 403 from _select is surfaced as forbidden", async () => {
   const { fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=employee": json(200, { authenticated: true }),
+    "GET /identity/v1/session?surface=employee": json(200, SESSION),
     "POST /identity/v1/contexts/_select": json(403, { message: "no" }),
   });
   const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
@@ -247,7 +253,7 @@ test("a failed authResult reports the BFF message", async () => {
 
 test("citizen session exchange uses surface=citizen and the citizen _select with an empty body", async () => {
   const { calls, fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=citizen": json(200, { authenticated: true }),
+    "GET /identity/v1/session?surface=citizen": json(200, SESSION),
     "POST /identity/v1/contexts/citizen/_select": json(200, citizenUser()),
   });
   const result = await establishIdentityBffSession({ surface: "citizen", tenant: TENANT, fetchImpl });
@@ -263,7 +269,7 @@ test("citizen session exchange uses surface=citizen and the citizen _select with
 
 test("citizen session rejects a token for another tenant", async () => {
   const { fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=citizen": json(200, { authenticated: true }),
+    "GET /identity/v1/session?surface=citizen": json(200, SESSION),
     "POST /identity/v1/contexts/citizen/_select": json(200, citizenUser("ke.nairobi")),
   });
   const result = await establishIdentityBffSession({ surface: "citizen", tenant: TENANT, fetchImpl });
@@ -271,9 +277,35 @@ test("citizen session rejects a token for another tenant", async () => {
   assert.equal(result.messageKey, "CORE_IDENTITY_INVALID_SESSION");
 });
 
+test("a session bound to another tenant starts a fresh sign-in without selecting", async () => {
+  const otherTenant = { authenticated: true, tenant: { urlSlug: "nairobi", tenantId: "ke.nairobi", name: "Nairobi" } };
+  for (const surface of ["citizen", "employee"]) {
+    const { calls, fetchImpl } = stubBff({
+      [`GET /identity/v1/session?surface=${surface}`]: json(200, otherTenant),
+    });
+    const result = await establishIdentityBffSession({ surface, tenant: TENANT, fetchImpl });
+    assert.deepEqual(result, { status: "signed-out", fromAuthResult: false }, surface);
+    assert.equal(calls.length, 1, "no _select for a foreign-tenant session");
+  }
+});
+
+test("a foreign-tenant session after an authResult round trip does not loop", async () => {
+  const { calls, fetchImpl } = stubBff({
+    "GET /identity/v1/auth-results/r-9": json(200, { status: "succeeded" }),
+    "GET /identity/v1/session?surface=citizen": json(200, { authenticated: true, tenant: null }),
+  });
+  const result = await establishIdentityBffSession({
+    surface: "citizen", tenant: TENANT, authResultId: "r-9", fetchImpl,
+  });
+  assert.equal(result.status, "signed-out");
+  assert.equal(result.fromAuthResult, true);
+  assert.equal(result.messageKey, "CORE_IDENTITY_TENANT_SESSION_MISMATCH");
+  assert.equal(calls.some((call) => call.url.includes("_select")), false);
+});
+
 test("citizen session rejects a non-CITIZEN user", async () => {
   const { fetchImpl } = stubBff({
-    "GET /identity/v1/session?surface=citizen": json(200, { authenticated: true }),
+    "GET /identity/v1/session?surface=citizen": json(200, SESSION),
     "POST /identity/v1/contexts/citizen/_select": json(200, citizenUser(TENANT.tenantId, "EMPLOYEE")),
   });
   const result = await establishIdentityBffSession({ surface: "citizen", tenant: TENANT, fetchImpl });
