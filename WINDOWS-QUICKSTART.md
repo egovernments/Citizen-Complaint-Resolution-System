@@ -191,15 +191,31 @@ mybox : ok=144  changed=34  unreachable=0  failed=0  skipped=240
 
 ## 6. Verify + log in (from your Windows browser)
 
-Use these URLs exactly as written, trailing slash included:
+Type the URLs exactly as written, trailing slash included.
 
-| What | URL | Log in with |
-|------|-----|-------------|
-| Employee UI | http://localhost/digit-ui/ | `ADMIN` / `eGov@123`, city **City A** |
-| Citizen SPA | http://localhost/citizen/ | — |
-| Configurator (DIGIT Studio) | http://localhost/configurator/ | `ADMIN` / `eGov@123`, tenant code **`pg`** |
-| Grafana | http://localhost/grafana/ | `admin` / generated password (below) |
-| Gatus health board | http://localhost/status/ | `digit-status` / generated password (below) |
+| What | Port 80 (recommended) | Direct port (fallback) | Log in with |
+|------|-----------------------|------------------------|-------------|
+| Employee UI | http://localhost/digit-ui/ | http://localhost:18000/digit-ui/ | `ADMIN` / `eGov@123`, city **City A** |
+| Citizen SPA | http://localhost/citizen/ | http://localhost:18000/digit-ui/citizen/ (see note 1) | — |
+| Configurator (DIGIT Studio) | http://localhost/configurator/ | http://localhost:18890/configurator/ (see note 2) | `ADMIN` / `eGov@123`, tenant code **`pg`** |
+| Grafana | http://localhost/grafana/ | http://localhost:13000/grafana/ | `admin` / generated password (below) |
+| Gatus health board | http://localhost/status/ | http://localhost:18889/ | `digit-status` / generated password (below); no password on the direct port |
+
+> **If a port-80 URL is not reachable or returns 404, use its direct-port URL
+> from the same row instead.** To fix port 80 itself, see
+> [If the port-80 URLs return 404](#if-the-port-80-urls-return-404) below.
+
+1. The Citizen SPA at `/citizen/` is served only by nginx on port 80. Its
+   fallback is the citizen app built into the employee UI bundle, served
+   through Kong. It is a different, older app, but it has its own
+   complaint-filing pages.
+2. The configurator's direct port serves the page but not the APIs it logs in
+   through, so the login fails there. Use it only to confirm the container is
+   up; to log in, get the port-80 URL working.
+
+The employee UI fallback is Kong on `18000`, not the employee UI container's
+own port `18080`. Like the configurator's, that port serves the page without
+the login APIs.
 
 **Configurator tenant code:** the prebuilt configurator image is not tied to
 any tenant, so its **Tenant code** field starts empty. Type `pg` (the
@@ -216,26 +232,43 @@ for k in grafana_admin_password status_basic_auth_password; do
 done
 ```
 
-Quick check from PowerShell:
+Quick check of both columns from PowerShell:
 
 ```powershell
-foreach ($u in 'digit-ui/','citizen/','configurator/','grafana/','status/') {
-  $url = "http://localhost/$u"
-  try   { "{0,-14} {1}" -f $u, (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 20).StatusCode }
-  catch { "{0,-14} {1}" -f $u, $_.Exception.Response.StatusCode.value__ }
+foreach ($u in 'digit-ui/','citizen/','configurator/','grafana/','status/',
+               ':18000/digit-ui/',':18000/digit-ui/citizen/',':18890/configurator/',
+               ':13000/grafana/',':18889/') {
+  $url = if ($u.StartsWith(':')) { "http://localhost$u" } else { "http://localhost/$u" }
+  try   { "{0,-26} {1}" -f $u, (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 20).StatusCode }
+  catch { "{0,-26} {1}" -f $u, $_.Exception.Response.StatusCode.value__ }
 }
 ```
 
-The first four return `200`. `status/` returns `401` until you log in, which is
-expected.
+On port 80, `status/` returns `401` until you log in, which is expected;
+everything else should return `200`.
 
-> **Use only `http://localhost/...` URLs (port 80) from Windows.** Docker
-> publishes these ports to the WSL VM's loopback only (Kong `18000`,
-> employee UI `18080`, configurator `18890`, Grafana `13000`, OpenBao `18200`).
-> WSL2's NAT-mode relay doesn't forward those to Windows, so
-> `localhost:18890` and similar URLs show "not reachable" in a Windows browser.
-> nginx on port 80 proxies everything you need. For the raw ports, add
-> `networkingMode=mirrored` to `[wsl2]`, or curl them from inside WSL.
+### If the port-80 URLs return 404
+
+Run the same request from inside WSL to see which side is answering:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/digit-ui/
+grep -c configurator /etc/nginx/sites-enabled/*
+```
+
+- **`200` inside WSL, `404` from Windows:** a Windows program owns port 80 and
+  answers before WSL does (IIS / the "World Wide Web Publishing Service" is a
+  common one). Find it with `netstat -ano | findstr ":80 "` in PowerShell and
+  stop it, or use the fallback column.
+- **`404` inside WSL as well**, or the `grep` prints `0`: the nginx site in
+  place isn't the one this deploy renders (for example, one left from an
+  earlier install). Re-run `./deploy.sh mybox`; it rewrites the site.
+
+> **Whether the direct ports open from Windows depends on your WSL
+> networking.** Docker publishes them on the WSL VM's loopback
+> (`127.0.0.1`), and not every WSL2 setup forwards that to Windows. If a
+> fallback URL doesn't load either, add `networkingMode=mirrored` to `[wsl2]`
+> in `.wslconfig`, then `wsl --shutdown` and re-run `./deploy.sh mybox`.
 
 ## Day-to-day
 
@@ -274,6 +307,7 @@ re-run to bring the stack back.
 | Containers OOM-killed / restart-looping | `free -h` inside WSL. Slim sits at ~7.5 GiB of the 11 GiB VM — use slim on 16 GB and close heavy Windows apps. |
 | Port 80 already in use | Something on Windows owns it: `netstat -ano \| findstr :80`. |
 
-Note: Kong is not published on `localhost:18000` in this profile, so the
+Note: Kong listens on `127.0.0.1:18000` inside WSL, so the
 `newman ... baseUrl=http://localhost:18000` snippets in
-`local-setup/ansible/README.md` don't apply here — go through nginx on port 80.
+`local-setup/ansible/README.md` work from a WSL shell. From Windows they work
+only if your WSL setup forwards that port (see the note at the end of step 6).
