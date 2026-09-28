@@ -14,8 +14,8 @@ const PINNED_STORAGE_KEY = "ccrs.citizen.sidebar-pinned";
  * a fixed 260px v2 sidebar that could not collapse and carried the profile
  * block, which now sits in the top bar's account menu (#2038 review).
  */
-const CitizenNavSideBar = ({ t, crestUrl }) => {
-  const { items } = useCitizenNavItems();
+const CitizenNavSideBar = ({ t, crestUrl, linkData }) => {
+  const { items } = useCitizenNavItems(linkData);
   const history = useHistory();
 
   const onItemSelect = (item) => {
