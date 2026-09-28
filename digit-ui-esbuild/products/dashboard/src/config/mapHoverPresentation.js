@@ -3,7 +3,7 @@
 // values (channel / SLA / status) resolve through dimensionLabel against
 // DASHBOARD_CHANNEL_* / DASHBOARD_SLA_* / DASHBOARD_WF_STAGE_* messages; no
 // code-owned fallbacks — unseeded values surface their raw code.
-import { translate as t, getLanguage } from "../i18n/localeRuntime";
+import { translate as t, getLanguage, toBcp47Locale } from "../i18n/localeRuntime";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import { formatNumber } from "../utils/numberFormat";
 
@@ -71,7 +71,7 @@ function formatPinDate(ms) {
   const n = Number(ms);
   if (!Number.isFinite(n) || n <= 0) return null;
   try {
-    return new Date(n).toLocaleDateString(getLanguage()?.replace("_", "-"), {
+    return new Date(n).toLocaleDateString(toBcp47Locale(getLanguage()), {
       year: "numeric",
       month: "short",
       day: "numeric",

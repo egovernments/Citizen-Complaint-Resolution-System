@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
@@ -54,19 +55,26 @@ public class AnalyticsService {
     static final int MAX_BATCH_QUERIES = 50;
 
     /**
-     * The only query params a PUBLIC-floor caller may attach to a KPI reference (#1797): the
-     * dashboard's global filter bar. Enforced HERE — on every path that resolves a kpiId for the
-     * public floor, not only the {@code /public/_query} alias — because Kong's audit mode
+     * The only query params a PUBLIC-floor caller may attach to a KPI reference (#1797 / #1455):
+     * the dashboard's global filter bar. Enforced HERE — on every path that resolves a kpiId for
+     * the public floor, not only the {@code /public/_query} alias — because Kong's audit mode
      * ({@code ENFORCE_UNAUTH=false}) still lets an anonymous body reach {@code /_query}, where it
      * degrades to the same PUBLIC floor. Each is a narrowing predicate the composer layers under
      * the def's own query; none can switch the aggregation level ({@code hierLevel}), fan out
      * companions ({@code compare}/{@code series}) or override the def's named {@code window}.
-     * Values are scalar strings, length-capped, and dates must be ISO calendar days supplied as a
-     * pair.
+     * Scalars are length-capped; multi-select params ({@code wards}/{@code serviceCodes}/
+     * {@code departments}) are bounded non-empty string arrays; dates must be ISO calendar days
+     * supplied as a pair.
      */
     static final Set<String> PUBLIC_QUERY_PARAMS =
-            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
+            Set.of("dateFrom", "dateTo", "ward", "wards", "serviceCode", "serviceCodes",
+                    "departments", "complaintPath", "boundaryPath");
+    static final Set<String> PUBLIC_ARRAY_QUERY_PARAMS =
+            Set.of("wards", "serviceCodes", "departments");
     static final int PUBLIC_QUERY_PARAM_MAX_LENGTH = 128;
+    /** Path params may be longer pipe/dot chains (composer caps at 512). */
+    static final int PUBLIC_PATH_PARAM_MAX_LENGTH = 512;
+    static final int PUBLIC_ARRAY_PARAM_MAX_VALUES = 300;
     private static final java.util.regex.Pattern ISO_DAY =
             java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
@@ -79,13 +87,18 @@ public class AnalyticsService {
      */
     private static final Map<String,String> PUBLIC_PARAM_COLUMNS = Map.of(
             "ward", "ward_code",
+            "wards", "ward_code",
             "serviceCode", "service_code",
-            "complaintPath", "complaint_node_path");
+            "serviceCodes", "service_code",
+            "departments", "department_code",
+            "complaintPath", "complaint_node_path",
+            "boundaryPath", "boundary_path");
 
     /**
      * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
      * empty object (the ref stays bare); throws {@code invalid_param} for any foreign key,
-     * non-scalar or blank value, over-long value, non-ISO-day date, or incomplete date range.
+     * malformed scalar/array, blank value, over-long value, non-ISO-day date, incomplete date
+     * range, or scalar+plural collision ({@code ward}+{@code wards}, etc.).
      */
     static ObjectNode sanitizePublicParams(JsonNode params) {
         if (params == null || params.isNull()) return null;
@@ -100,12 +113,18 @@ public class AnalyticsService {
             if (!PUBLIC_QUERY_PARAMS.contains(name))
                 throw new IllegalArgumentException("invalid_param: public queries accept only "
                         + new TreeSet<>(PUBLIC_QUERY_PARAMS) + "; got '" + name + "'");
+            if (PUBLIC_ARRAY_QUERY_PARAMS.contains(name)) {
+                clean.set(name, sanitizePublicStringArray(name, v));
+                continue;
+            }
             if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
                 throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty scalar value");
             String text = v.asText().trim();
-            if (text.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
+            int maxLen = ("complaintPath".equals(name) || "boundaryPath".equals(name))
+                    ? PUBLIC_PATH_PARAM_MAX_LENGTH : PUBLIC_QUERY_PARAM_MAX_LENGTH;
+            if (text.length() > maxLen)
                 throw new IllegalArgumentException("invalid_param: " + name + " exceeds "
-                        + PUBLIC_QUERY_PARAM_MAX_LENGTH + " characters");
+                        + maxLen + " characters");
             if ((name.equals("dateFrom") || name.equals("dateTo")) && !ISO_DAY.matcher(text).matches())
                 throw new IllegalArgumentException("invalid_param: " + name + " must be yyyy-MM-dd");
             clean.put(name, text);
@@ -113,7 +132,37 @@ public class AnalyticsService {
         if (clean.has("dateFrom") != clean.has("dateTo"))
             throw new IllegalArgumentException(
                     "invalid_param: dateFrom and dateTo must be supplied together");
+        rejectPublicScalarAndPlural(clean, "ward", "wards");
+        rejectPublicScalarAndPlural(clean, "serviceCode", "serviceCodes");
         return clean;
+    }
+
+    private static ArrayNode sanitizePublicStringArray(String name, JsonNode raw) {
+        if (raw == null || !raw.isArray() || raw.size() == 0)
+            throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty string array");
+        if (raw.size() > PUBLIC_ARRAY_PARAM_MAX_VALUES)
+            throw new IllegalArgumentException("invalid_param: " + name + " may contain at most "
+                    + PUBLIC_ARRAY_PARAM_MAX_VALUES + " values");
+        ArrayNode out = JsonNodeFactory.instance.arrayNode();
+        Set<String> unique = new LinkedHashSet<>();
+        for (JsonNode item : raw) {
+            if (item == null || !item.isTextual())
+                throw new IllegalArgumentException("invalid_param: " + name + " values must be strings");
+            String value = item.asText().trim();
+            if (value.isEmpty() || "all".equals(value) || value.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name
+                        + " values must be non-empty codes no longer than " + PUBLIC_QUERY_PARAM_MAX_LENGTH);
+            if (unique.add(value)) out.add(value);
+        }
+        if (out.isEmpty())
+            throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty string array");
+        return out;
+    }
+
+    private static void rejectPublicScalarAndPlural(ObjectNode params, String scalar, String plural) {
+        if (params.has(scalar) && params.has(plural))
+            throw new IllegalArgumentException("invalid_param: use either " + scalar + " or " + plural
+                    + ", not both");
     }
 
     /**

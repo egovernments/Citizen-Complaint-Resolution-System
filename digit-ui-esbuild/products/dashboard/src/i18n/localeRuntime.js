@@ -78,7 +78,12 @@ const localeStorageKey = () =>
  */
 function defaultLocale() {
   if (!isPublicDashboardRuntime()) return FALLBACK_LOCALE;
-  return `${globalConfig("LOCALE_DEFAULT") || "en"}_${globalConfig("LOCALE_REGION") || "IN"}`;
+  const lang = String(globalConfig("LOCALE_DEFAULT") || "en");
+  const region = String(globalConfig("LOCALE_REGION") || "IN");
+  // LOCALE_DEFAULT is the language half only; if an env already baked in the
+  // region (en_IN), do not append LOCALE_REGION again (en_IN_IN).
+  if (lang.includes("_")) return lang;
+  return `${lang}_${region}`;
 }
 
 const readStoredLocale = () => {
@@ -91,6 +96,25 @@ const readStoredLocale = () => {
 
 export function getLanguage() {
   return hostI18next()?.language || standalone.locale || readStoredLocale();
+}
+
+/**
+ * DIGIT locales use underscores (en_IN). Intl wants BCP 47 (en-IN). A doubled
+ * region from mis-set LOCALE_DEFAULT (en_IN_IN → en-IN_IN) must not reach
+ * toLocaleString — it throws RangeError and trips the route ErrorBoundary.
+ */
+export function toBcp47Locale(language) {
+  if (language == null || language === "") return undefined;
+  const tag = String(language).replace(/_/g, "-");
+  try {
+    if (typeof Intl !== "undefined" && Intl.DateTimeFormat?.supportedLocalesOf) {
+      const supported = Intl.DateTimeFormat.supportedLocalesOf([tag]);
+      return supported[0] || undefined;
+    }
+  } catch {
+    /* invalid tag */
+  }
+  return undefined;
 }
 
 /**

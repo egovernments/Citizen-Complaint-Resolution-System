@@ -294,7 +294,8 @@ public class AnalyticsControllerPublicTest {
         ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
                 "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_public\"," +
                         "\"params\":{\"dateFrom\":\"2026-07-01\",\"dateTo\":\"2026-07-31\"," +
-                        "\"ward\":\" W1 \",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"}}}}"),
+                        "\"ward\":\" W1 \",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"," +
+                        "\"boundaryPath\":\"mz|maputo_cidade\"}}}}"),
                 null);
 
         assertEquals(200, response.getStatusCodeValue());
@@ -303,7 +304,36 @@ public class AnalyticsControllerPublicTest {
                 eq("ke"), eq(1), isNull());
         JsonNode params = sanitized.getValue().at("/queries/tile/params");
         assertEquals(mapper.readTree("{\"dateFrom\":\"2026-07-01\",\"dateTo\":\"2026-07-31\"," +
-                "\"ward\":\"W1\",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"}"), params);
+                "\"ward\":\"W1\",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"," +
+                "\"boundaryPath\":\"mz|maputo_cidade\"}"), params);
+    }
+
+    @Test
+    public void publicQueryForwardsMultiSelectFilterParams() throws Exception {
+        KpiDefinition def = publicDef("cl_public");
+        DashboardPack pack = publicPack("cl_public");
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
+                .thenReturn(Collections.singletonList(def));
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.of(pack));
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull()))
+                .thenReturn(Map.of("results", Collections.emptyMap()));
+
+        ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
+                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_public\"," +
+                        "\"params\":{\"wards\":[\" W1 \",\"W2\"],\"serviceCodes\":[\"A\",\"B\"]," +
+                        "\"departments\":[\"ROADS\"]}}}}"),
+                null);
+
+        assertEquals(200, response.getStatusCodeValue());
+        ArgumentCaptor<JsonNode> sanitized = ArgumentCaptor.forClass(JsonNode.class);
+        verify(service).query(sanitized.capture(), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull());
+        JsonNode params = sanitized.getValue().at("/queries/tile/params");
+        assertEquals(mapper.readTree(
+                "{\"wards\":[\"W1\",\"W2\"],\"serviceCodes\":[\"A\",\"B\"],\"departments\":[\"ROADS\"]}"),
+                params);
     }
 
     @Test
@@ -341,8 +371,10 @@ public class AnalyticsControllerPublicTest {
                 "{\"compare\":\"prior\"}",                     // companion fan-out
                 "{\"series\":\"daily\"}",
                 "{\"window\":\"all\"}",                        // window override
-                "{\"ward\":[\"W1\",\"W2\"]}",                 // non-scalar
+                "{\"ward\":[\"W1\",\"W2\"]}",                 // non-scalar on scalar key
                 "{\"ward\":\"   \"}",                          // blank
+                "{\"wards\":[]}",                              // empty multi-select
+                "{\"ward\":\"W1\",\"wards\":[\"W2\"]}",       // scalar+plural collision
                 "{\"dateFrom\":\"01/07/2026\"}",               // not an ISO day
                 "{\"dateFrom\":\"2026-07-01\"}",               // incomplete range
                 "{\"dateTo\":\"2026-07-31\"}",                 // incomplete range

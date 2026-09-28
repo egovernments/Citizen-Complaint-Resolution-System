@@ -28,13 +28,17 @@ import { createPortal } from "react-dom";
  *     body-level styling.
  *
  * Behavior owned here so consumers stay declarative:
- *   - open/close state, click-outside close, Escape/Tab close (refocusing the
+ *   - open/close state, click-outside close, Escape close (refocusing the
  *     anchor), body-portal + positioning;
+ *   - `variant="menu"` (default): Tab also closes (action menus / single-pick
+ *     lists). `variant="dialog"`: Tab moves through search / options / footer
+ *     Apply controls without closing — required for staged multi-selects (#1455);
  *   - keyboard navigation: ArrowUp/ArrowDown/Home/End rove DOM focus across
  *     every [data-menu-item] inside the panel (Enter/Space activate natively —
  *     items are real <button>s); ArrowDown/ArrowUp on the closed chip opens;
- *   - initial focus: the selected item when there is one (which also scrolls
- *     it into view in long lists), else the first item.
+ *   - initial focus: [data-popover-autofocus] (e.g. search), else the selected
+ *     item when there is one (which also scrolls it into view in long lists),
+ *     else the first item.
  *
  * Dependency-free and SSR-safe: the panel only portals when `document`
  * exists, and a closed chip renders fine under ReactDOMServer. RGL note: the
@@ -51,6 +55,8 @@ const GAP_PX = 6;
 const VIEWPORT_PAD_PX = 8;
 const MIN_PANEL_MAX_PX = 64;
 const ITEM_SELECTOR = "[data-menu-item]:not(:disabled)";
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const CaretIcon = () => (
   <svg
@@ -102,30 +108,56 @@ const ChevronRightIcon = () => (
 );
 
 /**
- * One menu row. `selected` (true/false) makes it a menuitemradio with a
+ * One menu/list row. `selected` (true/false) makes it checkable with a
  * trailing check when on; leave it undefined for plain action/navigation
  * rows. `descend` marks an interior tree row: trailing chevron, always a
- * plain menuitem (activating it navigates within the panel, it is not a
+ * plain action (activating it navigates within the panel, it is not a
  * checkable option itself — but it still shows the selected treatment when
  * `selected` is passed, e.g. the applied subtree's own row, announced via
- * aria-current since menuitem carries no aria-checked).
+ * aria-current since plain menuitem carries no aria-checked).
+ *
+ * `semantics="menu"` (default): menuitem / menuitemradio for action menus.
+ * `semantics="dialog"`: plain buttons with aria-pressed for staged multi-select
+ * dialogs — listbox/option is invalid here (descend rows and footer buttons are
+ * not listbox children; option must not mix with menuitem).
  */
 export const PopoverMenuItem = ({
   selected,
+  multiple = false,
   descend = false,
   muted = false,
   title,
   className = "",
   onSelect,
   children,
+  semantics = "menu",
 }) => {
   const checkable = !descend && selected !== undefined;
+  const inDialog = semantics === "dialog";
+  let role;
+  let ariaChecked;
+  let ariaSelected;
+  let ariaPressed;
+  let ariaCurrent;
+  if (inDialog) {
+    // Native button — no menu/listbox roles inside dialog multi-select panels.
+    role = undefined;
+    ariaPressed = checkable || (multiple && selected !== undefined) ? !!selected : undefined;
+    ariaCurrent = !checkable && !multiple && selected ? "true" : undefined;
+  } else {
+    role = "menuitem";
+    if (checkable) role = "menuitemradio";
+    ariaChecked = checkable ? !!selected : undefined;
+    ariaCurrent = !checkable && selected ? "true" : undefined;
+  }
   return (
     <button
       type="button"
-      role={checkable ? "menuitemradio" : "menuitem"}
-      aria-checked={checkable ? !!selected : undefined}
-      aria-current={!checkable && selected ? "true" : undefined}
+      role={role}
+      aria-checked={ariaChecked}
+      aria-selected={ariaSelected}
+      aria-pressed={ariaPressed}
+      aria-current={ariaCurrent}
       data-menu-item=""
       data-selected={selected ? "true" : undefined}
       title={title}
@@ -166,12 +198,15 @@ const PopoverMenu = ({
   panelWidth = 240,
   chipClassName = "",
   panelClassName = "",
+  /** "menu" = action/single-pick (Tab closes). "dialog" = searchable multi-select (Tab stays). */
+  variant = "menu",
   children,
 }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const anchorRef = useRef(null);
   const panelRef = useRef(null);
+  const isDialog = variant === "dialog";
 
   const close = useCallback((opts = {}) => {
     setOpen(false);
@@ -249,13 +284,14 @@ const PopoverMenu = ({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [open, close]);
 
-  // Initial focus: selected item (scrolled into view) else first item.
+  // Initial focus: autofocus target (search), else selected item, else first item.
   useEffect(() => {
     if (!open) return undefined;
     const id = requestAnimationFrame(() => {
       const root = panelRef.current;
       if (!root) return;
       const target =
+        root.querySelector("[data-popover-autofocus]") ||
         root.querySelector('[data-menu-item][data-selected="true"]') ||
         root.querySelector(ITEM_SELECTOR);
       target?.focus();
@@ -264,9 +300,34 @@ const PopoverMenu = ({
   }, [open]);
 
   const handlePanelKeyDown = (event) => {
-    if (event.key === "Escape" || event.key === "Tab") {
+    if (event.key === "Escape") {
       event.preventDefault();
       close();
+      return;
+    }
+    // Menu: Tab dismisses. Dialog: Tab cycles search → options → Apply without closing.
+    if (event.key === "Tab") {
+      if (!isDialog) {
+        event.preventDefault();
+        close();
+        return;
+      }
+      const root = panelRef.current;
+      if (!root) return;
+      const focusables = Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+        (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true"
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
       return;
     }
     if (
@@ -274,6 +335,13 @@ const PopoverMenu = ({
       event.key !== "ArrowUp" &&
       event.key !== "Home" &&
       event.key !== "End"
+    ) {
+      return;
+    }
+    // Let the search input keep caret moves on Home/End; arrows still rove the list.
+    if (
+      (event.key === "Home" || event.key === "End") &&
+      event.target instanceof HTMLInputElement
     ) {
       return;
     }
@@ -309,7 +377,7 @@ const PopoverMenu = ({
         type="button"
         ref={anchorRef}
         disabled={disabled}
-        aria-haspopup="menu"
+        aria-haspopup={isDialog ? "dialog" : "menu"}
         aria-expanded={open}
         aria-label={ariaLabel}
         title={chipTitle}
@@ -330,7 +398,8 @@ const PopoverMenu = ({
         ? createPortal(
             <div
               ref={panelRef}
-              role="menu"
+              role={isDialog ? "dialog" : "menu"}
+              aria-modal={isDialog ? "true" : undefined}
               aria-label={ariaLabel}
               className={`dashboard-root dashboard-popover-panel${panelClassName ? ` ${panelClassName}` : ""}`}
               style={{

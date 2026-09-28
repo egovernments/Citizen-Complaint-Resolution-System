@@ -1,8 +1,9 @@
-import { getFiltersStorageKey, getSubMetricStorageKey } from "./dashboardConfig";
 import {
-  buildDefaultFilters,
-  sanitizeFilters,
-} from "./globalFilterGroups";
+  getFiltersStorageKey,
+  getLegacyFiltersStorageKey,
+  getSubMetricStorageKey,
+} from "./dashboardConfig";
+import { buildDefaultFilters, sanitizeFilters } from "./globalFilterGroups";
 
 const TIME_WINDOW_METRIC_IDS = [];
 
@@ -28,7 +29,9 @@ function migrateTimeWindowFromLegacy(timeZone) {
 
 export function loadDashboardFilters(timeZone) {
   try {
-    const raw = localStorage.getItem(getFiltersStorageKey());
+    const raw =
+      localStorage.getItem(getFiltersStorageKey()) ??
+      localStorage.getItem(getLegacyFiltersStorageKey());
     if (raw) {
       return sanitizeFilters(JSON.parse(raw), {}, timeZone);
     }
@@ -36,7 +39,11 @@ export function loadDashboardFilters(timeZone) {
     /* fall through */
   }
 
-  return sanitizeFilters({ timeWindow: migrateTimeWindowFromLegacy(timeZone) }, {}, timeZone);
+  return sanitizeFilters(
+    { timeWindow: migrateTimeWindowFromLegacy(timeZone) },
+    {},
+    timeZone
+  );
 }
 
 export function clearDashboardFilters(timeZone) {
@@ -58,12 +65,10 @@ export function reconcileFiltersWithOptions(filters, filterOptions, timeZone) {
   const safe = filters ?? buildDefaultFilters(timeZone);
   const next = sanitizeFilters(safe, filterOptions, timeZone);
   const changed =
-    next.geography !== safe.geography ||
-    next.complaintType !== safe.complaintType ||
-    // The tree filter's companions can be repaired (path backfilled, leaf
-    // re-derived) even when the code survives — must propagate too.
-    next.complaintTypePath !== safe.complaintTypePath ||
-    next.complaintTypeLeaf !== safe.complaintTypeLeaf ||
+    JSON.stringify(next.geographies) !== JSON.stringify(safe.geographies) ||
+    JSON.stringify(next.complaintTypes) !==
+      JSON.stringify(safe.complaintTypes) ||
+    JSON.stringify(next.departments) !== JSON.stringify(safe.departments) ||
     next.dateFrom !== safe.dateFrom ||
     next.dateTo !== safe.dateTo;
 

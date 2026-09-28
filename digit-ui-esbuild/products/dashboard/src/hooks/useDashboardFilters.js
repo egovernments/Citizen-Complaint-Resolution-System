@@ -6,7 +6,10 @@ import {
   reconcileFiltersWithOptions,
   resolveSubMetricId as resolveSubMetricIdForMetric,
 } from "../config/dashboardFilters";
-import { normalizeComplaintTypeValue } from "../utils/complaintTypeTree";
+import {
+  normalizeHierarchySelections,
+  normalizeStringList,
+} from "../utils/multiSelectFilters";
 import { buildDefaultFilters } from "../config/globalFilterGroups";
 
 /** `timeZone` is the already-resolved dashboard config zone (see AdminDashboard). */
@@ -35,19 +38,10 @@ export function useDashboardFilters({ persistent = true, timeZone } = {}) {
     (groupId, value) => {
       setFilters((prev) => {
         let next;
-        if (groupId === "complaintType") {
-          // Tree-traversal type filter: the widget sends the { code, path,
-          // leaf } node selection (APPLY-ON-SELECT); the flat fallback select
-          // still sends a bare leaf-code string. Persist the trio atomically
-          // so leaf → serviceCode / interior → complaintPath resolves without
-          // waiting for the MDMS tree.
-          const selection = normalizeComplaintTypeValue(value);
-          next = {
-            ...prev,
-            complaintType: selection.code,
-            complaintTypePath: selection.path,
-            complaintTypeLeaf: selection.leaf,
-          };
+        if (groupId === "geographies" || groupId === "complaintTypes") {
+          next = { ...prev, [groupId]: normalizeHierarchySelections(value) };
+        } else if (groupId === "departments") {
+          next = { ...prev, departments: normalizeStringList(value) };
         } else {
           next = { ...prev, [groupId]: value };
         }

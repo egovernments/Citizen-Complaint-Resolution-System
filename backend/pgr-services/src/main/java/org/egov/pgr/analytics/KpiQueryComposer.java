@@ -14,7 +14,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -46,9 +49,18 @@ import java.util.regex.Pattern;
  *   <li>{@code ward} — a boundary/ward code; narrows to {@code ward_code = ?} <em>iff</em> the grain
  *       has a filterable {@code ward_code}. A client narrowing WITHIN the user's RBAC scope; it can
  *       never widen (row-scope is still injected on top by {@link AnalyticsPlanner#plan}).</li>
+ *   <li>{@code wards} — the multi-select form of {@code ward}; a bounded non-empty string array
+ *       narrowed with {@code ward_code IN (...)}, with every literal still JDBC-bound.</li>
  *   <li>{@code serviceCode} — a complaint type LEAF; narrows to {@code service_code = ?} iff
  *       filterable. This stays the param for leaf selections (exact match, works on every grain
  *       incl. daily); {@code complaintPath} below is for interior nodes only.</li>
+ *   <li>{@code serviceCodes} — the multi-select form of {@code serviceCode}; hierarchy selections
+ *       are expanded by the dashboard to their ABAC-scoped exact leaf codes and narrowed with
+ *       {@code service_code IN (...)}, so multi-select works on facts, events and daily.</li>
+ *   <li>{@code departments} — selected department codes narrowed with
+ *       {@code department_code IN (...)}. This remains an additional client narrowing: the
+ *       server-resolved department scope is independently applied by the planner, so the two lists
+ *       intersect and a request can never widen ABAC access.</li>
  *   <li>{@code complaintPath} — a complaint-hierarchy INTERIOR node's dot-path (e.g.
  *       {@code SANITATION.SEWAGE}); narrows to the node's whole subtree via a delimiter-guarded
  *       {@code complaint_node_path} subtree predicate ({@code = ? OR LIKE ?||'.%'}) iff the grain
@@ -59,6 +71,13 @@ import java.util.regex.Pattern;
  *       {@code paramsIgnored:["complaintPath"]} on the result envelope) so the FE can flag the
  *       widget as unfiltered. Rows with a NULL path (nodes whose own code contains '.', see the
  *       #1111 migration; flat tenants) never match a subtree filter.</li>
+ *   <li>{@code boundaryPath} — a boundary-hierarchy INTERIOR node's pipe-path (e.g.
+ *       {@code mz|maputo_cidade|distrito_x}; CCSD-2171 geography drill-down). Mirrors
+ *       {@code complaintPath} on the {@code boundary_path} column with a {@code |}-guarded
+ *       subtree predicate ({@code = ? OR LIKE ?||'|%'}); alphabet adds {@code |}, cap 512.
+ *       All three grains carry the column prefix-filterable, so unlike {@code complaintPath}
+ *       it applies on daily too. Leaf (ward) selections keep using {@code ward} (exact
+ *       {@code ward_code} eq) — this param is additive for interior nodes only.</li>
  *   <li>{@code compare: "prior"} — instead of the selected/default range, apply the
  *       <em>immediately-preceding equal-duration</em> range on the def's time column. Mirrors the FE
  *       {@code priorPeriodCreatedAtFilter()} (~1586) / {@code priorPeriodEndDateIso()} (~1360) and the
@@ -110,6 +129,10 @@ public class KpiQueryComposer {
     private static final long MS_PER_DAY = 86_400_000L;
     /** Sparkline daily-series safety cap, matching the FE {@code Math.min(366, ...)}. */
     private static final int MAX_SERIES_DAYS = 366;
+    /** Maximum options emitted by the scoped DISTINCT filter-option query. */
+    static final int MAX_MULTI_FILTER_VALUES = 300;
+    /** Generous bound for one ward/service/department code; values remain JDBC-bound. */
+    static final int MAX_MULTI_FILTER_VALUE_LENGTH = 512;
     /**
      * Trend axis for a pinned def's sparkline when the request carries neither a date range nor a
      * window param — a pinned window is too narrow to be a trend (dtd would be one point).
@@ -130,6 +153,19 @@ public class KpiQueryComposer {
      */
     private static final Pattern COMPLAINT_PATH_VALUE =
             Pattern.compile("^[A-Za-z0-9._/\\-]{1," + MAX_COMPLAINT_PATH_LENGTH + "}$");
+    /**
+     * {@code boundaryPath} length cap — boundary paths are longer than complaint paths
+     * (pipe-joined lowercase boundary codes, one segment per hierarchy level, each segment
+     * itself underscore-joined, e.g. {@code mz|maputo_cidade|distrito_x|municipio_maputo_katembe}).
+     */
+    static final int MAX_BOUNDARY_PATH_LENGTH = 512;
+    /**
+     * The boundary path alphabet: the complaint-path alphabet plus {@code |}, the
+     * boundary_relationship materialized-path segment delimiter. Same defense-in-depth reasoning
+     * as {@link #COMPLAINT_PATH_VALUE}.
+     */
+    private static final Pattern BOUNDARY_PATH_VALUE =
+            Pattern.compile("^[A-Za-z0-9._/|\\-]{1," + MAX_BOUNDARY_PATH_LENGTH + "}$");
 
     private final AnalyticsCatalog catalog;
 
@@ -263,17 +299,31 @@ public class KpiQueryComposer {
      */
     private void applyNarrowingParams(ObjectNode next, Grain g, JsonNode params, List<String> paramsIgnoredOut) {
         // ---- narrowing dimension filters (only if the grain supports the column) ----
-        if (params.hasNonNull("ward")) {
+        rejectScalarAndPlural(params, "ward", "wards");
+        rejectScalarAndPlural(params, "serviceCode", "serviceCodes");
+
+        if (params.hasNonNull("wards")) {
+            applyInFilter(next, g, "ward_code", stringListParam(params, "wards"));
+        } else if (params.hasNonNull("ward")) {
             String ward = params.get("ward").asText();
             if (!ward.isEmpty() && !"all".equals(ward)) applyEqFilter(next, g, "ward_code", ward);
         }
-        if (params.hasNonNull("serviceCode")) {
+        if (params.hasNonNull("serviceCodes")) {
+            applyInFilter(next, g, "service_code", stringListParam(params, "serviceCodes"));
+        } else if (params.hasNonNull("serviceCode")) {
             String svc = params.get("serviceCode").asText();
             if (!svc.isEmpty() && !"all".equals(svc)) applyEqFilter(next, g, "service_code", svc);
+        }
+        if (params.hasNonNull("departments")) {
+            applyInFilter(next, g, "department_code", stringListParam(params, "departments"));
         }
         if (params.hasNonNull("complaintPath")) {
             String path = params.get("complaintPath").asText();
             if (!path.isEmpty()) applyComplaintPath(next, g, path, paramsIgnoredOut);
+        }
+        if (params.hasNonNull("boundaryPath")) {
+            String path = params.get("boundaryPath").asText();
+            if (!path.isEmpty()) applyBoundaryPath(next, g, path, paramsIgnoredOut);
         }
 
         // ---- hierarchy-level rollup (#1111): rewrite service_code dimensions to the level expr ----
@@ -761,6 +811,31 @@ public class KpiQueryComposer {
         mergeableFilterObject(query, "complaint_node_path").put("subtree", path);
     }
 
+    /**
+     * Narrow to a boundary-hierarchy INTERIOR node's whole subtree (CCSD-2171: province/district
+     * selections on the dashboard's geography drill-down). Mirrors {@link #applyComplaintPath}
+     * on the {@code boundary_path} column: a delimiter-guarded {@code subtree} predicate
+     * ({@code = ? OR LIKE ?||'|%'} — boundary paths are pipe-joined, see the grain MV's
+     * {@code ancestralmaterializedpath || '|' || code}), hard {@code invalid_param} on a
+     * malformed value, and a REPORTED skip on a grain without the column. Today all three grains
+     * (facts/events/daily) carry {@code boundary_path} prefix-filterable, so the skip arm is a
+     * guard for future grains rather than a live path.
+     *
+     * <p>Leaf (ward) selections must keep using the existing {@code ward} param — exact
+     * {@code ward_code} match; {@code boundaryPath} is additive for interior nodes only.
+     */
+    private void applyBoundaryPath(ObjectNode query, Grain g, String path, List<String> paramsIgnoredOut) {
+        if (!BOUNDARY_PATH_VALUE.matcher(path).matches())
+            throw new IllegalArgumentException("invalid_param: boundaryPath must be a pipe-joined boundary path over"
+                    + " [A-Za-z0-9._/|-], at most " + MAX_BOUNDARY_PATH_LENGTH + " chars");
+        if (!g.prefixFilterable.contains("boundary_path")) {
+            log.debug("grain '{}' has no boundary_path; ignoring boundaryPath param (reported)", g.name);
+            reportIgnored(paramsIgnoredOut, "boundaryPath");
+            return;
+        }
+        mergeableFilterObject(query, "boundary_path").put("subtree", path);
+    }
+
     // ---- narrowing eq filter ----
 
     /** Add {@code col = value} to the query's filters, but only if {@code col} is filterable on the grain. */
@@ -770,6 +845,49 @@ public class KpiQueryComposer {
             return;   // graceful skip — never inject an unknown column.
         }
         mergeableFilterObject(query, col).put("eq", value);
+    }
+
+    /** Add {@code col IN (...)} after validating and de-duplicating a dashboard multi-select. */
+    private void applyInFilter(ObjectNode query, Grain g, String col, List<String> values) {
+        if (!g.filterable.contains(col)) {
+            log.debug("grain '{}' does not allow filtering on '{}'; skipping narrowing param", g.name, col);
+            return;
+        }
+        ArrayNode in = query.arrayNode();
+        values.forEach(in::add);
+        mergeableFilterObject(query, col).set("in", in);
+    }
+
+    /**
+     * Parse one plural filter param. Presence is deliberate: an empty/malformed selection must be
+     * rejected instead of silently turning into an unfiltered dashboard response.
+     */
+    private List<String> stringListParam(JsonNode params, String name) {
+        JsonNode raw = params.get(name);
+        if (raw == null || !raw.isArray() || raw.size() == 0)
+            throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty string array");
+        if (raw.size() > MAX_MULTI_FILTER_VALUES)
+            throw new IllegalArgumentException("invalid_param: " + name + " may contain at most "
+                    + MAX_MULTI_FILTER_VALUES + " values");
+
+        Set<String> unique = new LinkedHashSet<>();
+        for (JsonNode item : raw) {
+            if (!item.isTextual())
+                throw new IllegalArgumentException("invalid_param: " + name + " values must be strings");
+            String value = item.asText().trim();
+            if (value.isEmpty() || "all".equals(value) || value.length() > MAX_MULTI_FILTER_VALUE_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name
+                        + " values must be non-empty codes no longer than " + MAX_MULTI_FILTER_VALUE_LENGTH);
+            unique.add(value);
+        }
+        return new ArrayList<>(unique);
+    }
+
+    /** A caller must use either the legacy scalar or the plural form, never both. */
+    private void rejectScalarAndPlural(JsonNode params, String scalar, String plural) {
+        if (params.hasNonNull(scalar) && params.hasNonNull(plural))
+            throw new IllegalArgumentException("invalid_param: use either " + scalar + " or " + plural
+                    + ", not both");
     }
 
     // ---- helpers ----
