@@ -8,8 +8,11 @@
  * English seed text of the key, so a tenant with no localization still reads
  * as English rather than as raw keys.
  *
- * The BFF filters the tenant's localization to these keys (plus the dynamic
- * `TENANT_TENANTS_*` and privacy-policy keys, see `dynamicMessageKeys`).
+ * The BFF filters the tenant's localization to these keys (its
+ * `LOGIN_MESSAGE_KEYS`, kept in step by the BFF's
+ * `tests/unit/login-message-keys.test.ts`) plus the keys it derives from the
+ * tenant's records (`dynamicMessageKeys`: `TENANT_TENANTS_*`, the mobile
+ * rule's errorMessage, LoginConfig texts/bannerImages, PrivacyPolicy).
  */
 export const LOGIN_MESSAGE_FALLBACKS = {
     // Employee (pages/employee/Login/login.js, PrivacyComponent.js)

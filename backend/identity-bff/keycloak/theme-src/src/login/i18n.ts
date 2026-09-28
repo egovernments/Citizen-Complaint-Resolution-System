@@ -51,7 +51,9 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitOtpExpired: "The OTP has expired. Request a new one.",
             digitTooManyAttempts: "Too many attempts. Please try again later.",
             digitResendTooSoon: "Please wait before requesting another OTP.",
-            digitSmsSendFailed: "Failed to send OTP. Please try again."
+            digitSmsSendFailed: "Failed to send OTP. Please try again.",
+            // SMS body the SPI sends ({0} = code, {1} = minutes); code first for autofill.
+            digitSmsOtpText: "{0} is your verification code. It expires in {1} minutes. Do not share it with anyone."
         },
         fr: {
             digitErrorTitle: "Un problème est survenu",
@@ -89,7 +91,8 @@ const { useI18n, ofTypeI18n } = i18nBuilder
             digitOtpExpired: "Le code OTP a expiré. Demandez-en un nouveau.",
             digitTooManyAttempts: "Trop de tentatives. Veuillez réessayer plus tard.",
             digitResendTooSoon: "Veuillez patienter avant de demander un nouveau code OTP.",
-            digitSmsSendFailed: "Échec de l'envoi du code OTP. Veuillez réessayer."
+            digitSmsSendFailed: "Échec de l'envoi du code OTP. Veuillez réessayer.",
+            digitSmsOtpText: "{0} est votre code de vérification. Il expire dans {1} minutes. Ne le partagez avec personne."
         }
     })
     .build();
