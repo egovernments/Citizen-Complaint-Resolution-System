@@ -30,7 +30,9 @@ const {
   isIdentityBffAuth,
   isValidTenantSlug,
   legacyMultiRootTenantEnabled,
+  mdmsAppId,
   parseTenantRoute,
+  rebaseAppUrl,
   resolveTenantRoute,
 } = require(OUT);
 
@@ -141,4 +143,25 @@ test("tenant route resolver fails closed for missing and inconsistent mappings",
     })),
     /could not be verified/i,
   );
+});
+
+test("MDMS app id stays separate from the tenant route base", () => {
+  global.window = {
+    globalConfigs: { getConfig: (key) => (key === "CONTEXT_PATH" ? "digit-ui" : undefined) },
+    __digitTenantContext: { appBasePath: "bomet/digit-ui" },
+  };
+  try {
+    assert.equal(mdmsAppId(), "digit-ui");
+    assert.equal(rebaseAppUrl("/digit-ui/citizen/pgr/create-complaint"), "/bomet/digit-ui/citizen/pgr/create-complaint");
+    assert.equal(rebaseAppUrl("/digit-ui/citizen?x=1"), "/bomet/digit-ui/citizen?x=1");
+    // Already-rebased and foreign URLs are left alone (idempotent on cached MDMS rows).
+    assert.equal(rebaseAppUrl("/bomet/digit-ui/citizen/pgr"), "/bomet/digit-ui/citizen/pgr");
+    assert.equal(rebaseAppUrl("/digit-uix/citizen"), "/digit-uix/citizen");
+    assert.equal(rebaseAppUrl("https://example.test/digit-ui/citizen"), "https://example.test/digit-ui/citizen");
+    // Legacy routes (no tenant context) are unchanged.
+    assert.equal(rebaseAppUrl("/digit-ui/citizen/pgr", null), "/digit-ui/citizen/pgr");
+  } finally {
+    delete global.window;
+  }
+  assert.equal(mdmsAppId(), "digit-ui");
 });

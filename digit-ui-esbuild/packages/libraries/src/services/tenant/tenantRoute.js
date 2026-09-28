@@ -93,6 +93,25 @@ export function currentAppBasePath() {
     "digit-ui";
 }
 
+/**
+ * The MDMS app identifier (`digit-ui` in ACCESSCONTROL actions such as
+ * `digit-ui-card`). Unlike the route base it never carries the tenant slug.
+ */
+export function mdmsAppId() {
+  return (typeof window !== "undefined" && window.globalConfigs?.getConfig?.("CONTEXT_PATH")) ||
+    "digit-ui";
+}
+
+/** Rebase an MDMS `/digit-ui/...` URL onto the active tenant route base. */
+export function rebaseAppUrl(url, context = tenantContext()) {
+  const base = context?.appBasePath;
+  const appId = mdmsAppId();
+  if (!base || typeof url !== "string") return url;
+  return url === `/${appId}` || url.startsWith(`/${appId}/`) || url.startsWith(`/${appId}?`)
+    ? `/${base}${url.slice(appId.length + 1)}`
+    : url;
+}
+
 export function currentTenantId() {
   return tenantContext()?.tenantId || null;
 }

@@ -99,7 +99,8 @@ const Home = ({
     [
       {
         name: "actions-test",
-        filter: `[?(@.url == '${Digit.Utils.getMultiRootTenant() ? window.globalPath : window.contextPath}-card')]`,
+        // MDMS keys actions by app id (`digit-ui-card`), not the tenant route base.
+        filter: `[?(@.url == '${Digit.Utils.getMultiRootTenant() ? window.globalPath : Digit.Utils.mdmsAppId()}-card')]`,
       },
     ],
     {

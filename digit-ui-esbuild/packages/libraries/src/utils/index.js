@@ -13,7 +13,7 @@ import * as parsingUtils from "../services/atoms/Utils/ParsingUtils"
 import { iconRender } from "./iconRender";
 import {getFieldIdName} from "./field";
 import { DEFAULT_MOBILE_PATTERN } from "../constants/mobileValidation";
-import { legacyMultiRootTenantEnabled } from "../services/tenant/tenantRoute";
+import { legacyMultiRootTenantEnabled, mdmsAppId, rebaseAppUrl } from "../services/tenant/tenantRoute";
 
 const GetParamFromUrl = (key, fallback, search) => {
   if (typeof window !== "undefined") {
@@ -575,5 +575,7 @@ export default {
   sandboxAccess,
   iconRender,
   transformURL,
+  mdmsAppId,
+  rebaseAppUrl,
   getFieldIdName
 };
