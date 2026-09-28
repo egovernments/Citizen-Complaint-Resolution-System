@@ -219,6 +219,13 @@ describe("digit-citizen login-sms-otp.ftl", () => {
         expect(next).toBeEnabled();
         expect(container.querySelector("#kc-otp-form")).toContainElement(hidden);
     });
+        // The first box keeps the old digit and the new one side by side.
+        fireEvent.change(boxes[0]!, { target: { value: "17" } });
+        expect(hidden.value).toBe("723456");
+        expect(document.activeElement).toBe(boxes[1]);
+        fireEvent.change(boxes[0]!, { target: { value: "97" } });
+        expect(hidden.value).toBe("923456");
+    });
 
     it("counts down 30s, then offers a resend that posts resend=true", async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -255,16 +262,30 @@ describe("digit-citizen login-sms-otp.ftl", () => {
 });
 
 describe("digit-citizen login-phone-profile.ftl", () => {
-    it("asks for a single name, validated like digit-ui, posted as firstName", async () => {
+    it("asks for a single name, validated like the server, posted as firstName", async () => {
         const { container } = await renderDigit("digit-citizen", "login-phone-profile.ftl");
         expect(screen.getByRole("heading", { name: "Provide your Name" })).toBeInTheDocument();
         const input = container.querySelector<HTMLInputElement>("#firstName")!;
         expect(input).toHaveAttribute("name", "firstName");
-        fireEvent.change(input, { target: { value: "Jane 7" } });
+        fireEvent.change(input, { target: { value: "Jane <b>" } });
         fireEvent.blur(input);
         expect(container.querySelector("#firstName-error")).toHaveTextContent("Please enter a valid Name");
         fireEvent.change(input, { target: { value: "Jane Chebet" } });
         expect(container.querySelector("#firstName-error")).toBeNull();
+    });
+
+    it("accepts the Unicode names the server accepts and rejects its prohibited characters", async () => {
+        const { container } = await renderDigit("digit-citizen", "login-phone-profile.ftl");
+        const input = container.querySelector<HTMLInputElement>("#firstName")!;
+        fireEvent.blur(input);
+        for (const ok of ["João", "O’Brien", "O'Brien", "Anne-Marie", "Zoë  Wanjiru "]) {
+            fireEvent.change(input, { target: { value: ok } });
+            expect(container.querySelector("#firstName-error"), ok).toBeNull();
+        }
+        for (const bad of ["a/b", "x=y", "(Jane)", "Jane;", "Jane$", "Ja\u0007ne"]) {
+            fireEvent.change(input, { target: { value: bad } });
+            expect(container.querySelector("#firstName-error"), bad).not.toBeNull();
+        }
     });
 });
 

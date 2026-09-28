@@ -3,9 +3,15 @@ import type { KcContext } from "../../../login/KcContext";
 import { useBranding } from "../../branding/BrandingContext";
 import type { DigitPageProps } from "../../shared/kc";
 
-/** pages/citizen/Login/config.js step 3 validation. */
-const NAME_PATTERN = /^[A-Za-z]+( [A-Za-z]+)*$/;
+/**
+ * The server's rule (DigitPhoneProfileAuthenticator, Keycloak's person-name
+ * validator): any Unicode letters, apostrophes, hyphens and so on, minus
+ * these prohibited characters, checked after whitespace is collapsed. Java's
+ * `\v` and `\p{Cntrl}` are spelled out as code points.
+ */
+const NAME_PROHIBITED = /[<>&"\n\x0B\f\r\x85\u2028\u2029$%!#?§;*~/\\|^=[\]{}()\x00-\x1F\x7F]/;
 const NAME_MAX = 50;
+const cleanName = (value: string) => value.trim().replace(/\s+/g, " ");
 
 /**
  * login-phone-profile.ftl (new citizens only): pages/citizen/Login/SelectName.js,
@@ -23,8 +29,8 @@ export default function PhoneProfile(props: DigitPageProps<Extract<KcContext, { 
     const [name, setName] = useState(kcContext.firstName ?? "");
     const [touched, setTouched] = useState(messagesPerField.existsError("firstName"));
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const trimmed = name.trim();
-    const valid = trimmed.length >= 1 && trimmed.length <= NAME_MAX && NAME_PATTERN.test(trimmed);
+    const trimmed = cleanName(name);
+    const valid = trimmed.length >= 1 && trimmed.length <= NAME_MAX && !NAME_PROHIBITED.test(trimmed);
     const showError = touched && !valid;
 
     return (
