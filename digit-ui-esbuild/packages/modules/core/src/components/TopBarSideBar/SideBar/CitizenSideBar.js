@@ -404,18 +404,11 @@ export const CitizenSideBar = ({
       : []),
   ];
 
-  const hamburgerItems = [
-    // The employee drawer also renders logged out (SideBar/index.js falls to
-    // this branch when there is no access_token), and `login-btn` used to reach
-    // it inside the Modules group that employees no longer get. Without this
-    // there is no way to sign in from the drawer on a phone.
-    ...(isEmployee && !user?.access_token
-      ? [{ label: t("CORE_COMMON_LOGIN"), type: "custom", icon: "Login", key: "login" }]
-      : []),
-    // The rail's own rows when the app supplies them (both apps do now), so
-    // the drawer and the desktop rail list the same destinations. The bare
-    // HOME row is only the fallback for a caller that passes none.
-    ...(isEmployee || navItems.length
+  // The rail's own rows when the app supplies them (both apps do now), so
+  // the drawer and the desktop rail list the same destinations. The bare
+  // HOME row is only the fallback for a caller that passes none.
+  const navRows =
+    isEmployee || navItems.length
       ? navItems
       : [
           {
@@ -425,11 +418,26 @@ export const CitizenSideBar = ({
             type: "custom",
             key: "home",
           },
-        ]),
-    // One faint line between the navigation and the account rows, and no
-    // other lines in the drawer (#2038 mobile review).
-    ...(accountRows.length > 0 ? [{ type: "divider", key: "account-divider" }] : []),
-    ...accountRows,
+        ];
+  // One faint line under the last grouped section, as the desktop rail draws
+  // it, and no other lines in the drawer (#2038 mobile review). Rows after the
+  // sections (Dashboard, configured links) go under the line with the account
+  // rows; without sections the line sits above the account rows.
+  const splitAt = navRows.map((item) => item?.type).lastIndexOf("section") + 1;
+  const treeRows = splitAt > 0 ? navRows.slice(0, splitAt) : navRows;
+  const belowRows = [...(splitAt > 0 ? navRows.slice(splitAt) : []), ...accountRows];
+
+  const hamburgerItems = [
+    // The employee drawer also renders logged out (SideBar/index.js falls to
+    // this branch when there is no access_token), and `login-btn` used to reach
+    // it inside the Modules group that employees no longer get. Without this
+    // there is no way to sign in from the drawer on a phone.
+    ...(isEmployee && !user?.access_token
+      ? [{ label: t("CORE_COMMON_LOGIN"), type: "custom", icon: "Login", key: "login" }]
+      : []),
+    ...treeRows,
+    ...(treeRows.length > 0 && belowRows.length > 0 ? [{ type: "divider", key: "tree-divider" }] : []),
+    ...belowRows,
     // Only for a caller without rail rows: with them, the modules' sections,
     // the MDMS-configured links and Login are already above, and this group
     // would repeat them.

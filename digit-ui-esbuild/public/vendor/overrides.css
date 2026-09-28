@@ -8793,18 +8793,23 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:focus:not(:focus-visible) {
     outline: none;
   }
+  /* Vendor's `.clickable:hover` draws a 1px brand border, and on a touch
+   * screen hover sticks after the tap, so the button kept a blue box. */
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:is(:hover, :active) {
+    border: 0 !important;
+  }
   :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger svg {
     width: 20px !important;
     height: 20px !important;
   }
-  /* Crest on a white disc, as in the design. */
+  /* Crest on the same white rounded square as the desktop bar. */
   :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
     width: 38px !important;
     height: 38px !important;
     max-height: 38px !important;
     object-fit: contain;
     background: #ffffff;
-    border-radius: 50%;
+    border-radius: 8px;
     padding: 2px;
     box-sizing: border-box;
   }
@@ -8898,9 +8903,10 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   stroke: var(--color-primary-2, #2563EB) !important;
 }
 
-/* Drawer: one faint line between the navigation and the account rows, and no
- * other lines: not between rows, not under the profile, not around Logout or
- * the foot. */
+/* Drawer: one faint line under the last grouped section, and one over the eGov
+ * lockup (as the desktop rail has over its eGov band); no other lines, not
+ * between rows, not under the profile, not around Logout. The global `[class*="divider"]` rule adds a light grey top border
+ * to the separator, which is what made it read white; only its fill stays. */
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-profile,
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-item-child-wrapper,
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom,
@@ -8911,31 +8917,26 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-divider {
   height: 1px;
   margin: 8px 16px;
+  border: 0 !important;
   background: rgba(255, 255, 255, 0.14);
 }
-/* Foot, then Logout as a plain row at the very bottom, as designed. */
-:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot {
+/* Logout as a plain row, then the eGov lockup at the very bottom behind a
+ * faint line, as at the foot of the desktop rail. */
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom {
   order: 3;
-  margin-top: auto;
+  margin: auto 0 0 !important;
+  padding: 0 12px !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot {
+  order: 4;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px;
+  margin-top: 8px;
+  padding: 14px 28px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot .digit-sidebar-egov {
-  height: 22px;
-}
-:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-powered {
-  display: block;
-  height: 14px;
-  width: auto;
-  opacity: 0.85;
-}
-:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom {
-  order: 4;
-  margin: 0 !important;
-  padding: 0 12px 12px !important;
+  height: 20px;
 }
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
   width: 100% !important;
