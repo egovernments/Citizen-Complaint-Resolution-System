@@ -8725,3 +8725,1256 @@ html .header-dropdown-option:focus-visible {
 .citizen:has(.citizen-sign-in-card) .digit-topbar .digit-header-action-fields {
   margin-left: auto !important;
 }
+
+/* ==========================================================================
+ * Citizen "File a Complaint" (#2038 design). Desktop: a card with the
+ * numbered stepper, grouped panels and a footer of hint + Back / Next. Phone
+ * (up to 48rem): a "Step 1 of 3" strip with bars, flat panels on grey, and
+ * the footer pinned to the bottom with an icon-only Back. The submitted page
+ * (.cms-receipt) and a complaint's page (.cms-details) share the tokens.
+ * ========================================================================== */
+.cms-file,
+.cms-receipt,
+.cms-details {
+  /* The theme's own button tokens, as the shared Button reads them, so the
+   * accents here follow each tenant the way its buttons do. */
+  --cms-accent: var(--color-button-secondary-text, var(--color-primary-2, #2563EB));
+  --cms-fill: var(--color-button-primary-bg-default, var(--color-primary-2, #2563EB));
+  --cms-on-fill: var(--color-button-primary-text, #FFFFFF);
+  --cms-accent-soft: #F3F6FC;
+  --cms-accent-line: #C7D2E4;
+  --cms-ink: #111827;
+  --cms-ink-2: #374151;
+  --cms-muted: #6B7280;
+  --cms-line: #E5E7EB;
+  --cms-panel: #F9FAFB;
+  --cms-panel-line: #E9ECF2;
+  --cms-danger: #DC2626;
+  --cms-warn: #B45309;
+  --cms-ok: #137A3E;
+  color: var(--cms-ink);
+}
+/* The page's own inset, as My Complaints and All Services have theirs:
+ * nothing else sits between the bar or the rail and these pages. */
+.cms-file,
+.cms-receipt,
+.cms-details {
+  padding: 24px 24px 32px;
+}
+.cms-file-title {
+  margin-bottom: 18px;
+}
+/* The app's global button hover (a lifted shadow and a half-pixel press) is
+ * for real buttons; the stepper, links and pickers here are not those. */
+:is(.cms-step-mark, .cms-link-button, .cms-sheet-option):is(:hover, :active) {
+  box-shadow: none !important;
+  transform: none !important;
+}
+.cms-file .cms-mic-button:is(:hover, :active) {
+  box-shadow: 0 6px 16px rgba(17, 24, 39, 0.22) !important;
+  transform: none !important;
+}
+.cms-file-card {
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 14px;
+}
+
+/* Desktop stepper */
+.cms-stepper {
+  display: flex;
+  justify-content: center;
+  padding: 22px 28px;
+  border-bottom: 1px solid #EEF1F6;
+}
+.cms-stepper ol {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: max-content;
+}
+.cms-step:last-child {
+  flex: 0 0 auto;
+}
+.cms-step-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.cms-step-mark:disabled {
+  cursor: default;
+}
+.cms-step-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #D1D5DB;
+  background: #FFFFFF;
+  color: #9CA3AF;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.cms-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #9CA3AF;
+  white-space: nowrap;
+}
+.cms-step.current .cms-step-dot {
+  border-color: var(--cms-accent);
+  color: var(--cms-accent);
+}
+.cms-step.done .cms-step-dot {
+  border-color: var(--cms-fill);
+  background: var(--cms-fill);
+  color: var(--cms-on-fill);
+}
+.cms-step.current .cms-step-label,
+.cms-step.done .cms-step-label {
+  color: var(--cms-ink);
+}
+.cms-step.current .cms-step-label {
+  font-weight: 700;
+}
+.cms-step-line {
+  flex: 1;
+  min-width: 40px;
+  height: 3px;
+  margin: 0 14px 26px;
+  border-radius: 2px;
+  background: #D8DCE2;
+}
+.cms-step-line.done {
+  background: var(--cms-fill);
+}
+
+/* Phone strip: hidden on desktop */
+.cms-strip {
+  display: none;
+}
+
+.cms-file-body {
+  padding: 24px 28px;
+}
+.cms-step-pane.is-hidden {
+  display: none;
+}
+.cms-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.cms-section {
+  padding: 20px;
+  background: var(--cms-panel);
+  border: 1px solid var(--cms-panel-line);
+  border-radius: 12px;
+}
+.cms-section-head {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cms-ink-2);
+}
+.cms-section-hint {
+  margin: -8px 0 16px;
+  max-width: 620px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4B5563;
+}
+.cms-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cms-ink);
+}
+.cms-required {
+  color: var(--cms-danger);
+}
+
+.cms-file .cms-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.cms-file .cms-section-address .cms-field-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+/* The cascade carries an inline flex column; here its levels join the grid. */
+.cms-file .cms-field-grid > .pgr-boundary-cascade,
+.cms-file .cms-field-grid > .cms-hierarchy {
+  display: contents !important;
+}
+.cms-file .cms-section-address .cms-field-grid > :last-child {
+  grid-column: 1 / -1;
+}
+
+/* Description */
+.cms-textarea-wrap {
+  position: relative;
+}
+.cms-textarea-wrap .cms-textarea {
+  min-height: 150px;
+  /* A bare textarea takes the browser's monospace; this one is prose. */
+  font-family: inherit;
+  line-height: 1.55;
+}
+.cms-textarea-wrap.with-mic .cms-textarea {
+  padding-right: 76px;
+}
+.cms-mic-button {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cms-fill);
+  color: var(--cms-on-fill);
+  box-shadow: 0 6px 16px rgba(17, 24, 39, 0.22);
+  cursor: pointer;
+}
+.cms-mic-button:hover {
+  background: var(--color-button-primary-bg-hover, var(--cms-fill));
+}
+.cms-counter {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+
+/* Photos */
+/* Rules on the shared Button's own utilities (display, padding, fill) need a
+ * third class: Tailwind scopes those as `.v2-scope .x` and loads later. */
+.cms-file .cms-photos .cms-photo-button {
+  display: none;
+}
+.cms-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 34px 20px;
+  text-align: center;
+  background: #FFFFFF;
+  border: 1.5px dashed var(--cms-accent-line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.cms-drop:hover,
+.cms-drop.dragging {
+  border-color: var(--cms-accent);
+  background: var(--cms-accent-soft);
+}
+.cms-drop.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.cms-drop.disabled:hover {
+  border-color: var(--cms-accent-line);
+  background: #FFFFFF;
+}
+.cms-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #E8EDF7;
+  color: var(--cms-accent);
+}
+.cms-drop-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--cms-accent);
+}
+.cms-drop-hint {
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+.cms-field-error {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--cms-danger);
+}
+.cms-photo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 10px;
+}
+.cms-photo-thumb {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #E8EDF7;
+}
+.cms-photo-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.cms-photo-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--cms-ink);
+}
+.cms-photo-status {
+  font-size: 12px;
+  color: var(--cms-muted);
+}
+.cms-photo-status.failed {
+  color: var(--cms-danger);
+}
+.cms-link-button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cms-accent);
+  cursor: pointer;
+}
+
+/* Location: the map sits on the page, not in a panel */
+.cms-section-map {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.cms-section-map .cms-section-head {
+  font-size: 14px;
+  color: var(--cms-ink);
+  margin-bottom: 13px;
+}
+.cms-map {
+  /* Leaflet's panes and controls stack in here, not over the page. */
+  isolation: isolate;
+}
+/* GeoLocations is shared, so it is shaped from here rather than edited: its
+ * instruction line moves under the map as a small caption, and its frame
+ * (inline styles, hence the attribute match) takes the design's corners. */
+.cms-map > div {
+  display: flex;
+  flex-direction: column-reverse;
+  margin-bottom: 0 !important;
+}
+.cms-map > div > .card-label {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #4B5563;
+}
+.cms-map div[style*="border-radius: 20px"] {
+  border-color: var(--cms-line) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+.cms-pin-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.cms-pin-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #9CA3AF;
+}
+.cms-pin-icon.pinned {
+  background: #E8EDF7;
+  color: var(--color-primary-1, #14306B);
+}
+.cms-pin-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cms-pin-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cms-ink);
+}
+.cms-pin-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+
+/* Review */
+.cms-review-heading {
+  display: none;
+}
+.cms-review-body {
+  gap: 16px;
+}
+.cms-review-card {
+  padding: 18px 20px;
+  background: var(--cms-panel);
+  border: 1px solid var(--cms-panel-line);
+  border-radius: 12px;
+}
+.cms-review-head {
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cms-panel-line);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cms-ink);
+}
+.cms-review-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+}
+.cms-review-row {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.cms-review-row dt {
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+.cms-review-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--cms-ink);
+}
+.cms-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-attachment {
+  overflow: hidden;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 12px;
+}
+.cms-attachment img {
+  display: block;
+  width: 100%;
+  height: 104px;
+  object-fit: cover;
+  background: #EEF1F6;
+}
+.cms-attachment-name {
+  display: block;
+  overflow: hidden;
+  padding: 10px 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 500;
+}
+.cms-file-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #FEF2F2;
+  color: var(--cms-danger);
+  font-size: 13.5px;
+}
+
+/* Footer: why Next is held, then Back / Next */
+.cms-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px 20px;
+  border-top: 1px solid #EEF1F6;
+}
+.cms-hint {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--cms-warn);
+}
+.cms-footer-actions {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* Sheets: a dialog on desktop, a card at the foot of a phone screen. Above
+ * the top bar, which sits at z-index 9999999. */
+.cms-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.5);
+}
+.cms-sheet {
+  width: 100%;
+  max-width: 440px;
+  padding: 28px 24px 22px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  color: #111827;
+  animation: cmsRise 200ms ease-out;
+}
+.cms-sheet-head {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+.cms-sheet-hint {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6B7280;
+}
+.cms-sheet-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 22px;
+}
+.cms-sheet-actions > button {
+  flex: 1;
+}
+.cms-sheet-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+}
+.cms-sheet-stack .cms-sheet-actions {
+  gap: 10px;
+  margin-top: 0;
+}
+
+
+/* Voice recorder */
+.cms-voice {
+  text-align: center;
+}
+.cms-voice-live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.cms-voice-pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  margin: 22px auto 6px;
+}
+.cms-voice-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #DC2626;
+  animation: cmsPulse 1.8s ease-out infinite;
+}
+.cms-voice-ring.late {
+  animation-delay: 0.6s;
+}
+.cms-voice-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: #DC2626;
+  color: #FFFFFF;
+}
+.cms-voice-live.ready .cms-voice-dot {
+  background: #137A3E;
+}
+.cms-voice-live.error .cms-voice-dot {
+  background: #9CA3AF;
+}
+.cms-voice-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 46px;
+  margin-top: 8px;
+}
+.cms-voice-bars span {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: #C7D2E4;
+  transform-origin: center;
+  transform: scaleY(0.3);
+}
+.cms-voice-live.recording .cms-voice-bars span {
+  background: #DC2626;
+  animation-name: cmsBar;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.cms-voice-time {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+.cms-voice-text,
+.cms-voice-result {
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #111827;
+  background: #F9FAFB;
+  border: 1px solid #E9ECF2;
+  border-radius: 10px;
+}
+.cms-voice-interim {
+  color: #9CA3AF;
+}
+
+/* Photo source sheet (phone only; desktop uses the drop zone) */
+.cms-photo-sheet {
+  padding: 16px;
+}
+.cms-photo-sheet .cms-sheet-head {
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cms-sheet-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cms-sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 14px;
+  background: #FFFFFF;
+  border: 1px solid #C7D2E4;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--cms-accent);
+  text-align: left;
+  cursor: pointer;
+}
+.cms-sheet-option:hover {
+  background: #F3F6FC;
+  border-color: var(--cms-accent);
+}
+.cms-photo-sheet .cms-sheet-cancel {
+  margin-top: 12px;
+}
+
+@keyframes cmsPulse {
+  0% { transform: scale(1); opacity: 0.35; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes cmsBar {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+@keyframes cmsRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cms-sheet,
+  .cms-voice-ring,
+  .cms-voice-live.recording .cms-voice-bars span {
+    animation: none !important;
+  }
+}
+
+/* Phone */
+@media (max-width: 48rem) {
+  .cms-file,
+  .cms-receipt {
+    padding: 0;
+  }
+  .cms-file-title {
+    display: none;
+  }
+  .cms-file-card {
+    border: 0;
+    border-radius: 0;
+    background: #F9FAFB;
+  }
+  .cms-stepper {
+    display: none;
+  }
+  .cms-strip {
+    display: block;
+    padding: 14px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--cms-line);
+  }
+  .cms-strip-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .cms-strip-heading {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--cms-ink);
+  }
+  .cms-strip-next {
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--cms-muted);
+  }
+  .cms-strip-bars {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .cms-strip-bars span {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--cms-line);
+  }
+  .cms-strip-bars span.on {
+    background: var(--cms-fill);
+  }
+  .cms-file-body {
+    padding: 16px;
+  }
+  .cms-step-body {
+    gap: 20px;
+  }
+  .cms-section {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+  .cms-label {
+    font-size: 14.5px;
+  }
+  .cms-textarea-wrap .cms-textarea {
+    min-height: 130px;
+    resize: none;
+  }
+  .cms-textarea-wrap.with-mic .cms-textarea {
+    padding-right: 68px;
+  }
+  .cms-mic-button {
+    right: 12px;
+    bottom: 12px;
+    width: 46px;
+    height: 46px;
+  }
+  .cms-counter {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  /* Photos ride under the description, as one button and a sheet. */
+  .cms-section-photos {
+    margin-top: -8px;
+  }
+  .cms-section-photos .cms-section-head,
+  .cms-drop {
+    display: none;
+  }
+  .cms-file .cms-photos .cms-photo-button {
+    display: inline-flex;
+    background: #FFFFFF;
+  }
+  .cms-photo-row {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .cms-section-category .cms-section-head {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--cms-line);
+  }
+  .cms-file .cms-field-grid,
+  .cms-file .cms-section-address .cms-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  /* Location: the map runs edge to edge, the fields ride up over it in a
+   * sheet headed by what is pinned. */
+  .cms-file-body.is-location {
+    padding: 0;
+  }
+  .cms-location-body {
+    gap: 0;
+  }
+  .cms-section-map .cms-section-head,
+  .cms-section-map .cms-section-hint {
+    display: none;
+  }
+  .cms-map div[style*="border-radius: 20px"] {
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  .cms-map > div > .card-label {
+    display: none;
+  }
+  .cms-pin-summary {
+    position: relative;
+    z-index: 1;
+    margin-top: -18px;
+    padding: 24px 16px 12px;
+    background: #FFFFFF;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -10px 30px rgba(17, 24, 39, 0.16);
+  }
+  .cms-pin-summary::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    width: 38px;
+    height: 4px;
+    margin-left: -19px;
+    border-radius: 999px;
+    background: #D1D5DB;
+  }
+  .cms-pin-title {
+    font-size: 15px;
+  }
+  .cms-pin-meta {
+    font-size: 12px;
+  }
+  .cms-section-address {
+    position: relative;
+    z-index: 1;
+    padding: 0 16px 16px;
+    background: #FFFFFF;
+  }
+
+  /* Review */
+  .cms-review-heading {
+    display: block;
+    margin: 0 0 -4px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--cms-ink);
+  }
+  .cms-review-body {
+    gap: 12px;
+  }
+  .cms-review-card {
+    padding: 14px;
+    background: #FFFFFF;
+    border-color: var(--cms-line);
+  }
+  .cms-review-head {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom-color: #F1F3F7;
+  }
+  .cms-review-rows {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .cms-review-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .cms-attachments {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .cms-attachment img {
+    height: 82px;
+  }
+
+  /* Footer pinned to the bottom of the screen */
+  .cms-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: block;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: #FFFFFF;
+    border-top: 1px solid var(--cms-line);
+  }
+  .cms-hint {
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+  .cms-footer-actions {
+    gap: 12px;
+    margin-left: 0;
+  }
+  .cms-file .cms-footer .cms-back {
+    flex: none;
+    width: 48px;
+    padding: 0;
+  }
+  .cms-back-label {
+    display: none;
+  }
+  .cms-footer .cms-next {
+    flex: 1;
+  }
+
+  .cms-sheet-overlay {
+    place-items: end stretch;
+    padding: 16px;
+  }
+  .cms-sheet {
+    max-width: none;
+    padding: 22px 18px 18px;
+    animation-duration: 220ms;
+  }
+  .cms-sheet-head {
+    font-size: 16px;
+  }
+  .cms-sheet-hint {
+    font-size: 12.5px;
+  }
+  .cms-voice-pulse {
+    width: 96px;
+    height: 96px;
+    margin: 18px auto 4px;
+  }
+  .cms-voice-dot {
+    width: 66px;
+    height: 66px;
+  }
+  .cms-voice-bars {
+    height: 40px;
+    margin-top: 6px;
+  }
+  .cms-voice-time {
+    margin-top: 10px;
+    font-size: 20px;
+  }
+  .cms-sheet-actions,
+  .cms-sheet-stack {
+    margin-top: 18px;
+  }
+  .cms-photo-sheet {
+    padding: 16px;
+  }
+}
+
+/* Complaint submitted */
+.cms-receipt {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+}
+.cms-receipt-strip {
+  display: none;
+}
+.cms-receipt-card {
+  padding: 44px 40px;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 14px;
+}
+.cms-receipt-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: #E7F4EC;
+  color: var(--cms-ok);
+}
+.cms-receipt-icon.failed {
+  background: #FEF2F2;
+  color: var(--cms-danger);
+}
+.cms-receipt-head {
+  margin: 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--cms-ink);
+}
+.cms-receipt-text {
+  max-width: 460px;
+  margin: 10px auto 0;
+  text-align: center;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #4B5563;
+}
+.cms-receipt-number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 16px 18px;
+  background: var(--cms-panel);
+  border: 1px solid var(--cms-line);
+  border-radius: 12px;
+}
+.cms-receipt-number-label {
+  font-size: 12px;
+  color: var(--cms-muted);
+}
+.cms-receipt-number-value {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--cms-ink);
+}
+.cms-receipt-number .cms-link-button {
+  font-size: 13.5px;
+}
+.cms-receipt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--cms-line);
+  border-radius: 12px;
+}
+.cms-receipt-rows .cms-review-row {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+.cms-receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+
+/* A complaint */
+.cms-details {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+.cms-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: #4B5563;
+}
+.cms-breadcrumb a {
+  font-weight: 500;
+  color: var(--cms-accent);
+  text-decoration: none;
+}
+.cms-breadcrumb a:hover {
+  text-decoration: underline;
+}
+.cms-breadcrumb > span[aria-hidden] {
+  margin: 0;
+  color: #9CA3AF;
+}
+.cms-breadcrumb [aria-current="page"] {
+  font-weight: 400;
+  color: #4B5563;
+}
+.cms-details-head {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.cms-details-card {
+  padding: 26px 28px;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 14px;
+}
+.cms-details-card-head {
+  margin: 0 0 20px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--cms-ink);
+}
+.cms-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 22px 32px;
+  margin: 0;
+}
+.cms-details-item.wide {
+  grid-column: 1 / -1;
+}
+.cms-details-item dt {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8A93A2;
+}
+.cms-details-item dd {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  font-size: 16px;
+  color: var(--cms-ink);
+}
+
+
+@media (max-width: 48rem) {
+  .cms-receipt-strip {
+    display: block;
+    padding: 14px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--cms-line);
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .cms-receipt-card {
+    padding: 24px 16px 0;
+    background: #F9FAFB;
+    border: 0;
+    border-radius: 0;
+  }
+  .cms-receipt-icon {
+    margin-bottom: 16px;
+  }
+  .cms-receipt-head {
+    font-size: 20px;
+    letter-spacing: 0;
+  }
+  .cms-receipt-text {
+    margin-top: 6px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .cms-receipt-number {
+    gap: 12px;
+    margin-top: 18px;
+    padding: 14px;
+    background: #FFFFFF;
+  }
+  .cms-receipt-number-label {
+    font-size: 11.5px;
+  }
+  .cms-receipt-number-value {
+    font-size: 16px;
+  }
+  .cms-receipt-rows {
+    gap: 10px;
+    margin-top: 12px;
+    padding: 14px;
+    background: #FFFFFF;
+  }
+  .cms-receipt-rows .cms-review-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .cms-receipt-actions {
+    position: sticky;
+    bottom: 0;
+    flex-direction: column;
+    gap: 8px;
+    margin: 24px -16px 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: #FFFFFF;
+    border-top: 1px solid var(--cms-line);
+  }
+  .cms-receipt-actions > button {
+    width: 100%;
+  }
+  .cms-details {
+    gap: 14px;
+    padding: 16px 16px 24px;
+  }
+  .cms-details-card {
+    padding: 18px 16px;
+  }
+  .cms-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .cms-details-item dd {
+    margin-top: 5px;
+    font-size: 15px;
+  }
+  .cms-details-actions > button {
+    width: 100%;
+  }
+}
