@@ -22,7 +22,11 @@ import {
  * form parameter, which skips credential validation entirely.
  */
 export interface CitizenTokenMinter {
-  mint(account: DigitAccount): Promise<DigitLogin>;
+  /**
+   * `verifiedMobileNumber` is the national number from the session's
+   * verified phone claim. Search responses may mask `account.mobileNumber`.
+   */
+  mint(account: DigitAccount, verifiedMobileNumber: string): Promise<DigitLogin>;
 }
 
 function requestInfo() {
@@ -35,10 +39,13 @@ function requestInfo() {
  * spend it on egov-user `/user/oauth/token` as the password of a CITIZEN
  * password grant.
  *
- * UNVERIFIED against a live egov-user. The live spike must confirm:
- * - which identity egov-user passes to egov-otp `_validate` for a CITIZEN
- *   grant (`DIGIT_CITIZEN_OTP_IDENTITY`: account userName by default, or
- *   mobileNumber), and with which tenant (the login tenant is assumed);
+ * egov-user's `UserService.validateOtp` validates a CITIZEN grant's OTP for
+ * `user.getMobileNumber()` at `user.getTenantId()`, so the identity is the
+ * mobile number by default (`DIGIT_CITIZEN_OTP_IDENTITY=mobileNumber`),
+ * taken from the verified session phone rather than a possibly-masked
+ * search response. `userName` remains available as an override.
+ *
+ * Still UNVERIFIED against a live egov-user. The live spike must confirm:
  * - that egov-user does not move a CITIZEN on a dotted tenant to the
  *   state-level root, which would make the returned UserRequest.tenantId
  *   differ from the bound tenant (the BFF then refuses the token);
@@ -46,13 +53,13 @@ function requestInfo() {
  * The OTP value is never logged, cached or returned.
  */
 export class EgovOtpCitizenTokenMinter implements CitizenTokenMinter {
-  async mint(account: DigitAccount): Promise<DigitLogin> {
+  async mint(account: DigitAccount, verifiedMobileNumber: string): Promise<DigitLogin> {
     if (!config.digitOtpCreateUrl) {
       throw new DigitUnavailableError("DIGIT citizen token minting is not configured");
     }
-    const identity = config.digitCitizenOtpIdentity === "mobileNumber"
-      ? account.mobileNumber
-      : account.userName;
+    const identity = config.digitCitizenOtpIdentity === "userName"
+      ? account.userName
+      : verifiedMobileNumber;
     if (!identity) throw new DigitUnavailableError("DIGIT citizen account has no OTP identity");
 
     let response: Response;

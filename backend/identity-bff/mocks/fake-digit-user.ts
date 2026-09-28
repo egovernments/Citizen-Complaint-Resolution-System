@@ -37,6 +37,9 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     adminLogins: 0, userLogins: 0, creates: 0, updates: 0, passwordUpdates: 0, logouts: 0,
     otpCreates: 0, citizenOtpLogins: 0, internalLogins: 0, localizationSearches: 0,
   };
+  // egov-user can mask PII in search responses; tests turn this on to prove
+  // callers never depend on the searched mobileNumber.
+  let maskSearchMobileNumbers = false;
   /** egov-otp store: `${identity}|${tenantId}` -> live one-time codes. */
   const otps = new Map<string, Set<string>>();
   /** egov-localization rows. */
@@ -121,9 +124,10 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
       candidate.type === req.body.userType);
     // Mirrors egov-user with citizen.login.password.otp.enabled=true: a
     // CITIZEN password is validated (and consumed) as an egov-otp code for
-    // the account's userName at the login tenant, never as its stored hash.
+    // the account's mobileNumber at its tenant (UserService.validateOtp uses
+    // user.getMobileNumber() and user.getTenantId()), never its stored hash.
     const citizenOtps = account?.type === "CITIZEN"
-      ? otps.get(`${account.userName}|${account.tenantId}`)
+      ? otps.get(`${account.mobileNumber}|${account.tenantId}`)
       : undefined;
     const credentialValid = account?.type === "CITIZEN"
       ? Boolean(citizenOtps?.delete(String(req.body.password)))
@@ -154,7 +158,9 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     const matches = [...accounts.values()].filter((account) =>
       account.userName === req.body.userName && account.tenantId === req.body.tenantId &&
       account.type === req.body.userType && account.active === (req.body.active !== false));
-    return res.json({ user: matches.map(publicAccount) });
+    return res.json({ user: matches.map(publicAccount).map((user) => maskSearchMobileNumbers && user.mobileNumber
+      ? { ...user, mobileNumber: `******${user.mobileNumber.slice(-4)}` }
+      : user) });
   });
 
   app.post("/user/users/_createnovalidate", (req, res) => {
@@ -316,6 +322,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     accounts, tokens, stats, receivedPasswords, addAccount, encKeys, schemas, mdms, workflows,
     otps, localization, mdmsKey,
     setTokenTtlSeconds(seconds: number) { tokenTtlSeconds = seconds; },
+    setMaskSearchMobileNumbers(mask: boolean) { maskSearchMobileNumbers = mask; },
     expireAllTokens() { for (const entry of tokens.values()) entry.expiresAt = Date.now() - 1; },
     async start(): Promise<string> {
       server = app.listen(0);

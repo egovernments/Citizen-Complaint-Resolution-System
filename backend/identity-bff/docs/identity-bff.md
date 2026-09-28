@@ -414,8 +414,12 @@ implementation:
 
 1. `POST DIGIT_OTP_CREATE_URL` (egov-otp `/otp/v1/_create`, **internal URL
    only**; its response contains the code) with
-   `{otp: {identity, tenantId}}`, where `identity` is the account's `userName`
-   (`DIGIT_CITIZEN_OTP_IDENTITY=userName`, default) or its `mobileNumber`;
+   `{otp: {identity, tenantId}}`, where `identity` is the national mobile
+   number from the session's verified `phone_number` claim
+   (`DIGIT_CITIZEN_OTP_IDENTITY=mobileNumber`, default), because egov-user's
+   `UserService.validateOtp` checks the code against `user.getMobileNumber()`
+   and `user.getTenantId()`. Search responses can mask the stored number, so
+   it is not read from them. `userName` is available as an override;
 2. `POST /user/oauth/token` password grant with `username=<kcbffc-...>`,
    `password=<that OTP>`, `tenantId=<bound tenant>`, `userType=CITIZEN`.
 
@@ -490,7 +494,7 @@ GET /identity/v1/tenant-contexts/bomet-county/branding?locale=en_IN
 | `IDENTITY_CITIZEN_SCOPE` | `openid profile phone` | Citizen authorization scope |
 | `IDENTITY_EMPLOYEE_COOKIE_NAME` / `IDENTITY_CITIZEN_COOKIE_NAME` | `${IDENTITY_COOKIE_NAME}_employee` / `_citizen` | Per-surface session cookies (`<name>_login` for attempts) |
 | `DIGIT_OTP_CREATE_URL` | empty | Internal egov-otp `/otp/v1/_create` for the default citizen minter |
-| `DIGIT_CITIZEN_OTP_IDENTITY` | `userName` | `userName` or `mobileNumber`, see the unverified note above |
+| `DIGIT_CITIZEN_OTP_IDENTITY` | `mobileNumber` | `mobileNumber` (verified session phone, what egov-user validates) or `userName` |
 | `DIGIT_CITIZEN_ROLES` | `CITIZEN` | Roles of newly created citizen accounts |
 | `DIGIT_LOCALIZATION_SEARCH_URL` | `${DIGIT_GATEWAY_HOST}/localization/messages/v1/_search` | Branding messages |
 | `DIGIT_UI_CONFIG_MODULE_NAME` | `commonMDMSConfig` | MDMS module of LoginConfig/PrivacyPolicy (digit-ui `UICONFIG_MODULENAME`) |

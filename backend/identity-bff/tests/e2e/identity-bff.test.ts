@@ -1591,8 +1591,15 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect((await citizenSelect(employeeCookie.replace("_employee=", "_citizen="))).status).toBe(401);
 
     const otpsBefore = digit.stats.otpCreates;
-    const selected = await citizenSelect(cookie, { tenantId: "ke.kisumu" });
+    // The OTP identity is the verified session phone, like egov-user's
+    // validateOtp (mobileNumber at the account tenant), even when search
+    // responses mask the stored number.
+    digit.setMaskSearchMobileNumbers(true);
+    const selected = await citizenSelect(cookie, { tenantId: "ke.kisumu" }).finally(() =>
+      digit.setMaskSearchMobileNumbers(false));
     expect(selected.status).toBe(200);
+    expect(digit.otps.has("712345678|ke.bomet")).toBe(true);
+    expect([...digit.otps.keys()].some((key) => key.startsWith("kcbffc-"))).toBe(false);
     const body = await selected.json();
     expect(Object.keys(body).sort()).toEqual(["UserRequest", "access_token", "expires_in", "scope", "token_type"]);
     expect(body).toMatchObject({

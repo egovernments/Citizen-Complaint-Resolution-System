@@ -199,7 +199,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         name: claims.name?.trim() || "Citizen",
         ...phone,
       });
-      const login = await managedUserLogin(identity, current.sessionId);
+      const login = await managedUserLogin(identity, current.sessionId, phone.mobileNumber);
       if (login.user.type !== "CITIZEN" || login.user.tenantId !== boundTenant.tenantId) {
         // Fail closed: never hand the browser a token for another user type
         // or tenant than the session is bound to.

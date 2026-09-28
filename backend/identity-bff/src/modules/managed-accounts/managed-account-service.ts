@@ -359,11 +359,13 @@ export async function ensureManagedAccount(
  * Returns a normal user-scoped DIGIT token for an active managed account,
  * cached for `sessionId` alone. A valid cached token is reused. Otherwise,
  * under the per-user lease, the account's password is rotated to a new
- * one-time value and the BFF logs in once as that user.
+ * one-time value and the BFF logs in once as that user. Citizen logins need
+ * the session's verified national mobile number (the OTP identity).
  */
 export async function managedUserLogin(
   identity: ManagedIdentity,
   sessionId: string,
+  verifiedMobileNumber?: string,
 ): Promise<DigitLogin> {
   const ref = sessionTokenRef(sessionId);
   const cached = await cachedLogin(identity);
@@ -385,7 +387,10 @@ export async function managedUserLogin(
       let login: DigitLogin;
       if (identity.userType === CITIZEN_USER_TYPE) {
         // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
-        login = await citizenTokenMinter().mint(account);
+        if (!verifiedMobileNumber) {
+          throw new ManagedAccountError("A verified phone number is required", 403);
+        }
+        login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
       } else {
         const password = oneTimePassword();
         await updateAccount(adminToken, { ...editable(account), password });

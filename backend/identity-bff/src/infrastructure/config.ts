@@ -145,11 +145,11 @@ export const config = {
   // CitizenTokenMinter. Never route this through a public gateway: its
   // response contains the OTP value. Empty = citizen tokens unavailable.
   digitOtpCreateUrl: process.env.DIGIT_OTP_CREATE_URL || "",
-  // Which account field egov-user passes to egov-otp as the OTP identity when
-  // a CITIZEN password grant is validated as an OTP. Unverified against live
-  // egov-user; see docs/identity-bff.md#citizen-token-minting.
+  // Which identity egov-user passes to egov-otp when a CITIZEN password grant
+  // is validated as an OTP: the mobile number (UserService.validateOtp), from
+  // the verified session phone. See docs/identity-bff.md#citizen-token-minting.
   digitCitizenOtpIdentity:
-    process.env.DIGIT_CITIZEN_OTP_IDENTITY === "mobileNumber" ? "mobileNumber" as const : "userName" as const,
+    process.env.DIGIT_CITIZEN_OTP_IDENTITY === "userName" ? "userName" as const : "mobileNumber" as const,
   digitCitizenRoles: csv(process.env.DIGIT_CITIZEN_ROLES || "CITIZEN"),
   // Public login branding (#2167): read-only MDMS + localization projection.
   identityBrandingCacheSeconds: parseInt(
