@@ -10,6 +10,19 @@ RUN wget -q \
       -O /keycloak-magic-link.jar \
     && echo "${MAGIC_LINK_SHA256}  /keycloak-magic-link.jar" | sha256sum -c -
 
+# DIGIT Keycloak extensions (keycloak/digit-extensions, CCRS #2167): the
+# citizen phone-number + SMS-OTP authenticators, the digit-sms-sender SPI, the
+# login-forms provider exposing `digitTenant`, and the digit-phone-base
+# fallback theme. `mvn package` runs the unit tests, so a failing test fails
+# the image build. Keycloak itself is a provided dependency.
+FROM maven:3.9-eclipse-temurin-21 AS digit-extensions
+WORKDIR /build
+COPY keycloak/digit-extensions/pom.xml ./
+RUN mvn -B -q dependency:go-offline
+COPY keycloak/digit-extensions/src ./src
+RUN mvn -B -q package \
+    && test -f target/digit-keycloak-extensions.jar
+
 # The Keycloakify login theme (keycloak/theme-src). Built here rather than
 # committed so the jar in the image always matches the reviewed sources.
 # Keycloakify packages the jar with Maven, hence the JDK in this stage; none of
@@ -28,6 +41,7 @@ RUN npm run build-keycloak-theme \
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION} AS builder
 COPY --from=extension --chown=keycloak:keycloak /keycloak-magic-link.jar /opt/keycloak/providers/keycloak-magic-link.jar
 COPY --from=theme --chown=keycloak:keycloak /theme/dist_keycloak/configurator-blue-login-theme.jar /opt/keycloak/providers/configurator-blue-login-theme.jar
+COPY --from=digit-extensions --chown=keycloak:keycloak /build/target/digit-keycloak-extensions.jar /opt/keycloak/providers/digit-keycloak-extensions.jar
 RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 
 FROM quay.io/keycloak/keycloak:${KEYCLOAK_VERSION}

@@ -7,6 +7,11 @@
 #   IDENTITY_BFF_IMAGE    identity BFF image built from this repository
 #   KEYCLOAK_PUBLIC_URL   public Keycloak base, e.g. https://example.org/auth
 #   IDENTITY_ENV_DIR      directory holding the env files below
+#   IDENTITY_SMS_*        citizen SMS OTP sender (see identity-bff.env.example)
+#
+# `--profile dev-mail` adds identity-mailpit, a local catcher for both the
+# Keycloak SMTP mail and (with IDENTITY_SMS_SENDER=mailpit) citizen OTPs. Never
+# enable it on a deployment real citizens use.
 services:
   keycloak:
     image: ${KEYCLOAK_IMAGE:-digit-keycloak-magic-link:26.7.3-0.75}
@@ -25,6 +30,14 @@ services:
       KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HEALTH_ENABLED: "true"
+      # Citizen phone + SMS OTP (keycloak/digit-extensions). MODE, not
+      # PROVIDER: spi-*-provider is build-time and `start` refuses it.
+      KC_SPI_DIGIT_SMS_SENDER_MODE: ${IDENTITY_SMS_SENDER:-log}
+      KC_SPI_DIGIT_SMS_SENDER_ALLOW_DEV: ${IDENTITY_SMS_ALLOW_DEV:-false}
+      KC_SPI_DIGIT_SMS_SENDER_MAILPIT_URL: ${IDENTITY_SMS_MAILPIT_URL:-}
+      KC_SPI_DIGIT_SMS_SENDER_HTTP_URL: ${IDENTITY_SMS_HTTP_URL:-}
+      KC_SPI_DIGIT_SMS_SENDER_HTTP_TOKEN: ${IDENTITY_SMS_HTTP_TOKEN:-}
+      KC_SPI_DIGIT_PHONE_OTP_TENANT_CONTEXT_URL: http://identity-bff:3000
     ports: !override
       - "127.0.0.1:18180:8180"
     healthcheck:
@@ -61,3 +74,20 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+
+  # Development-only mail/SMS catcher. SMTP identity-mailpit:1025 (no auth, no
+  # STARTTLS); UI and API on 127.0.0.1:18025/mailpit. For OTPs set
+  # IDENTITY_SMS_SENDER=mailpit, IDENTITY_SMS_ALLOW_DEV=true and
+  # IDENTITY_SMS_MAILPIT_URL=http://identity-mailpit:8025/mailpit.
+  identity-mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: identity-mailpit
+    profiles: ["dev-mail"]
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mailpit
+      MP_MAX_MESSAGES: "2000"
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks:
+      - egov-network

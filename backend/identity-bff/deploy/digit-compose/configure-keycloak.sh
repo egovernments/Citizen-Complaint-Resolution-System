@@ -21,9 +21,16 @@ readonly FIRST_BROKER_FLOW=digit-first-broker-login
 # (keycloak/theme-src, built by keycloak/Dockerfile.magic-link). Selected per
 # client rather than on the shared realm.
 readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-configurator-blue}
+# digit-ui sign-in surfaces (CCRS #2167). Each has its own client, browser flow
+# and Keycloakify theme; all three themes ship in the same theme jar.
+readonly EMPLOYEE_LOGIN_THEME=${KEYCLOAK_EMPLOYEE_LOGIN_THEME:-digit-employee}
+readonly CITIZEN_LOGIN_THEME=${KEYCLOAK_CITIZEN_LOGIN_THEME:-digit-citizen}
+readonly EMPLOYEE_FLOW=digit-employee-browser
+readonly CITIZEN_FLOW=digit-citizen-browser
+readonly CITIZEN_PHONE_FLOW=digit-citizen-phone-otp
 # Realm-level theme names this deployment set itself and may therefore clear.
 # `digit` is the name earlier revisions used before the theme was renamed.
-readonly OWNED_REALM_THEMES="$LOGIN_THEME digit"
+readonly OWNED_REALM_THEMES="$LOGIN_THEME digit $EMPLOYEE_LOGIN_THEME $CITIZEN_LOGIN_THEME"
 
 # Standalone installs keep these values in identity-bff.env. Ansible deployments
 # pass them as task-scoped environment variables so no second secrets file has
@@ -37,6 +44,10 @@ fi
 readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
+readonly EMPLOYEE_CLIENT=${KEYCLOAK_EMPLOYEE_CLIENT_ID:-digit-ui-employee}
+readonly CITIZEN_CLIENT=${KEYCLOAK_CITIZEN_CLIENT_ID:-digit-ui-citizen}
+readonly EMPLOYEE_SIGNIN_METHODS=${KEYCLOAK_EMPLOYEE_SIGNIN_METHODS:-password}
+readonly CITIZEN_SIGNIN_METHODS=${KEYCLOAK_CITIZEN_SIGNIN_METHODS:-phone_otp}
 # Journey policy belongs to the OIDC client. The BFF reads these attributes
 # live; these values are installer inputs, not BFF runtime configuration.
 readonly BFF_SIGNIN_METHODS=${KEYCLOAK_BFF_SIGNIN_METHODS:-password,google,github}
@@ -45,6 +56,8 @@ readonly BFF_SIGNUP_METHODS=${KEYCLOAK_BFF_SIGNUP_METHODS:-magic_link,google,git
 # does not treat a trailing wildcard as matching a query string.
 readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete/*"
 readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
+# digit-ui lives at /{tenantSlug}/digit-ui/... on the same origin as the BFF.
+readonly DIGIT_UI_BASE_URL=${IDENTITY_DIGIT_UI_BASE_URL:-${IDENTITY_REDIRECT_URI%%/identity/*}/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
 readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
   'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
@@ -152,6 +165,173 @@ flow_uuid() {
     jq -r --arg alias "$1" '.[] | select(.alias == $alias) | .id' | head -1
 }
 
+ensure_top_level_flow() {
+  local alias=$1 description=$2
+  if [ -z "$(flow_uuid "$alias")" ]; then
+    kc create authentication/flows -r "$REALM" \
+      -s "alias=$alias" -s "description=$description" \
+      -s providerId=basic-flow -s topLevel=true -s builtIn=false >/dev/null
+  fi
+}
+
+# Adds `provider` to `flow` once and pins its requirement. `flow` may be a
+# sub-flow alias; Keycloak resolves either.
+ensure_execution() {
+  local flow=$1 provider=$2 requirement=$3 execution
+  execution=$(kc get "authentication/flows/$flow/executions" -r "$REALM" |
+    jq -c --arg provider "$provider" '.[] | select(.providerId == $provider)' | head -1)
+  if [ -z "$execution" ]; then
+    kc create "authentication/flows/$flow/executions/execution" -r "$REALM" \
+      -s "provider=$provider" >/dev/null
+    execution=$(kc get "authentication/flows/$flow/executions" -r "$REALM" |
+      jq -c --arg provider "$provider" '.[] | select(.providerId == $provider)' | head -1)
+  fi
+  printf '%s' "$execution" | jq --arg requirement "$requirement" \
+    '.requirement = $requirement' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update "authentication/flows/$flow/executions" -r "$REALM" -f - \
+      --config "$KC_CONFIG" >/dev/null
+}
+
+# The digit-ui flows deliberately have no auth-cookie step: an existing
+# Keycloak SSO session (e.g. from the Configurator) must not sign someone in to
+# another surface without that surface's own credential.
+remove_cookie_executions() {
+  local flow=$1 id
+  for id in $(kc get "authentication/flows/$flow/executions" -r "$REALM" |
+    jq -r '.[] | select(.providerId == "auth-cookie") | .id'); do
+    kc delete "authentication/executions/$id" -r "$REALM" >/dev/null
+  done
+}
+
+configure_employee_flow() {
+  ensure_top_level_flow "$EMPLOYEE_FLOW" 'digit-ui employee sign-in: username and password'
+  remove_cookie_executions "$EMPLOYEE_FLOW"
+  ensure_execution "$EMPLOYEE_FLOW" auth-username-password-form REQUIRED
+}
+
+configure_citizen_flow() {
+  ensure_top_level_flow "$CITIZEN_FLOW" 'digit-ui citizen sign-in: phone number and SMS OTP'
+  remove_cookie_executions "$CITIZEN_FLOW"
+  local executions phone_flow
+  executions=$(kc get "authentication/flows/$CITIZEN_FLOW/executions" -r "$REALM")
+  phone_flow=$(printf '%s' "$executions" |
+    jq -c --arg display "$CITIZEN_PHONE_FLOW" '.[] | select(.displayName == $display and .level == 0)' | head -1)
+  # A sub-flow left half-built (or reordered by hand) is rebuilt: the order of
+  # the three steps is the security property (no user before the OTP).
+  if [ -n "$phone_flow" ] && [ "$(printf '%s' "$executions" | jq -c \
+    '[.[] | select(.level == 1) | .providerId]')" != '["digit-phone-number-form","digit-sms-otp","digit-phone-profile-form"]' ]; then
+    kc delete "authentication/executions/$(printf '%s' "$phone_flow" | jq -r .id)" -r "$REALM" >/dev/null
+    phone_flow=
+  fi
+  if [ -z "$phone_flow" ]; then
+    kc create "authentication/flows/$CITIZEN_FLOW/executions/flow" -r "$REALM" \
+      -s "alias=$CITIZEN_PHONE_FLOW" -s 'description=Phone number, SMS OTP, then name for new citizens' \
+      -s provider=registration-page -s type=basic-flow >/dev/null
+    phone_flow=$(kc get "authentication/flows/$CITIZEN_FLOW/executions" -r "$REALM" |
+      jq -c --arg display "$CITIZEN_PHONE_FLOW" '.[] | select(.displayName == $display and .level == 0)' | head -1)
+  fi
+  printf '%s' "$phone_flow" | jq '.requirement = "REQUIRED"' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update "authentication/flows/$CITIZEN_FLOW/executions" -r "$REALM" -f - \
+      --config "$KC_CONFIG" >/dev/null
+  ensure_execution "$CITIZEN_PHONE_FLOW" digit-phone-number-form REQUIRED
+  ensure_execution "$CITIZEN_PHONE_FLOW" digit-sms-otp REQUIRED
+  ensure_execution "$CITIZEN_PHONE_FLOW" digit-phone-profile-form REQUIRED
+}
+
+client_scope_uuid() {
+  kc get client-scopes -r "$REALM" | jq -r --arg name "$1" '.[] | select(.name == $name) | .id' | head -1
+}
+
+# Keycloak's built-in `phone` scope maps the phoneNumber / phoneNumberVerified
+# attributes to phone_number / phone_number_verified, which the BFF requires
+# for citizen sessions. `email` is dropped from the citizen defaults so the
+# user profile (below) does not demand an email address from citizens.
+configure_citizen_scopes() {
+  local client_uuid_value=$1 phone_scope email_scope
+  phone_scope=$(client_scope_uuid phone)
+  email_scope=$(client_scope_uuid email)
+  [ -n "$phone_scope" ] || {
+    printf 'realm %s has no built-in "phone" client scope\n' "$REALM" >&2
+    return 1
+  }
+  kc delete "clients/$client_uuid_value/optional-client-scopes/$phone_scope" -r "$REALM" >/dev/null 2>&1 || true
+  kc update "clients/$client_uuid_value/default-client-scopes/$phone_scope" -r "$REALM" -n >/dev/null
+  if [ -n "$email_scope" ]; then
+    kc delete "clients/$client_uuid_value/default-client-scopes/$email_scope" -r "$REALM" >/dev/null 2>&1 || true
+  fi
+}
+
+# One confidential authorization-code client per digit-ui surface. The BFF is
+# the only party that talks to it (PKCE, its own callback), and binds the
+# client's browser flow and theme. `digit.auth.signup.methods` is empty by
+# design (no self-service sign-up; a citizen account is created by the phone
+# flow itself). Keycloak does not persist an empty client attribute (the JPA
+# ClientAdapter removes it), so writing "" through the JSON body clears any
+# earlier value and leaves the attribute ABSENT, which is how the BFF must read
+# "no sign-up methods" for these surfaces.
+configure_digit_ui_client() {
+  local client_id=$1 secret=$2 surface=$3 theme=$4 signin_methods=$5 flow=$6
+  local client_uuid_value flow_id
+  client_uuid_value=$(ensure_client "$client_id" "$secret" false)
+  flow_id=$(flow_uuid "$flow")
+  kc update "clients/$client_uuid_value" -r "$REALM" \
+    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s "baseUrl=$DIGIT_UI_BASE_URL" \
+    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
+    -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
+    -s "authenticationFlowBindingOverrides.browser=$flow_id" >/dev/null
+  kc get "clients/$client_uuid_value" -r "$REALM" |
+    jq --arg theme "$theme" --arg surface "$surface" --arg signin "$signin_methods" \
+      '.attributes = ((.attributes // {}) + {
+         "pkce.code.challenge.method": "S256",
+         "post.logout.redirect.uris": "+",
+         "login_theme": $theme,
+         "digit.auth.surface": $surface,
+         "digit.auth.signin.methods": $signin,
+         "digit.auth.signup.methods": "",
+         "standard.token.exchange.enabled": "false"
+       })' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update "clients/$client_uuid_value" -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
+  # Tokens are verified by the BFF against its own audience; azp stays the
+  # surface client, which is how the BFF tells the surfaces apart.
+  ensure_mapper "clients/$client_uuid_value" digit-identity-bff-audience oidc-audience-mapper \
+    -s "config.\"included.client.audience\"=$BFF_CLIENT" \
+    -s 'config."id.token.claim"=false' -s 'config."access.token.claim"=true'
+  printf '%s' "$client_uuid_value"
+}
+
+# Declares the phone attributes (so they are managed, validated and visible to
+# the `phone` scope mappers), keeps every other attribute an admin can see
+# (ADMIN_EDIT, instead of silently dropping unmanaged attributes), and makes
+# email / lastName required only for journeys that request the `email` scope
+# (Configurator and employee do; citizen does not). Written as JSON because
+# kcadm cannot set the dotted `unmanagedAttributePolicy` key.
+configure_user_profile() {
+  kc get users/profile -r "$REALM" |
+    jq '
+      .unmanagedAttributePolicy = "ADMIN_EDIT" |
+      .attributes = (
+        [ .attributes[]
+          | select(.name != "phoneNumber" and .name != "phoneNumberVerified")
+          | if (.name == "email" or .name == "lastName") and .required != null
+            then .required = {scopes: ["email"]} else . end ] +
+        [ { name: "phoneNumber",
+            displayName: "${phoneNumber}",
+            multivalued: false,
+            validations: { pattern: { pattern: "^\\+[1-9]\\d{6,14}$", "error-message": "digitInvalidPhone" } },
+            permissions: { view: ["admin", "user"], edit: ["admin"] } },
+          { name: "phoneNumberVerified",
+            displayName: "${phoneNumberVerified}",
+            multivalued: false,
+            validations: { pattern: { pattern: "^(true|false)$" } },
+            permissions: { view: ["admin"], edit: ["admin"] } } ])' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update users/profile -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
+}
+
 configure_first_broker_login() {
   # Pin the account-linking behaviour instead of inheriting whatever a realm's
   # default happens to contain. Keycloak 26's built-in flow already has the
@@ -250,7 +430,7 @@ fi
 # and existing realms even when the optional magic-link resource is disabled.
 kc update "realms/$REALM" -s organizationsEnabled=true \
   -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
-  -s resetPasswordAllowed=false \
+  -s resetPasswordAllowed=false -s bruteForceProtected=true \
   -s "sslRequired=$SSL_REQUIRED" >/dev/null
 
 # The DIGIT theme is selected per client below (CCRS #2108) so that a client
@@ -325,6 +505,25 @@ ensure_mapper "client-scopes/$organization_scope" 'organization groups' \
   -s 'config."addGroupRoleMappings"=true'
 kc update "clients/$bff_uuid/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
 
+configure_user_profile
+
+# digit-ui employee and citizen sign-in (CCRS #2167). Skipped, not failed,
+# while an older installer has not generated their secrets yet.
+digit_ui_clients=skipped
+if [ -n "${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}" ] && [ -n "${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}" ]; then
+  configure_employee_flow
+  configure_citizen_flow
+  employee_uuid=$(configure_digit_ui_client "$EMPLOYEE_CLIENT" "$KEYCLOAK_EMPLOYEE_CLIENT_SECRET" \
+    employee "$EMPLOYEE_LOGIN_THEME" "$EMPLOYEE_SIGNIN_METHODS" "$EMPLOYEE_FLOW")
+  kc update "clients/$employee_uuid/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
+  citizen_uuid=$(configure_digit_ui_client "$CITIZEN_CLIENT" "$KEYCLOAK_CITIZEN_CLIENT_SECRET" \
+    citizen "$CITIZEN_LOGIN_THEME" "$CITIZEN_SIGNIN_METHODS" "$CITIZEN_FLOW")
+  configure_citizen_scopes "$citizen_uuid"
+  digit_ui_clients="$EMPLOYEE_CLIENT,$CITIZEN_CLIENT"
+else
+  printf 'KEYCLOAK_EMPLOYEE_CLIENT_SECRET / KEYCLOAK_CITIZEN_CLIENT_SECRET unset: digit-ui clients not configured\n' >&2
+fi
+
 if [ "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" = true ]; then
   configure_magic_link
 else
@@ -362,5 +561,5 @@ for role in EMPLOYEE SUPERUSER GRO PGR_LME DGRO CSR SUPERVISOR \
   fi
 done
 
-printf 'realm=%s organizations=enabled bff_client=%s magic_link=%s admin_client=%s temporary_admin_removed=%s\n' \
-  "$REALM" "$BFF_CLIENT" "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" "$ADMIN_CLIENT" "$temporary_admin"
+printf 'realm=%s organizations=enabled bff_client=%s magic_link=%s admin_client=%s digit_ui_clients=%s temporary_admin_removed=%s\n' \
+  "$REALM" "$BFF_CLIENT" "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" "$ADMIN_CLIENT" "$digit_ui_clients" "$temporary_admin"

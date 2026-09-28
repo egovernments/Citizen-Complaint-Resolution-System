@@ -45,6 +45,8 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_bff_client_secret',
       'keycloak_magic_link_client_secret',
       'keycloak_admin_client_secret',
+      'keycloak_employee_client_secret',
+      'keycloak_citizen_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
       'pgr_onboarding_worker_token',

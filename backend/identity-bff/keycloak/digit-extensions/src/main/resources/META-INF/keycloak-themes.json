@@ -1,0 +1,8 @@
+{
+  "themes": [
+    {
+      "name": "digit-phone-base",
+      "types": ["login"]
+    }
+  ]
+}

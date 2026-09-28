@@ -1,0 +1,3 @@
+org.egov.identity.keycloak.auth.DigitPhoneNumberAuthenticatorFactory
+org.egov.identity.keycloak.auth.DigitSmsOtpAuthenticatorFactory
+org.egov.identity.keycloak.auth.DigitPhoneProfileAuthenticatorFactory

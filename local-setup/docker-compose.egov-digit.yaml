@@ -3152,6 +3152,16 @@ services:
       # fallback is local-development only; bootstrap credentials do not rotate
       # an admin that already exists in the persisted Keycloak database.
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      # Citizen phone + SMS OTP (#2167, keycloak/digit-extensions). MODE, not
+      # PROVIDER: Keycloak treats spi-*-provider as a build-time option and
+      # `start --optimized` refuses to boot with a runtime value for it.
+      KC_SPI_DIGIT_SMS_SENDER_MODE: ${IDENTITY_SMS_SENDER:-log}
+      KC_SPI_DIGIT_SMS_SENDER_ALLOW_DEV: ${IDENTITY_SMS_ALLOW_DEV:-false}
+      KC_SPI_DIGIT_SMS_SENDER_MAILPIT_URL: ${IDENTITY_SMS_MAILPIT_URL:-}
+      KC_SPI_DIGIT_SMS_SENDER_HTTP_URL: ${IDENTITY_SMS_HTTP_URL:-}
+      KC_SPI_DIGIT_SMS_SENDER_HTTP_TOKEN: ${IDENTITY_SMS_HTTP_TOKEN:-}
+      # Tenant MobileNumberValidation comes from the BFF's public branding API.
+      KC_SPI_DIGIT_PHONE_OTP_TENANT_CONTEXT_URL: http://identity-bff:3000
     ports:
       - "${BIND_IP:-127.0.0.1}:18180:8180"
     healthcheck:
@@ -3190,6 +3200,13 @@ services:
       KEYCLOAK_BFF_CLIENT_SECRET: ${KEYCLOAK_BFF_CLIENT_SECRET:-dev-only-change-me}
       KEYCLOAK_MAGIC_LINK_CLIENT_ID: digit-identity-bff-magic-link
       KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: ${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:-}
+      # digit-ui sign-in surfaces (#2167).
+      KEYCLOAK_EMPLOYEE_CLIENT_ID: digit-ui-employee
+      KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}
+      KEYCLOAK_CITIZEN_CLIENT_ID: digit-ui-citizen
+      KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}
+      IDENTITY_EMPLOYEE_SCOPE: openid profile email
+      IDENTITY_CITIZEN_SCOPE: openid profile phone
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
       KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
       KEYCLOAK_ADMIN_CLIENT_ID: digit-identity-admin

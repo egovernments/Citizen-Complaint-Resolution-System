@@ -2658,6 +2658,13 @@
           keycloak_admin_client_secret: >-
             {{ _identity_stored.keycloak_admin_client_secret | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # digit-ui sign-in surfaces (#2167): one confidential client each.
+          keycloak_employee_client_secret: >-
+            {{ _identity_stored.keycloak_employee_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_citizen_client_secret: >-
+            {{ _identity_stored.keycloak_citizen_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
           identity_control_plane_token: >-
             {{ _identity_stored.identity_control_plane_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
@@ -2688,7 +2695,7 @@
       when:
         - enable_keycloak | default(false)
         # Exactly "the merge would change something", i.e. at least one of the
-        # six was absent or empty and has just been generated.
+        # identity secrets was absent or empty and has just been generated.
         - (bao_secrets_identity.json.data.data | combine(identity_secrets))
           != bao_secrets_identity.json.data.data
       no_log: true
@@ -2707,6 +2714,8 @@
           KEYCLOAK_BFF_CLIENT_SECRET={{ identity_secrets.keycloak_bff_client_secret }}
           KEYCLOAK_MAGIC_LINK_CLIENT_SECRET={{ identity_secrets.keycloak_magic_link_client_secret }}
           KEYCLOAK_ADMIN_CLIENT_SECRET={{ identity_secrets.keycloak_admin_client_secret }}
+          KEYCLOAK_EMPLOYEE_CLIENT_SECRET={{ identity_secrets.keycloak_employee_client_secret }}
+          KEYCLOAK_CITIZEN_CLIENT_SECRET={{ identity_secrets.keycloak_citizen_client_secret }}
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
           PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
@@ -5389,6 +5398,23 @@
       when:
         - enable_keycloak | default(false)
 
+    # Keycloak's digit-sms-sender refuses to boot in `mailpit` mode without the
+    # explicit dev acknowledgement, which would surface as an unhealthy
+    # keycloak container ten minutes into compose-up. Fail here instead.
+    - name: "identity-bootstrap — validate citizen SMS OTP sender"
+      ansible.builtin.assert:
+        that:
+          - (identity_sms_sender | default('log')) in ['log', 'mailpit', 'http']
+          - (identity_sms_sender | default('log')) != 'mailpit' or
+            ((identity_sms_allow_dev | default(false) | bool) and (identity_sms_mailpit_url | default('')) | length > 0)
+          - (identity_sms_sender | default('log')) != 'http' or (identity_sms_http_url | default('')) | length > 0
+        fail_msg: >-
+          identity_sms_sender must be log, mailpit or http. `mailpit` is
+          development-only and needs identity_sms_allow_dev: true plus
+          identity_sms_mailpit_url (e.g. http://mailpit:8025/mailpit);
+          `http` needs identity_sms_http_url.
+      when: enable_keycloak | default(false)
+
     - name: "identity-bootstrap — reconcile Organizations realm and BFF clients"
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
       environment:
@@ -5401,6 +5427,13 @@
         KEYCLOAK_MAGIC_LINK_ENABLED: "{{ identity_magic_link_enabled | default(false) | lower }}"
         KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ identity_secrets.keycloak_magic_link_client_secret }}"
         KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ identity_secrets.keycloak_admin_client_secret }}"
+        # digit-ui employee / citizen clients, flows and themes (#2167).
+        KEYCLOAK_EMPLOYEE_CLIENT_SECRET: "{{ identity_secrets.keycloak_employee_client_secret }}"
+        KEYCLOAK_CITIZEN_CLIENT_SECRET: "{{ identity_secrets.keycloak_citizen_client_secret }}"
+        KEYCLOAK_EMPLOYEE_LOGIN_THEME: "{{ identity_employee_login_theme | default('digit-employee') }}"
+        KEYCLOAK_CITIZEN_LOGIN_THEME: "{{ identity_citizen_login_theme | default('digit-citizen') }}"
+        KEYCLOAK_EMPLOYEE_SIGNIN_METHODS: "{{ identity_employee_signin_methods | default(['password']) | join(',') }}"
+        KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods | default(['phone_otp']) | join(',') }}"
         IDENTITY_REDIRECT_URI: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/identity/v1/callback' }}"
         IDENTITY_POST_LOGIN_REDIRECT: "{{ identity_post_login_redirect | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/configurator/login', true) }}"
         IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain, true) }}"

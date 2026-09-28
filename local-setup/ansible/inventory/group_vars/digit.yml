@@ -390,3 +390,16 @@ digit_ui_bundle_image: "egovio/digit-ui-esbuild:2.12-5137119"
 # anyone holding the URL can post into the channel -- so prefer pulling it from
 # OpenBao via secrets_path rather than committing it here.
 gatus_slack_webhook_url: ""
+
+# Citizen phone + SMS OTP sign-in inside Keycloak (#2167, enable_keycloak only).
+# identity_sms_sender: `log` (default) writes one line per SMS and withholds
+# the code; `mailpit` delivers OTPs to a Mailpit inbox instead of a phone and
+# is DEVELOPMENT ONLY -- Keycloak refuses to start with it unless
+# identity_sms_allow_dev is true; `http` POSTs {to, body, meta} to
+# identity_sms_http_url. Real SMS delivery is not wired yet.
+# Point identity_sms_mailpit_url at the Mailpit HTTP root on the Docker
+# network, including any MP_WEBROOT, e.g. http://mailpit:8025/mailpit.
+identity_sms_sender: log
+identity_sms_allow_dev: false
+identity_sms_mailpit_url: ""
+identity_sms_http_url: ""
