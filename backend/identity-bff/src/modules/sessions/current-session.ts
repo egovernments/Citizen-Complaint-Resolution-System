@@ -6,18 +6,26 @@ import {
 import {
   deleteIdentitySession,
   getIdentitySession,
+  identitySessionSurface,
   saveIdentitySession,
   sessionIdFromCookie,
 } from "./session-store.js";
 import type { IdentitySession } from "./types.js";
+import { DEFAULT_SURFACE, type IdentitySurface } from "../authentication/surfaces.js";
 
+/**
+ * The session behind `surface`'s cookie. A session is only ever returned for
+ * the surface that created it, so an employee or citizen session id pasted
+ * into another surface's cookie authenticates nothing there.
+ */
 export async function currentSession(
   cookieHeader?: string,
+  surface: IdentitySurface = DEFAULT_SURFACE,
 ): Promise<{ sessionId: string; session: IdentitySession } | null> {
-  const sessionId = sessionIdFromCookie(cookieHeader);
+  const sessionId = sessionIdFromCookie(cookieHeader, surface);
   if (!sessionId) return null;
   let session = await getIdentitySession(sessionId);
-  if (!session) return null;
+  if (!session || identitySessionSurface(session) !== surface) return null;
 
   if (session.accessExpiresAt > Date.now() + 30_000) {
     return { sessionId, session };
@@ -51,6 +59,7 @@ export async function currentSession(
       Math.max(1, Math.floor((sessionExpiresAt - Date.now()) / 1000)),
       oidcClientId,
       sessionExpiresAt,
+      { surface: session.surface, boundTenant: session.boundTenant },
     );
     session = (await getIdentitySession(sessionId))!;
     return { sessionId, session };

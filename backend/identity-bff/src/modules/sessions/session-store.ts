@@ -6,7 +6,15 @@ import type {
   IdentityAuthIntent,
   IdentityAuthResult,
 } from "../authentication/types.js";
-import type { IdentitySession, SelectedIdentityContext } from "./types.js";
+import type { IdentitySession, SelectedIdentityContext, SessionBinding } from "./types.js";
+import {
+  DEFAULT_SURFACE,
+  isTenantBoundSurface,
+  parseSurface,
+  sessionCookieName,
+  type BoundTenant,
+  type IdentitySurface,
+} from "../authentication/surfaces.js";
 
 export interface IdentityProfileDraft {
   email: string;
@@ -23,6 +31,10 @@ export interface LoginAttempt {
   returnTo: string;
   requiresLoginCookie: boolean;
   identityProfileDraft?: IdentityProfileDraft;
+  /** Absent on attempts created before #2167, which were all configurator. */
+  surface?: IdentitySurface;
+  /** Resolved before the redirect; required for employee/citizen attempts. */
+  boundTenant?: BoundTenant;
 }
 
 export interface PasswordSetupAttempt {
@@ -62,6 +74,8 @@ export async function createLoginAttempt(input: {
   returnTo: string;
   requiresLoginCookie?: boolean;
   identityProfileDraft?: IdentityProfileDraft;
+  surface?: IdentitySurface;
+  boundTenant?: BoundTenant;
 }): Promise<{
   state: string;
   codeVerifier: string;
@@ -88,10 +102,33 @@ export async function createLoginAttempt(input: {
   return { state, codeVerifier, codeChallenge, nonce };
 }
 
+function validBoundTenant(value: unknown): value is BoundTenant {
+  const tenant = value as BoundTenant | undefined;
+  return typeof tenant === "object" && tenant !== null &&
+    typeof tenant.urlSlug === "string" && Boolean(tenant.urlSlug) &&
+    typeof tenant.tenantId === "string" && Boolean(tenant.tenantId) &&
+    typeof tenant.rootTenantId === "string" && Boolean(tenant.rootTenantId) &&
+    typeof tenant.name === "string";
+}
+
+/** Surface bindings must be internally consistent or the record is discarded. */
+function validBinding(surfaceValue: unknown, boundTenant: unknown): boolean {
+  const surface = parseSurface(surfaceValue);
+  if (!surface) return false;
+  return isTenantBoundSurface(surface)
+    ? validBoundTenant(boundTenant)
+    : boundTenant === undefined;
+}
+
+export function attemptSurface(attempt: Pick<LoginAttempt, "surface">): IdentitySurface {
+  return attempt.surface || DEFAULT_SURFACE;
+}
+
 function parseLoginAttempt(raw: string | null): LoginAttempt | null {
   if (!raw) return null;
   try {
     const attempt = JSON.parse(raw) as LoginAttempt;
+    if (!validBinding(attempt.surface, attempt.boundTenant)) return null;
     const profileDraft = attempt.identityProfileDraft;
     const validProfileDraft = profileDraft === undefined || (
       typeof profileDraft.email === "string" &&
@@ -191,10 +228,13 @@ export async function createIdentitySession(
   tokens: IdentityTokenSet,
   claims: KeycloakClaims,
   oidcClientId: string,
+  binding: SessionBinding = {},
 ): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
   const maxAge = sessionTtl(tokens);
-  await saveIdentitySession(sessionId, tokens, claims, maxAge, oidcClientId);
+  await saveIdentitySession(
+    sessionId, tokens, claims, maxAge, oidcClientId, undefined, binding,
+  );
   return { sessionId, maxAge };
 }
 
@@ -205,11 +245,20 @@ export async function saveIdentitySession(
   ttl = sessionTtl(tokens),
   oidcClientId?: string,
   sessionExpiresAt = Date.now() + ttl * 1000,
+  binding: SessionBinding = {},
 ): Promise<void> {
+  if (binding.surface && !validBinding(binding.surface, binding.boundTenant)) {
+    throw new Error("Invalid identity session surface binding");
+  }
   const now = Date.now();
   const session: IdentitySession = {
     claims,
     ...(oidcClientId && { oidcClientId }),
+    // Configurator sessions stay byte-for-byte what they were before #2167.
+    ...(binding.surface && binding.surface !== DEFAULT_SURFACE && {
+      surface: binding.surface,
+      boundTenant: binding.boundTenant,
+    }),
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     accessExpiresAt: now + tokens.accessExpiresIn * 1000,
@@ -232,10 +281,17 @@ export async function getIdentitySession(
   const raw = await getRedis().get(sessionKey(sessionId));
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as IdentitySession;
+    const session = JSON.parse(raw) as IdentitySession;
+    if (session.surface !== undefined &&
+        !validBinding(session.surface, session.boundTenant)) return null;
+    return session;
   } catch {
     return null;
   }
+}
+
+export function identitySessionSurface(session: IdentitySession): IdentitySurface {
+  return session.surface || DEFAULT_SURFACE;
 }
 
 export async function deleteIdentitySession(sessionId: string): Promise<void> {
@@ -280,30 +336,45 @@ function cookieValue(cookieHeader: string | undefined, cookieName: string): stri
   return null;
 }
 
-export function sessionIdFromCookie(cookieHeader?: string): string | null {
-  return cookieValue(cookieHeader, config.identityCookieName);
+export function sessionIdFromCookie(
+  cookieHeader?: string,
+  surface: IdentitySurface = DEFAULT_SURFACE,
+): string | null {
+  return cookieValue(cookieHeader, sessionCookieName(surface));
 }
 
-export function loginStateFromCookie(cookieHeader?: string): string | null {
-  return cookieValue(cookieHeader, `${config.identityCookieName}_login`);
+export function loginStateFromCookie(
+  cookieHeader?: string,
+  surface: IdentitySurface = DEFAULT_SURFACE,
+): string | null {
+  return cookieValue(cookieHeader, `${sessionCookieName(surface)}_login`);
 }
 
-export function sessionCookie(sessionId: string, maxAge: number): string {
-  const secure = config.identityCookieSecure ? "; Secure" : "";
-  return `${config.identityCookieName}=${sessionId}; Path=/; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${maxAge}${secure}`;
+function secureFlag(): string {
+  return config.identityCookieSecure ? "; Secure" : "";
 }
 
-export function clearedSessionCookie(): string {
-  const secure = config.identityCookieSecure ? "; Secure" : "";
-  return `${config.identityCookieName}=; Path=/; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=0${secure}`;
+export function sessionCookie(
+  sessionId: string,
+  maxAge: number,
+  surface: IdentitySurface = DEFAULT_SURFACE,
+): string {
+  return `${sessionCookieName(surface)}=${sessionId}; Path=/; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${maxAge}${secureFlag()}`;
 }
 
-export function loginCookie(state: string): string {
-  const secure = config.identityCookieSecure ? "; Secure" : "";
-  return `${config.identityCookieName}_login=${state}; Path=/identity/v1/callback; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${config.identityLoginTtlSeconds}${secure}`;
+export function clearedSessionCookie(surface: IdentitySurface = DEFAULT_SURFACE): string {
+  return `${sessionCookieName(surface)}=; Path=/; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=0${secureFlag()}`;
 }
 
-export function clearedLoginCookie(): string {
-  const secure = config.identityCookieSecure ? "; Secure" : "";
-  return `${config.identityCookieName}_login=; Path=/identity/v1/callback; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=0${secure}`;
+/**
+ * Per-surface login-attempt cookie. Separate names let an employee and a
+ * citizen sign-in run in the same browser without clobbering each other's
+ * callback binding.
+ */
+export function loginCookie(state: string, surface: IdentitySurface = DEFAULT_SURFACE): string {
+  return `${sessionCookieName(surface)}_login=${state}; Path=/identity/v1/callback; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${config.identityLoginTtlSeconds}${secureFlag()}`;
+}
+
+export function clearedLoginCookie(surface: IdentitySurface = DEFAULT_SURFACE): string {
+  return `${sessionCookieName(surface)}_login=; Path=/identity/v1/callback; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=0${secureFlag()}`;
 }
