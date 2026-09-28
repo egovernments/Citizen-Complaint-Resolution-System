@@ -8715,11 +8715,13 @@ html .header-dropdown-option:focus-visible {
 }
 /* The sign-in card carries the crest, so the bar does not repeat it: on
  * desktop its brand block, on a phone the crest beside the menu button (the
- * button stays; it is where a phone reaches Language). */
-.citizen:has(.citizen-form-wrapper) .digit-topbar .digit-logo-ulb-wrapper,
-.citizen:has(.citizen-form-wrapper) .digit-topbar .digit-header-img-ulb-wrapper-mobileview {
+ * button stays; it is where a phone reaches Language). Keyed on the card
+ * itself, not the sign-in wrapper: the new-user name step is still a plain
+ * form with no crest of its own, and needs the bar's. */
+.citizen:has(.citizen-sign-in-card) .digit-topbar .digit-logo-ulb-wrapper,
+.citizen:has(.citizen-sign-in-card) .digit-topbar .digit-header-img-ulb-wrapper-mobileview {
   display: none !important;
 }
-.citizen:has(.citizen-form-wrapper) .digit-topbar .digit-header-action-fields {
+.citizen:has(.citizen-sign-in-card) .digit-topbar .digit-header-action-fields {
   margin-left: auto !important;
 }
