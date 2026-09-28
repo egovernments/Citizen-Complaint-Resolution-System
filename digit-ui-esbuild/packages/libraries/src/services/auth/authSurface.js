@@ -53,3 +53,30 @@ export function isKeycloakAuth(pathname) {
 export function isIdentityBffAuth(pathname) {
   return getAuthProvider(pathname) === "identity-bff";
 }
+
+/**
+ * Surface and login page for a protected route. Canonical tenant routes
+ * (`/{tenantSlug}/digit-ui/{surface}/...`) resolve the surface from the
+ * tenant-route parser and send users to that tenant's login; legacy
+ * `/<contextPath>/{surface}/...` routes keep their historical targets.
+ */
+export function privateRouteLogin(pathname, contextPath) {
+  const route = parseTenantRoute(pathname);
+  if (route) {
+    const surface = route.surface === "employee" ? "employee" : "citizen";
+    return {
+      surface,
+      loginPath: surface === "employee"
+        ? `/${route.appBasePath}/employee/user/login`
+        : `/${route.appBasePath}/citizen/login`,
+    };
+  }
+  const parts = (pathname || "").split("/").filter(Boolean);
+  const surface = parts[1] === "employee" ? "employee" : "citizen";
+  const loginPath = isKeycloakAuth(pathname)
+    ? `/${contextPath}/user/login`
+    : (surface === "employee"
+      ? `/${contextPath}/employee/user/language-selection`
+      : `/${contextPath}/citizen/login`);
+  return { surface, loginPath };
+}
