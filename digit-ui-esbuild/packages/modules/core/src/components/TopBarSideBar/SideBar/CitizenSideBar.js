@@ -8,7 +8,7 @@ import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
-import { SidebarFoot } from "./SidebarBrand";
+import { DrawerFoot } from "./SidebarBrand";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
@@ -368,18 +368,42 @@ export const CitizenSideBar = ({
     key: "city",
   }));
 
-  const transformedLanguageData = languages?.map((language) => ({
-    ...language,
-    type: "custom",
-    key: "language",
-    icon: "Language",
-  }));
-
   // On employee the access-control tree already supplies Home (and the
   // module rows, and Dashboard) so the hardcoded HOME row would duplicate it.
   // Before this, the drawer had neither: the employee branch built no module
   // rows at all, so "Modules" opened onto "No Tenants Found" and there was no
   // way to reach the dashboard from a phone (#2038 mobile review).
+  // The account rows under the navigation: the tenant switcher (when shown)
+  // and Edit Profile.
+  const accountRows = [
+    // Same rule as the top bar's ChangeCity, via the shared helper, so the two
+    // surfaces cannot disagree about whether the tenant switcher is shown.
+    ...(showTenantSwitcher(selectCityData?.length)
+      ? [
+          {
+            label: city,
+            value: city,
+            children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
+            type: "custom",
+            icon: "LocationCity",
+            key: "city",
+          },
+        ]
+      : []),
+    // Language is the pill in the phone bar now (#2038 design), so the drawer
+    // no longer repeats it.
+    ...(user && user.access_token
+      ? [
+          {
+            label: t("EDIT_PROFILE"),
+            type: "custom",
+            icon: "Edit",
+            key: "editProfile",
+          },
+        ]
+      : []),
+  ];
+
   const hamburgerItems = [
     // The employee drawer also renders logged out (SideBar/index.js falls to
     // this branch when there is no access_token), and `login-btn` used to reach
@@ -402,37 +426,10 @@ export const CitizenSideBar = ({
             key: "home",
           },
         ]),
-    // Same rule as the top bar's ChangeCity, via the shared helper, so the two
-    // surfaces cannot disagree about whether the tenant switcher is shown.
-    ...(showTenantSwitcher(selectCityData?.length)
-      ? [
-          {
-            label: city,
-            value: city,
-            children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
-            type: "custom",
-            icon: "LocationCity",
-            key: "city",
-          },
-        ]
-      : []),
-    {
-      label: t("Language"),
-      children: transformedLanguageData?.length > 0 ? transformedLanguageData : undefined,
-      type: "custom",
-      icon: "Language",
-      key: "language",
-    },
-    ...(user && user.access_token
-    ? [
-        {
-          label: t("EDIT_PROFILE"),
-          type: "custom",
-          icon: "Edit",
-          key: "editProfile",
-        },
-      ]
-    : []),
+    // One faint line between the navigation and the account rows, and no
+    // other lines in the drawer (#2038 mobile review).
+    ...(accountRows.length > 0 ? [{ type: "divider", key: "account-divider" }] : []),
+    ...accountRows,
     // Only for a caller without rail rows: with them, the modules' sections,
     // the MDMS-configured links and Login are already above, and this group
     // would repeat them.
@@ -476,7 +473,7 @@ export const CitizenSideBar = ({
       // On a phone the crest stays in the top bar right above the drawer, so
       // the drawer takes just the eGov foot; a crest here too would show the
       // same mark twice.
-      renderFooter={() => <SidebarFoot expanded />}
+      renderFooter={() => <DrawerFoot />}
     />
   ) : (
     <StaticCitizenSideBar logout={onLogout} />

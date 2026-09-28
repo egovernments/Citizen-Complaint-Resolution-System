@@ -48,7 +48,7 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
               },
               {
                 internalLink: `/${window?.contextPath}/employee/pgr/create-complaint`,
-                content: t("ACTION_TEST_CREATE_COMPLAINT"),
+                content: t("CS_COMMON_FILE_A_COMPLAINT"),
                 show: location.pathname.includes("create-complaint"),
               },
               {

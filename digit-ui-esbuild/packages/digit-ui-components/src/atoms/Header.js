@@ -17,6 +17,10 @@ const Header = ({
   logo,
   ulb,
   actionFields,
+  // Opt-in controls for the phone bar, which otherwise has only the menu
+  // button and the marks: `actionFields` never render below 768px. Right-
+  // aligned, in order. Absent, the phone bar is unchanged.
+  mobileActionFields,
 }) => {
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
   const onResize = () => {
@@ -96,6 +100,15 @@ const Header = ({
             {ulb}
           </div>
         </div>
+        {mobileActionFields && mobileActionFields.length > 0 && (
+          <div className="digit-header-mobile-actions">
+            {mobileActionFields.map((field, index) => (
+              <div className="individual-mobile-action-field" key={index}>
+                {field}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -171,6 +184,7 @@ Header.propTypes = {
   onImageClick: PropTypes.func,
   onLogoClick: PropTypes.func,
   onHamburgerClick: PropTypes.func,
+  mobileActionFields: PropTypes.array,
   props: PropTypes.object,
   logo: PropTypes.string,
 };
