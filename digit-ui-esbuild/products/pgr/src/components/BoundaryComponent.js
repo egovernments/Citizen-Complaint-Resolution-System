@@ -311,7 +311,11 @@ useEffect(() => {
     const isDeepestLevel =
       deepest?.boundaryType === lastLevel ||
       (lowestLevelCapped && !(deepest?.children && deepest.children.length > 0));
-    onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel }, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    onSelect(
+      config.key,
+      { ...deepest, isLeaf: isDeepestLevel, levels: levelsOf(path) },
+      { shouldValidate: true, shouldDirty: true, shouldTouch: true }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardHintCode, wardHintName, childrenData]);
 
@@ -366,7 +370,15 @@ useEffect(() => {
     // onSelect is RHF's setValue (FieldV1 wires component onSelect -> setValue).
     // Pass shouldValidate so the `required` rule re-runs and formState.isValid
     // (which gates the disabled NEXT/SubmitBar) flips true on selection.
-    onSelect(config.key, { ...selectedBoundary, isLeaf: isDeepestLevel }, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    onSelect(
+      config.key,
+      {
+        ...selectedBoundary,
+        isLeaf: isDeepestLevel,
+        levels: levelsOf(boundaryHierarchy.map((type) => newSelectedValues[type]).filter(Boolean)),
+      },
+      { shouldValidate: true, shouldDirty: true, shouldTouch: true }
+    );
 
     // Load child boundaries
     if (selectedBoundary.children && selectedBoundary.children.length > 0) {
@@ -384,7 +396,7 @@ useEffect(() => {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+    <div className="pgr-boundary-cascade" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         {effectiveHierarchy.map((key, idx) => {
           // Gate child dropdowns by parent selection so the user can't
           // pick a Ward without first picking County → Sub-County. The
@@ -486,6 +498,16 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
     </V2Field>
   );
 };
+
+/**
+ * The chosen node at each level, root to leaf, as `{ code, boundaryType }`.
+ * Handed up with the selection so a caller can name the whole address (a
+ * review screen showing "Ward, Sub County, County") without another lookup;
+ * the complaint payload still reads only the leaf's `code`.
+ */
+function levelsOf(nodes) {
+  return (nodes || []).map((node) => ({ code: node.code, boundaryType: node.boundaryType }));
+}
 
 /**
  * Walk the boundary tree and return the path (root → … → ward) whose
