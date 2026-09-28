@@ -100,14 +100,14 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     nameField: 'businessId', descriptionField: 'action', dedicated: true,
   },
   'access-roles': {
-    type: 'access-role', label: 'Access Roles', idField: 'code',
+    // Backed by the ACCESSCONTROL-ROLES.roles MDMS master itself (not the
+    // read-only accesscontrol role-search API, which only returns active
+    // roles), so roles can be added, edited and enabled/disabled via the
+    // root-level isActive like every other master. uniqueIdentifier == code,
+    // so ids and `reference="access-roles"` dropdowns are unchanged; those
+    // dropdowns still see active roles only (egovernments/CCRS#1846).
+    type: 'mdms', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
-    // `schema` here is a masters-visibility policy key only (see
-    // docs/design/masters-configurator-access-policy-design.md §3.2) — this
-    // resource still fetches via the accesscontrol role API (`type:
-    // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
-    // every fetch branch in dataProvider.ts before `config.schema` is ever
-    // read, so adding it here does not change how this resource is fetched.
     schema: MDMS_SCHEMAS.ROLES,
   },
   'access-actions': {

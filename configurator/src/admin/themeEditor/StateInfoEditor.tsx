@@ -145,6 +145,8 @@ export function StateInfoEditor() {
 
   const [record, setRecord] = useState<StateInfoRecord | null>(null);
   const [data, setData] = useState<StateInfoData>({});
+  // The MDMS record's root-level isActive — the enable/disable flag.
+  const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -172,6 +174,7 @@ export function StateInfoEditor() {
         }
         setRecord(target);
         setData({ ...target.data });
+        setIsActive(target.isActive !== false);
       } catch (e) {
         setLoadError((e as Error)?.message || 'Failed to load StateInfo.');
       } finally {
@@ -213,7 +216,7 @@ export function StateInfoEditor() {
           ...record,
           data: updated,
         } as unknown as Parameters<typeof digitClient.mdmsUpdate>[0],
-        record.isActive,
+        isActive,
       );
       toast({
         title: 'State Info updated',
@@ -320,6 +323,20 @@ export function StateInfoEditor() {
             <Label htmlFor="hasLocalisation" className="text-sm">
               <span className="font-medium">hasLocalisation</span>
               <span className="text-muted-foreground"> — when off, digit-ui skips the localization fetch entirely.</span>
+            </Label>
+          </section>
+
+          <section className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              id="isActive"
+              className="h-4 w-4 accent-primary-main"
+            />
+            <Label htmlFor="isActive" className="text-sm">
+              <span className="font-medium">Active</span>
+              <span className="text-muted-foreground"> — the record's root-level isActive; unchecking disables it.</span>
             </Label>
           </section>
 

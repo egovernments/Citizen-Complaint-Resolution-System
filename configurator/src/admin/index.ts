@@ -1,7 +1,6 @@
 // Re-export datagrid components and types from @digit-ui/datagrid package
+export { DigitDatagrid, DigitList, MASTER_SCREEN_META } from './masterScreens';
 export {
-  DigitDatagrid,
-  DigitList,
   EditableCell,
   ReferenceSelect,
   RowActions,

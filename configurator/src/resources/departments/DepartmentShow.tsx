@@ -1,11 +1,11 @@
-import { DigitShow } from '@/admin';
+import { DigitShow, MASTER_SCREEN_META } from '@/admin';
 import { FieldSection, FieldRow, ReverseReferenceList } from '@/admin/fields';
 import { StatusChip } from '@/admin/fields';
 import { useShowController } from 'ra-core';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 export function DepartmentShow() {
-  const { record } = useShowController();
+  const { record } = useShowController({ queryOptions: { meta: MASTER_SCREEN_META } });
   const { canEditResource } = useMastersCapability();
 
   return (
@@ -16,7 +16,7 @@ export function DepartmentShow() {
             <FieldRow label="Code">{String(rec.code ?? '')}</FieldRow>
             <FieldRow label="Name">{String(rec.name ?? '')}</FieldRow>
             <FieldRow label="Status">
-              <StatusChip value={rec.active} labels={{ true: 'Active', false: 'Inactive' }} />
+              <StatusChip value={rec._isActive} labels={{ true: 'Active', false: 'Inactive' }} />
             </FieldRow>
             <FieldRow label="Description">{String(rec.description ?? '--')}</FieldRow>
           </FieldSection>

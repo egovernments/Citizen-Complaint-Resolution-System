@@ -407,8 +407,10 @@ describe('createDigitDataProvider', () => {
       },
     ]);
     let captured: Record<string, unknown> | null = null;
-    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
+    let capturedIsActive: boolean | undefined;
+    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }, isActive: boolean) => {
       captured = rec.data;
+      capturedIsActive = isActive;
       return rec;
     });
 
@@ -420,8 +422,8 @@ describe('createDigitDataProvider', () => {
         id: 'DEPT_1',
         code: 'DEPT_1',
         name: 'New Name',
-        active: false,
-        _isActive: true,
+        active: true,
+        _isActive: false,
         _uniqueIdentifier: 'DEPT_1',
         _auditDetails: { createdBy: 'x' },
         _schemaCode: 'common-masters.Department',
@@ -433,6 +435,10 @@ describe('createDigitDataProvider', () => {
     assert.ok(captured, 'mdmsUpdate should have been called');
     assert.deepEqual(Object.keys(captured!).sort(), ['active', 'code', 'name']);
     assert.equal((captured as { name: string }).name, 'New Name');
+    // The root-level isActive (`_isActive`) is the single enable/disable flag:
+    // it is what gets saved, and the duplicate in-`data` `active` follows it
+    // (egovernments/CCRS#1846).
+    assert.equal(capturedIsActive, false);
     assert.equal((captured as { active: boolean }).active, false);
   });
 
@@ -888,26 +894,34 @@ describe('createDigitDataProvider', () => {
     assert.equal(result.data.find((r) => r.id === 'CITY_001')?.tenantId, 'ke.mycitynew');
   });
 
-  it('getList(access-roles) returns one record per role code', async () => {
-    // egov-accesscontrol merges the tenant's roles with the state tenant's, so
-    // a role defined at both levels comes back twice.
-    mock.method(client, 'accessRolesSearch', async () => [
-      { code: 'HRMS_ADMIN', name: 'HRMS Admin', tenantId: 'ke' },
-      { code: 'HRMS_ADMIN', name: 'HRMS Admin', tenantId: 'ke.bomet' },
-      { code: 'LOC_ADMIN', name: 'Localisation admin', tenantId: 'ke' },
-      { code: 'LOC_ADMIN', name: 'Localisation admin', tenantId: 'ke.bomet' },
-      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
-    ]);
+  it('getList(access-roles) reads the MDMS roles master; inactive roles only on master screens', async () => {
+    // access-roles is backed by ACCESSCONTROL-ROLES.roles itself, so a role
+    // disabled via the root-level isActive stays reachable on the master
+    // screens (meta.showInactive) but disappears from every other consumer
+    // (e.g. role dropdowns) — egovernments/CCRS#1846.
+    const roles = [
+      { code: 'ACCOUNT_ADMIN', name: 'Account Admin', isActive: false },
+      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', isActive: true },
+    ].map((r) => ({
+      id: `id-${r.code}`, tenantId: 'ke', schemaCode: 'ACCESSCONTROL-ROLES.roles',
+      uniqueIdentifier: r.code, data: { code: r.code, name: r.name }, isActive: r.isActive,
+    }));
+    const matching = (options?: { isActive?: boolean }) =>
+      options?.isActive === undefined ? roles : roles.filter((r) => r.isActive === options.isActive);
+    mock.method(client, 'mdmsCount', async (_t: string, _s: string, options?: { isActive?: boolean }) =>
+      matching(options).length);
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { isActive?: boolean; offset?: number }) =>
+      (options?.offset ? [] : matching(options)));
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('access-roles', {
-      pagination: { page: 1, perPage: 100 },
-      sort: { field: 'name', order: 'ASC' },
-      filter: {},
-    });
+    const params = { pagination: { page: 1, perPage: 100 }, sort: { field: 'code', order: 'ASC' as const }, filter: {} };
 
-    assert.deepEqual(result.data.map((r) => r.id), ['HRMS_ADMIN', 'LOC_ADMIN', 'MDMS_ADMIN']);
-    assert.equal(result.total, 3);
+    const lookup = await dp.getList('access-roles', params);
+    assert.deepEqual(lookup.data.map((r) => r.id), ['MDMS_ADMIN']);
+
+    const masterScreen = await dp.getList('access-roles', { ...params, meta: { showInactive: true } });
+    assert.deepEqual(masterScreen.data.map((r) => r.id), ['ACCOUNT_ADMIN', 'MDMS_ADMIN']);
+    assert.equal(masterScreen.data.find((r) => r.id === 'ACCOUNT_ADMIN')?._isActive, false);
   });
 
   it('keeps records whose id extraction failed, under distinct synthetic ids', async () => {
@@ -915,14 +929,14 @@ describe('createDigitDataProvider', () => {
     // are as broken as a real duplicate — react-admin keys on id — but they are
     // NOT the same record, so dropping the later one would hide a real row.
     // Each repeat gets its own id instead.
-    mock.method(client, 'accessRolesSearch', async () => [
+    mock.method(client, 'accessActionsSearch', async () => [
       { name: 'No code at all', tenantId: 'ke' },
       { name: 'Also no code', tenantId: 'ke' },
-      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
+      { id: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
     ]);
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('access-roles', {
+    const result = await dp.getList('access-actions', {
       pagination: { page: 1, perPage: 100 },
       sort: { field: 'name', order: 'ASC' },
       filter: {},
@@ -941,14 +955,14 @@ describe('createDigitDataProvider', () => {
   it('does not let a synthetic blank id swallow a real record that collides with it', async () => {
     // A real record whose code happens to equal the synthetic id must survive,
     // even though it is listed AFTER the blank-id records that generate one.
-    mock.method(client, 'accessRolesSearch', async () => [
+    mock.method(client, 'accessActionsSearch', async () => [
       { name: 'No code at all', tenantId: 'ke' },
       { name: 'Also no code', tenantId: 'ke' },
-      { code: '#blank-1', name: 'Real role oddly named', tenantId: 'ke' },
+      { id: '#blank-1', name: 'Real role oddly named', tenantId: 'ke' },
     ]);
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('access-roles', {
+    const result = await dp.getList('access-actions', {
       pagination: { page: 1, perPage: 100 },
       sort: { field: 'name', order: 'ASC' },
       filter: {},

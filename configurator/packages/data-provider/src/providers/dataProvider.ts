@@ -523,14 +523,28 @@ async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: str
   return all;
 }
 
-async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+async function mdmsGetList(
+  client: DigitApiClient,
+  config: ResourceConfig,
+  tenantId: string,
+  filter?: Record<string, unknown>,
+  includeInactive = false,
+): Promise<RaRecord[]> {
   const tenant = pickTenant(tenantId, filter);
   // No isActive push-down here: the leaf-adapter (adaptHierarchyLeaves) needs inactive
   // rows too, to resolve a leaf's parent name even when that parent has since been
   // deactivated. Non-leaf-adapter callers filter isActive themselves below.
   const records = await mdmsSearchAll(client, tenant, config.schema!);
   if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
-  return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+  const visible = includeInactive ? records : records.filter((r) => r.isActive);
+  return visible.map((r) => normalizeMdmsRecord(r, config));
+}
+
+/** True when the caller is a configurator master screen (List/Show/Edit —
+ *  MASTER_SCREEN_META), the only place deactivated MDMS records are shown.
+ *  Every other consumer (dropdowns, lookups, EntityLink) sees active rows only. */
+function wantsInactive(meta: unknown): boolean {
+  return Boolean((meta as { showInactive?: boolean } | undefined)?.showInactive);
 }
 
 async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
@@ -1063,14 +1077,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
   // Every list-shaped read funnels through here (getList's generic path,
   // getMany, getManyReference), so this is the one place that can guarantee the
   // "unique id per record" invariant react-admin depends on — see dedupeById.
-  async function fetchAll(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-    return dedupeById(await fetchAllRaw(resource, filter));
+  async function fetchAll(resource: string, filter?: Record<string, unknown>, includeInactive = false): Promise<RaRecord[]> {
+    return dedupeById(await fetchAllRaw(resource, filter, includeInactive));
   }
 
-  async function fetchAllRaw(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+  async function fetchAllRaw(resource: string, filter?: Record<string, unknown>, includeInactive = false): Promise<RaRecord[]> {
     const config = resolveConfig(resource);
     switch (config.type) {
-      case 'mdms': return mdmsGetList(client, config, tenantId, filter);
+      case 'mdms': return mdmsGetList(client, config, tenantId, filter, includeInactive);
       case 'hrms': return hrmsGetList(client, config, tenantId, filter);
       case 'boundary': return boundaryGetList(client, config, tenantId);
       case 'pgr': return pgrGetList(client, config, tenantId, filter);
@@ -1212,12 +1226,20 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // slice the requested page. mdmsSearchAll bounds itself on mdmsCount
       // with the SAME isActive criteria, so the total it hands back always
       // agrees with what was actually paged through.
+      // Master list screens pass meta.showInactive so deactivated records are
+      // listed (with a Status chip) and can be re-enabled; every other caller
+      // keeps seeing active rows only (egovernments/CCRS#1846).
+      const showInactive = wantsInactive(params.meta);
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const all = await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
+          // showInactive skips the isActive push-down entirely — deactivated
+          // rows are shown (and re-enabled) rather than hidden.
+          const all = showInactive
+            ? await mdmsSearchAll(client, tenant, config.schema!)
+            : await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
           // Defensive fallback for any MDMS build that ignores the isActive criterion —
           // degrades to filtering client-side, never worse than the pre-push-down behavior.
           // dedupeById mirrors what fetchAll does for the filtered path below, so
@@ -1225,16 +1247,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           // A no-op for records carrying an MDMS uniqueIdentifier (always unique);
           // it only bites on legacy rows that fall back to data[idField], which
           // normalizeMdmsRecord already notes collapse onto one record anyway.
-          const active = dedupeById(
-            all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config)),
-          );
-          const sorted = clientSort(active, field, order);
+          const visible = showInactive ? all : all.filter((r) => r.isActive);
+          const mapped = dedupeById(visible.map((r) => normalizeMdmsRecord(r, config)));
+          const sorted = clientSort(mapped, field, order);
           const data = clientPaginate(sorted, page, perPage);
-          return { data, total: active.length };
+          return { data, total: mapped.length };
         }
       }
 
-      const all = await fetchAll(resource, filterValues);
+      const all = await fetchAll(resource, filterValues, showInactive);
       const filtered = clientFilter(all, filterValues);
       const sorted = clientSort(filtered, field, order);
       const data = clientPaginate(sorted, page, perPage);
@@ -1268,10 +1289,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         }
         // Try uniqueIdentifier lookup first (fast path for records we created)
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        const active = records.filter((r) => r.isActive);
-        if (active.length) return { data: normalizeMdmsRecord(active[0], config) };
+        // Master Show/Edit screens (meta.showInactive) also resolve a
+        // deactivated record so it can be viewed and re-enabled; every other
+        // lookup (EntityLink etc.) only resolves active ones.
+        const showInactive = wantsInactive(params.meta);
+        const match = records.find((r) => r.isActive) ?? (showInactive ? records[0] : undefined);
+        if (match) return { data: normalizeMdmsRecord(match, config) };
         // Fall back to fetching all and matching by id field (handles hash-based UIDs)
-        const all = await mdmsGetList(client, config, tenantId);
+        const all = await mdmsGetList(client, config, tenantId, undefined, showInactive);
         const found = all.find((r) => String(r.id) === String(params.id));
         if (!found) throw new Error(`Record not found: ${params.id}`);
         return { data: found };
@@ -1593,11 +1618,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        // Opt-in reactivation: when meta.includeInactive is set, fall back to a
-        // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
-        // that delete() left occupied (mdmsUpdate below forces isActive: true).
-        const includeInactive = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
-        const existing = records.find((r) => r.isActive) ?? (includeInactive ? records[0] : undefined);
+        // Fall back to a deactivated row for the master Edit screen
+        // (meta.showInactive, re-enable via _isActive) and for the
+        // Remove -> re-Add flow (meta.includeInactive), which resurrects the
+        // uid delete() left occupied.
+        const reactivate = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
+        const existing =
+          records.find((r) => r.isActive) ??
+          (reactivate || wantsInactive(params.meta) ? records[0] : undefined);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
         // Strip the metadata that normalizeMdmsRecord glued onto the
         // record for react-admin's benefit (id, _isActive, _mdmsId,
@@ -1609,6 +1637,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const incoming = config.leafServiceDefAdapter
           ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
           : (params.data as Record<string, unknown>);
+        // The generic `_isActive` checkbox (MdmsResourceEdit/RoleActionEdit) is
+        // the one `_`-prefixed field callers are allowed to set — it's the MDMS
+        // envelope's isActive, not a `data` field, so it's read here rather
+        // than surviving into `sanitized` below. When absent (an edit form
+        // without the checkbox, or a dirty-fields-only payload) the record
+        // keeps its current status, except the Remove -> re-Add flow above.
+        const desiredIsActive =
+          typeof incoming._isActive === 'boolean' ? incoming._isActive : reactivate || existing.isActive;
         const sanitized: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(incoming)) {
           if (key === 'id') continue;
@@ -1616,11 +1652,20 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
+        // Root-level isActive is the single source of truth for enable/disable.
+        // Some masters also carry a boolean isActive/active inside `data`
+        // (e.g. NotificationRouting, MobileNumberValidation); mirror the root
+        // value into it so the two can never disagree. Non-boolean fields of
+        // the same name (Workflow.BusinessServiceMasterConfig.active is a
+        // string identifier) are left alone.
+        for (const key of ['isActive', 'active']) {
+          if (typeof existing.data[key] === 'boolean') existing.data[key] = desiredIsActive;
+        }
         // React-admin may send only dirty fields. Validate the authoritative
         // merged record so partial updates, updateMany, and reactivation cannot
         // revive a competing PGR Workflow.AutoEscalation policy.
         rejectLegacyPgrEscalationWrite(config, existing.data);
-        const updated = await client.mdmsUpdate(existing, true);
+        const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
           const all = await mdmsGetList(client, config, tenantId);
           const found = all.find((r) => String(r.id) === String(params.id));

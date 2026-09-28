@@ -37,10 +37,10 @@ const columns: DigitColumn[] = [
   { source: 'code', label: 'app.fields.code' },
   { source: 'name', label: 'app.fields.name', editable: true },
   {
-    source: 'active',
+    source: '_isActive',
     label: 'app.fields.status',
     render: (record) => (
-      <StatusChip value={record.active} labels={{ true: 'Active', false: 'Inactive' }} />
+      <StatusChip value={record._isActive} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
   },
   {
