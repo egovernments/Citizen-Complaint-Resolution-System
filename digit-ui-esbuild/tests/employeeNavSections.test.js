@@ -25,7 +25,7 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { insertModuleSections } = require(OUT);
+const { insertModuleSections, isCitizenHome, mdmsLinkRows, withTenantSegment } = require(OUT);
 
 const HOME = { label: "Home", navigationUrl: "/digit-ui/employee", icon: { icon: "Home" } };
 const DASHBOARD = { label: "Dashboard", navigationUrl: "/digit-ui/employee/dashboard", icon: { icon: "Dashboard" } };
@@ -78,3 +78,61 @@ test("no usable sections leaves the items untouched", () => {
   assert.equal(insertModuleSections(items, []), items);
   assert.equal(insertModuleSections(items, [null, { key: "x", label: "X", items: [] }]), items);
 });
+
+test("the citizen app anchors on its own Home", () => {
+  const home = { label: "Home", navigationUrl: "/digit-ui/citizen/all-services" };
+  const helpline = { label: "Helpline", navigationUrl: "tel:0700000000" };
+  const out = insertModuleSections([home, helpline], [COMPLAINTS], isCitizenHome);
+  assert.deepEqual(out.map((i) => i.label), ["Home", "Complaints", "Helpline"]);
+});
+
+// The shape processLinkData reads: rows grouped by parentModule, the first row
+// carrying the sidebar marker and URL.
+const LINK_DATA = {
+  PGR: [{ sidebar: "digit-ui-links", sidebarURL: "/digit-ui/citizen/pgr-home", leftIcon: "PGRIcon" }],
+  WS: [{ sidebar: "digit-ui-links", sidebarURL: "/digit-ui/citizen/ws-home" }],
+  FAQ: [{ sidebar: "digit-ui-links", sidebarURL: "https://example.org/faq" }],
+  TL: [{ sidebar: "digit-ui-card", sidebarURL: "/digit-ui/citizen/tl-home" }],
+};
+
+test("MDMS sidebar links become rows, skipping modules with their own section", () => {
+  const rows = mdmsLinkRows(LINK_DATA, {
+    contextPath: "digit-ui",
+    labelFor: (code) => `ACTION_TEST_${code}`,
+    hasOwnSection: (code) => code === "PGR",
+  });
+  assert.deepEqual(
+    rows.map((r) => [r.label, r.navigationUrl]),
+    [
+      ["ACTION_TEST_WS", "/digit-ui/citizen/ws-home"],
+      ["ACTION_TEST_FAQ", "https://example.org/faq"],
+    ]
+  );
+});
+
+test("MDMS rows keep a configured icon and fall back by kind", () => {
+  const icons = Object.fromEntries(
+    mdmsLinkRows(LINK_DATA, { contextPath: "digit-ui" }).map((r) => [r.navigationUrl, r.icon.icon])
+  );
+  assert.equal(icons["/digit-ui/citizen/pgr-home"], "PGRIcon");
+  assert.equal(icons["/digit-ui/citizen/ws-home"], "Apps");
+  assert.equal(icons["https://example.org/faq"], "OpenInNew");
+});
+
+test("no link data gives no rows", () => {
+  assert.deepEqual(mdmsLinkRows(undefined, { contextPath: "digit-ui" }), []);
+});
+
+test("multi-root puts the tenant into citizen and employee routes", () => {
+  assert.equal(withTenantSegment("/sandbox-ui/citizen/pgr/complaints", "sandbox-ui", "pg"), "/sandbox-ui/pg/citizen/pgr/complaints");
+  assert.equal(withTenantSegment("/sandbox-ui/employee/pgr/inbox-v2", "sandbox-ui", "pg"), "/sandbox-ui/pg/employee/pgr/inbox-v2");
+  assert.equal(withTenantSegment("/sandbox-ui/citizen", "sandbox-ui", "pg"), "/sandbox-ui/pg/citizen");
+});
+
+test("a route that already has the tenant, or is not an app route, is left alone", () => {
+  assert.equal(withTenantSegment("/sandbox-ui/pg/citizen/pgr/complaints", "sandbox-ui", "pg"), "/sandbox-ui/pg/citizen/pgr/complaints");
+  assert.equal(withTenantSegment("/sandbox-ui/citizenship", "sandbox-ui", "pg"), "/sandbox-ui/citizenship");
+  assert.equal(withTenantSegment("/other/citizen/x", "sandbox-ui", "pg"), "/other/citizen/x");
+  assert.equal(withTenantSegment("/sandbox-ui/citizen/x", "sandbox-ui", undefined), "/sandbox-ui/citizen/x");
+});
+
