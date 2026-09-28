@@ -6,7 +6,6 @@ import { interpret } from 'xstate';
 import { inspect } from '@xstate/inspect';
 import chatbotMachine from '../../nodejs/src/machine/seva';
 
-import * as marked from 'marked';
 
 inspect({
     iframe: false

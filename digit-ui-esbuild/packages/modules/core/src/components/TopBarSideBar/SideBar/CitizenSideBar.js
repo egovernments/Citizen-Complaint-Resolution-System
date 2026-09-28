@@ -7,6 +7,7 @@ import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
+import { SidebarFoot } from "./SidebarBrand";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
@@ -76,10 +77,10 @@ export const CitizenSideBar = ({
   toggleSidebar,
   onLogout,
   isEmployee = false,
-  // Employee navigation, same tree the desktop SideNav renders. Supplied by
-  // EmployeeMobileSideBar rather than fetched here, so the citizen drawer
-  // never mounts the access-control query.
-  employeeNavItems = [],
+  // The rows the desktop rail renders, for whichever app this is. Supplied by
+  // the Employee/Citizen mobile wrappers rather than fetched here, so the
+  // citizen drawer never mounts the employee access-control query.
+  navItems = [],
   linkData,
   islinkDataLoading,
   userProfile,
@@ -211,7 +212,7 @@ export const CitizenSideBar = ({
   }
   // The employee branch that used to live here rebuilt the module rows from
   // `data.actions` into `menuItems`. Those rows now come from
-  // `employeeNavItems` via the `employeeNavItems` prop, and `menuItems` is no
+  // the `navItems` prop, and `menuItems` is no
   // longer rendered on the employee drawer at all, so the whole build was
   // running on every render and having its output discarded.
 
@@ -318,8 +319,11 @@ export const CitizenSideBar = ({
     ...(isEmployee && !user?.access_token
       ? [{ label: t("CORE_COMMON_LOGIN"), type: "custom", icon: "Login", key: "login" }]
       : []),
-    ...(isEmployee
-      ? employeeNavItems
+    // The rail's own rows when the app supplies them (both apps do now), so
+    // the drawer and the desktop rail list the same destinations. The bare
+    // HOME row is only the fallback for a caller that passes none.
+    ...(isEmployee || navItems.length
+      ? navItems
       : [
           {
             label: "HOME",
@@ -346,9 +350,10 @@ export const CitizenSideBar = ({
         },
       ]
     : []),
-    // Citizen only: on employee the module rows are already above, and this
-    // group resolved to an empty list.
-    ...(isEmployee
+    // Only for a caller without rail rows: with them, the modules' sections,
+    // the MDMS-configured links and Login are already above, and this group
+    // would repeat them.
+    ...(isEmployee || navItems.length
       ? []
       : [
           {
@@ -385,6 +390,10 @@ export const CitizenSideBar = ({
       closeOnClickOutside={true}
       onOutsideClick={() => toggleSidebar(false)}
       onSelect={({ item, index, parentIndex }) => onItemSelect({ item, index, parentIndex })}
+      // On a phone the crest stays in the top bar right above the drawer, so
+      // the drawer takes just the eGov foot; a crest here too would show the
+      // same mark twice.
+      renderFooter={() => <SidebarFoot expanded />}
     />
   ) : (
     <StaticCitizenSideBar logout={onLogout} />

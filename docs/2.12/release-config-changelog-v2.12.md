@@ -75,6 +75,7 @@ This lists every config key, master data change, and infra change in this releas
 | `novu.bridge.channels.enabled` | (not present) | `SMS,EMAIL` — WhatsApp now needs explicit opt-in |
 | `egov.boundary.host` | `http://localhost:8081` | `http://boundary-service.egov:8080/` |
 | `core_postal_configs` (host_vars) | had `postalCodeLength` / `postalCodeErrorMessage` | those two keys removed — `postalCodePattern` is the only knob |
+| `pgr.employee.context.resolver-role-codes` (env `PGR_EMPLOYEE_CONTEXT_RESOLVER_ROLE_CODES`) | `PGR_LME,GRO,DGRO` | `PGR_LME` — a grievance officer routes a complaint, it belongs to the resolver once assigned, so the working-context header no longer labels a GRO "Resolver" (#2125). `DGRO` was already retired from the workflow. **This is a compiled default with no deployment override, so it needs a pgr-services rebuild, not a config change.** |
 
 #### Removed keys
 

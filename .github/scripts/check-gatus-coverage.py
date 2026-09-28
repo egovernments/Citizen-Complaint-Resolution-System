@@ -92,6 +92,10 @@ LS = ROOT / "local-setup"
 # triggers on every entry here wherever it lives -- adding one needs no change there. Do
 # not narrow that filter to a list of names: when a paths: filter guesses wrong the
 # workflow never runs, so the guard cannot report what it was never invoked to see.
+# Compose files here are inputs to local-setup/ansible/tests/, not deployable
+# stacks -- see find_unlisted_compose_files().
+FIXTURES = (LS / "ansible" / "tests" / "fixtures").resolve()
+
 COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
@@ -368,6 +372,15 @@ def find_unlisted_compose_files():
     # names it already expects.
     on_disk = {p.resolve() for p in LS.rglob("*compose*.yml")} | \
               {p.resolve() for p in LS.rglob("*compose*.yaml")}
+    # Test fixtures are not a stack anyone deploys, and one of them has to carry
+    # this exact filename: tasks/pg-storage-guard.yml decides "has this box been
+    # deployed to before" by stat-ing {{ digit_dir }}/docker-compose.egov-digit.yaml,
+    # so the fixture standing in for an existing stack must be named that.
+    #
+    # Scoped to this one directory on purpose. A broader "skip anything under a
+    # tests/ dir" rule would let a real compose file hide by being moved, which is
+    # the failure this function exists to prevent.
+    on_disk = {p for p in on_disk if FIXTURES not in p.parents}
     return sorted(str(p.relative_to(LS)) for p in on_disk - listed)
 
 
