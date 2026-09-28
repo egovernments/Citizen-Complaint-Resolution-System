@@ -80,6 +80,39 @@ export async function recordManagedTenant(userId: string, tenantId: string): Pro
   });
 }
 
+const CITIZEN_REGISTRATIONS_ATTRIBUTE = "digit.citizenRegistrations";
+
+/** Raw `digit.citizenRegistrations` values of one Keycloak user. */
+export async function citizenRegistrationValues(userId: string): Promise<string[]> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  return [...(user.attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
+}
+
+/**
+ * Read-modify-write of `digit.citizenRegistrations`, the durable citizen
+ * registration record, alongside `digit.managedTenants` on the same user.
+ * `update` returns the new values, or null to leave the user untouched.
+ */
+export async function updateCitizenRegistrationValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  const current = [...(user.attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
+  const next = update(current);
+  if (!next) return current;
+  await request(`/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ...user,
+      attributes: { ...user.attributes, [CITIZEN_REGISTRATIONS_ATTRIBUTE]: next },
+    }),
+  });
+  return next;
+}
+
 export interface IdentityUserProfile {
   name: string;
   emailId?: string;

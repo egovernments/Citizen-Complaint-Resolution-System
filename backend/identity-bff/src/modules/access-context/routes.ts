@@ -7,29 +7,42 @@ import {
   managedIdentity,
   managedUserLogin,
 } from "../managed-accounts/managed-account-service.js";
+import type { DigitLogin } from "../managed-accounts/digit-user-client.js";
+import { parseSurface } from "../authentication/surfaces.js";
+import { mobileValidationForRoute } from "../branding/tenant-branding.js";
+import {
+  CitizenContextError,
+  ensureCitizenRegistration,
+  splitE164,
+} from "../citizens/citizen-registration.js";
+import { isActiveDigitTenant } from "./tenant-directory.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { syncSubjectTenant } from "../reconciliation/subject-sync.js";
 import { currentSession } from "../sessions/current-session.js";
 import { saveSelectedIdentityContext } from "../sessions/session-store.js";
-import {
-  IdentityAdminError,
-  readTenantMappingForUrlSlug,
-} from "../organizations/organization-service.js";
+import { IdentityAdminError } from "../organizations/organization-service.js";
 import type { TenantOption } from "./tenant-directory.js";
-import { isActiveDigitTenant } from "./tenant-directory.js";
+import { resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
-
-const URL_SLUG = /^[a-z0-9-]{2,63}$/;
-
-function validUrlSlug(value: string): boolean {
-  return URL_SLUG.test(value) && (value.match(/[a-z]/g) || []).length >= 2;
-}
 
 function publicTenant({ organizationId: _organizationId, ...tenant }: TenantOption) {
   return tenant;
 }
 
+function tokenResponse(login: DigitLogin) {
+  return {
+    access_token: login.accessToken,
+    token_type: "bearer",
+    expires_in: Math.max(1, Math.floor((login.expiresAt - Date.now()) / 1000)),
+    scope: "read",
+    UserRequest: login.user,
+  };
+}
+
 function digitFailure(error: unknown, response: express.Response, message: string) {
+  if (error instanceof CitizenContextError) {
+    return response.status(error.status).json({ error: error.message });
+  }
   if (error instanceof ManagedAccountError) {
     return response.status(error.status).json({ error: error.message });
   }
@@ -47,27 +60,14 @@ export function registerAccessContextRoutes(app: express.Application): void {
   // tenant-directory query. Authorization still happens in `_select`.
   app.get("/identity/v1/tenant-contexts/:urlSlug", asyncRoute(async (request, response) => {
     const rawUrlSlug = request.params.urlSlug;
-    const urlSlug = (Array.isArray(rawUrlSlug) ? rawUrlSlug[0] : rawUrlSlug)
-      .trim()
-      .toLowerCase();
-    if (!validUrlSlug(urlSlug)) {
-      return response.status(404).json({ error: "Tenant route is not available" });
-    }
     try {
-      const mapping = await readTenantMappingForUrlSlug(urlSlug);
-      if (!mapping || !await isActiveDigitTenant(mapping.tenantId)) {
+      const tenant = await resolvePublicTenantRoute(
+        Array.isArray(rawUrlSlug) ? rawUrlSlug[0] : rawUrlSlug,
+      );
+      if (!tenant) {
         return response.status(404).json({ error: "Tenant route is not available" });
       }
-      return response.json({
-        tenant: {
-          urlSlug: mapping.urlSlug,
-          tenantId: mapping.tenantId,
-          rootTenantId: mapping.rootTenantId,
-          parentTenantId: mapping.parentTenantId,
-          fallbackTenantIds: mapping.fallbackTenantIds,
-          name: mapping.name,
-        },
-      });
+      return response.json({ tenant });
     } catch (error) {
       if (error instanceof IdentityAdminError) {
         console.warn("Tenant route resolution failed:", error.message);
@@ -98,7 +98,11 @@ export function registerAccessContextRoutes(app: express.Application): void {
     if (!hasTrustedWriteOrigin(request)) {
       return response.status(403).json({ error: "Untrusted request origin" });
     }
-    const current = await currentSession(request.headers.cookie);
+    const surface = parseSurface(request.body?.surface ?? request.query.surface);
+    if (!surface || surface === "citizen") {
+      return response.status(400).json({ error: "Unsupported sign-in surface" });
+    }
+    const current = await currentSession(request.headers.cookie, surface);
     if (!current) {
       return response.status(401).json({ error: "Invalid or missing identity session" });
     }
@@ -106,6 +110,11 @@ export function registerAccessContextRoutes(app: express.Application): void {
       ? request.body.tenantId.trim()
       : "";
     if (!tenantId) return response.status(400).json({ error: "tenantId is required" });
+    // An employee session is bound to the tenant of the route it signed in
+    // on; it can never select another tenant, whatever its memberships.
+    if (surface === "employee" && current.session.boundTenant?.tenantId !== tenantId) {
+      return response.status(403).json({ error: "Tenant context is not available" });
+    }
 
     try {
       const subject = current.session.claims.sub;
@@ -134,15 +143,76 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (!saved) {
         return response.status(401).json({ error: "Identity session expired" });
       }
-      return response.json({
-        access_token: login.accessToken,
-        token_type: "bearer",
-        expires_in: Math.max(1, Math.floor((login.expiresAt - Date.now()) / 1000)),
-        scope: "read",
-        UserRequest: login.user,
-      });
+      return response.json(tokenResponse(login));
     } catch (error) {
       return digitFailure(error, response, "Sign-in context is temporarily unavailable");
+    }
+  }));
+
+  // Citizen context (#2167, #2071). The tenant comes only from the session,
+  // which bound it from the route before the Keycloak redirect; the body
+  // selects nothing. No Organization membership is read or required.
+  app.post("/identity/v1/contexts/citizen/_select", asyncRoute(async (request, response) => {
+    if (!hasTrustedWriteOrigin(request)) {
+      return response.status(403).json({ error: "Untrusted request origin" });
+    }
+    const requestedSurface = request.body?.surface ?? request.query.surface;
+    if (requestedSurface !== undefined && requestedSurface !== "citizen") {
+      return response.status(400).json({ error: "Unsupported sign-in surface" });
+    }
+    const current = await currentSession(request.headers.cookie, "citizen");
+    if (!current) {
+      return response.status(401).json({ error: "Invalid or missing identity session" });
+    }
+    const { claims, boundTenant } = current.session;
+    if (!boundTenant || claims.azp !== config.keycloakCitizenClientId ||
+        current.session.oidcClientId !== config.keycloakCitizenClientId) {
+      return response.status(403).json({ error: "Citizen context is not available" });
+    }
+    if (claims.phone_number_verified !== true || !claims.phone_number) {
+      return response.status(403).json({ error: "A verified phone number is required" });
+    }
+
+    try {
+      if (!await isActiveDigitTenant(boundTenant.tenantId)) {
+        return response.status(403).json({ error: "Citizen context is not available" });
+      }
+      const rule = await mobileValidationForRoute({
+        urlSlug: boundTenant.urlSlug,
+        tenantId: boundTenant.tenantId,
+        rootTenantId: boundTenant.rootTenantId,
+        parentTenantId: null,
+        fallbackTenantIds: [],
+        name: boundTenant.name,
+      });
+      if (!rule) {
+        console.warn("Citizen context: tenant has no MobileNumberValidation rule");
+        return response.status(503).json({ error: "Citizen sign-in is not configured for this tenant" });
+      }
+      const phone = splitE164(claims.phone_number, rule);
+      if (!phone) {
+        return response.status(403).json({ error: "This phone number cannot be used for this tenant" });
+      }
+      const { identity } = await ensureCitizenRegistration({
+        subject: claims.sub,
+        tenant: boundTenant,
+        name: claims.name?.trim() || "Citizen",
+        ...phone,
+      });
+      const login = await managedUserLogin(identity, current.sessionId);
+      if (login.user.type !== "CITIZEN" || login.user.tenantId !== boundTenant.tenantId) {
+        // Fail closed: never hand the browser a token for another user type
+        // or tenant than the session is bound to.
+        console.error("Citizen context: DIGIT returned a token for an unexpected account");
+        return response.status(502).json({ error: "Citizen context is temporarily unavailable" });
+      }
+      return response.json(tokenResponse(login));
+    } catch (error) {
+      if (error instanceof IdentityAdminError) {
+        console.warn("Citizen context failed:", error.message);
+        return response.status(503).json({ error: "Citizen context is temporarily unavailable" });
+      }
+      return digitFailure(error, response, "Citizen context is temporarily unavailable");
     }
   }));
 }

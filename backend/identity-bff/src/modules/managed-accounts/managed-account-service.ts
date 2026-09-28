@@ -2,6 +2,7 @@ import { createHash, randomInt, randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { withDigitAdmin } from "./digit-admin-session.js";
+import { citizenTokenMinter } from "./citizen-token-minter.js";
 import { managedTenantsFromIdentity, recordManagedTenant } from "../organizations/organization-service.js";
 import {
   createAccount,
@@ -33,6 +34,14 @@ import {
  * so "discarded" means never persisted, logged, cached or returned.
  */
 export const MANAGED_USER_TYPE = "EMPLOYEE";
+/**
+ * Citizen accounts (#2167) follow the same ownership rule in their own
+ * namespace: `kcbffc-` usernames and a `keycloak-bff:citizen:v1:` marker,
+ * derived from a key that can never equal an employee key. A legacy citizen
+ * whose username is a mobile number is never adopted.
+ */
+export const CITIZEN_USER_TYPE = "CITIZEN";
+export type ManagedUserType = typeof MANAGED_USER_TYPE | typeof CITIZEN_USER_TYPE;
 
 export interface ManagedIdentity {
   issuer: string;
@@ -41,6 +50,7 @@ export interface ManagedIdentity {
   key: string;
   username: string;
   marker: string;
+  userType: ManagedUserType;
 }
 
 export interface ManagedProfile {
@@ -69,6 +79,24 @@ export function managedIdentity(issuer: string, subject: string, tenantId: strin
     key,
     username: `kcbff-${key.slice(0, 40)}`,
     marker: `keycloak-bff:v1:${subjectKey}:${tenantId}`,
+    userType: MANAGED_USER_TYPE,
+  };
+}
+
+/** The BFF-managed DIGIT CITIZEN account of (issuer, subject) at one tenant. */
+export function citizenIdentity(issuer: string, subject: string, tenantId: string): ManagedIdentity {
+  const subjectKey = createHash("sha256").update(`${issuer}\n${subject}`).digest("hex");
+  const key = createHash("sha256")
+    .update(`citizen\n${issuer}\n${subject}\n${tenantId}`)
+    .digest("hex");
+  return {
+    issuer,
+    subject,
+    tenantId,
+    key,
+    username: `kcbffc-${key.slice(0, 40)}`,
+    marker: `keycloak-bff:citizen:v1:${subjectKey}:${tenantId}`,
+    userType: CITIZEN_USER_TYPE,
   };
 }
 
@@ -143,7 +171,7 @@ async function withUserLease<T>(identity: ManagedIdentity, operation: () => Prom
 async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
   for (const active of [true, false]) {
     const accounts = await searchAccounts(adminToken, {
-      userName: identity.username, tenantId: identity.tenantId, userType: MANAGED_USER_TYPE, active,
+      userName: identity.username, tenantId: identity.tenantId, userType: identity.userType, active,
     });
     const account = accounts.find((candidate) => candidate.userName === identity.username);
     if (!account) continue;
@@ -160,6 +188,12 @@ export function desiredDigitRoles(tenantId: string, codes: string[]): DigitRole[
   const allowed = [...new Set([...config.digitManagedBaseRoles,
     ...codes.filter((code) => config.digitManagedRoleAllowlist.includes(code))])].sort();
   return allowed.map((code) => ({ code, name: code, tenantId }));
+}
+
+/** Citizen roles are fixed by configuration, never taken from Keycloak. */
+export function citizenDigitRoles(tenantId: string): DigitRole[] {
+  return [...new Set(config.digitCitizenRoles)].sort()
+    .map((code) => ({ code, name: code, tenantId }));
 }
 
 function roleSet(roles: DigitRole[]): string {
@@ -262,7 +296,12 @@ export async function ensureManagedAccount(
   return withUserLease(identity, () => withDigitAdmin(async (adminToken) => {
     const account = await findAccount(adminToken, identity);
     if (account && options.createOnly) return { account, created: false, changed: false };
-    const roles = roleCodes === null ? [] : desiredDigitRoles(identity.tenantId, roleCodes);
+    const citizen = identity.userType === CITIZEN_USER_TYPE;
+    const roles = roleCodes === null
+      ? []
+      : citizen
+        ? citizenDigitRoles(identity.tenantId)
+        : desiredDigitRoles(identity.tenantId, roleCodes);
 
     if (!account) {
       if (roleCodes === null || !profile) return { account: null, created: false, changed: false };
@@ -277,7 +316,7 @@ export async function ensureManagedAccount(
         countryCode: profile.countryCode?.trim() || null,
         emailId: profile.emailId || null,
         tenantId: identity.tenantId,
-        type: MANAGED_USER_TYPE,
+        type: identity.userType,
         active: true,
         identificationMark: identity.marker,
         roles,
@@ -287,13 +326,20 @@ export async function ensureManagedAccount(
       // provisioning has none to attribute one to, so logging in now would
       // mint a token no logout could ever revoke. The first
       // /contexts/_select rotates the password and logs in for its session.
-      await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
-      await recordManagedTenant(identity.subject, identity.tenantId);
+      // Citizen accounts stay out of the Organization-driven inventory, which
+      // would otherwise deactivate them for having no membership; their
+      // durable record is the CitizenRegistration.
+      if (!citizen) {
+        await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
+        await recordManagedTenant(identity.subject, identity.tenantId);
+      }
       return { account: created, created: true, changed: true };
     }
 
-    await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
-    await recordManagedTenant(identity.subject, identity.tenantId);
+    if (!citizen) {
+      await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
+      await recordManagedTenant(identity.subject, identity.tenantId);
+    }
     if (roleCodes === null) {
       if (!account.active) return { account, created: false, changed: false };
       const updated = await updateAccount(adminToken, { ...editable(account), active: false });
@@ -336,11 +382,17 @@ export async function managedUserLogin(
       if (!account || !account.active) {
         throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
       }
-      const password = oneTimePassword();
-      await updateAccount(adminToken, { ...editable(account), password });
-      const login = await passwordLogin({
-        username: identity.username, password, tenantId: account.tenantId, userType: MANAGED_USER_TYPE,
-      });
+      let login: DigitLogin;
+      if (identity.userType === CITIZEN_USER_TYPE) {
+        // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
+        login = await citizenTokenMinter().mint(account);
+      } else {
+        const password = oneTimePassword();
+        await updateAccount(adminToken, { ...editable(account), password });
+        login = await passwordLogin({
+          username: identity.username, password, tenantId: account.tenantId, userType: identity.userType,
+        });
+      }
       await cacheLogin(identity, ref, login);
       return login;
     });
@@ -362,6 +414,17 @@ export async function revokeManagedUserLogins(
     const identity = managedIdentity(issuer, subject, tenantId);
     await withUserLease(identity, () => releaseCachedLogin(identity, ref));
   }
+}
+
+/** Citizen logout: releases this session's claim on its one bound-tenant token. */
+export async function revokeCitizenLogin(
+  issuer: string,
+  subject: string,
+  tenantId: string,
+  sessionId: string,
+): Promise<void> {
+  const identity = citizenIdentity(issuer, subject, tenantId);
+  await withUserLease(identity, () => releaseCachedLogin(identity, sessionTokenRef(sessionId)));
 }
 
 /** Tenants where this BFF has provisioned an account for the subject. */

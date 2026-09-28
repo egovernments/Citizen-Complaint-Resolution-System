@@ -50,6 +50,8 @@ interface RealmState {
   }>;
 }
 
+type ClientState = RealmState["clients"] extends Map<string, infer Client> ? Client : never;
+
 let realms: Map<string, RealmState>;
 let lastAdminGrantType: string | undefined;
 /** "METHOD /path" of every Admin API call, so tests can assert read scope. */
@@ -94,7 +96,7 @@ function getOrCreateRealm(name: string): RealmState {
       userRoles: new Map(),
       users: [],
       organizations: new Map(),
-      clients: new Map([
+      clients: new Map<string, ClientState>([
         ["digit-identity-bff", {
           id: "digit-identity-bff-uuid",
           clientId: "digit-identity-bff",
@@ -122,6 +124,34 @@ function getOrCreateRealm(name: string): RealmState {
           clientId: "digit-identity-bff-magic-link",
           enabled: true,
           standardFlowEnabled: true,
+          roles: [],
+        }],
+        // #2167 digit-ui clients. kcadm cannot set an empty attribute, so the
+        // employee client has no signup attribute at all and the citizen
+        // client carries an explicitly empty one (set through the JSON body).
+        ["digit-ui-employee", {
+          id: "digit-ui-employee-uuid",
+          clientId: "digit-ui-employee",
+          enabled: true,
+          standardFlowEnabled: true,
+          attributes: {
+            "login_theme": "digit-employee",
+            "digit.auth.surface": "employee",
+            "digit.auth.signin.methods": "password",
+          },
+          roles: [],
+        }],
+        ["digit-ui-citizen", {
+          id: "digit-ui-citizen-uuid",
+          clientId: "digit-ui-citizen",
+          enabled: true,
+          standardFlowEnabled: true,
+          attributes: {
+            "login_theme": "digit-citizen",
+            "digit.auth.surface": "citizen",
+            "digit.auth.signin.methods": "phone_otp",
+            "digit.auth.signup.methods": "",
+          },
           roles: [],
         }],
       ]),
@@ -321,8 +351,9 @@ export function createKcAdminMock() {
       federatedIdentities,
     } = req.body;
     // Check for duplicate by email or username
+    // Phone-OTP citizens have no email; only a present email can collide.
     const exists = realm.users.some(
-      (u) => u.email === email || u.username === username,
+      (u) => (email !== undefined && u.email === email) || u.username === username,
     );
     if (exists) {
       return res.status(409).json({ errorMessage: "User exists with same username" });
