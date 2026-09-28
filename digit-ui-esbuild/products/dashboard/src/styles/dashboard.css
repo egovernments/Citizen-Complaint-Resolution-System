@@ -4019,7 +4019,7 @@
     transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  html[data-employee-sidebar-pinned="true"]
+  html[data-sidebar-pinned="true"]
     .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
     padding-left: 15rem !important;
   }

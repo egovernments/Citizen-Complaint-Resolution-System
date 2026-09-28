@@ -19,6 +19,7 @@ import { AlertCircle } from "lucide-react";
 
 import { LOCALIZATION_KEY } from "../../constants/Localization";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
+import { complaintLabel } from "../../utils/complaintLabel";
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
@@ -199,6 +200,19 @@ const ComplaintDetailsPage = () => {
     return v === key ? fallback : v;
   };
 
+  // The details hook hands the flat Type / Sub-Type rows over as bare
+  // COMPLAINT_HIERARCHY.<code> keys, which printed raw on any tenant that has
+  // not seeded them. Label them as My Complaints and the employee page do:
+  // the key's translation, else the hierarchy node's own name.
+  const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
+  const serviceDef = (serviceDefs || []).find((def) => def?.serviceCode === complaintDetails?.service?.serviceCode);
+  const typeRowLabels = serviceDef
+    ? {
+        CS_ADDCOMPLAINT_COMPLAINT_TYPE: complaintLabel(t, serviceDef.menuPath, serviceDef.menuPathName),
+        CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: complaintLabel(t, serviceDef.serviceCode, serviceDef.name),
+      }
+    : {};
+
   // When a hierarchy applies, the level rows below replace the flat Type/Sub-Type
   // entries the details hook injects — drop those by their displayed label.
   const isFlatTypeRow = (key) => {
@@ -340,7 +354,7 @@ const ComplaintDetailsPage = () => {
                     <DetailRow
                       key={flag}
                       label={t(flag)}
-                      value={renderRowValue(complaintDetails.details[flag], t)}
+                      value={typeRowLabels[flag] || renderRowValue(complaintDetails.details[flag], t)}
                     />
                   ))}
               </div>
