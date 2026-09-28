@@ -89,7 +89,7 @@ export function BoundaryOverviewMap() {
       {status === 'error' && <div className="text-sm text-red-600">Could not load boundaries for this tenant.</div>}
       {status === 'empty' && (
         <div className="text-sm text-gray-500">
-          No boundaries with real map geometry yet. Run Phase 2 (Fetch from OpenStreetMap) to populate them.
+          No boundaries with real map geometry yet. Run Phase 2 (Fetch boundaries) to populate them.
         </div>
       )}
       {status === 'ready' && (

@@ -391,6 +391,8 @@ def rows_for(ds, alpha2, tolerance, chosen):
             seen[c] = seen.get(c, 0) + 1
             ids.append(f'{prefix}:{c}' if seen[c] == 1 else f'{prefix}:{c}#{seen[c]}')
         ids_by_level[i] = ids
+        # Only COD codes are P-codes; a geoBoundaries shapeID is an internal id.
+        pcodes = [c if ds.source == 'cod' and not c.startswith('ADM') else None for c in codes]
         geoms = g.geometry.values
         if tolerance > 0:
             geoms = shapely.simplify(geoms, tolerance, preserve_topology=True)
@@ -405,7 +407,7 @@ def rows_for(ds, alpha2, tolerance, chosen):
                 None if pd.isna(name) else str(name), lv.n,
                 json.dumps({'xmin': bounds[k][0], 'xmax': bounds[k][2], 'ymin': bounds[k][1], 'ymax': bounds[k][3]}),
                 shapely.to_geojson(geoms[k]), parent_ids[p] if i > 0 and p >= 0 else None,
-                ds.source, lv.licence, None if codes[k].startswith('ADM') else codes[k], 1 if chosen else 0,
+                ds.source, lv.licence, pcodes[k], 1 if chosen else 0,
             ))
     return out
 

@@ -218,6 +218,13 @@ class Rows(unittest.TestCase):
                          ('ADM2', 2, 'cod:TST:A2', 'cod', 'CC BY', 1))
         self.assertEqual(set(json.loads(cell[7])), {'xmin', 'xmax', 'ymin', 'ymax'})
 
+    def test_only_cod_rows_carry_a_pcode(self):
+        ds = nested_country('geoboundaries')
+        official.check_levels(ds, 0.9, 0.02)
+        rows = official.rows_for(ds, 'TS', 0.0, True)
+        self.assertEqual({r[12] for r in rows}, {None})
+        self.assertEqual(rows[1][0], 'geoboundaries:TST:A0')  # the shapeID still makes the id
+
     def test_repeated_codes_get_distinct_ids(self):
         ds = nested_country()
         ds.levels[2].gdf['code'] = 'same'
