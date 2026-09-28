@@ -76,7 +76,12 @@ final class PhoneAuthSupport {
                 authSession.removeAuthNote(name);
             }
         };
-        return new OtpChallenge(notes, PhoneOtpRuntime.get().settings, Clock.systemUTC(), RANDOM);
+        // Attempt slots and single use are claimed in the cluster-wide
+        // single-use store, not in the (per-request copy of the) notes.
+        KeycloakSession session = context.getSession();
+        OtpChallenge.ClaimStore claims = (key, lifespanSeconds) ->
+                session.singleUseObjects().putIfAbsent(key, lifespanSeconds);
+        return new OtpChallenge(notes, claims, PhoneOtpRuntime.get().settings, Clock.systemUTC(), RANDOM);
     }
 
     /** Rate-limit, mint a new code and send it to {@code e164}. */
