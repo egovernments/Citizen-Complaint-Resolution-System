@@ -38,6 +38,16 @@ if [ -z "${TURBOPASS_SKIP_VENV:-}" ] && ! "$PY" -c "import duckdb, geopandas, py
   PY=python
 fi
 
+# Build into a scratch file next to the served DB and swap it in only once it
+# verifies: search-api keeps its open handle on the old file meanwhile, and a
+# failed or interrupted run leaves the served DB untouched. The rename is
+# atomic because both paths share a directory (and so a filesystem).
+TARGET="${OVERTURE_DB_PATH:-../overture-data/boundaries.sqlite}"
+BUILD="${TARGET}.building"
+rm -f "$BUILD" "$BUILD-journal"
+trap 'rm -f "$BUILD" "$BUILD-journal"' EXIT
+export OVERTURE_DB_PATH="$BUILD"
+
 echo "==> [1/5] Downloading Overture boundaries for: ${COUNTRIES}"
 "$PY" scrape.py
 
@@ -53,4 +63,5 @@ echo "==> [4/5] Adding official boundary sets (${OFFICIAL_SOURCES:-cod,geobounda
 echo "==> [5/5] Verifying"
 "$PY" verify_db.py
 
-echo "==> Boundary DB ready at ${OVERTURE_DB_PATH:-../overture-data/boundaries.sqlite}"
+mv -f "$BUILD" "$TARGET"
+echo "==> Boundary DB ready at ${TARGET}. Restart search-api to serve it."

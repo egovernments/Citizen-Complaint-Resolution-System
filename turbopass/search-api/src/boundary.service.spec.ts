@@ -1,4 +1,5 @@
 import { HttpException } from '@nestjs/common';
+import { of } from 'rxjs';
 import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -345,5 +346,38 @@ describe('BoundaryService official sources', () => {
     const old = new BoundaryService({} as any, { get: () => undefined } as any);
     expect(await statusOf(old.search('Nairobi', 'official'))).toBe(503);
     expect(await statusOf(old.search('Nairobi', 'nowhere'))).toBe(400);
+  });
+});
+
+describe('BoundaryService geoapify quota', () => {
+  const saved = process.env.GEOAPIFY_RATE_LIMIT;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.GEOAPIFY_RATE_LIMIT;
+    else process.env.GEOAPIFY_RATE_LIMIT = saved;
+  });
+
+  const serviceWith = (limit: number) => {
+    process.env.GEOAPIFY_RATE_LIMIT = String(limit);
+    const calls: string[] = [];
+    const http = {
+      get: (url: string) => {
+        calls.push(url);
+        return of({ data: { features: [] } });
+      },
+    };
+    const config = { get: (k: string) => (k === 'GEOAPIFY_API_KEY' ? 'key' : undefined) };
+    return { svc: new BoundaryService(http as any, config as any), calls };
+  };
+
+  it('refuses a fetch it cannot finish before spending any of the quota', async () => {
+    const { svc, calls } = serviceWith(5); // a fetch can make 6 calls
+    expect(await statusOf(svc.fetchBoundaries('place', 'geoapify'))).toBe(429);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('runs a fetch that fits the quota', async () => {
+    const { svc, calls } = serviceWith(6);
+    await svc.fetchBoundaries('place', 'geoapify');
+    expect(calls.length).toBeGreaterThan(0);
   });
 });

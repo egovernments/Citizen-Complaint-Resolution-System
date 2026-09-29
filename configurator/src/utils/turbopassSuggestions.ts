@@ -128,6 +128,52 @@ export function chooseTurbopassSource(
   return sources?.official === true ? 'official' : 'overture';
 }
 
+/** Every source the search-api can serve, in the order Phase 2 offers them. */
+export const SOURCE_ORDER = ['official', 'cod', 'geoboundaries', 'overture', 'geoapify'] as const;
+
+/** Sources the server says it can answer (/health `sources`), in offer order.
+ *  Empty when /health was unreadable or nothing is loaded. */
+export function availableSources(sources: Record<string, unknown> | null | undefined): string[] {
+  return SOURCE_ORDER.filter((s) => sources?.[s] === true);
+}
+
+/** Dropdown label for a source. */
+export function sourceOptionLabel(source: string): string {
+  switch (source) {
+    case 'official':
+      return 'Official — best of COD-AB / geoBoundaries per country';
+    case 'cod':
+      return 'OCHA COD-AB';
+    case 'geoboundaries':
+      return 'geoBoundaries';
+    case 'overture':
+      return 'Overture Maps (OpenStreetMap-derived)';
+    case 'geoapify':
+      return 'Geoapify (hosted)';
+    default:
+      return source;
+  }
+}
+
+/** Shown instead of the search when the deployment has no boundary service. */
+export const TURBOPASS_UNAVAILABLE_MESSAGE =
+  "Boundary search isn't set up on this deployment: the turbopass boundary service isn't reachable, " +
+  'or has no boundary data loaded. An administrator can enable it (enable_turbopass, with a boundary DB — ' +
+  'see turbopass/README.md). Until then, use Upload from Excel.';
+
+/** A search result tagged with the source that produced it, so a later fetch
+ *  asks that source even if the operator has switched sources since. */
+export type SourcedFeature<T extends SuggestionFeature = SuggestionFeature> = T & { querySource: string };
+
+export function tagWithSource<T extends SuggestionFeature>(features: T[] | null | undefined, source: string): SourcedFeature<T>[] {
+  return (Array.isArray(features) ? features : []).map((f) => ({ ...f, querySource: source }));
+}
+
+/** The source to fetch a picked place from: the one that found it. */
+export function fetchSourceFor(item: { querySource?: unknown } | null | undefined, current: string): string {
+  return typeof item?.querySource === 'string' && item.querySource ? item.querySource : current;
+}
+
 /** /boundary/search URL. `onboardableOnly` asks an offline source for places
  *  with at least one area inside them (min_descendants=1): a place with nothing
  *  inside can never form a hierarchy. Geoapify has no such filter. */
@@ -180,6 +226,18 @@ export function deadEndMessage(item: SuggestionFeature | null | undefined): stri
   const parent = str(p.parent_name);
   const head = `"${name}"${subtype ? ` (${subtype})` : ''} has no smaller areas inside it, so it can't form a hierarchy.`;
   return parent ? `${head} It lies in ${parent} — search for that instead.` : `${head} Search for a larger area that contains it.`;
+}
+
+/** Why a fetched place can't be onboarded when it yielded fewer than two
+ *  levels. A place with nothing inside it gets deadEndMessage; one with areas
+ *  inside that all came back as a single usable level (e.g. the place itself
+ *  had no polygon) is told so, instead of being wrongly called empty. */
+export function tooFewLevelsMessage(item: SuggestionFeature | null | undefined, fetchedAreas: number): string {
+  const p = item?.properties ?? {};
+  const inside = typeof p.descendant_count === 'number' ? p.descendant_count : Math.max(fetchedAreas - 1, 0);
+  if (inside === 0) return deadEndMessage(item);
+  const name = str(p.name) || str(p.formatted) || 'This place';
+  return `"${name}" has ${inside.toLocaleString('en-US')} ${inside === 1 ? 'area' : 'areas'} inside it, but they came back as a single level with map polygons, so they can't form a hierarchy of two levels. Pick a larger area, or try another boundary source.`;
 }
 
 export function sourceLabel(source: string): string {

@@ -1,7 +1,8 @@
-// Helpers for Phase 2's one-click OSM path: turn the admin-level groups
-// extracted from an Overpass dump (via osmtogeojson) into the Boundary[]
-// payload boundary-service expects. Pure functions — the Overpass fetch and
-// all UI state stay in Phase2Page.
+// Helpers for Phase 2's one-click fetch path: turn the admin-level groups
+// built from a turbopass /boundary/fetch response (GeoJSON features grouped
+// by admin_level, from whichever source served them) into the Boundary[]
+// payload boundary-service expects. Pure functions — the fetch and all UI
+// state stay in Phase2Page.
 //
 // Two deliberate exclusion rules (surfaced to the operator as a "skipped"
 // report instead of silently mangling the tree):
@@ -15,9 +16,9 @@ import { coerceForBoundaryService } from './boundaryGeoJson';
 import type { Boundary } from '@/api/types';
 
 export interface OsmAdminLevel {
-  /** OSM admin_level (numeric; higher = more specific) */
+  /** Admin level as the source numbers it (higher = more specific) */
   level: number;
-  /** GeoJSON features from osmtogeojson for this admin_level */
+  /** GeoJSON features the turbopass fetch returned at this admin_level */
   features: any[];
   examples: string[];
   /** Operator-provided hierarchy level name, e.g. "District" */

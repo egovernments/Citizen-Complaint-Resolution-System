@@ -58,6 +58,10 @@ export function offlineSourcesOf(row: IndexRow): OfflineSource[] {
   return row.official === 1 ? [own, 'official'] : [own];
 }
 
+// A Geoapify fetch: place details, then one boundaries call per sublevel.
+const GEOAPIFY_SUBLEVELS = 5;
+const GEOAPIFY_FETCH_CALLS = 1 + GEOAPIFY_SUBLEVELS;
+
 interface OfficialDatasetRow {
   country: string;
   source: string;
@@ -114,6 +118,8 @@ export class BoundaryService {
   // In-memory name index per offline source — see boundary-matcher.ts. A
   // source the DB holds no rows for has no entry.
   private indexes = new Map<OfflineSource, BoundaryIndex>();
+  // The `boundaries` table's columns, read once: older DBs lack some.
+  private columns = new Set<string>();
   // Outbound Geoapify calls per rolling minute, across all callers: the key's
   // quota is the project's, so the cap is global (GEOAPIFY_RATE_LIMIT; 0 = off).
   private readonly geoapifyLimiter = new RateLimiter(
@@ -142,6 +148,8 @@ export class BoundaryService {
         ? path.resolve(process.env.OVERTURE_DB_PATH)
         : path.resolve(process.cwd(), '../overture-data/boundaries.sqlite');
       this.db = new Database(dbPath, { readonly: true });
+      const info = this.db.prepare('PRAGMA table_info(boundaries)');
+      this.columns = new Set((info.all() as TableColumn[]).map((c) => c.name));
       this.indexes = this.buildIndexes();
     } catch (e) {
       console.warn(
@@ -156,9 +164,9 @@ export class BoundaryService {
   // source before official.py) is read as NULL instead of failing the source.
   private buildIndexes(): Map<OfflineSource, BoundaryIndex> {
     const db = this.db as Database.Database;
-    const info = db.prepare('PRAGMA table_info(boundaries)');
-    const have = new Set((info.all() as TableColumn[]).map((c) => c.name));
-    const cols = INDEX_COLUMNS.map((c) => (have.has(c) ? c : `NULL AS ${c}`));
+    const cols = INDEX_COLUMNS.map((c) =>
+      this.columns.has(c) ? c : `NULL AS ${c}`,
+    );
     const started = Date.now();
     const select = db.prepare(`SELECT ${cols.join(', ')} FROM boundaries`);
     const bySource = new Map<OfflineSource, IndexRow[]>();
@@ -269,8 +277,8 @@ export class BoundaryService {
     return index;
   }
 
-  private takeGeoapify(): void {
-    const wait = this.geoapifyLimiter.tryTake();
+  private takeGeoapify(calls = 1): void {
+    const wait = this.geoapifyLimiter.tryTake(calls);
     if (wait > 0) {
       throw new HttpException(
         {
@@ -376,14 +384,8 @@ export class BoundaryService {
 
   /** `b.col` for each column the table has, `NULL AS col` for the rest. */
   private optionalColumns(names: string[]): string {
-    const db = this.db as Database.Database;
-    const have = new Set(
-      (db.prepare('PRAGMA table_info(boundaries)').all() as TableColumn[]).map(
-        (c) => c.name,
-      ),
-    );
     return names
-      .map((n) => (have.has(n) ? `b.${n}` : `NULL AS ${n}`))
+      .map((n) => (this.columns.has(n) ? `b.${n}` : `NULL AS ${n}`))
       .join(', ');
   }
 
@@ -399,7 +401,10 @@ export class BoundaryService {
 
       const allFeatures: any[] = [];
 
-      this.takeGeoapify();
+      // Reserve every call this fetch can make before making any: running out
+      // halfway would fail the request after spending the quota, and each
+      // retry would spend it again.
+      this.takeGeoapify(GEOAPIFY_FETCH_CALLS);
       try {
         const placeUrl = `https://api.geoapify.com/v2/place-details?id=${encodeURIComponent(id)}&features=details,geometry&apiKey=${apiKey}`;
         const placeRes$ = this.httpService.get(placeUrl);
@@ -413,8 +418,7 @@ export class BoundaryService {
         );
       }
 
-      for (let sublevel = 1; sublevel <= 5; sublevel++) {
-        this.takeGeoapify();
+      for (let sublevel = 1; sublevel <= GEOAPIFY_SUBLEVELS; sublevel++) {
         const url = `https://api.geoapify.com/v1/boundaries/consists-of?id=${encodeURIComponent(
           id,
         )}&geometry=geometry_1000&sublevel=${sublevel}&apiKey=${apiKey}`;
