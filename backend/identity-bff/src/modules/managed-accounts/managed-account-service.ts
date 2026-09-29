@@ -2,6 +2,7 @@ import { createHash, randomInt, randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { withDigitAdmin } from "./digit-admin-session.js";
+import { citizenTokenMinter } from "./citizen-token-minter.js";
 import { managedTenantsFromIdentity, recordManagedTenant } from "../organizations/organization-service.js";
 import {
   createAccount,
@@ -33,6 +34,16 @@ import {
  * so "discarded" means never persisted, logged, cached or returned.
  */
 export const MANAGED_USER_TYPE = "EMPLOYEE";
+/**
+ * Citizen accounts (#2167) follow the same ownership rule in their own
+ * namespace: `kcbffc-` usernames and a `keycloak-bff:citizen:v1:` marker,
+ * derived from a key that can never equal an employee key. A legacy citizen
+ * whose username is a mobile number is never adopted. Unlike employees, a
+ * citizen account lives at egov-user's citizen tenant (the state root, see
+ * `digitCitizenTenantId`), shared by every city route under it.
+ */
+export const CITIZEN_USER_TYPE = "CITIZEN";
+export type ManagedUserType = typeof MANAGED_USER_TYPE | typeof CITIZEN_USER_TYPE;
 
 export interface ManagedIdentity {
   issuer: string;
@@ -41,6 +52,7 @@ export interface ManagedIdentity {
   key: string;
   username: string;
   marker: string;
+  userType: ManagedUserType;
 }
 
 export interface ManagedProfile {
@@ -69,6 +81,46 @@ export function managedIdentity(issuer: string, subject: string, tenantId: strin
     key,
     username: `kcbff-${key.slice(0, 40)}`,
     marker: `keycloak-bff:v1:${subjectKey}:${tenantId}`,
+    userType: MANAGED_USER_TYPE,
+  };
+}
+
+/**
+ * The tenant egov-user keeps a CITIZEN at: the first dotted segment of the
+ * tenant it is given, exactly like `UserUtils.getStateLevelTenantForCitizen`
+ * (`ke.bomet.ulb1` -> `ke`). egov-user applies this to CITIZEN search, login
+ * lookup, uniqueness and the stored row, and issues the token for it.
+ *
+ * This is NOT necessarily the BFF's `rootTenantId`: that is the Keycloak
+ * Organization's mapped tenant, which may itself be dotted (an Organization
+ * mapped to `ke.bomet` has rootTenantId `ke.bomet`, but its citizens live at
+ * `ke`). Derive from egov-user's rule, never from the Organization mapping.
+ */
+export function digitCitizenTenantId(tenantId: string): string {
+  return tenantId.split(".")[0];
+}
+
+/**
+ * The BFF-managed DIGIT CITIZEN account of (issuer, subject) for a route
+ * tenant. There is ONE account per (subject, egov-user citizen tenant): every
+ * city route under `ke` resolves to the same `ke` account, so the username,
+ * marker and token cache are all derived from `digitCitizenTenantId`, not
+ * from the route tenant. The route tenant stays on the CitizenRegistration.
+ */
+export function citizenIdentity(issuer: string, subject: string, routeTenantId: string): ManagedIdentity {
+  const tenantId = digitCitizenTenantId(routeTenantId);
+  const subjectKey = createHash("sha256").update(`${issuer}\n${subject}`).digest("hex");
+  const key = createHash("sha256")
+    .update(`citizen\n${issuer}\n${subject}\n${tenantId}`)
+    .digest("hex");
+  return {
+    issuer,
+    subject,
+    tenantId,
+    key,
+    username: `kcbffc-${key.slice(0, 40)}`,
+    marker: `keycloak-bff:citizen:v1:${subjectKey}:${tenantId}`,
+    userType: CITIZEN_USER_TYPE,
   };
 }
 
@@ -143,7 +195,7 @@ async function withUserLease<T>(identity: ManagedIdentity, operation: () => Prom
 async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
   for (const active of [true, false]) {
     const accounts = await searchAccounts(adminToken, {
-      userName: identity.username, tenantId: identity.tenantId, userType: MANAGED_USER_TYPE, active,
+      userName: identity.username, tenantId: identity.tenantId, userType: identity.userType, active,
     });
     const account = accounts.find((candidate) => candidate.userName === identity.username);
     if (!account) continue;
@@ -160,6 +212,12 @@ export function desiredDigitRoles(tenantId: string, codes: string[]): DigitRole[
   const allowed = [...new Set([...config.digitManagedBaseRoles,
     ...codes.filter((code) => config.digitManagedRoleAllowlist.includes(code))])].sort();
   return allowed.map((code) => ({ code, name: code, tenantId }));
+}
+
+/** Citizen roles are fixed by configuration, never taken from Keycloak. */
+export function citizenDigitRoles(tenantId: string): DigitRole[] {
+  return [...new Set(config.digitCitizenRoles)].sort()
+    .map((code) => ({ code, name: code, tenantId }));
 }
 
 function roleSet(roles: DigitRole[]): string {
@@ -262,7 +320,12 @@ export async function ensureManagedAccount(
   return withUserLease(identity, () => withDigitAdmin(async (adminToken) => {
     const account = await findAccount(adminToken, identity);
     if (account && options.createOnly) return { account, created: false, changed: false };
-    const roles = roleCodes === null ? [] : desiredDigitRoles(identity.tenantId, roleCodes);
+    const citizen = identity.userType === CITIZEN_USER_TYPE;
+    const roles = roleCodes === null
+      ? []
+      : citizen
+        ? citizenDigitRoles(identity.tenantId)
+        : desiredDigitRoles(identity.tenantId, roleCodes);
 
     if (!account) {
       if (roleCodes === null || !profile) return { account: null, created: false, changed: false };
@@ -277,7 +340,7 @@ export async function ensureManagedAccount(
         countryCode: profile.countryCode?.trim() || null,
         emailId: profile.emailId || null,
         tenantId: identity.tenantId,
-        type: MANAGED_USER_TYPE,
+        type: identity.userType,
         active: true,
         identificationMark: identity.marker,
         roles,
@@ -287,13 +350,20 @@ export async function ensureManagedAccount(
       // provisioning has none to attribute one to, so logging in now would
       // mint a token no logout could ever revoke. The first
       // /contexts/_select rotates the password and logs in for its session.
-      await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
-      await recordManagedTenant(identity.subject, identity.tenantId);
+      // Citizen accounts stay out of the Organization-driven inventory, which
+      // would otherwise deactivate them for having no membership; their
+      // durable record is the CitizenRegistration.
+      if (!citizen) {
+        await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
+        await recordManagedTenant(identity.subject, identity.tenantId);
+      }
       return { account: created, created: true, changed: true };
     }
 
-    await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
-    await recordManagedTenant(identity.subject, identity.tenantId);
+    if (!citizen) {
+      await getRedis().hset(managedAccountsKey(), indexField(identity), identity.issuer);
+      await recordManagedTenant(identity.subject, identity.tenantId);
+    }
     if (roleCodes === null) {
       if (!account.active) return { account, created: false, changed: false };
       const updated = await updateAccount(adminToken, { ...editable(account), active: false });
@@ -313,11 +383,13 @@ export async function ensureManagedAccount(
  * Returns a normal user-scoped DIGIT token for an active managed account,
  * cached for `sessionId` alone. A valid cached token is reused. Otherwise,
  * under the per-user lease, the account's password is rotated to a new
- * one-time value and the BFF logs in once as that user.
+ * one-time value and the BFF logs in once as that user. Citizen logins need
+ * the session's verified national mobile number (the OTP identity).
  */
 export async function managedUserLogin(
   identity: ManagedIdentity,
   sessionId: string,
+  verifiedMobileNumber?: string,
 ): Promise<DigitLogin> {
   const ref = sessionTokenRef(sessionId);
   const cached = await cachedLogin(identity);
@@ -336,11 +408,20 @@ export async function managedUserLogin(
       if (!account || !account.active) {
         throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
       }
-      const password = oneTimePassword();
-      await updateAccount(adminToken, { ...editable(account), password });
-      const login = await passwordLogin({
-        username: identity.username, password, tenantId: account.tenantId, userType: MANAGED_USER_TYPE,
-      });
+      let login: DigitLogin;
+      if (identity.userType === CITIZEN_USER_TYPE) {
+        // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
+        if (!verifiedMobileNumber) {
+          throw new ManagedAccountError("A verified phone number is required", 403);
+        }
+        login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
+      } else {
+        const password = oneTimePassword();
+        await updateAccount(adminToken, { ...editable(account), password });
+        login = await passwordLogin({
+          username: identity.username, password, tenantId: account.tenantId, userType: identity.userType,
+        });
+      }
       await cacheLogin(identity, ref, login);
       return login;
     });
@@ -362,6 +443,21 @@ export async function revokeManagedUserLogins(
     const identity = managedIdentity(issuer, subject, tenantId);
     await withUserLease(identity, () => releaseCachedLogin(identity, ref));
   }
+}
+
+/**
+ * Citizen logout: releases this session's claim on the token of the citizen
+ * account behind its bound tenant. Sessions on other city routes under the
+ * same root hold the same token and keep it until they log out too.
+ */
+export async function revokeCitizenLogin(
+  issuer: string,
+  subject: string,
+  tenantId: string,
+  sessionId: string,
+): Promise<void> {
+  const identity = citizenIdentity(issuer, subject, tenantId);
+  await withUserLease(identity, () => releaseCachedLogin(identity, sessionTokenRef(sessionId)));
 }
 
 /** Tenants where this BFF has provisioned an account for the subject. */

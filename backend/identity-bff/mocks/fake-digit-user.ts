@@ -21,6 +21,16 @@ interface Account {
 }
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+/**
+ * egov-user's `UserUtils.getStateLevelTenantForCitizen`: a CITIZEN on a dotted
+ * tenant is searched, logged in, uniqueness-checked AND stored (in
+ * `UserRepository.create`) at the first dotted segment. Other types keep the
+ * tenant they are given. Explicit role tenantIds are kept as sent.
+ */
+const citizenTenant = (tenantId: string, userType: unknown) =>
+  userType === "CITIZEN" && typeof tenantId === "string" && tenantId.includes(".")
+    ? tenantId.split(".")[0]
+    : tenantId;
 const POLICY = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%])\S{8,15}$/;
 
 /**
@@ -33,7 +43,17 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
   app.use(express.json());
   const accounts = new Map<string, Account>();
   const tokens = new Map<string, { uuid: string; expiresAt: number }>();
-  const stats = { adminLogins: 0, userLogins: 0, creates: 0, updates: 0, passwordUpdates: 0, logouts: 0 };
+  const stats = {
+    adminLogins: 0, userLogins: 0, creates: 0, updates: 0, passwordUpdates: 0, logouts: 0,
+    otpCreates: 0, citizenOtpLogins: 0, internalLogins: 0, localizationSearches: 0,
+  };
+  // egov-user can mask PII in search responses; tests turn this on to prove
+  // callers never depend on the searched mobileNumber.
+  let maskSearchMobileNumbers = false;
+  /** egov-otp store: `${identity}|${tenantId}` -> live one-time codes. */
+  const otps = new Map<string, Set<string>>();
+  /** egov-localization rows. */
+  const localization: Array<{ tenantId: string; locale: string; module: string; code: string; message: string }> = [];
   const receivedPasswords: string[] = [];
   const bootstrapSchemaCodes = [
     "tenant.tenants", "tenant.OnboardingConfig", "ACCESSCONTROL-ROLES.roles",
@@ -92,13 +112,41 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     return caller;
   };
 
+  // egov-otp internal create: the response carries the code (no SMS here).
+  app.post("/otp/v1/_create", (req, res) => {
+    const identity = req.body?.otp?.identity;
+    const tenantId = req.body?.otp?.tenantId;
+    if (typeof identity !== "string" || typeof tenantId !== "string") {
+      return res.status(400).json({ error: "identity and tenantId are required" });
+    }
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const key = `${identity}|${tenantId}`;
+    otps.set(key, new Set([...(otps.get(key) || []), otp]));
+    stats.otpCreates += 1;
+    return res.json({ otp: { otp, UUID: randomUUID(), identity, tenantId, isValidationSuccessful: false } });
+  });
+
   app.post("/user/oauth/token", express.urlencoded({ extended: false }), (req, res) => {
+    // isInternal skips credential validation in egov-user; the BFF must never send it.
+    if (req.body.isInternal !== undefined) stats.internalLogins += 1;
+    const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
     const account = [...accounts.values()].find((candidate) =>
-      candidate.userName === req.body.username && candidate.tenantId === req.body.tenantId &&
+      candidate.userName === req.body.username && candidate.tenantId === tenantId &&
       candidate.type === req.body.userType);
-    if (!account || !account.active || account.passwordHash !== hash(String(req.body.password))) {
+    // Mirrors egov-user with citizen.login.password.otp.enabled=true: a
+    // CITIZEN password is validated (and consumed) as an egov-otp code for
+    // the account's mobileNumber at its tenant (UserService.validateOtp uses
+    // user.getMobileNumber() and user.getTenantId()), never its stored hash.
+    const citizenOtps = account?.type === "CITIZEN"
+      ? otps.get(`${account.mobileNumber}|${account.tenantId}`)
+      : undefined;
+    const credentialValid = account?.type === "CITIZEN"
+      ? Boolean(citizenOtps?.delete(String(req.body.password)))
+      : account?.passwordHash === hash(String(req.body.password));
+    if (!account || !account.active || !credentialValid) {
       return res.status(400).json({ error: "invalid_request", error_description: "Invalid login credentials" });
     }
+    if (account.type === "CITIZEN") stats.citizenOtpLogins += 1;
     if (account.roles.some((role) => role.code === "ACCOUNT_ADMIN")) stats.adminLogins += 1;
     else stats.userLogins += 1;
     const existing = [...tokens.entries()].find(([, entry]) =>
@@ -118,10 +166,13 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
 
   app.post("/user/_search", (req, res) => {
     if (!requireAdmin(req, res)) return;
+    const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
     const matches = [...accounts.values()].filter((account) =>
-      account.userName === req.body.userName && account.tenantId === req.body.tenantId &&
+      account.userName === req.body.userName && account.tenantId === tenantId &&
       account.type === req.body.userType && account.active === (req.body.active !== false));
-    return res.json({ user: matches.map(publicAccount) });
+    return res.json({ user: matches.map(publicAccount).map((user) => maskSearchMobileNumbers && user.mobileNumber
+      ? { ...user, mobileNumber: `******${user.mobileNumber.slice(-4)}` }
+      : user) });
   });
 
   app.post("/user/users/_createnovalidate", (req, res) => {
@@ -144,12 +195,14 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
         return res.status(400).json({ error: "INVALID_MOBILE_NUMBER" });
       }
     }
-    if ([...accounts.values()].some((account) => account.userName === user.userName && account.tenantId === user.tenantId)) {
+    const tenantId = citizenTenant(user.tenantId, user.type);
+    if ([...accounts.values()].some((account) => account.userName === user.userName &&
+        account.tenantId === tenantId && account.type === user.type)) {
       return res.status(400).json({ error: "duplicate" });
     }
     receivedPasswords.push(user.password);
     stats.creates += 1;
-    const account = addAccount({ ...user, password: user.password });
+    const account = addAccount({ ...user, tenantId, password: user.password });
     return res.json({ user: [publicAccount(account)] });
   });
 
@@ -236,6 +289,22 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     const root = req.body?.MdmsCriteria?.tenantId;
     const schemaCode = req.body?.MdmsCriteria?.schemaCode;
     if (schemaCode) return res.json({ mdms: mdms.get(mdmsKey(root, schemaCode)) || [] });
+    const moduleDetails = req.body?.MdmsCriteria?.moduleDetails as Array<{
+      moduleName: string; masterDetails: Array<{ name: string }>;
+    }> | undefined;
+    if (moduleDetails?.some((module) => module.moduleName !== "tenant")) {
+      // v1 compatibility shape over the v2 store: exact tenant, no inheritance.
+      const MdmsRes: Record<string, Record<string, unknown[]>> = {};
+      for (const module of moduleDetails) {
+        MdmsRes[module.moduleName] = Object.fromEntries(module.masterDetails.map((master) => [
+          master.name,
+          (mdms.get(mdmsKey(root, `${module.moduleName}.${master.name}`)) || [])
+            .filter((record) => record.isActive !== false)
+            .map((record) => record.data),
+        ]));
+      }
+      return res.json({ MdmsRes });
+    }
     return res.json({ MdmsRes: { tenant: { tenants: options.tenants
       .filter((tenant) => tenant.split(".")[0] === root).map((code) => ({ code })) } } });
   });
@@ -255,15 +324,19 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     return res.json({ BusinessServices: workflows.get(target) });
   });
   app.post("/localization/messages/v1/_search", (req, res) => {
-    const module = String(req.query.module);
-    return res.json({ messages: [{ code: `${module.toUpperCase()}_LABEL`, message: module, module, locale: req.query.locale }] });
+    stats.localizationSearches += 1;
+    const modules = new Set(String(req.query.module || "").split(",").filter(Boolean));
+    return res.json({ messages: localization.filter((row) =>
+      row.tenantId === req.query.tenantId && row.locale === req.query.locale && modules.has(row.module)) });
   });
   app.post("/localization/messages/v1/_upsert", (req, res) => res.json({ messages: req.body?.messages || [] }));
 
   let server: Server;
   return {
     accounts, tokens, stats, receivedPasswords, addAccount, encKeys, schemas, mdms, workflows,
+    otps, localization, mdmsKey,
     setTokenTtlSeconds(seconds: number) { tokenTtlSeconds = seconds; },
+    setMaskSearchMobileNumbers(mask: boolean) { maskSearchMobileNumbers = mask; },
     expireAllTokens() { for (const entry of tokens.values()) entry.expiresAt = Date.now() - 1; },
     async start(): Promise<string> {
       server = app.listen(0);
