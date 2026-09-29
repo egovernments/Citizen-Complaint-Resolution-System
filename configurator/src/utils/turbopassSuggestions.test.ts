@@ -246,3 +246,17 @@ describe('tooFewLevelsMessage', () => {
     expect(tooFewLevelsMessage({ properties: { name: 'X' } }, 1)).toMatch(/no smaller areas inside it/);
   });
 });
+
+describe('official level names in labels and credits', () => {
+  it('labels a suggestion with its local level name', () => {
+    expect(
+      formatSuggestionLabel({ properties: { formatted: 'Westlands — Sub-county, Nairobi, Kenya', subtype: 'ADM2', level_name: 'Sub-county', admin_level: 2 } }).type,
+    ).toBe('[Sub-county · L2]');
+  });
+
+  it('credits Geoapify with OpenStreetMap', () => {
+    expect(attributionLine([{ properties: { source: 'geoapify', licence: 'ODbL' } }])).toBe(
+      'Boundary data: Geoapify (© OpenStreetMap contributors, ODbL)',
+    );
+  });
+});

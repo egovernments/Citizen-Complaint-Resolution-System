@@ -231,20 +231,69 @@ function makeOfficialDb(file: string): void {
     ['cod:KEN:KE047', 'ADM1', 'Nairobi', 1, 'cod:KEN:KE', 'KE047'],
     ['cod:KEN:KE047001', 'ADM2', 'Westlands', 2, 'cod:KEN:KE047', 'KE047001'],
   ] as const) {
-    insert.run(id, id, subtype, name, level, square, parent, 'cod', cod, pcode, 1);
+    insert.run(
+      id,
+      id,
+      subtype,
+      name,
+      level,
+      square,
+      parent,
+      'cod',
+      cod,
+      pcode,
+      1,
+    );
   }
-  insert.run('geoboundaries:KEN:X1', 'geoboundaries:KEN:X1', 'country', 'Kenya', 0, square, null, 'geoboundaries', 'Public Domain', null, 0);
-  insert.run('geoboundaries:KEN:X2', 'geoboundaries:KEN:X2', 'ADM1', 'Nairobi', 1, square, 'geoboundaries:KEN:X1', 'geoboundaries', 'Public Domain', null, 0);
+  insert.run(
+    'geoboundaries:KEN:X1',
+    'geoboundaries:KEN:X1',
+    'country',
+    'Kenya',
+    0,
+    square,
+    null,
+    'geoboundaries',
+    'Public Domain',
+    null,
+    0,
+  );
+  insert.run(
+    'geoboundaries:KEN:X2',
+    'geoboundaries:KEN:X2',
+    'ADM1',
+    'Nairobi',
+    1,
+    square,
+    'geoboundaries:KEN:X1',
+    'geoboundaries',
+    'Public Domain',
+    null,
+    0,
+  );
   const levels = JSON.stringify([
     { level: 'ADM0', areas: 1, kept: true },
     { level: 'ADM1', areas: 47, kept: true },
     { level: 'ADM2', areas: 291, areas_kept: 290, kept: true },
     { level: 'ADM3', areas: 1000, kept: false, coverage: 37.3 },
   ]);
-  db.prepare('INSERT INTO official_datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    'KE', 'cod', 1, 1, cod, '2019-10-31', 'cod-enhanced', 'https://data.humdata.org/dataset/cod-ab-ken', levels, '');
-  db.prepare('INSERT INTO official_datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    'KE', 'geoboundaries', 0, 1, 'Public Domain', '2020', '', '', '[]', '');
+  db.prepare(
+    'INSERT INTO official_datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(
+    'KE',
+    'cod',
+    1,
+    1,
+    cod,
+    '2019-10-31',
+    'cod-enhanced',
+    'https://data.humdata.org/dataset/cod-ab-ken',
+    levels,
+    '',
+  );
+  db.prepare(
+    'INSERT INTO official_datasets VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run('KE', 'geoboundaries', 0, 1, 'Public Domain', '2020', '', '', '[]', '');
   db.close();
 }
 
@@ -282,7 +331,8 @@ describe('BoundaryService official sources', () => {
       subtype: 'ADM2',
       admin_level: 2,
       region_name: 'Nairobi',
-      formatted: 'Westlands — ADM2, Nairobi, Kenya',
+      formatted: 'Westlands — Sub-county, Nairobi, Kenya',
+      level_name: 'Sub-county',
       source: 'cod',
       licence: 'CC BY-IGO',
     });
@@ -305,6 +355,16 @@ describe('BoundaryService official sources', () => {
     ).toEqual([
       ['cod:KEN:KE047', 1, 'KE047', 'CC BY-IGO'],
       ['cod:KEN:KE047001', 2, 'KE047001', 'CC BY-IGO'],
+    ]);
+    // Levels renumbered from the fetched place, with their local names.
+    expect(
+      res.features.map((f: any) => [
+        f.properties.depth,
+        f.properties.level_name,
+      ]),
+    ).toEqual([
+      [0, 'County'],
+      [1, 'Sub-county'],
     ]);
   });
 
@@ -365,7 +425,9 @@ describe('BoundaryService geoapify quota', () => {
         return of({ data: { features: [] } });
       },
     };
-    const config = { get: (k: string) => (k === 'GEOAPIFY_API_KEY' ? 'key' : undefined) };
+    const config = {
+      get: (k: string) => (k === 'GEOAPIFY_API_KEY' ? 'key' : undefined),
+    };
     return { svc: new BoundaryService(http as any, config as any), calls };
   };
 
