@@ -28,6 +28,8 @@ export const ULBService = {
    * @returns {String}
    */
   getCurrentTenantId: () => {
+    const routeTenant = window.__digitTenantContext?.tenantId;
+    if (routeTenant) return routeTenant;
     // TODO: change when setter is done.
 
     const user = UserService.getUser();
@@ -59,6 +61,8 @@ export const ULBService = {
    * @returns {String}
    */
   getStateId: () => {
+    const routeTenant = window.__digitTenantContext?.tenantId;
+    if (routeTenant) return routeTenant;
     const isMultiRootTenant = window?.globalConfigs?.getConfig("MULTI_ROOT_TENANT") || false;
     const overrideRootTenant = window?.globalConfigs?.getConfig("OVERRIDE_ROOT_TENANT_WITH_LOGGEDIN_TENANT") || false;
 
@@ -106,6 +110,8 @@ export const ULBService = {
    *
    * @returns {String}
    */ getCitizenCurrentTenant: (selectedCity = false) => {
+    const routeTenant = window.__digitTenantContext?.tenantId;
+    if (routeTenant) return routeTenant;
     const homeCity = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code;
     if (selectedCity) {
       return homeCity;

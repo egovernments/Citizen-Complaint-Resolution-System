@@ -2,20 +2,9 @@ import React from "react";
 import PropTypes from "prop-types";
 import { Route, Redirect } from "react-router-dom";
 
-// Keycloak/SSO is resolved per surface: citizen may use Keycloak while the
-// employee surface always stays on DIGIT password auth. Keep in sync with
-// libraries/src/services/auth/authSurface.js (inlined here to avoid a
-// cross-package import).
-function isKeycloakAuth(pathname) {
-  const parts = (pathname || "").split("/").filter(Boolean);
-  const surface = parts[1] === "employee" ? "employee" : "citizen";
-  const cfg = (key) => window?.globalConfigs?.getConfig(key);
-  const provider =
-    surface === "employee"
-      ? cfg("EMPLOYEE_AUTH_PROVIDER") || "digit"
-      : cfg("CITIZEN_AUTH_PROVIDER") || cfg("AUTH_PROVIDER") || "digit";
-  return provider === "keycloak";
-}
+// Surface + login target come from the shared tenant-route aware resolver so
+// `/{tenantSlug}/digit-ui/employee/...` is treated as employee.
+import { privateRouteLogin } from "../../../libraries/src/services/auth/authSurface";
 
 export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
   return (
@@ -26,14 +15,12 @@ export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
         // Derive expected surface from the URL the user is trying to
         // reach (NOT from the last-stored userType — that's whoever
         // logged in last and may not match the path being visited).
-        // `/<contextPath>/employee/...` → employee, anything else → citizen.
-        const pathParts = (props.location.pathname || "").split("/").filter(Boolean);
-        const pathUserType = pathParts[1] === "employee" ? "employee" : "citizen";
-        const loginPath = isKeycloakAuth(props.location.pathname)
-          ? `/${window?.contextPath}/user/login`
-          : (pathUserType === "employee"
-            ? `/${window?.contextPath}/employee/user/language-selection`
-            : `/${window?.contextPath}/citizen/login`);
+        // `/{slug}/digit-ui/employee/...` or `/<contextPath>/employee/...`
+        // → employee, anything else → citizen.
+        const { surface: pathUserType, loginPath } = privateRouteLogin(
+          props.location.pathname,
+          window?.contextPath,
+        );
 
         // No token at all → bounce to the login page that matches the
         // URL the user was trying to reach.

@@ -7,9 +7,14 @@
 #   IDENTITY_BFF_IMAGE    identity BFF image built from this repository
 #   KEYCLOAK_PUBLIC_URL   public Keycloak base, e.g. https://example.org/auth
 #   IDENTITY_ENV_DIR      directory holding the env files below
+#
+# `--profile dev-mail` adds identity-mailpit, a local catcher for the Keycloak
+# SMTP mail. Never enable it on a deployment real users use.
 services:
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-digit-keycloak-magic-link:26.7.3-0.75}
+    # Same default as local-setup (build/build-config.yml publishes
+    # keycloak/Dockerfile.magic-link as identity-keycloak).
+    image: ${KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
     command: ["start"]
     # Replace the legacy start-dev environment: no KEYCLOAK_ADMIN bootstrap
     # account is created from a persisted file. A temporary admin is created
@@ -61,3 +66,18 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+
+  # Development-only mail catcher. SMTP identity-mailpit:1025 (no auth, no
+  # STARTTLS); UI and API on 127.0.0.1:18025/mailpit.
+  identity-mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: identity-mailpit
+    profiles: ["dev-mail"]
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mailpit
+      MP_MAX_MESSAGES: "2000"
+    ports:
+      - "127.0.0.1:18025:8025"
+    networks:
+      - egov-network

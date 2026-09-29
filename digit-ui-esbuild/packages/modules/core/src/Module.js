@@ -7,7 +7,6 @@ import { Provider } from "react-redux";
 import { BrowserRouter as Router } from "react-router-dom";
 import { DigitApp, DigitAppWrapper } from "./App";
 import SelectOtp from "./pages/citizen/Login/SelectOtp";
-import ChangeCity from "./components/ChangeCity";
 import ChangeLanguage from "./components/ChangeLanguage";
 import { useState } from "react";
 import ErrorBoundary from "./components/ErrorBoundaries";
@@ -31,7 +30,7 @@ const DigitUIWrapper = ({ stateCode, enabledModules, moduleReducers, defaultLand
     <Provider store={data}>
       <Router>
         <BodyContainer>
-          {Digit.Utils.getMultiRootTenant() ? (
+          {Digit.Utils.getMultiRootTenant() && !window.__digitTenantContext ? (
             <DigitAppWrapper
               initData={initData}
               stateCode={stateCode}
@@ -155,7 +154,6 @@ export const DigitUI = ({ stateCode, registry, enabledModules, moduleReducers, d
 
 const componentsToRegister = {
   SelectOtp,
-  ChangeCity,
   ChangeLanguage,
   LoginSignupSelector,
   ForgotOrganizationTooltip,

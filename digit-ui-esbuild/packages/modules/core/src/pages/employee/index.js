@@ -54,7 +54,10 @@ const EmployeeApp = ({
   }, []);
 
   const additionalComponent = initData?.modules?.filter((i) => i?.additionalComponent)?.map((i) => i?.additionalComponent);
-  const isSuperUserWithMultipleRootTenant = Digit.UserService.hasAccess("SUPERUSER") && Digit.Utils.getMultiRootTenant();
+  const isSuperUserWithMultipleRootTenant =
+    !window.__digitTenantContext &&
+    Digit.UserService.hasAccess("SUPERUSER") &&
+    Digit.Utils.getMultiRootTenant();
   const hideClass = location.pathname.includes(`employee/sandbox/productDetailsPage/`);
   useEffect(() => {
     const isDirectAccess = location.pathname === path || location.pathname === `${path}/`;
@@ -92,19 +95,25 @@ const EmployeeApp = ({
             }
           >
             <Switch>
-              {!Digit.Utils.getMultiRootTenant() && (
+              {(!Digit.Utils.getMultiRootTenant() || window.__digitTenantContext) && (
                 <Route exact path={`${path}/user/login`}>
                   <EmployeeLogin stateCode={stateCode} appTenants={appTenants} />
                 </Route>
               )}
               <Route exact path={`${path}/user/login/otp`}>
-                <Otp isLogin={true} />
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <Otp isLogin={true} />}
               </Route>
               <Route path={`${path}/user/forgot-password`}>
-                <ForgotPassword stateCode={stateCode}/>
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <ForgotPassword stateCode={stateCode}/>}
               </Route>
               <Route path={`${path}/user/change-password`}>
-                <ChangePassword />
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <ChangePassword />}
               </Route>
               <PrivateRoute path={`${path}/user/profile`} component={()=><UserProfile stateCode={stateCode} userType={"employee"} cityDetails={cityDetails} />}/>
               <Route path={`${path}/user/error`}>

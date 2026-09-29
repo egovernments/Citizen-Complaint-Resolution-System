@@ -24,7 +24,6 @@ import SideBarMenu from "../../../config/sidebar-menu";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import LogoutDialog from "../../Dialog/LogoutDialog";
-import ChangeCity from "../../ChangeCity";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import ImageComponent from "../../ImageComponent";
 
@@ -58,9 +57,6 @@ const Profile = ({ info, stateName, t, photo }) => (
       </div>
     )}
     <div className="profile-divider"></div>
-    {window.location.href.includes("/employee") &&
-      !window.location.href.includes("/employee/user/login") &&
-      !window.location.href.includes("employee/user/language-selection") && <ChangeCity t={t} mobileView={true} />}
   </div>
 );
 const IconsObject = {

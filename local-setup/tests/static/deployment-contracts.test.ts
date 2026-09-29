@@ -45,6 +45,8 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_bff_client_secret',
       'keycloak_magic_link_client_secret',
       'keycloak_admin_client_secret',
+      'keycloak_employee_client_secret',
+      'keycloak_citizen_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
       'pgr_onboarding_worker_token',
@@ -98,6 +100,26 @@ describe('ansible playbook-deploy.yml', () => {
     }
     expect(task).toContain("selectattr('value', 'eq', 'keycloak')");
     expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
+  });
+
+  // #2167 review: the Keycloak login branding comes from the same Ansible
+  // values as globalConfigs.js, so the two cannot drift.
+  test('login branding shares the globalConfigs sources', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+    const pairs: Array<[string, string, string]> = [
+      ['IDENTITY_DIGIT_FOOTER_URL', 'footer_logo_url', 'DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-'],
+      ['IDENTITY_DIGIT_FOOTER_BW_URL', 'footer_bw_logo_url', 'DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-'],
+      ['IDENTITY_DIGIT_HOME_URL', 'digit_home_url', 'DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-'],
+      ['IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME', 'config_module_name',
+        'DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-'],
+    ];
+    for (const [envName, ansibleVar, composeLine] of pairs) {
+      expect(env).toMatch(new RegExp(`^${envName}='?\\{\\{ \\(?${ansibleVar}\\b`, 'm'));
+      expect(globalConfig).toContain(`{{ ${ansibleVar} | to_json }}`);
+      expect(compose).toContain(composeLine);
+    }
   });
 
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
@@ -285,6 +307,32 @@ describe('docker-compose.egov-digit.yaml', () => {
     expect(compose).toContain('KONG_REAL_IP_HEADER: X-Forwarded-For');
     expect(compose).toContain('KONG_REAL_IP_RECURSIVE: "on"');
     expect(composeEnv).toContain('KONG_TRUSTED_IPS={{ kong_trusted_ips | default(');
+  });
+});
+
+describe('tenant-scoped digit-ui routing', () => {
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const helmTenantIngress = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/templates/tenant-ingress.yaml'
+  );
+
+  test('Compose nginx keeps the public slug and rewrites only the internal UI mount', () => {
+    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block
+    // opener and reject the config (#2127).
+    expect(nginx).toContain('location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {');
+    expect(nginx).toContain('location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {');
+    expect(nginx).toContain(
+      'rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;'
+    );
+  });
+
+  test('Kubernetes ingress exposes the same tenant-prefixed contract', () => {
+    expect(helmTenantIngress).toContain(
+      'path: /([a-z0-9-]{2,63})/digit-ui(/|$)(.*)'
+    );
+    expect(helmTenantIngress).toContain(
+      'nginx.ingress.kubernetes.io/rewrite-target: /digit-ui/$3'
+    );
   });
 });
 

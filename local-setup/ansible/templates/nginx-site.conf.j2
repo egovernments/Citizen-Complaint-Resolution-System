@@ -605,6 +605,18 @@ server {
     return 302 /digit-ui/public-dashboard;
   }
 
+  # Canonical tenant-scoped DIGIT UI. The public slug remains in the browser
+  # URL so the SPA can resolve it to an immutable tenant id through the
+  # Identity BFF; only the internal asset/document lookup is rewritten to the
+  # existing /digit-ui mount. This works in static, container and HMR modes and
+  # deliberately does not treat the slug itself as authorization.
+  location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {
+    return 302 /$1/digit-ui/;
+  }
+  location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {
+    rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;
+  }
+
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook

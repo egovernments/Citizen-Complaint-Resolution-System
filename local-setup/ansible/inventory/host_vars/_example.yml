@@ -664,8 +664,9 @@ novu_bridge_channel: "sms"
 #
 # Secrets: `keycloak_admin_password` must be set in OpenBao (the deploy fails
 # closed without it — an empty value makes compose fall back to the literal
-# `admin`). The six identity secrets — keycloak_bff_client_secret,
+# `admin`). The identity secrets — keycloak_bff_client_secret,
 # keycloak_magic_link_client_secret, keycloak_admin_client_secret,
+# keycloak_employee_client_secret, keycloak_citizen_client_secret,
 # identity_control_plane_token, identity_session_introspection_token and
 # pgr_onboarding_worker_token — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
@@ -700,9 +701,16 @@ identity_smtp_auth: true
 identity_smtp_user: ""
 identity_smtp_ssl: false
 identity_smtp_starttls: true
-
 # MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak' on any
 # of the three keys below.
+# digit-ui sign-in through Keycloak (#2167): clients digit-ui-employee and
+# digit-ui-citizen, each with its own browser flow and theme.
+identity_employee_login_theme: "digit-employee"
+identity_citizen_login_theme: "digit-citizen"
+identity_employee_signin_methods: [password]
+# Which citizen sign-in methods to offer is open (#2189); empty = none.
+identity_citizen_signin_methods: []
+
 #
 # 'keycloak' used to mean "SSO via the digit-ui auth-adapter", which called the
 # `/kc` token-exchange route against a per-tenant realm's `digit-ui` client.

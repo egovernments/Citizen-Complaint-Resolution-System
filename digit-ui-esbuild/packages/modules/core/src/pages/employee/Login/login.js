@@ -17,16 +17,15 @@
 // MDMS bannerImages are present; otherwise the card sits on the plain
 // Background like the legacy fallback.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { useHistory } from "react-router-dom";
-import { Loader, Toast } from "@egovernments/digit-ui-components";
+import { Toast } from "@egovernments/digit-ui-components";
 import {
   Button as V2Button,
   Card as V2Card,
   Field as V2Field,
   Input as V2Input,
-  Select as V2Select,
 } from "@egovernments/digit-ui-components-v2";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -35,7 +34,7 @@ import Header from "../../../components/Header";
 import Carousel from "./Carousel/Carousel";
 import ImageComponent from "../../../components/ImageComponent";
 
-const setEmployeeDetail = (userObject, token) => {
+export const setEmployeeDetail = (userObject, token) => {
   if (Digit.Utils.getMultiRootTenant() && process.env.NODE_ENV !== "development") return;
   let locale = JSON.parse(sessionStorage.getItem("Digit.locale"))?.value || Digit.Utils.getDefaultLanguage();
   localStorage.setItem("Employee.tenant-id", userObject?.tenantId);
@@ -222,17 +221,8 @@ function PasswordInput({ id, value, onChange, autoComplete, invalid }) {
   );
 }
 
-const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }) => {
-  const { data: hookCities, isLoading: isHookCitiesLoading } = Digit.Hooks.useTenants();
-  const { data: storeData, isLoading: isStoreLoading } = Digit.Hooks.useStore.getInitData();
-  const cities = appTenants?.length
-    ? appTenants
-    : storeData?.tenants?.length
-      ? storeData.tenants
-      : hookCities;
-  // Only gate on the hooks while no city list has resolved yet — appTenants
-  // (or already-fetched store tenants) should render without a page loader.
-  const isLoading = !cities?.length && (isHookCitiesLoading || isStoreLoading);
+const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
+  const { data: storeData } = Digit.Hooks.useStore.getInitData();
   const [user, setUser] = useState(null);
   const [showToast, setShowToast] = useState(null);
   const [disable, setDisable] = useState(false);
@@ -244,42 +234,14 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
     return v === key ? fallback : v;
   };
 
-  // City dropdown — derived from the live MDMS tenant list filtered by
-  // `LOGIN_TENANT_ALLOWLIST` if the deployment configures one (matches
-  // legacy `select:` literal in config.js).
-  const cityField = useMemo(() => propsConfig?.inputs?.find((f) => f?.key === "city"), [propsConfig]);
-  const cityOptions = useMemo(() => {
-    const all = Array.isArray(cities) ? cities : [];
-    const allow = window?.globalConfigs?.getConfig?.("LOGIN_TENANT_ALLOWLIST");
-    const filtered = Array.isArray(allow) && allow.length > 0
-      ? all.filter((tnt) => allow.includes(tnt.code))
-      : all;
-    return filtered.map((tnt) => ({
-      value: tnt.code,
-      label: tr(`TENANT_TENANTS_${Digit?.Utils?.locale?.getTransformedLocale?.(tnt.code) ?? tnt.code}`, tnt.name || tnt.code),
-    }));
-  }, [cities]);
-
-  const defaultTenant = Digit.ULBService.getStateId();
-  const defaultCityCode = useMemo(() => {
-    if (!cityField) return undefined;
-    if (cityOptions.length === 1) return cityOptions[0].value;
-    return cityField?.populators?.defaultValue?.code;
-  }, [cityField, cityOptions]);
+  const defaultTenant = window.__digitTenantContext?.tenantId || Digit.ULBService.getStateId();
 
   const [form, setForm] = useState({
     username: "",
     password: "",
     email: "",
-    city: defaultCityCode,
     check: false,
   });
-  useEffect(() => {
-    if (defaultCityCode && form.city !== defaultCityCode) {
-      setForm((prev) => ({ ...prev, city: defaultCityCode }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultCityCode]);
 
   const set = (k) => (v) => setForm((prev) => ({ ...prev, [k]: v }));
 
@@ -321,7 +283,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
     const data = {
       username: form.username?.trim(),
       password: form.password?.trim(),
-      tenantId: form.city || defaultTenant,
+      tenantId: defaultTenant,
       userType: "EMPLOYEE",
     };
     try {
@@ -386,10 +348,6 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
 
   const onForgotPassword = () => history.push(`/${window?.contextPath}/employee/user/forgot-password`);
 
-  if (isLoading) {
-    return <Loader page={true} variant="PageLoader" />;
-  }
-
   // Validation gate for the submit CTA.
   const canSubmit = (() => {
     if (loginOTPBased) {
@@ -397,8 +355,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
       return emailOk && form.check && !disable && !isDisabled;
     }
     const fields = [form.username, form.password].every((v) => (v || "").trim().length > 0);
-    const cityOk = cityField ? !!form.city : true;
-    return fields && cityOk && form.check && !disable && !isDisabled;
+    return fields && form.check && !disable && !isDisabled;
   })();
 
   const headerKey = propsConfig?.texts?.header || "CORE_COMMON_LOGIN";
@@ -482,21 +439,6 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
                   autoComplete="current-password"
                 />
               </V2Field>
-              {cityField ? (
-                <V2Field
-                  label={tr(cityField.label || "CORE_COMMON_CITY", "City")}
-                  required={!!cityField.isMandatory}
-                  htmlFor="emp-city"
-                >
-                  <V2Select
-                    id="emp-city"
-                    value={form.city}
-                    onValueChange={set("city")}
-                    options={cityOptions}
-                    placeholder={tr("CORE_COMMON_SELECT_CITY", "Select city")}
-                  />
-                </V2Field>
-              ) : null}
             </>
           )}
 
