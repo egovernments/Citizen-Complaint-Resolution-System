@@ -45,6 +45,8 @@ class ProxyAuthFilterTest {
         config.setUserDetailsPath("/user/_details");
         config.setProxyAllowedRoles(List.of("EMPLOYEE", "GRO", "PGR_LME"));
         config.setProxyAdminRoles(List.of("SUPERUSER", "MDMS_ADMIN", "ACCOUNT_ADMIN"));
+        // As deployed: the core-SMS default tenant is the state root, which owns the providers.
+        config.setCoreSmsDefaultTenant("pg");
         filter = new ProxyAuthFilter(restTemplate, config);
     }
 
@@ -190,9 +192,15 @@ class ProxyAuthFilterTest {
      * returns them (every role object carries its tenantId); returns the response for assertions.
      */
     private MockHttpServletResponse call(MockHttpServletRequest req, MockFilterChain chain, String... roles) throws Exception {
+        return callAt(req, chain, "pg", roles);
+    }
+
+    /** As {@link #call}, with every role held at {@code tenant}. */
+    private MockHttpServletResponse callAt(MockHttpServletRequest req, MockFilterChain chain, String tenant,
+                                           String... roles) throws Exception {
         List<Map<String, Object>> roleList = java.util.Arrays.stream(roles)
-                .map(r -> Map.<String, Object>of("code", r, "tenantId", "pg")).toList();
-        stubUserDetails(Map.of("type", "EMPLOYEE", "tenantId", "pg", "roles", roleList));
+                .map(r -> Map.<String, Object>of("code", r, "tenantId", tenant)).toList();
+        stubUserDetails(Map.of("type", "EMPLOYEE", "tenantId", tenant, "roles", roleList));
         req.addHeader("Authorization", "Bearer good-token");
         MockHttpServletResponse res = new MockHttpServletResponse();
         filter.doFilter(req, res, chain);
@@ -236,6 +244,70 @@ class ProxyAuthFilterTest {
                     "the refusal must carry a machine-readable code, not just a status: "
                             + res.getContentAsString());
         }
+    }
+
+    private static final List<String> ADMIN_TIER = List.of("/novu-adapter/v1/providers",
+            "/novu-adapter/v1/providers/_update",
+            "/novu-adapter/v1/providers/_delete",
+            "/novu-adapter/v1/providers/test-send",
+            "/novu-adapter/v1/dispatch/_dry-run",
+            "/novu-adapter/v1/dispatch/_resolve");
+
+    @Test
+    void anAdminOfAnotherRootOnTheBoxIsRefusedEveryAdminCall() throws Exception {
+        // #1999 multi-root box: `acme` is an onboarded workspace, `pg` owns the providers. An
+        // ACCOUNT_ADMIN at acme must not rotate or delete the provider pg's login OTPs go through.
+        for (String path : ADMIN_TIER) {
+            MockFilterChain chain = new MockFilterChain();
+            filter = new ProxyAuthFilter(restTemplate, config);
+            MockHttpServletResponse res = callAt(post(path), chain, "acme", "ACCOUNT_ADMIN");
+
+            assertEquals(403, res.getStatus(), path);
+            assertNull(chain.getRequest(), path + " must not reach the controller");
+            assertTrue(res.getContentAsString().contains("NB_TENANT_NOT_ALLOWED"), res.getContentAsString());
+            assertTrue(res.getContentAsString().contains("only an admin of pg"), res.getContentAsString());
+        }
+    }
+
+    @Test
+    void theOwningStateIsTheCoreSmsDefaultTenantsRoot_plusTheExplicitList() throws Exception {
+        config.setCoreSmsDefaultTenant("pg.citya");
+        filter = new ProxyAuthFilter(restTemplate, config);
+        MockFilterChain pgChain = new MockFilterChain();
+        assertEquals(200, callAt(post("/novu-adapter/v1/providers/_update"), pgChain, "pg", "MDMS_ADMIN").getStatus());
+        assertNotNull(pgChain.getRequest(), "an admin of the core-SMS tenant's state owns the providers");
+
+        config.setProviderAdminTenants(List.of(" acme ", "ke.bomet"));
+        for (String tenant : List.of("acme", "ke")) {
+            MockFilterChain chain = new MockFilterChain();
+            filter = new ProxyAuthFilter(restTemplate, config);
+            assertEquals(200, callAt(post("/novu-adapter/v1/providers/_update"), chain, tenant, "MDMS_ADMIN").getStatus(),
+                    tenant);
+            assertNotNull(chain.getRequest(), tenant + " is on NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS (by its state root)");
+        }
+    }
+
+    @Test
+    void withNoOwningStateConfigured_theAdminTierFailsClosed() throws Exception {
+        config.setCoreSmsDefaultTenant("");
+        filter = new ProxyAuthFilter(restTemplate, config);
+        MockFilterChain chain = new MockFilterChain();
+
+        MockHttpServletResponse res = call(post("/novu-adapter/v1/providers/_delete"), chain, "SUPERUSER");
+
+        assertEquals(403, res.getStatus());
+        assertNull(chain.getRequest());
+        assertTrue(res.getContentAsString().contains("NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS"), res.getContentAsString());
+    }
+
+    @Test
+    void anAdminOfAnotherRootStillReadsTheScreens() throws Exception {
+        // Only the admin tier is bound to the owning state; the broad gate is unchanged.
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse res = callAt(get("/novu-adapter/v1/providers/catalog"), chain, "acme", "ACCOUNT_ADMIN");
+
+        assertEquals(200, res.getStatus());
+        assertNotNull(chain.getRequest());
     }
 
     @Test

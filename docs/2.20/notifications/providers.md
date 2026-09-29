@@ -52,10 +52,18 @@ The worker is started with `NODE_OPTIONS=--require /opt/digit-novu-providers/reg
 
 `migrate-notifications.py` refuses to create such a provider while the running `novu-worker` container does not preload them. Twilio and SMTP do not depend on the preload.
 
+A deployment that runs the worker **without** the preload (Helm `worker.digitProviders.enabled: false`, or a hand-rolled worker) must tell novu-bridge so with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` (default `true`, because the stock deployments mount them; the deploy sets it from the same switch as the mount). The bridge then:
+
+- leaves `smscountry`, `ozeki` and `jasmin` out of `GET /providers/catalog`, so the Configurator does not offer them;
+- refuses to create, rotate, re-enable or test one with `400 NB_PROVIDER_TYPE_UNAVAILABLE`, while renaming, disabling and deleting still work so that old ones can be cleaned up;
+- records a channel that still selects one as `SKIPPED / NB_PROVIDER_UNAVAILABLE` instead of triggering it.
+
+A channel with no provider selected is not covered: if Novu's default `sms` integration is one of these, the bridge cannot tell and the row still reads `SENT`. With the flag off, the bridge refuses to create such integrations, so this only happens to one created before the flag was turned off, or created in Novu directly.
+
 ### How it is deployed
 
 - **Compose.** `./deploy.sh` copies the directory (without its tests) to `/opt/digit/novu-worker-providers` before the stack starts, and `NOVU_WORKER_PROVIDERS_DIR` in `/opt/digit/.env` points the `novu-worker` volume at it. When the copied files change, the deploy restarts `novu-worker`, because the worker reads them only at boot. A compose run straight from `local-setup/` mounts the repo copy. Nothing to set in host_vars.
-- **Helm.** The backbone `novu` chart carries a copy of the runtime files in `files/novu-worker-providers/`, because a chart cannot read outside itself. A ConfigMap serves them, the worker mounts it and gets the same `NODE_OPTIONS`, and a checksum annotation rolls the pods when the files change. `worker.digitProviders.enabled` (default `true`) turns it off. `local-setup/tests/static/deployment-contracts.test.ts` fails if the copy drifts from `backend/novu-bridge/novu-worker-providers/`.
+- **Helm.** The backbone `novu` chart carries a copy of the runtime files in `files/novu-worker-providers/`, because a chart cannot read outside itself. A ConfigMap serves them, the worker mounts it and gets the same `NODE_OPTIONS`, and a checksum annotation rolls the pods when the files change. `worker.digitProviders.enabled` (default `true`) turns it off, and novu-bridge must then run with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` (see above). `local-setup/tests/static/deployment-contracts.test.ts` fails if the copy drifts from `backend/novu-bridge/novu-worker-providers/`.
 
 ### Upgrading Novu
 
@@ -97,7 +105,25 @@ No 2.12 deployment has such an integration: 2.12 had no provider catalog.
 
 On every dispatch, the bridge reads the tenant's `NOTIFICATIONS.Channel` row at the state tenant (60 s cache). The row's `provider` field is the Novu integration identifier. The bridge checks the selection against Novu's integration list (`NOVU_BRIDGE_PROVIDER_AVAILABILITY_CACHE_TTL_MS`, 60 s). A missing, disabled or wrong-channel provider is recorded as `SKIPPED / NB_PROVIDER_UNAVAILABLE` instead of triggering. If Novu cannot be reached for the check, the bridge delivers as it otherwise would. With no provider selected, the row's `gateway` and the env fallbacks apply.
 
-The check cannot see whether the worker loads DIGIT's providers, so a DIGIT provider on a worker without them passes it. See [DIGIT's worker providers](#digits-worker-providers).
+The check cannot see whether the worker loads DIGIT's providers. It relies on `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS`: with the flag off, a selected SMSCountry, Ozeki or Jasmin provider is `SKIPPED / NB_PROVIDER_UNAVAILABLE`. See [DIGIT's worker providers](#digits-worker-providers).
+
+### Removing a provider
+
+Integrations are deployment-wide, so `POST /providers/_delete`, and `_update` with `active: false`, refuse with `409 NB_PROVIDER_IN_USE` while a tenant still sends through the provider:
+
+- a channel row selects it, by identifier or Novu `_id`;
+- it is the **last active** integration on its Novu channel (`sms` carries SMS and WhatsApp, `email` carries Email), and some enabled channel on that Novu channel has no provider selected. Such a channel sends through Novu's default integration. It can be a legacy `RAINMAKER-PGR.NotificationChannel` row, which has no `provider` field; a state with no rows that runs on `NOVU_BRIDGE_CHANNELS_ENABLED`; or any tenant while the channel policy is off. An SMS channel on the [legacy direct route](#the-legacy-direct-route) does not count, because it never reaches Novu.
+
+The channel rows are read from MDMS at the time of the call. The states checked are: the request's `tenantId`, every state the caller is an admin of, every state the bridge has dispatched for since it started, and the states that own the providers. The check fails closed: a state whose rows cannot be read refuses, and an unreadable Novu integration list fails the call before anything changes.
+
+### Who may manage providers
+
+Creating, updating, deleting and test-sending a provider, as well as `/dispatch/_dry-run` and `/dispatch/_resolve`, need a role from `NOVU_BRIDGE_PROXY_ADMIN_ROLES`. That role must be held at a state tenant that owns the deployment's providers:
+
+- the state of `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root;
+- any state listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` (comma-separated, default empty).
+
+An admin of any other root on the same box, such as an onboarded workspace, gets `403 NB_TENANT_NOT_ALLOWED`. If neither setting names a state, every one of these calls is refused, and the bridge logs a warning at start-up.
 
 ## Adding a provider
 

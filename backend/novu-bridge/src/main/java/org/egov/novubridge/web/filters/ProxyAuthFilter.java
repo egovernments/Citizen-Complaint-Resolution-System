@@ -33,8 +33,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * egov-user {@code /user/_details}; the caller must be an EMPLOYEE with a role from
  * {@code novu.bridge.proxy.allowed.roles}. Credential-bearing, destructive, PII-expanding and
  * message-sending POSTs additionally need a role from {@code novu.bridge.proxy.admin.roles} held
- * at a STATE tenant (403 {@code NB_ADMIN_ROLE_REQUIRED}): providers are deployment-wide, so a
- * city admin must not rotate or delete the one its state sends through. Tenant-scoped reads
+ * at a STATE tenant (403 {@code NB_ADMIN_ROLE_REQUIRED}), and that state must be one that owns
+ * the deployment's providers (403 {@code NB_TENANT_NOT_ALLOWED}): the core-SMS default tenant's
+ * state plus {@code novu.bridge.provider.admin.tenants}. Providers are deployment-wide, so neither
+ * a city admin nor the admin of another root on the same box (a #1999 workspace) may rotate or
+ * delete the one the owning state sends its OTPs through. Tenant-scoped reads
  * ({@code /logs}, {@code /config/source}) are limited to the caller's tenants (403
  * {@code NB_TENANT_NOT_ALLOWED}). The resolved {@link Caller} is cached 60s keyed by SHA-256 of
  * the token, never the raw token, and handed to the controllers as a request attribute.
@@ -199,14 +202,29 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (!requiresAdmin(request)) {
             return true;
         }
-        if (!caller.adminStateTenants().isEmpty()) {
-            return true;
+        if (caller.adminStateTenants().isEmpty()) {
+            log.warn("Proxy auth: refusing {} {} — caller holds none of the admin roles {} at a state tenant",
+                    request.getMethod(), pathOf(request), config.getProxyAdminRoles());
+            writeError(response, HttpStatus.FORBIDDEN, "NB_ADMIN_ROLE_REQUIRED",
+                    "This needs one of these roles held at a state tenant (e.g. ke, not ke.bomet): "
+                            + String.join(", ", config.getProxyAdminRoles()));
+            return false;
         }
-        log.warn("Proxy auth: refusing {} {} — caller holds none of the admin roles {} at a state tenant",
-                request.getMethod(), pathOf(request), config.getProxyAdminRoles());
-        writeError(response, HttpStatus.FORBIDDEN, "NB_ADMIN_ROLE_REQUIRED",
-                "This needs one of these roles held at a state tenant (e.g. ke, not ke.bomet): "
-                        + String.join(", ", config.getProxyAdminRoles()));
+        Set<String> owning = config.providerAdminStateTenants();
+        for (String state : caller.adminStateTenants()) {
+            if (owning.contains(state)) {
+                return true;
+            }
+        }
+        log.warn("Proxy auth: refusing {} {} — caller is an admin at {}, not at a state that owns the providers {}",
+                request.getMethod(), pathOf(request), caller.adminStateTenants(), owning);
+        // Only configured values are echoed: writeError concatenates.
+        writeError(response, HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", owning.isEmpty()
+                ? "No state tenant owns this deployment's notification providers: set "
+                        + "NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT or NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS"
+                : "Notification providers are shared by the whole deployment, so only an admin of "
+                        + String.join(", ", owning) + " may manage them or send through them; "
+                        + "your admin role is at another state tenant");
         return false;
     }
 

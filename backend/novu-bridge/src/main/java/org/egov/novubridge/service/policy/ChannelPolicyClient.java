@@ -3,6 +3,7 @@ package org.egov.novubridge.service.policy;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.ServiceUrl;
+import org.egov.novubridge.util.Values;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -108,14 +109,76 @@ public class ChannelPolicyClient {
         return using;
     }
 
-    /** Every state tenant this instance has read channel rows for since it started, plus the core-SMS default's. */
+    /**
+     * Every state tenant this instance has read channel rows for since it started, plus the states
+     * that own the providers (the core-SMS default's and {@code novu.bridge.provider.admin.tenants}),
+     * so a restart never shrinks the set below them.
+     */
     public Set<String> knownStateTenants() {
         Set<String> states = new LinkedHashSet<>(cache.keySet());
-        String coreSms = stateTenant(config.getCoreSmsDefaultTenant());
-        if (StringUtils.hasText(coreSms)) {
-            states.add(coreSms.trim());
-        }
+        states.addAll(config.providerAdminStateTenants());
         return states;
+    }
+
+    /**
+     * The enabled channels that send through Novu's default integration for {@code novuChannel}
+     * ({@code sms} carries SMS and WHATSAPP, {@code email} EMAIL) because nothing pins them: a row
+     * with no {@code provider}, or a state with no rows at all that runs on
+     * {@code novu.bridge.channels.enabled}. An SMS channel on the direct SMSCountry gateway does
+     * not use Novu and is left out. Labels read {@code <state>:<CHANNEL>}. With the policy off every
+     * tenant runs on the env list, labelled {@code all tenants:<CHANNEL>}. Read from MDMS now, and
+     * fails CLOSED like {@link #tenantsUsingProvider}.
+     */
+    public List<String> channelsOnNovuDefault(Collection<String> stateTenants, String novuChannel) {
+        List<String> out = new ArrayList<>();
+        if (!StringUtils.hasText(novuChannel)) {
+            return out;
+        }
+        if (!enabled()) {
+            envChannelsOnNovuDefault("all tenants", novuChannel, out);
+            return out;
+        }
+        for (String stateTenant : new LinkedHashSet<>(stateTenants)) {
+            if (!StringUtils.hasText(stateTenant)) {
+                continue;
+            }
+            Map<String, ChannelSetting> rows = fetchOrThrow(stateTenant, config.getChannelPolicySchema());
+            if (rows.isEmpty() && hasDistinctLegacySchema()) {
+                rows = fetchOrThrow(stateTenant, config.getChannelPolicyLegacySchema());
+            }
+            if (rows.isEmpty()) {
+                envChannelsOnNovuDefault(stateTenant, novuChannel, out);
+                continue;
+            }
+            for (ChannelSetting s : rows.values()) {
+                if (s.enabled() && !StringUtils.hasText(s.provider())
+                        && novuChannel.equalsIgnoreCase(Values.novuChannel(s.code()))
+                        && !directSmsCountry(s.code(), s.gateway())) {
+                    out.add(stateTenant + ":" + s.code());
+                }
+            }
+        }
+        return out;
+    }
+
+    private void envChannelsOnNovuDefault(String label, String novuChannel, List<String> out) {
+        for (String code : List.of("SMS", "WHATSAPP", "EMAIL")) {
+            if (config.isChannelEnabled(code) && novuChannel.equalsIgnoreCase(Values.novuChannel(code))
+                    && !directSmsCountry(code, null)) {
+                out.add(label + ":" + code);
+            }
+        }
+    }
+
+    /** {@link #gateway}'s rule: an SMS row's gateway, else {@code novu.bridge.sms.provider}. */
+    private boolean directSmsCountry(String code, String rowGateway) {
+        if (!"SMS".equalsIgnoreCase(code)) {
+            return false;
+        }
+        if (StringUtils.hasText(rowGateway)) {
+            return "smscountry".equalsIgnoreCase(rowGateway.trim());
+        }
+        return config.isSmsCountryDirect();
     }
 
     private static boolean usesProvider(Map<String, ChannelSetting> rows, String key) {

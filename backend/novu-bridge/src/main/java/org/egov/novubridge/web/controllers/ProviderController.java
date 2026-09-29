@@ -49,7 +49,8 @@ import static org.egov.novubridge.util.Values.unwrapData;
 
 /**
  * The configurator's Notification Providers screen, behind ProxyAuthFilter (create, _update,
- * _delete and test-send additionally need an admin role held at a state tenant).
+ * _delete and test-send additionally need an admin role held at a state that owns the
+ * deployment's providers: {@link org.egov.novubridge.config.NovuBridgeConfiguration#providerAdminStateTenants()}).
  *
  * <p>Secrets stay server-side: operator credentials go straight to Novu and are never persisted,
  * logged (key names only) or echoed. Every response goes through the {@link IntegrationProjection}
@@ -118,6 +119,7 @@ public class ProviderController {
         if (!StringUtils.hasText(providerId)) {
             throw new CustomException("NB_INVALID_PROVIDER", "providerId is required");
         }
+        catalog.requireAvailable(providerId);
         String novuChannel = toNovuChannel(channel);
         // WHATSAPP is stored as a Novu `sms` integration; the identifier is the only round-trippable
         // field that can remember it was WhatsApp.
@@ -163,7 +165,8 @@ public class ProviderController {
      * Rename, toggle or rotate. The id is in the body because the gateway's access control matches
      * exact URLs. Novu REPLACES credentials wholesale on PUT, so a rotation is validated as complete
      * against the type derived from the integration's own identifier. Deactivating
-     * ({@code active:false}) is guarded like a delete: see {@link #requireNotInUse}.
+     * ({@code active:false}) is guarded like a delete: see {@link #requireNotInUse}. Rotating or
+     * re-enabling a DIGIT worker provider the worker does not load is {@code NB_PROVIDER_TYPE_UNAVAILABLE}.
      */
     @PostMapping("/providers/_update")
     public ResponseEntity<ProviderCreateResponse> updateProvider(@RequestBody Map<String, Object> body) {
@@ -171,11 +174,15 @@ public class ProviderController {
         if (!StringUtils.hasText(id)) {
             throw new CustomException("NB_INVALID_PROVIDER", "id is required");
         }
-        Map<String, Object> existing = findIntegration(id);
+        List<Map<String, Object>> integrations = listIntegrations();
+        Map<String, Object> existing = findIntegration(integrations, id);
 
         String name = str(body.get("name"));
         Boolean active = body.containsKey("active") ? truthy(body.get("active")) : null;
         Map<String, Object> credentials = asMap(body.get("credentials"));
+        if (credentials != null || Boolean.TRUE.equals(active)) {
+            catalog.requireAvailable(str(existing.get("providerId")));
+        }
         Map<String, Object> novuCredentials = null;
         if (credentials != null) {
             String derived = ProviderCatalog.deriveType(existing);
@@ -204,7 +211,7 @@ public class ProviderController {
                     "Nothing to update: supply at least one of name, credentials, active");
         }
         if (Boolean.FALSE.equals(active)) {
-            requireNotInUse(body, existing, "disable");
+            requireNotInUse(body, existing, integrations, "disable");
         }
 
         NovuClient.NovuResponse novuResponse =
@@ -224,8 +231,9 @@ public class ProviderController {
         if (!StringUtils.hasText(id)) {
             throw new CustomException("NB_INVALID_PROVIDER", "id is required");
         }
-        Map<String, Object> existing = findIntegration(id);
-        requireNotInUse(body, existing, "delete");
+        List<Map<String, Object>> integrations = listIntegrations();
+        Map<String, Object> existing = findIntegration(integrations, id);
+        requireNotInUse(body, existing, integrations, "delete");
 
         novuClient.deleteIntegration(str(existing.get("_id")));
         providerAvailability.invalidate();
@@ -238,16 +246,24 @@ public class ProviderController {
     }
 
     /**
-     * Refuses to delete or disable an integration a channel row still selects (409
-     * {@code NB_PROVIDER_IN_USE}), matched by identifier OR Novu {@code _id}. {@code tenantId} is
-     * required (the caller's state tenant) and must be a state the caller is an admin of (403
-     * {@code NB_TENANT_NOT_ALLOWED}). The rows are read from MDMS now, for that state, every state
-     * the caller administers and every state this instance has dispatched for (plus the core-SMS
-     * default tenant's), and the check fails CLOSED: a state whose rows cannot be read refuses too.
-     * Integrations are deployment-wide, so a state this instance has never seen and the caller does
-     * not administer is not checked.
+     * Refuses to delete or disable an integration a tenant still sends through (409
+     * {@code NB_PROVIDER_IN_USE}):
+     * <ul>
+     *   <li>a channel row selects it, by identifier OR Novu {@code _id};</li>
+     *   <li>or it is the last ACTIVE integration on its Novu channel and a channel sends through
+     *       Novu's default for that channel because nothing pins it: a row without
+     *       {@code provider} (every legacy row), a state on the {@code novu.bridge.channels.enabled}
+     *       fallback, or every tenant when the channel policy is off.</li>
+     * </ul>
+     * {@code tenantId} is required (the caller's state tenant) and must be a state the caller is an
+     * admin of (403 {@code NB_TENANT_NOT_ALLOWED}). The rows are read from MDMS now, for that state,
+     * every state the caller administers, every state this instance has dispatched for and the
+     * states that own the providers; the check fails CLOSED: a state whose rows cannot be read
+     * refuses too, and so does an unreadable Novu integration list (the lookup before this throws).
+     * Integrations are deployment-wide, so a state outside that set is not checked.
      */
-    private void requireNotInUse(Map<String, Object> body, Map<String, Object> integration, String verb) {
+    private void requireNotInUse(Map<String, Object> body, Map<String, Object> integration,
+                                 List<Map<String, Object>> integrations, String verb) {
         String tenantId = str(body.get("tenantId"));
         if (!StringUtils.hasText(tenantId)) {
             throw new CustomException("NB_INVALID_PROVIDER",
@@ -268,9 +284,13 @@ public class ProviderController {
 
         String identifier = str(integration.get("identifier"));
         String label = StringUtils.hasText(identifier) ? identifier : str(integration.get("_id"));
+        String novuChannel = Values.lower(str(integration.get("channel")));
+        boolean lastActive = isLastActiveOnItsChannel(integration, integrations);
         List<String> using;
+        List<String> onDefault;
         try {
             using = channelPolicy.tenantsUsingProvider(states, identifier, str(integration.get("_id")));
+            onDefault = lastActive ? channelPolicy.channelsOnNovuDefault(states, novuChannel) : List.of();
         } catch (RuntimeException e) {
             log.warn("Refusing to {} provider {}: channel rows for {} could not be read ({})",
                     verb, label, states, e.getMessage());
@@ -283,6 +303,39 @@ public class ProviderController {
                     + " is still selected on a channel for tenant(s) " + String.join(", ", using)
                     + ". Point that channel at another provider first.");
         }
+        if (!onDefault.isEmpty()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                    + " is the last active Novu '" + novuChannel + "' integration, and these channels are on "
+                    + "with no provider selected, so Novu sends them through it: " + String.join(", ", onDefault)
+                    + ". Select a provider on those channels (or add and enable another '" + novuChannel
+                    + "' provider) first.");
+        }
+    }
+
+    /**
+     * Removing it would leave its Novu channel with no active integration. False for an inactive
+     * one (Novu never selects it, so removing it changes nothing) and when another active
+     * integration on the same Novu channel remains.
+     */
+    private static boolean isLastActiveOnItsChannel(Map<String, Object> integration,
+                                                    List<Map<String, Object>> integrations) {
+        if (!Boolean.TRUE.equals(integration.get("active"))) {
+            return false;
+        }
+        String channel = Values.lower(str(integration.get("channel")));
+        for (Map<String, Object> other : integrations) {
+            if (other == integration || !Boolean.TRUE.equals(other.get("active"))) {
+                continue;
+            }
+            String otherId = str(other.get("_id"));
+            if (otherId != null && otherId.equals(str(integration.get("_id")))) {
+                continue;
+            }
+            if (channel == null || channel.equals(Values.lower(str(other.get("channel"))))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** A refusal with its own status (403, 409), in the {@code Errors} shape the tracer handler uses. */
@@ -317,8 +370,16 @@ public class ProviderController {
 
     /** By Novu {@code _id} or {@code identifier}; Novu v2.3.0 has no GET-by-id, so this lists. */
     private Map<String, Object> findIntegration(String id) {
-        NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
-        for (Map<String, Object> i : IntegrationProjection.extractList(novuResponse.getResponse())) {
+        return findIntegration(listIntegrations(), id);
+    }
+
+    /** Throws {@code NB_NOVU_INTEGRATIONS_FAILED} when Novu cannot be asked. */
+    private List<Map<String, Object>> listIntegrations() {
+        return IntegrationProjection.extractList(novuClient.listIntegrations().getResponse());
+    }
+
+    private static Map<String, Object> findIntegration(List<Map<String, Object>> integrations, String id) {
+        for (Map<String, Object> i : integrations) {
             if (id.equals(str(i.get("_id"))) || id.equals(str(i.get("identifier")))) {
                 return i;
             }
@@ -456,6 +517,8 @@ public class ProviderController {
         String integrationIdentifier = null;
         if (StringUtils.hasText(integrationId)) {
             Map<String, Object> integration = findIntegration(integrationId);
+            // Novu would accept the trigger and the test would read ok:true for a message the worker drops.
+            catalog.requireAvailable(str(integration.get("providerId")));
             integrationIdentifier = str(integration.get("identifier"));
         }
         if (StringUtils.hasText(str(body.get("type")))) {

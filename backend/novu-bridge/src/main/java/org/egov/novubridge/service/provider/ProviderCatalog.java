@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The out-of-the-box provider types: what the operator enters, which Novu provider backs each, and
@@ -19,7 +20,9 @@ import java.util.Map;
  * <p>Every type is a Novu provider. SMSCountry, Ozeki and Jasmin are not in upstream Novu: they are
  * DIGIT's provider classes in {@code backend/novu-bridge/novu-worker-providers}, mounted into the
  * stock Novu {@code worker} and registered before it starts. A worker without them saves their
- * integrations fine and fails every send inside Novu.
+ * integrations fine and fails every send inside Novu, so a deployment that runs the worker without
+ * them sets {@code novu.bridge.digit.worker.providers=false}: the catalog then leaves them out and
+ * every attempt to create, rotate, re-enable or test one answers {@code NB_PROVIDER_TYPE_UNAVAILABLE}.
  *
  * <p>Novu's integration has no "catalog type" field and credentials are never read back, so the
  * type is encoded in the integration {@code identifier} as {@code <type>-<stableId(name)>}. That
@@ -43,6 +46,10 @@ public class ProviderCatalog {
     public static final String NOVU_PROVIDER_OZEKI = "ozeki";
     public static final String NOVU_PROVIDER_JASMIN = "jasmin";
 
+    /** The Novu provider ids that exist only when the worker loads DIGIT's providers. */
+    private static final Set<String> WORKER_NOVU_PROVIDERS =
+            Set.of(NOVU_PROVIDER_SMSCOUNTRY, NOVU_PROVIDER_OZEKI, NOVU_PROVIDER_JASMIN);
+
     /** Longest-first so {@code twilio-whatsapp-…} never resolves to {@code twilio-sms}. */
     private static final List<String> TYPES_LONGEST_FIRST =
             List.of(TWILIO_WHATSAPP, SMSCOUNTRY, TWILIO_SMS, JASMIN, OZEKI, SMTP);
@@ -64,8 +71,44 @@ public class ProviderCatalog {
         this.config = config;
     }
 
-    /** The catalog, in the order the configurator should offer it. */
+    /**
+     * The catalog, in the order the configurator should offer it: without DIGIT's worker
+     * providers when the worker does not load them.
+     */
     public List<ProviderType> types() {
+        List<ProviderType> types = allTypes();
+        if (!config.isDigitWorkerProvidersEnabled()) {
+            types.removeIf(t -> isWorkerProvider(t.getNovuProviderId()));
+        }
+        return types;
+    }
+
+    /** Is this Novu provider id one of DIGIT's worker providers (SMSCountry, Ozeki, Jasmin)? */
+    public static boolean isWorkerProvider(String novuProviderId) {
+        return novuProviderId != null && WORKER_NOVU_PROVIDERS.contains(novuProviderId.trim().toLowerCase(Locale.ROOT));
+    }
+
+    /** True when the provider id is a DIGIT worker provider and this deployment's worker lacks them. */
+    public boolean isUnavailable(String novuProviderId) {
+        return !config.isDigitWorkerProvidersEnabled() && isWorkerProvider(novuProviderId);
+    }
+
+    /** Throws {@code NB_PROVIDER_TYPE_UNAVAILABLE} for a DIGIT worker provider the worker does not load. */
+    public void requireAvailable(String novuProviderId) {
+        if (isUnavailable(novuProviderId)) {
+            throw new CustomException("NB_PROVIDER_TYPE_UNAVAILABLE", unavailableMessage(novuProviderId.trim()));
+        }
+    }
+
+    /** The one sentence every refusal (and a skipped dispatch) uses. */
+    public static String unavailableMessage(String novuProviderId) {
+        return "'" + novuProviderId + "' is one of DIGIT's providers in the Novu worker, and this deployment "
+                + "runs the worker without them (NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false): Novu would accept "
+                + "the message and fail it inside the worker. Choose another provider, or mount "
+                + "novu-worker-providers into the worker and set the flag to true.";
+    }
+
+    private List<ProviderType> allTypes() {
         List<ProviderType> types = new ArrayList<>(6);
         types.add(ProviderType.builder()
                 .type(TWILIO_SMS).label("Twilio SMS").channel("SMS").transport("novu")
@@ -147,14 +190,18 @@ public class ProviderCatalog {
         return types;
     }
 
-    /** Look a type up, or throw {@code NB_UNKNOWN_PROVIDER_TYPE}. */
+    /**
+     * Look a type up, or throw {@code NB_UNKNOWN_PROVIDER_TYPE}; a DIGIT worker type the worker
+     * does not load throws {@code NB_PROVIDER_TYPE_UNAVAILABLE}.
+     */
     public ProviderType require(String type) {
         if (!StringUtils.hasText(type)) {
             throw new CustomException("NB_UNKNOWN_PROVIDER_TYPE", "type is required");
         }
         String wanted = type.trim().toLowerCase(Locale.ROOT);
-        for (ProviderType t : types()) {
+        for (ProviderType t : allTypes()) {
             if (t.getType().equals(wanted)) {
+                requireAvailable(t.getNovuProviderId());
                 return t;
             }
         }

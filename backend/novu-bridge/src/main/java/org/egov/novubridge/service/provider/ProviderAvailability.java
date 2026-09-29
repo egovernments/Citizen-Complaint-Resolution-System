@@ -21,12 +21,15 @@ import java.util.Map;
  * and delivery proceeds, like the consent gate on an outage. A failed read is remembered for one
  * TTL so an outage costs one doomed call per TTL, not one per event on the listener thread. The
  * bridge's own provider create/_update/_delete call {@link #invalidate()}.
+ *
+ * <p>With {@code novu.bridge.digit.worker.providers=false} a pinned SMSCountry, Ozeki or Jasmin
+ * integration is {@link Status#WORKER_PROVIDER_MISSING}: the worker has no handler for it.
  */
 @Slf4j
 @Component
 public class ProviderAvailability {
 
-    public enum Status { AVAILABLE, MISSING, INACTIVE, CHANNEL_MISMATCH, UNKNOWN }
+    public enum Status { AVAILABLE, MISSING, INACTIVE, CHANNEL_MISMATCH, WORKER_PROVIDER_MISSING, UNKNOWN }
 
     /**
      * The verdict, the sentence that goes in the dispatch row's error message, and the
@@ -41,7 +44,7 @@ public class ProviderAvailability {
         }
     }
 
-    private record Integration(boolean active, String novuChannel, String identifier) {
+    private record Integration(boolean active, String novuChannel, String identifier, String providerId) {
     }
 
     private record Snapshot(Map<String, Integration> byKey, long fetchedAt) {
@@ -89,6 +92,12 @@ public class ProviderAvailability {
             return new Result(Status.CHANNEL_MISMATCH, "Provider " + identifier.trim()
                     + " is a Novu '" + integration.novuChannel() + "' integration, but " + channel
                     + " delivers on Novu's '" + wanted + "' channel. Nothing was sent.", identifier);
+        }
+        if (!config.isDigitWorkerProvidersEnabled() && ProviderCatalog.isWorkerProvider(integration.providerId())) {
+            return new Result(Status.WORKER_PROVIDER_MISSING, "Provider " + identifier.trim()
+                    + " is selected for " + channel + ", but "
+                    + ProviderCatalog.unavailableMessage(integration.providerId().trim()) + " Nothing was sent.",
+                    identifier);
         }
         return new Result(Status.AVAILABLE, null,
                 StringUtils.hasText(integration.identifier()) ? integration.identifier() : identifier.trim());
@@ -142,7 +151,8 @@ public class ProviderAvailability {
             String identifier = Values.str(row.get("identifier"));
             String id = Values.str(row.get("_id"));
             Integration integration = new Integration(Boolean.TRUE.equals(row.get("active")),
-                    Values.lower(Values.str(row.get("channel"))), identifier == null ? null : identifier.trim());
+                    Values.lower(Values.str(row.get("channel"))), identifier == null ? null : identifier.trim(),
+                    Values.str(row.get("providerId")));
             // Indexed under both: a channel row may name either.
             if (StringUtils.hasText(identifier)) {
                 out.put(key(identifier), integration);

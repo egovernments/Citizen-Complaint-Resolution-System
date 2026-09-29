@@ -18,7 +18,7 @@ info:
     | Tier | Endpoints | Who may call |
     |---|---|---|
     | Operator (read) | `/config/source`, `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `POST /dispatch/_validate` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent). `/logs` and `/config/source` answer only for the caller's own tenants: see below |
-    | Admin (credentials, sends) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /providers/test-send`, `POST /dispatch/_dry-run`, `POST /dispatch/_resolve` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (`ke`, not `ke.bomet`); otherwise `403 NB_ADMIN_ROLE_REQUIRED` |
+    | Admin (credentials, sends) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /providers/test-send`, `POST /dispatch/_dry-run`, `POST /dispatch/_resolve` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (`ke`, not `ke.bomet`); otherwise `403 NB_ADMIN_ROLE_REQUIRED`. That state must own the deployment's providers: the core-SMS default tenant's state (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root) or one listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`; otherwise `403 NB_TENANT_NOT_ALLOWED` |
     | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
     | Unauthenticated | `/contract/envelope`, `/contract/thin-event`, `/contract/openapi` | anyone who can reach the service |
 
@@ -26,8 +26,9 @@ info:
     tenants are its own `tenantId` plus every tenant at which it holds an allowed or admin
     role; a STATE tenant among them also covers that state's cities. `/logs` and
     `/config/source` answer `403 NB_TENANT_NOT_ALLOWED` for any other `tenantId`. Admin roles
-    count only at a state tenant because provider integrations are deployment-wide: a city
-    admin must not rotate or delete the provider its whole state sends through.
+    count only at a state tenant that owns the providers, because provider integrations are
+    deployment-wide: neither a city admin nor the admin of another root on the same box (an
+    onboarded workspace) may rotate or delete the provider the owning state's OTPs go through.
 
     `ProxyAuthFilter` is registered on `/novu-adapter/v1/*` but gates only the namespaces
     `config`, `logs`, `integrations`, `preferences`, `providers` and `dispatch`. Anything else — the
@@ -242,7 +243,8 @@ paths:
       description: |
         The Configurator renders its Add-provider form straight from this, so a provider gained
         or a field renamed needs no SPA change. Describes what to ASK for; contains no stored
-        credential.
+        credential. With `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` (a Novu worker that does
+        not load DIGIT's providers) `smscountry`, `ozeki` and `jasmin` are left out.
       responses:
         "200":
           description: The catalog
@@ -328,8 +330,9 @@ paths:
         `active` absent means true. The LEGACY form `{channel, providerId, name, identifier,
         credentials}` remains the escape hatch for a Novu provider the catalog does not cover.
         `smscountry`, `ozeki` and `jasmin` are DIGIT's providers, mounted into the stock Novu
-        worker: on a worker without them the integration is created but every send through it
-        fails inside Novu.
+        worker: on a worker without them Novu would create the integration and fail every send
+        through it, so with `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` either form naming one
+        answers `400 NB_PROVIDER_TYPE_UNAVAILABLE`.
 
         Credentials POST straight through to Novu over TLS. They are never persisted here,
         never logged (only key NAMES are) and never echoed back.
@@ -351,7 +354,7 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/Integration" }
         "400":
-          description: "`NB_UNKNOWN_PROVIDER_TYPE`, `NB_INVALID_PROVIDER`, `NB_INVALID_CHANNEL`"
+          description: "`NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE`, `NB_INVALID_PROVIDER`, `NB_INVALID_CHANNEL`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -373,7 +376,11 @@ paths:
         (`NB_UNKNOWN_PROVIDER_TYPE`): re-create it from the catalog.
 
         `active: false` (disable) is guarded exactly like `_delete`: it needs `tenantId` and is
-        refused with 409 while a channel still selects the provider.
+        refused with 409 while a tenant still sends through the provider.
+
+        Rotating or re-enabling (`active: true`) an SMSCountry, Ozeki or Jasmin integration while
+        `NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false` is `400 NB_PROVIDER_TYPE_UNAVAILABLE`; a
+        rename, a disable and a delete still work, so they can be cleaned up.
       requestBody:
         required: true
         content:
@@ -400,13 +407,13 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/Integration" }
         "400":
-          description: "`NB_INVALID_PROVIDER` (no id, an empty change set, or `active: false` without `tenantId`), `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_NOT_FOUND`"
+          description: "`NB_INVALID_PROVIDER` (no id, an empty change set, or `active: false` without `tenantId`), `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE`, `NB_PROVIDER_NOT_FOUND`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: "`NB_ADMIN_ROLE_REQUIRED` (see AdminForbidden), or `NB_TENANT_NOT_ALLOWED` when disabling for a `tenantId` whose state the caller holds no admin role at"
+          description: "`NB_ADMIN_ROLE_REQUIRED` / `NB_TENANT_NOT_ALLOWED` (see AdminForbidden), or `NB_TENANT_NOT_ALLOWED` when disabling for a `tenantId` whose state the caller holds no admin role at"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -429,9 +436,20 @@ paths:
         legacy `RAINMAKER-PGR.NotificationChannel`, as dispatch does) from MDMS at the time of
         the call, never from a cache, for: the state of `tenantId`, every state the caller holds
         an admin role at, every state this instance has dispatched for since it started, and the
-        core-SMS default tenant's. A row selecting the provider by `identifier` OR Novu `_id`
-        (case-insensitive) refuses; so does a state whose rows cannot be read. Integrations are
-        deployment-wide, so a state that is none of those is not checked.
+        states that own the providers (the core-SMS default tenant's and
+        `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`). It refuses when:
+
+        - a row selects the provider by `identifier` OR Novu `_id` (case-insensitive);
+        - the provider is the LAST active integration on its Novu channel (`sms` carries SMS and
+          WhatsApp, `email` Email) and a channel on that Novu channel sends through Novu's
+          default because nothing pins it: an enabled row with no `provider` (every legacy row),
+          a state with no rows on `NOVU_BRIDGE_CHANNELS_ENABLED`, or every tenant when the
+          channel policy is off. An SMS channel on the direct SMSCountry route does not count;
+        - a state's rows cannot be read.
+
+        The Novu integration list is read first; when it cannot be, the call fails
+        (`NB_NOVU_INTEGRATIONS_FAILED`) and nothing is deleted. Integrations are deployment-wide,
+        so a state that is none of those is not checked.
       requestBody:
         required: true
         content:
@@ -462,12 +480,12 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: "`NB_ADMIN_ROLE_REQUIRED` (see AdminForbidden), or `NB_TENANT_NOT_ALLOWED` when the caller holds no admin role at the state of `tenantId`"
+          description: "`NB_ADMIN_ROLE_REQUIRED` / `NB_TENANT_NOT_ALLOWED` (see AdminForbidden), or `NB_TENANT_NOT_ALLOWED` when the caller holds no admin role at the state of `tenantId`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "409":
-          description: "`NB_PROVIDER_IN_USE` — a channel row still selects it, or a state's channel rows could not be read (nothing was deleted)"
+          description: "`NB_PROVIDER_IN_USE` — a channel row still selects it, it is the last active integration behind an unpinned enabled channel, or a state's channel rows could not be read (nothing was deleted)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -506,7 +524,7 @@ paths:
                   active: { type: boolean }
                   detail: { type: string }
         "400":
-          description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`"
+          description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -564,7 +582,7 @@ paths:
                   errorCode: { type: string, description: "Only when `ok` is false." }
                   errorMessage: { type: string, description: "Only when `ok` is false." }
         "400":
-          description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_NOT_FOUND`"
+          description: "`NB_INVALID_CHANNEL`, `NB_UNKNOWN_PROVIDER_TYPE`, `NB_PROVIDER_TYPE_UNAVAILABLE` (the type or the named integration is SMSCountry, Ozeki or Jasmin on a worker without DIGIT's providers), `NB_PROVIDER_NOT_FOUND`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -780,7 +798,7 @@ components:
         A DIGIT access token, introspected by the bridge against egov-user
         `POST /user/_details`. The caller must be `type == EMPLOYEE` and hold a role from
         `novu.bridge.proxy.allowed.roles`; the admin-tier calls need a role from
-        `novu.bridge.proxy.admin.roles` as well, held at a state tenant.
+        `novu.bridge.proxy.admin.roles` as well, held at a state tenant that owns the providers.
     receiptSecret:
       type: apiKey
       in: header
@@ -806,8 +824,11 @@ components:
       description: |
         `NB_ADMIN_ROLE_REQUIRED` — the caller passed the broad gate but holds no role from
         `novu.bridge.proxy.admin.roles` at a state tenant (one held only at a city does not
-        count). The body carries BOTH the flat `error` key the read-only paths have always
-        written and the `Errors` envelope the controllers use.
+        count). `NB_TENANT_NOT_ALLOWED` — it holds one, but not at a state that owns the
+        deployment's providers (the core-SMS default tenant's state, or one in
+        `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`), or neither setting names one. The body carries
+        BOTH the flat `error` key the read-only paths have always written and the `Errors`
+        envelope the controllers use.
       content:
         application/json:
           schema:

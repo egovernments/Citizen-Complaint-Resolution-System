@@ -170,6 +170,49 @@ class ChannelPolicyClientTest {
                 () -> client.tenantsUsingProvider(List.of("mz"), "ozeki-0011aabb", null));
     }
 
+    // ---- channels that send through Novu's default integration (no pin) ----------
+
+    @Test
+    void unpinnedEnabledChannelsRideTheNovuDefault_perNovuChannel() {
+        stubRows(row("SMS", true, "novu", null), row("WHATSAPP", true, null, null),
+                row("EMAIL", true, null, null, "smtp-deadbeef"));
+        assertEquals(List.of("ke:SMS", "ke:WHATSAPP"), client.channelsOnNovuDefault(List.of("ke"), "sms"));
+        assertEquals(List.of(), client.channelsOnNovuDefault(List.of("ke"), "email"), "EMAIL is pinned");
+    }
+
+    @Test
+    void disabledPinnedAndDirectSmsCountryChannelsDoNot() {
+        stubRows(row("SMS", true, "smscountry", "KE-GOV"), row("WHATSAPP", false, null, null));
+        assertEquals(List.of(), client.channelsOnNovuDefault(List.of("ke"), "sms"));
+    }
+
+    @Test
+    void aStateWithNoRowsRunsOnTheEnvAllowlist_andPolicyOffMeansEveryTenant() {
+        stubRows();
+        config.setChannelsEnabled(List.of("SMS", "EMAIL"));
+        assertEquals(List.of("mz:SMS"), client.channelsOnNovuDefault(List.of("mz"), "sms"));
+        config.setSmsProvider("smscountry");   // env direct route: the SMS leg never reaches Novu
+        assertEquals(List.of(), client.channelsOnNovuDefault(List.of("mz"), "sms"));
+
+        config.setSmsProvider("");
+        config.setChannelPolicyEnabled(false);
+        assertEquals(List.of("all tenants:EMAIL"), client.channelsOnNovuDefault(List.of(), "email"));
+    }
+
+    @Test
+    void theDefaultCheckFailsClosedToo() {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new ResourceAccessException("down"));
+        assertThrows(RuntimeException.class, () -> client.channelsOnNovuDefault(List.of("ke"), "sms"));
+    }
+
+    @Test
+    void theOwningStatesAreAlwaysKnown_soARestartDoesNotShrinkTheCheckedSet() {
+        config.setCoreSmsDefaultTenant("ke.bomet");
+        config.setProviderAdminTenants(List.of("acme", " "));
+        assertEquals(java.util.Set.of("ke", "acme"), client.knownStateTenants());
+    }
+
     @Test
     void stateTenantIsTheFirstSegment() {
         assertEquals("ke", ChannelPolicyClient.stateTenant("ke.bomet"));

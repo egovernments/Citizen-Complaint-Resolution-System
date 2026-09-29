@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.TimeZone;
 
 /** Property reference and defaults: {@code application.properties}. */
@@ -82,6 +84,17 @@ public class NovuBridgeConfiguration {
 
     @Value("${novu.bridge.provider.availability.cache.ttl.ms:60000}")
     private Long providerAvailabilityCacheTtlMs;
+
+    // Does the Novu worker load DIGIT's providers (backend/novu-bridge/novu-worker-providers)?
+    // Set from the same switch as the worker's mount. False hides SMSCountry/Ozeki/Jasmin: on a
+    // worker without them Novu accepts their triggers and fails every send inside the worker.
+    @Value("${novu.bridge.digit.worker.providers:true}")
+    private Boolean digitWorkerProviders;
+
+    // State tenants, besides the core-SMS default tenant's state, whose admins manage the
+    // deployment-wide providers. Blank = the core-SMS default tenant's state alone.
+    @Value("#{'${novu.bridge.provider.admin.tenants:}'.split(',')}")
+    private List<String> providerAdminTenants;
 
     @Value("${novu.bridge.mdms.host:http://egov-mdms-service:8094}")
     private String mdmsHost;
@@ -197,8 +210,36 @@ public class NovuBridgeConfiguration {
         return "smscountry".equalsIgnoreCase(smsProvider == null ? "" : smsProvider.trim());
     }
 
+    /** Missing means mounted: the stock deployments mount DIGIT's providers into the worker. */
+    public boolean isDigitWorkerProvidersEnabled() {
+        return !Boolean.FALSE.equals(digitWorkerProviders);
+    }
+
+    /**
+     * The state tenants that own this deployment's providers: the core-SMS default tenant's state
+     * (the deploy sets it to state_root) plus {@code novu.bridge.provider.admin.tenants}, each
+     * reduced to its state root. Empty when neither is set.
+     */
+    public Set<String> providerAdminStateTenants() {
+        Set<String> states = new LinkedHashSet<>();
+        addStateRoot(states, coreSmsDefaultTenant);
+        if (providerAdminTenants != null) {
+            providerAdminTenants.forEach(t -> addStateRoot(states, t));
+        }
+        return states;
+    }
+
+    private static void addStateRoot(Set<String> states, String tenantId) {
+        if (tenantId == null || tenantId.trim().isEmpty()) {
+            return;
+        }
+        String t = tenantId.trim();
+        int dot = t.indexOf('.');
+        states.add(dot < 0 ? t : t.substring(0, dot));
+    }
+
     public boolean isChannelEnabled(String channel) {
-        if (channel == null) return false;
+        if (channel == null || channelsEnabled == null) return false;
         return channelsEnabled.stream().anyMatch(c -> c.trim().equalsIgnoreCase(channel.trim()));
     }
 

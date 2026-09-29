@@ -87,6 +87,14 @@ public class ConfigurationSanityCheck {
         }
         if (Boolean.FALSE.equals(config.getProxyAuthEnabled())) {
             warn.add("novu.bridge.proxy.auth.enabled=false — the configurator proxy endpoints are unauthenticated");
+        } else if (config.providerAdminStateTenants().isEmpty()) {
+            warn.add("neither novu.bridge.core.sms.default.tenant nor novu.bridge.provider.admin.tenants is set — "
+                    + "no state owns the providers, so every provider create/_update/_delete/test-send and "
+                    + "dispatch _dry-run/_resolve is refused (403 NB_TENANT_NOT_ALLOWED)");
+        }
+        if (!config.isDigitWorkerProvidersEnabled()) {
+            warn.add("novu.bridge.digit.worker.providers=false — SMSCountry, Ozeki and Jasmin are hidden from the "
+                    + "provider catalog, and a channel that still selects one is SKIPPED/NB_PROVIDER_UNAVAILABLE");
         }
 
         warn.forEach(w -> log.warn("novu-bridge config: {}", w));
