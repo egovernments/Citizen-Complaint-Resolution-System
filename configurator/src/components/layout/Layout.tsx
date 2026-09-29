@@ -32,7 +32,7 @@ export default function Layout() {
 
   const currentPhaseFromUrl = parseInt(location.pathname.split('/').pop() || '1');
   const currentPhaseInfo = phases.find((p) => p.id === currentPhaseFromUrl);
-  // Actionability = visibility (docs/design/masters-configurator-access-policy-design.md
+  // Actionability = visibility (docs/reference/architecture/access-control/masters-configurator-access-policy-design.md
   // §3.3): a role can act on whatever masters it can edit; this phase's create
   // actions are already gateway-enforced (§3.1) — this banner just tells a
   // view-only role that up front instead of letting them discover it via a

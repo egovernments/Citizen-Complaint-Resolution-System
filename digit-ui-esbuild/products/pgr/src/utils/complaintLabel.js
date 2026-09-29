@@ -7,7 +7,7 @@
 //
 // Replaces the legacy SERVICEDEFS.* keys (tied to the removed ServiceDefs
 // master). Keys are seeded for every node (interior + leaf) by the configurator
-// upload / migration and by docs/migration/migrate.cjs.
+// upload / migration and by local-setup/scripts/migration/complaint-hierarchy/migrate.cjs.
 
 export const COMPLAINT_LABEL_PREFIX = "COMPLAINT_HIERARCHY.";
 

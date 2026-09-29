@@ -39,7 +39,7 @@ readonly PY_MIN_MINOR=9         # the oldest ansible-core this playbook accepts
                                 # and pip resolves to whatever this Python
                                 # supports
 
-# The playbook BREAKS on ansible-core >= 2.19 — see WINDOWS-QUICKSTART.md, and
+# The playbook BREAKS on ansible-core >= 2.19 — see docs/setup/quickstart-windows.md, and
 # the "Conditional result was ..." failures it produces at play start. An
 # unpinned `pip install ansible` happily lands on 2.21, so pin it here and
 # verify afterwards rather than trusting the resolver.

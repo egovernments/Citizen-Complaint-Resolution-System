@@ -28,7 +28,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_INBOX_VISIBILITY_CONFIG;
 
 /**
  * Server-side visibility resolver for the PGR inbox tabs (Visibility V1
- * Step-2 reportee core, VISIBILITY-DESIGN.md §4.2).
+ * Step-2 reportee core, docs/features/visibility/README.md §4.2).
  *
  * MY  -> assignee = the acting user (PGRService.search/count already resolve
  *        the assignee through workflow).
