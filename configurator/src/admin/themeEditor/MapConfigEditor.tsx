@@ -191,12 +191,14 @@ function FieldInput({
 function GoogleKeyInput({
   spec, value, setField,
 }: { spec: FieldSpec; value: string; setField: (path: string, value: unknown) => void }) {
-  const [check, setCheck] = useState<{ state: 'checking' | 'ok' | 'error'; text?: string } | null>(null);
+  const [check, setCheck] = useState<{ state: 'checking' | 'ok' | 'unverified' | 'error'; text?: string } | null>(null);
   const test = async () => {
     setCheck({ state: 'checking' });
     try {
-      await validateGoogleMapsKey(value);
-      setCheck({ state: 'ok', text: 'Google accepted this key.' });
+      const result = await validateGoogleMapsKey(value);
+      setCheck(result === 'ok'
+        ? { state: 'ok', text: 'Google accepted this key.' }
+        : { state: 'unverified', text: "Google didn't answer in time, so this key isn't verified. Try again, or check it in Google Cloud Console." });
     } catch (e) {
       setCheck({ state: 'error', text: e instanceof Error ? e.message : String(e) });
     }
@@ -211,7 +213,7 @@ function GoogleKeyInput({
         </Button>
       </div>
       {check?.text && (
-        <p className={`text-xs mt-1 ${check.state === 'ok' ? 'text-green-700' : 'text-destructive'}`}>{check.text}</p>
+        <p className={`text-xs mt-1 ${check.state === 'ok' ? 'text-green-700' : check.state === 'unverified' ? 'text-amber-700' : 'text-destructive'}`}>{check.text}</p>
       )}
     </FieldShell>
   );

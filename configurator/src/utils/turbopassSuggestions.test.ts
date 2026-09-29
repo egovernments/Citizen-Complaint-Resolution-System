@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   attributionLine,
+  availableSources,
+  fetchSourceFor,
+  sourceOptionLabel,
+  tagWithSource,
+  tooFewLevelsMessage,
   chooseTurbopassSource,
   isOfflineSource,
   formatSuggestionLabel,
@@ -189,5 +194,55 @@ describe('attributionLine', () => {
   it('says nothing for features without a source (Geoapify, older servers)', () => {
     expect(attributionLine([f()])).toBeNull();
     expect(attributionLine(null)).toBeNull();
+  });
+});
+
+describe('availableSources', () => {
+  it('lists what /health says the server can answer, official first', () => {
+    expect(availableSources({ overture: true, geoapify: false, cod: true, official: true, geoboundaries: true })).toEqual([
+      'official',
+      'cod',
+      'geoboundaries',
+      'overture',
+    ]);
+  });
+
+  it('is empty when /health was unreadable or nothing is loaded', () => {
+    expect(availableSources(null)).toEqual([]);
+    expect(availableSources({ overture: false, official: false, geoapify: false })).toEqual([]);
+  });
+
+  it('labels every source', () => {
+    expect(sourceOptionLabel('official')).toMatch(/COD-AB/);
+    expect(sourceOptionLabel('geoapify')).toBe('Geoapify (hosted)');
+  });
+});
+
+describe('suggestions remember their source', () => {
+  it('fetches from the source that found the place, not the one selected now', () => {
+    const [picked] = tagWithSource([{ properties: { place_id: 'overture-id' } }], 'overture');
+    expect(fetchSourceFor(picked, 'official')).toBe('overture');
+  });
+
+  it('falls back to the current source for an untagged place', () => {
+    expect(fetchSourceFor({}, 'official')).toBe('official');
+    expect(fetchSourceFor(null, 'cod')).toBe('cod');
+  });
+});
+
+describe('tooFewLevelsMessage', () => {
+  it('calls a place with nothing inside it a dead end', () => {
+    expect(tooFewLevelsMessage({ properties: { name: 'Bissau', descendant_count: 0 } }, 1)).toMatch(/no smaller areas inside it/);
+  });
+
+  it("doesn't call a place with areas inside it empty", () => {
+    const msg = tooFewLevelsMessage({ properties: { name: 'Nairobi', descendant_count: 17 } }, 17);
+    expect(msg).toMatch(/has 17 areas inside it, but they came back as a single level/);
+    expect(msg).not.toMatch(/no smaller areas/);
+  });
+
+  it('counts the fetched areas when the source has no descendant count (Geoapify)', () => {
+    expect(tooFewLevelsMessage({ properties: { name: 'X' } }, 5)).toMatch(/has 4 areas inside it/);
+    expect(tooFewLevelsMessage({ properties: { name: 'X' } }, 1)).toMatch(/no smaller areas inside it/);
   });
 });

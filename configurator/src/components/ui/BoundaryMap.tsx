@@ -81,8 +81,9 @@ function hasCoordinates(data: GeoJsonInput): boolean {
  * Renders one or many boundary geometries, highlighted and auto-fitted to
  * bounds: on OpenStreetMap tiles via vanilla Leaflet (React-version agnostic,
  * no marker-icon bundling — we only draw polygons), or on Google Maps when
- * `google` carries a key. If Google won't load, it falls back to Leaflet and
- * says why. Returns a graceful placeholder when there's no geometry.
+ * `google` carries a key. If Google won't load, or rejects the key after the
+ * map is drawn, it falls back to Leaflet and says why. Returns a graceful
+ * placeholder when there's no geometry.
  */
 export function BoundaryMap({ data, height = '360px', color = '#0b4d2c', className, google }: BoundaryMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -131,16 +132,24 @@ export function BoundaryMap({ data, height = '360px', color = '#0b4d2c', classNa
     };
 
     if (googleKey) {
-      drawGeoJsonOnGoogleMap(container, input, color, googleKey)
+      const fallBack = (e: unknown) => {
+        if (cancelled) return;
+        cleanup();
+        cleanup = () => {};
+        setGoogleError({ key: googleKey, message: e instanceof Error ? e.message : String(e) });
+        drawLeaflet();
+      };
+      drawGeoJsonOnGoogleMap(container, input, color, googleKey, {
+        // A draw superseded while the API loaded must not create a map.
+        isCancelled: () => cancelled,
+        // Google can reject the key after the map is up — swap to Leaflet.
+        onAuthFailure: fallBack,
+      })
         .then((dispose) => {
           if (cancelled) dispose();
           else cleanup = dispose;
         })
-        .catch((e: unknown) => {
-          if (cancelled) return;
-          setGoogleError({ key: googleKey, message: e instanceof Error ? e.message : String(e) });
-          drawLeaflet();
-        });
+        .catch(fallBack);
     } else {
       drawLeaflet();
     }

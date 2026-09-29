@@ -55,7 +55,10 @@ from the checkout instead.
 ## Build the boundary DB
 
 `overture-scraper/bootstrap.sh`, the bootstrap image's entrypoint, runs five steps and exits
-non-zero if any fails — it never reports "ready" over an empty DB:
+non-zero if any fails — it never reports "ready" over an empty DB. It builds into
+`boundaries.sqlite.building` next to the served file and renames it into place only after step 5
+passes, so a failed or interrupted rebuild leaves the served DB untouched. search-api keeps
+serving the DB it opened until it restarts; restart it to serve the new one.
 
 1. `scrape.py` reads Overture's `division_area` parquet on S3 for the requested countries.
 2. `apply_admin_levels.py`: Overture numbers admin levels only down to county (country 0,
@@ -146,7 +149,7 @@ that source answers `404`.
 | Build variable | Default | |
 |---|---|---|
 | `VITE_TURBOPASS_URL` | `/turbopass` | Same-origin path (nginx proxies it), or the central service's URL |
-| `VITE_TURBOPASS_SOURCE` | — | Unset: `official` when the server's `/health` lists it, else `overture`. Set it to pin a source. |
+| `VITE_TURBOPASS_SOURCE` | — | The source Phase 2 starts on. Unset: `official` when the server's `/health` lists it, else `overture`. Operators can switch in Phase 2's **Boundary source** picker, which lists every source `/health` reports; a place is always fetched from the source that found it. |
 | `VITE_TURBOPASS_MATCH` | `substring` | The `match` mode the configurator sends |
 
 ## Adding countries
