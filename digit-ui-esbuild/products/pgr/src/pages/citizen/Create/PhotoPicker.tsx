@@ -11,6 +11,7 @@
 import * as React from "react";
 import { Button } from "@egovernments/digit-ui-components-v2";
 import { useDialogFocus } from "./useDialogFocus";
+import { trackEvent } from "../../../utils/analytics";
 
 declare const Digit: any;
 
@@ -148,11 +149,13 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         const response = await Digit.UploadServices.Filestorage("property-upload", ready, tenantId);
         const fileStoreId = response?.data?.files?.[0]?.fileStoreId;
         if (!fileStoreId) throw new Error("no fileStoreId");
+        trackEvent("pgr.file-complaint.photo.uploaded", { category: "pgr", label: ready === file ? "original" : "scaled" });
         // Named as uploaded: a scaled photo went up as a .jpg.
         onChange((prev) =>
           prev.map((p) => (p.id === photo.id ? { ...p, status: "done", fileStoreId, size: ready.size, name: ready.name } : p))
         );
       } catch {
+        trackEvent("pgr.file-complaint.photo.upload-failed", { category: "pgr" });
         onChange((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "failed" } : p)));
       }
     },
@@ -167,16 +170,19 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
     for (const file of files) {
       if (!/^image\/(jpeg|png|jpg)$/i.test(file.type)) {
         setNotice(tr("CS_PHOTO_TYPE", "Only JPG or PNG photos can be attached."));
+        trackEvent("pgr.file-complaint.photo.rejected", { category: "pgr", label: "type" });
         continue;
       }
       if (file.size > MAX_PICK_BYTES) {
         setNotice(tr("CS_PHOTO_TOO_LARGE", "That photo is over 5 MB. Choose a smaller one."));
+        trackEvent("pgr.file-complaint.photo.rejected", { category: "pgr", label: "size" });
         continue;
       }
       accepted.push(file);
     }
     if (accepted.length > room) {
       setNotice(tr("CS_PHOTO_LIMIT", `You can attach up to ${MAX_PHOTOS} photos.`));
+      trackEvent("pgr.file-complaint.photo.rejected", { category: "pgr", label: "limit" });
     }
     const picked = accepted.slice(0, Math.max(0, room)).map((file) => ({
       file,
@@ -232,6 +238,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         disabled={full}
         leading={<CameraGlyph />}
         onClick={() => setSheetOpen(true)}
+        data-analytics-event="pgr.file-complaint.photo.open"
       >
         {tr("CS_ADDCOMPLAINT_UPLOAD_PHOTO", "Upload photo")}
       </Button>
@@ -242,6 +249,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         role="button"
         tabIndex={full ? -1 : 0}
         aria-disabled={full}
+        data-analytics-event="pgr.file-complaint.photo.browse"
         onClick={() => !full && galleryRef.current?.click()}
         onKeyDown={(event) => {
           if (!full && (event.key === "Enter" || event.key === " ")) {
@@ -257,7 +265,10 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         onDrop={(event) => {
           event.preventDefault();
           setDragging(false);
-          if (!full) addFiles(event.dataTransfer.files);
+          if (full) return;
+          // A drop is no click, so the shim cannot see it.
+          trackEvent("pgr.file-complaint.photo.dropped", { category: "pgr", value: event.dataTransfer.files?.length || 0 });
+          addFiles(event.dataTransfer.files);
         }}
       >
         <span className="cms-drop-icon">
@@ -291,12 +302,22 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
                 </span>
               </span>
               {photo.status === "failed" ? (
-                <button type="button" className="cms-link-button cms-retry" onClick={() => retry(photo)}>
+                <button
+                  type="button"
+                  className="cms-link-button cms-retry"
+                  onClick={() => retry(photo)}
+                  data-analytics-event="pgr.file-complaint.photo.retry"
+                >
                   <RetryGlyph />
                   {tr("CS_COMMON_RETRY", "Retry")}
                 </button>
               ) : null}
-              <button type="button" className="cms-link-button" onClick={() => remove(photo.id)}>
+              <button
+                type="button"
+                className="cms-link-button"
+                onClick={() => remove(photo.id)}
+                data-analytics-event="pgr.file-complaint.photo.remove"
+              >
                 {tr("CS_COMMON_REMOVE", "Remove")}
               </button>
             </li>
@@ -311,16 +332,32 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
               {tr("CS_PHOTO_SHEET_TITLE", "Upload a photo")}
             </h2>
             <div className="cms-sheet-options">
-              <button type="button" className="cms-sheet-option" onClick={() => cameraRef.current?.click()}>
+              <button
+                type="button"
+                className="cms-sheet-option"
+                onClick={() => cameraRef.current?.click()}
+                data-analytics-event="pgr.file-complaint.photo.camera"
+              >
                 <CameraGlyph />
                 {tr("CS_PHOTO_TAKE", "Take a photo")}
               </button>
-              <button type="button" className="cms-sheet-option" onClick={() => galleryRef.current?.click()}>
+              <button
+                type="button"
+                className="cms-sheet-option"
+                onClick={() => galleryRef.current?.click()}
+                data-analytics-event="pgr.file-complaint.photo.gallery"
+              >
                 <ImageGlyph />
                 {tr("CS_PHOTO_GALLERY", "Choose from gallery")}
               </button>
             </div>
-            <Button variant="ghost" width="full" className="cms-sheet-cancel" onClick={() => setSheetOpen(false)}>
+            <Button
+              variant="ghost"
+              width="full"
+              className="cms-sheet-cancel"
+              onClick={() => setSheetOpen(false)}
+              data-analytics-event="pgr.file-complaint.photo.cancel"
+            >
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
           </div>

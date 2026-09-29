@@ -84,7 +84,13 @@ function ComplaintNumber({ id, tr }) {
         <div className="cms-receipt-number-label">{tr("CS_FILE_COMPLAINT_NUMBER", "Complaint number")}</div>
         <div className="cms-receipt-number-value">{id}</div>
       </div>
-      <button type="button" className="cms-link-button" onClick={copy} aria-live="polite">
+      <button
+        type="button"
+        className="cms-link-button"
+        onClick={copy}
+        aria-live="polite"
+        data-analytics-event="pgr.complaint.response-copy-number"
+      >
         {copied ? tr("CS_COMMON_COPIED", "Copied") : tr("CS_COMMON_COPY", "Copy")}
       </button>
     </div>
@@ -183,15 +189,23 @@ const Response = () => {
         ) : null}
         <div className="cms-receipt-actions">
           {success && goDetail ? (
-            <Button variant="outline" leading={<EyeGlyph />} onClick={() => history.push(goDetail)}>
+            <Button
+              variant="outline"
+              leading={<EyeGlyph />}
+              onClick={() => history.push(goDetail)}
+              data-analytics-event="pgr.complaint.response-view"
+            >
               {tr("CS_COMMON_VIEW_COMPLAINT", "View Complaint")}
             </Button>
           ) : !success ? (
-            <Button variant="outline" onClick={() => history.push(retryFlow)}>
+            <Button variant="outline" onClick={() => history.push(retryFlow)} data-analytics-event="pgr.complaint.response-try-again">
               {tr("CS_COMMON_TRY_AGAIN", "Try Again")}
             </Button>
           ) : null}
-          <Button onClick={() => history.push(goHome)}>{tr("CORE_COMMON_GO_TO_HOME", "Go back to home page")}</Button>
+          {/* Same name the employee response page gives its home button. */}
+          <Button onClick={() => history.push(goHome)} data-analytics-event="pgr.complaint.response-go-home">
+            {tr("CORE_COMMON_GO_TO_HOME", "Go back to home page")}
+          </Button>
         </div>
       </div>
     </div>
