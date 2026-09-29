@@ -421,7 +421,8 @@ digit_ui_bundle_image: >-
 # Precedence, most specific first:
 #   1. a per-image pin in host_vars (`pgr_services_image:` …) or a local build
 #      (`build_mcp:` / `build_otp_publisher:`) — the tag is NOT applied to that
-#      image, and the deploy prints which ones it skipped;
+#      image, and the deploy prints which ones it skipped. An unpinned `-db`
+#      image whose service is pinned follows the service's pin;
 #   2. image_tag, when it covers the image (see image_tag_services);
 #   3. the compose-file default.
 image_tag: ""
@@ -444,25 +445,31 @@ image_tag_verify: true
 
 # The images image_tag moves. `image` is the build-config image-name (and the
 # registry repository), `env` the variable the compose files read, `var` the
-# host_vars pin that overrides it, `follows` the service a migration image
-# moves with under image_tag_services. Adding a CI-built image to the stack
+# host_vars pin that overrides it. `follows` ties a migration image to its
+# service: it moves with the service under image_tag_services, and when the
+# service is pinned it follows that pin instead of the tag (so a newer build's
+# migrations never run under an older service). `profiles` copies the compose
+# profiles the service sits behind; the registry check skips images whose
+# profiles are all off, since they are never pulled. Adding a CI-built image to the stack
 # means adding it here, parameterising its compose `image:` as
 # `${ENV:-egovio/<image>:<default>}` and writing ENV in templates/digit.env.j2
-# — tests/static/deployment-contracts.test.ts checks all three. One entry per
-# line: that test reads this list with a line regex, not a YAML parser.
+# — tests/static/deployment-contracts.test.ts checks all three. Keep `image`,
+# `env` and `var` first and on the entry's first line: that test reads this
+# list with a line regex, not a YAML parser.
 ccrs_image_catalog:
   - {image: pgr-services, env: PGR_SERVICES_IMAGE, var: pgr_services_image}
   - {image: pgr-services-db, env: PGR_SERVICES_DB_IMAGE, var: pgr_services_db_image, follows: pgr-services}
-  - {image: novu-bridge, env: NOVU_BRIDGE_IMAGE, var: novu_bridge_image}
-  - {image: novu-bridge-db, env: NOVU_BRIDGE_DB_IMAGE, var: novu_bridge_db_image, follows: novu-bridge}
-  - {image: novu-bridge-endpoint, env: NOVU_BRIDGE_ENDPOINT_IMAGE, var: novu_bridge_endpoint_image}
-  - {image: digit-config-service, env: DIGIT_CONFIG_SERVICE_IMAGE, var: digit_config_service_image}
-  - {image: digit-config-service-db, env: DIGIT_CONFIG_SERVICE_DB_IMAGE, var: digit_config_service_db_image, follows: digit-config-service}
-  - {image: digit-user-preferences-service, env: DIGIT_USER_PREFERENCES_SERVICE_IMAGE, var: digit_user_preferences_service_image}
+  - {image: novu-bridge, env: NOVU_BRIDGE_IMAGE, var: novu_bridge_image, profiles: [notifications]}
+  - {image: novu-bridge-db, env: NOVU_BRIDGE_DB_IMAGE, var: novu_bridge_db_image, follows: novu-bridge, profiles: [notifications]}
+  - {image: novu-bridge-endpoint, env: NOVU_BRIDGE_ENDPOINT_IMAGE, var: novu_bridge_endpoint_image, profiles: [notifications]}
+  - {image: digit-config-service, env: DIGIT_CONFIG_SERVICE_IMAGE, var: digit_config_service_image, profiles: [notifications]}
+  - {image: digit-config-service-db, env: DIGIT_CONFIG_SERVICE_DB_IMAGE, var: digit_config_service_db_image,
+     follows: digit-config-service, profiles: [notifications]}
+  - {image: digit-user-preferences-service, env: DIGIT_USER_PREFERENCES_SERVICE_IMAGE, var: digit_user_preferences_service_image, profiles: [notifications]}
   - {image: digit-ui-esbuild, env: DIGIT_UI_IMAGE, var: digit_ui_image}
   - {image: configurator, env: CONFIGURATOR_IMAGE, var: configurator_image}
-  - {image: digit-mcp, env: MCP_IMAGE, var: mcp_image}
-  - {image: otp-publisher, env: OTP_PUBLISHER_IMAGE, var: otp_publisher_image}
+  - {image: digit-mcp, env: MCP_IMAGE, var: mcp_image, profiles: [mcp, mcp-readonly]}
+  - {image: otp-publisher, env: OTP_PUBLISHER_IMAGE, var: otp_publisher_image, profiles: [notifications]}
 
 # Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
 # the default for every tenant: gatus warns about the unusable provider and

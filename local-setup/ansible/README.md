@@ -188,6 +188,18 @@ Rules worth knowing:
   `build_mcp: true` / `build_otp_publisher: true`, outrank the tag for that
   image. The plan flags each one (`<-- NOT <tag>: pinned by …`), so delete the
   old pins once you switch to tags.
+- **A `-db` migration image follows its service's pin.** With
+  `pgr_services_image: egovio/pgr-services:X` and no `pgr_services_db_image`,
+  the tag does not move `pgr-services-db` either: it deploys
+  `egovio/pgr-services-db:X`, so a newer build's schema migrations never run
+  under an older service. A service pinned by digest cannot hand its tag on;
+  the deploy then stops and asks for the `-db` pin explicitly.
+- **Images this tenant doesn't run are not checked.** Notification images
+  (profile `notifications`, i.e. `enable_novu`) and digit-mcp (`enable_mcp` /
+  `enable_mcp_readonly`) are skipped by the registry check when their profile
+  is off. The plan marks them `(not deployed: …)`.
+- The revert warning repeats the previous run's scope, e.g. `re-run with
+  --image-tag=master-3f9e2a1 --image-tag-services=pgr-services`.
 - **Images this repo does not build** (egov-user, accesscontrol, Kong,
   Postgres, Novu, …) are not affected; they keep their compose-file pins.
 - `image_tag_verify: false` skips the check. Only a registry the target
