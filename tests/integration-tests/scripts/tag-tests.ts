@@ -36,7 +36,6 @@ function deriveFileTags(filePath: string, fileContents: string): Tag[] {
   // Area — from path + filename + content sniffing
   const fileName = path.basename(rel);
   if (/^tests\/onboarding\//.test(rel)) tags.add('@area:onboarding');
-  if (/target-tenant-onboarding/.test(fileName)) tags.add('@area:onboarding');
   if (/login|logout|register|auth/.test(fileName)) tags.add('@area:auth');
   if (/pgr|complaint|wizard|rate|reopen|track|timeline|escalat|filestore|create-fixes|pin-and-cascade|postal/.test(fileName)) tags.add('@area:pgr');
   if (/(^|\/)theme/.test(fileName) || /theme-config|inspect-theme/.test(fileName)) tags.add('@area:theme');

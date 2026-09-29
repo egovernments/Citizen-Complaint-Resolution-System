@@ -191,35 +191,84 @@ mybox : ok=144  changed=34  unreachable=0  failed=0  skipped=240
 
 ## 6. Verify + log in (from your Windows browser)
 
-| What | URL |
-|------|-----|
-| Employee UI | http://localhost/digit-ui/ — `ADMIN` / `eGov@123`, select **City A** |
-| Citizen SPA | http://localhost/citizen/ |
-| Configurator (DIGIT Studio) | http://localhost/configurator/ |
-| Grafana | http://localhost/**grafana**/ |
+Type the URLs exactly as written, trailing slash included.
+
+| What | Port 80 (recommended) | Direct port (fallback) | Log in with |
+|------|-----------------------|------------------------|-------------|
+| Employee UI | http://localhost/digit-ui/ | http://localhost:18000/digit-ui/ | `ADMIN` / `eGov@123`, city **City A** |
+| Citizen SPA | http://localhost/citizen/ | http://localhost:18000/digit-ui/citizen/ (see note 1) | — |
+| Configurator (DIGIT Studio) | http://localhost/configurator/ | http://localhost:18890/configurator/ (see note 2) | `ADMIN` / `eGov@123`, tenant code **`pg`** |
+| Grafana | http://localhost/grafana/ | http://localhost:13000/grafana/ | `admin` / generated password (below) |
+| Gatus health board | http://localhost/status/ | http://localhost:18889/ | `digit-status` / generated password (below); no password on the direct port |
+
+> **If a port-80 URL is not reachable or returns 404, use its direct-port URL
+> from the same row instead.** To fix port 80 itself, see
+> [If the port-80 URLs return 404](#if-the-port-80-urls-return-404) below.
+
+1. The Citizen SPA at `/citizen/` is served only by nginx on port 80. Its
+   fallback is the citizen app built into the employee UI bundle, served
+   through Kong. It is a different, older app, but it has its own
+   complaint-filing pages.
+2. The configurator's direct port serves the page but not the APIs it logs in
+   through, so the login fails there. Use it only to confirm the container is
+   up; to log in, get the port-80 URL working.
+
+The employee UI fallback is Kong on `18000`, not the employee UI container's
+own port `18080`. Like the configurator's, that port serves the page without
+the login APIs.
+
+**Configurator tenant code:** the prebuilt configurator image is not tied to
+any tenant, so its **Tenant code** field starts empty. Type `pg` (the
+state-level tenant). The form won't submit with the field empty.
+
+**Generated passwords:** the deploy generates the Grafana and Gatus passwords
+and stores them in OpenBao. Read them from a root shell inside WSL:
+
+```bash
+TOKEN=$(python3 -c 'import json; print(json.load(open("/opt/digit/.openbao/init.json"))["root_token"])')
+for k in grafana_admin_password status_basic_auth_password; do
+  printf '%-28s ' "$k"
+  docker exec -e BAO_TOKEN="$TOKEN" openbao bao kv get -field="$k" kv/digit/pg.citya; echo
+done
+```
+
+Quick check of both columns from PowerShell:
 
 ```powershell
-foreach ($u in 'digit-ui','citizen','configurator','grafana') {
-  $url = "http://localhost/$u/"
-  try   { "{0,-14} {1}" -f $u, (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 20).StatusCode }
-  catch { "{0,-14} {1}" -f $u, $_.Exception.Response.StatusCode.value__ }
+foreach ($u in 'digit-ui/','citizen/','configurator/','grafana/','status/',
+               ':18000/digit-ui/',':18000/digit-ui/citizen/',':18890/configurator/',
+               ':13000/grafana/',':18889/') {
+  $url = if ($u.StartsWith(':')) { "http://localhost$u" } else { "http://localhost/$u" }
+  try   { "{0,-26} {1}" -f $u, (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 20).StatusCode }
+  catch { "{0,-26} {1}" -f $u, $_.Exception.Response.StatusCode.value__ }
 }
 ```
 
-All four return `200`.
+On port 80, `status/` returns `401` until you log in, which is expected;
+everything else should return `200`.
 
-> **The Gatus health board is off by default.** `nginx_features.status` is
-> `false` in both localhost templates — the board maps every internal component
-> and its health, so it is no longer published without a password. To enable
-> it, set `nginx_features.status: true` **and** `status_basic_auth_password`
-> in your host_vars (the deploy asserts on the second), then browse
-> `/status/` and authenticate.
+### If the port-80 URLs return 404
 
-> **Grafana is at `/grafana/`, not `localhost:13000`.** Docker publishes
-> Grafana and OpenBao to the WSL VM's loopback only, and WSL2's NAT-mode relay
-> doesn't forward those to Windows. Everything you need is proxied through
-> nginx on port 80. If you want the raw ports, add `networkingMode=mirrored`
-> to `[wsl2]`, or curl them from inside WSL.
+Run the same request from inside WSL to see which side is answering:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/digit-ui/
+grep -c configurator /etc/nginx/sites-enabled/*
+```
+
+- **`200` inside WSL, `404` from Windows:** a Windows program owns port 80 and
+  answers before WSL does (IIS / the "World Wide Web Publishing Service" is a
+  common one). Find it with `netstat -ano | findstr ":80 "` in PowerShell and
+  stop it, or use the fallback column.
+- **`404` inside WSL as well**, or the `grep` prints `0`: the nginx site in
+  place isn't the one this deploy renders (for example, one left from an
+  earlier install). Re-run `./deploy.sh mybox`; it rewrites the site.
+
+> **Whether the direct ports open from Windows depends on your WSL
+> networking.** Docker publishes them on the WSL VM's loopback
+> (`127.0.0.1`), and not every WSL2 setup forwards that to Windows. If a
+> fallback URL doesn't load either, add `networkingMode=mirrored` to `[wsl2]`
+> in `.wslconfig`, then `wsl --shutdown` and re-run `./deploy.sh mybox`.
 
 ## Day-to-day
 
@@ -258,6 +307,7 @@ re-run to bring the stack back.
 | Containers OOM-killed / restart-looping | `free -h` inside WSL. Slim sits at ~7.5 GiB of the 11 GiB VM — use slim on 16 GB and close heavy Windows apps. |
 | Port 80 already in use | Something on Windows owns it: `netstat -ano \| findstr :80`. |
 
-Note: Kong is not published on `localhost:18000` in this profile, so the
+Note: Kong listens on `127.0.0.1:18000` inside WSL, so the
 `newman ... baseUrl=http://localhost:18000` snippets in
-`local-setup/ansible/README.md` don't apply here — go through nginx on port 80.
+`local-setup/ansible/README.md` work from a WSL shell. From Windows they work
+only if your WSL setup forwards that port (see the note at the end of step 6).

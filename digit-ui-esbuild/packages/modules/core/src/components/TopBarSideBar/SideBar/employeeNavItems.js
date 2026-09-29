@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { insertModuleSections } from "./navSections";
+import { insertModuleSections, withTenantSegment } from "./navSections";
 
 /**
  * Employee navigation items, derived from the access-control tree.
@@ -52,6 +52,13 @@ function mergeObjects(obj1, obj2) {
 export const navigateToEmployeeUrl = (history, url, { isMultiRootTenant, tenantId } = {}) => {
   if (!url || url === "/") return;
 
+  // Dial / mail links (the citizen Helpline row) belong to the OS handler.
+  // Left to the branches below they were glued onto the host as a path.
+  if (/^(tel|mailto):/i.test(url)) {
+    window.location.href = url;
+    return;
+  }
+
   //Detect if it's an external link (starts with http or https)
   const isExternal = /^https?:\/\//i.test(url);
 
@@ -76,7 +83,7 @@ export const navigateToEmployeeUrl = (history, url, { isMultiRootTenant, tenantI
       window.location.href = updatedUrl;
     }
   } else {
-    history.push(url);
+    history.push(isMultiRootTenant ? withTenantSegment(url, window?.contextPath, tenantId) : url);
   }
 };
 

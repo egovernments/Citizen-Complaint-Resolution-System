@@ -1016,7 +1016,10 @@ const CreatePGRFlowV2: React.FC = () => {
 
   return (
     <ScreenContainer>
-      <div style={{ padding: "0.75rem 1.25rem 0 1.25rem", flexShrink: 0 }}>
+      {/* 24px sides, the inset My Complaints and a complaint's page give
+          their heading and cards, so the three line up; the footer below
+          takes the same inset so its buttons sit on the card's edges. */}
+      <div style={{ padding: "1rem 1.5rem 0 1.5rem", flexShrink: 0 }}>
         <ScreenHeader
           title={tr(t, "CS_COMMON_FILE_A_COMPLAINT", "File a Complaint")}
         />
@@ -1038,7 +1041,7 @@ const CreatePGRFlowV2: React.FC = () => {
           // the Card kissed the viewport edges left/right with zero
           // breathing room, since the parent .pgr-citizen-wrapper
           // sets no inline padding either.
-          padding: "1rem 1.25rem",
+          padding: "1rem 1.5rem",
         }}
       >
         {stepIndex === 0 && <Step0Type {...stepProps} />}
@@ -1055,7 +1058,7 @@ const CreatePGRFlowV2: React.FC = () => {
           </div>
         ) : null}
       </div>
-      <FormFooter>
+      <FormFooter className="px-6">
         {/* Analytics (CCRS#2007). Named from the step's stable STEPS id rather
             than stepIndex, so inserting or reordering a step cannot silently
             re-point an existing funnel step in the reports. The shim only emits
@@ -1070,7 +1073,7 @@ const CreatePGRFlowV2: React.FC = () => {
               : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
           }
         >
-          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : t("BACK")}
+          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : tr(t, "CS_COMMON_BACK", "Back")}
         </Button>
         <Button
           variant="primary"
@@ -1084,7 +1087,10 @@ const CreatePGRFlowV2: React.FC = () => {
               : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`
           }
         >
-          {isLast ? t("SUBMIT") : t("NEXT")}
+          {/* The bare NEXT / BACK / SUBMIT keys hold upper-case values; the
+              CS_/CORE_ twins are the sentence-case labels the rest of the
+              app's buttons use. */}
+          {isLast ? tr(t, "CORE_COMMON_SUBMIT", "Submit") : tr(t, "CS_COMMON_NEXT", "Next")}
         </Button>
       </FormFooter>
     </ScreenContainer>
