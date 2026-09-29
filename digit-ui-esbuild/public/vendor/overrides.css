@@ -8385,8 +8385,10 @@ html .header-dropdown-option:focus-visible {
     --app-rail-w: var(--app-rail-open);
   }
 
-  /* The lockup lives in the rail's foot; the bar keeps only the crest. */
-  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-logo {
+  /* The lockup lives in the rail's foot; the bar keeps only the crest. A
+   * tenant with no crest image at all keeps the logo slot rather than an
+   * empty corner. */
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header:not(.digit-employee-header--no-crest) .digit-topbar-logo {
     display: none !important;
   }
   :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb {
@@ -8395,6 +8397,13 @@ html .header-dropdown-option:focus-visible {
     padding: 0 !important;
     display: flex !important;
     align-items: center !important;
+    gap: 12px;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb-label {
+    color: var(--color-header-text, #ffffff);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
   }
   :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb img.state {
     width: 40px !important;
@@ -8433,8 +8442,9 @@ html .header-dropdown-option:focus-visible {
     box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
     transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s ease;
   }
+  /* No theme publishes a hover shade of primary-2, so it is derived. */
   html[data-sidebar-pinned] .digit-rail-toggle:hover {
-    background: var(--color-primary-2-hover, #1D4ED8);
+    background: color-mix(in srgb, var(--color-primary-2, #2563EB) 85%, #000000);
   }
   html[data-sidebar-pinned] .digit-rail-toggle:focus-visible {
     outline: 2px solid var(--color-primary-2, #2563EB);
@@ -8529,7 +8539,8 @@ html .header-dropdown-option:focus-visible {
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.88);
+  /* The rail's own row colour, as its navigation rows use. */
+  color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.88));
   font-size: 0.9rem;
   font-weight: 500;
   white-space: nowrap;
@@ -8537,10 +8548,10 @@ html .header-dropdown-option:focus-visible {
   cursor: pointer;
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout:focus-visible {
-  outline: 2px solid #ffffff;
+  outline: 2px solid currentColor;
   outline-offset: -2px;
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout svg,
@@ -8787,7 +8798,9 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
     height: 34px !important;
     flex: 0 0 auto;
     border-radius: 9px;
-    background: rgba(255, 255, 255, 0.12);
+    /* A tint of the bar's own text colour, so a light-header tenant gets a
+     * dark chip rather than white on white. */
+    background: color-mix(in srgb, var(--color-header-text, #ffffff) 12%, transparent);
     -webkit-tap-highlight-color: transparent;
   }
   :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:focus:not(:focus-visible) {
@@ -8833,8 +8846,9 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   padding: 0 11px;
   border: 0;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  /* The bar's text colour and a tint of it, as the menu button. */
+  background: color-mix(in srgb, var(--color-header-text, #ffffff) 12%, transparent);
+  color: var(--color-header-text, #ffffff);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -8844,7 +8858,7 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   outline: none;
 }
 .digit-language-pill-button:focus-visible {
-  outline: 2px solid #ffffff;
+  outline: 2px solid currentColor;
   outline-offset: 2px;
 }
 .digit-language-pill-button svg,
