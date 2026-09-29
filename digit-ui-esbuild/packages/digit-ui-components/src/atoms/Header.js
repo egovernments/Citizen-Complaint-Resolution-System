@@ -22,28 +22,16 @@ const Header = ({
   // aligned, in order. Absent, the phone bar is unchanged.
   mobileActionFields,
 }) => {
-  const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
-  const onResize = () => {
-    if (window.innerWidth <= 768) {
-      if (!isMobileView) {
-        setIsMobileView(true);
-      }
-    } else {
-      if (isMobileView) {
-        setIsMobileView(false);
-      }
-    }
-  };
+  // Phone below 768px, the width the rails mount from (`MediaQuery
+  // minWidth={768}`, `min-width: 48rem`); at exactly 768 both shells used to
+  // render. One listener for the component's life: the effect used to run on
+  // every render and its cleanup added another listener instead of removing.
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   useEffect(() => {
-    window.addEventListener("resize", () => {
-      onResize();
-    });
-    return () => {
-      window.addEventListener("resize", () => {
-        onResize();
-      });
-    };
-  });
+    const onResize = () => setIsMobileView(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const getImageUrl = (imageKey) => {
     return IMAGES[imageKey] ;
