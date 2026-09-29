@@ -7,9 +7,9 @@
 //      level, postal code and landmark.
 //   3. Review, then submit.
 //
-// What is unchanged: the request sent to /pgr/v1/_create (mapFormDataToRequest
-// is byte-identical), the category and boundary pickers, the map, the postal
-// code and pincode-allowlist rules, and the response page's redux contract.
+// What is unchanged: the request sent to /pgr/v1/_create (bar the locality,
+// below), the category and boundary pickers, the map, the postal code and
+// pincode-allowlist rules, and the response page's redux contract.
 // All three steps stay mounted and only the current one shows, so going Back
 // finds the pickers as the citizen left them.
 
@@ -117,6 +117,7 @@ interface FormData {
 /** The boundary picker's selection: the leaf, plus the node at each level. */
 interface BoundaryLevel {
   code?: string;
+  name?: string;
   boundaryType?: string;
 }
 
@@ -178,10 +179,15 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
         buildingName: "",
         street: "",
         pincode: validateString(formData?.postalCode),
+        // The ward the citizen confirmed in the cascade, which Review shows.
+        // It is the map's ward whenever the map's ward is in the boundary
+        // tree (the cascade fills from it); when the tree has no such ward,
+        // or the citizen changed the cascade, the map's code was filed while
+        // Review showed another ward.
         locality: {
           code:
-            formData?.GeoLocationsPoint?.ward?.code ||
             formData?.SelectedBoundary?.code ||
+            formData?.GeoLocationsPoint?.ward?.code ||
             "",
         },
         geoLocation: serializeGeoLocation(geoLocation),
@@ -767,10 +773,16 @@ function categoryNames(data: FormData, t: (k: string) => string): { category: st
 /** "Ward, Sub County, County, 00100": the boundary levels leaf first, then postal code. */
 function addressLine(data: FormData, t: (k: string) => string): string {
   const levels: BoundaryLevel[] = (data.SelectedBoundary?.levels as BoundaryLevel[]) || [];
+  // Named as the cascade's dropdowns name them: the code's translation, else
+  // the node's own name, so an unlocalised tenant does not read raw codes.
   const names = levels
     .slice()
     .reverse()
-    .map((level) => (level.code ? t(level.code) : ""))
+    .map((level) => {
+      if (!level.code) return "";
+      const translated = t(level.code);
+      return translated && translated !== level.code ? translated : level.name || level.code;
+    })
     .filter(Boolean);
   const postal = data.postalCode ?? (data.GeoLocationsPoint?.pincode != null ? String(data.GeoLocationsPoint.pincode) : "");
   return [...names, postal].filter(Boolean).join(", ");
@@ -814,7 +826,7 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
       <ReviewCard title={say("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS", "Complaint details")}>
         <ReviewRows
           rows={[
-            [say("CS_FILE_DESCRIPTION", "Description"), data.description?.trim() ? truncate(data.description, 180) : notProvided],
+            [say("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION", "Description"), data.description?.trim() ? truncate(data.description, 180) : notProvided],
             [say("CS_FILE_CATEGORY_LABEL", "Category"), category || notSelected],
             // A type with no sub-types has nothing to select here.
             [say("CS_FILE_SUBCATEGORY_LABEL", "Sub-category"), subCategory || (category ? "—" : notSelected)],
@@ -1033,6 +1045,9 @@ const CreatePGRFlowV2: React.FC = () => {
     []
   );
   const uploading = photos.some((p) => p.status === "uploading");
+  // A photo that did not upload holds the step until it is retried or
+  // removed: the citizen believes it is attached, and it would be dropped.
+  const uploadFailed = photos.some((p) => p.status === "failed");
 
   // Step 1: a description with at least three letters, and a complaint type.
   // Sub-type is conditionally mandatory: if the chosen type has sub-services in
@@ -1053,7 +1068,11 @@ const CreatePGRFlowV2: React.FC = () => {
   const postalOk = isPostalCodeValid(formData.postalCode ?? formData?.GeoLocationsPoint?.pincode);
 
   const stepIsValid =
-    stepIndex === 0 ? descriptionOk && categoryOk && !uploading : stepIndex === 1 ? locationOk && postalOk : true;
+    stepIndex === 0
+      ? descriptionOk && categoryOk && !uploading && !uploadFailed
+      : stepIndex === 1
+      ? locationOk && postalOk
+      : true;
 
   /** Why Next is held, in the words the design uses. */
   const hint = (() => {
@@ -1062,6 +1081,7 @@ const CreatePGRFlowV2: React.FC = () => {
       if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
       if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a category and sub-category to continue.");
       if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
+      if (uploadFailed) return tr(t, "CS_FILE_HINT_UPLOAD_FAILED", "A photo didn't upload. Retry it or remove it.");
     }
     if (stepIndex === 1) {
       if (!locationOk) return tr(t, "CS_FILE_HINT_LOCATION", "Select every level of the location to continue.");
@@ -1123,15 +1143,16 @@ const CreatePGRFlowV2: React.FC = () => {
         .filter((p) => p.status === "done" && p.fileStoreId)
         .map((p) => p.fileStoreId as string);
       const payload = mapFormDataToRequest({ ...formData, ComplaintImagesPoint: fileStoreIds }, tenantId, user?.info ?? user);
-      // What the confirmation screen summarises. The create response carries
-      // only codes; the names are known here.
+      // What the confirmation screen summarises, handed over in the route's
+      // state: the create response carries only codes, and the names are known
+      // here. Route state survives the response page remounting.
       const names = categoryNames(formData, t);
-      Digit.SessionStorage.set("PGR_FILED_SUMMARY", {
+      const filedSummary = {
         category: [names.category, names.subCategory].filter(Boolean).join(" · "),
         location: addressLine(formData, t),
         photos: fileStoreIds.length,
         filedAt: Date.now(),
-      });
+      };
       createMutation(payload, {
         onError: () => {
           // Outcome, not intent. The submit click is already tagged; whether the
@@ -1147,7 +1168,7 @@ const CreatePGRFlowV2: React.FC = () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/digit-ui/citizen/pgr/response`, { filedSummary });
         },
       });
       return;
@@ -1159,7 +1180,13 @@ const CreatePGRFlowV2: React.FC = () => {
   }
 
   function handleBack() {
-    if (stepIndex === 0 || submitting) return;
+    if (submitting) return;
+    // On the first step Back leaves the flow, as Cancel did; nothing else on
+    // the page does now.
+    if (stepIndex === 0) {
+      history.goBack();
+      return;
+    }
     setStepIndex((i) => i - 1);
     scrollToTop();
   }
@@ -1268,10 +1295,12 @@ const CreatePGRFlowV2: React.FC = () => {
               variant="outline"
               className="cms-back"
               onClick={handleBack}
-              disabled={stepIndex === 0 || submitting}
+              disabled={submitting}
               aria-label={say("CS_COMMON_BACK", "Back")}
               leading={<ChevronLeft />}
-              data-analytics-event={`pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`}
+              data-analytics-event={
+                stepIndex === 0 ? "pgr.file-complaint.cancel" : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
+              }
             >
               <span className="cms-back-label">{say("CS_COMMON_BACK", "Back")}</span>
             </Button>
@@ -1284,7 +1313,7 @@ const CreatePGRFlowV2: React.FC = () => {
               trailing={<ArrowRight />}
               data-analytics-event={isLast ? "pgr.file-complaint.submit" : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`}
             >
-              {isLast ? say("CS_FILE_SUBMIT", "Submit complaint") : say("CS_COMMON_NEXT", "Next")}
+              {isLast ? say("CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT", "Submit complaint") : say("CS_COMMON_NEXT", "Next")}
             </Button>
           </div>
         </div>

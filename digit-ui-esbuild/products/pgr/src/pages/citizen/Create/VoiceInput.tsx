@@ -8,6 +8,7 @@
 
 import * as React from "react";
 import { Button } from "@egovernments/digit-ui-components-v2";
+import { useDialogFocus } from "./useDialogFocus";
 
 type SpeechState = "idle" | "recording" | "ready" | "error";
 
@@ -19,6 +20,22 @@ function recognitionConstructor(): any {
 
 export function speechToTextSupported(): boolean {
   return !!recognitionConstructor();
+}
+
+/**
+ * Join a finalised phrase onto what was heard so far. Android Chrome in
+ * continuous mode re-sends each final with everything before it, and some
+ * engines repeat the last phrase, so a phrase that already contains, or is
+ * contained in, the text so far replaces or is dropped rather than appended.
+ */
+function mergeFinal(heard: string, next: string): string {
+  if (!next) return heard;
+  if (!heard) return next;
+  const a = heard.toLowerCase();
+  const n = next.toLowerCase();
+  if (n.startsWith(a)) return next;
+  if (a.endsWith(n)) return heard;
+  return `${heard} ${next}`;
 }
 
 /** The browser's own English variant (en-KE, en-IN…) if it has one, else en-US. */
@@ -39,6 +56,8 @@ export function useSpeechToText() {
   const [errorCode, setErrorCode] = React.useState<string | null>(null);
   const recRef = React.useRef<any>(null);
   const finalRef = React.useRef("");
+  // The phrase still being recognised, kept so an early end does not lose it.
+  const interimRef = React.useRef("");
   const stateRef = React.useRef<SpeechState>("idle");
   const timerRef = React.useRef<number | null>(null);
 
@@ -77,6 +96,7 @@ export function useSpeechToText() {
     if (!Recognition) return;
     teardown();
     finalRef.current = "";
+    interimRef.current = "";
     setTranscript("");
     setInterim("");
     setSeconds(0);
@@ -88,25 +108,44 @@ export function useSpeechToText() {
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
+    // Rebuilt from the whole session's results on each event, so a result
+    // the engine revises or repeats is counted once.
     rec.onresult = (event: any) => {
+      let heard = "";
       let pending = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
-        const text = result[0]?.transcript || "";
-        if (result.isFinal) {
-          finalRef.current = `${finalRef.current} ${text}`.replace(/\s+/g, " ").trim();
-        } else {
-          pending += text;
-        }
+        const text = (result[0]?.transcript || "").trim();
+        if (!text) continue;
+        if (result.isFinal) heard = mergeFinal(heard, text);
+        else pending = `${pending} ${text}`.trim();
       }
-      setTranscript(finalRef.current);
-      setInterim(pending.trim());
+      finalRef.current = heard;
+      interimRef.current = pending;
+      setTranscript(heard);
+      setInterim(pending);
+    };
+    // What the citizen saw while recording is the result, whether or not the
+    // engine finalised its last phrase (iOS Safari ends without doing so).
+    const keepHeard = () => {
+      const heard = mergeFinal(finalRef.current, interimRef.current);
+      finalRef.current = heard;
+      interimRef.current = "";
+      setTranscript(heard);
+      setInterim("");
+      return heard;
     };
     rec.onerror = (event: any) => {
       // "aborted" is our own teardown; the rest are real failures.
       if (event?.error === "aborted") return;
-      setErrorCode(event?.error || "unknown");
       stopTimer();
+      // A failure mid-dictation (the network dropping, say) keeps what was
+      // already heard rather than discarding it.
+      if (keepHeard()) {
+        setBoth("ready");
+        return;
+      }
+      setErrorCode(event?.error || "unknown");
       setBoth("error");
     };
     // Recognition also ends on its own after a long silence. Whatever ended
@@ -115,8 +154,7 @@ export function useSpeechToText() {
       stopTimer();
       recRef.current = null;
       if (stateRef.current !== "recording") return;
-      setInterim("");
-      if (finalRef.current) {
+      if (keepHeard()) {
         setBoth("ready");
       } else {
         setErrorCode("no-speech");
@@ -151,6 +189,7 @@ export function useSpeechToText() {
   const reset = React.useCallback(() => {
     teardown();
     finalRef.current = "";
+    interimRef.current = "";
     setTranscript("");
     setInterim("");
     setSeconds(0);
@@ -219,6 +258,8 @@ interface VoiceSheetProps {
 export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
   const speech = useSpeechToText();
   const { state, transcript, interim, seconds, errorCode, start, stop, reset } = speech;
+  const sheetRef = React.useRef<HTMLDivElement>(null);
+  useDialogFocus(open, sheetRef, state);
 
   React.useEffect(() => {
     if (open) start();
@@ -266,7 +307,7 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
 
   return (
     <div className="cms-sheet-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="cms-sheet cms-voice" role="dialog" aria-modal="true" aria-labelledby="cms-voice-title">
+      <div ref={sheetRef} tabIndex={-1} className="cms-sheet cms-voice" role="dialog" aria-modal="true" aria-labelledby="cms-voice-title">
         <h2 id="cms-voice-title" className="cms-sheet-head">
           {title}
         </h2>
@@ -333,7 +374,7 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
                 {tr("CS_VOICE_RETAKE", "Retake")}
               </Button>
               <Button variant="outline" leading={<TrashGlyph />} onClick={onClose} style={DANGER_OUTLINE}>
-                {tr("CS_COMMON_DELETE", "Delete")}
+                {tr("CS_INFO_DELETE", "Delete")}
               </Button>
             </div>
             <Button variant="ghost" width="full" onClick={onClose}>
