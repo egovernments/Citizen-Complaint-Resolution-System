@@ -59,7 +59,11 @@ through POST /novu-bridge/novu-adapter/v1/providers from --credentials-file (JSO
 SMSCountry, Ozeki and Jasmin are DIGIT's providers, mounted into the stock Novu worker
 (backend/novu-bridge/novu-worker-providers): creating one is refused while the running
 novu-worker container does not preload them, because every send through it would fail
-inside Novu (redeploy with the current compose file first).
+inside Novu (redeploy with the current compose file first). It is ALSO refused when the worker
+cannot be checked at all — no docker here, a worker container by another name, a remote box
+reached with --digit-url, a Kubernetes install — unless you have checked the worker yourself
+and pass --assume-worker-providers (Kubernetes: the novu chart's worker.digitProviders.enabled,
+see docs/2.20/notifications/providers.md).
 
 Exit: 0 ok · 1 finished with warnings (preview differences, verification mismatch, a
 required operator action) · 2 a tenant failed or could not be read · 3 a write was
@@ -437,13 +441,31 @@ def plan_provider_creation(ctx, args):
                             "unavailable (%s)" % ctx.integrations_error)
     mounted_kinds = [k for k in kinds if k in MOUNTED_PROVIDER_TYPES]
     worker = getattr(args, "worker_container", None)
-    if mounted_kinds and worker and worker_loads_digit_providers(worker) is False:
+    loads = worker_loads_digit_providers(worker) if (mounted_kinds and worker) else None
+    if mounted_kinds and loads is False:
         raise RefuseToStart(
             "%s provider(s) are DIGIT providers mounted into the Novu worker, but the %s container "
             "does not preload them (its NODE_OPTIONS has no %s): the provider would save and every "
             "send through it would fail inside Novu while the bridge records SENT. Redeploy with "
             "the current compose file first (docs/2.20/notifications/providers.md)"
             % (", ".join(mounted_kinds), worker, WORKER_PROVIDERS_PRELOAD))
+    if mounted_kinds and loads is None:
+        # Not knowing is not the same as "it preloads them". Guessing wrong saves a provider
+        # that passes test-send's API check and then fails every real send inside Novu.
+        where = ("the %r container could not be inspected (no docker here, no such container, "
+                 "or no permission)" % worker) if worker else "--worker-container '' turned the check off"
+        if not getattr(args, "assume_worker_providers", False):
+            raise RefuseToStart(
+                "%s provider(s) are DIGIT providers that only work when the Novu worker preloads "
+                "them, and %s, so this cannot be checked. Check the worker yourself — Compose: "
+                "`docker inspect novu-worker` shows NODE_OPTIONS with %s; Kubernetes: the novu "
+                "chart's worker.digitProviders.enabled is true — then re-run with "
+                "--assume-worker-providers (or --worker-container <name> on the box that runs it)"
+                % (", ".join(mounted_kinds), where, WORKER_PROVIDERS_PRELOAD))
+        print("WARNING: %s: %s; creating %s on the operator's word (--assume-worker-providers). "
+              "If the worker does not preload DIGIT's providers, every send through it fails inside "
+              "Novu while the bridge records SENT." % ("worker not checked", where, ", ".join(mounted_kinds)),
+              file=sys.stderr)
     creds = read_credentials_file(args.credentials_file)
     required = catalog_required(ctx)
     plans = []
@@ -1547,7 +1569,12 @@ exit: 0 ok · 1 warnings · 2 a tenant failed · 3 403 · 4 refused to start""")
                     help="container to read the bridge env from ('' = do not ask docker)")
     ap.add_argument("--worker-container", default="novu-worker",
                     help="Novu worker container checked for DIGIT's mounted providers before "
-                         "creating an SMSCountry/Ozeki/Jasmin provider ('' = do not ask docker)")
+                         "creating an SMSCountry/Ozeki/Jasmin provider ('' = do not ask docker; "
+                         "creating one then needs --assume-worker-providers)")
+    ap.add_argument("--assume-worker-providers", action="store_true",
+                    help="create an SMSCountry/Ozeki/Jasmin provider even though the Novu worker "
+                         "could not be inspected — only after checking yourself that it preloads "
+                         "DIGIT's providers")
     ap.add_argument("--bridge-url", help="novu-bridge base URL (default: DIGIT_URL, through Kong)")
     ap.add_argument("--digit-url", default=os.environ.get("DIGIT_URL", ""))
     ap.add_argument("--login-tenant", default=os.environ.get("DIGIT_LOGIN_TENANT"))

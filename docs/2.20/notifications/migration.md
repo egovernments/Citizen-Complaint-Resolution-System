@@ -120,13 +120,44 @@ python3 migrate-notifications.py plan  --tenant mycity --adopt-defaults
 python3 migrate-notifications.py apply --tenant mycity --adopt-defaults --yes
 ```
 
-The plan calls it `none` and lists every row it would write. `notifications_adopt_defaults: true`
-in host_vars makes the deploy seed the defaults anyway — only for a fresh install whose database
-arrived with complaints (the `full-dump.sql` demo data under `pg`; `localhost-full.yml.example`
-sets it). It never touches a tenant that has configuration.
+The plan calls it `none` and lists every row it would write. `notifications_adopt_defaults` in
+host_vars makes the deploy seed the defaults anyway — only for roots whose complaints are demo
+data (the `full-dump.sql` complaints under `pg`): `true` for every root the deploy seeds
+(`localhost-full.yml.example` sets it), or a list such as `[pg]` for those roots only. It never
+touches a tenant that has configuration.
+
+**Every state root with complaints is decided, not just `state_root`**
+([#1943](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1943)).
+novu-bridge resolves a complaint's configuration at the complaint's own state root (`pg.citya` →
+`pg`), so the deploy seeds `state_root` plus every root that has a complaint
+(`split_part(tenantid, '.', 1)` of `eg_pgr_service_v2`), each with its own complaint count and its
+own login (`notif_seed_user` at that root). A box whose `state_root` is `ke` but which still
+carries the dump's `pg` complaints therefore gets `pg` decided and reported too. The deploy prints
+one line per root (`notif-seed — result per state root`): `fresh`, `notifications`, `legacy` or
+`none`, each `legacy` / `none` root with its own `ACTION` and command. A root where the seeding
+user cannot log in is a `WARNING` and is skipped (fatal only for `state_root`); a root that fails
+does not stop the others, and the run fails once, at the end, naming every failed root. Roots
+matching `notifications_seed_exclude` (default `(?i)^(PW_|pwt)`, the test suite's junk tenants)
+are listed and skipped. To see the roots yourself:
+
+```bash
+sudo docker exec docker-postgres psql -U egov -d egov -c \
+  "select split_part(tenantid, '.', 1) as state_root, count(*) from eg_pgr_service_v2 group by 1"
+```
+
+`migrate-notifications.py --all` still takes its roots from `--roots` (else `STATE_ROOT`, else the
+bridge's OTP default tenant): pass `--roots ke,pg` on such a box, or `--tenant pg`.
 Until it is migrated, the Configure and Channels screens show it read-only (*"This tenant has not
 been migrated yet — shown read-only"*) and refuse a raw first `NOTIFICATIONS.Routing` /
 `NOTIFICATIONS.Channel` row (`namespace-switch`): that row alone would switch the tenant over.
+
+**The legacy masters stay writable through the API.** The Configurator shows the four
+`RAINMAKER-PGR.Notification*` masters read-only, but that only hides its own edit screens: the MDMS
+role-actions that let `MDMS_ADMIN` / `ACCOUNT_ADMIN` write them are unchanged (a 2.12 tenant that
+has not been migrated is still configured through them by anything that writes MDMS directly).
+Once a tenant is migrated novu-bridge no longer reads them, so **an edit made to them after
+migration has no effect** — change a migrated tenant in Notifications → Configure
+(`NOTIFICATIONS.*`).
 
 Moving a tenant is a separate step, per tenant, with
 `local-setup/scripts/migrate-notifications.py` (the deploy stages it as
@@ -231,8 +262,13 @@ catalog's field keys (the Novu provider's credential keys):
 An SMSCountry, Ozeki or Jasmin provider is one of **DIGIT's providers mounted into the Novu
 worker** ([providers.md](./providers.md#digits-worker-providers)). A deploy of this release
 mounts them; redeploy **before** moving a tenant onto one if the box was deployed earlier. While
-the `novu-worker` container does not preload them the script refuses to create them (exit `4`;
-`--worker-container ''` skips the check).
+the `novu-worker` container does not preload them the script refuses to create them (exit `4`).
+It also refuses (exit `4`) when it **cannot check** the worker — no docker where it runs, a worker
+container by another name (`--worker-container <name>`), a remote box reached with `--digit-url`,
+a Kubernetes install, or `--worker-container ''`. Check the worker yourself (Compose: `docker
+inspect novu-worker` shows `NODE_OPTIONS` with `digit-novu-providers/register.js`; Kubernetes:
+`global.novuWorkerDigitProviders` / the novu chart's `worker.digitProviders.enabled` is `true`),
+then re-run with `--assume-worker-providers`; the script says it did not check.
 The direct SMSCountry route needs no Novu worker at all.
 
 The file must be mode `0600` or stricter, or it is refused. Values are never printed or written

@@ -260,10 +260,14 @@ _svc_env_get() {   # _svc_env_get <service> <VAR> — the value of VAR in the co
 # _remove_retired_notification_containers — containers of services this release removed.
 # `up -d` leaves them running as orphans, and egov-notification-sms keeps consuming
 # egov.core.notification.sms alongside novu-bridge — every login OTP sent twice, through two
-# providers. So they go BEFORE any step starts a new bridge, not after: the new bridge's
-# first subscription to that topic starts at the latest offset, so an OTP requested in the
-# few seconds it boots is not sent (the user asks again) — never sent twice. Only a
-# container compose made for that service in $DIGIT_HOME is removed. Idempotent.
+# providers. They go only once a bridge is there to take over (same rule as the playbook):
+#   • step 1, a bridge was already running: right after it is recreated and running — its
+#     consumer group resumes from the offsets the old bridge committed;
+#   • step 2, the first bridge on this box: after `up -d` and once novu-bridge is HEALTHY
+#     (_remove_retired_after_bridge_healthy). Removed before, nothing consumed the topic while
+#     the stack came up, the new bridge's first subscription starts at the latest offset so
+#     those OTPs were lost, and a failed up left the box with no OTP sender at all.
+# Only a container compose made for that service in $DIGIT_HOME is removed. Idempotent.
 _remove_retired_notification_containers() {
   local svc owner
   for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
@@ -278,6 +282,25 @@ _remove_retired_notification_containers() {
   done
 }
 
+# _remove_retired_after_bridge_healthy — the first-bridge case above: wait (up to 10 min)
+# for novu-bridge's healthcheck, then remove the retired senders. A bridge that never gets
+# healthy keeps them — OTPs may go out twice, but they go out.
+_remove_retired_after_bridge_healthy() {
+  [[ "$DRY_RUN" == true ]] && { note "would remove the retired OTP senders once novu-bridge is healthy"; return 0; }
+  local cid status="" i
+  for i in $(seq 1 60); do
+    cid=$(container_of novu-bridge)
+    [[ -n "$cid" ]] && status="$(sudo docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
+    [[ "$status" == healthy ]] && break
+    sleep 10
+  done
+  if [[ "$status" != healthy ]]; then
+    warn "novu-bridge is not healthy after 10 minutes (status: ${status:-absent}) — the retired OTP senders (egov-notification-sms, otp-publisher) are LEFT RUNNING so OTPs keep going out; a login OTP may arrive twice until you fix the bridge and re-run this step"
+    return 0
+  fi
+  _remove_retired_notification_containers
+}
+
 # _tenant_complaints <tenant> — how many PGR complaints have ever been filed at <tenant> and
 # its cities: the seeder's fresh-install signal (NOTIF_TENANT_COMPLAINTS). Prints nothing on
 # any failure, which the seeder reads as "unknown" — never as zero.
@@ -285,6 +308,14 @@ _tenant_complaints() {
   printf "select count(*) from eg_pgr_service_v2 where tenantid = :'t' or tenantid like :'t' || '.%%';\n" \
     | sudo docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -v t="$1" -tAq 2>/dev/null \
     | tr -d '[:space:]' || true
+}
+
+# _complaint_roots — "root count" per line: every state root complaints are filed under
+# (the first segment of the tenant id — the root novu-bridge resolves their configuration at).
+# Prints nothing on any failure.
+_complaint_roots() {
+  printf "select split_part(tenantid, '.', 1), count(*) from eg_pgr_service_v2 where coalesce(tenantid, '') <> '' group by 1 order by 1;\n" \
+    | sudo docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -tAq -F ' ' 2>/dev/null || true
 }
 
 # _restart_accesscontrol — egov-accesscontrol caches role-actions in memory; new rows
@@ -431,11 +462,16 @@ do_step1() {
   # already running — on a first enable there is no old bridge to race, and the thin
   # events wait in Kafka until step 2 starts one.
   if [[ -n "$(container_of novu-bridge)" ]]; then
-    # The new bridge consumes egov.core.notification.sms: the old OTP senders go first.
-    _remove_retired_notification_containers
     log "A bridge is running — recreating it on the same build BEFORE pgr-services…"
     set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
     compose up -d novu-bridge-migration novu-bridge
+    # The recreated bridge consumes egov.core.notification.sms: the old OTP senders go now,
+    # and only once it is running (see the function).
+    if [[ "$DRY_RUN" == true ]] || _svc_running novu-bridge; then
+      _remove_retired_notification_containers
+    else
+      warn "novu-bridge is not running after the recreate — the retired OTP senders are left running"
+    fi
   fi
 
   # Per-recipient language is resolved by novu-bridge now (NOVU_BRIDGE_PREFERENCE_HOST in the
@@ -485,13 +521,13 @@ do_step2() {
     set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
   fi
 
-  # The retired OTP senders go BEFORE the new bridge starts (see the function).
-  _remove_retired_notification_containers
-
   # Bring up ONLY the Novu stack services + their migrations. Never a bare `up -d`.
   log "Bringing up the Novu stack (named services only — never a bare up -d)…"
   compose up -d novu-mongo novu-api novu-worker novu-ws novu-dashboard novu-bridge \
     digit-config-service novu-bridge-migration digit-config-service-migration
+
+  # The retired OTP senders go only now that a bridge can take over (see the function).
+  _remove_retired_after_bridge_healthy
 
   verify "novu-api responds on ${NOVU_API_LOCAL}" "http_reachable '$NOVU_API_LOCAL'"
   verify "novu-bridge container is running" "_svc_running novu-bridge"
@@ -662,6 +698,19 @@ do_step6() {
   # this count; empty = the database could not be read = not provably fresh.
   local complaints; complaints="$(_tenant_complaints "$NOTIF_TENANT")"
   log "Complaints ever filed at ${NOTIF_TENANT} and its cities: ${complaints:-unknown} (0 = a fresh install)"
+
+  # This step seeds ONE root, NOTIF_TENANT. novu-bridge resolves a complaint's configuration at
+  # the complaint's own state root (#1943), so complaints under any other root get nothing from
+  # this run. Name them, with the command that seeds each (the Ansible deploy does all of them).
+  local root count others=""
+  while read -r root count; do
+    [[ -z "$root" || "$root" == "$NOTIF_TENANT" ]] && continue
+    others="${others} ${root}(${count})"
+  done < <(_complaint_roots)
+  if [[ -n "$others" ]]; then
+    warn "complaints are also filed under other state roots:${others} — this step seeds only ${NOTIF_TENANT}, and novu-bridge reads each complaint's notification configuration at its OWN root, so those send nothing until seeded."
+    note "Seed each with this step again: NOTIF_TENANT=<root> $0 --only step6 (ADMIN_USER must exist at that root), or deploy with Ansible, which seeds every root with complaints. See docs/2.20/notifications/setup-guide.md §8.2."
+  fi
 
   # seed-notifications.py env interface: DIGIT_URL/NOTIF_TENANT/DIGIT_USERNAME/
   # DIGIT_PASSWORD/SCHEMA_FILE/NOTIF_SCHEMA_FILE/DATA_DIR/NOTIF_SEED_PHASE/

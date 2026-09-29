@@ -3000,6 +3000,21 @@ services:
       # (POST /providers, /providers/_update, /providers/_delete). A caller without one
       # of these roles gets 403 NB_ADMIN_ROLE_REQUIRED even if it is on the list above.
       NOVU_BRIDGE_PROXY_ADMIN_ROLES: ${NOVU_BRIDGE_PROXY_ADMIN_ROLES:-SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN}
+      # Which state's admins may manage providers (create / _update / _delete, test-send,
+      # _dry-run, _resolve): the owning state — the state root of
+      # NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT above, which the deploy rewrites from `pg` to
+      # state_root — plus the comma-separated extra state tenants here. Blank = the owning
+      # state only. A box serving several state roots (#1999) lists the others here, or
+      # their admins get 403 NB_TENANT_NOT_ALLOWED.
+      NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS: ${NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS:-}
+      # Whether novu-worker preloads DIGIT's SMS providers (SMSCountry, Ozeki, Jasmin). It
+      # always does here: the novu-worker service above mounts them and requires register.js
+      # unconditionally (and refuses to boot without them), so this is not a knob on Compose.
+      # false would make the bridge hide/refuse those provider types (400
+      # NB_PROVIDER_TYPE_UNAVAILABLE) and skip a channel pinned to one
+      # (SKIPPED / NB_PROVIDER_UNAVAILABLE) — the Helm chart sets it from the same switch
+      # as the worker mount (global.novuWorkerDigitProviders).
+      NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS: 'true'
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # Thin events: the bridge resolves placeholder labels (complaint type, status, department)

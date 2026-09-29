@@ -238,6 +238,11 @@ describe('notification masters', () => {
         `${name}'s notice must name the migration command`);
       assert.doesNotMatch(notice!, /--tags notifications|seed step/);
       assert.match(notice!, /never deleted/);
+      // Kanav re-review 4118608372: readOnly only hides this screen's edit routes. The MDMS
+      // role-actions still let an admin write these masters through the API, and after
+      // migration novu-bridge ignores them — the notice must not let "read-only" imply more.
+      assert.match(notice!, /MDMS API still accepts writes/);
+      assert.match(notice!, /after migration has no effect/);
     }
   });
 

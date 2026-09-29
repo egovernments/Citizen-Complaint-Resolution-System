@@ -38,6 +38,10 @@ httpPort: 8080
 appType: "java-spring"
 tracing-enabled: true
 heap: "-Xmx192m -Xms192m"
+# See NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS below: used only when global.novuWorkerDigitProviders
+# is not set (the helmfile sets it for both this chart and the novu worker).
+digit-worker-providers: true
+provider-admin-tenants: ""
 java-args: "-Dspring.profiles.active=monitoring"
 
 # Health Checks
@@ -123,6 +127,19 @@ env: |
     value: "/mdms-v2/v2/_search"
   - name: NOVU_BRIDGE_RECEIPTS_SECRET
     value: {{ index .Values "receipts-secret" | default "" | quote }}
+  # Whether novu-worker preloads DIGIT's SMS providers (SMSCountry, Ozeki, Jasmin). MUST match
+  # the novu chart's worker.digitProviders.enabled: helmfile sets both from
+  # global.novuWorkerDigitProviders (charts/environments/env.yaml); installing this chart on
+  # its own, set digit-worker-providers to what the worker runs with. false = the bridge
+  # hides/refuses those provider types (400 NB_PROVIDER_TYPE_UNAVAILABLE) and skips a channel
+  # pinned to one (SKIPPED / NB_PROVIDER_UNAVAILABLE) rather than let every send fail in Novu.
+  - name: NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS
+    value: {{ if hasKey (.Values.global | default dict) "novuWorkerDigitProviders" }}{{ .Values.global.novuWorkerDigitProviders | toString | quote }}{{ else }}{{ index .Values "digit-worker-providers" | toString | quote }}{{ end }}
+  # Extra state tenants (comma-separated) whose admins may manage providers, besides the
+  # owning state (the state root of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT, i.e. egov-config's
+  # state-level-tenant-id). A cluster serving several state roots (#1999) lists the others.
+  - name: NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS
+    value: {{ index .Values "provider-admin-tenants" | default "" | quote }}
   - name: NOVU_BASE_URL
     value: {{ index .Values "novu-base-url" | quote }}
   - name: NOVU_API_KEY

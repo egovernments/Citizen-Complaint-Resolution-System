@@ -103,11 +103,18 @@ and "upgrade" work from the one task. They run in this order:
 Exit: 0 done · 2 a core master failed, or MDMS could not be read (a schema search that
 fails is reported as unreadable, never as "absent") · 3 at least one write was refused with 403
 (restart egov-accesscontrol and run the data phase again — the playbook does this once
-by itself) or, with NOTIF_SEED_PHASE=all, access-control rows were just created.
+by itself) or, with NOTIF_SEED_PHASE=all, access-control rows were just created · 4 the login
+itself was refused (NOTIF-LOGIN-REFUSED: no such user at DIGIT_LOGIN_TENANT, or a wrong
+password) — nothing read or written. A deployment with complaints under several state roots
+seeds each root with its own login, and a root where the admin does not exist says so here
+instead of failing with a traceback.
 
 Env:
   DIGIT_URL          Kong base, e.g. http://127.0.0.1:18000        (required)
   NOTIF_TENANT       tenant to seed at (state root, e.g. ke)       (required)
+                     The playbook runs this once per state root: state_root and every root
+                     that has complaints (novu-bridge resolves a complaint's configuration
+                     at its own root — #1943), each with that root's complaint count.
   DIGIT_USERNAME     admin username         (default: ADMIN)
   DIGIT_PASSWORD     admin password         (default: eGov@123)
   DIGIT_LOGIN_TENANT tenant to auth against (default: $NOTIF_TENANT)
@@ -373,6 +380,32 @@ def token():
     req = urllib.request.Request(URL + "/user/oauth/token", data=data,
         headers={"Authorization": BASIC, "Content-Type": "application/x-www-form-urlencoded"})
     return json.load(urllib.request.urlopen(req, timeout=40))["access_token"]
+
+
+LOGIN_REFUSED_EXIT = 4
+
+
+def login():
+    """The admin token. A refused login (4xx from /user/oauth/token: the user does not exist
+    at LOGIN_TENANT, or the password is wrong) prints NOTIF-LOGIN-REFUSED and exits 4 — the
+    playbook reports that root and carries on with the others. Anything else (Kong down, an
+    answer without a token) prints NOTIF-LOGIN-ERROR and exits 2. Nothing is read or written
+    either way."""
+    try:
+        return token()
+    except urllib.error.HTTPError as exc:
+        if 400 <= exc.code < 500:
+            print("NOTIF-LOGIN-REFUSED: tenant=%s — logging in as %s at %s was refused (HTTP %d): "
+                  "that user does not exist there, or the password differs. Nothing was read or "
+                  "written for %s." % (TENANT, USERNAME, LOGIN_TENANT, exc.code, TENANT))
+            sys.exit(LOGIN_REFUSED_EXIT)
+        print("NOTIF-LOGIN-ERROR: tenant=%s — /user/oauth/token answered HTTP %d. Nothing was "
+              "read or written." % (TENANT, exc.code))
+        sys.exit(2)
+    except (urllib.error.URLError, OSError, ValueError, KeyError) as exc:
+        print("NOTIF-LOGIN-ERROR: tenant=%s — no token from %s/user/oauth/token (%s). Nothing "
+              "was read or written." % (TENANT, URL, exc))
+        sys.exit(2)
 
 
 def ri(tok):
@@ -1393,7 +1426,7 @@ def main():
     if nc is None:
         sys.exit("ERROR: notifications_convert.py is not staged next to this script")
     print("seed-notifications: tenant=%s url=%s phase=%s" % (TENANT, URL, PHASE))
-    tok = token()
+    tok = login()
 
     if PHASE in ("all", "access"):
         acl_created, acl_dup, acl_failed = run_access_phase(tok)

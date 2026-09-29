@@ -594,18 +594,47 @@ novu_bridge_smscountry_password: ""
 # get when these are unset; set them only to widen or narrow that.
 # novu_bridge_proxy_allowed_roles: "EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN"
 # novu_bridge_proxy_admin_roles:   "SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN"
+#
+# The admin tier counts only when the role is held at a state that OWNS this
+# deployment's providers: state_root (novu-bridge reads it from its OTP default
+# tenant, which the deploy sets to state_root and checks), plus the extra state
+# tenants listed here. A box that serves several state roots (#1999) lists the
+# others, or their admins get 403 NB_TENANT_NOT_ALLOWED on Providers. Blank =
+# state_root's admins only.
+# novu_bridge_provider_admin_tenants: "pg,ke"
 
+# WHERE the deploy seeds notification configuration: state_root, plus EVERY state
+# root that has complaints (the first segment of each complaint's tenant — a
+# dump-based box with state_root `ke` still has the stock `pg.*` complaints, and
+# novu-bridge resolves their notifications at `pg`, not at `ke`; #1943). Each root
+# is decided and reported on its own ("notif-seed — result per state root"), logs
+# in at itself as notif_seed_user (a root where that user does not exist is a
+# WARNING and is skipped; only state_root's is fatal), and one root failing does
+# not stop the others. Roots matching this regex are skipped and listed — by
+# default the Playwright suite's junk tenants, like migrate-notifications.py's
+# --exclude:
+# notifications_seed_exclude: "(?i)^(PW_|pwt)"
+#
 # The shipped default notification configuration. A deploy writes it ONLY into a
-# tenant with no notification configuration at all AND no complaint ever filed at it
-# (a fresh install). A tenant with complaints but no configuration is what a 2.12
-# tenant on the old hard-coded path looks like; the defaults would change what its
-# citizens receive, so the deploy reports it (notif-seed — ACTION) and you install
-# them after a review: `migrate-notifications.py plan --tenant <t> --adopt-defaults`,
-# then `apply ... --adopt-defaults --yes` (docs/2.20/notifications/migration.md).
-# true = seed them anyway on such a tenant: ONLY for a fresh install whose database
-# arrived with complaints in it (a restored demo dump). Never affects a tenant that
-# already has configuration.
+# root with no notification configuration at all AND no complaint ever filed
+# under it (a fresh install). A root with complaints but no configuration is what
+# a 2.12 tenant on the old hard-coded path looks like; the defaults would change
+# what its citizens receive, so the deploy reports it (notif-seed — ACTION, state
+# none) — and until it has a configuration its complaints send NO notifications.
+# Install them after a review:
+#   `migrate-notifications.py plan --tenant <root> --adopt-defaults`, then
+#   `apply ... --adopt-defaults --yes` (docs/2.20/notifications/migration.md).
+# notifications_adopt_defaults seeds them anyway, on the deploy's word — ONLY for
+# roots whose complaints are demo data (a restored dump). Never affects a root
+# that already has configuration (fresh or not, 2.12 or NOTIFICATIONS.*).
+#   false          — no root (default)
+#   true           — every root this deploy seeds (the stock quickstart: state_root
+#                    pg with the dump's demo complaints; localhost-full sets this)
+#   [pg]           — only these roots, e.g. a `ke` box that also carries the dump's
+#                    demo `pg` complaints but whose `ke` complaints are real
+#   (-e accepts true/false or a comma list: -e notifications_adopt_defaults=pg,ke)
 # notifications_adopt_defaults: false
+# notifications_adopt_defaults: [pg]
 
 # ONE BUILD for the notification stack. pgr-services, its pgr-services-db
 # migrator, novu-bridge and its novu-bridge-db migrator MUST come from the same

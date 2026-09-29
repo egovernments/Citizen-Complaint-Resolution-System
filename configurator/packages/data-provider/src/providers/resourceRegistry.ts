@@ -72,7 +72,10 @@ export const LEGACY_NOTIFICATION_NOTICE =
   + 'These rows are kept and still read by the notification service on a tenant that has not been migrated yet, so they are shown here, '
   + 'read-only; they are never deleted. To move them, run the migration script on the server '
   + '(migrate-notifications.py plan --tenant <tenant>, then apply --tenant <tenant> --yes): it copies what this tenant actually has, '
-  + 'is one-way per tenant, and leaves these rows untouched. Re-running the deploy does not move them.';
+  + 'is one-way per tenant, and leaves these rows untouched. Re-running the deploy does not move them. '
+  + 'Read-only applies to this screen only: the MDMS API still accepts writes to these masters from an admin role '
+  + '(MDMS_ADMIN / ACCOUNT_ADMIN), and once a tenant is migrated the notification service no longer reads them — '
+  + 'an edit made to them after migration has no effect. Change a migrated tenant in Notifications → Configure.';
 
 export const REGISTRY: Record<string, ResourceConfig> = {
   // Dedicated Resources

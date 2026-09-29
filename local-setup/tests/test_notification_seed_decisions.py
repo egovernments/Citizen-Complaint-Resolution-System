@@ -221,8 +221,9 @@ class ProviderIdentifier(unittest.TestCase):
         self.assertIsNone(mn.derive_type({"providerId": "generic-sms", "channel": "sms"}))
 
     NO_WORKER = object()
+    PRELOADING = {"NODE_OPTIONS": "--require /opt/digit-novu-providers/register.js"}
 
-    def plan(self, entry, integrations=(), worker_env=NO_WORKER):
+    def plan(self, entry, integrations=(), worker_env=PRELOADING, assume=False):
         import stat
         import tempfile
         fd, path = tempfile.mkstemp(suffix=".json")
@@ -232,7 +233,7 @@ class ProviderIdentifier(unittest.TestCase):
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
         ctx = types.SimpleNamespace(integrations=list(integrations), integrations_error=None)
         args = types.SimpleNamespace(create_provider=["smscountry"], create_smscountry_provider=False,
-                                     credentials_file=path,
+                                     credentials_file=path, assume_worker_providers=assume,
                                      worker_container=None if worker_env is self.NO_WORKER else "novu-worker")
         original = mn.catalog_required
         mn.catalog_required = lambda _ctx: dict(mn.CATALOG_REQUIRED)  # no bridge call in a unit test
@@ -263,9 +264,54 @@ class ProviderIdentifier(unittest.TestCase):
         self.assertEqual(plans[0]["state"], "create")
         self.assertEqual(plans[0]["keys"], ["from", "password", "user"])
 
-    def test_an_smscountry_provider_is_not_blocked_when_docker_cannot_tell(self):
-        plans = self.plan({"credentials": self.CREDS}, worker_env=None)
+    # Kanav re-review 4118608374: the guard failed OPEN — docker absent, the container named
+    # differently, or the script run from a laptop against a remote box, and a DIGIT provider was
+    # created with no refusal and no warning.
+    def test_an_smscountry_provider_is_refused_when_docker_cannot_tell(self):
+        with self.assertRaises(mn.RefuseToStart) as caught:
+            self.plan({"credentials": self.CREDS}, worker_env=None)
+        self.assertIn("could not be inspected", str(caught.exception))
+        self.assertIn("--assume-worker-providers", str(caught.exception))
+
+    def test_an_smscountry_provider_is_refused_when_the_worker_check_is_turned_off(self):
+        with self.assertRaises(mn.RefuseToStart) as caught:
+            self.plan({"credentials": self.CREDS}, worker_env=self.NO_WORKER)
+        self.assertIn("turned the check off", str(caught.exception))
+
+    def test_the_operator_can_vouch_for_an_uncheckable_worker_and_is_warned(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            plans = self.plan({"credentials": self.CREDS}, worker_env=None, assume=True)
         self.assertEqual(plans[0]["state"], "create")
+        self.assertIn("WARNING: worker not checked", err.getvalue())
+
+    def test_vouching_never_overrides_a_worker_that_provably_does_not_preload(self):
+        with self.assertRaises(mn.RefuseToStart) as caught:
+            self.plan({"credentials": self.CREDS}, worker_env={"NODE_ENV": "local"}, assume=True)
+        self.assertIn("does not preload them", str(caught.exception))
+
+    def test_a_novu_native_provider_needs_no_worker_check(self):
+        # twilio-sms is Novu's own provider: an uncheckable worker is irrelevant to it.
+        ctx = types.SimpleNamespace(integrations=[], integrations_error=None)
+        import stat
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".json")
+        self.addCleanup(os.unlink, path)
+        with os.fdopen(fd, "w") as fh:
+            json.dump({"twilio-sms": {"credentials": {k: "x" for k in mn.CATALOG_REQUIRED["twilio-sms"]}}}, fh)
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        args = types.SimpleNamespace(create_provider=["twilio-sms"], create_smscountry_provider=False,
+                                     credentials_file=path, assume_worker_providers=False,
+                                     worker_container="novu-worker")
+        original = mn.catalog_required
+        mn.catalog_required = lambda _ctx: dict(mn.CATALOG_REQUIRED)
+        self.addCleanup(setattr, mn, "catalog_required", original)
+        original_env = mn.container_env
+        mn.container_env = lambda _name: None
+        self.addCleanup(setattr, mn, "container_env", original_env)
+        self.assertEqual(mn.plan_provider_creation(ctx, args)[0]["state"], "create")
 
     def test_a_prefixless_identifier_is_refused_before_any_write(self):
         with self.assertRaises(mn.RefuseToStart) as caught:
@@ -288,6 +334,49 @@ class ProviderIdentifier(unittest.TestCase):
         plans = self.plan({"identifier": "sms-primary", "credentials": self.CREDS},
                           integrations=[{"identifier": "sms-primary", "active": True}])
         self.assertEqual(plans[0]["state"], "exists")
+
+
+class SeederLogin(unittest.TestCase):
+    """#1943 / Kanav re-review 4118608347: the deploy now seeds every state root that has
+    complaints, each with its own login. A root where the admin does not exist must be a
+    clear, per-root outcome (exit 4, NOTIF-LOGIN-REFUSED) the playbook can report and move on
+    from — not a traceback that looks like any other crash."""
+
+    def login_with(self, exc):
+        import contextlib
+        import io
+        original = sn.token
+
+        def refuse():
+            raise exc
+        sn.token = refuse
+        self.addCleanup(setattr, sn, "token", original)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as caught:
+            sn.login()
+        return caught.exception.code, out.getvalue()
+
+    def http_error(self, code):
+        import urllib.error
+        return urllib.error.HTTPError("http://kong/user/oauth/token", code, "x", {}, None)
+
+    def test_a_refused_login_is_exit_4_with_a_marker(self):
+        code, out = self.login_with(self.http_error(400))
+        self.assertEqual(code, 4)
+        self.assertIn("NOTIF-LOGIN-REFUSED:", out)
+        self.assertNotIn("DONE", out)  # the playbook's success gate must not pass
+
+    def test_a_gateway_that_is_down_is_not_a_refused_login(self):
+        import urllib.error
+        code, out = self.login_with(urllib.error.URLError("connection refused"))
+        self.assertEqual(code, 2)
+        self.assertIn("NOTIF-LOGIN-ERROR:", out)
+        self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
+
+    def test_a_server_error_on_login_is_not_a_refused_login(self):
+        code, out = self.login_with(self.http_error(502))
+        self.assertEqual(code, 2)
+        self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
 
 
 if __name__ == "__main__":

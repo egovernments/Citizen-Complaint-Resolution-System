@@ -225,33 +225,53 @@ PRs it is stacked on) has merged to `develop` and been built, **no immutable tag
 containing it exists**: the only tag that will hold it is the rolling `nightly-develop`.
 So that is the shipped default for the four notification-stack images, as a stopgap —
 and every deploy says so (the Ansible preflight warns about the rolling tag; Helm pulls
-it `Always`). Every other CCRS image default is an immutable tag; this one must become
-one too, in the first release after the merge:
+it `Always`). It must become an immutable tag in the **first release cut after the
+merge**. This is a release blocker, not a follow-up: the release PR is not merged while
+any of the values below still reads `nightly-develop`. Whoever cuts that release owns it:
 
 1. After the merge, let the develop nightly (or a `build.yml` dispatch on `develop`)
    build the merge commit. Note its `develop-<sha8>` — the first 8 hex chars of the
-   commit it built.
-2. Check that tag exists on Docker Hub for **all four** images:
-   `egovio/pgr-services`, `egovio/pgr-services-db`, `egovio/novu-bridge`,
-   `egovio/novu-bridge-db` (a failed leg leaves one of them missing).
-3. Replace `nightly-develop` with that tag in the **six** defaults, in one commit:
+   commit it built (`git rev-parse --short=8 <merge-commit>`).
+2. Check that tag exists on Docker Hub for **all four** images — a failed leg leaves
+   one of them missing. A `HEAD` on the registry does not spend pull quota
+   (`docker manifest inspect` does):
+   ```bash
+   TAG=develop-<sha8>
+   for img in pgr-services pgr-services-db novu-bridge novu-bridge-db; do
+     tok=$(curl -fsS "https://auth.docker.io/token?service=registry.docker.io&scope=repository:egovio/$img:pull" | jq -r .token)
+     printf '%-16s ' "$img"; curl -s -o /dev/null -w '%{http_code}\n' -I \
+       -H "Authorization: Bearer $tok" \
+       -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+       "https://registry-1.docker.io/v2/egovio/$img/manifests/$TAG"
+   done   # all four must print 200
+   ```
+3. Replace `nightly-develop` with that tag in these **nine** values, in one commit:
    - `local-setup/docker-compose.egov-digit.yaml` — `pgr-services` and `novu-bridge`
-     (`${NOTIFICATION_STACK_TAG:-…}`);
+     (`${NOTIFICATION_STACK_TAG:-…}`): 2;
    - `local-setup/docker-compose.migrations.yml` — `pgr-services-migration` and
-     `novu-bridge-migration`;
+     `novu-bridge-migration`: 2;
    - `devops/deploy-as-code/charts/urban/pgr-services/values.yaml` and
      `devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml` —
-     `image.tag` and `initContainers.dbMigration.image.tag` (both marked
-     `RELEASE STEP`).
-   Also `enable-notifications.sh`'s `NOTIFICATION_STACK_TAG` default. The static test
-   `all four images default to ONE tag, in compose and in both Helm charts`
-   (`local-setup/tests/static/deployment-contracts.test.ts`) fails if the six
-   disagree.
+     `image.tag` and `initContainers.dbMigration.image.tag` in each (the lines marked
+     `RELEASE STEP`): 4;
+   - `local-setup/scripts/enable-notifications.sh` — the `NOTIFICATION_STACK_TAG`
+     default: 1.
+   The static test `all four images default to ONE tag, in compose and in both Helm
+   charts` (`local-setup/tests/static/deployment-contracts.test.ts`) fails if the
+   compose and chart values disagree. Then check none is left:
+   ```bash
+   grep -n 'nightly-develop' local-setup/docker-compose.egov-digit.yaml local-setup/docker-compose.migrations.yml \
+     devops/deploy-as-code/charts/urban/pgr-services/values.yaml \
+     devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml \
+     local-setup/scripts/enable-notifications.sh | grep -E 'pgr-services|novu-bridge|NOTIFICATION_STACK_TAG=|tag: '
+   # expect no output (comments aside); other images (xstate-chatbot, identity-*) are not part of this step
+   ```
 4. Leave `global.notificationStackTag` in `charts/environments/env.yaml` empty — it
    overrides the chart pins when set — and update the `Default` column of the tag
-   table in `docs/2.20/notifications/migration.md`.
+   table in `docs/2.20/notifications/migration.md` (and the `notification_stack_tag`
+   row in `docs/2.20/notifications/setup-guide.md` §8.1) to the pinned tag.
 
-Later releases bump the same six values to the new build's tag. Boxes that must track
+Later releases bump the same nine values to the new build's tag. Boxes that must track
 `develop` keep setting `notification_stack_tag: nightly-develop` (or Helm
 `global.notificationStackTag: nightly-develop`) themselves.
 

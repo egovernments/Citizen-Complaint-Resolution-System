@@ -202,6 +202,13 @@ enable_otp_services: false     # real SMS OTP; without it the login OTP is alway
 enable_digit_ui_v2: false      # the newer citizen SPA at /citizen/
 run_ci_tests: false            # adds 5–10 minutes of Postman + Playwright to every deploy
 requires_nairobi_mdms: false   # an external config submodule most deployments do not use
+
+# With enable_novu on, the deploy seeds notification configuration at state_root AND
+# at every state root that has complaints — the dump's demo complaints sit under `pg`,
+# so `pg` is reported as having complaints but no configuration (it sends nothing).
+# They are demo data: this installs the shipped defaults there too. Leave it out if
+# `pg` carries complaints real people filed (docs/2.20/notifications/migration.md §3).
+# notifications_adopt_defaults: [pg]
 install_claude_code: false
 
 # Which URL paths the host nginx serves. A service that is running but has

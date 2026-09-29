@@ -579,6 +579,46 @@ describe('Novu workflow creation deployment contract', () => {
     expect(novuValues).toMatch(/^ {4}repository: "ghcr\.io\/novuhq\/novu\/worker"\n {4}tag: "2\.3\.0"$/m);
   });
 
+  // M1 (re-review): novu-bridge must know whether the worker preloads those providers
+  // (NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS), and it must come from the SAME switch as the mount,
+  // or the two can disagree and the bridge offers providers whose every send fails.
+  test('the bridge is told whether the worker preloads DIGIT providers, from the mount switch', () => {
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const bridgeBlock = next === -1 ? rest : rest.slice(0, next);
+    // Compose mounts + preloads unconditionally (pinned above), so the bridge is told "true", literally.
+    expect(bridgeBlock).toMatch(/^ {6}NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS: 'true'$/m);
+
+    expect(read('devops/deploy-as-code/charts/environments/env.yaml')).toMatch(/^ {2}novuWorkerDigitProviders: true$/m);
+    const helmfile = read('devops/deploy-as-code/charts/backbone-services/backboneservices-helmfile.yaml');
+    expect(helmfile).toContain(
+      'enabled: {{ if hasKey .Values.global "novuWorkerDigitProviders" }}{{ .Values.global.novuWorkerDigitProviders }}{{ else }}true{{ end }}');
+    const bridgeValues = read('devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml');
+    expect(bridgeValues).toMatch(
+      /- name: NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS\n {4}value: \{\{ if hasKey \(\.Values\.global \| default dict\) "novuWorkerDigitProviders" \}\}\{\{ \.Values\.global\.novuWorkerDigitProviders /);
+    expect(bridgeValues).toMatch(/^digit-worker-providers: true$/m);
+  });
+
+  // Provider admin calls are allowed only for admins of the owning state (the state root of
+  // NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT) plus NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS.
+  test('the provider-owning tenant is state_root, checked on the running bridge, and extra admin tenants are plumbed', () => {
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    const bridgeBlock = composeFile.slice(start, composeFile.indexOf('\n  # ====', start));
+    expect(bridgeBlock).toContain('NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS: ${NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS:-}');
+    expect(composeEnv).toContain("NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS={{ novu_bridge_provider_admin_tenants | default('') }}");
+    expect(read('local-setup/ansible/inventory/host_vars/_example.yml')).toMatch(/^# novu_bridge_provider_admin_tenants: /m);
+    expect(read('devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml')).toContain(
+      '- name: NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS');
+
+    const readTenant = taskBody('novu-bootstrap — read the OTP / provider-owning tenant novu-bridge runs with');
+    expect(readTenant).toContain("sed -n 's/^NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT=//p'"); // never the whole env: it holds secrets
+    const fail = taskBody('novu-bootstrap — fail: novu-bridge does not run with state_root as its OTP / provider-owning tenant');
+    expect(fail).toContain("(bridge_core_tenant.stdout | default('') | trim) != state_root");
+    expect(playbookFile.indexOf('novu-bootstrap — read the OTP / provider-owning tenant')).toBeGreaterThan(
+      playbookFile.indexOf('novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY'));
+  });
+
   // The fork (a custom-built worker image) was retired for the mounted providers.
   test('nothing deploys or documents the retired Novu fork worker', () => {
     const hostVarsExample = read('local-setup/ansible/inventory/host_vars/_example.yml');
@@ -598,6 +638,7 @@ describe('Novu workflow creation deployment contract', () => {
       'NOVU_BRIDGE_PREFERENCE_ENABLED',
       'NOVU_BRIDGE_PREFERENCE_FAIL_OPEN',
       'NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE',
+      'NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS',
     ];
     const start = composeFile.indexOf('\n  novu-bridge:');
     const rest = composeFile.slice(start + 1);
@@ -734,17 +775,57 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
   // 4079418204: the retired OTP senders were removed AFTER the main `up -d`, so for the
   // whole stack start egov-notification-sms and the new novu-bridge both consumed
   // egov.core.notification.sms and every login OTP went out twice.
-  test('the retired OTP senders are removed before any new bridge starts', () => {
-    const removal = playbook.indexOf('- name: "notification stack — remove the retired egov-notification-sms');
+  // 4118608332 (re-review): removing them before the up on a box with NO bridge yet left
+  // nothing consuming the topic for the whole start (OTPs dropped), and a failed up left
+  // the box with no OTP sender at all. So: early only when a recreated bridge is running,
+  // otherwise after the main up once novu-bridge is healthy.
+  test('the retired OTP senders go early only when a recreated bridge is running', () => {
     const bridgeFirst = playbook.indexOf('- name: "notification stack — recreate novu-bridge before pgr-services');
+    const early = playbook.indexOf('- name: "notification stack — remove the retired OTP senders now');
     const mainStart = playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)');
+    const late = playbook.indexOf('- name: "notification stack — remove the retired OTP senders once novu-bridge is healthy');
     const pull = playbook.indexOf('- name: Pull all images from VPC registry');
-    expect(removal).toBeGreaterThan(pull);
-    expect(removal).toBeLessThan(bridgeFirst);
-    expect(bridgeFirst).toBeLessThan(mainStart);
-    const removalTask = task('notification stack — remove the retired');
-    expect(removalTask).toContain('enable_novu | default(false)');
-    expect(removalTask).toContain('"$svc|{{ digit_dir }}"');
+    expect(pull).toBeGreaterThan(-1);
+    expect(bridgeFirst).toBeGreaterThan(pull);
+    expect(early).toBeGreaterThan(bridgeFirst);
+    expect(mainStart).toBeGreaterThan(early);
+    expect(late).toBeGreaterThan(mainStart);
+
+    expect(task('notification stack — recreate novu-bridge before pgr-services')).toContain('echo "BRIDGE-RUNNING');
+    const earlyTask = task('notification stack — remove the retired OTP senders now');
+    expect(earlyTask).toContain('enable_novu | default(false)');
+    expect(earlyTask).toContain('- bridge_first is changed');
+    expect(earlyTask).toContain(`- "'BRIDGE-RUNNING' in (bridge_first.stdout | default(''))"`);
+    expect(earlyTask).toContain('"$svc|{{ digit_dir }}"');
+    expect(earlyTask).toContain('register: retired_notification_containers\n');
+
+    const lateTask = task('notification stack — remove the retired OTP senders once novu-bridge is healthy');
+    expect(lateTask).toContain('- retired_notification_containers is skipped');
+    expect(lateTask).toContain('enable_novu | default(false)');
+    // removal waits for the bridge's healthcheck, and a bridge that never gets healthy keeps them
+    expect(lateTask).toMatch(/\[ "\$status" != "healthy" \]; then\n\s+echo "KEPT:/);
+    expect(lateTask.indexOf('"$status" != "healthy"')).toBeLessThan(lateTask.indexOf('docker rm -f'));
+    expect(lateTask).toContain('"$svc|{{ digit_dir }}"');
+    expect(task('notification stack — WARNING: the retired OTP senders were kept')).toContain(
+      "'KEPT:' in (retired_notification_containers_late.stdout | default(''))");
+  });
+
+  test('enable-notifications.sh removes the retired OTP senders only once a bridge can take over', () => {
+    const sh = read('local-setup/scripts/enable-notifications.sh');
+    const body = (fn: string) => {
+      const start = sh.indexOf(`\n${fn}() {`);
+      expect(start).toBeGreaterThan(-1);
+      return sh.slice(start, sh.indexOf('\n}\n', start));
+    };
+    const step1 = body('do_step1');
+    expect(step1.indexOf('compose up -d novu-bridge-migration novu-bridge')).toBeLessThan(
+      step1.indexOf('_remove_retired_notification_containers'));
+    expect(step1).toContain('_svc_running novu-bridge');
+    const step2 = body('do_step2');
+    expect(step2).not.toContain('_remove_retired_notification_containers');
+    expect(step2.indexOf('compose up -d novu-mongo')).toBeLessThan(step2.indexOf('_remove_retired_after_bridge_healthy'));
+    const wait = body('_remove_retired_after_bridge_healthy');
+    expect(wait.indexOf('[[ "$status" != healthy ]]')).toBeLessThan(wait.indexOf('_remove_retired_notification_containers'));
   });
 
   // 4079418208: the pg → state_root rewrite of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT only
@@ -775,26 +856,118 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
 
   // 4079418103: a tenant with no MDMS notification rows was always "fresh", so an upgrade
   // wrote the shipped defaults over every tenant that ran 2.12's hard-coded path.
-  test('the seed gets the complaint count that tells a fresh install from an upgraded tenant', () => {
-    const count = task('notif-seed — count the complaints ever filed at the tenant');
-    // the tenant is a psql variable, never spliced into the SQL
-    expect(count).toContain(`-v t="$NOTIF_TENANT"`);
-    expect(count).toContain("tenantid = :'t' or tenantid like :'t' || '.%%'");
-    expect(count).toContain('failed_when: false');
+  // 4118608347 / #1943: the decision (and the count) covered state_root only, while
+  // novu-bridge resolves each complaint's configuration at the complaint's own root.
+  test('the seed runs per state root with complaints, each with its own complaint count', () => {
+    const roots = task('notif-seed — list the state roots complaints are filed under');
+    // the same derivation the bridge applies, from the database, grouped per root
+    expect(roots).toContain("select split_part(tenantid, '.', 1), count(*) from eg_pgr_service_v2");
+    expect(roots).toContain('group by 1');
+    expect(roots).toContain('failed_when: false');
+    expect(roots).not.toMatch(/\{\{[^}]*state_root/); // no tenant spliced into the SQL
+    const pick = task('notif-seed — the state roots to seed');
+    expect(pick).toContain('[notif_seed_tenant | trim] + (notif_complaint_counts.keys()');
+    expect(pick).toContain("select('match', '^[A-Za-z][A-Za-z0-9_-]*$')");
+    expect(pick).toContain("notifications_seed_exclude | default('(?i)^(PW_|pwt)')");
+    for (const name of [
+      'notif-seed — access-control rows (phase 1 of 2)',
+      'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
+      'notif-seed — data phase again with the role-actions loaded',
+    ]) {
+      const t = task(name);
+      expect(t).toMatch(/\n {6}loop: "\{\{ /);
+      expect(t).toContain('NOTIF_TENANT: "{{ item }}"');
+      expect(t).toContain('DIGIT_LOGIN_TENANT: "{{ item }}"');
+      expect(t).toContain('failed_when: false');
+    }
+    expect(task('notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)')).toContain(
+      'loop: "{{ notif_acl_ok_roots | default([]) }}"');
     for (const name of [
       'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
       'notif-seed — data phase again with the role-actions loaded',
     ]) {
       const t = task(name);
-      // an unreadable count must reach the seeder as EMPTY (unknown), never as 0
-      expect(t).toContain(`NOTIF_TENANT_COMPLAINTS: "{{ (notif_tenant_complaints.stdout | default('') | trim) if (notif_tenant_complaints.rc | default(1)) == 0 else '' }}"`);
-      expect(t).toContain(`NOTIF_ADOPT_DEFAULTS: "{{ '1' if (notifications_adopt_defaults | default(false) | bool) else '' }}"`);
+      // THIS root's count; an unreadable count must reach the seeder as EMPTY (unknown), never as 0
+      expect(t).toContain(`NOTIF_TENANT_COMPLAINTS: "{{ (notif_complaint_counts[item] | default('0')) if (notif_complaint_counts_known | bool) else '' }}"`);
+      expect(t).toContain(`NOTIF_ADOPT_DEFAULTS: "{{ '1' if item in notif_adopt_roots else '' }}"`);
     }
-    expect(playbook.indexOf('notif-seed — count the complaints')).toBeLessThan(
+    expect(task('notif-seed — complaint counts per state root')).toContain(
+      "if (notif_complaint_roots.rc | default(1)) == 0 else {}");
+    expect(playbook.indexOf('notif-seed — list the state roots')).toBeLessThan(
       playbook.indexOf('notif-seed — schemas, channel rows, fresh-tenant defaults'));
+
+    // every root reported, and each ACTION names ITS root
+    expect(task('notif-seed — result per state root')).toContain('loop: "{{ notif_seed_roots }}"');
     const none = task('notif-seed — ACTION: this tenant has no notification configuration');
     expect(none).toContain("' state=none '");
-    expect(none).toContain('--adopt-defaults');
-    expect(task("notif-seed — ACTION: this tenant's notification configuration is not migrated")).toContain("' state=legacy '");
+    expect(none).toContain('--tenant {{ item }} --adopt-defaults');
+    expect(none).toContain('loop: "{{ notif_seed_roots }}"');
+    const legacy = task("notif-seed — ACTION: this tenant's notification configuration is not migrated");
+    expect(legacy).toContain("' state=legacy '");
+    expect(legacy).toContain('--tenant {{ item }}');
+
+    // one bad root does not hide the others: the only fail is after the report, and a refused
+    // login at a root other than state_root is a warning
+    const fail = task('notif-seed — fail: a state root could not be seeded');
+    expect(playbook.indexOf('notif-seed — fail: a state root could not be seeded')).toBeGreaterThan(
+      playbook.indexOf('notif-seed — result per state root'));
+    expect(fail).toContain("reject('in', notif_seed_login_refused_roots | reject('equalto', notif_seed_tenant | trim) | list)");
+    const block = playbook.slice(playbook.indexOf('notif-seed — list the state roots'),
+      playbook.indexOf('notif-seed — fail: a state root could not be seeded'));
+    expect(block).not.toContain('ansible.builtin.fail:');
+    expect(task('notif-seed — WARNING: could not log in at a complaint root')).toContain('item != (notif_seed_tenant | trim)');
+  });
+
+  test('notifications_adopt_defaults is validated and may name roots', () => {
+    expect(task('notif-seed — notifications_adopt_defaults is true, false, or a list of state roots')).toContain(
+      'ansible.builtin.assert:');
+    const adopt = task('notif-seed — the roots notifications_adopt_defaults covers');
+    expect(adopt).toContain("notif_seed_roots if (notifications_adopt_defaults | default(false) | bool) else []");
+    expect(adopt).toContain("notifications_adopt_defaults.split(',')");
+    const example = read('local-setup/ansible/inventory/host_vars/_example.yml');
+    expect(example).toMatch(/^# notifications_adopt_defaults: false$/m);
+    expect(example).toMatch(/^# notifications_adopt_defaults: \[pg\]/m);
+    expect(example).toMatch(/^# notifications_seed_exclude: /m);
+  });
+});
+
+// Kanav re-review 4118608379: ~50 `#L<n>` anchors in the e2e README pointed past the end of
+// files or at unrelated code once the code moved. The links now name `Class.member` instead;
+// this keeps every name true.
+describe('e2e notifications README code links', () => {
+  const readme = read('local-setup/tests/e2e/notifications/README.md');
+  const links = [...readme.matchAll(/\[`([^`]+)`\]\((\/[^)\s]+)\)/g)].map((m) => ({ label: m[1], target: m[2] }));
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  test('carries no line anchors', () => {
+    expect(readme).not.toMatch(/#L\d/);
+    expect(links.length).toBeGreaterThan(80);
+  });
+
+  test('every linked file exists and every named member is declared in it', () => {
+    const problems: string[] = [];
+    for (const { label, target } of links) {
+      const rel = target.replace(/^\//, '').replace(/#.*$/, '');
+      if (!fs.existsSync(path.join(REPO_ROOT, rel))) {
+        problems.push(`${label} → ${rel}: file missing`);
+        continue;
+      }
+      const src = read(rel);
+      if (rel.endsWith('.json') && /^[A-Z][\w-]*\.[A-Z]\w+$/.test(label)) {
+        if (!src.includes(`"code": "${label}"`)) problems.push(`${label}: no schema with that code in ${rel}`);
+        continue;
+      }
+      if (!rel.endsWith('.java') || !label.includes('.')) continue;
+      const parts = label.split('.');
+      if (parts[0] !== path.basename(rel, '.java')) problems.push(`${label}: class is not ${path.basename(rel)}`);
+      const member = esc(parts[parts.length - 1]);
+      const declared = [
+        new RegExp(`^\\s*(?:@\\w+(?:\\([^)]*\\))?\\s+)*(?:(?:public|private|protected|static|final|synchronized|abstract|default)\\s+)*[\\w<>\\[\\],.? ]+\\s+${member}\\s*\\(`, 'm'),
+        new RegExp(`[\\w>\\]]\\s+${member}\\s*(?:=|;)`),
+        new RegExp(`\\b(?:class|record|interface|enum)\\s+${member}\\b`),
+      ].some((re) => re.test(src));
+      if (!declared) problems.push(`${label}: ${parts[parts.length - 1]} is not declared in ${rel}`);
+    }
+    expect(problems).toEqual([]);
   });
 });
