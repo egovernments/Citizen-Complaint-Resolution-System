@@ -500,13 +500,13 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
 };
 
 /**
- * The chosen node at each level, root to leaf, as `{ code, boundaryType }`.
+ * The chosen node at each level, root to leaf, as `{ code, name, boundaryType }`.
  * Handed up with the selection so a caller can name the whole address (a
  * review screen showing "Ward, Sub County, County") without another lookup;
  * the complaint payload still reads only the leaf's `code`.
  */
 function levelsOf(nodes) {
-  return (nodes || []).map((node) => ({ code: node.code, boundaryType: node.boundaryType }));
+  return (nodes || []).map((node) => ({ code: node.code, name: node.name, boundaryType: node.boundaryType }));
 }
 
 /**

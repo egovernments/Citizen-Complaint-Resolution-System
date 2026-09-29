@@ -4,15 +4,14 @@
 //
 // Same redux data flow (`state.pgr.complaints.response`), same action-message
 // switch (CREATE / REOPEN / RATE / failure) and same SessionStorage cleanup as
-// before. The filing summary (category, location, photos, time) comes from
-// what the filing flow stashed in PGR_FILED_SUMMARY just before it submitted;
-// the create response itself carries only codes.
+// before. The filing summary (category, location, photos, time) arrives in the
+// route's state from the filing flow; the create response carries only codes.
 //
 // Note: filename is `Response.js` (matches the registry entry
 // `PGRResponseCitzen` / Module.js import).
 
 import React from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Button } from "@egovernments/digit-ui-components-v2";
@@ -95,17 +94,16 @@ function ComplaintNumber({ id, tr }) {
 const Response = () => {
   const { t } = useTranslation();
   const history = useHistory();
+  const location = useLocation();
   const appState = useSelector((state) => state)["pgr"] || {};
   const { complaints } = appState;
-  // Read once: the stash belongs to the filing that just finished.
-  const [summary] = React.useState(() => Digit.SessionStorage.get("PGR_FILED_SUMMARY"));
+  const summary = location.state?.filedSummary;
 
   React.useEffect(() => {
     if (appState.complaints?.response?.ServiceWrappers?.length > 0) {
       Digit.SessionStorage.del("PGR_MAP_LOCATION");
     }
   }, [appState]);
-  React.useEffect(() => () => Digit.SessionStorage.del("PGR_FILED_SUMMARY"), []);
 
   const tr = (key, fallback) => {
     const v = t(key);
@@ -193,7 +191,7 @@ const Response = () => {
               {tr("CS_COMMON_TRY_AGAIN", "Try Again")}
             </Button>
           ) : null}
-          <Button onClick={() => history.push(goHome)}>{tr("CS_FILE_GO_HOME", "Go back to home page")}</Button>
+          <Button onClick={() => history.push(goHome)}>{tr("CORE_COMMON_GO_TO_HOME", "Go back to home page")}</Button>
         </div>
       </div>
     </div>

@@ -9076,6 +9076,11 @@ html .header-dropdown-option:focus-visible {
   color: var(--cms-accent);
   cursor: pointer;
 }
+.cms-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 /* Location: the map sits on the page, not in a panel */
 .cms-section-map {
@@ -9285,6 +9290,10 @@ html .header-dropdown-option:focus-visible {
   font-size: 17px;
   font-weight: 700;
   color: #111827;
+}
+/* The sheet itself takes focus only while it has no action to give it to. */
+.cms-sheet:focus {
+  outline: none;
 }
 .cms-sheet-hint {
   margin: 5px 0 0;

@@ -274,7 +274,7 @@ const ComplaintDetailsPage = () => {
           ) : null}
 
           <section className="cms-details-card">
-            <h2 className="cms-details-card-head">{tr("CS_COMPLAINT_TIMELINE", "Complaint Timeline")}</h2>
+            <h2 className="cms-details-card-head">{tr("CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE", "Complaint Timeline")}</h2>
             {complaintDetails?.service ? <WorkflowComponent complaintDetails={complaintDetails} id={id} /> : null}
           </section>
 

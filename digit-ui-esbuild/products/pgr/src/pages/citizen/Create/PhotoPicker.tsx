@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { Button } from "@egovernments/digit-ui-components-v2";
+import { useDialogFocus } from "./useDialogFocus";
 
 declare const Digit: any;
 
@@ -60,6 +61,10 @@ async function fitForUpload(file: File): Promise<File> {
   canvas.height = Math.round(img.naturalHeight * scale);
   const ctx = canvas.getContext("2d");
   if (!ctx) return file;
+  // JPEG has no transparency: a transparent PNG (a screenshot) would come out
+  // with a black background, so it is laid on white first.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   for (const quality of [0.85, 0.75, 0.65, 0.55]) {
     const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
@@ -84,6 +89,12 @@ const ImageGlyph = () => (
     <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
   </svg>
 );
+const RetryGlyph = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <path d="M3 4v5h5" />
+  </svg>
+);
 const UploadGlyph = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -105,7 +116,21 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
   const [notice, setNotice] = React.useState<string | null>(null);
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const galleryRef = React.useRef<HTMLInputElement>(null);
+  const sheetRef = React.useRef<HTMLDivElement>(null);
+  // The picked files, kept so a failed upload can be retried.
+  const filesRef = React.useRef(new Map<string, File>());
+  // For revoking the previews when the picker goes away.
+  const photosRef = React.useRef(photos);
+  photosRef.current = photos;
   const full = photos.length >= MAX_PHOTOS;
+  useDialogFocus(sheetOpen, sheetRef);
+
+  React.useEffect(
+    () => () => {
+      photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    },
+    []
+  );
 
   React.useEffect(() => {
     if (!sheetOpen) return undefined;
@@ -123,7 +148,10 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         const response = await Digit.UploadServices.Filestorage("property-upload", ready, tenantId);
         const fileStoreId = response?.data?.files?.[0]?.fileStoreId;
         if (!fileStoreId) throw new Error("no fileStoreId");
-        onChange((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "done", fileStoreId, size: ready.size } : p)));
+        // Named as uploaded: a scaled photo went up as a .jpg.
+        onChange((prev) =>
+          prev.map((p) => (p.id === photo.id ? { ...p, status: "done", fileStoreId, size: ready.size, name: ready.name } : p))
+        );
       } catch {
         onChange((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "failed" } : p)));
       }
@@ -162,13 +190,24 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
     }));
     if (picked.length === 0) return;
     onChange((prev) => [...prev, ...picked.map((p) => p.photo)]);
-    picked.forEach(({ photo, file }) => upload(photo, file));
+    picked.forEach(({ photo, file }) => {
+      filesRef.current.set(photo.id, file);
+      upload(photo, file);
+    });
+  };
+
+  const retry = (photo: PickedPhoto) => {
+    const file = filesRef.current.get(photo.id);
+    if (!file) return;
+    onChange((prev) => prev.map((p) => (p.id === photo.id ? { ...p, status: "uploading" } : p)));
+    upload(photo, file);
   };
 
   const remove = (id: string) => {
     onChange((prev) => {
       const gone = prev.find((p) => p.id === id);
       if (gone) URL.revokeObjectURL(gone.previewUrl);
+      filesRef.current.delete(id);
       return prev.filter((p) => p.id !== id);
     });
   };
@@ -251,6 +290,12 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
                     : formatSize(photo.size)}
                 </span>
               </span>
+              {photo.status === "failed" ? (
+                <button type="button" className="cms-link-button cms-retry" onClick={() => retry(photo)}>
+                  <RetryGlyph />
+                  {tr("CS_COMMON_RETRY", "Retry")}
+                </button>
+              ) : null}
               <button type="button" className="cms-link-button" onClick={() => remove(photo.id)}>
                 {tr("CS_COMMON_REMOVE", "Remove")}
               </button>
@@ -261,7 +306,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
 
       {sheetOpen ? (
         <div className="cms-sheet-overlay" onMouseDown={(event) => event.target === event.currentTarget && setSheetOpen(false)}>
-          <div className="cms-sheet cms-photo-sheet" role="dialog" aria-modal="true" aria-labelledby="cms-photo-title">
+          <div ref={sheetRef} tabIndex={-1} className="cms-sheet cms-photo-sheet" role="dialog" aria-modal="true" aria-labelledby="cms-photo-title">
             <h2 id="cms-photo-title" className="cms-sheet-head">
               {tr("CS_PHOTO_SHEET_TITLE", "Upload a photo")}
             </h2>
