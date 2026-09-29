@@ -123,7 +123,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
   // Masters the current role can't see (per resource.masters conditions on
   // the shared MDMS search action) drop out of nav entirely — UI-level only,
-  // see docs/design/masters-configurator-access-policy-design.md §3.3.
+  // see docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3.
   // Two independent gates, and a nav item must clear BOTH. `canViewResource` is
   // master's masters-capability gate; `requiredRoles` is #1584's tidiness gate for
   // items that are only useful to a couple of roles. The rebase brought both in

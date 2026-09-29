@@ -6,8 +6,8 @@ Overpass. The public `overpass-api.de` is rate-limited and frequently returns
 
 This file is the operator runbook. For what Overpass *is*, its query language and
 quotas, and the wider OSM picture (data sources, geocoding, tiles, self-hosting the
-other services), see [`docs/openstreetmap/`](../docs/openstreetmap/README.md) — in
-particular [20 — Services](../docs/openstreetmap/20-services.md), which covers Overpass QL,
+other services), see [`docs/features/maps/openstreetmap/`](../docs/features/maps/openstreetmap/README.md) — in
+particular [20 — Services](../docs/features/maps/openstreetmap/20-services.md), which covers Overpass QL,
 the quotas, and the empty-result triage order (extract coverage → area generation →
 local-language name match).
 

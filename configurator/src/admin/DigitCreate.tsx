@@ -67,7 +67,7 @@ function DigitCreateContent({
   const resource = useResourceContext();
   const { canEditResource } = useMastersCapability();
   // UI-level only (not a security boundary) — see
-  // docs/design/masters-configurator-access-policy-design.md §3.3.
+  // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3.
   const canEdit = !resource || canEditResource(resource);
 
   const displayTitle = title || defaultTitle || 'Create';

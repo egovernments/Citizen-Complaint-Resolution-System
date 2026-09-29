@@ -3,7 +3,6 @@ import { CitizenSideBar } from "./CitizenSideBar";
 import EmployeeSideBar from "./EmployeeSideBar";
 import { useEmployeeNavItems } from "./employeeNavItems";
 import { useCitizenNavItems } from "./citizenNavItems";
-import { crestAltFor } from "./SidebarBrand";
 
 // The employee mobile drawer needs the same nav tree the desktop SideNav
 // renders. Fetching it in a wrapper keeps the hook out of CitizenSideBar,
@@ -33,7 +32,7 @@ const CitizenMobileSideBar = (props) => {
   return <CitizenSideBar {...props} navItems={forHamburger(items)} />;
 };
 
-const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobileView, userDetails, modules, linkData, islinkDataLoading, userProfile, crestUrl }) => {
+const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, userDetails, linkData, islinkDataLoading, userProfile }) => {
   if (CITIZEN)
     return (
       <CitizenMobileSideBar
@@ -50,7 +49,7 @@ const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobil
     else {
       return !isSidebarOpen && userDetails?.access_token ? (
         <div className="digit-employeeSidebar">
-          <EmployeeSideBar {...{ t, mobileView, userDetails, modules, crestUrl }} crestAlt={crestAltFor(t)} />
+          <EmployeeSideBar t={t} onLogout={handleLogout} />
         </div>
       ) : (
         <div className="digit-citizenSidebar">

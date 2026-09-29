@@ -344,7 +344,7 @@ enable_search_stack: false
 #   bao kv get -field=matomo_admin_password <secrets_path>
 # Reach the UI over a tunnel: ssh -L 18081:127.0.0.1:18081 <host>
 #
-# See docs/matomo-deployment.md for the full walkthrough.
+# See docs/setup/deployment/matomo.md for the full walkthrough.
 # enable_matomo: false
 # matomo_auto_install: true       # false = click through the wizard yourself
 # matomo_admin_user: admin        # the Matomo superuser login
@@ -462,7 +462,7 @@ enable_novu: false
 #
 # Adds 2 containers (xstate-chatbot + a one-shot Flyway migration).
 #
-# BEFORE ENABLING, read docs/2.12/notifications/inbound-whatsapp.md. In particular the
+# BEFORE ENABLING, read docs/releases/2.12/notifications/inbound-whatsapp.md. In particular the
 # webhook is public by necessity (Twilio cannot present a DIGIT token), so it is
 # authenticated by Twilio signature validation — keep chatbot_validate_signature on and
 # set twilio_auth_token, or every inbound message is rejected.
@@ -757,7 +757,7 @@ db_fast_path: true
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
 # Escape hatch for the on-box storage check. The playbook inspects the TARGET
@@ -928,7 +928,7 @@ grafana_anonymous_enabled: false
 # templates/globalConfigs.js.j2, so an inventory that never mentions them
 # renders exactly as before — no edit is required to adopt the feature.
 #
-# Full guide: docs/analytics-guide/  (start with 10-setup.md; the complete
+# Full guide: docs/features/analytics/  (start with 10-setup.md; the complete
 # self-hosted Matomo walkthrough is 50-self-hosted-matomo.md)
 
 # Hard off switch. `true` disables the shim entirely, whatever MDMS says —

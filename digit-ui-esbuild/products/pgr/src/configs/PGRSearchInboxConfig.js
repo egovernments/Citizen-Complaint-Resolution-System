@@ -169,7 +169,7 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                 uiConfig: {
                     links: [
                         {
-                            text: "ES_PGR_NEW_COMPLAINT",
+                            text: "CS_COMMON_FILE_A_COMPLAINT",
                             url: "/employee/pgr/create-complaint",
                             roles: ["SUPERUSER", "PGR-ADMIN", "PGR_ADMIN", "HELPDESK_USER"],
                             hyperlink: true,
