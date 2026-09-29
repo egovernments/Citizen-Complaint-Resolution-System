@@ -1,22 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Citizen file-complaint flow — v2 (Tailwind + shadcn-style chrome).
+// Citizen "File a Complaint": three steps, as in the #2038 design.
 //
-// This is a strangler-fig replacement for the FormExplorer.js + steps-config/*
-// + FormComposerV2 stack. The same 6-step shape is preserved so:
-//   - the data shape submitted to /pgr/v1/_create is byte-identical
-//   - the boundary, geolocation, and image-upload behaviour stays in the
-//     existing components (PGRBoundaryComponent, GeoLocations, SelectImages),
-//     just rendered inside v2 chrome
-//   - server-side, redux, and post-submit response page see no change
+//   1. Complaint details: the description (typed, or spoken through the
+//      browser's speech recognition), photos, and the category.
+//   2. Location: the map pin (optional) and the boundary down to its last
+//      level, postal code and landmark.
+//   3. Review, then submit.
 //
-// What changes vs FormExplorer:
-//   - Tailwind / v2 components throughout the chrome (Stepper, ScreenContainer,
-//     FormFooter, Card, Button, Field, RadioCards, Select, Textarea).
-//   - Step 1 uses RadioCards for complaint type + sub-type instead of a tiny
-//     Dropdown — much better mobile tap targets.
-//   - Sticky action bar with Continue/Back, mobile-first layout.
-//   - State managed locally via React hooks — no FormComposerV2 / hidden
-//     react-hook-form coupling.
+// What is unchanged: the request sent to /pgr/v1/_create (bar the locality,
+// below), the category and boundary pickers, the map, the postal code and
+// pincode-allowlist rules, and the response page's redux contract.
+// All three steps stay mounted and only the current one shows, so going Back
+// finds the pickers as the citizen left them.
 
 import * as React from "react";
 import { useTranslation } from "react-i18next";
@@ -28,17 +23,9 @@ import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
 
-import {
-  ScreenContainer,
-  ScreenHeader,
-  FormFooter,
-  Button,
-  Card,
-  Field,
-  Textarea,
-  Input,
-  Select,
-} from "@egovernments/digit-ui-components-v2";
+import { Button, ScreenContainer, ScreenHeader, Field, Input, Select, Textarea } from "@egovernments/digit-ui-components-v2";
+import { MicButton, VoiceSheet, speechToTextSupported } from "./VoiceInput";
+import { PhotoPicker, PickedPhoto } from "./PhotoPicker";
 
 /**
  * Resolve a translation key with an English fallback.
@@ -110,7 +97,9 @@ interface BoundaryNode {
 interface GeoPoint {
   lat?: number | null;
   lng?: number | null;
-  ward?: { code?: string } | null;
+  /** Reverse-geocoded address, when the map found one. */
+  address?: string | null;
+  ward?: { code?: string; name?: string } | null;
   pincode?: string | number | null;
 }
 
@@ -125,26 +114,21 @@ interface FormData {
   ComplaintImagesPoint?: string[]; // fileStoreIds
 }
 
-interface StepShellProps {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
+/** The boundary picker's selection: the leaf, plus the node at each level. */
+interface BoundaryLevel {
+  code?: string;
+  name?: string;
+  boundaryType?: string;
 }
 
 const STEPS = [
-  { id: "type", title: "Complaint" },
-  { id: "map", title: "Pin location" },
-  // Combined location step — replaces the previous separate
-  // "address" (landmark + pincode) and "ward" (County / Sub-County /
-  // Ward dropdowns) steps. Ward + pincode are auto-filled from the
-  // map pin via the existing GeoLocations.resolveWard +
-  // BoundaryComponent auto-cascade pipeline; the user only ever
-  // types the optional landmark unless the auto-fill misses (in
-  // which case the missing dropdown becomes interactive).
-  { id: "location", title: "Location" },
-  { id: "details", title: "Details" },
-  { id: "photos", title: "Photos" },
+  { id: "details", key: "CS_FILE_STEP_DETAILS", fallback: "Complaint Details" },
+  { id: "location", key: "CS_FILE_STEP_LOCATION", fallback: "Location" },
+  { id: "review", key: "CS_FILE_STEP_REVIEW", fallback: "Review" },
 ] as const;
+
+/** The description's ceiling: eg_pgr_service_v2.description is varchar(4000). */
+const DESCRIPTION_MAX = 4000;
 
 // ---------------------------------------------------------------------------
 // Helpers (kept identical to the legacy FormExplorer so the API payload
@@ -195,10 +179,15 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
         buildingName: "",
         street: "",
         pincode: validateString(formData?.postalCode),
+        // The ward the citizen confirmed in the cascade, which Review shows.
+        // It is the map's ward whenever the map's ward is in the boundary
+        // tree (the cascade fills from it); when the tree has no such ward,
+        // or the citizen changed the cascade, the map's code was filed while
+        // Review showed another ward.
         locality: {
           code:
-            formData?.GeoLocationsPoint?.ward?.code ||
             formData?.SelectedBoundary?.code ||
+            formData?.GeoLocationsPoint?.ward?.code ||
             "",
         },
         geoLocation: serializeGeoLocation(geoLocation),
@@ -258,40 +247,17 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
   }
 }
 
-// Mandatory fields per step (zero-indexed).
-const MANDATORY_BY_STEP: ReadonlyArray<ReadonlyArray<keyof FormData>> = [
-  ["SelectComplaintType"], // 0 — type (sub-type is conditionally required, see stepIsValid)
-  [], // 1 — exact map pin is optional; the administrative boundary remains required on the next step
-  ["SelectedBoundary"], // 2 — combined location step: ward must be selected (map auto-fills it; manual fallback if auto-fill missed)
-  ["description"], // 3 — description
-  [], // 4 — photos (optional)
-];
-
 // ---------------------------------------------------------------------------
 // Sub-step bodies
 // ---------------------------------------------------------------------------
 
-function StepShell({ title, description, children }: StepShellProps) {
+/** One of the step's grouped panels: a small heading over its fields. */
+function Section({ title, className, children }: { title?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
-    <Card className="p-6">
-      <div className="mb-5">
-        <h2
-          className="text-lg font-semibold"
-          // Theme-driven heading color — picks up the tenant's primary brand
-          // hue (kenya-green on naipepea, orange on default) via the same
-          // var chain the legacy headings use.
-          style={{
-            color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-          }}
-        >
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
+    <section className={`cms-section${className ? ` ${className}` : ""}`}>
+      {title ? <h2 className="cms-section-head">{title}</h2> : null}
       {children}
-    </Card>
+    </section>
   );
 }
 
@@ -422,7 +388,9 @@ function ComplaintHierarchyPicker({
       : -1;
 
   return (
-    <div className="space-y-5">
+    // Its levels sit in the step's field grid: side by side on desktop,
+    // stacked on a phone.
+    <div className="cms-hierarchy">
       {levels.map((lvl, i) => {
         // Once the chosen branch terminates early, drop the deeper levels that
         // have nothing to offer (e.g. SUB_TYPE under a SECTOR that has none).
@@ -441,6 +409,10 @@ function ComplaintHierarchyPicker({
               value={sel[i] ?? undefined}
               disabled={disabled}
               onValueChange={(value: string) => handleChange(i, value)}
+              // Every filing list searches, whatever its length, as the
+              // employee form's do (CCRS#941).
+              searchable
+              searchPlaceholder={tr(t, "CS_COMMON_SEARCH", "Search")}
               placeholder={
                 disabled
                   ? tr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
@@ -455,7 +427,7 @@ function ComplaintHierarchyPicker({
   );
 }
 
-function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBodyProps) {
+function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBodyProps) {
   const hierarchyActive = !!(
     hierarchyDef &&
     Array.isArray(hierarchyDef.levels) &&
@@ -488,133 +460,113 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
   }, [data.SelectComplaintType?.menuPath, serviceDefs]);
 
   return (
-    <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}>
-      <div className="space-y-5">
-        {hierarchyActive ? (
-          <ComplaintHierarchyPicker
-            def={hierarchyDef as ComplaintHierarchyDef}
-            nodes={nodes || []}
-            serviceDefs={serviceDefs}
-            t={t}
-            onLeafChange={(leaf) =>
-              patch({ SelectComplaintType: leaf, SelectSubComplaintType: leaf })
-            }
-          />
-        ) : (
-          <>
-        <Field
-          label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
-          required
-          htmlFor="complaint-type"
-        >
-          <Select
-            id="complaint-type"
-            value={data.SelectComplaintType?.menuPath}
-            onValueChange={(value: string) => {
-              const picked = types.find((tp) => tp.menuPath === value);
-              patch({ SelectComplaintType: picked, SelectSubComplaintType: null });
-            }}
-            placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint type")}
-            options={types.map((tp) => ({
-              value: tp.menuPath,
-              label: tp.menuPathName ?? tp.menuPath,
-            }))}
-          />
-        </Field>
-        {subTypes.length > 1 ? (
+    <div className="cms-field-grid">
+      {hierarchyActive ? (
+        <ComplaintHierarchyPicker
+          def={hierarchyDef as ComplaintHierarchyDef}
+          nodes={nodes || []}
+          serviceDefs={serviceDefs}
+          t={t}
+          onLeafChange={(leaf) =>
+            patch({ SelectComplaintType: leaf, SelectSubComplaintType: leaf })
+          }
+        />
+      ) : (
+        <>
           <Field
-            label={t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE")}
+            label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
             required
-            htmlFor="complaint-subtype"
+            htmlFor="complaint-type"
           >
             <Select
-              id="complaint-subtype"
-              value={data.SelectSubComplaintType?.serviceCode}
+              id="complaint-type"
+              value={data.SelectComplaintType?.menuPath}
+              searchable
+              searchPlaceholder={tr(t, "CS_COMMON_SEARCH", "Search")}
               onValueChange={(value: string) => {
-                const picked = subTypes.find((s) => s.serviceCode === value);
-                patch({ SelectSubComplaintType: picked });
+                const picked = types.find((tp) => tp.menuPath === value);
+                patch({ SelectComplaintType: picked, SelectSubComplaintType: null });
               }}
-              placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
-              options={subTypes.map((s) => ({
-                value: s.serviceCode,
-                label: complaintLabel(t, s.serviceCode, s.name),
+              placeholder={tr(t, "CS_COMPLAINT_PICK_TYPE", "Select a complaint type")}
+              options={types.map((tp) => ({
+                value: tp.menuPath,
+                label: tp.menuPathName ?? tp.menuPath,
               }))}
             />
           </Field>
-        ) : null}
-          </>
-        )}
-      </div>
-    </StepShell>
+          {subTypes.length > 1 ? (
+            <Field
+              label={t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE")}
+              required
+              htmlFor="complaint-subtype"
+            >
+              <Select
+                id="complaint-subtype"
+                value={data.SelectSubComplaintType?.serviceCode}
+                searchable
+                searchPlaceholder={tr(t, "CS_COMMON_SEARCH", "Search")}
+                onValueChange={(value: string) => {
+                  const picked = subTypes.find((s) => s.serviceCode === value);
+                  patch({ SelectSubComplaintType: picked });
+                }}
+                placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
+                options={subTypes.map((s) => ({
+                  value: s.serviceCode,
+                  label: complaintLabel(t, s.serviceCode, s.name),
+                }))}
+              />
+            </Field>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
 
-function Step1Map({ data, patch, t }: StepBodyProps) {
+function MapPanel({ data, patch, t }: StepBodyProps) {
   // Reuse the existing GeoLocations component — it owns the leaflet map +
   // Nominatim integration. We just pass through formData and a setter.
   const GeoLocations = Digit?.ComponentRegistryService?.getComponent("GeoLocations");
   if (!GeoLocations) {
-    return (
-      <StepShell title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}>
-        <p className="text-sm text-destructive">Map component not registered.</p>
-      </StepShell>
-    );
+    return <p className="cms-field-error">Map component not registered.</p>;
   }
   return (
-    <StepShell
-      title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}
-      description={tr(
-        t,
-        "CS_PIN_LOCATION_HINT",
-        "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward."
-      )}
-    >
-      <GeoLocations
-        t={t}
-        config={{
-          key: "GeoLocationsPoint",
-          populators: { name: "GeoLocationsPoint" },
-          withoutLabel: true,
-        }}
-        formData={data}
-        onSelect={(_key: string, value: GeoPoint) => {
-          patch({
-            GeoLocationsPoint: value,
-            // Mirror the new pin's pincode onto postalCode. Always reset to the
-            // current pin: if the newly-picked location has no pincode, clear it
-            // rather than keeping the previous pin's value — otherwise a stale
-            // pincode from an earlier pin lingers after the pin is moved
-            // (CCRS#722). The user can still type one on the location step.
-            postalCode:
-              value?.pincode != null && String(value.pincode).length > 0
-                ? String(value.pincode)
-                : "",
-          });
-        }}
-      />
-    </StepShell>
+    <GeoLocations
+      t={t}
+      config={{
+        key: "GeoLocationsPoint",
+        populators: { name: "GeoLocationsPoint" },
+        withoutLabel: true,
+      }}
+      formData={data}
+      onSelect={(_key: string, value: GeoPoint) => {
+        patch({
+          GeoLocationsPoint: value,
+          // Mirror the new pin's pincode onto postalCode. Always reset to the
+          // current pin: if the newly-picked location has no pincode, clear it
+          // rather than keeping the previous pin's value — otherwise a stale
+          // pincode from an earlier pin lingers after the pin is moved
+          // (CCRS#722). The user can still type one on the location step.
+          postalCode:
+            value?.pincode != null && String(value.pincode).length > 0
+              ? String(value.pincode)
+              : "",
+        });
+      }}
+    />
   );
 }
 
 /**
- * Combined location-confirmation step.
+ * The boundary cascade, postal code and landmark under the map.
  *
- * Replaces the separate address (landmark + postal code) and ward
- * (County / Sub-County / Ward cascade) steps. The previous flow asked
- * the user to re-pick all three boundary levels and re-type the
- * pincode even though the prior map step had already captured them
- * via `GeoLocations.resolveWard()` (point-in-polygon on the bundled
- * Nairobi-wards GeoJSON, plus Nominatim for pincode).
- *
- * Now: the boundary cascade auto-fills from the map pin and renders
- * each level as DISABLED Selects (read-only with the value visible),
- * pincode is the same kind of disabled input, and the user only
- * types an optional landmark before continuing. If the auto-fill
- * misses a particular level (GeoJSON / boundary-tree drift, or
- * pincode missing from Nominatim) the affected control becomes
- * interactive so the user can fill the gap manually.
+ * The cascade auto-fills from the map pin (GeoLocations.resolveWard writes
+ * the ward, BoundaryComponent rebuilds the path) and renders the filled
+ * levels read-only; a level the auto-fill missed stays interactive so the
+ * citizen can fill the gap. The postal code pre-fills from the pin too but
+ * always stays editable.
  */
-function Step2Location({ data, patch, t, tenantId }: StepBodyProps) {
+function LocationFields({ data, patch, t, tenantId }: StepBodyProps) {
   const PGRBoundaryComponent = Digit?.ComponentRegistryService?.getComponent("PGRBoundaryComponent");
 
   // The map's resolveWard writes ward.{code, name} into
@@ -637,137 +589,356 @@ function Step2Location({ data, patch, t, tenantId }: StepBodyProps) {
   const showPostalError = effectivePincode.length > 0 && !postalValid;
 
   return (
-    <StepShell
-      title={t("CS_COMPLAINT_LOCATION_DETAILS") || "Confirm location"}
-      description={tr(
-        t,
-        "CS_LOCATION_CONFIRM_HINT",
-        "We picked these from your map pin. Add a landmark if it helps the team find the spot."
-      )}
-    >
-      <div className="space-y-5">
-        {PGRBoundaryComponent ? (
-          <PGRBoundaryComponent
-            t={t}
-            userType="citizen"
-            // Scope the cascade to the tenant the complaint FILES under, which is
-            // the same tenant the map resolves against. Without it the cascade
-            // falls back to ULBService.getCurrentTenantId(), which returns
-            // STATE_LEVEL_TENANT_ID for every citizen — so a citizen whose home
-            // city is set would pick boundaries out of the state root's tree and
-            // attach them to a complaint filed in their city.
-            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "", tenantId }}
-            formData={data}
-            // Ask the cascade to render its dropdowns as disabled
-            // wherever it has an auto-filled value. Levels left empty
-            // (auto-fill miss) stay interactive so the user can pick.
-            readOnly={wardFromMap}
-            onSelect={(_key: string, value: BoundaryNode) => {
-              patch({ SelectedBoundary: value });
-            }}
-          />
-        ) : (
-          <p className="text-sm text-destructive">Boundary component not registered.</p>
-        )}
-
-        <Field
-          label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
-          htmlFor="postal-code"
-          error={showPostalError ? getPostalCodeErrorMessage(t) : undefined}
-        >
-          <Input
-            id="postal-code"
-            type="text"
-            // Numeric keyboard hint only when the configured pattern is
-            // digit-only (KE 5, MZ 4, IN 6 — every real deployment today);
-            // alnum/dash tenants (UK / US 5+4 examples in _example.yml) get
-            // the full keyboard their pattern needs. No keystroke filtering
-            // either way — the shared validator is the sole gate, so input
-            // is never mangled before it reaches isPostalCodeValid().
-            inputMode={isPostalCodeNumeric() ? "numeric" : "text"}
-            pattern={isPostalCodeNumeric() ? "[0-9]*" : undefined}
-            maxLength={16}
-            invalid={showPostalError}
-            value={effectivePincode}
-            onChange={(e) => patch({ postalCode: e.target.value })}
-          />
-        </Field>
-
-        <Field label={t("CS_COMPLAINT_LANDMARK__DETAILS")} htmlFor="landmark">
-          <Input
-            id="landmark"
-            placeholder={tr(t, "CS_LANDMARK_PLACEHOLDER", "e.g. Near Jamia Mosque")}
-            maxLength={64}
-            value={data.landmark ?? ""}
-            onChange={(e) => patch({ landmark: e.target.value })}
-          />
-        </Field>
-      </div>
-    </StepShell>
-  );
-}
-
-function Step3Description({ data, patch, t }: StepBodyProps) {
-  return (
-    <StepShell
-      title={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS")}
-      description={tr(
-        t,
-        "CS_DESCRIPTION_HINT",
-        "What happened? When did it start? Add as much detail as helps."
-      )}
-    >
-      <Field
-        label={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION")}
-        required
-        htmlFor="complaint-description"
-      >
-        <Textarea
-          id="complaint-description"
-          placeholder={tr(
-            t,
-            "CS_DESCRIBE_THE_ISSUE_PLACEHOLDER",
-            "Describe the issue in your own words…"
-          )}
-          maxLength={1000}
-          value={data.description ?? ""}
-          onChange={(e) => patch({ description: e.target.value })}
+    <div className="cms-field-grid">
+      {PGRBoundaryComponent ? (
+        <PGRBoundaryComponent
+          t={t}
+          userType="citizen"
+          // Scope the cascade to the tenant the complaint FILES under, which is
+          // the same tenant the map resolves against. Without it the cascade
+          // falls back to ULBService.getCurrentTenantId(), which returns
+          // STATE_LEVEL_TENANT_ID for every citizen — so a citizen whose home
+          // city is set would pick boundaries out of the state root's tree and
+          // attach them to a complaint filed in their city.
+          config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "", tenantId }}
+          formData={data}
+          // Ask the cascade to render its dropdowns as disabled
+          // wherever it has an auto-filled value. Levels left empty
+          // (auto-fill miss) stay interactive so the user can pick.
+          readOnly={wardFromMap}
+          onSelect={(_key: string, value: BoundaryNode) => {
+            patch({ SelectedBoundary: value });
+          }}
         />
-        <div className="mt-1 text-xs text-muted-foreground text-right">
-          {(data.description ?? "").length} / 1000
-        </div>
+      ) : (
+        <p className="text-sm text-destructive">Boundary component not registered.</p>
+      )}
+
+      <Field
+        label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
+        htmlFor="postal-code"
+        error={showPostalError ? getPostalCodeErrorMessage(t) : undefined}
+      >
+        <Input
+          id="postal-code"
+          type="text"
+          // Numeric keyboard hint only when the configured pattern is
+          // digit-only (KE 5, MZ 4, IN 6 — every real deployment today);
+          // alnum/dash tenants (UK / US 5+4 examples in _example.yml) get
+          // the full keyboard their pattern needs. No keystroke filtering
+          // either way — the shared validator is the sole gate, so input
+          // is never mangled before it reaches isPostalCodeValid().
+          inputMode={isPostalCodeNumeric() ? "numeric" : "text"}
+          pattern={isPostalCodeNumeric() ? "[0-9]*" : undefined}
+          maxLength={16}
+          invalid={showPostalError}
+          value={effectivePincode}
+          onChange={(e) => patch({ postalCode: e.target.value })}
+        />
       </Field>
-    </StepShell>
+
+      <Field label={t("CS_COMPLAINT_LANDMARK__DETAILS")} htmlFor="landmark">
+        <Input
+          id="landmark"
+          placeholder={tr(t, "CS_LANDMARK_PLACEHOLDER", "e.g. Near Jamia Mosque")}
+          maxLength={64}
+          value={data.landmark ?? ""}
+          onChange={(e) => patch({ landmark: e.target.value })}
+        />
+      </Field>
+    </div>
   );
 }
 
-function Step4Images({ data, patch, t }: StepBodyProps) {
-  // Reuse SelectImages — the registered component knows how to call the
-  // upload API and write fileStoreIds back. We pass formData + setter the
-  // same way it expects from FormStep.
-  const SelectImages = Digit?.ComponentRegistryService?.getComponent("SelectImages");
-  if (!SelectImages) {
-    return (
-      <StepShell title={t("CS_ADDCOMPLAINT_UPLOAD_PHOTO")}>
-        <p className="text-sm text-destructive">Image-upload component not registered.</p>
-      </StepShell>
-    );
-  }
+// ---------------------------------------------------------------------------
+// Steps
+// ---------------------------------------------------------------------------
+
+const ChevronLeft = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="m15 18-6-6 6-6" />
+  </svg>
+);
+const ArrowRight = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </svg>
+);
+const CheckMark = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+const PinGlyph = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+
+interface DetailsStepProps extends StepBodyProps {
+  photos: PickedPhoto[];
+  setPhotos: (updater: (prev: PickedPhoto[]) => PickedPhoto[]) => void;
+  canSpeak: boolean;
+  onVoice: () => void;
+}
+
+function DetailsStep(props: DetailsStepProps) {
+  const { data, patch, t, tenantId, photos, setPhotos, canSpeak, onVoice } = props;
+  const say = (key: string, fallback: string) => tr(t, key, fallback);
   return (
-    <StepShell title={t("CS_ADDCOMPLAINT_UPLOAD_PHOTO")}>
-      <SelectImages
-        t={t}
-        formData={data}
-        onSelect={(_key: string, value: string[]) => {
-          patch({ ComplaintImagesPoint: value });
-        }}
-        config={{
-          key: "ComplaintImagesPoint",
-          populators: { name: "ComplaintImagesPoint" },
-          label: "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
-        }}
-      />
-    </StepShell>
+    <div className="cms-step-body">
+      <Section className="cms-section-describe">
+        <label className="cms-label" htmlFor="complaint-description">
+          {say("CS_FILE_DESCRIBE", "Describe your complaint")} <span className="cms-required">*</span>
+        </label>
+        <div className={`cms-textarea-wrap${canSpeak ? " with-mic" : ""}`}>
+          <Textarea
+            id="complaint-description"
+            className="cms-textarea"
+            rows={6}
+            maxLength={DESCRIPTION_MAX}
+            placeholder={say("CS_FILE_DESCRIBE_PLACEHOLDER", "Type your complaint here…")}
+            value={data.description ?? ""}
+            onChange={(e) => patch({ description: e.target.value })}
+          />
+          {canSpeak ? <MicButton label={say("CS_VOICE_RECORD", "Record your complaint")} onClick={onVoice} /> : null}
+        </div>
+        <div className="cms-counter">
+          {(data.description ?? "").length} / {DESCRIPTION_MAX}
+        </div>
+      </Section>
+      <Section title={say("CS_FILE_PHOTO", "Upload a photo")} className="cms-section-photos">
+        <PhotoPicker photos={photos} onChange={setPhotos} tenantId={tenantId || ""} tr={say} />
+      </Section>
+      <Section title={say("CS_FILE_CATEGORY", "Complaint category")} className="cms-section-category">
+        <CategoryFields {...props} />
+      </Section>
+    </div>
+  );
+}
+
+function LocationStep(props: StepBodyProps) {
+  const { data, t } = props;
+  const point = data.GeoLocationsPoint;
+  const pinned = point?.lat != null && point?.lng != null;
+  const coords = pinned ? `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}` : "";
+  return (
+    <div className="cms-step-body cms-location-body">
+      <Section title={tr(t, "CS_FILE_STEP_LOCATION", "Location")} className="cms-section-map">
+        <p className="cms-section-hint">
+          {tr(t, "CS_PIN_LOCATION_HINT", "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward.")}
+        </p>
+        <div className="cms-map">
+          <MapPanel {...props} />
+        </div>
+        <div className="cms-pin-summary">
+          <span className={`cms-pin-icon${pinned ? " pinned" : ""}`}>
+            <PinGlyph />
+          </span>
+          <span className="cms-pin-text">
+            <span className="cms-pin-title">
+              {pinned
+                ? tr(t, "CS_FILE_PINNED", "Pinned location")
+                : tr(t, "CS_FILE_NOT_PINNED", "No location pinned yet (Optional)")}
+            </span>
+            <span className="cms-pin-meta">
+              {pinned ? point?.address || coords : tr(t, "CS_FILE_PIN_HINT", "Search, drag the map, or use current location")}
+            </span>
+          </span>
+        </div>
+      </Section>
+      <Section className="cms-section-address">
+        <LocationFields {...props} />
+      </Section>
+    </div>
+  );
+}
+
+const truncate = (text: string, max: number) => {
+  const flat = text.trim().replace(/\s+/g, " ");
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return `${space > max * 0.6 ? cut.slice(0, space) : cut}…`;
+};
+
+/** Category and sub-category names for the chosen type, as the pickers show them. */
+function categoryNames(data: FormData, t: (k: string) => string): { category: string; subCategory: string } {
+  const main = data.SelectComplaintType;
+  const sub = data.SelectSubComplaintType || main;
+  if (!main) return { category: "", subCategory: "" };
+  // A leaf with a parent reads "parent · leaf"; a type picked at its own
+  // (terminal) level has no sub-category.
+  const hasParent = !!main.menuPath && main.menuPath !== sub?.serviceCode;
+  return {
+    category: hasParent ? complaintLabel(t, main.menuPath, main.menuPathName) : complaintLabel(t, sub?.serviceCode, sub?.name),
+    subCategory: hasParent && sub ? complaintLabel(t, sub.serviceCode, sub.name) : "",
+  };
+}
+
+/** "Ward, Sub County, County, 00100": the boundary levels leaf first, then postal code. */
+function addressLine(data: FormData, t: (k: string) => string): string {
+  const levels: BoundaryLevel[] = (data.SelectedBoundary?.levels as BoundaryLevel[]) || [];
+  // Named as the cascade's dropdowns name them: the code's translation, else
+  // the node's own name, so an unlocalised tenant does not read raw codes.
+  const names = levels
+    .slice()
+    .reverse()
+    .map((level) => {
+      if (!level.code) return "";
+      const translated = t(level.code);
+      return translated && translated !== level.code ? translated : level.name || level.code;
+    })
+    .filter(Boolean);
+  const postal = data.postalCode ?? (data.GeoLocationsPoint?.pincode != null ? String(data.GeoLocationsPoint.pincode) : "");
+  return [...names, postal].filter(Boolean).join(", ");
+}
+
+function ReviewCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="cms-review-card">
+      <h3 className="cms-review-head">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function ReviewRows({ rows }: { rows: Array<[string, string]> }) {
+  return (
+    <dl className="cms-review-rows">
+      {rows.map(([label, value]) => (
+        <div key={label} className="cms-review-row">
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[] }) {
+  const say = (key: string, fallback: string) => tr(t, key, fallback);
+  const notProvided = say("CS_FILE_NOT_PROVIDED", "Not provided");
+  const notSelected = say("CS_FILE_NOT_SELECTED", "Not selected");
+  const { category, subCategory } = categoryNames(data, t);
+  const attached = photos.filter((p) => p.status === "done");
+  const point = data.GeoLocationsPoint;
+  const pinned = point?.lat != null && point?.lng != null;
+  const user = Digit.UserService.getUser()?.info;
+
+  return (
+    <div className="cms-step-body cms-review-body">
+      <h2 className="cms-review-heading">{say("CS_FILE_REVIEW_HEADING", "Review before you submit")}</h2>
+      <ReviewCard title={say("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS", "Complaint details")}>
+        <ReviewRows
+          rows={[
+            [say("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION", "Description"), data.description?.trim() ? truncate(data.description, 180) : notProvided],
+            [say("CS_FILE_CATEGORY_LABEL", "Category"), category || notSelected],
+            // A type with no sub-types has nothing to select here.
+            [say("CS_FILE_SUBCATEGORY_LABEL", "Sub-category"), subCategory || (category ? "—" : notSelected)],
+            [
+              say("CS_FILE_PHOTOS", "Photos"),
+              attached.length
+                ? say("CS_FILE_PHOTOS_ATTACHED", "{count} attached").replace("{count}", String(attached.length))
+                : say("CS_FILE_NO_PHOTOS", "None attached"),
+            ],
+          ]}
+        />
+      </ReviewCard>
+      <ReviewCard title={say("CS_FILE_STEP_LOCATION", "Location")}>
+        <ReviewRows
+          rows={[
+            [say("CS_FILE_ADDRESS", "Address"), addressLine(data, t) || notProvided],
+            [say("CS_COMPLAINT_LANDMARK__DETAILS", "Landmark"), data.landmark?.trim() ? truncate(data.landmark, 60) : notProvided],
+            [
+              say("CS_FILE_PIN_DROP", "Pin drop"),
+              pinned
+                ? point?.address || `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}`
+                : say("CS_FILE_NOT_CAPTURED", "Not captured"),
+            ],
+          ]}
+        />
+      </ReviewCard>
+      {attached.length ? (
+        <ReviewCard title={say("CS_FILE_ATTACHMENTS", "Attachments")}>
+          <ul className="cms-attachments">
+            {attached.map((photo) => (
+              <li key={photo.id} className="cms-attachment">
+                <img src={photo.previewUrl} alt="" />
+                <span className="cms-attachment-name">{photo.name}</span>
+              </li>
+            ))}
+          </ul>
+        </ReviewCard>
+      ) : null}
+      <ReviewCard title={say("CS_FILE_COMPLAINANT", "Complainant details")}>
+        <ReviewRows
+          rows={[
+            [say("CORE_COMMON_NAME", "Name"), user?.name || notProvided],
+            [say("CORE_COMMON_MOBILE_NUMBER", "Phone number"), user?.mobileNumber || notProvided],
+          ]}
+        />
+      </ReviewCard>
+    </div>
+  );
+}
+
+/** Desktop: the numbered stepper at the top of the card. Done steps go back. */
+function FlowStepper({ index, t, onGo }: { index: number; t: (k: string) => string; onGo: (i: number) => void }) {
+  return (
+    <nav className="cms-stepper" aria-label={tr(t, "CS_FILE_PROGRESS", "Progress")}>
+      <ol>
+        {STEPS.map((step, i) => {
+          const state = i < index ? "done" : i === index ? "current" : "todo";
+          return (
+            <li key={step.id} className={`cms-step ${state}`}>
+              <button
+                type="button"
+                className="cms-step-mark"
+                disabled={i >= index}
+                aria-current={i === index ? "step" : undefined}
+                onClick={() => onGo(i)}
+                data-analytics-event={`pgr.file-complaint.stepper.${step.id}`}
+              >
+                <span className="cms-step-dot">{i < index ? <CheckMark /> : i + 1}</span>
+                <span className="cms-step-label">{tr(t, step.key, step.fallback)}</span>
+              </button>
+              {i < STEPS.length - 1 ? <span className={`cms-step-line${i < index ? " done" : ""}`} aria-hidden="true" /> : null}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+/** Phone: "Step 1 of 3 · Complaint Details", what comes next, and a bar per step. */
+function FlowStrip({ index, t }: { index: number; t: (k: string) => string }) {
+  const current = STEPS[index];
+  const next = STEPS[index + 1];
+  const stepOf = tr(t, "CS_FILE_STEP_OF", "Step {current} of {total}")
+    .replace("{current}", String(index + 1))
+    .replace("{total}", String(STEPS.length));
+  return (
+    <div className="cms-strip">
+      <div className="cms-strip-row">
+        <span className="cms-strip-heading">
+          {stepOf} · {tr(t, current.key, current.fallback)}
+        </span>
+        <span className="cms-strip-next">
+          {next
+            ? tr(t, "CS_FILE_NEXT_STEP", "Next: {step}").replace("{step}", tr(t, next.key, next.fallback))
+            : tr(t, "CS_FILE_CHECK_SUBMIT", "Check and submit")}
+        </span>
+      </div>
+      <div className="cms-strip-bars" aria-hidden="true">
+        {STEPS.map((step, i) => (
+          <span key={step.id} className={i <= index ? "on" : ""} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -838,8 +1009,14 @@ const CreatePGRFlowV2: React.FC = () => {
 
   const [stepIndex, setStepIndex] = React.useState(0);
   const [formData, setFormData] = React.useState<FormData>({});
+  const [photos, setPhotos] = React.useState<PickedPhoto[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
+  // The location step mounts on its first visit and then stays, so the map
+  // and the boundary cascade keep what the citizen picked when they go Back.
+  const [locationVisited, setLocationVisited] = React.useState(false);
+  const canSpeak = React.useMemo(() => speechToTextSupported(), []);
 
   const patch = React.useCallback((partial: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
@@ -871,33 +1048,70 @@ const CreatePGRFlowV2: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData?.GeoLocationsPoint?.pincode]);
 
-  const stepIsValid = React.useMemo(() => {
-    const required = MANDATORY_BY_STEP[stepIndex] || [];
-    if (!required.every((field) => isFieldValid(formData, field))) return false;
-    // Sub-type is conditionally mandatory: if the chosen complaint type has
-    // any sub-services in the same menuPath, the user MUST pick one before
-    // continuing. Mirrors the legacy FormExplorer (which surfaced the
-    // dropdown only when sub-types existed and required a selection); the
-    // baseline MANDATORY_BY_STEP can't express this since the requirement
-    // depends on serviceDefs, not on a fixed field list.
+
+  const updatePhotos = React.useCallback(
+    (updater: (prev: PickedPhoto[]) => PickedPhoto[]) => setPhotos(updater),
+    []
+  );
+  const uploading = photos.some((p) => p.status === "uploading");
+  // A photo that did not upload holds the step until it is retried or
+  // removed: the citizen believes it is attached, and it would be dropped.
+  const uploadFailed = photos.some((p) => p.status === "failed");
+
+  // Step 1: a description with at least three letters, and a complaint type.
+  // Sub-type is conditionally mandatory: if the chosen type has sub-services in
+  // the same menuPath, one must be picked (the legacy FormExplorer rule).
+  const descriptionOk = isFieldValid(formData, "description");
+  const categoryOk = React.useMemo(() => {
+    if (!isFieldValid(formData, "SelectComplaintType")) return false;
+    const mainPath = formData.SelectComplaintType?.menuPath;
+    const subTypeOptions = (Array.isArray(serviceDefs) ? serviceDefs : []).filter(
+      (s: ServiceDef) => s.menuPath === mainPath
+    );
+    return !(subTypeOptions.length > 1 && !formData.SelectSubComplaintType);
+  }, [formData, serviceDefs]);
+
+  // Step 2: the boundary down to its leaf, and a postal code that is either
+  // empty (it is optional) or matches the tenant's configured shape (CCRS#722).
+  const locationOk = isFieldValid(formData, "SelectedBoundary");
+  const postalOk = isPostalCodeValid(formData.postalCode ?? formData?.GeoLocationsPoint?.pincode);
+
+  const stepIsValid =
+    stepIndex === 0
+      ? descriptionOk && categoryOk && !uploading && !uploadFailed
+      : stepIndex === 1
+      ? locationOk && postalOk
+      : true;
+
+  /** Why Next is held, in the words the design uses. */
+  const hint = (() => {
     if (stepIndex === 0) {
-      const mainPath = formData.SelectComplaintType?.menuPath;
-      const subTypeOptions = (Array.isArray(serviceDefs) ? serviceDefs : []).filter(
-        (s: ServiceDef) => s.menuPath === mainPath
-      );
-      if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) {
-        return false;
-      }
+      if (!(formData.description ?? "").trim()) return tr(t, "CS_FILE_HINT_DESCRIBE", "Describe your complaint to continue.");
+      if (!descriptionOk) return tr(t, "CS_FILE_HINT_LETTERS", "Use at least three letters to describe the complaint.");
+      if (!categoryOk) return tr(t, "CS_FILE_HINT_CATEGORY", "Select a category and sub-category to continue.");
+      if (uploading) return tr(t, "CS_FILE_HINT_UPLOADING", "Wait for your photos to finish uploading.");
+      if (uploadFailed) return tr(t, "CS_FILE_HINT_UPLOAD_FAILED", "A photo didn't upload. Retry it or remove it.");
     }
-    // Location step: don't let the user past a pincode that doesn't match the
-    // tenant's configured length (CCRS#722). Empty is allowed (optional); an
-    // invalid map-autofilled value must be corrected before continuing.
-    if (stepIndex === 2) {
-      const effective = formData.postalCode ?? formData?.GeoLocationsPoint?.pincode;
-      if (!isPostalCodeValid(effective)) return false;
+    if (stepIndex === 1) {
+      if (!locationOk) return tr(t, "CS_FILE_HINT_LOCATION", "Select every level of the location to continue.");
+      if (!postalOk) return getPostalCodeErrorMessage(t);
     }
-    return true;
-  }, [stepIndex, formData, serviceDefs]);
+    return "";
+  })();
+
+  // Coming back to the map: Leaflet sized itself while hidden, and redraws on
+  // a window resize.
+  React.useEffect(() => {
+    if (stepIndex !== 1) return undefined;
+    const id = window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    return () => window.cancelAnimationFrame(id);
+  }, [stepIndex]);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0 });
+    // The app scrolls inside .body-container rather than the window.
+    document.querySelector(".body-container")?.scrollTo({ top: 0 });
+  };
 
   function pincodeAllowlistOk(): boolean {
     const wardResolved =
@@ -924,11 +1138,9 @@ const CreatePGRFlowV2: React.FC = () => {
     );
   }
 
+
   function handleContinue() {
-    if (!stepIsValid) {
-      setError(t("CORE_COMMON_REQUIRED_ERRMSG"));
-      return;
-    }
+    if (!stepIsValid || submitting) return;
     if (isLast) {
       if (!pincodeAllowlistOk()) {
         setError(t("CS_COMMON_PINCODE_NOT_SERVICABLE"));
@@ -936,7 +1148,20 @@ const CreatePGRFlowV2: React.FC = () => {
       }
       setSubmitting(true);
       const user = Digit.UserService.getUser();
-      const payload = mapFormDataToRequest(formData, tenantId, user?.info ?? user);
+      const fileStoreIds = photos
+        .filter((p) => p.status === "done" && p.fileStoreId)
+        .map((p) => p.fileStoreId as string);
+      const payload = mapFormDataToRequest({ ...formData, ComplaintImagesPoint: fileStoreIds }, tenantId, user?.info ?? user);
+      // What the confirmation screen summarises, handed over in the route's
+      // state: the create response carries only codes, and the names are known
+      // here. Route state survives the response page remounting.
+      const names = categoryNames(formData, t);
+      const filedSummary = {
+        category: [names.category, names.subCategory].filter(Boolean).join(" · "),
+        location: addressLine(formData, t),
+        photos: fileStoreIds.length,
+        filedAt: Date.now(),
+      };
       createMutation(payload, {
         onError: () => {
           // Outcome, not intent. The submit click is already tagged; whether the
@@ -952,20 +1177,27 @@ const CreatePGRFlowV2: React.FC = () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/digit-ui/citizen/pgr/response`, { filedSummary });
         },
       });
       return;
     }
-    setStepIndex((i) => i + 1);
+    const next = stepIndex + 1;
+    if (next === 1) setLocationVisited(true);
+    setStepIndex(next);
+    scrollToTop();
   }
 
   function handleBack() {
+    if (submitting) return;
+    // On the first step Back leaves the flow, as Cancel did; nothing else on
+    // the page does now.
     if (stepIndex === 0) {
       history.goBack();
       return;
     }
     setStepIndex((i) => i - 1);
+    scrollToTop();
   }
 
   if (isMDMSLoading) {
@@ -1013,86 +1245,89 @@ const CreatePGRFlowV2: React.FC = () => {
     t,
     tenantId,
   };
+  const say = (key: string, fallback: string) => tr(t, key, fallback);
+  const appendSpoken = (text: string) => {
+    const prev = (formData.description ?? "").trim();
+    patch({ description: (prev ? `${prev} ${text}` : text).slice(0, DESCRIPTION_MAX) });
+  };
 
   return (
-    <ScreenContainer>
-      {/* 24px sides, the inset My Complaints and a complaint's page give
-          their heading and cards, so the three line up; the footer below
-          takes the same inset so its buttons sit on the card's edges. */}
-      <div style={{ padding: "1rem 1.5rem 0 1.5rem", flexShrink: 0 }}>
-        <ScreenHeader
-          title={tr(t, "CS_COMMON_FILE_A_COMPLAINT", "File a Complaint")}
+    <ScreenContainer className="cms-file">
+      <div className="cms-file-title">
+        <ScreenHeader title={say("CS_COMMON_FILE_A_COMPLAINT", "File a Complaint")} />
+      </div>
+      <div className="cms-file-card">
+        <FlowStepper
+          index={stepIndex}
+          t={t}
+          onGo={(i) => {
+            if (i < stepIndex && !submitting) {
+              setStepIndex(i);
+              scrollToTop();
+            }
+          }}
         />
-      </div>
-      {/* Step body — sits between the header and the FormFooter and
-          flows at content height. The earlier body-only-scroll
-          variant (`overflow-y: auto` here) clipped dropdown listboxes
-          when a Type/Subtype/Boundary popover wanted to extend past
-          the form bottom on a short form, forcing an internal scroll
-          inside the body instead of letting the popover float over
-          adjacent surface. With overflow visible the popover spills
-          out cleanly; the wrapper still has min-width:0 + flex 1
-          for citizen layout reasons. */}
-      <div
-        style={{
-          flex: "1 1 auto",
-          // Same horizontal rhythm as the other v2 surfaces (My
-          // Complaints, Edit Profile, etc.) — without it, on mobile
-          // the Card kissed the viewport edges left/right with zero
-          // breathing room, since the parent .pgr-citizen-wrapper
-          // sets no inline padding either.
-          padding: "1rem 1.5rem",
-        }}
-      >
-        {stepIndex === 0 && <Step0Type {...stepProps} />}
-        {stepIndex === 1 && <Step1Map {...stepProps} />}
-        {stepIndex === 2 && <Step2Location {...stepProps} />}
-        {stepIndex === 3 && <Step3Description {...stepProps} />}
-        {stepIndex === 4 && <Step4Images {...stepProps} />}
-        {error ? (
-          <div
-            role="alert"
-            className="mt-4 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
+        <FlowStrip index={stepIndex} t={t} />
+        <div className={`cms-file-body is-${STEPS[stepIndex]?.id}`}>
+          <div className={`cms-step-pane${stepIndex === 0 ? "" : " is-hidden"}`}>
+            <DetailsStep
+              {...stepProps}
+              photos={photos}
+              setPhotos={updatePhotos}
+              canSpeak={canSpeak}
+              onVoice={() => setVoiceOpen(true)}
+            />
           </div>
-        ) : null}
+          {locationVisited ? (
+            <div className={`cms-step-pane${stepIndex === 1 ? "" : " is-hidden"}`}>
+              <LocationStep {...stepProps} />
+            </div>
+          ) : null}
+          {stepIndex === 2 ? <ReviewStep {...stepProps} photos={photos} /> : null}
+          {error ? (
+            <div role="alert" className="cms-file-error">
+              {error}
+            </div>
+          ) : null}
+        </div>
+        <div className="cms-footer">
+          {hint ? (
+            <p className="cms-hint" aria-live="polite">
+              {hint}
+            </p>
+          ) : null}
+          <div className="cms-footer-actions">
+            {/* Analytics (CCRS#2007). Named from the step's stable STEPS id rather
+                than stepIndex, so inserting or reordering a step cannot silently
+                re-point an existing funnel step in the reports. */}
+            <Button
+              variant="outline"
+              className="cms-back"
+              onClick={handleBack}
+              disabled={submitting}
+              aria-label={say("CS_COMMON_BACK", "Back")}
+              leading={<ChevronLeft />}
+              data-analytics-event={
+                stepIndex === 0 ? "pgr.file-complaint.cancel" : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
+              }
+            >
+              <span className="cms-back-label">{say("CS_COMMON_BACK", "Back")}</span>
+            </Button>
+            <Button
+              variant="primary"
+              className="cms-next"
+              onClick={handleContinue}
+              disabled={!stepIsValid}
+              loading={submitting}
+              trailing={<ArrowRight />}
+              data-analytics-event={isLast ? "pgr.file-complaint.submit" : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`}
+            >
+              {isLast ? say("CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT", "Submit complaint") : say("CS_COMMON_NEXT", "Next")}
+            </Button>
+          </div>
+        </div>
       </div>
-      <FormFooter className="px-6">
-        {/* Analytics (CCRS#2007). Named from the step's stable STEPS id rather
-            than stepIndex, so inserting or reordering a step cannot silently
-            re-point an existing funnel step in the reports. The shim only emits
-            these when an admin has set trackClicks on the destination. */}
-        <Button
-          variant="outline"
-          onClick={handleBack}
-          type="button"
-          data-analytics-event={
-            stepIndex === 0
-              ? "pgr.file-complaint.cancel"
-              : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
-          }
-        >
-          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : tr(t, "CS_COMMON_BACK", "Back")}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={handleContinue}
-          loading={submitting}
-          disabled={!stepIsValid}
-          type="button"
-          data-analytics-event={
-            isLast
-              ? "pgr.file-complaint.submit"
-              : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`
-          }
-        >
-          {/* The bare NEXT / BACK / SUBMIT keys hold upper-case values; the
-              CS_/CORE_ twins are the sentence-case labels the rest of the
-              app's buttons use. */}
-          {isLast ? tr(t, "CORE_COMMON_SUBMIT", "Submit") : tr(t, "CS_COMMON_NEXT", "Next")}
-        </Button>
-      </FormFooter>
+      <VoiceSheet open={voiceOpen} onClose={() => setVoiceOpen(false)} onUse={appendSpoken} tr={say} />
     </ScreenContainer>
   );
 };
