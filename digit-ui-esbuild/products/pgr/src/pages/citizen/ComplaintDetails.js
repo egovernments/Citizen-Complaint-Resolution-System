@@ -183,7 +183,9 @@ const ComplaintDetailsPage = () => {
   return (
     <div className="v2-scope cms-details">
       <nav className="cms-breadcrumb" aria-label={tr("CS_COMMON_BREADCRUMB", "Breadcrumb")}>
-        <Link to={home}>{tr("CS_COMMON_HOME", "Home")}</Link>
+        <Link to={home} data-analytics-event="pgr.complaint.details-home">
+          {tr("CS_COMMON_HOME", "Home")}
+        </Link>
         <span aria-hidden="true">/</span>
         <span aria-current="page">{pageTitle}</span>
       </nav>
@@ -279,7 +281,9 @@ const ComplaintDetailsPage = () => {
           </section>
 
           <div className="cms-details-actions">
-            <Button onClick={() => history.push(fileAnother)}>{tr("CS_FILE_ANOTHER", "File another complaint")}</Button>
+            <Button onClick={() => history.push(fileAnother)} data-analytics-event="pgr.complaint.details-file-another">
+              {tr("CS_FILE_ANOTHER", "File another complaint")}
+            </Button>
           </div>
         </>
       )}

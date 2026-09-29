@@ -490,6 +490,11 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled 
           if (picked) onChange(picked);
         }}
         options={options}
+        // Filing's boundary levels search at any length, as the complaint type
+        // levels do (CCRS#941): a ward is typed, not scanned for, and a short
+        // list on one tenant is a long one on the next.
+        searchable
+        searchPlaceholder={t("CS_COMMON_SEARCH") === "CS_COMMON_SEARCH" ? "Search" : t("CS_COMMON_SEARCH")}
         // A tenant that seeds CS_COMMON_SELECT still gets its own text; otherwise
         // the verb is translated too, not just the field name.
         placeholder={t("CS_COMMON_SELECT") === "CS_COMMON_SELECT" ? selectPlaceholder(t, t(label)) : t("CS_COMMON_SELECT")}

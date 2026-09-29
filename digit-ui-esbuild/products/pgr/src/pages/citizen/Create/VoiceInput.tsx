@@ -9,6 +9,7 @@
 import * as React from "react";
 import { Button } from "@egovernments/digit-ui-components-v2";
 import { useDialogFocus } from "./useDialogFocus";
+import { trackEvent } from "../../../utils/analytics";
 
 type SpeechState = "idle" | "recording" | "ready" | "error";
 
@@ -237,7 +238,14 @@ const TrashGlyph = () => (
 );
 
 export const MicButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
-  <button type="button" className="cms-mic-button" onClick={onClick} aria-label={label} title={label}>
+  <button
+    type="button"
+    className="cms-mic-button"
+    onClick={onClick}
+    aria-label={label}
+    title={label}
+    data-analytics-event="pgr.file-complaint.voice.open"
+  >
     <MicGlyph size={20} />
   </button>
 );
@@ -260,6 +268,19 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
   const { state, transcript, interim, seconds, errorCode, start, stop, reset } = speech;
   const sheetRef = React.useRef<HTMLDivElement>(null);
   useDialogFocus(open, sheetRef, state);
+
+  // Outcomes, which no click shows: a transcript came back, or recording
+  // failed and why (the recogniser's own error code, never the words).
+  React.useEffect(() => {
+    if (!open) return;
+    if (state === "ready") {
+      trackEvent("pgr.file-complaint.voice.transcribed", { category: "pgr", value: seconds });
+    } else if (state === "error") {
+      trackEvent("pgr.file-complaint.voice.failed", { category: "pgr", label: errorCode || "unknown" });
+    }
+    // Once per state change; seconds and errorCode are read as they stand then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, state]);
 
   React.useEffect(() => {
     if (open) start();
@@ -351,10 +372,10 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
 
         {recording ? (
           <div className="cms-sheet-actions">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} data-analytics-event="pgr.file-complaint.voice.cancel">
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
-            <Button variant="destructive" leading={<StopGlyph />} onClick={stop}>
+            <Button variant="destructive" leading={<StopGlyph />} onClick={stop} data-analytics-event="pgr.file-complaint.voice.stop">
               {tr("CS_VOICE_STOP", "Stop")}
             </Button>
           </div>
@@ -366,27 +387,36 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
                 onUse(transcript);
                 onClose();
               }}
+              data-analytics-event="pgr.file-complaint.voice.use"
             >
               {tr("CS_VOICE_USE", "Upload")}
             </Button>
             <div className="cms-sheet-actions">
-              <Button variant="outline" leading={<RetakeGlyph />} onClick={start}>
+              <Button variant="outline" leading={<RetakeGlyph />} onClick={start} data-analytics-event="pgr.file-complaint.voice.retake">
                 {tr("CS_VOICE_RETAKE", "Retake")}
               </Button>
-              <Button variant="outline" leading={<TrashGlyph />} onClick={onClose} style={DANGER_OUTLINE}>
+              <Button
+                variant="outline"
+                leading={<TrashGlyph />}
+                onClick={onClose}
+                style={DANGER_OUTLINE}
+                data-analytics-event="pgr.file-complaint.voice.delete"
+              >
                 {tr("CS_INFO_DELETE", "Delete")}
               </Button>
             </div>
-            <Button variant="ghost" width="full" onClick={onClose}>
+            <Button variant="ghost" width="full" onClick={onClose} data-analytics-event="pgr.file-complaint.voice.cancel">
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
           </div>
         ) : failed ? (
           <div className="cms-sheet-actions">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} data-analytics-event="pgr.file-complaint.voice.cancel">
               {tr("CS_COMMON_CANCEL", "Cancel")}
             </Button>
-            <Button onClick={start}>{tr("CS_VOICE_RETRY", "Try again")}</Button>
+            <Button onClick={start} data-analytics-event="pgr.file-complaint.voice.retry">
+              {tr("CS_VOICE_RETRY", "Try again")}
+            </Button>
           </div>
         ) : null}
       </div>

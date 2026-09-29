@@ -409,6 +409,10 @@ function ComplaintHierarchyPicker({
               value={sel[i] ?? undefined}
               disabled={disabled}
               onValueChange={(value: string) => handleChange(i, value)}
+              // Every filing list searches, whatever its length, as the
+              // employee form's do (CCRS#941).
+              searchable
+              searchPlaceholder={tr(t, "CS_COMMON_SEARCH", "Search")}
               placeholder={
                 disabled
                   ? tr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
@@ -477,6 +481,8 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
             <Select
               id="complaint-type"
               value={data.SelectComplaintType?.menuPath}
+              searchable
+              searchPlaceholder={tr(t, "CS_COMMON_SEARCH", "Search")}
               onValueChange={(value: string) => {
                 const picked = types.find((tp) => tp.menuPath === value);
                 patch({ SelectComplaintType: picked, SelectSubComplaintType: null });
@@ -497,6 +503,8 @@ function CategoryFields({ data, patch, serviceDefs, hierarchyDef, nodes, t }: St
               <Select
                 id="complaint-subtype"
                 value={data.SelectSubComplaintType?.serviceCode}
+                searchable
+                searchPlaceholder={tr(t, "CS_COMMON_SEARCH", "Search")}
                 onValueChange={(value: string) => {
                   const picked = subTypes.find((s) => s.serviceCode === value);
                   patch({ SelectSubComplaintType: picked });
@@ -892,6 +900,7 @@ function FlowStepper({ index, t, onGo }: { index: number; t: (k: string) => stri
                 disabled={i >= index}
                 aria-current={i === index ? "step" : undefined}
                 onClick={() => onGo(i)}
+                data-analytics-event={`pgr.file-complaint.stepper.${step.id}`}
               >
                 <span className="cms-step-dot">{i < index ? <CheckMark /> : i + 1}</span>
                 <span className="cms-step-label">{tr(t, step.key, step.fallback)}</span>

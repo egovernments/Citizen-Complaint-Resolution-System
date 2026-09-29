@@ -6898,5 +6898,11 @@
         "message": "Upload",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SEARCH",
+        "message": "Search",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
