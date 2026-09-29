@@ -636,8 +636,11 @@ class PGRService {
       const messageBundle = {};
 
       for (const code of localityCodes) {
-        // Remove ADMIN_ prefix for PGR usage
-        const localityCodeForPGR = code.replace(/^ADMIN_/, '');
+        // The boundary code is exactly what PGR validates the locality against, so it is
+        // carried through untouched. Previously a leading ADMIN_ was stripped here and
+        // re-added in persistComplaint, which only round-tripped for ADMIN_-prefixed codes:
+        // W1_ADMIN_WARD went out as ADMIN_W1_ADMIN_WARD and PGR rejected the complaint.
+        const localityCodeForPGR = code;
         localities.push(localityCodeForPGR);
 
         // Use localized name if available, otherwise generate a readable name from the code
@@ -954,7 +957,7 @@ class PGRService {
     requestBody["RequestInfo"]["authToken"] = authToken;
     requestBody["service"]["tenantId"] = city;
     requestBody["service"]["address"]["city"] = city;
-    requestBody["service"]["address"]["locality"]["code"] = "ADMIN_" + locality;
+    requestBody["service"]["address"]["locality"]["code"] = locality;
 
     // Add localized locality name if available
     if (slots.localityName) {
@@ -981,9 +984,8 @@ class PGRService {
         if (response.ok) {
           const data = await response.json();
           if (data.messages) {
-            // Look for ADMIN_<locality> code
-            const localityCode = `ADMIN_${locality}`;
-            const message = data.messages.find(m => m.code === localityCode);
+            // digit-tenants keys locality names by the boundary code itself
+            const message = data.messages.find(m => m.code === locality);
             if (message) {
               requestBody["service"]["address"]["locality"]["name"] = message.message;
             }

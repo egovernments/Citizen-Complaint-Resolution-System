@@ -366,7 +366,20 @@ const sevaMachine = Machine({
                   target: "#changeName",
                   cond: (context) => context.intention == "No",
                 },
+                {
+                  target: "error",
+                },
               ],
+            },
+            error: {
+              onEntry: assign((context, event) => {
+                let message = dialog.get_message(
+                  dialog.global_messages.error.retry,
+                  context.user.locale
+                );
+                dialog.sendMessage(context, message, true);
+              }),
+              always: "question",
             },
           },
         },
