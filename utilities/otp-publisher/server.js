@@ -13,7 +13,8 @@
 //
 // Response shapes mirror the previous Kong mock so the digit-ui SPA
 // doesn't notice anything has changed:
-//   _send  → { ResponseInfo:{...}, otp:{otp:"", UUID:"<id>", isValidationSuccessful:true} }
+//   _send  → { ResponseInfo:{...}, otp:{otp:"", UUID:"<id>", isValidationSuccessful:true,
+//              maskedMobileNumber:"*****5679"} }
 //   _validate → same shape; isValidationSuccessful reflects the Redis check,
 //     and a failed check is HTTP 400 (egov-otp's status for a bad OTP)
 //
@@ -76,6 +77,11 @@ const generateOtp = () => {
   // 6-digit, zero-padded
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
 };
+
+// Last four digits only, e.g. "712345679" -> "*****5679". Lets the employee
+// Forgot Password page say where the OTP went without exposing the number.
+const maskMobile = (mobile) =>
+  mobile.length > 4 ? `${'*'.repeat(mobile.length - 4)}${mobile.slice(-4)}` : '*'.repeat(mobile.length);
 
 const keyFor = (mobile, tenantId) => `${REDIS_KEY_PREFIX}${tenantId}:${mobile}`;
 
@@ -189,7 +195,7 @@ app.post('/user-otp/v1/_send', async (req, res) => {
     await redis.set(keyFor(mobile, tenantId), otp, 'EX', OTP_TTL_SECONDS);
     const eventId = await publishEvent({ tenantId, mobile, otp, userType: extractType(req.body) });
     log('info', 'otp.sent', { tenantId, mobile_redacted: mobile.replace(/.(?=.{2})/g, '*'), eventId });
-    res.json(mockOk({ UUID: eventId }));
+    res.json(mockOk({ UUID: eventId, maskedMobileNumber: maskMobile(mobile) }));
   } catch (e) {
     log('error', 'otp.send.failed', { err: e.message });
     // Mirror the legacy mock: still respond 200 (the SPA polls) so a transient
