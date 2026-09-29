@@ -25,7 +25,7 @@ SPA → Kong → otp-publisher → /otp/v1/_validate → Redis lookup → 200/40
 
 | Path | What it does |
 |---|---|
-| `POST /user-otp/v1/_send` | Generates a 6-digit OTP, caches `otp:<tenantId>:<mobile>` with `OTP_TTL_SECONDS` TTL, publishes `OTP.SEND` to Kafka, responds with the legacy mock-shape envelope so the SPA notices nothing. When the body has no `mobileNumber` but has a `userName` (the employee Forgot Password screen), the mobile number and tenantId are looked up from egov-user `/user/_search`, as the stock user-otp service does. Unknown user or no mobile on the account → 400; egov-user unreachable → 502. |
+| `POST /user-otp/v1/_send` | Generates a 6-digit OTP, caches `otp:<tenantId>:<mobile>` with `OTP_TTL_SECONDS` TTL, publishes `OTP.SEND` to Kafka, responds with the legacy mock-shape envelope so the SPA notices nothing. When the body has no `mobileNumber` but has a `userName` (the employee Forgot Password screen), the mobile number and tenantId are looked up from egov-user `/user/_search`, as the stock user-otp service does. Unknown user or no mobile on the account → 400; egov-user unreachable → 502. `otp.maskedMobileNumber` carries the last four digits of the recipient, which the employee Forgot Password page displays. |
 | `POST /otp/v1/_validate` | Looks up the cached OTP and confirms (single-use — deletes on success). Falls back to `STATIC_OTP` if set. A wrong, expired or already-used OTP is HTTP 400, as egov-otp answers it — egov-user's password-reset path rejects on the status code, not the `isValidationSuccessful` flag. |
 | `GET  /healthz` | Liveness — returns `{"ok":true}` when Redis + Kafka are up. |
 
