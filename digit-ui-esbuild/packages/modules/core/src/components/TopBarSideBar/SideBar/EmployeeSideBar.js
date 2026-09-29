@@ -14,7 +14,7 @@ import { AppSideNav } from "./AppSideNav";
  */
 const PINNED_STORAGE_KEY = "ccrs.employee.sidebar-pinned";
 
-const EmployeeSideBar = ({ t, crestUrl, crestAlt }) => {
+const EmployeeSideBar = ({ t, onLogout }) => {
   const { items } = useEmployeeNavItems();
   const history = useHistory();
   const isMultiRootTenant = Digit.Utils.getMultiRootTenant();
@@ -27,17 +27,16 @@ const EmployeeSideBar = ({ t, crestUrl, crestAlt }) => {
   };
 
   // No early return while the nav items load. A spinner in place of the rail
-  // meant the crest, the toggle and the rail's width all arrived late; the
-  // rail renders at once and its rows fill in.
+  // meant the toggle and the rail's width arrived late; the rail renders at
+  // once and its rows fill in.
   return (
     <MediaQuery minWidth={768}>
       <AppSideNav
         t={t}
         items={items}
         storageKey={PINNED_STORAGE_KEY}
-        crestUrl={crestUrl}
-        crestAlt={crestAlt}
         onItemSelect={onItemSelect}
+        onLogout={onLogout}
       />
     </MediaQuery>
   );
