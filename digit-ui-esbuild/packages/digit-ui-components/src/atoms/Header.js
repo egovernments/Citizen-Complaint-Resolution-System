@@ -21,6 +21,8 @@ const Header = ({
   // button and the marks: `actionFields` never render below 768px. Right-
   // aligned, in order. Absent, the phone bar is unchanged.
   mobileActionFields,
+  // Opt-in: the analytics event the phone bar's menu button records.
+  menuAnalyticsEvent,
 }) => {
   // Phone below 768px, the width the rails mount from (`MediaQuery
   // minWidth={768}`, `min-width: 48rem`); at exactly 768 both shells used to
@@ -48,6 +50,7 @@ const Header = ({
         style={style}
       >
         <HamburgerButton
+          analyticsEvent={menuAnalyticsEvent}
           className={`digit-topbar-hamburger ${theme || ""} ${
             onHamburgerClick ? "clickable" : ""
           }`}
@@ -173,6 +176,7 @@ Header.propTypes = {
   onLogoClick: PropTypes.func,
   onHamburgerClick: PropTypes.func,
   mobileActionFields: PropTypes.array,
+  menuAnalyticsEvent: PropTypes.string,
   props: PropTypes.object,
   logo: PropTypes.string,
 };

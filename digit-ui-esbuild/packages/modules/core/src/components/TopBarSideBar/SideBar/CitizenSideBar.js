@@ -9,6 +9,7 @@ import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
 import { DrawerFoot } from "./SidebarBrand";
+import { trackEvent } from "../../analytics";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
@@ -468,7 +469,16 @@ export const CitizenSideBar = ({
       // bottom and the drawer top. CSS in overrides.css aligns the
       // drawer flush against the actual topbar height instead.
       styles={{ height: "93%" }}
-      onLogout={onLogout}
+      // The drawer's Logout is the shared component's own button, which takes
+      // no analytics tag, so its outcome is sent from here.
+      onLogout={
+        onLogout
+          ? () => {
+              trackEvent("shell.drawer.logout", { category: "shell" });
+              onLogout();
+            }
+          : undefined
+      }
       hideUserManuals={true}
       profile={profilePic ? profilePic : undefined}
       isSearchable={true}
