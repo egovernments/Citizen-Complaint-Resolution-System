@@ -303,3 +303,38 @@ test("REGRESSION NEW1: toAddressableDigits round-trips every reconcilable form",
     assert.equal(s.toAddressableDigits(raw, cfg), want, `failed for ${raw}`);
   }
 });
+
+// Exactly the two active rows on bometfeedbackhub's `ke` root, which serves both
+// ke.bomet (+254) and ke.india (+91).
+const KE_TWO_ROWS = [
+  { isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^(0?[17][0-9]{8}|[6-9][0-9]{9})$" } },
+  { isActive: true, data: { countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$" } },
+];
+
+function loadKeTwoRows() {
+  return loadService({
+    fetchImpl: async () => ({ ok: true, json: async () => ({ mdms: KE_TWO_ROWS }) }),
+  });
+}
+
+test("REGRESSION: a +91 citizen is not rejected when +254 is the state's first row", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(ke.countryCode, "+254");
+  assert.deepEqual(ke.alternates.map((a) => a.countryCode), ["+91"]);
+  // Previously null: +254 was the only rule tried, and 916307817430 matches neither form.
+  assert.equal(s.toNational("whatsapp:+916307817430", ke), "6307817430");
+});
+
+test("the primary row still wins whenever it can reconcile the number", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(s.toNational("whatsapp:+254712345678", ke), "712345678");
+  assert.equal(s.toNational("0712345678", ke), "0712345678");
+});
+
+test("a number no row accepts is still rejected", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(s.toNational("whatsapp:+447700900123", ke), null);
+});

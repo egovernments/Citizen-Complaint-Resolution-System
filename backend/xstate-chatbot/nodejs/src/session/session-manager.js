@@ -58,6 +58,9 @@ async function getAuthenticatedSandboxUser(mobileNumber, tenantId) {
 class SessionManager {
   async fromUser(reformattedMessage) {
     let mobileNumber = reformattedMessage.user.mobileNumber;
+    // Channel-supplied reply address; egov-user's record does not carry it, so it is
+    // re-attached once the user is resolved.
+    let whatsAppAddress = reformattedMessage.user.whatsAppAddress;
     let user;
     let userId;
     let messageInput = reformattedMessage.message.input?.toLowerCase();
@@ -310,7 +313,7 @@ class SessionManager {
         reformattedMessage.extraInfo.tenantId = config.rootTenantId;
       } catch (error) {
         channelProvider.sendMessageToUser(
-          { mobileNumber: mobileNumber },
+          { mobileNumber: mobileNumber, whatsAppAddress: whatsAppAddress },
           [`Sorry, there was an error processing your request. Please check your mobile number format (should be 10 digits) and try again. Error: ${error.message}`],
           reformattedMessage.extraInfo
         );
@@ -323,6 +326,7 @@ class SessionManager {
     if (!user || !userId) {
       return;
     }
+    if (whatsAppAddress) user.whatsAppAddress = whatsAppAddress;
 
     // Use user.userId (KeyCloak UUID) as the session storage key in both sandbox
     // and normal mode. This matches the legacy normal flow and keeps onTransition's

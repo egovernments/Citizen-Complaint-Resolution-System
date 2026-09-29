@@ -48,3 +48,22 @@ test("REGRESSION #6/#7: an unset sender fails loudly instead of using the eGov d
     assert.throws(() => loadProvider(blank).senderAddress(), /TWILIO_WHATSAPP_NUMBER is not set/);
   }
 });
+
+test("REGRESSION: replies go to the address the citizen wrote from, not a re-prefixed national number", async () => {
+  const provider = loadProvider("whatsapp:+14155238886");
+  // ke's first row: +254, whose regex also admits 10-digit Indian numbers.
+  const mobile = require(mobilePath);
+  mobile.getConfig = async () => ({ countryCode: "+254", mobileNumberRegex: "^(0?[17][0-9]{8}|[6-9][0-9]{9})$" });
+  const sent = [];
+  provider.sendTwilioRequest = async (params) => sent.push(params.get("To"));
+
+  const citizen = { mobileNumber: "6307817430", whatsAppAddress: "whatsapp:+916307817430" };
+  await provider.sendMessageToUser(citizen, ["hello"], { tenantId: "ke" });
+  // Previously the national number was re-prefixed with the tenant default: +2546307817430.
+  assert.deepEqual(sent, ["whatsapp:+916307817430"]);
+
+  // Without a captured address the old national-number path is unchanged.
+  sent.length = 0;
+  await provider.sendMessageToUser({ mobileNumber: "712345678" }, ["hello"], { tenantId: "ke" });
+  assert.deepEqual(sent, ["whatsapp:+254712345678"]);
+});

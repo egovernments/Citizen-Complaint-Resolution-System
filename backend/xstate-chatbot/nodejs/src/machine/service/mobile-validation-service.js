@@ -108,11 +108,19 @@ class MobileValidationService {
     const chosen = active.find((r) => r.data.default === true) || active[0];
     if (!chosen || !chosen.data.countryCode) return null;
 
-    return {
-      countryCode: String(chosen.data.countryCode).trim(),
-      mobileNumberRegex:
-        chosen.data.mobileNumberRegex || config.mobileValidation.defaultRegex,
-    };
+    const toConfig = (row) => ({
+      countryCode: String(row.data.countryCode).trim(),
+      mobileNumberRegex: row.data.mobileNumberRegex || config.mobileValidation.defaultRegex,
+    });
+    // A state can carry more than one active row: ke serves ke.bomet (+254) and ke.india
+    // (+91) from one root. The chosen row stays authoritative; the others are only tried
+    // by toNational when it cannot reconcile an inbound number, so a +91 citizen is not
+    // rejected just because +254 happened to be listed first.
+    const alternates = active
+      .filter((r) => r !== chosen && r.data.countryCode)
+      .map(toConfig);
+
+    return { ...toConfig(chosen), alternates };
   }
 
   /** Digits only — drops `whatsapp:`, `+`, spaces, dashes and brackets. */
@@ -152,6 +160,18 @@ class MobileValidationService {
    * rather than silently file a complaint against a mangled number.
    */
   toNational(raw, mobileConfig) {
+    const national = this.nationalFor(raw, mobileConfig);
+    if (national) return national;
+    // Only when the primary rule cannot reconcile the number: try the state's other rows.
+    for (const alternate of (mobileConfig && mobileConfig.alternates) || []) {
+      const viaAlternate = this.nationalFor(raw, alternate);
+      if (viaAlternate) return viaAlternate;
+    }
+    return null;
+  }
+
+  /** toNational against a single rule. */
+  nationalFor(raw, mobileConfig) {
     const digits = this.digitsOnly(raw);
     if (!digits) return null;
 
