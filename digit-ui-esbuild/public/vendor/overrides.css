@@ -1087,12 +1087,9 @@ html .digit-topbar:not(.digit-employee-header) {
  * equal, so this is the column's centre) and travels with the rail. Only
  * where a rail is mounted: the signed-out pages have none. */
 @media (min-width: 48rem) {
-  .citizen:has(> .center-container.citizen-home-container > .digit-sidebar) > .citizen-home-footer {
-    padding-left: calc(3rem + 16px) !important;
+  html[data-sidebar-pinned] .citizen > .citizen-home-footer {
+    padding-left: calc(var(--app-rail-w) + 16px) !important;
     transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  html[data-sidebar-pinned="true"] .citizen:has(> .center-container.citizen-home-container > .digit-sidebar) > .citizen-home-footer {
-    padding-left: calc(15rem + 16px) !important;
   }
 }
 
@@ -2080,7 +2077,9 @@ button[class*="toast-close"] svg,
  * already overridden to 56px, so every employee page carried 32px of dead
  * space above its content instead of the 16px the comment claimed. */
 :root {
-  --employee-header-h: 76px;
+  /* 64px, as in the design; it was 76px while the crest sat in a full-height
+   * rail's head, which had to share the bar's height. */
+  --employee-header-h: 64px;
   /* Breathing room between the fixed bar and the first content. */
   --employee-header-gap: 16px;
 }
@@ -3261,7 +3260,7 @@ button[class*="toast-close"] svg,
 
 .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
   margin-left: 0 !important;
-  padding-left: var(--digit-sidebar-width, 3rem) !important;
+  padding-left: var(--app-rail-w, 0px) !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -7495,6 +7494,15 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
     padding-right: 16px !important;
   }
 }
+/* With a rail on the page the left gutter starts where the rail ends, so the
+ * column centres in the space beside it rather than across the whole window;
+ * at 272px open the rail otherwise reached the heading. */
+@media (min-width: 48rem) {
+  html[data-sidebar-pinned] .employee .grounded-container > .v2-scope {
+    padding-left: calc(var(--app-rail-w) + 24px) !important;
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
 
 
 /* ----------------------------------------------------------------------
@@ -7927,18 +7935,17 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
 /* The sidebar only exists at >=768px (EmployeeSideBar renders inside
  * `MediaQuery minWidth={768}`), so there is nothing to inset below that. */
 @media (min-width: 48rem) {
-  /* Vendor: `margin-left: 72px; width: calc(100% - 83px)` — a 48px rail plus
-   * a 24px gutter. Pinning grows the rail to 240px, so both values move by
-   * exactly that delta. Derived from the two widths handed to SideNav rather
-   * than restated, so the panel and the page cannot disagree about how far
-   * they moved. */
+  /* Vendor: `margin-left: 72px; width: calc(100% - 83px)`, a 48px rail plus
+   * a 24px gutter and 11px on the right. The same gutters, around whatever
+   * width the rail has now (--app-rail-w), so the page and the panel cannot
+   * disagree about how far they moved. */
   .employee .main {
     transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
                 width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  html[data-sidebar-pinned="true"] .employee .main {
-    margin-left: calc(72px + (15rem - 3rem)) !important;
-    width: calc(100% - 83px - (15rem - 3rem)) !important;
+  html[data-sidebar-pinned] .employee .main {
+    margin-left: calc(var(--app-rail-w) + 24px) !important;
+    width: calc(100% - var(--app-rail-w) - 35px) !important;
   }
 }
 
@@ -8083,11 +8090,12 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
  * expanded — the icons appeared to jitter under the sliding edge. One padding
  * for both states fixes the column in place; 12px is what centres a 24px icon
  * in the 48px collapsed rail, so the closed state is unchanged and only the
- * open state stops moving. */
+ * open state stops moving. The rail is 80px closed now, so 28px is what
+ * centres the icon; the value changed, the reasoning did not. */
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-item,
 :is(.employee, .citizen) .digit-sidebar.hovered .digit-sidebar-item,
 :is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-item {
-  padding: 8px 12px !important;
+  padding: 8px 28px !important;
 }
 
 /* Optical alignment of the bar's right edge.
@@ -8352,111 +8360,112 @@ html .header-dropdown-option:focus-visible {
 }
 
 /* ======================================================================
- * Employee sidebar: full height, crest and toggle at its head, eGov at its
- * foot, and a Complaints section (#2038 review, round 3).
+ * App shell: full-width top bar, rail below it (#2038 design).
  *
- * The rail used to sit under the top bar and open on hover. It now runs the
- * full height of the window, the top bar starts where it ends, and the toggle
- * beside the crest is the only thing that opens or closes it (SideNav's
- * `hoverExpand={false}`). The crest and the eGov lockup leave the top bar for
- * the rail's head and foot.
+ * Both apps. The top bar spans the window again with the tenant crest at its
+ * left, on a white tile; the rail starts under it and opens or closes only
+ * from the blue square on its edge. Its foot carries Logout and the eGov
+ * lockup, so the bar no longer shows the lockup.
  *
- * The nav icons must not move between the two states (#2038: "the icon size
- * or gap or position should ideally not jitter"), so the head keeps the top
- * bar's height either way: crest and toggle share one row when open, and stack
- * a size smaller when closed. The section label and its closed-state divider
- * are the same height for the same reason.
+ * The rail's two widths are declared once. `--app-rail-w` follows the rail's
+ * state (published on <html> by AppSideNav) and is what every page inset
+ * reads, so the page, the footer and the toggle cannot disagree with the
+ * panel about how far it moved. Unset (no rail, or a phone) it is 0.
  * ---------------------------------------------------------------------- */
+:root {
+  --app-rail-open: 17rem;
+  --app-rail-closed: 5rem;
+  --app-rail-w: 0px;
+}
 @media (min-width: 48rem) {
-  :is(.employee, .citizen) .digit-sidebar {
-    top: 0 !important;
-    height: 100vh !important;
+  html[data-sidebar-pinned="false"] {
+    --app-rail-w: var(--app-rail-closed);
   }
-  /* Same widths and curve as the rail, so the bar's edge travels with it. */
-  /* Keyed on the flag's presence: it exists only while a rail is mounted, so
-   * pages without one (the citizen sign-in) keep a full-width bar. */
-  html[data-sidebar-pinned] :is(.employee, .citizen) .digit-topbar.digit-employee-header {
-    left: 3rem !important;
-    width: calc(100% - 3rem) !important;
-    max-width: none !important;
-    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-                width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  html[data-sidebar-pinned="true"] {
+    --app-rail-w: var(--app-rail-open);
   }
-  html[data-sidebar-pinned="true"] :is(.employee, .citizen) .digit-topbar.digit-employee-header {
-    left: 15rem !important;
-    width: calc(100% - 15rem) !important;
-  }
-  /* Crest and lockup now live in the rail. With the brand block gone, the
-   * actions keep their place at the right. Only where a rail is mounted: a
-   * page without one (the citizen language and location pickers) would
-   * otherwise show no tenant mark at all. */
-  html[data-sidebar-pinned] :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-logo-ulb-wrapper {
+
+  /* The lockup lives in the rail's foot; the bar keeps only the crest. A
+   * tenant with no crest image at all keeps the logo slot rather than an
+   * empty corner. */
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header:not(.digit-employee-header--no-crest) .digit-topbar-logo {
     display: none !important;
   }
-  html[data-sidebar-pinned] :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-action-fields {
-    margin-left: auto !important;
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb {
+    border: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb-label {
+    color: var(--color-header-text, #ffffff);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb img.state {
+    width: 40px !important;
+    height: 40px !important;
+    max-height: 40px !important;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 2px;
+    box-sizing: border-box;
   }
 }
 
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head {
-  flex: 0 0 auto;
-  height: var(--employee-header-h, 76px);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 12px 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+/* The toggle: a blue square on the rail's edge, just under the bar. Fixed to
+ * the viewport (see RailToggle), so it is placed from the same width variable
+ * and eased on the same curve as the rail. Desktop only, like the rail. */
+.digit-rail-toggle {
+  display: none;
 }
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head.closed {
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-  padding: 0;
+@media (min-width: 48rem) {
+  html[data-sidebar-pinned] .digit-rail-toggle {
+    position: fixed;
+    top: calc(var(--employee-header-h, 64px) + 18px);
+    left: calc(var(--app-rail-w) - 16px);
+    z-index: 1001;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 2px solid #ffffff;
+    border-radius: 9px;
+    background: var(--color-primary-2, #2563EB);
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
+    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s ease;
+  }
+  /* No theme publishes a hover shade of primary-2, so it is derived. */
+  html[data-sidebar-pinned] .digit-rail-toggle:hover {
+    background: color-mix(in srgb, var(--color-primary-2, #2563EB) 85%, #000000);
+  }
+  html[data-sidebar-pinned] .digit-rail-toggle:focus-visible {
+    outline: 2px solid var(--color-primary-2, #2563EB);
+    outline-offset: 2px;
+  }
+  .digit-rail-toggle svg,
+  .digit-rail-toggle svg * {
+    fill: none !important;
+    stroke: currentColor !important;
+  }
 }
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-crest {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: 4px;
-  flex: 0 0 auto;
+
+/* The selected row is plain blue: vendor adds an 8px white strip down its
+ * left edge (a ::before), which the design does not have. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected::before {
+  display: none !important;
 }
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-crest {
-  width: 26px;
-  height: 26px;
-}
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-sidebar-text-default, #D1D5DB);
-  cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-head.closed .digit-sidebar-toggle {
-  width: 28px;
-  height: 28px;
-}
-/* Stroke-only glyph; the rail's blanket `svg { fill }` rules would fill it solid. */
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle svg,
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle svg * {
-  fill: none !important;
-  stroke: currentColor !important;
-}
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-sidebar-selected-text, #FFFFFF);
-}
-:is(.employee, .citizen) .digit-sidebar .digit-sidebar-toggle:focus-visible {
-  outline: 2px solid var(--color-sidebar-selected-text, #FFFFFF);
-  outline-offset: 2px;
+
+/* Rows start 22px under the bar, as designed; the rail has no head now. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-items-container {
+  padding-top: 22px !important;
 }
 
 /* A section is a label over its rows; the rows keep the list's own 4px rhythm.
@@ -8510,16 +8519,71 @@ html .header-dropdown-option:focus-visible {
   );
 }
 
+/* Foot: Logout, then the eGov lockup. Logout's icon sits on the same 28px
+ * line as the row icons above it, open or closed. */
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot {
   margin-top: auto;
   flex: 0 0 auto;
-  padding: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 46px;
+  margin: 6px 12px 10px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  /* The rail's own row colour, as its navigation rows use. */
+  color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.88));
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout svg * {
+  flex: 0 0 auto;
+  fill: none !important;
+  stroke: currentColor !important;
+}
+/* The lockup's band is exactly as tall as the page's "Powered by DIGIT"
+ * footer (--v2-page-footer-height, 40px), so its top rule runs level with the
+ * footer's top border across the whole window. Same navy as the rail: a
+ * darker band read as a separate strip stuck to the rail's foot. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-egov-band {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: var(--v2-page-footer-height, 40px);
+  box-sizing: border-box;
+  padding: 0 0 0 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov-band {
+  justify-content: center;
+  padding-left: 0;
 }
 .digit-sidebar-foot .digit-sidebar-egov {
   display: block;
-  height: 22px;
+  height: 18px;
   width: auto;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov {
+  height: 14px;
 }
 
 /* Phones: the eGov lockup moves to the drawer's foot, and the crest keeps the
@@ -8568,17 +8632,7 @@ html .header-dropdown-option:focus-visible {
 :is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
 }
-.digit-msb-sidebar .digit-sidebar-foot {
-  padding: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
-.digit-msb-sidebar .digit-msb-section::after {
-  content: "";
-  display: block;
-  height: 1px;
-  margin: 8px 16px 4px;
-  background: rgba(255, 255, 255, 0.18);
-}
+
 .digit-msb-sidebar .digit-msb-section-label {
   padding: 16px 16px 6px;
   font-size: 11px;
@@ -8599,10 +8653,9 @@ html .header-dropdown-option:focus-visible {
  * employee surface is a margined `.main`. The old gutter was a fixed 260px
  * keyed on the v2 sidebar (`aside.v2-scope`), which no longer renders.
  *
- * The rail is a direct child of the row (MediaQuery adds no wrapper), so
- * `:has(> .digit-sidebar)` is exactly "a rail is on this page": the signed-
- * out sign-in pages keep a centred layout. Widths and curve are the rail's,
- * so the page travels with it.
+ * A rail is on the page exactly when <html> carries `data-sidebar-pinned`
+ * (AppSideNav sets it while mounted), so the signed-out sign-in pages keep a
+ * centred layout. The inset reads --app-rail-w, so the page travels with it.
  * ---------------------------------------------------------------------- */
 /* "Powered by DIGIT" sat 74px above the bottom of the window on short pages:
  * the row's min-height subtracts the bar's height as well as the footer's,
@@ -8627,15 +8680,20 @@ html .header-dropdown-option:focus-visible {
 @media (min-width: 48rem) {
   /* The right gutter mirrors the 20px left of the page, so a card sits as
    * far from the window's edge as from the rail. */
-  .center-container.citizen-home-container:has(> .digit-sidebar) {
-    padding-left: calc(3rem + 20px) !important;
+  html[data-sidebar-pinned] .citizen .center-container.citizen-home-container {
+    padding-left: calc(var(--app-rail-w) + 20px) !important;
     padding-right: 20px !important;
     align-items: flex-start !important;
     transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  html[data-sidebar-pinned="true"] .center-container.citizen-home-container:has(> .digit-sidebar) {
-    padding-left: calc(15rem + 20px) !important;
-  }
+}
+/* The rail renders beside the page now, not inside it, and the vendor sheet
+ * lifts this container to z-index 100 in the citizen flex column: its left
+ * padding sat over the rail and took every click on it. With a rail on the
+ * page the container takes no stacking level of its own, so the rail stays
+ * clickable and a dialog opened in the page can cover the bar too. */
+html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container {
+  z-index: auto;
 }
 
 /* A module's landing page (/citizen/pgr-home): the Back row the module's
@@ -8724,4 +8782,183 @@ html .header-dropdown-option:focus-visible {
 }
 .citizen:has(.citizen-sign-in-card) .digit-topbar .digit-header-action-fields {
   margin-left: auto !important;
+}
+
+/* ======================================================================
+ * Phone bar and drawer (#2038 design and mobile review).
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  /* Menu button: a translucent rounded square, and no blue box on tap.
+   * The box was the browser's tap highlight on a clickable div, and the
+   * focus ring left behind after a pointer tap; keyboard focus still shows. */
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger {
+    display: grid !important;
+    place-items: center;
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 auto;
+    border-radius: 9px;
+    /* A tint of the bar's own text colour, so a light-header tenant gets a
+     * dark chip rather than white on white. */
+    background: color-mix(in srgb, var(--color-header-text, #ffffff) 12%, transparent);
+    -webkit-tap-highlight-color: transparent;
+  }
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:focus:not(:focus-visible) {
+    outline: none;
+  }
+  /* Vendor's `.clickable:hover` draws a 1px brand border, and on a touch
+   * screen hover sticks after the tap, so the button kept a blue box. */
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:is(:hover, :active) {
+    border: 0 !important;
+  }
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  /* Crest on the same white rounded square as the desktop bar. */
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
+    width: 38px !important;
+    height: 38px !important;
+    max-height: 38px !important;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 2px;
+    box-sizing: border-box;
+  }
+  :is(.employee, .citizen) .digit-topbar .digit-header-mobile-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* Language pill (phone bar). */
+.digit-language-pill {
+  position: relative;
+}
+.digit-language-pill-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  /* The bar's text colour and a tint of it, as the menu button. */
+  background: color-mix(in srgb, var(--color-header-text, #ffffff) 12%, transparent);
+  color: var(--color-header-text, #ffffff);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.digit-language-pill-button:focus:not(:focus-visible) {
+  outline: none;
+}
+.digit-language-pill-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.digit-language-pill-button svg,
+.digit-language-pill-button svg * {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+.digit-language-pill-menu {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: 160px;
+  max-width: calc(100vw - 48px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 14px 32px rgba(17, 24, 39, 0.24);
+  overflow: hidden;
+  z-index: 10000;
+}
+.digit-language-pill-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid #f1f3f7;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.digit-language-pill-menu li:last-child .digit-language-pill-option {
+  border-bottom: 0;
+}
+.digit-language-pill-option.active {
+  background: #f3f6fc;
+  font-weight: 600;
+}
+/* The menu opens inside the bar, whose rules paint every descendant with the
+ * header's white text (`.digit-topbar.light *`); on the white menu that made
+ * the names invisible. */
+.digit-topbar .digit-language-pill-menu .digit-language-pill-option,
+.digit-topbar .digit-language-pill-menu .digit-language-pill-option span {
+  color: #111827 !important;
+}
+.digit-language-pill-option svg,
+.digit-language-pill-option svg * {
+  fill: none !important;
+  stroke: var(--color-primary-2, #2563EB) !important;
+}
+
+/* Drawer: one faint line under the last grouped section, and one over the eGov
+ * lockup (as the desktop rail has over its eGov band); no other lines, not
+ * between rows, not under the profile, not around Logout. The global `[class*="divider"]` rule adds a light grey top border
+ * to the separator, which is what made it read white; only its fill stays. */
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-profile,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-item-child-wrapper,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-sidebar-foot {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-divider {
+  height: 1px;
+  margin: 8px 16px;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.14);
+}
+/* Logout as a plain row, then the eGov lockup at the very bottom behind a
+ * faint line, as at the foot of the desktop rail. */
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom {
+  order: 3;
+  margin: auto 0 0 !important;
+  padding: 0 12px !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot {
+  order: 4;
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 14px 28px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot .digit-sidebar-egov {
+  height: 20px;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
+  width: 100% !important;
+  height: 46px !important;
+  justify-content: flex-start !important;
+  gap: 16px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
 }

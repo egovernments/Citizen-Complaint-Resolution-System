@@ -9,7 +9,6 @@ import TopBarSideBar from "../../components/TopBarSideBar";
 import StaticCitizenSideBar from "../../components/TopBarSideBar/SideBar/StaticCitizenSideBar";
 import { Card as V2Card, CitizenServiceCard } from "@egovernments/digit-ui-components-v2";
 import { BackButton } from "@egovernments/digit-ui-react-components";
-import CitizenNavSideBar from "../../components/TopBarSideBar/SideBar/CitizenNavSideBar";
 import FAQsSection from "./FAQs/FAQs";
 import CitizenHome from "./Home";
 import LanguageSelection from "./Home/LanguageSelection";
@@ -182,12 +181,12 @@ const Home = ({
         logoUrl={logoUrl}
         logoUrlWhite={stateInfo?.logoUrlWhite}
         showSidebar={CITIZEN ? true : false}
+        showRail={!hideSidebar}
         linkData={linkData}
         islinkDataLoading={islinkDataLoading}
       />
 
       <div className={`main center-container citizen-home-container mb-25`}>
-        {hideSidebar ? null : <CitizenNavSideBar t={t} crestUrl={logoUrl} linkData={linkData} />}
 
         <Switch>
           <Route exact path={path}>

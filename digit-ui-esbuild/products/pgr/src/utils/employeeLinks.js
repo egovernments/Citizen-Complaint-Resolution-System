@@ -16,7 +16,9 @@ export const getPGREmployeeLinks = (t) => {
   const links = [
     {
       key: "create",
-      label: t("ACTION_TEST_CREATE_COMPLAINT"),
+      // "File a Complaint", the citizen app's words for the same action, on
+      // the employee side too (#2038).
+      label: t("CS_COMMON_FILE_A_COMPLAINT"),
       link: `${base}/create-complaint`,
       roles: ["CSR"],
       icon: "NoteAdd",
