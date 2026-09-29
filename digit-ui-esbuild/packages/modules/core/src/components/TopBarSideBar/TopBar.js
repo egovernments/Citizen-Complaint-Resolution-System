@@ -71,6 +71,16 @@ const TopBar = ({
    */
   const ulbLogo = logoUrlWhite || stateInfo?.logoUrlWhite;
   const ulbLogoDuplicatesHeaderImg = Boolean(ulbLogo) && ulbLogo === logoUrl;
+  // The desktop bar shows the tenant crest at its left and hides the logo slot
+  // (the eGov lockup lives in the rail's foot). The crest used to render only
+  // for a signed-in user of a city without a ULB grade; signed out, or with a
+  // grade, the slot held text alone and the bar had no crest. It renders in
+  // every case now, ahead of whatever label the case carries.
+  const crestSrc = ulbLogo || logoUrl;
+  // Signed out, the crest's caption is the state's MYCITY label, shown only
+  // when a tenant has seeded it: unseeded, it printed the raw key.
+  const mycityKey = `MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`;
+  const mycityLabel = t(mycityKey) !== mycityKey ? `${t(mycityKey)} ${t("MYCITY_STATECODE_LABEL")}` : null;
 
   React.useEffect(async () => {
     const tenant = Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getStateId() : Digit.ULBService.getCurrentTenantId();
@@ -179,12 +189,16 @@ const TopBar = ({
             />
           ),
         ].filter(Boolean)}
+        // The phone bar has room for one control beside the marks: the
+        // language pill, as in the design. The drawer no longer lists Language.
+        mobileActionFields={showLanguageChange ? [<ChangeLanguage compact={true} />] : undefined}
+        menuAnalyticsEvent="shell.menu.open"
         onHamburgerClick={() => {
           toggleSidebar();
         }}
         className={`digit-employee-header${CITIZEN ? " digit-citizen-header" : ""}${
           ulbLogoDuplicatesHeaderImg ? " digit-employee-header--single-mark" : ""
-        }`}
+        }${crestSrc ? "" : " digit-employee-header--no-crest"}`}
         img={logoUrl}
         logoWidth={"64px"}
         logoHeight={"48px"}
@@ -199,20 +213,19 @@ const TopBar = ({
         style={{}}
         theme="light"
         ulb={
-          loggedin ? (
-            cityDetails?.city?.ulbGrade ? (
-              <>
-                {t(cityDetails?.i18nKey).toUpperCase()}{" "}
-                {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
-              </>
-            ) : (
-              <ImageComponent className="state" src={ulbLogo} alt="State Logo" />
-            )
-          ) : (
-            <>
-              {t(`MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`)} {t(`MYCITY_STATECODE_LABEL`)}
-            </>
-          )
+          <>
+            {crestSrc ? <ImageComponent className="state" src={crestSrc} alt="State Logo" /> : null}
+            {loggedin ? (
+              cityDetails?.city?.ulbGrade ? (
+                <span className="digit-topbar-ulb-label">
+                  {t(cityDetails?.i18nKey).toUpperCase()}{" "}
+                  {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
+                </span>
+              ) : null
+            ) : mycityLabel ? (
+              <span className="digit-topbar-ulb-label">{mycityLabel}</span>
+            ) : null}
+          </>
         }
       />
       {showWorkingContext && (

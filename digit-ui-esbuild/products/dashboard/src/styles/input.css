@@ -2516,7 +2516,6 @@
   min-width: 0;
   overflow-x: clip;
   box-sizing: border-box;
-  --digit-sidebar-width: 3rem;
   /* Matches the employee app's own content inset. An internal page — Create
    * Complaint is the honest comparison, not the landing screen — clears the
    * nav rail by 52px before its first card begins. At 12px the dashboard read
@@ -2614,7 +2613,7 @@
    * this was reserving 48px for something that is not on screen. At 420px that
    * is a ninth of the viewport, and it showed as a lopsided left gutter
    * (60px left against 23px right). */
-  padding-left: var(--digit-sidebar-width, 3rem) !important;
+  padding-left: var(--app-rail-w, 0px) !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -2648,22 +2647,13 @@
   }
 }
 
-/* A pinned nav rail has to move the dashboard too.
- *
- * The rule above pins this surface to `margin-left: 0` and insets it with
- * padding instead, so the employee chrome's pinned rule — which moves
- * `.employee .main` by its margin — cannot reach it. The dashboard would sit
- * still while every other employee page slid across.
- *
- * Distance and easing are taken from the same 3rem/15rem pair SideNav
- * animates between, so the surface and the panel travel together. */
+/* The rail moves the dashboard too. The rule above pins this surface to
+ * `margin-left: 0` and insets it with padding, which reads --app-rail-w (set
+ * in public/vendor/overrides.css from the rail's state), so it slides with the
+ * panel on the panel's curve. */
 @media (min-width: 48rem) {
   .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
     transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  html[data-sidebar-pinned="true"]
-    .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
-    padding-left: 15rem !important;
   }
 }
 
