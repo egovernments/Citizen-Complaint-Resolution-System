@@ -19,7 +19,7 @@ If a question's answer is non-trivial (a secret, a tenant code, a domain), ASK. 
 `db_fast_path_ack_data_wipe: false` on purpose (issue #2082), so a host_vars with the
 flag but not the ack fails `deploy.sh` at preflight in two seconds. Write both, and
 only after the operator has confirmed the target holds no database worth keeping — if
-it does, the answer is `docs/2.12/operations/postgres-volume-migration.md` first, not
+it does, the answer is `docs/releases/2.12/operations/postgres-volume-migration.md` first, not
 the ack. The playbook independently inspects the box and refuses if it finds one, so
 acking it anyway does not get past the check.
 

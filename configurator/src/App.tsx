@@ -115,7 +115,7 @@ function ManagementAdmin() {
 
 // Split from ManagementAdmin so useMastersCapability() (which reads the
 // context MastersCapabilityProvider establishes above) resolves correctly —
-// see docs/design/masters-configurator-access-policy-design.md §3.3. Masters
+// see docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3. Masters
 // the current role can't see are filtered out via `{cond && <Resource .../>}`
 // (React.Children.toArray drops the resulting `false`), keeping every
 // <Resource> a direct child of <CoreAdminUI> as react-admin requires.

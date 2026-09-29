@@ -1,5 +1,5 @@
 // Masters migration: existing complaint masters → the TWO-master model from the PR #861 review
-// (docs/design/complaint-hierarchy-2master-rework-plan.md).
+// (docs/features/complaint-hierarchy/two-master-rework-plan.md).
 //
 //   OLD (either shape):
 //     - FLAT:        RAINMAKER-PGR.ServiceDefs grouped by menuPath

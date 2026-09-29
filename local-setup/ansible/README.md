@@ -7,11 +7,11 @@ fully independent stack on its own machine — same playbook, different
 service breakdown.
 
 > **Deploying from Windows?** Follow the
-> [Windows Quickstart (WSL2)](../../WINDOWS-QUICKSTART.md) — it walks the
+> [Windows Quickstart (WSL2)](../../docs/setup/quickstart-windows.md) — it walks the
 > same `./deploy.sh` flow end-to-end inside WSL2, including the
 > `localhost-slim` / `localhost-full` sizing templates for 16 GB and
 > 32 GB machines. On macOS, the equivalent is the
-> [macOS Quickstart (OrbStack)](../../MAC-QUICKSTART.md).
+> [macOS Quickstart (OrbStack)](../../docs/setup/quickstart-mac.md).
 
 ## Layout
 
@@ -157,7 +157,7 @@ their own. End-to-end:
    `./deploy.sh` stops and makes you confirm the wipe (issue #2082).
    Set the ack to `true` once you have checked the target box holds no
    database you want to keep. If it does, migrate it first —
-   `docs/2.12/operations/postgres-volume-migration.md`.
+   `docs/releases/2.12/operations/postgres-volume-migration.md`.
 
 3. **No inventory edit needed.** `deploy.sh` regenerates
    `inventory/hosts.yml` from `host_vars/*.yml` on every run, so
@@ -710,7 +710,7 @@ shared belongs in `group_vars/digit.yml`.
    container it deliberately did not deploy. **grafana, prometheus, tempo,
    otel-collector and node-exporter are not waited on at all** — and are not Gatus-checked
    either, so nothing reports them either way (#1613). See
-   `docs/observability/enabling-monitoring.md`.
+   `docs/operations/monitoring/enabling-monitoring.md`.
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 

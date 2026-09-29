@@ -1306,7 +1306,7 @@
     # runs ahead of them. Always layered: it IS the migration model (it turns the
     # apps' embedded Flyway off and gates them on their migrator), so a deploy
     # without it silently falls back to embedded Flyway and, on an
-    # operator-supplied dump, can destroy data. See docs/db-migration-flow.md.
+    # operator-supplied dump, can destroy data. See docs/operations/data-migration/README.md.
     #
     # db/ is already synchronized below (digit_config_dirs), which carries
     # db/normalize/ (the guard's build context) and db/flyway-history-map.yml.
@@ -2362,7 +2362,7 @@
     # The status board's key is collected only when OpenBao has nothing AND the
     # operator did not pin one in host_vars — a host_vars password is the
     # operator's to manage, and copying it into OpenBao would quietly create a
-    # second source of truth. (That is also why `docs/2.12/deployment/README.md`
+    # second source of truth. (That is also why `docs/releases/2.12/deployment/README.md`
     # points at the host_vars value as well as the `bao kv get`.)
     - name: "OpenBao — collect the passwords this deploy generated"
       ansible.builtin.set_fact:

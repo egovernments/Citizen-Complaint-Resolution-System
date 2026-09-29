@@ -315,7 +315,7 @@
       before assuming it is yours.
 
       Otherwise migrate the data onto the named volume and re-run:
-        docs/2.12/operations/postgres-volume-migration.md
+        docs/releases/2.12/operations/postgres-volume-migration.md
 
       If this box is scratch and you WANT the database replaced, set
       `pg_allow_data_loss: true` in host_vars. Deliberately separate from
@@ -359,7 +359,7 @@
       clean-slate teardown, not the deploy.
 
       To keep force_clean, migrate the database onto the named volume first:
-        docs/2.12/operations/postgres-volume-migration.md
+        docs/releases/2.12/operations/postgres-volume-migration.md
 
       `pg_allow_data_loss: true` also bypasses this, but read it literally —
       on this box it means letting the teardown strand the database.
