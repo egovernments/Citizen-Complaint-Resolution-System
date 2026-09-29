@@ -117,17 +117,28 @@ A country whose data stops at region level gives operators a two-level hierarchy
 
 `match`, `limit` and `min_descendants` apply to the offline sources. Results rank exact → prefix →
 substring → fuzzy, then broadest place first; matching ignores case and accents. Each result
-carries `place_id`, `name`, `subtype`, `admin_level`, `parent_name`, `region_name`,
+carries `place_id`, `name`, `subtype`, `admin_level`, `level_name`, `parent_name`, `region_name`,
 `country_name`, `descendant_count`, `match_type`, `source`, `licence`, and a `formatted`
-label that tells same-name places apart ("Delhi — region, India", "Westlands — ADM2,
-Nairobi, Kenya"). Official places are named `ADM1`, `ADM2`, ... with ids
+label that tells same-name places apart ("Delhi — region, India", "Westlands — Sub-county,
+Nairobi, Kenya"). Official places have subtype `ADM1`, `ADM2`, ... and ids
 `<source>:<ISO3>:<P-code or shapeID>`. Search results have a GeoJSON `bbox`
 (`[west, south, east, north]`) but no polygons — `geometry` is `null`.
 
 `GET /boundary/fetch?id=<place_id>&source=<source>` — the place and every area inside it, with
-polygons, `source`, `licence` and (official sets) `pcode`. A place with more than
-`FETCH_MAX_FEATURES` areas inside is refused with `413`, naming the count; an id that isn't in
-that source answers `404`.
+polygons, `admin_level`, `depth`, `level_name`, `source`, `licence` and (COD) `pcode`. A place with
+more than `FETCH_MAX_FEATURES` areas inside is refused with `413`, naming the count; an id that
+isn't in that source answers `404`.
+
+**Levels across sources.** Each source numbers levels its own way (`admin_level`: ADM number for
+the official sets, 0–6 for Overture, OpenStreetMap's 2–10 for Geoapify). `depth` renumbers one
+fetch consecutively — 0 is the fetched place, then 1, 2, … for each level present — so clients can
+show "Level 1, 2, 3" for any source. `level_name` is the level's local name ("County", "Ward") for
+the official sets of the 12 #1994 priority countries (`search-api/src/level-names.ts`); it is
+`null` elsewhere, and always for Overture and Geoapify, whose levels don't follow the national
+structure consistently.
+
+Geoapify responses are translated into these same fields (no `descendant_count` or `level_name`;
+`licence` credits OpenStreetMap), so every source returns one shape.
 
 `GET /health` — `sources` (which of `overture` / `official` / `cod` / `geoboundaries` /
 `geoapify` can answer here), `overture` (release, countries, build time, number of places) and

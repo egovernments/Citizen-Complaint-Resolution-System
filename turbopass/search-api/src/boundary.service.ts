@@ -10,6 +10,12 @@ import {
   type MatchMode,
 } from './boundary-matcher';
 import { intFromEnv } from './config';
+import { levelNameFor } from './level-names';
+import {
+  geoapifyFetchFeatures,
+  geoapifySearchFeatures,
+  withDepths,
+} from './normalize';
 import { RateLimiter } from './rate-limiter';
 
 // Columns the name indexes read; see buildIndexes().
@@ -323,7 +329,10 @@ export class BoundaryService {
       try {
         const response$ = this.httpService.get(url);
         const response = await lastValueFrom(response$);
-        return response.data;
+        return {
+          type: 'FeatureCollection',
+          features: geoapifySearchFeatures(response.data),
+        };
       } catch (error: any) {
         throw new HttpException(
           error.response?.data?.message || 'Geoapify search request failed',
@@ -362,6 +371,7 @@ export class BoundaryService {
                 score: h.score,
                 source: h.source ?? 'overture',
                 licence: h.licence,
+                level_name: h.level_name,
               },
               bbox: toGeoJsonBbox(b?.bbox),
               geometry: null,
@@ -441,7 +451,7 @@ export class BoundaryService {
 
       return {
         type: 'FeatureCollection',
-        features: allFeatures,
+        features: geoapifyFetchFeatures(allFeatures),
       };
     } else if (isOfflineSource(source)) {
       const index = this.offlineIndex(source);
@@ -479,20 +489,23 @@ export class BoundaryService {
 
         return {
           type: 'FeatureCollection',
-          features: rows.map((r: any) => ({
-            type: 'Feature',
-            properties: {
-              place_id: r.id,
-              name: r.name,
-              formatted: `${r.name}, ${r.country}`,
-              admin_level: r.admin_level || 0,
-              subtype: r.subtype,
-              source: r.source ?? 'overture',
-              licence: r.licence,
-              pcode: r.pcode,
-            },
-            geometry: JSON.parse(r.geometry || '{}'),
-          })),
+          features: withDepths(
+            rows.map((r: any) => ({
+              type: 'Feature',
+              properties: {
+                place_id: r.id,
+                name: r.name,
+                formatted: `${r.name}, ${r.country}`,
+                admin_level: r.admin_level || 0,
+                subtype: r.subtype,
+                level_name: levelNameFor(r),
+                source: r.source ?? 'overture',
+                licence: r.licence,
+                pcode: r.pcode,
+              },
+              geometry: JSON.parse(r.geometry || '{}'),
+            })),
+          ),
         };
       } catch (error: any) {
         throw new HttpException(

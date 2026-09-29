@@ -10,6 +10,8 @@
 // doesn't have. The index holds names only (no geometry), so the full IN+KE+MZ
 // build (~65k rows) costs a few MB.
 
+import { levelNameFor } from './level-names';
+
 export const MATCH_MODES = ['exact', 'prefix', 'substring', 'fuzzy'] as const;
 export type MatchMode = (typeof MATCH_MODES)[number];
 
@@ -122,6 +124,8 @@ export interface BoundaryHit {
   formatted: string;
   source: string | null;
   licence: string | null;
+  /** The level's local name ("Ward") for the official sets, when known. */
+  level_name: string | null;
 }
 
 const TYPE_RANK: Record<MatchMode, number> = {
@@ -351,6 +355,7 @@ export class BoundaryIndex {
     countryName ??=
       (row.country && this.countryNames.get(row.country)) || row.country;
 
+    const levelName = levelNameFor(row);
     return {
       id: row.id,
       name,
@@ -364,13 +369,14 @@ export class BoundaryIndex {
       match_type: type,
       distance,
       score: matchScore(type, distance),
-      formatted: formatBoundaryLabel(name, row.subtype, [
+      formatted: formatBoundaryLabel(name, levelName ?? row.subtype, [
         parent && parent.subtype !== 'country' ? parent.name : null,
         region?.name,
         row.subtype === 'country' ? null : countryName,
       ]),
       source: row.source ?? null,
       licence: row.licence ?? null,
+      level_name: levelName,
     };
   }
 }

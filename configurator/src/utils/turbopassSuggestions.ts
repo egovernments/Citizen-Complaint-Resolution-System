@@ -56,7 +56,8 @@ export function formatSuggestionLabel(item: SuggestionFeature | null | undefined
   const areasTag = typeof n === 'number'
     ? (n === 0 ? 'no sub-areas' : `${n.toLocaleString('en-US')} ${n === 1 ? 'sub-area' : 'sub-areas'}`)
     : '';
-  const subtype = str(p.subtype);
+  // The official sets' local level name ("Ward") reads better than "ADM3".
+  const subtype = str(p.level_name) || str(p.subtype);
   if (subtype) return { text, type: `[${[subtype, levelTag, areasTag].filter(Boolean).join(' · ')}]` };
   const resultType = str(p.result_type);
   if (resultType) return { text, type: `[${resultType}]` };
@@ -193,6 +194,7 @@ const DATASET_NAMES: Record<string, string> = {
   cod: 'OCHA COD-AB',
   geoboundaries: 'geoBoundaries',
   overture: 'Overture Maps',
+  geoapify: 'Geoapify',
 };
 
 /** "Boundary data: OCHA COD-AB (CC BY-IGO)" for the fetched features, or null
@@ -212,6 +214,7 @@ export function attributionLine(features: SuggestionFeature[] | null | undefined
   const parts = [...bySource].map(([src, licences]) => {
     const name = DATASET_NAMES[src] ?? src;
     if (src === 'overture') return `${name} (ODbL)`;
+    if (src === 'geoapify') return `${name} (© OpenStreetMap contributors, ODbL)`;
     return licences.size ? `${name} (${[...licences].sort().join('; ')})` : name;
   });
   return `Boundary data: ${parts.join(', ')}`;
