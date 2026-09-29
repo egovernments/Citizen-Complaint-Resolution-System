@@ -228,10 +228,11 @@ catalog's field keys (the Novu provider's credential keys):
 {"smscountry": {"name": "SMSCountry", "credentials": {"user": "…", "password": "…", "from": "<sender id>"}}}
 ```
 
-An SMSCountry, Ozeki or Jasmin provider is a native provider of the **DIGIT Novu worker**
-([providers.md](./providers.md#the-digit-novu-worker)): build it, set `novu_worker_image` and
-redeploy **before** moving a tenant onto one. While the `novu-worker` container runs the upstream
-image the script refuses to create them (exit `4`; `--worker-container ''` skips the check).
+An SMSCountry, Ozeki or Jasmin provider is one of **DIGIT's providers mounted into the Novu
+worker** ([providers.md](./providers.md#digits-worker-providers)). A deploy of this release
+mounts them; redeploy **before** moving a tenant onto one if the box was deployed earlier. While
+the `novu-worker` container does not preload them the script refuses to create them (exit `4`;
+`--worker-container ''` skips the check).
 The direct SMSCountry route needs no Novu worker at all.
 
 The file must be mode `0600` or stricter, or it is refused. Values are never printed or written

@@ -525,15 +525,6 @@ build_novu_dashboard: false
 # novu_base_path: "/novu"           # subpath to bake into the rebased dist
 # novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
 
-# The Novu worker (the process that calls the SMS/email gateways). Unset = upstream
-# ghcr.io/novuhq/novu/worker:2.3.0, which carries Twilio, SMTP and Novu's other
-# built-in providers. SMSCountry, Ozeki and Jasmin providers need the DIGIT fork's
-# worker instead: upstream v2.3.0 + those provider classes, from
-# github.com/dhruv-1001/novu (branch digit/v2.3.0). It is not in a registry yet:
-# build it ON THIS BOX (docs/2.20/notifications/providers.md, "The DIGIT Novu
-# worker") and name the local tag here. The deploy warns while this is upstream.
-# novu_worker_image: "novu-worker:2.3.0-digit.1"
-
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
@@ -555,8 +546,8 @@ twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 # ────────── Ordinary SMS through a NON-Twilio gateway (optional) ──────────
 # SMS gateways are Novu providers, added on Configurator -> Notifications ->
 # Providers and selected per tenant on Channels: Twilio SMS, SMSCountry, Ozeki,
-# Jasmin. SMSCountry / Ozeki / Jasmin need novu_worker_image (above) to be the
-# DIGIT fork's worker. Nothing here is needed for them.
+# Jasmin. SMSCountry / Ozeki / Jasmin ship with the deploy: their provider code is
+# mounted into the stock Novu worker. Nothing here is needed for them.
 #
 # novu_bridge_sms_provider is only for the LEGACY direct SMSCountry route of 2.12
 # deployments: "smscountry" makes novu-bridge post the SMS leg straight to

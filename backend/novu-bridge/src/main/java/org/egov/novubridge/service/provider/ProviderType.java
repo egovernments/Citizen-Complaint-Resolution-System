@@ -18,7 +18,7 @@ public class ProviderType {
     /**
      * {@code novu}: Novu's worker calls the gateway through the provider named by
      * {@link #novuProviderId}. Every current type is {@code novu}; SMSCountry, Ozeki and Jasmin
-     * need the DIGIT fork's worker image (see {@link ProviderCatalog}).
+     * are DIGIT's providers mounted into the worker (see {@link ProviderCatalog}).
      */
     String transport;
     /** The Novu {@code providerId} the integration is created with. */

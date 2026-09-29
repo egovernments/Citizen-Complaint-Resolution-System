@@ -136,28 +136,6 @@
           all of them: notification_stack_tag: "develop-<sha8>" (or a release tag). Tracking
           develop on purpose (a dev or nightly box)? Then this is expected.
 
-    # SMSCountry, Ozeki and Jasmin are provider classes of the DIGIT fork of Novu v2.3.0
-    # (upstream + added SMS providers). The upstream worker has no handler for them, and
-    # nothing fails loudly: the Configurator saves the provider, novu-bridge's trigger is
-    # accepted (the row reads SENT), and the step dies inside Novu with "Sms handler for
-    # provider … is not found". Warn, not fail: Twilio/SMTP-only boxes need no fork.
-    - name: "preflight — Novu worker: warn when it is the upstream image"
-      when:
-        - enable_novu | default(false)
-        - _worker == '' or _worker is match('^ghcr\.io/novuhq/novu/worker(:|@|$)')
-      vars:
-        _worker: "{{ novu_worker_image | default('', true) | string | trim }}"
-      ansible.builtin.debug:
-        msg: >-
-          WARNING: the Novu worker is the upstream image
-          ({{ _worker or 'ghcr.io/novuhq/novu/worker:2.3.0, the compose default' }}).
-          SMSCountry, Ozeki and Jasmin providers need the DIGIT fork's worker: on this one they
-          save fine and every send through them fails inside Novu while the bridge records SENT.
-          Twilio and SMTP are unaffected. Build it on this box (github.com/dhruv-1001/novu,
-          branch digit/v2.3.0; docs/2.20/notifications/providers.md "The DIGIT Novu worker")
-          and set novu_worker_image: "novu-worker:2.3.0-digit.1". The legacy direct SMSCountry
-          route (novu_bridge_sms_provider: smscountry) does not need it.
-
     - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
       ansible.builtin.assert:
         that: uppercase_host_vars_keys | length == 0
@@ -1577,6 +1555,24 @@
           gatus:    ../gatus
           dataloader: ../dataloader
           scripts:  ../scripts
+
+    # DIGIT's SMS providers (SMSCountry, Jasmin, Ozeki) for the STOCK Novu worker. Compose
+    # mounts this directory read-only into novu-worker (NOVU_WORKER_PROVIDERS_DIR in .env)
+    # and the worker loads register.js before it starts. Staged before the stack comes
+    # up: a missing source would be mounted as an empty directory and the worker would
+    # refuse to boot. `delete` keeps the target exact so a removed provider cannot
+    # linger; the tests stay in the repo. The worker runs as uid 1000, hence the chmod.
+    - name: "Novu worker providers — stage on target"
+      when: enable_novu | default(false)
+      synchronize:
+        src: "../../backend/novu-bridge/novu-worker-providers/"
+        dest: "{{ digit_dir }}/novu-worker-providers/"
+        delete: true
+        rsync_opts:
+          - "--exclude=test/"
+          - "--exclude=run-tests.sh"
+          - "--chmod=D755,F644"
+      register: novu_worker_providers_sync
 
     # ==================== Kong CORS origins (pin BEFORE up -d) ====================
     # The config sync above rsynced the repo's kong.yml, which ships
@@ -3211,6 +3207,25 @@
         | map(attribute='stdout_lines') | flatten
         | select('search', 'otel-collector-config')
         | list | length > 0
+
+    # novu-worker loads its mounted providers once, at boot, and compose recreates it
+    # only for an image or env change. Restart it when the staged provider files
+    # changed, or it keeps running the previous provider code.
+    - name: "Novu worker — restart when its mounted providers changed"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^novu-worker$')" ]; then
+          echo "NOCHANGE worker not running"
+          exit 0
+        fi
+        docker restart novu-worker
+      args:
+        executable: /bin/bash
+      register: novu_worker_restart
+      changed_when: "'NOCHANGE' not in novu_worker_restart.stdout"
+      when:
+        - enable_novu | default(false)
+        - novu_worker_providers_sync is changed
 
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy

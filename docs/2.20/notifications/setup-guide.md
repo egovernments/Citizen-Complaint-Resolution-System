@@ -101,7 +101,7 @@ credential fields, **Create Provider**.
 | Ozeki SMS Gateway ¹ | SMS | HTTP API URL (e.g. `http://ozeki.example.org:9509/api?action=sendmsg`), Username (the gateway's HTTP API user), Password, Sender id (optional) |
 | Jasmin SMS Gateway ¹ | SMS | Send URL (e.g. `http://jasmin.example.org:1401/send`), Username, Password, Sender id (optional). Text outside the GSM alphabet (Amharic, emoji) goes as UCS-2: **70 characters per SMS segment, not 160** |
 
-¹ These three need the **DIGIT Novu worker** (`novu_worker_image`, [§8.1](#81-deployment-settings)). On the upstream worker the provider saves, **Test** and dispatch report the message as sent, and every send fails inside Novu (`Sms handler for provider … is not found` in Novu's activity feed). The deploy prints a warning while the worker is upstream. See [providers.md](./providers.md#the-digit-novu-worker) for the gateway specifics.
+¹ These three are DIGIT's providers, mounted into Novu's worker by the deploy; there is nothing to set. The worker refuses to boot if they fail to load, with a `[digit-novu-providers]` error in `docker logs novu-worker`. Without them the provider would save, **Test** and dispatch would report the message as sent, and every send would fail inside Novu (`Sms handler for provider … is not found` in Novu's activity feed). See [providers.md](./providers.md#digits-worker-providers) for how they load and for the gateway specifics.
 
 Email traps:
 
@@ -422,7 +422,6 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `novu_bridge_receipts_secret` | Enables delivery receipts ([§8.3](#83-delivery-receipts)); a secret | blank = off |
 | `novu_bridge_preference_enabled` / `novu_bridge_preference_fail_open` | Consent gate; allow delivery when the preference service is down | `false` / `true` |
 | `novu_bridge_core_sms_country_code` | Country code for OTP numbers sent without one, e.g. `+254` (`254` works too); a leading trunk `0` is dropped. Blank: numbers go out as given, which gateways will not route, and the bridge warns at startup | blank |
-| `novu_worker_image` | The Novu worker image. SMSCountry / Ozeki / Jasmin providers need the DIGIT fork's worker, e.g. `novu-worker:2.3.0-digit.1`, built on the box ([providers.md](./providers.md#build-it)); the deploy warns while it is upstream | `ghcr.io/novuhq/novu/worker:2.3.0` |
 | `twilio_account_sid` / `twilio_auth_token` / `twilio_whatsapp_from` | Bootstrap the `twilio-whatsapp` Novu integration at deploy | — |
 | `novu_bridge_workflow_id_sms` / `_whatsapp` / `_email` | Novu workflow ids | `complaints-*` |
 | `novu_bridge_integration_id_whatsapp` | Only if a second Twilio integration exists | blank |

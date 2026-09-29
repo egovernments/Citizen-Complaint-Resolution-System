@@ -503,9 +503,8 @@ describe('Novu workflow creation deployment contract', () => {
     expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
 
-  // SMSCountry / Ozeki / Jasmin providers are native to the DIGIT Novu fork's worker. The
-  // bridge-side SMSCountry adapter (and its apiUrl allow-list) is gone: settings for it
-  // would be dead config that reads as if something still consumed it.
+  // The bridge-side SMSCountry adapter (and its apiUrl allow-list) is gone: settings for
+  // it would be dead config that reads as if something still consumed it.
   test('no bridge-side gateway adapter settings are left', () => {
     for (const text of [composeFile, composeEnv]) {
       expect(text).not.toContain('SMSCOUNTRY_ALLOWED_HOSTS');
@@ -513,24 +512,81 @@ describe('Novu workflow creation deployment contract', () => {
     }
   });
 
-  test('the Novu worker image is configurable, upstream by default, and the deploy warns on upstream', () => {
+  // SMSCountry / Ozeki / Jasmin are DIGIT's providers, mounted into the STOCK Novu worker
+  // (backend/novu-bridge/novu-worker-providers). Without the mount and the preload their
+  // integrations save and every send through them fails inside Novu while the bridge
+  // records SENT, so each link of the chain is pinned here.
+  const PROVIDERS_SRC = 'backend/novu-bridge/novu-worker-providers';
+  const PROVIDERS_CHART = 'devops/deploy-as-code/charts/backbone-services/novu/files/novu-worker-providers';
+  const runtimeFiles = (dir: string) =>
+    fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.js')).sort();
+  const taskBody = (name: string) => {
+    const at = playbookFile.indexOf(`- name: "${name}"`);
+    expect(at).toBeGreaterThan(-1);
+    const next = playbookFile.indexOf('\n    - name:', at + 1);
+    return playbookFile.slice(at, next === -1 ? undefined : next);
+  };
+
+  test('compose runs the stock Novu worker and mounts + preloads DIGIT providers', () => {
     const start = composeFile.indexOf('\n  novu-worker:');
     expect(start).toBeGreaterThan(-1);
     const rest = composeFile.slice(start + 1);
     const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
     const workerBlock = next === -1 ? rest : rest.slice(0, next);
-    expect(workerBlock).toMatch(/^ {4}image: \$\{NOVU_WORKER_IMAGE:-ghcr\.io\/novuhq\/novu\/worker:2\.3\.0\}$/m);
-    expect(composeEnv).toMatch(/^NOVU_WORKER_IMAGE=\{\{ novu_worker_image \| default\('', true\) \}\}$/m);
-
-    const warn = playbookFile.slice(
-      playbookFile.indexOf('preflight — Novu worker: warn when it is the upstream image'),
-      playbookFile.indexOf('preflight — reject UPPERCASE host_vars keys')
+    expect(workerBlock).toMatch(/^ {4}image: ghcr\.io\/novuhq\/novu\/worker:2\.3\.0$/m);
+    expect(workerBlock).toMatch(/^ {6}NODE_OPTIONS: --require \/opt\/digit-novu-providers\/register\.js$/m);
+    expect(workerBlock).toMatch(
+      /^ {6}- \$\{NOVU_WORKER_PROVIDERS_DIR:-\.\.\/backend\/novu-bridge\/novu-worker-providers\}:\/opt\/digit-novu-providers:ro$/m
     );
-    expect(warn.length).toBeGreaterThan(0);
-    expect(warn).toContain('enable_novu');
-    expect(warn).toContain('novu_worker_image');
-    expect(warn).toContain('ghcr\\.io/novuhq/novu/worker');
-    expect(warn).toContain('novu-worker:2.3.0-digit.1');
+    // The compose default is relative to local-setup/ and must land on the real directory.
+    expect(fs.existsSync(path.join(REPO_ROOT, 'local-setup', '../backend/novu-bridge/novu-worker-providers/register.js'))).toBe(true);
+    expect(composeEnv).toMatch(/^NOVU_WORKER_PROVIDERS_DIR=\{\{ digit_dir \}\}\/novu-worker-providers$/m);
+  });
+
+  test('the deploy stages the providers before the stack starts and restarts the worker when they change', () => {
+    const stage = taskBody('Novu worker providers — stage on target');
+    expect(stage).toContain('enable_novu');
+    expect(stage).toContain(`src: "../../${PROVIDERS_SRC}/"`);
+    expect(stage).toContain('dest: "{{ digit_dir }}/novu-worker-providers/"');
+    expect(stage).toContain('delete: true');
+    expect(stage).toContain('register: novu_worker_providers_sync');
+    expect(playbookFile.indexOf('Novu worker providers — stage on target')).toBeLessThan(
+      playbookFile.indexOf('- name: Start DIGIT stack (Linux/Debian)')
+    );
+
+    const restart = taskBody('Novu worker — restart when its mounted providers changed');
+    expect(restart).toContain('docker restart novu-worker');
+    expect(restart).toContain('novu_worker_providers_sync is changed');
+  });
+
+  // helm can only read files inside the chart, so the chart carries a copy. It must be
+  // the same code, or k8s and compose would send differently.
+  test('the helm chart ships the same provider code and mounts + preloads it', () => {
+    expect(runtimeFiles(PROVIDERS_CHART)).toEqual(runtimeFiles(PROVIDERS_SRC));
+    expect(runtimeFiles(PROVIDERS_SRC)).toEqual(['jasmin.js', 'novu.js', 'ozeki.js', 'register.js', 'smscountry.js']);
+    for (const file of runtimeFiles(PROVIDERS_SRC)) {
+      expect(read(`${PROVIDERS_CHART}/${file}`)).toBe(read(`${PROVIDERS_SRC}/${file}`));
+    }
+
+    const workerTemplate = read('devops/deploy-as-code/charts/backbone-services/novu/templates/worker/worker-deployment.yaml');
+    expect(workerTemplate).toContain('value: "--require /opt/digit-novu-providers/register.js"');
+    expect(workerTemplate).toContain('mountPath: /opt/digit-novu-providers');
+    expect(workerTemplate).toContain('checksum/digit-providers');
+    expect(read('devops/deploy-as-code/charts/backbone-services/novu/templates/worker/worker-providers-configmap.yaml')).toContain(
+      '.Files.Glob "files/novu-worker-providers/*.js"'
+    );
+    expect(novuValues).toMatch(/^ {2}digitProviders:\n {4}enabled: true$/m);
+    expect(novuValues).toMatch(/^ {4}repository: "ghcr\.io\/novuhq\/novu\/worker"\n {4}tag: "2\.3\.0"$/m);
+  });
+
+  // The fork (a custom-built worker image) was retired for the mounted providers.
+  test('nothing deploys or documents the retired Novu fork worker', () => {
+    const hostVarsExample = read('local-setup/ansible/inventory/host_vars/_example.yml');
+    for (const text of [composeFile, composeEnv, playbookFile, novuValues, hostVarsExample]) {
+      for (const stale of ['NOVU_WORKER_IMAGE', 'novu_worker_image', 'dhruv-1001/novu', '2.3.0-digit']) {
+        expect(text).not.toContain(stale);
+      }
+    }
   });
 
   // These were documented as "add them to /opt/digit/.env by hand" — and every deploy

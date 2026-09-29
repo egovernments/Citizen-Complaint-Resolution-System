@@ -205,7 +205,7 @@ class ProviderControllerTest {
     }
 
     @Test
-    void createFromCatalog_forkGatewaysAreCreatedAsTheirOwnNovuProvider_withNativeCredentials() {
+    void createFromCatalog_digitGatewaysAreCreatedAsTheirOwnNovuProvider_withNativeCredentials() {
         when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
                 anyString(), anyString(), nullable(Map.class), anyBoolean()))
                 .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9"))));
@@ -291,7 +291,7 @@ class ProviderControllerTest {
         ArgumentCaptor<Map<String, Object>> overrides = ArgumentCaptor.forClass((Class) Map.class);
         verify(novuClient).trigger(eq("complaints-sms"), anyString(), eq("+15550100"),
                 nullable(String.class), anyMap(), anyString(), overrides.capture());
-        // The fork's Ozeki provider builds its own {messages:[…]} body; a generic-sms
+        // DIGIT's Ozeki provider builds its own {messages:[…]} body; a generic-sms
         // passthrough here would be dead weight at best.
         assertEquals(Map.of("sms", Map.of("integrationIdentifier", "ozeki-0011aabbccddeeff")),
                 overrides.getValue());

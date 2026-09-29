@@ -1,6 +1,6 @@
 # Providers, and adding a provider
 
-This page covers how novu-bridge reaches SMS, WhatsApp and email gateways, the DIGIT build of the Novu worker that some of those gateways need, and how to add a provider type. The code lives in `backend/novu-bridge/`. Operators add providers on Configurator → Notifications → **Providers** ([setup-guide.md §3](./setup-guide.md#3-add-a-provider)).
+This page covers how novu-bridge reaches SMS, WhatsApp and email gateways, the DIGIT providers that some of those gateways need inside Novu's worker, and how to add a provider type. The code lives in `backend/novu-bridge/`. Operators add providers on Configurator → Notifications → **Providers** ([setup-guide.md §3](./setup-guide.md#3-add-a-provider)).
 
 ## How providers work
 
@@ -13,15 +13,15 @@ Every provider an operator adds is a **Novu integration**, and novu-bridge never
 | `twilio-sms` | SMS | `twilio` | `accountSid`, `token`, `from` | upstream Novu |
 | `twilio-whatsapp` | WHATSAPP | `twilio` | `accountSid`, `token`, `from` | upstream Novu |
 | `smtp` | EMAIL | `nodemailer` | `host`, `port`, `user`, `password`, `from`, `senderName`, `secure` | upstream Novu |
-| `smscountry` | SMS | `smscountry` | `user`, `password`, `from`, `baseUrl` (optional) | **DIGIT Novu worker** |
-| `ozeki` | SMS | `ozeki` | `baseUrl`, `user`, `password`, `from` (optional) | **DIGIT Novu worker** |
-| `jasmin` | SMS | `jasmin` | `baseUrl`, `user`, `password`, `from` (optional) | **DIGIT Novu worker** |
+| `smscountry` | SMS | `smscountry` | `user`, `password`, `from`, `baseUrl` (optional) | **DIGIT, mounted into the worker** |
+| `ozeki` | SMS | `ozeki` | `baseUrl`, `user`, `password`, `from` (optional) | **DIGIT, mounted into the worker** |
+| `jasmin` | SMS | `jasmin` | `baseUrl`, `user`, `password`, `from` (optional) | **DIGIT, mounted into the worker** |
 
 The configurator renders the credential form from `GET /novu-adapter/v1/providers/catalog`, so a new type needs no UI change.
 
 Integration identifiers take the form `<type>-<hash>`. `typeFromIdentifier` maps an identifier back to its type using `TYPES_LONGEST_FIRST`, and credential rotation reads the form from that type. A caller may choose its own identifier on the catalog form, but it must start with `<type>-`. Otherwise the call answers `400 NB_INVALID_PROVIDER`. An unmarked integration still derives its type from its Novu provider id when that id names exactly one type (`deriveType`).
 
-## The DIGIT Novu worker
+## DIGIT's worker providers
 
 Novu's `generic-sms` provider cannot drive SMSCountry, Ozeki or Jasmin. It always POSTs JSON and reads the message id from a JSON reply. The three gateways fail it in different ways:
 
@@ -29,55 +29,43 @@ Novu's `generic-sms` provider cannot drive SMSCountry, Ozeki or Jasmin. It alway
 - Jasmin replies in plain text.
 - Ozeki answers HTTP 200 for rejections, so `generic-sms` would record a failed send as sent.
 
-Novu's own answer is one provider class per gateway: v2.3.0 ships 38 SMS provider classes.
+Novu's own answer is one provider class per gateway (v2.3.0 ships 38 SMS provider classes), compiled into its worker. DIGIT adds its classes to the **stock** worker image at start-up instead of building a custom one. The code lives in **`backend/novu-bridge/novu-worker-providers/`**:
 
-So DIGIT keeps a fork: **[dhruv-1001/novu](https://github.com/dhruv-1001/novu), branch `digit/v2.3.0`**. The fork is upstream v2.3.0 plus added SMS provider classes, and nothing else. The changes are new files plus registry entries, with no edits to upstream code. The decision is recorded in [#2084](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2084#issuecomment-5808124117). The first three providers came in [dhruv-1001/novu#1](https://github.com/dhruv-1001/novu/pull/1).
+| File | What it is |
+|---|---|
+| `smscountry.js`, `jasmin.js`, `ozeki.js` | One gateway each: a provider class extending Novu's own `BaseProvider`, plus the handler that builds it from the integration's credentials |
+| `register.js` | The preload. It wraps the worker's `SmsFactory.getHandler`, so an integration whose `providerId` is one of these gets DIGIT's handler and every other one goes to Novu's own lookup unchanged |
+| `novu.js` | Resolves Novu's internals (`BaseProvider`, `BaseSmsHandler`, `SmsFactory`, axios) from inside the image |
+| `test/`, `run-tests.sh` | Tests, run inside the stock worker image they patch |
 
-Only the **worker** needs the fork:
+The worker is started with `NODE_OPTIONS=--require /opt/digit-novu-providers/register.js` and the directory mounted read-only at `/opt/digit-novu-providers`. This works because the Novu worker is not bundled: its packages resolve to plain files, so `register.js` patches the same `SmsFactory` the worker uses. Only the worker is touched:
 
-- **Worker.** The worker sends the message. Its `SmsFactory` maps a `providerId` to a handler, and upstream has no handler for `smscountry`, `ozeki` or `jasmin`.
-- **API.** The API accepts any `providerId` string. It encrypts credentials by key name, not per provider, so it stays upstream.
-- **ws.** Stays upstream.
-- **Dashboard.** Stays upstream. It lists these integrations without a logo or credential form, which does not matter because providers are managed from the Configurator.
+- **API.** Stays stock. It accepts any `providerId` string and stores credentials under a fixed set of key names, encrypting the secret ones by name. These providers use existing keys (`user`, `password`, `from`, `baseUrl`).
+- **ws.** Stays stock.
+- **Dashboard.** Stays stock. It lists these integrations without a logo or credential form, which does not matter because providers are managed from the Configurator.
 
-**On the upstream worker, nothing fails loudly:**
+**Failure is loud by design.** The worker refuses to boot, with a `[digit-novu-providers]` error in its log, if a provider file does not load, or if the image is not the Novu version these internals were verified against (`SUPPORTED_WORKER_VERSIONS` in `register.js`, today `2.3.0`). On success it logs `[digit-novu-providers] SMS providers registered in the Novu worker: smscountry, jasmin, ozeki`. A worker without the preload would otherwise fail quietly:
 
 1. The Configurator saves an SMSCountry, Ozeki or Jasmin provider.
 2. novu-bridge's trigger is accepted, and the dispatch row reads `SENT`.
 3. The step then dies inside Novu with `Sms handler for provider smscountry is not found`.
 
-`./deploy.sh` warns while `enable_novu` is on and the worker is the upstream image. `migrate-notifications.py` refuses to create such a provider on the upstream worker. Twilio and SMTP work on either worker.
+`migrate-notifications.py` refuses to create such a provider while the running `novu-worker` container does not preload them. Twilio and SMTP do not depend on the preload.
 
-### Build it
+### How it is deployed
 
-The image is a **local build for now**, not in a registry. Build it on the box that runs it. The following reproduces upstream's own self-hosted release build (`.github/workflows/prepare-self-hosted-release.yml`) for the worker:
+- **Compose.** `./deploy.sh` copies the directory (without its tests) to `/opt/digit/novu-worker-providers` before the stack starts, and `NOVU_WORKER_PROVIDERS_DIR` in `/opt/digit/.env` points the `novu-worker` volume at it. When the copied files change, the deploy restarts `novu-worker`, because the worker reads them only at boot. A compose run straight from `local-setup/` mounts the repo copy. Nothing to set in host_vars.
+- **Helm.** The backbone `novu` chart carries a copy of the runtime files in `files/novu-worker-providers/`, because a chart cannot read outside itself. A ConfigMap serves them, the worker mounts it and gets the same `NODE_OPTIONS`, and a checksum annotation rolls the pods when the files change. `worker.digitProviders.enabled` (default `true`) turns it off. `local-setup/tests/static/deployment-contracts.test.ts` fails if the copy drifts from `backend/novu-bridge/novu-worker-providers/`.
 
-```bash
-git clone --filter=blob:none -b digit/v2.3.0 https://github.com/dhruv-1001/novu.git novu-fork
-cd novu-fork
-# node 20 and pnpm 10.11.0 (e.g. `corepack enable`); pnpm-context needs the root deps
-pnpm install --filter novuhq --frozen-lockfile
-cp scripts/dotenvcreate.mjs apps/worker/src/dotenvcreate.mjs
-printf '\nIS_SELF_HOSTED=true\nOS_TELEMETRY_URL=""\n' >> apps/worker/src/.example.env
-sed -i 's/pm2-runtime start dist\/main\.js -i max/node dist\/main.js/g' apps/worker/Dockerfile
-sed -i 's/^ENV NX_DAEMON=false$/ENV NX_DAEMON=false\nENV NX_NO_CLOUD=true/' apps/worker/Dockerfile
-: > /tmp/empty-secret                      # community edition: no BullMQ Pro token
-pnpm --silent --workspace-root pnpm-context -- apps/worker/Dockerfile \
-  | docker buildx build --secret id=BULL_MQ_PRO_NPM_TOKEN,src=/tmp/empty-secret \
-      --build-arg PACKAGE_PATH=apps/worker - -t novu-worker:2.3.0-digit.1 --load
-git checkout -- apps/worker && rm apps/worker/src/dotenvcreate.mjs
-```
+### Upgrading Novu
 
-Some steps are easy to get wrong:
+The providers depend on Novu internals: the file paths, the `SmsFactory.getHandler` lookup and the handler interface. Before bumping the worker image:
 
-- Without the `dotenvcreate.mjs` copy, the build fails at `cp src/dotenvcreate.mjs`.
-- The `sed` on the entrypoint gives the same single-process `node dist/main.js` as the upstream image.
-- The tag is `2.3.0-digit.<n>`: the Novu version, then our build number. Bump `<n>` whenever the fork gains a provider.
+1. Run the tests against the new image: `NOVU_TEST_IMAGE=ghcr.io/novuhq/novu/worker:<version> backend/novu-bridge/novu-worker-providers/run-tests.sh`.
+2. Fix anything they catch, then add the version to `SUPPORTED_WORKER_VERSIONS` in `register.js` and copy the runtime files to the chart.
+3. Send one message through each provider against a mock gateway ([developer-guide.md](./developer-guide.md#local-testing-without-real-gateways)).
 
-### Run it
-
-- **Compose.** Set `novu_worker_image: "novu-worker:2.3.0-digit.1"` in host_vars and run `./deploy.sh`. This renders `NOVU_WORKER_IMAGE` into `/opt/digit/.env`, which the `novu-worker` service reads. When it is unset, the default is `ghcr.io/novuhq/novu/worker:2.3.0`. The deploy's `compose pull` ignores pull failures, so a local-only tag is fine.
-- **Helm.** In the backbone `novu` chart, override `worker.image.repository` and `worker.image.tag`. A cluster has to pull the image from somewhere, so push it to a registry its nodes can reach first. None is published yet.
+Bumping the image without step 2 leaves the worker refusing to boot, which is the point. `DIGIT_NOVU_PROVIDERS_ALLOW_UNTESTED=true` on the worker overrides the check for an emergency.
 
 ## Gateway notes
 
@@ -103,13 +91,13 @@ No 2.12 deployment has such an integration: 2.12 had no provider catalog.
 
 ### The legacy direct route
 
-`novu.bridge.sms.provider=smscountry` (host_vars `novu_bridge_sms_provider`) makes the bridge post the SMS leg to SMSCountry itself through `SmsCountryDeliveryProvider` (a `service/delivery/DeliveryProvider`). This bypasses Novu and takes credentials from env (`novu_bridge_smscountry_user` / `_password` / `_url`). It remains for 2.12 deployments and needs neither Novu nor the DIGIT worker. It gets no Novu credential store, activity log or Configurator management. Its failures are `NB_SMSCOUNTRY_REJECTED` / `NB_SMSCOUNTRY_UNREACHABLE` on the dispatch row. Use it **or** an SMSCountry provider on a channel, not both.
+`novu.bridge.sms.provider=smscountry` (host_vars `novu_bridge_sms_provider`) makes the bridge post the SMS leg to SMSCountry itself through `SmsCountryDeliveryProvider` (a `service/delivery/DeliveryProvider`). This bypasses Novu and takes credentials from env (`novu_bridge_smscountry_user` / `_password` / `_url`). It remains for 2.12 deployments and needs neither Novu nor DIGIT's worker providers. It gets no Novu credential store, activity log or Configurator management. Its failures are `NB_SMSCOUNTRY_REJECTED` / `NB_SMSCOUNTRY_UNREACHABLE` on the dispatch row. Use it **or** an SMSCountry provider on a channel, not both.
 
 ### Provider selection at dispatch
 
 On every dispatch, the bridge reads the tenant's `NOTIFICATIONS.Channel` row at the state tenant (60 s cache). The row's `provider` field is the Novu integration identifier. The bridge checks the selection against Novu's integration list (`NOVU_BRIDGE_PROVIDER_AVAILABILITY_CACHE_TTL_MS`, 60 s). A missing, disabled or wrong-channel provider is recorded as `SKIPPED / NB_PROVIDER_UNAVAILABLE` instead of triggering. If Novu cannot be reached for the check, the bridge delivers as it otherwise would. With no provider selected, the row's `gateway` and the env fallbacks apply.
 
-The check cannot see which worker image runs, so a fork-only provider on the upstream worker passes it. See [The DIGIT Novu worker](#the-digit-novu-worker).
+The check cannot see whether the worker loads DIGIT's providers, so a DIGIT provider on a worker without them passes it. See [DIGIT's worker providers](#digits-worker-providers).
 
 ## Adding a provider
 
@@ -118,39 +106,31 @@ Every new gateway follows one rule: **one provider class in Novu, plus one catal
 ```
 Does upstream Novu v2.3.0 ship a provider for this gateway?
 ├─ yes → catalog entry only (step 2)
-└─ no  → a provider class in the DIGIT fork (step 1), then the catalog entry (step 2)
+└─ no  → a DIGIT provider in backend/novu-bridge/novu-worker-providers (step 1), then the catalog entry (step 2)
 ```
 
-### 1. The provider class, in the fork
+### 1. The provider, in `novu-worker-providers`
 
-Work on a branch of [dhruv-1001/novu](https://github.com/dhruv-1001/novu) cut from `digit/v2.3.0`, and open the PR **inside the fork** against `digit/v2.3.0`. Copy the shape of `smscountry` or `jasmin` from [#1](https://github.com/dhruv-1001/novu/pull/1). The change must stay additive: new files, plus one entry in each registry.
+Copy the shape of `jasmin.js` (form-encoded, plain-text reply) or `ozeki.js` (JSON). Everything stays in `backend/novu-bridge/novu-worker-providers/`, with no image to build:
 
-| Package | Add |
-|---|---|
-| `packages/providers/src/lib/sms/<id>/` | `<id>.provider.ts` (a `BaseProvider` implementing `ISmsProvider`) and `<id>.provider.spec.ts`; export it from `lib/sms/index.ts` |
-| `packages/shared` | `SmsProviderIdEnum.<Name> = '<id>'` (`types/providers.ts`), a credentials config built from existing `CredentialsKeyEnum` keys (`consts/providers/credentials/provider-credentials.ts`; `password` and the other `secureCredentials` keys are encrypted at rest), an entry in `smsProviders` (`consts/providers/channels/sms.ts`) |
-| `packages/framework` | The same enum value (`src/shared.ts`) and `smsProviderSchemas` entry (`schemas/providers/sms/index.ts`). The `satisfies Record<SmsProviderIdEnum, …>` check fails to compile without it |
-| `libs/application-generic/src/factories/sms` | `handlers/<id>.handler.ts` (credentials → provider config), its export in `handlers/index.ts`, and an instance in `SmsFactory` |
-| `apps/dashboard/public/images/providers/light/square/<id>.svg` | A placeholder lettermark, not a vendor brand asset |
+1. Add `<id>.js` exporting `PROVIDER_ID`, the provider class (extends `BaseProvider` from `./novu`, implements `sendMessage(options, bridgeProviderData)` and returns `{ id, date }`) and the handler (extends `BaseSmsHandler`, `buildProvider(credentials)` maps the integration's credentials onto the provider's config).
+2. Add the handler to `loadHandlers()` in `register.js`.
+3. Read credentials only from keys Novu's API already stores. They include `user`, `password`, `from`, `baseUrl`, `apiKey`, `secretKey`, `token`, `host` and `port`; the full list is the `credentials` object of Novu's integration schema, which drops any other key on save, so a new name would arrive empty.
+4. Add `test/<id>.test.js` and run `./run-tests.sh`.
+5. Copy the runtime file to `devops/deploy-as-code/charts/backbone-services/novu/files/novu-worker-providers/`. The static contract test fails until the chart copy matches.
 
-The provider must decide success from **what the gateway says**, not the HTTP status, and must throw when the gateway did not accept the message. Cover every reply shape the gateway really produces (success, error string, HTML error page, empty body, rejection-as-200). In the spec, check each test fails when its behaviour is removed.
-
-```bash
-cd packages/shared && pnpm build && cd ../stateless && pnpm build && cd ../providers && npx vitest run src/lib/sms/<id>
-```
-
-Then [build the worker](#build-it) with the next tag (`2.3.0-digit.<n+1>`) and set `novu_worker_image` to it.
+The provider must decide success from **what the gateway says**, not the HTTP status, and must throw when the gateway did not accept the message. Cover every reply shape the gateway really produces (success, error string, HTML error page, empty body, rejection-as-200). Check that each test fails when its behaviour is removed.
 
 ### 2. The catalog entry, in novu-bridge
 
 1. In `ProviderCatalog`:
    - Add a type constant and put it in `TYPES_LONGEST_FIRST`, so that no type is a prefix-match for a longer one.
-   - For a fork provider, also add a `NOVU_PROVIDER_*` constant and a `TYPE_BY_NOVU_SMS_PROVIDER` entry.
+   - For a DIGIT provider, also add a `NOVU_PROVIDER_*` constant and a `TYPE_BY_NOVU_SMS_PROVIDER` entry.
 2. Add the entry to `types()`. The field **keys must be the Novu provider's credential keys**, because `toNovuCredentials` copies exactly the declared keys:
    ```java
    types.add(ProviderType.builder()
            .type(ACME).label("ACME SMS").channel("SMS").transport("novu")
-           .novuProviderId(NOVU_PROVIDER_ACME)             // the fork's (or Novu's) provider id
+           .novuProviderId(NOVU_PROVIDER_ACME)             // DIGIT's (or Novu's) provider id
            .credentialFields(List.of(
                    CredentialField.text("baseUrl", "API URL", true, "https://acme.example/send", null),
                    CredentialField.text("user", "Username", true, null, null),
@@ -163,7 +143,7 @@ Then [build the worker](#build-it) with the next tag (`2.3.0-digit.<n+1>`) and s
 3. **`supportsVerify(true)`** turns on **Check status** (`POST /providers/verify`), which only checks that the integration exists and is active. **`supportsTestSend(true)`** turns on **Test** (`POST /providers/test-send`), the only real proof that the credentials work.
 4. Mirror the type in `local-setup/scripts/migrate-notifications.py`:
    - `CATALOG_CHANNEL`, `CATALOG_LABEL`, `CATALOG_REQUIRED` and `TYPES_LONGEST_FIRST`
-   - `TYPE_BY_NOVU_SMS_PROVIDER` and `FORK_WORKER_TYPES` for a fork provider
+   - `TYPE_BY_NOVU_SMS_PROVIDER` and `MOUNTED_PROVIDER_TYPES` for a DIGIT provider
 5. Extend `ProviderCatalogTest` with the new provider id and keys.
 
 To verify:

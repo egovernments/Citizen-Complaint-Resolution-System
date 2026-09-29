@@ -327,9 +327,9 @@ paths:
         type back from it; anything else is `400 NB_INVALID_PROVIDER`.
         `active` absent means true. The LEGACY form `{channel, providerId, name, identifier,
         credentials}` remains the escape hatch for a Novu provider the catalog does not cover.
-        `smscountry`, `ozeki` and `jasmin` are native providers of the DIGIT Novu fork's worker:
-        on the upstream worker the integration is created but every send through it fails
-        inside Novu.
+        `smscountry`, `ozeki` and `jasmin` are DIGIT's providers, mounted into the stock Novu
+        worker: on a worker without them the integration is created but every send through it
+        fails inside Novu.
 
         Credentials POST straight through to Novu over TLS. They are never persisted here,
         never logged (only key NAMES are) and never echoed back.
@@ -945,9 +945,9 @@ components:
           enum: [novu]
           description: |
             How the message reaches the gateway. `novu` — Novu's worker calls it through the
-            provider named by `novuProviderId`. `smscountry`, `ozeki` and `jasmin` are provider
-            classes of the DIGIT Novu fork (v2.3.0 + added SMS providers), so they need its
-            worker image.
+            provider named by `novuProviderId`. `smscountry`, `ozeki` and `jasmin` are DIGIT's
+            provider classes (backend/novu-bridge/novu-worker-providers), mounted into the stock
+            Novu worker.
         novuProviderId: { type: string }
         credentialFields:
           type: array

@@ -18,10 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SMSCountry, Ozeki and Jasmin are native providers of the DIGIT Novu fork's worker. These pin the
- * catalog to that fork's contract: the Novu provider ids and credential keys below are what
- * {@code packages/shared} (provider-credentials.ts) and the worker's handlers read. A drift here
- * saves fine and fails every send inside Novu.
+ * SMSCountry, Ozeki and Jasmin are DIGIT's providers mounted into the Novu worker. These pin the
+ * catalog to their contract: the Novu provider ids and credential keys below are what the
+ * handlers in {@code backend/novu-bridge/novu-worker-providers} read. A drift here saves fine and
+ * fails every send inside Novu.
  */
 class ProviderCatalogTest {
 
@@ -44,13 +44,13 @@ class ProviderCatalogTest {
     }
 
     @Test
-    void theForkGatewaysAreNativeNovuProviders_withTheForksIdsAndCredentialKeys() {
-        // The fork's credential configs: smsCountryConfig / ozekiConfig / jasminConfig.
-        Map<String, Set<String>> forkKeys = Map.of(
+    void theDigitGatewaysAreNovuProviders_withTheirIdsAndCredentialKeys() {
+        // The keys the handlers' buildProvider reads (novu-worker-providers/<id>.js).
+        Map<String, Set<String>> providerKeys = Map.of(
                 "smscountry", Set.of("user", "password", "baseUrl", "from"),
                 "ozeki", Set.of("baseUrl", "user", "password", "from"),
                 "jasmin", Set.of("baseUrl", "user", "password", "from"));
-        for (Map.Entry<String, Set<String>> e : forkKeys.entrySet()) {
+        for (Map.Entry<String, Set<String>> e : providerKeys.entrySet()) {
             ProviderType type = catalog.require(e.getKey());
             assertEquals("novu", type.getTransport(), e.getKey());
             assertEquals(e.getKey(), type.getNovuProviderId(), e.getKey());

@@ -2664,14 +2664,13 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # The worker is the Novu process that calls the gateways. SMSCountry, Ozeki
-    # and Jasmin providers exist only in the DIGIT fork of Novu v2.3.0 (upstream
-    # v2.3.0 + added SMS providers; github.com/dhruv-1001/novu, digit/v2.3.0):
-    # set NOVU_WORKER_IMAGE (host_vars novu_worker_image) to that build, e.g.
-    # novu-worker:2.3.0-digit.1. On the upstream default below those providers
-    # save fine and every send through them fails inside Novu. Twilio and SMTP
-    # work on either. The API, ws and dashboard stay upstream.
-    image: ${NOVU_WORKER_IMAGE:-ghcr.io/novuhq/novu/worker:2.3.0}
+    # The worker is the Novu process that calls the gateways. It stays the stock
+    # image: DIGIT's SMS providers (SMSCountry, Jasmin, Ozeki) are plain JS files
+    # from backend/novu-bridge/novu-worker-providers, mounted read-only below and
+    # loaded before the worker starts (NODE_OPTIONS --require register.js). The
+    # worker refuses to boot if they fail to load or the image is not the Novu
+    # version they were verified against, so a bump must re-run their tests.
+    image: ghcr.io/novuhq/novu/worker:2.3.0
     container_name: novu-worker
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2698,6 +2697,13 @@ services:
       MULTICAST_QUEUE_CHUNK_SIZE: '100'
       IS_EMAIL_INLINE_CSS_DISABLED: 'false'
       IS_USE_MERGED_DIGEST_ID_ENABLED: 'false'
+      NODE_OPTIONS: --require /opt/digit-novu-providers/register.js
+    # The deploy stages the providers at /opt/digit/novu-worker-providers and sets
+    # NOVU_WORKER_PROVIDERS_DIR; the default is the repo copy, for a compose run from
+    # local-setup/. A missing source becomes an empty directory, and the worker
+    # then fails to boot on the missing register.js rather than running without them.
+    volumes:
+      - ${NOVU_WORKER_PROVIDERS_DIR:-../backend/novu-bridge/novu-worker-providers}:/opt/digit-novu-providers:ro
     networks:
       - egov-network
 
@@ -2963,7 +2969,7 @@ services:
       # LEGACY direct route (2.12 deployments): the SMS leg bypasses Novu and
       # SmsCountryClient posts form-encoded to SMSCountry's legacy bulk API with
       # the credentials below. A Configurator SMSCountry provider does not use
-      # these: it is a native provider of the DIGIT Novu worker (NOVU_WORKER_IMAGE).
+      # these: it is a Novu provider, mounted into novu-worker (see that service).
       # These MUST be declared here, not merely written to /opt/digit/.env:
       # Compose reads .env for ${...} interpolation only, so a variable absent
       # from this block never reaches the container and the bridge silently

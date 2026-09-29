@@ -16,10 +16,10 @@ import java.util.Map;
  * The out-of-the-box provider types: what the operator enters, which Novu provider backs each, and
  * how the credential form maps onto Novu's credential keys.
  *
- * <p>Every type is a native Novu provider. SMSCountry, Ozeki and Jasmin are not in upstream
- * Novu: they are provider classes in the DIGIT fork of Novu v2.3.0 (github.com/dhruv-1001/novu,
- * branch {@code digit/v2.3.0}), so they need that fork's {@code worker} image. On the upstream
- * worker their integrations save fine and every send fails inside Novu.
+ * <p>Every type is a Novu provider. SMSCountry, Ozeki and Jasmin are not in upstream Novu: they are
+ * DIGIT's provider classes in {@code backend/novu-bridge/novu-worker-providers}, mounted into the
+ * stock Novu {@code worker} and registered before it starts. A worker without them saves their
+ * integrations fine and fails every send inside Novu.
  *
  * <p>Novu's integration has no "catalog type" field and credentials are never read back, so the
  * type is encoded in the integration {@code identifier} as {@code <type>-<stableId(name)>}. That
@@ -36,7 +36,7 @@ public class ProviderCatalog {
     public static final String OZEKI = "ozeki";
     public static final String JASMIN = "jasmin";
 
-    /** Novu provider ids. The last three exist only in the DIGIT fork's worker (see the class doc). */
+    /** Novu provider ids. The last three are DIGIT's mounted worker providers (see the class doc). */
     public static final String NOVU_PROVIDER_TWILIO = "twilio";
     public static final String NOVU_PROVIDER_NODEMAILER = "nodemailer";
     public static final String NOVU_PROVIDER_SMSCOUNTRY = "smscountry";

@@ -229,9 +229,9 @@ NB_PREFERENCE_DENIED`.
 - **SMS:** run a small HTTP mock on the compose network that answers in the gateway's real
   format (including its failure shapes, e.g. SMSCountry's and Ozeki's rejections-as-200) and
   logs what it received; point an SMSCountry provider's Gateway URL, or an Ozeki / Jasmin
-  provider's URL, at it by service name. These three need the DIGIT Novu worker
-  (`novu_worker_image`, [providers.md](./providers.md#the-digit-novu-worker)): on the upstream
-  worker the mock is never called.
+  provider's URL, at it by service name. These three are DIGIT's providers mounted into the
+  Novu worker ([providers.md](./providers.md#digits-worker-providers)); a worker started
+  without them never calls the mock.
 - **Email:** run an SMTP sink with a web inbox (e.g. Mailpit) on the compose network and add it
   as an Email (SMTP) provider: host = service name, its SMTP port, any user/password, **Use TLS
   on connect** unticked. Or use Ethereal ([setup-guide.md §8.5](./setup-guide.md#85-testing-email-without-a-real-mailbox)).

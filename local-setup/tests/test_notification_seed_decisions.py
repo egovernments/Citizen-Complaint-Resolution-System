@@ -220,7 +220,9 @@ class ProviderIdentifier(unittest.TestCase):
                 self.assertEqual(mn.derive_type({"providerId": provider, "channel": "sms"}), provider)
         self.assertIsNone(mn.derive_type({"providerId": "generic-sms", "channel": "sms"}))
 
-    def plan(self, entry, integrations=(), worker_image=None):
+    NO_WORKER = object()
+
+    def plan(self, entry, integrations=(), worker_env=NO_WORKER):
         import stat
         import tempfile
         fd, path = tempfile.mkstemp(suffix=".json")
@@ -231,16 +233,16 @@ class ProviderIdentifier(unittest.TestCase):
         ctx = types.SimpleNamespace(integrations=list(integrations), integrations_error=None)
         args = types.SimpleNamespace(create_provider=["smscountry"], create_smscountry_provider=False,
                                      credentials_file=path,
-                                     worker_container="novu-worker" if worker_image else None)
+                                     worker_container=None if worker_env is self.NO_WORKER else "novu-worker")
         original = mn.catalog_required
         mn.catalog_required = lambda _ctx: dict(mn.CATALOG_REQUIRED)  # no bridge call in a unit test
         self.addCleanup(setattr, mn, "catalog_required", original)
-        original_image = mn.container_image
-        mn.container_image = lambda _name: worker_image  # no docker call in a unit test
-        self.addCleanup(setattr, mn, "container_image", original_image)
+        original_env = mn.container_env
+        mn.container_env = lambda _name: worker_env  # no docker call in a unit test
+        self.addCleanup(setattr, mn, "container_env", original_env)
         return mn.plan_provider_creation(ctx, args)
 
-    # The SMSCountry form is the fork provider's credential keys.
+    # The SMSCountry form is the Novu provider's credential keys.
     CREDS = {"user": "u", "password": "p", "from": "S"}
 
     def test_the_pre_native_smscountry_keys_are_refused_with_their_new_names(self):
@@ -249,16 +251,21 @@ class ProviderIdentifier(unittest.TestCase):
         self.assertIn("lack required key(s): from", str(caught.exception))
         self.assertIn("senderId is now from", str(caught.exception))
 
-    def test_an_smscountry_provider_is_refused_while_the_worker_is_upstream(self):
+    def test_an_smscountry_provider_is_refused_while_the_worker_does_not_preload_our_providers(self):
         with self.assertRaises(mn.RefuseToStart) as caught:
-            self.plan({"credentials": self.CREDS}, worker_image="ghcr.io/novuhq/novu/worker:2.3.0")
-        self.assertIn("DIGIT Novu worker", str(caught.exception))
-        self.assertIn("ghcr.io/novuhq/novu/worker:2.3.0", str(caught.exception))
+            self.plan({"credentials": self.CREDS}, worker_env={"NODE_ENV": "local"})
+        self.assertIn("does not preload them", str(caught.exception))
+        self.assertIn("digit-novu-providers/register.js", str(caught.exception))
 
-    def test_an_smscountry_provider_is_planned_on_the_fork_worker(self):
-        plans = self.plan({"credentials": self.CREDS}, worker_image="novu-worker:2.3.0-digit.1")
+    def test_an_smscountry_provider_is_planned_when_the_worker_preloads_our_providers(self):
+        plans = self.plan({"credentials": self.CREDS},
+                          worker_env={"NODE_OPTIONS": "--require /opt/digit-novu-providers/register.js"})
         self.assertEqual(plans[0]["state"], "create")
         self.assertEqual(plans[0]["keys"], ["from", "password", "user"])
+
+    def test_an_smscountry_provider_is_not_blocked_when_docker_cannot_tell(self):
+        plans = self.plan({"credentials": self.CREDS}, worker_env=None)
+        self.assertEqual(plans[0]["state"], "create")
 
     def test_a_prefixless_identifier_is_refused_before_any_write(self):
         with self.assertRaises(mn.RefuseToStart) as caught:
