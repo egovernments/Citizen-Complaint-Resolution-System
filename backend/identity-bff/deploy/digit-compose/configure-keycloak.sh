@@ -152,6 +152,16 @@ flow_uuid() {
     jq -r --arg alias "$1" '.[] | select(.alias == $alias) | .id' | head -1
 }
 
+# Keeps every attribute an admin can see (ADMIN_EDIT, instead of silently
+# dropping unmanaged attributes). Written as JSON because kcadm cannot set the
+# dotted `unmanagedAttributePolicy` key.
+configure_user_profile() {
+  kc get users/profile -r "$REALM" |
+    jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update users/profile -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
+}
+
 configure_first_broker_login() {
   # Pin the account-linking behaviour instead of inheriting whatever a realm's
   # default happens to contain. Keycloak 26's built-in flow already has the
@@ -250,7 +260,7 @@ fi
 # and existing realms even when the optional magic-link resource is disabled.
 kc update "realms/$REALM" -s organizationsEnabled=true \
   -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
-  -s resetPasswordAllowed=false \
+  -s resetPasswordAllowed=false -s bruteForceProtected=true \
   -s "sslRequired=$SSL_REQUIRED" >/dev/null
 
 # The DIGIT theme is selected per client below (CCRS #2108) so that a client
@@ -324,6 +334,8 @@ ensure_mapper "client-scopes/$organization_scope" 'organization groups' \
   -s 'config."userinfo.token.claim"=true' -s 'config."introspection.token.claim"=true' \
   -s 'config."addGroupRoleMappings"=true'
 kc update "clients/$bff_uuid/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
+
+configure_user_profile
 
 if [ "${KEYCLOAK_MAGIC_LINK_ENABLED:-false}" = true ]; then
   configure_magic_link

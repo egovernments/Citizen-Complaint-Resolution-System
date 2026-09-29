@@ -495,8 +495,6 @@ deployed with. In the deployment's config:
 ui_state_tenant_id: <root>.<city>          # the apps land on the new city
 boot_tenant: <root>.<city>
 hierarchy_type: <the Phase 2 hierarchy name>
-login_tenant_allowlist: [<root>, <root>.<city>]   # every tenant that must
-                                                  # appear in the City dropdown
 ```
 
 Leave `state_root`, `state_tenant_id` and `tenant_id` alone — those are the boot

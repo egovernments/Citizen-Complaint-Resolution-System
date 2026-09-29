@@ -288,6 +288,74 @@ describe('docker-compose.egov-digit.yaml', () => {
   });
 });
 
+describe('tenant-scoped digit-ui routing', () => {
+  const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+  const helmGlobalConfig = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/files/globalConfigs.js.tpl'
+  );
+
+  test('tenant selection is no longer deployment global configuration', () => {
+    expect(globalConfig).not.toContain('SHOW_TENANT_SWITCHER');
+    expect(globalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+    expect(helmGlobalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+  });
+
+  // #2072 Step 1: digit-ui-esbuild signs in by route (Identity BFF on tenant
+  // routes, DIGIT auth on legacy ones) and defaults every one of these keys
+  // to `digit` when absent, so no deployment surface may emit them.
+  test('no browser auth-provider or direct-Keycloak keys in globalConfigs', () => {
+    const REMOVED = ['AUTH_PROVIDER', 'KEYCLOAK_URL', 'KEYCLOAK_REALM',
+      'KEYCLOAK_CLIENT_ID', 'TOKEN_EXCHANGE_URL', 'authProvider',
+      'keycloakUrl', 'keycloakRealm', 'keycloakClientId', 'tokenExchangeUrl'];
+    const sources = {
+      'globalConfigs.js.j2': globalConfig,
+      'helm globalConfigs.js.tpl': helmGlobalConfig,
+      'helm values.yaml': read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml'),
+      'digit-ui-esbuild dev stub': read('digit-ui-esbuild/public/globalConfigs.js'),
+      'local-setup nginx stub': read('local-setup/nginx/globalConfigs.js'),
+    };
+    for (const [name, body] of Object.entries(sources)) {
+      for (const key of REMOVED) {
+        // AUTH_PROVIDER also covers CITIZEN_/EMPLOYEE_AUTH_PROVIDER;
+        // authProvider covers citizenAuthProvider/employeeAuthProvider.
+        expect({ name, key, found: body.includes(key) }).toEqual({ name, key, found: false });
+      }
+    }
+    // digit-ui-v2 (/citizen) still bakes auth_provider at build time.
+    expect(read('local-setup/ansible/playbook-deploy.yml'))
+      .toContain('VITE_AUTH_PROVIDER="{{ auth_provider | default(\'\') }}"');
+  });
+});
+
+// #2167 review (Fable M3): Keycloak (KC_PROXY_HEADERS=xforwarded) takes the
+// LEFTMOST X-Forwarded-For entry as the client IP and Kong always appends its
+// peer, so the outermost nginx must SET the header for Keycloak, never append
+// a client-supplied one; otherwise a caller picks the IP Keycloak records
+// (brute-force detection, events).
+describe('Keycloak sees the real client IP', () => {
+  const locationBlock = (conf: string, marker: string) => {
+    const start = conf.indexOf(marker);
+    expect(start).toBeGreaterThan(-1);
+    // End at the block's closing-brace line; Jinja `{{ }}` sit inside it.
+    const end = conf.slice(start).search(/\n\s*\}\s*\n/);
+    return conf.slice(start, start + end);
+  };
+
+  test('host nginx sets X-Forwarded-For for /auth/realms/ before Kong', () => {
+    const block = locationBlock(
+      read('local-setup/ansible/templates/nginx-site.conf.j2'), 'location ^~ /auth/realms/ {');
+    expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block).not.toContain('$proxy_add_x_forwarded_for');
+  });
+
+  test('the identity compose nginx sets it for Keycloak too', () => {
+    const block = locationBlock(
+      read('backend/identity-bff/deploy/digit-compose/nginx-identity.conf'), 'location /auth/realms/ {');
+    expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block).not.toContain('$proxy_add_x_forwarded_for');
+  });
+});
+
 describe('Novu workflow creation deployment contract', () => {
   const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
   const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));

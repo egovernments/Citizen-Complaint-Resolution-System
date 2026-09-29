@@ -60,8 +60,6 @@ boot_tenant: ke.bomet
 tenant_id: ke
 ui_state_tenant_id: ke.bomet
 nginx_preserve_vhost: false        # kit: true — local box has no hand-managed vhost to preserve
-login_tenant_allowlist: []
-
 # Hide these modules in the employee UI. IM (inbox-v2) needs the search
 # stack, which is off on this box (enable_search_stack: false below).
 employee_module_denylist:
