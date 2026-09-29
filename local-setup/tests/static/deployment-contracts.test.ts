@@ -249,6 +249,35 @@ describe('one-tag deploys (#1729)', () => {
     expect(escaped).toEqual([]);
   });
 
+  test('catalog `profiles` match the compose profiles each image runs under', () => {
+    // The registry check skips an image whose profiles are all off (Vinoth
+    // review on #2166). A catalog entry claiming a profile compose does not
+    // gate would skip a check for an image that IS pulled; one missing a
+    // profile would block deploys on an image that is never pulled.
+    const composeProfiles = new Map<string, { gated: Set<string>; ungated: boolean }>();
+    for (const [, body] of deployedCompose) {
+      const blocks = body.split(/^(?=  [\w.-]+:\s*$)/m);
+      for (const block of blocks) {
+        const env = block.match(/^ {4}image:\s*\$\{(\w+):-/m)?.[1];
+        if (!env) continue;
+        const listed = block.match(/^ {4}profiles:\s*\[([^\]]*)\]/m)?.[1];
+        const entry = composeProfiles.get(env) ?? { gated: new Set<string>(), ungated: false };
+        if (listed === undefined) entry.ungated = true;
+        else listed.split(',').map((p) => p.trim().replace(/"/g, '')).forEach((p) => entry.gated.add(p));
+        composeProfiles.set(env, entry);
+      }
+    }
+    const entries = [...groupVars.matchAll(/^  - \{image: ([\w-]+), env: (\w+),([^}]*)\}/gm)];
+    expect(entries).toHaveLength(catalog.length);
+    for (const [, image, env, rest] of entries) {
+      const declared = (rest.match(/profiles: \[([^\]]*)\]/)?.[1] ?? '')
+        .split(',').map((p) => p.trim()).filter(Boolean).sort();
+      const inCompose = composeProfiles.get(env);
+      const expected = !inCompose || inCompose.ungated ? [] : [...inCompose.gated].sort();
+      expect({ image, profiles: declared }).toEqual({ image, profiles: expected });
+    }
+  });
+
   test('digit.env.j2 writes every catalog env var from the resolved plan, once', () => {
     expect(envTemplate).toContain('{% for e in ccrs_image_catalog %}');
     expect(envTemplate).toContain('{{ e.env }}={{ ccrs_image_env[e.env] }}');
