@@ -26,7 +26,7 @@ const REQUIRED_PAGES = [
 ];
 
 describe("page coverage", () => {
-    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src/login/KcPage.tsx"), "utf8");
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src/login/ConfiguratorKcPage.tsx"), "utf8");
 
     it.each(REQUIRED_PAGES)("%s has an explicit override", pageId => {
         expect(source).toContain(`case "${pageId}":`);
