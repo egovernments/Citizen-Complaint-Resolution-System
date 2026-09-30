@@ -6,7 +6,7 @@ export type CitizenOtpAuditEvent = "OTP_SEND" | "OTP_VERIFY" | "SESSION_CREATE";
 export interface CitizenOtpAuditRecord {
   event: CitizenOtpAuditEvent;
   outcome: "SUCCESS" | "REFUSED" | "FAILED";
-  /** Stable machine reason for a refusal or failure, e.g. `OTP_LOCKED`. */
+  /** Stable machine reason for a refusal or failure, e.g. `OTP_RATE_LIMITED`. */
   reason?: string;
   tenantId?: string;
   urlSlug?: string;

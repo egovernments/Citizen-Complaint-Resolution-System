@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, randomInt } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
+import { countInWindow, uncount } from "../../infrastructure/rate-limit.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import type { BoundTenant } from "../authentication/surfaces.js";
 
@@ -8,6 +9,10 @@ import type { BoundTenant } from "../authentication/surfaces.js";
  * by IDENTITY_CITIZEN_OTP_SECRET and bound to their challenge, so a Redis dump
  * cannot be brute-forced offline. Phone-keyed buckets use the same keyed hash,
  * never the number itself.
+ *
+ * Guessing is bounded per challenge (IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS) and by
+ * the per-phone and per-IP send limits. There is deliberately no lockout per
+ * phone number: anyone who knows a number could use one to lock its owner out.
  */
 
 const PREFIX = () => `${config.cachePrefix}:identity:citizen-otp`;
@@ -26,8 +31,6 @@ function codeHash(challengeId: string, code: string): string {
 }
 
 const challengeKey = (id: string) => `${PREFIX()}:challenge:${id}`;
-const lockKey = (phoneRef: string) => `${PREFIX()}:lock:${phoneRef}`;
-const failuresKey = (phoneRef: string) => `${PREFIX()}:failures:${phoneRef}`;
 const cooldownKey = (phoneRef: string) => `${PREFIX()}:cooldown:${phoneRef}`;
 const phoneSendsKey = (phoneRef: string) => `${PREFIX()}:sends:phone:${phoneRef}`;
 const ipSendsKey = (ipRef: string) => `${PREFIX()}:sends:ip:${ipRef}`;
@@ -38,40 +41,34 @@ export interface OtpChallenge {
   tenant: BoundTenant;
 }
 
-/** Seconds until the phone's lockout ends, or 0 when it is not locked. */
-export async function lockoutRemaining(phoneNumber: string): Promise<number> {
-  const ttl = await getRedis().ttl(lockKey(privateRef("phone", phoneNumber)));
-  return ttl > 0 ? ttl : 0;
-}
-
-const COUNT_IN_WINDOW = `local current = redis.call('INCR', KEYS[1])
-  if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
-  return {current, redis.call('TTL', KEYS[1])}`;
-
-async function countInWindow(key: string, windowSeconds: number): Promise<{ count: number; ttl: number }> {
-  const [count, ttl] = await getRedis().eval(COUNT_IN_WINDOW, 1, key, windowSeconds) as [number, number];
-  return { count: Number(count), ttl: Number(ttl) };
+/** What a granted send charged, so a failed delivery can give it back. */
+export interface SendReservation {
+  phoneRef: string;
+  ipRef: string;
+  cooldown: boolean;
 }
 
 export type SendAllowance =
-  | { allowed: true }
+  | { allowed: true; reservation: SendReservation }
   | { allowed: false; reason: "COOLDOWN" | "PHONE_LIMIT" | "IP_LIMIT"; retryAfter: number };
 
 /**
  * Resend limits: a per-phone cooldown between codes, and per-phone and per-IP
- * counts in a rolling window. Every request counts, including refused ones.
+ * counts in a window. Refused requests count too; a granted send that then
+ * fails to deliver is refunded with `refundSend`.
  */
 export async function reserveSend(phoneNumber: string, ip: string): Promise<SendAllowance> {
   const phoneRef = privateRef("phone", phoneNumber);
+  const ipRef = privateRef("ip", ip);
   const window = config.identityCitizenOtpSendWindowSeconds;
-  const ipSends = await countInWindow(ipSendsKey(privateRef("ip", ip)), window);
+  const ipSends = await countInWindow(ipSendsKey(ipRef), window);
   if (ipSends.count > config.identityCitizenOtpIpSendLimit) {
     return { allowed: false, reason: "IP_LIMIT", retryAfter: Math.max(1, ipSends.ttl) };
   }
-  const cooled = config.identityCitizenOtpResendSeconds <= 0 || await getRedis().set(
+  const cooldown = config.identityCitizenOtpResendSeconds > 0;
+  if (cooldown && !await getRedis().set(
     cooldownKey(phoneRef), "1", "EX", config.identityCitizenOtpResendSeconds, "NX",
-  );
-  if (!cooled) {
+  )) {
     const ttl = await getRedis().ttl(cooldownKey(phoneRef));
     return { allowed: false, reason: "COOLDOWN", retryAfter: Math.max(1, ttl) };
   }
@@ -79,7 +76,14 @@ export async function reserveSend(phoneNumber: string, ip: string): Promise<Send
   if (phoneSends.count > config.identityCitizenOtpPhoneSendLimit) {
     return { allowed: false, reason: "PHONE_LIMIT", retryAfter: Math.max(1, phoneSends.ttl) };
   }
-  return { allowed: true };
+  return { allowed: true, reservation: { phoneRef, ipRef, cooldown } };
+}
+
+/** A code that never reached the citizen costs them nothing. */
+export async function refundSend(reservation: SendReservation): Promise<void> {
+  await uncount(phoneSendsKey(reservation.phoneRef));
+  await uncount(ipSendsKey(reservation.ipRef));
+  if (reservation.cooldown) await getRedis().del(cooldownKey(reservation.phoneRef));
 }
 
 /** A new six-digit code for a new challenge. The code itself is never stored. */
@@ -117,14 +121,18 @@ export async function readChallenge(id: string): Promise<OtpChallenge | null> {
 }
 
 /**
- * Compare, count and consume in one step, so concurrent guesses cannot share
- * an attempt and a right code is accepted exactly once.
+ * Compare and count in one step. A right code CLAIMS the challenge instead of
+ * deleting it: the claim makes it unusable for anyone else while sign-in
+ * completes, and the route then either consumes it (`consumeChallenge`) or,
+ * when Keycloak was briefly unavailable, releases it (`releaseChallenge`) so
+ * the same code still works.
  */
-const CHECK_CODE = `local hash = redis.call('HGET', KEYS[1], 'hash')
+const CLAIM_CODE = `local hash = redis.call('HGET', KEYS[1], 'hash')
   if not hash then return {'MISSING', 0} end
+  if redis.call('HEXISTS', KEYS[1], 'claimed') == 1 then return {'MISSING', 0} end
   if hash == ARGV[1] or ARGV[3] == '1' then
-    if redis.call('DEL', KEYS[1]) == 1 then return {'OK', 0} end
-    return {'MISSING', 0}
+    redis.call('HSET', KEYS[1], 'claimed', '1')
+    return {'OK', 0}
   end
   local attempts = redis.call('HINCRBY', KEYS[1], 'attempts', 1)
   local remaining = tonumber(ARGV[2]) - attempts
@@ -134,37 +142,31 @@ const CHECK_CODE = `local hash = redis.call('HGET', KEYS[1], 'hash')
 export type CodeCheck =
   | { status: "OK"; fixedCode: boolean }
   | { status: "MISSING" }
-  | { status: "WRONG"; attemptsRemaining: number; locked: boolean };
+  | { status: "WRONG"; attemptsRemaining: number };
 
 /**
  * `fixedCode` is the enabled legacy fixed OTP: it satisfies any live
- * challenge, still single-use and still behind lockout.
+ * challenge, still single-use and still behind the attempt limit.
  */
-export async function checkCode(
+export async function claimCode(
   challenge: OtpChallenge,
   code: string,
   fixedCode: string | null = null,
 ): Promise<CodeCheck> {
   const fixed = fixedCode !== null && code === fixedCode;
   const [status, remaining] = await getRedis().eval(
-    CHECK_CODE, 1, challengeKey(challenge.id),
+    CLAIM_CODE, 1, challengeKey(challenge.id),
     codeHash(challenge.id, code), config.identityCitizenOtpMaxAttempts, fixed ? "1" : "0",
   ) as [string, number];
-  if (status === "OK") {
-    await getRedis().del(failuresKey(privateRef("phone", challenge.phoneNumber)));
-    return { status: "OK", fixedCode: fixed };
-  }
+  if (status === "OK") return { status: "OK", fixedCode: fixed };
   if (status !== "WRONG") return { status: "MISSING" };
-  // Wrong guesses also add up per phone across challenges; enough of them
-  // lock the phone out of both sending and verifying.
-  const phoneRef = privateRef("phone", challenge.phoneNumber);
-  const failures = await countInWindow(failuresKey(phoneRef), config.identityCitizenOtpLockoutSeconds);
-  const locked = failures.count >= config.identityCitizenOtpLockoutFailures;
-  if (locked) {
-    await getRedis().multi()
-      .set(lockKey(phoneRef), "1", "EX", config.identityCitizenOtpLockoutSeconds)
-      .del(failuresKey(phoneRef), challengeKey(challenge.id))
-      .exec();
-  }
-  return { status: "WRONG", attemptsRemaining: locked ? 0 : Math.max(0, Number(remaining)), locked };
+  return { status: "WRONG", attemptsRemaining: Math.max(0, Number(remaining)) };
+}
+
+export async function consumeChallenge(id: string): Promise<void> {
+  await getRedis().del(challengeKey(id));
+}
+
+export async function releaseChallenge(id: string): Promise<void> {
+  await getRedis().hdel(challengeKey(id), "claimed");
 }

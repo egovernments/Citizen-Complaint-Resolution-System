@@ -28,10 +28,13 @@ export interface IdentitySession {
    * is never refreshed, and ends at `sessionExpiresAt`.
    */
   authMethod?: "phone_otp";
+  /** phone_otp: when the Keycloak user was last confirmed enabled (ms). */
+  identityCheckedAt?: number;
 }
 
 /** Surface binding persisted with a session and preserved across refresh. */
 export interface SessionBinding {
   surface?: IdentitySurface;
   boundTenant?: BoundTenant;
+  authMethod?: "phone_otp";
 }

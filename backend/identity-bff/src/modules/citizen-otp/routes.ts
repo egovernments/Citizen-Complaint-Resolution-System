@@ -16,12 +16,14 @@ import { config } from "../../infrastructure/config.js";
 import { audit } from "./audit.js";
 import { fixedOtpCode, OtpDeliveryError, otpSender } from "./otp-sender.js";
 import {
-  checkCode,
+  claimCode,
+  consumeChallenge,
   createChallenge,
   deleteChallenge,
-  lockoutRemaining,
   privateRef,
   readChallenge,
+  refundSend,
+  releaseChallenge,
   reserveSend,
 } from "./otp-store.js";
 
@@ -36,10 +38,6 @@ function refuse(response: express.Response, refusal: Refusal) {
   return response.status(refusal.status).json(refusal.body);
 }
 
-const locked = (retryAfter: number): Refusal => ({
-  status: 429,
-  body: { error: "Too many wrong codes for this number. Try again later.", code: "OTP_LOCKED", retryAfter },
-});
 
 /**
  * Every response of these routes carries a stable `code`; `error` is display
@@ -118,11 +116,6 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
       const phoneRef = privateRef("phone", phoneNumber);
       const base = { event: "OTP_SEND" as const, tenantId: tenant.tenantId, urlSlug: tenant.urlSlug, phoneRef, ipRef };
 
-      const lockedFor = await lockoutRemaining(phoneNumber);
-      if (lockedFor) {
-        await audit({ ...base, outcome: "REFUSED", reason: "OTP_LOCKED" });
-        return refuse(response, locked(lockedFor));
-      }
       const allowance = await reserveSend(phoneNumber, request.ip || "unknown");
       if (!allowance.allowed) {
         await audit({ ...base, outcome: "REFUSED", reason: `OTP_${allowance.reason}` });
@@ -137,11 +130,9 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
       }
 
       const { challenge, code } = await createChallenge(phoneNumber, tenant);
-      const sender = otpSender();
-      let delivered = false;
+      let reason: string | undefined;
       try {
-        if (!sender.configured) throw new OtpDeliveryError("No OTP channel is configured");
-        await sender.send({
+        await otpSender().send({
           challengeId: challenge.id,
           tenantId: tenant.tenantId,
           phoneNumber,
@@ -149,32 +140,23 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
           expiresInSeconds: config.identityCitizenOtpTtlSeconds,
           ...(typeof locale === "string" && { locale }),
         });
-        delivered = true;
       } catch (error) {
-        if (!(error instanceof OtpDeliveryError)) {
+        if (!(error instanceof OtpDeliveryError) || fixedOtpCode() === null) {
+          // Undelivered: the challenge goes, and so does what it cost.
           await deleteChallenge(challenge.id);
-          throw error;
-        }
-        console.warn("Citizen OTP delivery failed:", error.message);
-        // With the fixed code on, the challenge stays usable without delivery.
-        if (fixedOtpCode() === null) {
-          await deleteChallenge(challenge.id);
+          await refundSend(allowance.reservation);
+          if (!(error instanceof OtpDeliveryError)) throw error;
+          console.warn("Citizen OTP delivery failed:", error.message);
           await audit({ ...base, challengeId: challenge.id, outcome: "FAILED", reason: "OTP_CHANNEL_UNAVAILABLE" });
           return response.status(503).json({
             error: "The code could not be sent. Try again later.",
             code: "OTP_CHANNEL_UNAVAILABLE",
           });
         }
+        // Fixed-code mode (development): the challenge stays usable undelivered.
+        reason = "FIXED_CODE_ONLY";
       }
-      if (!delivered) {
-        await audit({ ...base, challengeId: challenge.id, outcome: "SUCCESS", reason: "FIXED_CODE_ONLY" });
-        return response.status(202).json({
-          challengeId: challenge.id,
-          expiresIn: config.identityCitizenOtpTtlSeconds,
-          resendAfter: config.identityCitizenOtpResendSeconds,
-        });
-      }
-      await audit({ ...base, challengeId: challenge.id, outcome: "SUCCESS" });
+      await audit({ ...base, challengeId: challenge.id, outcome: "SUCCESS", ...(reason && { reason }) });
       return response.status(202).json({
         challengeId: challenge.id,
         expiresIn: config.identityCitizenOtpTtlSeconds,
@@ -221,22 +203,13 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     const phoneRef = privateRef("phone", challenge.phoneNumber);
     const base = { tenantId: tenant.tenantId, urlSlug: tenant.urlSlug, phoneRef, ipRef, challengeId };
 
-    const lockedFor = await lockoutRemaining(challenge.phoneNumber);
-    if (lockedFor) {
-      await audit({ ...base, event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_LOCKED" });
-      return refuse(response, locked(lockedFor));
-    }
-    const check = await checkCode(challenge, code, fixedOtpCode());
+    const check = await claimCode(challenge, code, fixedOtpCode());
     if (check.status === "MISSING") {
       await audit({ ...base, event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_EXPIRED" });
       return expired();
     }
     if (check.status === "WRONG") {
-      await audit({
-        ...base, event: "OTP_VERIFY", outcome: "REFUSED",
-        reason: check.locked ? "OTP_LOCKED" : "OTP_INVALID",
-      });
-      if (check.locked) return refuse(response, locked(config.identityCitizenOtpLockoutSeconds));
+      await audit({ ...base, event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_INVALID" });
       return response.status(400).json({
         error: "That code is not correct.",
         code: check.attemptsRemaining > 0 ? "OTP_INVALID" : "OTP_EXPIRED",
@@ -248,15 +221,27 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
       ...(check.fixedCode && { reason: "FIXED_CODE" }),
     });
 
+    // The claimed code is consumed only once a session exists. A transient
+    // Keycloak failure releases it, so the citizen can retry the same code.
     let user;
+    let session;
     try {
       user = await ensurePhoneIdentityUser(challenge.phoneNumber);
+      session = await createPhoneOtpSession({
+        subject: user.id,
+        name: user.name,
+        phoneNumber: challenge.phoneNumber,
+        boundTenant: tenant,
+      });
     } catch (error) {
+      const refused = error instanceof IdentityAdminError && (error.status === 403 || error.status === 409);
+      if (refused) await consumeChallenge(challenge.id);
+      else await releaseChallenge(challenge.id);
       if (!(error instanceof IdentityAdminError)) throw error;
       const disabled = error.status === 403;
       console.warn("Citizen OTP identity resolution failed:", error.message);
       await audit({
-        ...base, event: "SESSION_CREATE", outcome: disabled ? "REFUSED" : "FAILED",
+        ...base, event: "SESSION_CREATE", outcome: refused ? "REFUSED" : "FAILED",
         reason: disabled ? "IDENTITY_DISABLED" : error.status === 409 ? "IDENTITY_CONFLICT" : "IDENTITY_UNAVAILABLE",
       });
       if (disabled) {
@@ -267,13 +252,8 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         code: error.status === 409 ? "IDENTITY_CONFLICT" : "IDENTITY_UNAVAILABLE",
       });
     }
-
-    const { sessionId, maxAge } = await createPhoneOtpSession({
-      subject: user.id,
-      name: user.name,
-      phoneNumber: challenge.phoneNumber,
-      boundTenant: tenant,
-    });
+    await consumeChallenge(challenge.id);
+    const { sessionId, maxAge } = session;
     await audit({
       ...base, event: "SESSION_CREATE", outcome: "SUCCESS", subject: user.id,
       sessionRef: privateRef("session", sessionId),

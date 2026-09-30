@@ -926,15 +926,25 @@ function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIde
   return { id: user.id, name: name || "Citizen", created };
 }
 
+/**
+ * Every user whose VERIFIED phone is this number. The query already asks for
+ * verified owners only, and all pages are read, so unverified holders of the
+ * number can never hide the real owner behind a result limit.
+ */
 async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserRepresentation[]> {
   const query = new URLSearchParams({
-    q: `${PHONE_ATTRIBUTE}:${phoneNumber}`,
+    q: `${PHONE_ATTRIBUTE}:${phoneNumber} ${PHONE_VERIFIED_ATTRIBUTE}:true`,
     briefRepresentation: "false",
-    max: "5",
   });
-  const response = await request(`/users?${query}`);
-  return (await response.json() as UserRepresentation[])
+  return (await paged<UserRepresentation>(`/users?${query}`))
     .filter((user) => verifiedPhoneOwner(user, phoneNumber));
+}
+
+/** False when the Keycloak user is disabled or no longer exists. */
+export async function identityUserEnabled(userId: string): Promise<boolean> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`, {}, [200, 404]);
+  if (response.status === 404) return false;
+  return (await response.json() as UserRepresentation).enabled !== false;
 }
 
 /**
@@ -966,7 +976,22 @@ export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<Phon
     }),
   }, [201, 409]);
   const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
-  if (response.status === 201 && id) return { id, name: "Citizen", created: true };
+  if (response.status === 201 && id) {
+    // Keycloak drops unmanaged attributes silently unless the realm keeps
+    // them. A user without its verified phone would never be found again and
+    // would block every later sign-in for the number, so it is removed and
+    // the misconfiguration is reported instead.
+    const created = await (await request(`/users/${encodeURIComponent(id)}`)).json() as UserRepresentation;
+    if (!verifiedPhoneOwner(created, phoneNumber)) {
+      await request(`/users/${encodeURIComponent(id)}`, { method: "DELETE" }, [204, 404]);
+      console.error(
+        "Keycloak did not store phoneNumber/phoneNumberVerified on a new user. " +
+        "Set the realm's unmanagedAttributePolicy to ADMIN_EDIT (#2193).",
+      );
+      throw new IdentityAdminError("Keycloak did not store the phone attributes", 503);
+    }
+    return { id, name: "Citizen", created: true };
+  }
 
   const query = new URLSearchParams({ username, exact: "true", briefRepresentation: "false" });
   const raced = (await (await request(`/users?${query}`)).json() as UserRepresentation[])

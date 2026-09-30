@@ -109,7 +109,8 @@ export const config = {
   ),
   identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
   // Citizen phone OTP sign-in (#2189). The secret keys the code and phone
-  // hashes; without it, or without a sender, `phone_otp` is never offered.
+  // hashes. `phone_otp` is offered only with the secret AND a way to prove a
+  // number: a configured sender, or a valid fixed code (development).
   identityCitizenOtpSecret: process.env.IDENTITY_CITIZEN_OTP_SECRET || "",
   identityCitizenOtpTtlSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_TTL_SECONDS || "300"),
   identityCitizenOtpMaxAttempts: parseInt(process.env.IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS || "5"),
@@ -119,12 +120,6 @@ export const config = {
   ),
   identityCitizenOtpPhoneSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT || "5"),
   identityCitizenOtpIpSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT || "20"),
-  identityCitizenOtpLockoutFailures: parseInt(
-    process.env.IDENTITY_CITIZEN_OTP_LOCKOUT_FAILURES || "10",
-  ),
-  identityCitizenOtpLockoutSeconds: parseInt(
-    process.env.IDENTITY_CITIZEN_OTP_LOCKOUT_SECONDS || "3600",
-  ),
   // Interim OTP channel: "log" writes codes to the BFF log (development only).
   // Anything else = no channel, so a send answers OTP_CHANNEL_UNAVAILABLE.
   identityCitizenOtpSender: process.env.IDENTITY_CITIZEN_OTP_SENDER || "",

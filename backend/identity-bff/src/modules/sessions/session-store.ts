@@ -259,6 +259,7 @@ export async function saveIdentitySession(
       surface: binding.surface,
       boundTenant: binding.boundTenant,
     }),
+    ...(binding.authMethod && { authMethod: binding.authMethod, identityCheckedAt: now }),
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     accessExpiresAt: now + tokens.accessExpiresIn * 1000,
@@ -288,9 +289,10 @@ export async function createPhoneOtpSession(input: {
 }): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
   const maxAge = config.identitySessionTtlSeconds;
-  const sessionExpiresAt = Date.now() + maxAge * 1000;
-  const session: IdentitySession = {
-    claims: {
+  await saveIdentitySession(
+    sessionId,
+    { accessToken: "", accessExpiresIn: maxAge },
+    {
       sub: input.subject,
       email: "",
       name: input.name,
@@ -298,19 +300,17 @@ export async function createPhoneOtpSession(input: {
       phone_number_verified: true,
       azp: config.keycloakCitizenClientId,
     },
-    oidcClientId: config.keycloakCitizenClientId,
-    surface: "citizen",
-    boundTenant: input.boundTenant,
-    authMethod: "phone_otp",
-    accessToken: "",
-    accessExpiresAt: sessionExpiresAt,
-    sessionExpiresAt,
-  };
-  if (!validBinding(session.surface, session.boundTenant)) {
-    throw new Error("Invalid identity session surface binding");
-  }
-  await getRedis().set(sessionKey(sessionId), JSON.stringify(session), "EX", maxAge);
+    maxAge,
+    config.keycloakCitizenClientId,
+    undefined,
+    { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
+  );
   return { sessionId, maxAge };
+}
+
+/** Rewrites a session record without changing its expiry. */
+export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<void> {
+  await getRedis().set(sessionKey(sessionId), JSON.stringify(session), "KEEPTTL");
 }
 
 export async function getIdentitySession(

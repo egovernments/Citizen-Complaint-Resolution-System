@@ -79,6 +79,8 @@ export function resetAdminRequestLog(): void {
 
 export function resetState() {
   initState();
+  faults = [];
+  dropUnmanagedAttributes = false;
 }
 
 function getRealm(name: string): RealmState | undefined {
@@ -161,6 +163,9 @@ function getOrCreateRealm(name: string): RealmState {
   return realm;
 }
 
+let faults: Array<{ method: string; path: string; status?: number; remaining: number }> = [];
+let dropUnmanagedAttributes = false;
+
 export function createKcAdminMock() {
   initState();
 
@@ -170,6 +175,24 @@ export function createKcAdminMock() {
   app.use((req, _res, next) => {
     if (!req.path.startsWith("/__test")) adminRequests.push(`${req.method} ${req.path}`);
     next();
+  });
+  // Test hooks: fail the next N admin requests matching a method and path
+  // fragment, or drop unmanaged user attributes like a realm without
+  // unmanagedAttributePolicy would.
+  app.put("/__test/faults", express.json(), (req, res) => {
+    faults.push({ ...req.body, remaining: req.body.count ?? 1 });
+    res.status(204).end();
+  });
+  app.put("/__test/drop-unmanaged-attributes", express.json(), (req, res) => {
+    dropUnmanagedAttributes = req.body?.drop === true;
+    res.status(204).end();
+  });
+  app.use((req, res, next) => {
+    const fault = faults.find((candidate) => candidate.remaining > 0 &&
+      candidate.method === req.method && req.path.includes(candidate.path));
+    if (!fault) return next();
+    fault.remaining -= 1;
+    return res.status(fault.status || 503).json({ error: "injected fault" });
   });
   app.get("/__test/admin-log", (_req, res) => res.json(adminRequestLog()));
   app.delete("/__test/admin-log", (_req, res) => {
@@ -341,10 +364,15 @@ export function createKcAdminMock() {
     // Keycloak's `q=key:value` custom-attribute search (exact value match).
     const attributeQuery = req.query.q as string | undefined;
     if (attributeQuery) {
-      const separator = attributeQuery.indexOf(":");
-      const key = attributeQuery.slice(0, separator);
-      const value = attributeQuery.slice(separator + 1);
-      return res.json(realm.users.filter((u) => u.attributes?.[key]?.includes(value)));
+      const pairs = attributeQuery.split(" ").filter(Boolean).map((pair) => {
+        const separator = pair.indexOf(":");
+        return [pair.slice(0, separator), pair.slice(separator + 1)] as const;
+      });
+      const first = Number(req.query.first || 0);
+      const max = Number(req.query.max || 100);
+      return res.json(realm.users
+        .filter((u) => pairs.every(([key, value]) => u.attributes?.[key]?.includes(value)))
+        .slice(first, first + max));
     }
     const first = Number(req.query.first || 0);
     const max = Number(req.query.max || realm.users.length);
@@ -381,8 +409,17 @@ export function createKcAdminMock() {
       credentials: Array.isArray(credentials) ? credentials : [],
       federatedIdentities: Array.isArray(federatedIdentities) ? federatedIdentities : [],
     };
+    if (dropUnmanagedAttributes) user.attributes = undefined;
     realm.users.push(user);
     res.status(201).set("Location", `/admin/realms/${req.params.realm}/users/${user.id}`).end();
+  });
+
+  app.delete("/admin/realms/:realm/users/:userId", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const index = realm.users.findIndex((user) => user.id === req.params.userId);
+    if (index < 0) return res.status(404).json({ error: "User not found" });
+    realm.users.splice(index, 1);
+    res.status(204).end();
   });
 
   app.get("/admin/realms/:realm/users/:userId", (req, res) => {

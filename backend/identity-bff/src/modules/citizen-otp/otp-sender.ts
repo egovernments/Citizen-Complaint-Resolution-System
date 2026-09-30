@@ -55,17 +55,25 @@ export function setOtpSender(next: OtpSender): void {
   sender = next;
 }
 
-/** The legacy egov-user fixed OTP, honoured only when explicitly enabled. */
+const OTP_CODE = /^\d{6}$/;
+
+/**
+ * The legacy egov-user fixed OTP, honoured only when explicitly enabled and
+ * shaped like a real code (six digits); any other value is ignored, and
+ * startup says so.
+ */
 export function fixedOtpCode(): string | null {
-  return config.citizenLoginPasswordOtpFixedEnabled ? config.citizenLoginPasswordOtpFixedValue : null;
+  const value = config.citizenLoginPasswordOtpFixedValue;
+  return config.citizenLoginPasswordOtpFixedEnabled && OTP_CODE.test(value) ? value : null;
 }
 
 /**
- * `phone_otp` is offered once codes can be hashed. Whether a code can then
- * be delivered is answered per send, with OTP_CHANNEL_UNAVAILABLE.
+ * `phone_otp` is offered only when a number can actually be proved: the
+ * secret to hash codes, and a configured sender or a valid fixed code. A
+ * delivery that fails later still answers OTP_CHANNEL_UNAVAILABLE.
  */
 export function phoneOtpAvailable(): boolean {
-  return Boolean(config.identityCitizenOtpSecret);
+  return Boolean(config.identityCitizenOtpSecret) && (sender.configured || fixedOtpCode() !== null);
 }
 
 /** Startup warnings for the two modes that weaken phone proof. */
@@ -74,7 +82,9 @@ export function warnAboutInsecureOtpModes(): void {
   if (config.identityCitizenOtpSender === "log") {
     console.warn("WARNING: citizen OTP codes are written to the log (IDENTITY_CITIZEN_OTP_SENDER=log). Development only.");
   }
-  if (config.citizenLoginPasswordOtpFixedEnabled) {
+  if (config.citizenLoginPasswordOtpFixedEnabled && fixedOtpCode() === null) {
+    console.error("CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE is not six digits; the fixed code is IGNORED.");
+  } else if (config.citizenLoginPasswordOtpFixedEnabled) {
     console.warn("WARNING: CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED is on: the fixed code signs in ANY citizen phone number. Development only.");
   }
 }

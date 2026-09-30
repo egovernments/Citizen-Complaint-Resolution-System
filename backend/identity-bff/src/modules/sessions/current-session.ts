@@ -9,7 +9,11 @@ import {
   identitySessionSurface,
   saveIdentitySession,
   sessionIdFromCookie,
+  touchIdentitySession,
 } from "./session-store.js";
+import { identityUserEnabled } from "../organizations/organization-service.js";
+
+const PHONE_OTP_IDENTITY_CHECK_MS = 60_000;
 import type { IdentitySession } from "./types.js";
 import { DEFAULT_SURFACE, type IdentitySurface } from "../authentication/surfaces.js";
 
@@ -27,8 +31,25 @@ export async function currentSession(
   let session = await getIdentitySession(sessionId);
   if (!session || identitySessionSurface(session) !== surface) return null;
   if (session.authMethod === "phone_otp") {
-    // No Keycloak token to refresh: valid until its absolute expiry only.
-    return session.sessionExpiresAt > Date.now() ? { sessionId, session } : null;
+    // No Keycloak token to refresh, so the Keycloak user is re-checked
+    // directly: disabling or deleting it ends the session within a minute.
+    if (session.sessionExpiresAt <= Date.now()) return null;
+    if (Date.now() - (session.identityCheckedAt || 0) > PHONE_OTP_IDENTITY_CHECK_MS) {
+      let enabled = true;
+      try {
+        enabled = await identityUserEnabled(session.claims.sub);
+      } catch (error) {
+        // A Keycloak blip must not sign every OTP citizen out; retry next time.
+        console.warn("Phone OTP session identity check failed:", (error as Error).message);
+      }
+      if (!enabled) {
+        await deleteIdentitySession(sessionId);
+        return null;
+      }
+      session = { ...session, identityCheckedAt: Date.now() };
+      await touchIdentitySession(sessionId, session);
+    }
+    return { sessionId, session };
   }
 
   if (session.accessExpiresAt > Date.now() + 30_000) {
