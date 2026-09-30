@@ -42,7 +42,8 @@ import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEd
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient } from '@/providers/bridge';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, DigitApiClient } from '@/providers/bridge';
+import { useLiveI18nProvider } from '@/providers/i18nProvider';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -122,6 +123,7 @@ function ManagementAdmin() {
 function ManagementAdminResources() {
   const { state } = useApp();
   const { canViewResource } = useMastersCapability();
+  const i18nProvider = useLiveI18nProvider();
   return (
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
