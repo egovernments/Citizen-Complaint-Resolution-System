@@ -52,6 +52,8 @@ export const pgrUiConstantsDescriptor: SchemaDescriptor = {
     {
       path: 'VOICE_INPUT',
       widget: 'boolean',
+      // File a Complaint treats an unset flag as on.
+      whenUnset: true,
       label: 'Voice input on File a Complaint',
       help: 'Offers a mic on the complaint description, in browsers that support speech recognition. Leave it on unless the tenant should not offer voice; turning it off hides the mic for every citizen.',
     },
