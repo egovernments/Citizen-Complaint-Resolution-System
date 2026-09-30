@@ -601,16 +601,7 @@ export function parseComplaintTypeExcel(workbook: XLSX.WorkBook): {
 
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
-  // PascalCase code from a display name, punctuation-stripped: codes feed
-  // MDMS uniqueIdentifiers + localization keys where & / ' etc. break
-  // lookups. Mirrors nameToPascalCode in digit-mcp/src/utils/xlsx-reader.ts.
-  const toPascal = (s: string): string =>
-    s
-      .replace(/[&/'’().,]+/g, ' ')
-      .split(/[\s_-]+/)
-      .filter(Boolean)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join('');
+
 
   jsonData.forEach((row, index) => {
     // Operator-friendly format: "Complaint Type*" (menu group) +
@@ -928,6 +919,21 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
 // Complaint Hierarchy (configurable N-level) Parser
 // ============================================
 
+/**
+ * A PascalCase code from a display name, punctuation stripped: codes feed MDMS
+ * uniqueIdentifiers and localization keys, where & / ' and the like break
+ * lookups. "Street lights / not working" gives StreetLightsNotWorking. Mirrors
+ * nameToPascalCode in digit-mcp/src/utils/xlsx-reader.ts; the Complaints step
+ * uses it too, so types built by hand and from a sheet get the same codes.
+ */
+export const toPascal = (s: string): string =>
+  s
+    .replace(/[&/'’().,]+/g, ' ')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join('');
+
 // One row of the single 2-master ComplaintHierarchy adjacency list. Interior
 // nodes and leaves share this shape; LEAF rows ALSO carry the leaf fields
 // (department/departments/slaHours/keywords). `menuPath` is gone — grouping is
@@ -974,13 +980,7 @@ export function parseComplaintHierarchyExcel(
   hierarchyType: string,
   levelCodes: string[]
 ): ComplaintHierarchyParseResult {
-  const toPascal = (s: string): string =>
-    s
-      .replace(/[&/'’().,]+/g, ' ')
-      .split(/[\s_-]+/)
-      .filter(Boolean)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join('');
+
 
   const levels = levelCodes.filter((l) => l && l.trim());
   const leafIdx = levels.length - 1;

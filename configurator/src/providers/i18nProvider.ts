@@ -74,11 +74,21 @@ const customEnglishMessages: TranslationMessages = {
       switch_to_onboarding: 'Switch to Onboarding',
       pgr_dashboard: 'PGR Dashboard',
       public_dashboard: 'Public Dashboard',
+      main: 'Main',
+      search: 'Search',
+      no_matches: 'No matches',
+      collapse_sidebar: 'Collapse sidebar',
+      expand_sidebar: 'Expand sidebar',
+      open_menu: 'Open menu',
+      close_menu: 'Close menu',
     },
     header: {
       management_mode: 'Management Mode',
       title: 'DIGIT Management Studio',
       brand: 'Complaints Management',
+      help: 'Help',
+      account: 'Account',
+      sign_out: 'Sign out',
     },
     dashboard: {
       date: {

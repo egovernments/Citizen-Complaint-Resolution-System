@@ -1,5 +1,4 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { themeVariables } from '@/themes';
 
 /**
  * Backdrop layers, taken from the reference implementation rather than
@@ -152,19 +151,20 @@ export function AuthBackdrop() {
   );
 }
 
-const AUTH_THEME: CSSProperties = {
-  ...(themeVariables('cms-blue') as CSSProperties),
+const AUTH_TYPE: CSSProperties = {
   fontFamily: 'Inter, Roboto, system-ui, sans-serif',
 };
 
 /**
  * One visual boundary for sign-in, sign-up, tenant choice and recovery. Auth
- * pages provide only card content; palette, backdrop, dimensions and brand
- * chrome live here so a new auth state cannot quietly invent another system.
+ * pages provide only card content; backdrop, dimensions and brand chrome live
+ * here so a new auth state cannot quietly invent another system. The palette
+ * is the saved theme (CMS Blue unless someone picked another inside and then
+ * signed out); there is no theme switcher on these pages.
  */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen w-full bg-background text-foreground" style={AUTH_THEME}>
+    <div className="min-h-screen w-full bg-background text-foreground" style={AUTH_TYPE}>
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[45fr_55fr] xl:grid-cols-2">
         {/* The narrative block sits at the bottom of the panel rather than
             floating in the middle of it: `mt-auto` on that block absorbs the

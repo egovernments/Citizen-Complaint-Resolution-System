@@ -21,37 +21,49 @@ export interface ThemePreset {
 // Presets
 // ---------------------------------------------------------------------------
 
+/**
+ * DIGIT Orange, the eGov design system as the DIGIT admin console ships it:
+ * every value here is that console's own token, so the Configurator reads the
+ * same as the other eGov products.
+ *
+ *   primary     #C84C0E   the DIGIT orange
+ *   secondary   #0B4B66   the DIGIT teal
+ *   text        #363636, muted #787878; lines #D6D5D4, input strokes #505A5F
+ *   surfaces    white page, #FAFAFA sidebar, #EEEEEE muted
+ *   status      error #B91900, success #00703C, warning #9E5F00, info #0057BD
+ */
 const digitOrange: ThemePreset = {
   name: 'digit-orange',
   label: 'DIGIT Orange',
   primaryHex: '#C84C0E',
   dark: false,
   variables: {
-    '--background': '0 0% 93%',
-    '--foreground': '0 8% 4%',
+    '--background': '0 0% 100%',
+    '--foreground': '0 0% 21.2%',
     '--card': '0 0% 100%',
-    '--card-foreground': '0 8% 4%',
+    '--card-foreground': '0 0% 21.2%',
+    '--sidebar': '0 0% 98%',
     '--popover': '0 0% 100%',
-    '--popover-foreground': '0 8% 4%',
-    '--primary': '24 91% 42%',
+    '--popover-foreground': '0 0% 21.2%',
+    '--primary': '20 86.9% 42%',
     '--primary-foreground': '0 0% 100%',
-    '--secondary': '204 38% 22%',
+    '--secondary': '197.8 80.5% 22.2%',
     '--secondary-foreground': '0 0% 100%',
-    '--muted': '0 0% 96%',
-    '--muted-foreground': '200 9% 34%',
-    '--accent': '24 91% 96%',
-    '--accent-foreground': '24 91% 42%',
-    '--destructive': '7 77% 47%',
+    '--muted': '0 0% 93.3%',
+    '--muted-foreground': '0 0% 47.1%',
+    '--accent': '7 100% 98%',
+    '--accent-foreground': '20 86.9% 42%',
+    '--destructive': '8.1 100% 36.3%',
     '--destructive-foreground': '0 0% 100%',
-    '--border': '30 3% 83%',
-    '--input': '200 9% 34%',
-    '--ring': '24 91% 42%',
+    '--border': '30 2.4% 83.5%',
+    '--input': '200 8.6% 34.3%',
+    '--ring': '20 86.9% 42%',
     '--radius': '0.25rem',
-    '--chart-1': '204 80% 43%',
-    '--chart-2': '45 93% 58%',
-    '--chart-3': '280 60% 52%',
-    '--chart-4': '28 85% 56%',
-    '--chart-5': '187 85% 53%',
+    '--chart-1': '20 86.9% 42%',
+    '--chart-2': '197.8 80.5% 22.2%',
+    '--chart-3': '212.4 100% 37.1%',
+    '--chart-4': '152.1 100% 22%',
+    '--chart-5': '36.1 100% 31%',
   },
 };
 
@@ -65,6 +77,7 @@ const materialIndigo: ThemePreset = {
     '--foreground': '220 13% 10%',
     '--card': '0 0% 100%',
     '--card-foreground': '220 13% 10%',
+    '--sidebar': '0 0% 100%',
     '--popover': '0 0% 100%',
     '--popover-foreground': '220 13% 10%',
     '--primary': '231 48% 48%',
@@ -99,6 +112,7 @@ const materialTeal: ThemePreset = {
     '--foreground': '174 13% 8%',
     '--card': '0 0% 100%',
     '--card-foreground': '174 13% 8%',
+    '--sidebar': '0 0% 100%',
     '--popover': '0 0% 100%',
     '--popover-foreground': '174 13% 8%',
     '--primary': '174 100% 29%',
@@ -133,6 +147,7 @@ const materialBlue: ThemePreset = {
     '--foreground': '207 13% 8%',
     '--card': '0 0% 100%',
     '--card-foreground': '207 13% 8%',
+    '--sidebar': '0 0% 100%',
     '--popover': '0 0% 100%',
     '--popover-foreground': '207 13% 8%',
     '--primary': '207 90% 54%',
@@ -167,6 +182,7 @@ const digitDark: ThemePreset = {
     '--foreground': '0 0% 93%',
     '--card': '0 0% 10%',
     '--card-foreground': '0 0% 93%',
+    '--sidebar': '0 0% 10%',
     '--popover': '0 0% 10%',
     '--popover-foreground': '0 0% 93%',
     '--primary': '24 78% 60%',
@@ -218,6 +234,7 @@ const cmsBlue: ThemePreset = {
     '--foreground': '221 28% 16%',
     '--card': '0 0% 100%',
     '--card-foreground': '221 28% 16%',
+    '--sidebar': '0 0% 100%',
     '--popover': '0 0% 100%',
     '--popover-foreground': '221 28% 16%',
     '--primary': '221 83% 53%',
@@ -263,30 +280,11 @@ const THEME_MAP = new Map(THEMES.map((t) => [t.name, t]));
 const STORAGE_KEY = 'digit-theme';
 
 export function getStoredTheme(): string {
-  return localStorage.getItem(STORAGE_KEY) || 'digit-orange';
+  // CMS Blue until someone picks another preset from the top bar.
+  return localStorage.getItem(STORAGE_KEY) || 'cms-blue';
 }
 
-/**
- * A preset's variables, for a surface that wants to scope a palette to its own
- * subtree rather than to the document.
- *
- * Scoping beats setting them on `documentElement` from a child, because
- * ThemeProvider sits above and its effect runs after any child's — so a child
- * that paints the root gets quietly overwritten on mount. Custom properties
- * cascade, so the nearest ancestor wins and there is nothing to restore.
- */
-export function themeVariables(name: string): Record<string, string> {
-  return { ...(THEME_MAP.get(name)?.variables ?? {}) };
-}
-
-/**
- * Paint a theme without remembering it.
- *
- * Split out from `applyTheme` for surfaces that set their own look for as long
- * as they are mounted and hand it back afterwards — the signup flow does this,
- * and persisting there would leave the admin console wearing the onboarding
- * palette for every later visit.
- */
+/** Paint a theme on the document without remembering it; `applyTheme` also saves it. */
 export function applyThemeVariables(name: string): boolean {
   const preset = THEME_MAP.get(name);
   if (!preset) return false;
