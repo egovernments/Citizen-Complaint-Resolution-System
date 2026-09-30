@@ -619,6 +619,11 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 120s;
     proxy_buffering off;
+    # Keycloak's login responses carry several large Set-Cookie headers; the
+    # default header buffer 502s them ("upstream sent too big header"). Same
+    # sizes as nginx-identity.conf.
+    proxy_buffer_size 64k;
+    proxy_buffers 8 64k;
   }
 
 {% endif %}

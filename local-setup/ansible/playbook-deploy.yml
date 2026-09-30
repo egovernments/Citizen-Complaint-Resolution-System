@@ -395,31 +395,38 @@
     # Refuse the combination rather than ship a login that cannot work.
     # (Dhruv review, #2088.)
     - name: "preflight — refuse the removed Keycloak UI login path"
-      vars:
-        _keycloak_login_surfaces: >-
-          {{ {'auth_provider': auth_provider | default(''),
-              'citizen_auth_provider': citizen_auth_provider | default(auth_provider | default('')),
-              'employee_auth_provider': employee_auth_provider | default('digit')}
-             | dict2items | selectattr('value', 'eq', 'keycloak')
-             | map(attribute='key') | list }}
       ansible.builtin.fail:
         msg: |
-          host_vars for {{ inventory_hostname }} selects Keycloak login on:
-          {{ _keycloak_login_surfaces | join(', ') }}
+          host_vars for {{ inventory_hostname }} sets auth_provider: keycloak.
 
           That path no longer exists. #2088 replaced it with the Identity BFF
           (`/identity/v1`) and removed what the old auth-adapters called:
             - the `/kc` and `/token-exchange` token-exchange routes,
             - the per-tenant Keycloak realm named after state_tenant_id,
             - the `digit-ui` public client in that realm.
-          digit-ui-esbuild ignores these keys (#2072) and signs in through the
-          Identity BFF on /{tenant}/digit-ui/... routes; digit-ui-v2 would
-          still send users to the removed path, a 404 at login.
+          digit-ui-v2 bakes auth_provider in at build time and would still send
+          users to the removed path, a 404 at login.
 
-          Leave these keys unset (or 'digit'). `enable_keycloak: true` on its
+          Leave auth_provider unset (or 'digit'). `enable_keycloak: true` on its
           own is fine and is what stands up Keycloak, the Identity BFF and
           `/identity/v1` — it does not require flipping auth_provider.
-      when: _keycloak_login_surfaces | length > 0
+      when: (auth_provider | default('')) == 'keycloak'
+
+    # Keys nothing reads any more (#2072): digit-ui-esbuild dropped the per-surface
+    # auth providers, and the tenant allowlist / switcher settings go with the
+    # tenant selector (#2192). Warn rather than fail, so an old host_vars file
+    # still deploys (review, #2193).
+    - name: "preflight — warn about ignored login settings"
+      vars:
+        _ignored_login_keys: >-
+          {{ ['citizen_auth_provider', 'employee_auth_provider',
+              'login_tenant_allowlist', 'show_tenant_switcher']
+             | select('in', hostvars[inventory_hostname]) | list }}
+      ansible.builtin.debug:
+        msg: >-
+          [WARN] {{ inventory_hostname }} still sets {{ _ignored_login_keys | join(', ') }}.
+          These are ignored now; remove them from host_vars.
+      when: _ignored_login_keys | length > 0
 
     # ==================== WSL2 resource config (.wslconfig) ====================
     # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
@@ -4422,6 +4429,22 @@
             state: absent
           notify: Reload nginx
           when: not (nginx_preserve_vhost | default(false))
+
+    # A preserved (hand-managed) vhost never gets the /auth/realms/ block from
+    # nginx-site.conf.j2, so Kong still APPENDS a caller-supplied
+    # X-Forwarded-For and Keycloak records whatever IP the caller sends
+    # (review, #2193). Tell the operator what to add by hand.
+    - name: "Host nginx — warn: preserved vhost lacks the Keycloak client-IP block"
+      ansible.builtin.debug:
+        msg: >-
+          [WARN] nginx_preserve_vhost is set, so /etc/nginx/sites-available/{{ domain }}
+          is hand-managed. Add the `location ^~ /auth/realms/ { ... }` block from
+          templates/nginx-site.conf.j2 to it (proxy_set_header X-Forwarded-For
+          $remote_addr; and the 64k proxy buffers), or Keycloak logs a
+          client-chosen IP for logins and failures.
+      when:
+        - nginx_preserve_vhost | default(false)
+        - enable_keycloak | default(false)
 
     - name: "Host nginx — Linux, RHEL family"
       when:

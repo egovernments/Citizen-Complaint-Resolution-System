@@ -696,12 +696,12 @@ identity_smtp_user: ""
 identity_smtp_ssl: false
 identity_smtp_starttls: true
 
-# MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak' here or
-# in citizen_auth_provider / employee_auth_provider.
+# MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak'.
+# (The old citizen_auth_provider / employee_auth_provider overrides are gone;
+# the deploy warns if a host_vars file still sets them.)
 #
 # digit-ui-esbuild no longer reads any auth-provider or Keycloak key from
-# globalConfigs.js (#2072): its /{tenant}/digit-ui/... routes sign in through
-# the Identity BFF, and legacy /digit-ui/... routes use DIGIT auth. Only
+# globalConfigs.js (#2072). Only
 # digit-ui-v2 (/citizen) still bakes auth_provider in as VITE_AUTH_PROVIDER,
 # and its 'keycloak' path (/token-exchange, per-tenant realm) was removed by
 # #2088, so 'keycloak' would be a 404 at login.

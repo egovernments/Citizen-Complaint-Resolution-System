@@ -88,16 +88,19 @@ describe('ansible playbook-deploy.yml', () => {
   // its `digit-ui` client are gone, so `auth_provider: keycloak` is a 404 at
   // login until the frontend cutover onto /identity/v1 lands.
   test('refuses to deploy a frontend still pointed at the removed Keycloak login', () => {
-    const start = playbook.indexOf('_keycloak_login_surfaces:');
+    // Only auth_provider still reaches a frontend (digit-ui-v2's VITE_AUTH_PROVIDER).
+    expect(playbook).toContain("when: (auth_provider | default('')) == 'keycloak'");
+  });
+
+  // Review (#2193): dead per-surface keys must not block a deploy.
+  test('ignored login settings only warn', () => {
+    const start = playbook.indexOf('name: "preflight — warn about ignored login settings"');
     expect(start).toBeGreaterThan(-1);
-    const task = playbook.slice(start, start + 2000);
-    // all three resolution keys are covered, including the two per-surface
-    // overrides that do not simply inherit auth_provider
-    for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider']) {
-      expect(task).toContain(`'${key}':`);
+    const task = playbook.slice(start, start + 800);
+    expect(task).toContain('ansible.builtin.debug:');
+    for (const key of ['citizen_auth_provider', 'employee_auth_provider', 'login_tenant_allowlist', 'show_tenant_switcher']) {
+      expect(task).toContain(`'${key}'`);
     }
-    expect(task).toContain("selectattr('value', 'eq', 'keycloak')");
-    expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
   });
 
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
@@ -346,6 +349,13 @@ describe('Keycloak sees the real client IP', () => {
       read('local-setup/ansible/templates/nginx-site.conf.j2'), 'location ^~ /auth/realms/ {');
     expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
     expect(block).not.toContain('$proxy_add_x_forwarded_for');
+    // Same header buffers as nginx-identity.conf, or login 502s (review, #2193).
+    expect(block).toContain('proxy_buffer_size 64k;');
+  });
+
+  test('a preserved vhost gets a warning to add the block by hand', () => {
+    expect(read('local-setup/ansible/playbook-deploy.yml'))
+      .toContain('name: "Host nginx — warn: preserved vhost lacks the Keycloak client-IP block"');
   });
 
   test('the identity compose nginx sets it for Keycloak too', () => {

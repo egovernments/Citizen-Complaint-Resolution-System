@@ -250,7 +250,7 @@ fi
 # and existing realms even when the optional magic-link resource is disabled.
 kc update "realms/$REALM" -s organizationsEnabled=true \
   -s loginWithEmailAllowed=true -s duplicateEmailsAllowed=false \
-  -s resetPasswordAllowed=false -s bruteForceProtected=true \
+  -s resetPasswordAllowed=false \
   -s "sslRequired=$SSL_REQUIRED" >/dev/null
 
 # The DIGIT theme is selected per client below (CCRS #2108) so that a client
