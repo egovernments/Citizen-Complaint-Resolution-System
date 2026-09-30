@@ -606,3 +606,32 @@ describe('citizen phone OTP deployment', () => {
     expect(bff).toContain('IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}');
   });
 });
+
+// #2205: citizen OTP messages are seeded at pg (dump) and at every other state
+// root (playbook upsert) from one bundle, so the two never drift.
+describe('citizen OTP localization seed', () => {
+  const bundle: { code: string; message: string; module: string; locale: string }[] =
+    JSON.parse(read('local-setup/ansible/files/digit-ui-localization/identity-otp.json'));
+
+  test('the bundle covers the CORE_IDENTITY_OTP_* keys in rainmaker-common', () => {
+    expect(bundle.map((m) => m.code).sort()).toEqual([
+      'CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE', 'CORE_IDENTITY_OTP_EXPIRED',
+      'CORE_IDENTITY_OTP_INVALID', 'CORE_IDENTITY_OTP_INVALID_MOBILE',
+      'CORE_IDENTITY_OTP_LOCKED', 'CORE_IDENTITY_OTP_RATE_LIMITED',
+      'CORE_IDENTITY_OTP_RESEND_TOO_SOON',
+    ]);
+    for (const m of bundle) expect([m.module, m.locale]).toEqual(['rainmaker-common', 'en_IN']);
+  });
+
+  test('pg has the same rows in the dump', () => {
+    const dump = read('local-setup/db/full-dump.sql');
+    for (const m of bundle) {
+      expect(dump).toContain(`\ten_IN\t${m.code}\t${m.message}\tpg\trainmaker-common\t`);
+    }
+  });
+
+  test('the playbook upserts the bundle at the state root', () => {
+    expect(read('local-setup/ansible/playbook-deploy.yml'))
+      .toContain("/files/digit-ui-localization/identity-otp.json') | from_json");
+  });
+});

@@ -5357,6 +5357,34 @@
       loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
       when: state_root != 'pg'
 
+    # digit-ui citizen phone-OTP messages (#2189/#2205), in rainmaker-common at
+    # the state root, where digit-ui reads them. pg gets the same rows from
+    # db/full-dump.sql. `{{seconds}}`/`{{attempts}}` are i18next placeholders;
+    # lookup() output is unsafe, so Ansible leaves them alone.
+    - name: "digit-ui identity strings — upsert citizen OTP messages (per locale)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/localization/messages/v1/_upsert"
+        method: POST
+        headers: "{{ {'Content-Type': 'application/json'} | combine({'Host': domain} if not (tls_enabled | default(true)) else {}) }}"
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: emp
+            ver: ".01"
+            action: create
+            authToken: "{{ cfg_i18n_auth.json.access_token }}"
+            userInfo: "{{ cfg_i18n_auth.json.UserRequest }}"
+          tenantId: "{{ state_root }}"
+          locale: "{{ item }}"
+          messages: "{{ identity_i18n_bundle | selectattr('locale', 'equalto', item) | list }}"
+        status_code: [200, 201]
+        timeout: 60
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      vars:
+        identity_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/digit-ui-localization/identity-otp.json') | from_json }}"
+      loop: "{{ identity_i18n_bundle | map(attribute='locale') | unique | list }}"
+      when: state_root != 'pg'
+
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
     #   1. enable_novu is true (the notifications profile is active)
