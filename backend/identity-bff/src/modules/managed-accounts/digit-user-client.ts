@@ -152,7 +152,14 @@ export async function passwordLogin(input: {
 
 export async function searchAccounts(
   authToken: string,
-  criteria: { userName: string; tenantId: string; userType: string; active: boolean },
+  criteria: {
+    tenantId: string;
+    userType: string;
+    active: boolean;
+    userName?: string;
+    uuid?: string[];
+    mobileNumber?: string;
+  },
 ): Promise<DigitAccount[]> {
   const response = await send("/_search", {
     method: "POST",

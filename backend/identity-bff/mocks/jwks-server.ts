@@ -78,7 +78,20 @@ const CLIENT_SURFACES = new Map([
  * "unverified", "foreign" (a verified non-Kenyan number) and "other" (a
  * second citizen).
  */
+/** #2167 link tests: citizens whose Keycloak-verified phone matches a legacy DIGIT citizen. */
+const LEGACY_CITIZENS: Record<string, { sub: string; phone: string }> = {
+  "legacya": { sub: "citizen-user-3", phone: "+254799000881" },
+  "legacyb": { sub: "citizen-user-4", phone: "+254799000882" },
+};
+
 function citizenClaims(profile: string): Record<string, unknown> & { sub: string; name: string; email?: string } {
+  const legacy = LEGACY_CITIZENS[profile];
+  if (legacy) {
+    return {
+      sub: legacy.sub, name: "Legacy Citizen", preferred_username: legacy.phone,
+      phone_number: legacy.phone, phone_number_verified: true,
+    };
+  }
   const subject = profile === "other" ? "citizen-user-2" : "citizen-user-1";
   return {
     sub: subject,
@@ -126,7 +139,8 @@ export function createJwksApp() {
       const claims = surface === "citizen"
         ? citizenClaims(profile)
         : {
-          sub: "identity-user-1",
+          // "unlinked": an employee with no Organization membership (#2167).
+          sub: profile === "unlinked" ? "identity-user-unlinked" : "identity-user-1",
           email: "person@example.com",
           name: "Demo Person",
           preferred_username: "demo.person",

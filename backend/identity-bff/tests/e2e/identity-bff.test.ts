@@ -31,7 +31,9 @@ import {
   isOrganizationGroupMember,
   readOrganizationGroupReconciliation,
   clearTenantMappingCache,
+  keycloakPhoneIsAdminControlled,
   readTenantMappingForTenant,
+  resetPhoneTrustCache,
   updateCitizenRegistrationValues,
 } from "../../src/modules/organizations/organization-service.js";
 import {
@@ -2325,6 +2327,260 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(session.subject).toBeTruthy();
       expect(session.sessionRef).toMatch(/^[0-9a-f]{32}$/);
       expect(JSON.stringify(records)).not.toMatch(/2547\d{8}|7990\d{5}|198\.51\.100/);
+    });
+  });
+
+  describe("existing tenants, employees and citizens (#2167)", () => {
+    const cp = (path: string, body?: unknown) =>
+      fetch(`${app()}/internal/identity/v1/${path}`, {
+        method: body === undefined ? "GET" : "POST",
+        headers: { Authorization: "Bearer test-control-plane", "Content-Type": "application/json" },
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      });
+    const employeeSelect = (cookie: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", tenantId: "ke.bomet" }),
+    });
+    const legacy = (input: { userName: string; tenantId: string; type: "EMPLOYEE" | "CITIZEN"; mobileNumber: string; roles: string[] }) =>
+      digit.addAccount({
+        userName: input.userName, name: "Legacy Person", mobileNumber: input.mobileNumber, emailId: null,
+        tenantId: input.tenantId, type: input.type, active: true, identificationMark: null,
+        roles: input.roles.map((code) => ({ code, tenantId: input.tenantId })), password: "Legacy@123",
+      });
+    const profileUrl = () => `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/profile`;
+    const setProfile = async (profile: unknown) => {
+      await fetch(profileUrl(), {
+        method: "PUT",
+        headers: { Authorization: "Bearer mock-kc-admin-token", "Content-Type": "application/json" },
+        body: JSON.stringify(profile),
+      });
+      resetPhoneTrustCache();
+    };
+    const auditRecords = async () => (await getRedis().xrange(auditStreamKey(), "-", "+")).map(([, fields]) => {
+      const record: Record<string, string> = {};
+      for (let index = 0; index < fields.length; index += 2) record[fields[index]] = fields[index + 1];
+      return record;
+    });
+    const originalSender = otpSender();
+    const sent: OtpMessage[] = [];
+
+    beforeAll(async () => {
+      await kcAdmin("/users", {
+        id: "identity-user-unlinked", username: "legacy.employee", email: "legacy.employee@example.com", enabled: true,
+      });
+      for (const [id, phone] of [["citizen-user-3", "+254799000881"], ["citizen-user-4", "+254799000882"]]) {
+        await kcAdmin("/users", {
+          id, username: phone, enabled: true,
+          attributes: { phoneNumber: [phone], phoneNumberVerified: ["true"] },
+        });
+      }
+      Object.assign(config as any, { identityCitizenOtpSecret: "test-otp-secret", identityCitizenOtpResendSeconds: 0 });
+      setOtpSender({ configured: true, async send(message) { sent.push(message); } });
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: {
+          "login_theme": "digit-citizen", "digit.auth.surface": "citizen",
+          "digit.auth.signin.methods": "phone_otp,password",
+        },
+      });
+      resetIdentityMethodCatalog();
+    });
+
+    afterAll(async () => {
+      Object.assign(config as any, { identityCitizenOtpSecret: "" });
+      setOtpSender(originalSender);
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: { "login_theme": "digit-citizen", "digit.auth.surface": "citizen", "digit.auth.signin.methods": "password" },
+      });
+      resetIdentityMethodCatalog();
+      await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+    });
+
+    it("links an existing employee only by admin action, keeping its uuid and roles, and re-checks it on every _select", async () => {
+      const account = legacy({ userName: "EMP-LEGACY-1", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000101", roles: ["EMPLOYEE", "GRO", "PGR_LME"] });
+      const cookie = await signIn("employee", "unlinked");
+      // A signed-in employee with no membership and no link: nothing matches by name.
+      const before = await employeeSelect(cookie);
+      expect(before.status).toBe(403);
+      expect((await before.json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
+
+      const linked = await cp("account-links/_link", {
+        actor: "qa-admin",
+        links: [{ email: "legacy.employee@example.com", tenantId: "ke.bomet", digitUserName: "EMP-LEGACY-1" }],
+      });
+      expect((await linked.json()).results).toEqual([expect.objectContaining({
+        status: "LINKED", subject: "identity-user-unlinked", digitUserUuid: account.uuid,
+      })]);
+
+      const passwordUpdates = digit.stats.passwordUpdates;
+      const selected = await employeeSelect(cookie);
+      expect(selected.status).toBe(200);
+      const token = await selected.json();
+      expect(token.UserRequest).toMatchObject({ uuid: account.uuid, userName: "EMP-LEGACY-1" });
+      // Same account, same roles; only the password moved to a BFF-held value.
+      expect(digit.accounts.get(account.uuid)!.roles.map((role) => role.code).sort()).toEqual(["EMPLOYEE", "GRO", "PGR_LME"]);
+      expect(digit.stats.passwordUpdates).toBe(passwordUpdates + 1);
+      expect(digit.accounts.get(account.uuid)!.identificationMark).toBeNull();
+
+      // Cached token or not, a deactivated account ends access at the next _select.
+      digit.accounts.get(account.uuid)!.active = false;
+      const inactive = await employeeSelect(cookie);
+      expect(inactive.status).toBe(403);
+      expect((await inactive.json()).code).toBe("DIGIT_ACCOUNT_INACTIVE");
+      expect(digit.tokens.has(token.access_token)).toBe(false);
+      digit.accounts.get(account.uuid)!.active = true;
+
+      const again = await cp("account-links/_link", {
+        links: [{ subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid }],
+      });
+      expect((await again.json()).results[0].status).toBe("ALREADY_LINKED");
+
+      const unlinked = await cp("account-links/_unlink", {
+        subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid, actor: "qa-admin",
+      });
+      expect(await unlinked.json()).toEqual({ removed: true });
+      expect((await (await employeeSelect(cookie)).json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
+      expect(digit.accounts.get(account.uuid)!.active).toBe(true);
+    });
+
+    it("refuses links that are unproven or already owned, item by item", async () => {
+      const owned = legacy({ userName: "EMP-LEGACY-2", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000102", roles: ["EMPLOYEE"] });
+      await kcAdmin("/users", { id: "second-admin-user", username: "second", email: "second@example.com", enabled: true });
+      const managed = [...digit.accounts.values()].find((account) => account.userName.startsWith("kcbff-"))!;
+      const response = await cp("account-links/_link", {
+        links: [
+          { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: owned.uuid },
+          { subject: "second-admin-user", tenantId: "ke.bomet", digitUserUuid: owned.uuid },
+          { subject: "second-admin-user", tenantId: managed.tenantId, digitUserUuid: managed.uuid },
+          { subject: "no-such-user", tenantId: "ke.bomet", digitUserUuid: owned.uuid },
+          { subject: "second-admin-user", tenantId: "ke.bomet", digitUserName: "NOBODY" },
+          { subject: "second-admin-user", tenantId: "zz", digitUserUuid: owned.uuid },
+        ],
+      });
+      expect((await response.json()).results.map((result: { status: string; code?: string }) => result.code || result.status))
+        .toEqual(["LINKED", "DIGIT_ACCOUNT_LINKED_ELSEWHERE", "DIGIT_ACCOUNT_MANAGED", "IDENTITY_NOT_FOUND",
+          "DIGIT_ACCOUNT_NOT_FOUND", "TENANT_NOT_FOUND"]);
+      const empty = await cp("account-links/_link", { links: [] });
+      expect([empty.status, (await empty.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      await cp("account-links/_unlink", { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: owned.uuid });
+    });
+
+    it("links an existing citizen after a BFF phone OTP, and fails closed on an ambiguous number", async () => {
+      const existing = legacy({ userName: "799000771", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000771", roles: ["CITIZEN"] });
+      const signInByOtp = async (mobileNumber: string) => {
+        const sentBefore = sent.length;
+        const { challengeId } = await (await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber }),
+        })).json();
+        expect(sent.length).toBe(sentBefore + 1);
+        const verified = await fetch(`${app()}/identity/v1/citizen/otp/_verify`, {
+          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: "bomet-county", challengeId, code: sent[sent.length - 1].code }),
+        });
+        return cookieFrom(verified, "digit_identity_session_citizen")!;
+      };
+      const creates = digit.stats.creates;
+      const selected = await citizenSelect(await signInByOtp("799000771"));
+      expect(selected.status).toBe(200);
+      expect((await selected.json()).UserRequest).toMatchObject({ uuid: existing.uuid, type: "CITIZEN" });
+      expect(digit.stats.creates).toBe(creates);
+
+      legacy({ userName: "799000772", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000772", roles: ["CITIZEN"] });
+      legacy({ userName: "citizen-dup-772", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000772", roles: ["CITIZEN"] });
+      const ambiguous = await citizenSelect(await signInByOtp("799000772"));
+      expect(ambiguous.status).toBe(409);
+      expect((await ambiguous.json()).code).toBe("CITIZEN_ACCOUNT_AMBIGUOUS");
+      expect(digit.stats.creates).toBe(creates);
+    });
+
+    it("trusts a Keycloak-verified phone only when users cannot edit it", async () => {
+      const userEditable = { name: "phoneNumber", permissions: { view: ["admin", "user"], edit: ["admin", "user"] } };
+      const adminOnly = (name: string) => ({ name, permissions: { view: ["admin", "user"], edit: ["admin"] } });
+      for (const [profile, trusted] of [
+        [{ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] }, true],
+        [{ unmanagedAttributePolicy: "ADMIN_VIEW", attributes: [] }, true],
+        [{ attributes: [] }, true],
+        [{ unmanagedAttributePolicy: "ENABLED", attributes: [] }, false],
+        [{ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [userEditable] }, false],
+        [{ unmanagedAttributePolicy: "ENABLED", attributes: [adminOnly("phoneNumber"), adminOnly("phoneNumberVerified")] }, true],
+      ] as const) {
+        await setProfile(profile);
+        expect(await keycloakPhoneIsAdminControlled(), JSON.stringify(profile)).toBe(trusted);
+      }
+
+      const a = legacy({ userName: "799000881", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000881", roles: ["CITIZEN"] });
+      const b = legacy({ userName: "799000882", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000882", roles: ["CITIZEN"] });
+      // Users can edit their phone: the claim proves nothing, so no link.
+      await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+      const untrusted = await citizenSelect(await signIn("citizen", "legacya"));
+      expect(untrusted.status).toBe(200);
+      expect((await untrusted.json()).UserRequest.uuid).not.toBe(a.uuid);
+      // Admin-only phone: the verified claim links the existing account.
+      await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+      const trusted = await citizenSelect(await signIn("citizen", "legacyb"));
+      expect(trusted.status).toBe(200);
+      expect((await trusted.json()).UserRequest.uuid).toBe(b.uuid);
+    });
+
+    it("lets an admin undo a citizen link, and a blocked link does not re-form", async () => {
+      const b = [...digit.accounts.values()].find((account) => account.userName === "799000882")!;
+      expect((await (await cp("account-links?subject=citizen-user-4")).json()).links)
+        .toEqual([{ userType: "CITIZEN", tenantId: "ke", digitUuid: b.uuid }]);
+      const undo = await cp("account-links/_unlink", {
+        subject: "citizen-user-4", userType: "CITIZEN", tenantId: "ke", digitUserUuid: b.uuid, block: true, actor: "qa-admin",
+      });
+      expect(await undo.json()).toEqual({ removed: true });
+      const blocked = await citizenSelect(await signIn("citizen", "legacyb"));
+      expect(blocked.status).toBe(409);
+      expect((await blocked.json()).code).toBe("CITIZEN_ACCOUNT_LINK_BLOCKED");
+      // An explicit admin link overrides the block.
+      const relinked = await cp("account-links/_link", {
+        links: [{ subject: "citizen-user-4", userType: "CITIZEN", tenantId: "ke", digitUserUuid: b.uuid }],
+      });
+      expect((await relinked.json()).results[0].status).toBe("LINKED");
+      expect((await (await citizenSelect(await signIn("citizen", "legacyb"))).json()).UserRequest.uuid).toBe(b.uuid);
+    });
+
+    it("audits every link, refusal and unlink with its method and actor", async () => {
+      const records = (await auditRecords()).filter((record) => record.event.startsWith("ACCOUNT_LINK_"));
+      const seen = new Set(records.map((record) => `${record.event}:${record.method || "-"}`));
+      for (const kind of ["ACCOUNT_LINK_CREATE:ADMIN", "ACCOUNT_LINK_CREATE:VERIFIED_PHONE",
+        "ACCOUNT_LINK_REFUSED:ADMIN", "ACCOUNT_LINK_REFUSED:VERIFIED_PHONE", "ACCOUNT_LINK_REVOKE:-"]) {
+        expect(seen.has(kind), kind).toBe(true);
+      }
+      expect(records.some((record) => record.actor === "control-plane:qa-admin")).toBe(true);
+      expect(records.every((record) => record.subject && record.digitUserUuid !== undefined || record.reason)).toBe(true);
+    });
+
+    it("backfills root tenant routes with the tenant id as slug, and never renames one", async () => {
+      Object.assign(config as any, { identityTenantRouteBackfillRoots: ["ke", "ke.bomet", "zz"] });
+      const dry = await (await cp("tenant-routes/_backfill", { dryRun: true })).json();
+      expect(dry).toEqual({
+        created: ["ke"],
+        skipped: [{ tenantId: "ke.bomet", reason: "NOT_ROOT" }, { tenantId: "zz", reason: "NOT_ACTIVE" }],
+        conflicts: [],
+      });
+      expect((await fetch(`${app()}/identity/v1/tenant-contexts/ke`)).status).toBe(404);
+
+      const run = await (await cp("tenant-routes/_backfill", { actor: "deploy" })).json();
+      expect(run.created).toEqual(["ke"]);
+      const route = await (await fetch(`${app()}/identity/v1/tenant-contexts/ke`)).json();
+      expect(route.tenant).toMatchObject({ urlSlug: "ke", tenantId: "ke" });
+
+      // An operator renames the slug; later runs leave it alone.
+      const organization = (await readTenantMappingForTenant("ke"))!;
+      await kcUpdate(`/organizations/${organization.organizationId}`, {
+        attributes: { "digit.rootTenantId": ["ke"], "digit.urlSlug": ["kenya"] },
+      });
+      clearTenantMappingCache();
+      const rerun = await (await cp("tenant-routes/_backfill", {})).json();
+      expect(rerun).toMatchObject({ created: [], conflicts: [] });
+      expect(rerun.skipped).toContainEqual({ tenantId: "ke", reason: "ALREADY_MAPPED" });
+      clearTenantMappingCache();
+      expect((await readTenantMappingForTenant("ke"))!.urlSlug).toBe("kenya");
+      expect((await auditRecords()).some((record) => record.event === "TENANT_ROUTE_BACKFILL" && record.actor === "control-plane:deploy"))
+        .toBe(true);
     });
   });
 });

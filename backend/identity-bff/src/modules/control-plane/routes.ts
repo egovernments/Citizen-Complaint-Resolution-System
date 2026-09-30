@@ -6,6 +6,7 @@ import {
   ensureOrganizationMembership,
   ensureOrganizationRoleAssignment,
   ensureOrganizationTenantGroup,
+  findEnabledIdentityUser,
   IdentityAdminError,
   organizationIdentifierAvailable,
   readOrganizationMapping,
@@ -17,7 +18,20 @@ import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js"
 import { runIdentityReconciliation } from "../reconciliation/reconciliation-service.js";
 import { syncSubject } from "../reconciliation/subject-sync.js";
 import { clearTenantCaches, isActiveDigitTenant } from "../access-context/tenant-directory.js";
-import { ManagedAccountError } from "../managed-accounts/managed-account-service.js";
+import {
+  CITIZEN_USER_TYPE,
+  ManagedAccountError,
+  type ManagedUserType,
+} from "../managed-accounts/managed-account-service.js";
+import {
+  AccountLinkError,
+  createAccountLink,
+  EMPLOYEE_USER_TYPE,
+  findEmployeeUuid,
+  linksOf,
+  removeAccountLink,
+} from "../account-links/account-links.js";
+import { backfillTenantRoutes } from "../tenant-routes/backfill.js";
 
 function asyncRoute(
   handler: (req: express.Request, res: express.Response) => Promise<unknown>,
@@ -44,6 +58,9 @@ function optionalString(value: unknown, name: string): string | undefined {
 }
 
 function handleAdminError(error: unknown, res: express.Response) {
+  if (error instanceof AccountLinkError) {
+    return res.status(error.status).json({ error: error.message, code: error.code });
+  }
   if (error instanceof IdentityAdminError || error instanceof ManagedAccountError) {
     return res.status(error.status).json({ error: error.message });
   }
@@ -51,6 +68,18 @@ function handleAdminError(error: unknown, res: express.Response) {
     return res.status(error.status === 409 ? 409 : 502).json({ error: error.message });
   }
   throw error;
+}
+
+const MAX_LINKS_PER_REQUEST = 500;
+
+function actorOf(value: unknown): string {
+  return typeof value === "string" && /^[\w.@:-]{1,100}$/.test(value) ? `control-plane:${value}` : "control-plane";
+}
+
+function linkUserType(value: unknown): ManagedUserType {
+  if (value === undefined || value === EMPLOYEE_USER_TYPE) return EMPLOYEE_USER_TYPE;
+  if (value === CITIZEN_USER_TYPE) return CITIZEN_USER_TYPE;
+  throw new IdentityAdminError("userType must be EMPLOYEE or CITIZEN", 400);
 }
 
 export function registerControlPlaneRoutes(app: express.Application): void {
@@ -73,6 +102,98 @@ export function registerControlPlaneRoutes(app: express.Application): void {
     }
     next();
   });
+
+  // Existing-tenant routes (#2167). Idempotent; never renames a slug.
+  app.post("/internal/identity/v1/tenant-routes/_backfill", asyncRoute(async (req, res) => {
+    try {
+      return res.json(await backfillTenantRoutes({
+        dryRun: req.body?.dryRun === true,
+        actor: actorOf(req.body?.actor),
+      }));
+    } catch (error) {
+      return handleAdminError(error, res);
+    }
+  }));
+
+  /**
+   * Admin links of existing DIGIT accounts (#2167), one or a bulk import.
+   * Each item names the Keycloak user (`subject` or `email`) and the DIGIT
+   * account (`digitUserUuid`, or `digitUserName` for an employee). Items are
+   * independent: each gets its own result and audit record.
+   */
+  app.post("/internal/identity/v1/account-links/_link", asyncRoute(async (req, res) => {
+    const items = req.body?.links;
+    if (!Array.isArray(items) || items.length === 0 || items.length > MAX_LINKS_PER_REQUEST) {
+      return res.status(400).json({ error: `links must hold 1-${MAX_LINKS_PER_REQUEST} items`, code: "INVALID_REQUEST" });
+    }
+    const actor = actorOf(req.body?.actor);
+    clearTenantCaches();
+    const results = [];
+    for (const [index, item] of items.entries()) {
+      try {
+        const userType = linkUserType(item?.userType);
+        const tenantId = requiredString(item?.tenantId, "tenantId");
+        if (userType === CITIZEN_USER_TYPE && tenantId.includes(".")) {
+          throw new AccountLinkError("Citizen accounts live at the root tenant", 400, "INVALID_REQUEST");
+        }
+        if (!await isActiveDigitTenant(tenantId)) {
+          throw new AccountLinkError("Unknown or inactive DIGIT tenant", 404, "TENANT_NOT_FOUND");
+        }
+        const subject = await findEnabledIdentityUser({
+          id: optionalString(item?.subject, "subject"),
+          email: optionalString(item?.email, "email"),
+        });
+        if (!subject) throw new AccountLinkError("No enabled Keycloak user matches", 404, "IDENTITY_NOT_FOUND");
+        const userName = optionalString(item?.digitUserName, "digitUserName");
+        const digitUuid = optionalString(item?.digitUserUuid, "digitUserUuid") ||
+          (userName && userType === EMPLOYEE_USER_TYPE ? await findEmployeeUuid(tenantId, userName) : null);
+        if (!digitUuid) throw new AccountLinkError("No active DIGIT account matches", 404, "DIGIT_ACCOUNT_NOT_FOUND");
+        const { status } = await createAccountLink({
+          subject, userType, tenantId, digitUuid, method: "ADMIN", actor,
+        });
+        results.push({ index, status, subject, userType, tenantId, digitUserUuid: digitUuid });
+      } catch (error) {
+        if (error instanceof AccountLinkError || error instanceof IdentityAdminError) {
+          const code = error instanceof AccountLinkError ? error.code
+            : error.status === 400 ? "INVALID_REQUEST" : "IDENTITY_UNAVAILABLE";
+          results.push({ index, status: "REFUSED", code, error: error.message });
+          continue;
+        }
+        if (error instanceof DigitUnavailableError) {
+          results.push({ index, status: "REFUSED", code: "DIGIT_UNAVAILABLE", error: error.message });
+          continue;
+        }
+        throw error;
+      }
+    }
+    return res.json({ results });
+  }));
+
+  app.post("/internal/identity/v1/account-links/_unlink", asyncRoute(async (req, res) => {
+    try {
+      const subject = requiredString(req.body?.subject, "subject");
+      const result = await removeAccountLink({
+        subject,
+        userType: linkUserType(req.body?.userType),
+        tenantId: requiredString(req.body?.tenantId, "tenantId"),
+        digitUuid: requiredString(req.body?.digitUserUuid, "digitUserUuid"),
+        block: req.body?.block === true,
+        actor: actorOf(req.body?.actor),
+      });
+      return res.json(result);
+    } catch (error) {
+      return handleAdminError(error, res);
+    }
+  }));
+
+  app.get("/internal/identity/v1/account-links", asyncRoute(async (req, res) => {
+    try {
+      const subject = requiredString(req.query.subject, "subject");
+      return res.json(await linksOf(subject));
+    } catch (error) {
+      return handleAdminError(error, res);
+    }
+  }));
 
   app.post("/internal/identity/v1/organizations/_ensure", asyncRoute(async (req, res) => {
     try {

@@ -169,8 +169,16 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
   app.post("/user/_search", (req, res) => {
     if (!requireAdmin(req, res)) return;
     const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
+    // egov-user filters by whichever of userName, uuid and mobileNumber are given.
+    const { userName, uuid, mobileNumber } = req.body;
+    if (userName === undefined && !Array.isArray(uuid) && mobileNumber === undefined) {
+      return res.status(400).json({ error: "search criteria required" });
+    }
     const matches = [...accounts.values()].filter((account) =>
-      account.userName === req.body.userName && account.tenantId === tenantId &&
+      (userName === undefined || account.userName === userName) &&
+      (!Array.isArray(uuid) || uuid.includes(account.uuid)) &&
+      (mobileNumber === undefined || account.mobileNumber === mobileNumber) &&
+      account.tenantId === tenantId &&
       account.type === req.body.userType && account.active === (req.body.active !== false));
     return res.json({ user: matches.map(publicAccount).map((user) => maskSearchMobileNumbers && user.mobileNumber
       ? { ...user, mobileNumber: `******${user.mobileNumber.slice(-4)}` }

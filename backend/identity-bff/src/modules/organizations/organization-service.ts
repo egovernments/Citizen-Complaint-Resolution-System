@@ -135,9 +135,103 @@ async function writeCitizenRegistrationValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
+  return updateUserAttributeValues(userId, CITIZEN_REGISTRATIONS_ATTRIBUTE, update);
+}
+
+const ACCOUNT_LINKS_ATTRIBUTE = "digit.accountLinks";
+const ACCOUNT_LINK_BLOCKS_ATTRIBUTE = "digit.accountLinkBlocks";
+
+/**
+ * Existing DIGIT accounts linked to a Keycloak user (#2167), one value per
+ * link: `<EMPLOYEE|CITIZEN>|<tenantId>|<digitUuid>`. Admin-edit only, like
+ * `digit.citizenRegistrations`. Blocks record links an admin undid and that
+ * must not re-form automatically.
+ */
+export async function accountLinkValues(userId: string): Promise<{ links: string[]; blocks: string[] }> {
   const response = await request(`/users/${encodeURIComponent(userId)}`);
   const user = await response.json() as UserRepresentation;
-  const current = [...(user.attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
+  return {
+    links: [...(user.attributes?.[ACCOUNT_LINKS_ATTRIBUTE] || [])],
+    blocks: [...(user.attributes?.[ACCOUNT_LINK_BLOCKS_ATTRIBUTE] || [])],
+  };
+}
+
+export function updateAccountLinkValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  return updateUserAttributeValues(userId, ACCOUNT_LINKS_ATTRIBUTE, update);
+}
+
+export function updateAccountLinkBlockValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  return updateUserAttributeValues(userId, ACCOUNT_LINK_BLOCKS_ATTRIBUTE, update);
+}
+
+/** Keycloak users holding exactly this link value (for one-owner checks). */
+export async function usersWithAccountLink(value: string): Promise<string[]> {
+  const query = new URLSearchParams({ q: `${ACCOUNT_LINKS_ATTRIBUTE}:${value}`, briefRepresentation: "false", max: "5" });
+  const response = await request(`/users?${query}`);
+  return (await response.json() as UserRepresentation[])
+    .filter((user) => user.id && user.attributes?.[ACCOUNT_LINKS_ATTRIBUTE]?.includes(value))
+    .map((user) => user.id!);
+}
+
+/** An enabled Keycloak user, by id or by exact email. */
+export async function findEnabledIdentityUser(input: { id?: string; email?: string }): Promise<string | null> {
+  let user: UserRepresentation | null = null;
+  if (input.id) {
+    const response = await request(`/users/${encodeURIComponent(input.id)}`, {}, [200, 404]);
+    user = response.status === 404 ? null : await response.json() as UserRepresentation;
+  } else if (input.email) {
+    user = await findIdentityUserByEmail(input.email.trim().toLowerCase());
+  }
+  return user?.id && user.enabled !== false ? user.id : null;
+}
+
+interface UserProfileAttribute {
+  name: string;
+  permissions?: { view?: string[]; edit?: string[] };
+}
+
+let phoneTrustCache: { value: boolean; expiresAt: number } | null = null;
+
+/**
+ * Whether a Keycloak-held phone can be trusted as proof: users must not be
+ * able to edit `phoneNumber` or `phoneNumberVerified` themselves. Declared
+ * profile attributes must not grant `user` edit; undeclared ones are only
+ * safe when the realm's unmanagedAttributePolicy keeps users from editing.
+ */
+export async function keycloakPhoneIsAdminControlled(): Promise<boolean> {
+  if (phoneTrustCache && phoneTrustCache.expiresAt > Date.now()) return phoneTrustCache.value;
+  const response = await request("/users/profile");
+  const profile = await response.json() as {
+    attributes?: UserProfileAttribute[];
+    unmanagedAttributePolicy?: string;
+  };
+  const value = [PHONE_ATTRIBUTE, PHONE_VERIFIED_ATTRIBUTE].every((name) => {
+    const declared = profile.attributes?.find((attribute) => attribute.name === name);
+    if (declared) return !(declared.permissions?.edit || []).includes("user");
+    return profile.unmanagedAttributePolicy !== "ENABLED";
+  });
+  phoneTrustCache = { value, expiresAt: Date.now() + 60_000 };
+  return value;
+}
+
+export function resetPhoneTrustCache(): void {
+  phoneTrustCache = null;
+}
+
+async function updateUserAttributeValues(
+  userId: string,
+  attributeName: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  const current = [...(user.attributes?.[attributeName] || [])];
   const next = update(current);
   if (!next) return current;
   // Send only the user-profile fields, never the stale `enabled` and friends:
@@ -151,7 +245,7 @@ async function writeCitizenRegistrationValues(
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      attributes: { ...user.attributes, [CITIZEN_REGISTRATIONS_ATTRIBUTE]: next },
+      attributes: { ...user.attributes, [attributeName]: next },
     }),
   });
   return next;

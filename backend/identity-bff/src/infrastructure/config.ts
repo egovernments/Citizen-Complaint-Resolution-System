@@ -127,6 +127,14 @@ export const config = {
   // when on, the fixed code is accepted for any challenge. Development only.
   citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
   citizenLoginPasswordOtpFixedValue: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE || "123456",
+  // Existing-tenant routes (#2167): when true, startup gives every active
+  // DIGIT ROOT tenant in IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS that has no
+  // Organization one whose URL slug is the tenant id. Never renames a slug.
+  identityTenantRouteBackfill: process.env.IDENTITY_TENANT_ROUTE_BACKFILL === "true",
+  identityTenantRouteBackfillRoots: csv(
+    process.env.IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS ||
+      (process.env.DIGIT_ADMIN_TENANT_ID || "").split(".")[0],
+  ),
   identityAuditStreamMaxLength: parseInt(process.env.IDENTITY_AUDIT_STREAM_MAXLEN || "100000"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
