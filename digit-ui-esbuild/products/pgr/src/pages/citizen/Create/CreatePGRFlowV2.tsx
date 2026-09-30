@@ -19,6 +19,7 @@ import { complaintLabel } from "../../../utils/complaintLabel";
 import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { serializeGeoLocation } from "../../../utils/geoLocation";
 import { trackEvent } from "../../../utils/analytics";
+import useVoiceInputEnabled from "../../../hooks/pgr/useVoiceInputEnabled";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -1016,7 +1017,11 @@ const CreatePGRFlowV2: React.FC = () => {
   // The location step mounts on its first visit and then stays, so the map
   // and the boundary cascade keep what the citizen picked when they go Back.
   const [locationVisited, setLocationVisited] = React.useState(false);
-  const canSpeak = React.useMemo(() => speechToTextSupported(), []);
+  // The browser has to support speech, and the tenant mustn't have turned
+  // voice off (RAINMAKER-PGR.UIConstants.VOICE_INPUT: false).
+  const browserCanSpeak = React.useMemo(() => speechToTextSupported(), []);
+  const voiceEnabled = useVoiceInputEnabled(tenantId);
+  const canSpeak = browserCanSpeak && voiceEnabled;
 
   const patch = React.useCallback((partial: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
