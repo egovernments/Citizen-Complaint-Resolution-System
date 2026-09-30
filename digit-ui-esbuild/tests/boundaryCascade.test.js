@@ -19,7 +19,7 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { disambiguateLabels, optionsForLevels, pathsByCode, selectionAfterPick } = require(OUT);
+const { disambiguateLabels, levelsFilledAbove, optionsForLevels, pathsByCode, selectionAfterPick } = require(OUT);
 
 const node = (code, boundaryType, children = []) => ({ code, name: code, boundaryType, children });
 
@@ -97,4 +97,14 @@ test("only names shared within a level carry their parent", () => {
     { value: "CHEMANER", label: "Chemaner" },
     { value: "CH_TOWNSHIP", label: "Township (CHEPALUNGU)" },
   ]);
+});
+
+test("a pick reports how many levels above it it filled in", () => {
+  const first = pick("SIGOR");
+  assert.equal(levelsFilledAbove(byCode("SIGOR"), {}, first, hierarchy), 2);
+  // Walking down from a chosen county fills nothing above.
+  const county = pick("BOMET");
+  assert.equal(levelsFilledAbove(byCode("CHEPALUNGU"), county, pick("CHEPALUNGU", county), hierarchy), 0);
+  // A ward from another sub-county changes the one above it.
+  assert.equal(levelsFilledAbove(byCode("CHEMANER"), first, pick("CHEMANER", first), hierarchy), 1);
 });

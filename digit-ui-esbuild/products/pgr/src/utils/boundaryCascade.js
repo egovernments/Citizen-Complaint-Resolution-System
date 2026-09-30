@@ -70,6 +70,16 @@ export const selectionAfterPick = (picked, selected, { hierarchy, shownLevels, p
 };
 
 /**
+ * How many levels above `picked` the pick filled in or changed: 0 when the
+ * cascade was walked top-down, more when a ward was picked first. Reported
+ * with the pick so the telemetry shows how people use the open cascade.
+ */
+export const levelsFilledAbove = (picked, before, after, hierarchy) =>
+  hierarchy
+    .slice(0, Math.max(hierarchy.indexOf(picked.boundaryType), 0))
+    .filter((type) => after[type] && after[type].code !== before[type]?.code).length;
+
+/**
  * Labels for one level's options. With every ward listed before a sub-county
  * is picked, two can share a name; those carry their parent's
  * ("Township (Bomet East)").
