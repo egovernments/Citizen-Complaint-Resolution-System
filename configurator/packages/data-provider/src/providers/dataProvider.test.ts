@@ -59,29 +59,30 @@ describe('createDigitDataProvider', () => {
     );
   });
 
-  it('rejects PGR writes through the competing generic workflow escalation masters', async () => {
-    mock.method(client, 'mdmsSearch', async () => [{
-      id: 'legacy-pgr', tenantId: 'pg', schemaCode: 'Workflow.AutoEscalationStatesToIgnore',
-      uniqueIdentifier: 'PGR', data: { businessService: 'PGR', module: 'PGR' },
-      isActive: true,
-      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
-    }]);
+  it('does not expose the generic workflow escalation masters at all (#1777)', async () => {
+    // PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig. The
+    // configurator used to guard PGR writes through Workflow.AutoEscalation /
+    // AutoEscalationStatesToIgnore; those masters are no longer registered, so
+    // no write — PGR or otherwise — can reach them through this provider.
+    const mdmsCreate = mock.method(client, 'mdmsCreate', async () => {
+      throw new Error('must not be called');
+    });
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(
       () => dp.create('auto-escalation', {
         data: { businessService: 'PGR', module: 'PGR' },
       }),
-      /configured only through RAINMAKER-PGR.EscalationConfig/,
+      /Unknown resource/,
     );
     await assert.rejects(
       () => dp.update('auto-escalation-ignore', {
         id: 'PGR',
-        // Partial dirty-field payload: the guard must use the merged server row.
         data: { active: true },
         previousData: { businessService: 'PGR', module: 'PGR' },
       }),
-      /configured only through RAINMAKER-PGR.EscalationConfig/,
+      /Unknown resource/,
     );
+    assert.equal(mdmsCreate.mock.callCount(), 0);
   });
 
   it('creates a non-root boundary relationship in the login tenant with its direct parent', async () => {

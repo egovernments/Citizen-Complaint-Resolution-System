@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import {
   getResourceConfig, getAllResources, getDedicatedResources,
-  getGenericMdmsResources, getResourceLabel, getResourceIdField,
+  getGenericMdmsResources, getAdvancedMdmsResources, getResourceLabel, getResourceIdField,
   getResourceBySchema,
 } from './resourceRegistry.js';
 
@@ -117,9 +117,6 @@ describe('resourceRegistry', () => {
     const expected: Record<string, string> = {
       'theme-config': 'common-masters.ThemeConfig',
       'mobile-number-validation': 'common-masters.MobileNumberValidation',
-      'tenant-boundary': 'egov-location.TenantBoundary',
-      'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',
-      'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',
       'pgr-ui-constants': 'RAINMAKER-PGR.UIConstants',
       'pgr-escalation': 'RAINMAKER-PGR.EscalationConfig',
     };
@@ -143,6 +140,52 @@ describe('resourceRegistry', () => {
     assert.strictEqual(uiConstants.idField, 'code');
     // Same defect, same fix, one master earlier — keep both honest.
     assert.strictEqual(getResourceConfig('map-config')?.idField, 'code');
+  });
+
+  it('does not register masters used only for internal project setup (#1777)', () => {
+    // These have no configurator screen: no route, no sidebar/Advanced entry,
+    // and no reverse-reference link. Their data stays in MDMS untouched.
+    const internalSchemas = [
+      'Workflow.BusinessService',
+      'Workflow.BusinessServiceConfig',
+      'Workflow.AutoEscalation',
+      'DataSecurity.EncryptionPolicy',
+      'DataSecurity.DecryptionABAC',
+      'DataSecurity.MaskingPatterns',
+      'DataSecurity.SecurityPolicy',
+      'INBOX.InboxQueryConfiguration',
+      'egov-hrms.Degree',
+      'egov-hrms.EmploymentTest',
+      'egov-hrms.Specalization',
+      'common-masters.CronJobAPIConfig',
+      'egov-location.TenantBoundary',
+      'Workflow.AutoEscalationStatesToIgnore',
+      'Workflow.BusinessServiceMasterConfig',
+    ];
+    for (const schema of internalSchemas) {
+      assert.strictEqual(getResourceBySchema(schema), undefined, `${schema} must not be registered`);
+    }
+    for (const resource of [
+      'workflow-services', 'workflow-config', 'auto-escalation', 'encryption-policy',
+      'decryption-abac', 'masking-patterns', 'security-policy', 'inbox-config', 'degrees',
+      'employment-tests', 'specializations', 'cron-jobs', 'tenant-boundary',
+      'auto-escalation-ignore', 'workflow-bs-master',
+    ]) {
+      assert.strictEqual(getResourceConfig(resource), undefined, `${resource} must not be registered`);
+    }
+    // The dedicated Workflows viewer (workflow service API, not MDMS) is unaffected.
+    assert.ok(getResourceConfig('workflow-business-services'));
+  });
+
+  it('keeps Map Configuration routable but out of the Advanced list (#1777)', () => {
+    // /manage/map-config is registered from the generic set and opens the
+    // dedicated editor behind the Tenant Management sidebar entry.
+    assert.ok(getGenericMdmsResources()['map-config']);
+    assert.strictEqual(getAdvancedMdmsResources()['map-config'], undefined);
+    // Advanced is otherwise exactly the generic set.
+    const advanced = Object.keys(getAdvancedMdmsResources());
+    const generic = Object.keys(getGenericMdmsResources()).filter((r) => r !== 'map-config');
+    assert.deepStrictEqual(advanced, generic);
   });
 
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {

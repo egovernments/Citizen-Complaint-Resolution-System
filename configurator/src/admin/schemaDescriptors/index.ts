@@ -2,9 +2,6 @@ import type { SchemaDescriptor } from './types';
 import { mobileValidationDescriptor } from './mobile-validation';
 import { formValidationsDescriptor } from './form-validations';
 import { themeConfigDescriptor } from './theme-config';
-import { tenantBoundaryDescriptor } from './tenant-boundary';
-import { autoEscalationIgnoreDescriptor } from './auto-escalation-ignore';
-import { workflowBsMasterDescriptor } from './workflow-bs-master';
 import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
 import { notificationRoutingDescriptor } from './notification-routing';
@@ -18,9 +15,6 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [mobileValidationDescriptor.schema]: mobileValidationDescriptor,
   [formValidationsDescriptor.schema]: formValidationsDescriptor,
   [themeConfigDescriptor.schema]: themeConfigDescriptor,
-  [tenantBoundaryDescriptor.schema]: tenantBoundaryDescriptor,
-  [autoEscalationIgnoreDescriptor.schema]: autoEscalationIgnoreDescriptor,
-  [workflowBsMasterDescriptor.schema]: workflowBsMasterDescriptor,
   [pgrUiConstantsDescriptor.schema]: pgrUiConstantsDescriptor,
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,
