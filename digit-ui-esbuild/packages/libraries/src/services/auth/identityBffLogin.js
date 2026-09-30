@@ -186,8 +186,12 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
       message: `The signed-in account did not produce a valid ${surface} session for this tenant.`,
     };
   }
+  // Employee roles apply at the route tenant and its ancestors (a state-level
+  // role at `ke` also holds at `ke.bomet`); a sibling tenant's roles do not.
+  const appliesHere = (roleTenant) =>
+    roleTenant === tenant.tenantId || tenant.tenantId.startsWith(`${roleTenant}.`);
   const scopedInfo = surface === "employee"
-    ? { ...info, roles: (info.roles || []).filter((role) => role.tenantId === tenant.tenantId) }
+    ? { ...info, roles: (info.roles || []).filter((role) => appliesHere(role.tenantId)) }
     : info;
   return { status: "authenticated", user: { info: scopedInfo, ...tokens } };
 }

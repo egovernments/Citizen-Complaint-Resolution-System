@@ -41,6 +41,18 @@ const getFromInfo = (info) => {
   return info?.tenantId || info?.tenantid || info?.userInfo?.tenantId || null;
 };
 
+const citizenAccountTenant = (routeTenant) => routeTenant.rootTenantId || routeTenant.tenantId.split(".")[0];
+
+// A stored session belongs to this route: the route tenant itself, or, for a
+// citizen, the route tenant's root, where egov-user keeps the citizen account.
+const belongsToRoute = (info, routeTenant) => {
+  const parsed = typeof info === "string" ? parseValue(info) : info;
+  const tenantId = getFromInfo(parsed);
+  if (!tenantId || tenantId === routeTenant.tenantId) return true;
+  const type = parsed?.type || parsed?.userInfo?.type;
+  return type === "CITIZEN" && tenantId === citizenAccountTenant(routeTenant);
+};
+
 const clearAuthFromAnotherTenant = (routeTenant) => {
   if (!routeTenant) return;
   const sessionInfo = window.Digit.SessionStorage.get("User")?.info;
@@ -54,8 +66,8 @@ const clearAuthFromAnotherTenant = (routeTenant) => {
       : routeTenant.surface === "citizen"
         ? getFromStorage("Citizen.user-info")
         : getFromStorage("Employee.user-info");
-  const activeTenant = getFromInfo(sessionInfo) || getFromInfo(persistedInfo);
-  if (!activeTenant || activeTenant === routeTenant.tenantId) return;
+  const activeInfo = getFromInfo(sessionInfo) ? sessionInfo : persistedInfo;
+  if (belongsToRoute(activeInfo, routeTenant)) return;
 
   // Auth storage predates tenant-scoped routes and is shared across tabs. Do
   // not let a token issued for one tenant silently authenticate another URL.
@@ -82,10 +94,10 @@ const installCrossTabTenantGuard = (routeTenant) => {
 
   window.addEventListener("storage", (event) => {
     if (!event.key || !TENANT_AUTH_KEYS.has(event.key) || !event.newValue) return;
-    const observed = event.key.endsWith("tenant-id")
-      ? parseValue(event.newValue)
-      : getFromInfo(parseValue(event.newValue));
-    if (!observed || observed === expected) return;
+    const sameTenant = event.key.endsWith("tenant-id")
+      ? parseValue(event.newValue) === expected
+      : belongsToRoute(event.newValue, routeTenant);
+    if (sameTenant) return;
 
     // localStorage is origin-wide. If another tab installs a token for a
     // different tenant, freeze this tab before it can keep issuing requests

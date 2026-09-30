@@ -40,7 +40,7 @@ import Utils from "./utils";
 import { subFormRegistry } from "./subFormRegistry";
 import AccessControlService from "./services/elements/Access";
 import { getAuthAdapter, initAuthAdapter, AuthAdapter } from "./services/auth/index";
-import { isIdentityBffAuth } from "./services/auth/authSurface";
+import { isIdentityBffAuth, privateRouteLogin } from "./services/auth/authSurface";
 import {
   buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
   establishIdentityBffSession,
@@ -58,6 +58,8 @@ const initLibraries = () => {
   setupLibraries("SessionStorage", Storage);
   setupLibraries("PersistantStorage", PersistantStorage);
   setupLibraries("UserService", UserService);
+  // Read by the component packages' PrivateRoute, which cannot import this package.
+  setupLibraries("AuthSurface", { privateRouteLogin });
   setupLibraries("ULBService", ULBService);
 
   setupLibraries("Config", { mergeConfig });

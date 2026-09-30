@@ -71,8 +71,16 @@ export const UserService = {
       const surface = tenantContext()?.surface || getAuthSurface();
       const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
       try {
+        // Revoke the DIGIT access token the BFF minted, as the legacy logout
+        // does; ending the BFF session alone leaves it valid until expiry.
+        await UserService.logoutUser();
+      } catch (e) {
+        console.warn("DIGIT token revocation failed on logout", e);
+      }
+      try {
         await identityBffLogout({ surface, fetchImpl: window.fetch.bind(window) });
       } catch (e) {
+        console.warn("Identity BFF logout failed", e);
       } finally {
         window.localStorage.clear();
         window.sessionStorage.clear();

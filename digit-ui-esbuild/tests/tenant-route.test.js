@@ -86,6 +86,16 @@ test("canonical citizen routes also use the Identity BFF; legacy citizen routes 
   delete global.window;
 });
 
+test("legacy routes under any context path keep the employee surface", () => {
+  global.window = {
+    location: { pathname: "/pgr-ui/employee/pgr/inbox" },
+    globalConfigs: { getConfig: (key) => (key === "CITIZEN_AUTH_PROVIDER" ? "keycloak" : undefined) },
+  };
+  assert.equal(getAuthProvider(), "digit");
+  assert.equal(getAuthProvider("/pgr-ui/citizen/login"), "keycloak");
+  delete global.window;
+});
+
 test("tenant routes without a surface segment do not force the Identity BFF", () => {
   global.window = { location: { pathname: "/" }, globalConfigs: { getConfig: () => undefined } };
   assert.equal(getAuthProvider("/bomet-county/digit-ui/"), "digit");

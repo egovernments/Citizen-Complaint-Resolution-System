@@ -96,6 +96,7 @@ function App() {
   window.globalPath = window.contextPath;
   const stateCode =
     routeTenant?.tenantId ||
+    window.globalConfigs?.getConfig("BOOTSTRAP_TENANT_ID") ||
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
     process.env.REACT_APP_STATE_LEVEL_TENANT_ID ||
     "pg";

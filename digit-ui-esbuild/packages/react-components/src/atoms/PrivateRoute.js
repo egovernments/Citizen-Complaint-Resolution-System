@@ -1,9 +1,10 @@
 import React from "react";
 import { Route, Redirect } from "react-router-dom";
 
-// Surface + login target come from the shared tenant-route aware resolver so
-// `/{tenantSlug}/digit-ui/employee/...` is treated as employee.
-import { privateRouteLogin } from "../../../libraries/src/services/auth/authSurface";
+// Surface + login target come from the libraries' tenant-route aware resolver
+// (Digit.AuthSurface, set up by initLibraries) so `/{tenantSlug}/digit-ui/employee/...`
+// is treated as employee. A runtime lookup, not an import: this package is
+// built and published without the libraries package.
 
 export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
   return (
@@ -16,7 +17,7 @@ export const PrivateRoute = ({ component: Component, roles, ...rest }) => {
         // logged in last and may not match the path being visited).
         // `/{slug}/digit-ui/employee/...` or `/<contextPath>/employee/...`
         // → employee, anything else → citizen.
-        const { surface: pathUserType, loginPath } = privateRouteLogin(
+        const { surface: pathUserType, loginPath } = window.Digit.AuthSurface.privateRouteLogin(
           props.location.pathname,
           window?.contextPath,
         );

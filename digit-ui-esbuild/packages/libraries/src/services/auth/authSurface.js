@@ -26,11 +26,12 @@ import { parseTenantRoute } from "../tenant/tenantRoute";
 export function getAuthSurface(pathname) {
   const path =
     pathname || (typeof window !== "undefined" ? window.location.pathname : "");
-  // Both legacy /digit-ui/{surface} and canonical
-  // /{tenantSlug}/digit-ui/{surface} routes are supported during rollout.
+  // Canonical /{tenantSlug}/digit-ui/{surface} routes come from the tenant
+  // route parser; legacy `/<contextPath>/{surface}` routes keep any context path.
+  const route = parseTenantRoute(path);
+  if (route) return route.surface === "employee" ? "employee" : "citizen";
   const parts = (path || "").split("/").filter(Boolean);
-  const mount = parts.indexOf("digit-ui");
-  return mount >= 0 && parts[mount + 1] === "employee" ? "employee" : "citizen";
+  return parts[1] === "employee" ? "employee" : "citizen";
 }
 
 export function getAuthProvider(pathname) {

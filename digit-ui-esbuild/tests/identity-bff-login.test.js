@@ -77,7 +77,9 @@ const employeeUser = (tenantId = TENANT.tenantId) => ({
     tenantId,
     roles: [
       { code: "GRO", tenantId: TENANT.tenantId },
+      { code: "SUPERUSER", tenantId: "ke" },
       { code: "GRO", tenantId: "ke.other" },
+      { code: "GRO", tenantId: "ke.bometx" },
     ],
   },
 });
@@ -186,7 +188,7 @@ test("`from` pointing at the surface's own sign-in pages collapses to the base",
 
 // ------------------------------------------------------------ employee session
 
-test("employee session exchange passes surface=employee and scopes roles to the route tenant", async () => {
+test("employee session exchange passes surface=employee and scopes roles to the route tenant and its ancestors", async () => {
   const { calls, fetchImpl } = stubBff({
     "GET /identity/v1/session?surface=employee": json(200, SESSION),
     "POST /identity/v1/contexts/_select": json(200, employeeUser()),
@@ -195,7 +197,7 @@ test("employee session exchange passes surface=employee and scopes roles to the 
   assert.equal(result.status, "authenticated");
   assert.deepEqual(calls[1].body, { surface: "employee", tenantId: "ke.bomet" });
   assert.equal(calls[1].init.credentials, "include");
-  assert.deepEqual(result.user.info.roles.map((r) => r.tenantId), ["ke.bomet"]);
+  assert.deepEqual(result.user.info.roles.map((r) => r.tenantId), ["ke.bomet", "ke"]);
   assert.equal(result.user.access_token, "emp-token");
 });
 

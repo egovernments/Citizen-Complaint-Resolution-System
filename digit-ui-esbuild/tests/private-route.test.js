@@ -38,7 +38,7 @@ process.on("exit", () => {
 const { ComponentsPrivateRoute, ReactPrivateRoute, privateRouteLogin, React, renderToStaticMarkup, StaticRouter } = require(OUT);
 
 const withUser = (user, fn) => {
-  const digit = { UserService: { getUser: () => user } };
+  const digit = { UserService: { getUser: () => user }, AuthSurface: { privateRouteLogin } };
   global.Digit = digit;
   global.window = { Digit: digit, contextPath: "digit-ui", globalConfigs: { getConfig: () => undefined } };
   try {
