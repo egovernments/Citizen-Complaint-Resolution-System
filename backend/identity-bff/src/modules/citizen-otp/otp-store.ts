@@ -122,7 +122,7 @@ export async function readChallenge(id: string): Promise<OtpChallenge | null> {
  */
 const CHECK_CODE = `local hash = redis.call('HGET', KEYS[1], 'hash')
   if not hash then return {'MISSING', 0} end
-  if hash == ARGV[1] then
+  if hash == ARGV[1] or ARGV[3] == '1' then
     if redis.call('DEL', KEYS[1]) == 1 then return {'OK', 0} end
     return {'MISSING', 0}
   end
@@ -132,18 +132,27 @@ const CHECK_CODE = `local hash = redis.call('HGET', KEYS[1], 'hash')
   return {'WRONG', remaining}`;
 
 export type CodeCheck =
-  | { status: "OK" }
+  | { status: "OK"; fixedCode: boolean }
   | { status: "MISSING" }
   | { status: "WRONG"; attemptsRemaining: number; locked: boolean };
 
-export async function checkCode(challenge: OtpChallenge, code: string): Promise<CodeCheck> {
+/**
+ * `fixedCode` is the enabled legacy fixed OTP: it satisfies any live
+ * challenge, still single-use and still behind lockout.
+ */
+export async function checkCode(
+  challenge: OtpChallenge,
+  code: string,
+  fixedCode: string | null = null,
+): Promise<CodeCheck> {
+  const fixed = fixedCode !== null && code === fixedCode;
   const [status, remaining] = await getRedis().eval(
     CHECK_CODE, 1, challengeKey(challenge.id),
-    codeHash(challenge.id, code), config.identityCitizenOtpMaxAttempts,
+    codeHash(challenge.id, code), config.identityCitizenOtpMaxAttempts, fixed ? "1" : "0",
   ) as [string, number];
   if (status === "OK") {
     await getRedis().del(failuresKey(privateRef("phone", challenge.phoneNumber)));
-    return { status: "OK" };
+    return { status: "OK", fixedCode: fixed };
   }
   if (status !== "WRONG") return { status: "MISSING" };
   // Wrong guesses also add up per phone across challenges; enough of them

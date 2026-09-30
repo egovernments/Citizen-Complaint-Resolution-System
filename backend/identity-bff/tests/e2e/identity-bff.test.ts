@@ -17,10 +17,11 @@ import {
 } from "../../src/modules/sessions/session-store.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
-  NovuBridgeOtpSender,
+  LogOtpSender,
   OtpDeliveryError,
   otpSender,
   setOtpSender,
+  warnAboutInsecureOtpModes,
   type OtpMessage,
 } from "../../src/modules/citizen-otp/otp-sender.js";
 import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
@@ -2140,14 +2141,72 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       }
     });
 
-    it("drops the challenge when delivery fails", async () => {
+    it("answers OTP_CHANNEL_UNAVAILABLE when a code cannot be sent", async () => {
       failDelivery = true;
       try {
         const response = await send("799000501");
         expect(response.status).toBe(503);
-        expect(await response.json()).toMatchObject({ code: "OTP_DELIVERY_UNAVAILABLE" });
+        expect(await response.json()).toMatchObject({ code: "OTP_CHANNEL_UNAVAILABLE" });
       } finally {
         failDelivery = false;
+      }
+      const fake = otpSender();
+      setOtpSender(new LogOtpSender());
+      try {
+        const response = await send("799000502");
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ code: "OTP_CHANNEL_UNAVAILABLE" });
+      } finally {
+        setOtpSender(fake);
+      }
+    });
+
+    it("accepts the legacy fixed code only when it is enabled", async () => {
+      const disabled = await (await send("799000601")).json();
+      const refused = await verify(disabled.challengeId, "123456" === lastCode() ? "654321" : "123456");
+      expect((await refused.json()).code).toBe("OTP_INVALID");
+
+      const fake = otpSender();
+      Object.assign(config as any, {
+        citizenLoginPasswordOtpFixedEnabled: true, citizenLoginPasswordOtpFixedValue: "123456",
+      });
+      setOtpSender(new LogOtpSender());
+      try {
+        // No channel: the challenge still issues, and the fixed code proves it once.
+        const { challengeId } = await (await send("799000602")).json();
+        const ok = await verify(challengeId, "123456");
+        expect(ok.status).toBe(200);
+        expect((await (await verify(challengeId, "123456")).json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        (config as any).citizenLoginPasswordOtpFixedEnabled = false;
+        setOtpSender(fake);
+      }
+    });
+
+    it("writes codes to the log only when the log sender is chosen, and warns at startup", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const sender = new LogOtpSender();
+        expect(sender.configured).toBe(false);
+        await expect(sender.send({
+          challengeId: "c1", tenantId: "ke.bomet", phoneNumber: "+254712345678", code: "246810", expiresInSeconds: 300,
+        })).rejects.toBeInstanceOf(OtpDeliveryError);
+        (config as any).identityCitizenOtpSender = "log";
+        (config as any).citizenLoginPasswordOtpFixedEnabled = true;
+        expect(sender.configured).toBe(true);
+        await sender.send({
+          challengeId: "c1", tenantId: "ke.bomet", phoneNumber: "+254712345678", code: "246810", expiresInSeconds: 300,
+        });
+        expect(warn.mock.calls.some(([line]) => String(line).includes("246810"))).toBe(true);
+        warn.mockClear();
+        warnAboutInsecureOtpModes();
+        const warnings = warn.mock.calls.map(([line]) => String(line)).join("\n");
+        expect(warnings).toContain("IDENTITY_CITIZEN_OTP_SENDER=log");
+        expect(warnings).toContain("CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED");
+      } finally {
+        (config as any).identityCitizenOtpSender = "";
+        (config as any).citizenLoginPasswordOtpFixedEnabled = false;
+        warn.mockRestore();
       }
     });
 
@@ -2167,44 +2226,6 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(session.subject).toBeTruthy();
       expect(session.sessionRef).toMatch(/^[0-9a-f]{32}$/);
       expect(JSON.stringify(records)).not.toMatch(/2547\d{8}|7990\d{5}|198\.51\.100/);
-    });
-
-    it("hands novu-bridge a thin event and keeps nothing but the status", async () => {
-      const { createServer } = await import("node:http");
-      let received: any = null;
-      const server = createServer((req, res) => {
-        let body = "";
-        req.on("data", (chunk) => { body += chunk; });
-        req.on("end", () => {
-          received = { path: req.url, body: JSON.parse(body) };
-          res.writeHead(received.body.event.tenantId === "ke.fail" ? 500 : 202).end("{}");
-        });
-      });
-      await new Promise<void>((resolve) => server.listen(0, resolve));
-      const saved = config.notificationMessageSendUrl;
-      (config as any).notificationMessageSendUrl =
-        `http://localhost:${(server.address() as any).port}/novu-adapter/v1/messages/_send`;
-      try {
-        const sender = new NovuBridgeOtpSender();
-        await sender.send({
-          challengeId: "challenge-1", tenantId: "ke.bomet", phoneNumber: "+254712345678",
-          code: "123456", expiresInSeconds: 300, locale: "sw_KE",
-        });
-        expect(received.path).toBe("/novu-adapter/v1/messages/_send");
-        expect(received.body.event).toMatchObject({
-          kind: "THIN", eventType: "IDENTITY_OTP", module: "IDENTITY", eventName: "IDENTITY.CITIZEN.OTP",
-          tenantId: "ke.bomet", entityId: "challenge-1", transactionSeed: "challenge-1",
-          recipients: [{ type: "CITIZEN", phone: "+254712345678", locale: "sw_KE" }],
-          data: { otp: "123456", expiryMinutes: "5" },
-        });
-        await expect(sender.send({
-          challengeId: "challenge-2", tenantId: "ke.fail", phoneNumber: "+254712345678",
-          code: "123456", expiresInSeconds: 300,
-        })).rejects.toBeInstanceOf(OtpDeliveryError);
-      } finally {
-        (config as any).notificationMessageSendUrl = saved;
-        await new Promise((resolve) => server.close(resolve));
-      }
     });
   });
 });

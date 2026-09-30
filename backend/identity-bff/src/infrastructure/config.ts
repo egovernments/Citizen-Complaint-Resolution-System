@@ -125,10 +125,13 @@ export const config = {
   identityCitizenOtpLockoutSeconds: parseInt(
     process.env.IDENTITY_CITIZEN_OTP_LOCKOUT_SECONDS || "3600",
   ),
-  // novu-bridge's synchronous send endpoint. The BFF hands it a thin event and
-  // holds no provider credentials. Empty = no sender, so no `phone_otp`.
-  notificationMessageSendUrl: process.env.NOTIFICATION_MESSAGE_SEND_URL || "",
-  notificationOtpEventType: process.env.NOTIFICATION_OTP_EVENT_TYPE || "IDENTITY_OTP",
+  // Interim OTP channel: "log" writes codes to the BFF log (development only).
+  // Anything else = no channel, so a send answers OTP_CHANNEL_UNAVAILABLE.
+  identityCitizenOtpSender: process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  // Same switch and value egov-user reads (citizen.login.password.otp.fixed.*):
+  // when on, the fixed code is accepted for any challenge. Development only.
+  citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
+  citizenLoginPasswordOtpFixedValue: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE || "123456",
   identityAuditStreamMaxLength: parseInt(process.env.IDENTITY_AUDIT_STREAM_MAXLEN || "100000"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",

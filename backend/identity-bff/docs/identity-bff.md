@@ -437,8 +437,8 @@ tenant's projection does not affect the others.
 `phone_otp` is a citizen sign-in method the BFF runs itself, without a
 Keycloak login page. List it in the citizen client's
 `digit.auth.signin.methods` (e.g. `phone_otp,password`). It is offered only
-when `IDENTITY_CITIZEN_OTP_SECRET` and `NOTIFICATION_MESSAGE_SEND_URL` are
-both set, never on another surface, and `/identity/v1/authorize` refuses it.
+when `IDENTITY_CITIZEN_OTP_SECRET` is set, never on another surface, and
+`/identity/v1/authorize` refuses it.
 
 | Step | API | Result |
 |---|---|---|
@@ -460,12 +460,17 @@ both set, never on another surface, and `/identity/v1/authorize` refuses it.
 - **Lockout:** `IDENTITY_CITIZEN_OTP_LOCKOUT_FAILURES` wrong codes for one
   phone, across challenges, lock it out of sending and verifying for
   `IDENTITY_CITIZEN_OTP_LOCKOUT_SECONDS`.
-- **Delivery:** the only sender posts a novu-bridge thin event
-  (`kind: THIN`, `module: IDENTITY`, `eventName: IDENTITY.CITIZEN.OTP`, the phone
-  in `recipients`, `data.otp`, `data.expiryMinutes`, `transactionSeed` = the
-  challenge id) to `NOTIFICATION_MESSAGE_SEND_URL`. The BFF holds no Novu key and
-  no provider logic; routing, wording and channel belong to the notification
-  service. A failed send drops the challenge and answers 503.
+- **Delivery:** through an `OtpSender`. The only implementation for now
+  writes the code to the BFF log, and runs only with
+  `IDENTITY_CITIZEN_OTP_SENDER=log` (development only). With no channel, or a
+  failed send, `_send` drops the challenge and answers 503
+  `OTP_CHANNEL_UNAVAILABLE`. A real channel (novu-bridge) replaces it later
+  behind the same interface; the BFF holds no provider logic.
+- **Fixed code:** `CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=true`, the switch
+  egov-user reads, makes `CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE` (default
+  `123456`) valid for any live challenge, still single-use and behind lockout.
+  `_send` then succeeds even without a channel. Startup warns when this or the
+  log sender is on.
 - **Identity:** a verified code resolves the Keycloak user whose **verified**
   `phoneNumber` matches, or creates one (`phoneNumberVerified=true`) with the
   admin API. An unverified match is never taken over; two verified owners or a
@@ -482,7 +487,7 @@ both set, never on another surface, and `/identity/v1/authorize` refuses it.
 
 Stable error codes: `INVALID_MOBILE_NUMBER`, `OTP_RESEND_TOO_SOON`,
 `OTP_RATE_LIMITED` and `OTP_LOCKED` (429, with `Retry-After`),
-`OTP_DELIVERY_UNAVAILABLE`, `OTP_INVALID` (with `attemptsRemaining`),
+`OTP_CHANNEL_UNAVAILABLE`, `OTP_INVALID` (with `attemptsRemaining`),
 `OTP_EXPIRED`, `IDENTITY_DISABLED`, `IDENTITY_CONFLICT`, `IDENTITY_UNAVAILABLE`.
 
 ### Citizen token minting

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
 
 export interface OtpMessage {
@@ -13,8 +12,8 @@ export interface OtpMessage {
 
 /**
  * Delivers a citizen sign-in code. The identity service generates, stores and
- * checks the code; a sender only carries it. Implementations hold no provider
- * logic or credentials.
+ * checks the code; a sender only carries it and holds no provider logic or
+ * credentials. A real channel (novu-bridge) replaces the log sender later.
  */
 export interface OtpSender {
   readonly configured: boolean;
@@ -24,60 +23,28 @@ export interface OtpSender {
 export class OtpDeliveryError extends Error {}
 
 /**
- * The only implementation: novu-bridge's `messages/_send`, given a thin event
- * (novu-bridge `thin-event-v1`). The phone goes in `recipients` because the
- * citizen may have no DIGIT account yet; routing, template, wording, channel
- * and provider are the notification box's decision.
+ * Interim sender (#2189): writes the code to the BFF's log. Anyone who can
+ * read that log can sign in as any citizen, so it runs only when
+ * IDENTITY_CITIZEN_OTP_SENDER=log is set, and startup warns about it.
  */
-export class NovuBridgeOtpSender implements OtpSender {
+export class LogOtpSender implements OtpSender {
   get configured(): boolean {
-    return Boolean(config.notificationMessageSendUrl);
+    return config.identityCitizenOtpSender === "log";
   }
 
   async send(message: OtpMessage): Promise<void> {
-    if (!this.configured) throw new OtpDeliveryError("No OTP sender is configured");
-    const event = {
-      kind: "THIN",
-      schemaVersion: "1",
-      eventId: randomUUID(),
-      eventType: config.notificationOtpEventType,
-      eventTime: new Date().toISOString(),
-      producer: "identity-bff",
-      module: "IDENTITY",
-      eventName: "IDENTITY.CITIZEN.OTP",
-      entityType: "OTP_CHALLENGE",
-      entityId: message.challengeId,
+    if (!this.configured) throw new OtpDeliveryError("No OTP channel is configured");
+    console.warn(JSON.stringify({
+      otp: "identity.citizen_otp.log_sender",
       tenantId: message.tenantId,
-      // One challenge is delivered at most once, whatever retries happen.
-      transactionSeed: message.challengeId,
-      recipients: [{
-        type: "CITIZEN",
-        phone: message.phoneNumber,
-        ...(message.locale && { locale: message.locale }),
-      }],
-      data: {
-        otp: message.code,
-        expiryMinutes: String(Math.ceil(message.expiresInSeconds / 60)),
-      },
-    };
-    let response: Response;
-    try {
-      response = await fetch(config.notificationMessageSendUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ RequestInfo: { apiId: "digit-identity-bff" }, event }),
-        signal: AbortSignal.timeout(config.digitTimeoutMs),
-      });
-    } catch {
-      throw new OtpDeliveryError("OTP send request failed");
-    }
-    // Only the status is kept: the body may echo the code or the phone.
-    await response.body?.cancel();
-    if (!response.ok) throw new OtpDeliveryError(`OTP send returned ${response.status}`);
+      phoneNumber: message.phoneNumber,
+      code: message.code,
+      expiresInSeconds: message.expiresInSeconds,
+    }));
   }
 }
 
-let sender: OtpSender = new NovuBridgeOtpSender();
+let sender: OtpSender = new LogOtpSender();
 
 export function otpSender(): OtpSender {
   return sender;
@@ -88,7 +55,26 @@ export function setOtpSender(next: OtpSender): void {
   sender = next;
 }
 
-/** `phone_otp` is offered only when a code can be both hashed and delivered. */
+/** The legacy egov-user fixed OTP, honoured only when explicitly enabled. */
+export function fixedOtpCode(): string | null {
+  return config.citizenLoginPasswordOtpFixedEnabled ? config.citizenLoginPasswordOtpFixedValue : null;
+}
+
+/**
+ * `phone_otp` is offered once codes can be hashed. Whether a code can then
+ * be delivered is answered per send, with OTP_CHANNEL_UNAVAILABLE.
+ */
 export function phoneOtpAvailable(): boolean {
-  return Boolean(config.identityCitizenOtpSecret) && sender.configured;
+  return Boolean(config.identityCitizenOtpSecret);
+}
+
+/** Startup warnings for the two modes that weaken phone proof. */
+export function warnAboutInsecureOtpModes(): void {
+  if (!config.identityCitizenOtpSecret) return;
+  if (config.identityCitizenOtpSender === "log") {
+    console.warn("WARNING: citizen OTP codes are written to the log (IDENTITY_CITIZEN_OTP_SENDER=log). Development only.");
+  }
+  if (config.citizenLoginPasswordOtpFixedEnabled) {
+    console.warn("WARNING: CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED is on: the fixed code signs in ANY citizen phone number. Development only.");
+  }
 }

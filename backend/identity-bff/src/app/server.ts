@@ -4,9 +4,11 @@ import { createIdentityApp } from "./create-app.js";
 import { initJwks } from "../modules/authentication/token-verifier.js";
 import { runIdentityReconciliation } from "../modules/reconciliation/reconciliation-service.js";
 import { startOnboardingWorker } from "../modules/onboarding/worker.js";
+import { warnAboutInsecureOtpModes } from "../modules/citizen-otp/otp-sender.js";
 
 initJwks();
 initCache();
+warnAboutInsecureOtpModes();
 
 const app = createIdentityApp();
 const reconcile = () => void runIdentityReconciliation()
