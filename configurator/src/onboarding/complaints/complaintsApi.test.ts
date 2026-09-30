@@ -16,11 +16,12 @@ const create = vi.mocked(mdmsService.create);
 const update = vi.mocked(mdmsService.update);
 const setActive = vi.mocked(mdmsService.setActive);
 
+// mdms-v2 keys hierarchy rows by hierarchyType and code, as the live 8c box does.
 const row = (code: string, data: Record<string, unknown>, extra: Partial<MdmsRecord> = {}): MdmsRecord => ({
   id: code,
   tenantId: 'acme',
   schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
-  uniqueIdentifier: code,
+  uniqueIdentifier: `PGR.${code}`,
   isActive: true,
   data: { hierarchyType: 'PGR', code, ...data },
   ...extra,

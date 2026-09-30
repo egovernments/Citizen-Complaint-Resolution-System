@@ -42,6 +42,12 @@ export type LoadedComplaints =
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 const dataOf = (record: MdmsRecord) => record.data as Record<string, unknown>;
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
+/**
+ * A hierarchy row's own code. mdms-v2 keys these rows by hierarchyType and
+ * code ("PGR.StreetLighting"), while parentCode and serviceCode use the bare
+ * code, so matching goes by `data.code`, never the uniqueIdentifier.
+ */
+const codeOf = (record: MdmsRecord) => text(dataOf(record).code) || record.uniqueIdentifier;
 
 export function subtypeCount(draft: ComplaintDraft): number {
   return draft.types.reduce((count, type) => count + type.subtypes.length, 0);
@@ -71,13 +77,13 @@ export async function loadComplaints(tenantId: string): Promise<LoadedComplaints
   const leafHours = active.map((record) => Number(dataOf(record).slaHours)).filter((hours) => hours > 0);
 
   const types: DraftType[] = typeRows.map((row) => {
-    const subtypes = subtypeRows.filter((sub) => dataOf(sub).parentCode === row.uniqueIdentifier);
+    const subtypes = subtypeRows.filter((sub) => dataOf(sub).parentCode === codeOf(row));
     const department = text(dataOf(row).department) || text(subtypes.map((sub) => dataOf(sub).department).find(Boolean));
     return {
-      code: row.uniqueIdentifier,
-      name: text(dataOf(row).name) || row.uniqueIdentifier,
+      code: codeOf(row),
+      name: text(dataOf(row).name) || codeOf(row),
       department,
-      subtypes: subtypes.map((sub) => ({ code: sub.uniqueIdentifier, name: text(dataOf(sub).name) || sub.uniqueIdentifier })),
+      subtypes: subtypes.map((sub) => ({ code: codeOf(sub), name: text(dataOf(sub).name) || codeOf(sub) })),
     };
   });
 
@@ -176,7 +182,7 @@ async function sync(tenantId: string, rows: { code: string; data: Record<string,
   const existing = (await mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 })).filter(
     (record) => record.tenantId === tenantId && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE,
   );
-  const byCode = new Map(existing.map((record) => [record.uniqueIdentifier, record]));
+  const byCode = new Map(existing.map((record) => [codeOf(record), record]));
   const wanted = new Set(rows.map((row) => row.code));
 
   for (const row of rows) {
@@ -186,7 +192,7 @@ async function sync(tenantId: string, rows: { code: string; data: Record<string,
     else if (!sameData(dataOf(record), row.data)) await mdmsService.update(record, { ...dataOf(record), ...row.data });
   }
   for (const record of existing) {
-    if (record.isActive !== false && !wanted.has(record.uniqueIdentifier)) await mdmsService.setActive(record, false);
+    if (record.isActive !== false && !wanted.has(codeOf(record))) await mdmsService.setActive(record, false);
   }
 }
 
@@ -195,7 +201,7 @@ export async function saveComplaints(
   loaded: Extract<LoadedComplaints, { editable: true }>,
   draft: ComplaintDraft,
 ): Promise<number> {
-  const rows = rowsFor(draft, loaded.records.map((record) => record.uniqueIdentifier));
+  const rows = rowsFor(draft, loaded.records.map(codeOf));
   await sync(tenantId, rows, loaded.hasDefinition);
 
   // pgr-services validates serviceCode at the state root, so a city keeps a
