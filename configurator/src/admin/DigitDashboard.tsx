@@ -1,8 +1,9 @@
-import { useGetList, useTranslate } from 'ra-core';
+import { useGetList } from 'ra-core';
+import { T } from '@digit-ui/datagrid';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { getDedicatedResources } from '@/providers/bridge';
-import { useResourceLabel } from '@/providers/useResourceLabel';
+import { ResourceLabel } from '@/providers/ResourceLabel';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
 import {
@@ -51,8 +52,6 @@ function ResourceCard({ resource }: { resource: string }) {
   });
 
   const navigate = useNavigate();
-  const resourceLabel = useResourceLabel();
-  const label = resourceLabel(resource);
   const Icon = ICONS[resource] ?? Briefcase;
 
   return (
@@ -74,7 +73,7 @@ function ResourceCard({ resource }: { resource: string }) {
                 {error instanceof Error ? error.message : 'Error loading data'}
               </p>
             ) : null}
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-sm text-muted-foreground"><ResourceLabel resource={resource} /></p>
           </div>
         </div>
       </DigitCard>
@@ -83,7 +82,6 @@ function ResourceCard({ resource }: { resource: string }) {
 }
 
 export function DigitDashboard() {
-  const translate = useTranslate();
   const { canViewResource } = useMastersCapability();
   const dedicatedMap = getDedicatedResources();
   const resources = Object.keys(dedicatedMap).filter(
@@ -93,7 +91,7 @@ export function DigitDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-        {translate('app.header.title')}
+        <T i18nKey="app.header.title" />
       </h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {resources.map((resource) => (

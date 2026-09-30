@@ -2,12 +2,13 @@ import React from 'react';
 import { useShowController, RecordContextProvider, type ShowControllerProps } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, RefreshCw } from 'lucide-react';
+import { T } from '@digit-ui/datagrid';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Button } from '@/components/ui/button';
 
 export interface DigitShowProps extends ShowControllerProps {
   /** Page title (defaults to the record's defaultTitle from ra-core) */
-  title?: string;
+  title?: React.ReactNode;
   /** Content rendered inside the card */
   children: React.ReactNode | ((record: Record<string, unknown>) => React.ReactNode);
   /** Show an Edit button */
@@ -49,13 +50,13 @@ export function DigitShow({
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1.5">
             <ArrowLeft className="w-4 h-4" />
-            Back
+            <T i18nKey="app.show.back">Back</T>
           </Button>
         </div>
         <DigitCard className="max-w-none">
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-            Loading...
+            <T i18nKey="app.show.loading">Loading...</T>
           </div>
         </DigitCard>
       </div>
@@ -68,17 +69,17 @@ export function DigitShow({
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1.5">
             <ArrowLeft className="w-4 h-4" />
-            Back
+            <T i18nKey="app.show.back">Back</T>
           </Button>
         </div>
         <DigitCard className="max-w-none">
           <div className="text-center py-12">
-            <p className="text-destructive font-medium">Error loading record</p>
+            <p className="text-destructive font-medium"><T i18nKey="app.show.error_loading">Error loading record</T></p>
             <p className="text-sm text-muted-foreground mt-1">
-              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              {error instanceof Error ? error.message : <T i18nKey="app.show.error_unexpected">An unexpected error occurred</T>}
             </p>
             <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3">
-              Try again
+              <T i18nKey="app.show.try_again">Try again</T>
             </Button>
           </div>
         </DigitCard>
@@ -93,7 +94,7 @@ export function DigitShow({
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1.5">
             <ArrowLeft className="w-4 h-4" />
-            Back
+            <T i18nKey="app.show.back">Back</T>
           </Button>
           <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
             {displayTitle}
@@ -105,7 +106,7 @@ export function DigitShow({
         {hasEdit && record && (
           <Button size="sm" onClick={handleEdit} className="gap-1.5">
             <Pencil className="w-4 h-4" />
-            Edit
+            <T i18nKey="app.show.edit">Edit</T>
           </Button>
         )}
       </div>

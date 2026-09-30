@@ -8,7 +8,8 @@
 import { DigitApiClient, createDigitDataProvider, createDigitAuthProvider } from '@digit-mcp/data-provider';
 import type { DataProvider, AuthProvider } from 'ra-core';
 import type { UserInfo } from '@digit-mcp/data-provider';
-import { clearTranslationCache } from './i18nProvider';
+import { clearTranslationCache, refreshTranslations } from './i18nProvider';
+import { localizationService } from '@/api/services/localization';
 
 // Re-export registry functions so the rest of the app imports from one place
 export {
@@ -35,9 +36,41 @@ let _dataProvider: DataProvider | null = null;
 let _dataProviderTenant: string = '';
 let _authProvider: AuthProvider | null = null;
 
+const WRITE_METHODS = ['create', 'update', 'updateMany', 'delete', 'deleteMany'] as const;
+
+/**
+ * Localization writes can change the configurator's own UI copy, so refresh
+ * its translations as soon as one succeeds — an admin who relabels a string
+ * in System → Localization sees it change without waiting out the cache.
+ * The service's own cache is busted first: its module-scoped `_search` (the
+ * one the configurator reads its strings through) otherwise keeps serving
+ * the pre-write snapshot.
+ */
+async function afterLocalizationWrite(): Promise<void> {
+  try {
+    await localizationService.cacheBust();
+  } catch (e) {
+    console.warn('localization cache-bust failed', e);
+  }
+  await refreshTranslations({ force: true });
+}
+
+function withTranslationRefresh(dataProvider: DataProvider): DataProvider {
+  const wrapped: Record<string, unknown> = { ...dataProvider };
+  for (const method of WRITE_METHODS) {
+    const original = dataProvider[method] as (resource: string, params: unknown) => Promise<unknown>;
+    wrapped[method] = async (resource: string, params: unknown) => {
+      const result = await original(resource, params);
+      if (resource === 'localization') void afterLocalizationWrite();
+      return result;
+    };
+  }
+  return wrapped as unknown as DataProvider;
+}
+
 export function getDataProvider(tenantId: string): DataProvider {
   if (!_dataProvider || _dataProviderTenant !== tenantId) {
-    _dataProvider = createDigitDataProvider(digitClient, tenantId);
+    _dataProvider = withTranslationRefresh(createDigitDataProvider(digitClient, tenantId));
     _dataProviderTenant = tenantId;
   }
   return _dataProvider;
@@ -88,6 +121,7 @@ function notifyAuthChange(): void {
 export function configureDigitClient(url: string, token?: string, user?: UserInfo, stateTenant?: string): void {
   // Check if URL changed -- if so, we need a new client instance
   const currentInfo = digitClient.getAuthInfo();
+  const previousTenant = digitClient.stateTenantId;
   const currentUrl = (digitClient as unknown as Record<string, unknown>)['baseUrl'] as string | undefined;
 
   if (currentUrl !== url) {
@@ -109,4 +143,8 @@ export function configureDigitClient(url: string, token?: string, user?: UserInf
   }
 
   notifyAuthChange();
+
+  // The app's own strings are fetched per state tenant; the boot-time fetch
+  // ran before one was known, so load them now.
+  if (stateTenant && stateTenant !== previousTenant) void refreshTranslations();
 }

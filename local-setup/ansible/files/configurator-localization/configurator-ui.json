@@ -4990,5 +4990,653 @@
     "message": "Provedores de análise",
     "module": "configurator-ui",
     "locale": "pt_BR"
+  },
+  {
+    "code": "app.show.back",
+    "message": "Back",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.show.back",
+    "message": "वापस",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.show.back",
+    "message": "Retour",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.show.back",
+    "message": "Voltar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.show.edit",
+    "message": "Edit",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.show.edit",
+    "message": "संपादित करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.show.edit",
+    "message": "Modifier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.show.edit",
+    "message": "Editar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.show.loading",
+    "message": "Loading...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.show.loading",
+    "message": "लोड हो रहा है...",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.show.loading",
+    "message": "Chargement...",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.show.loading",
+    "message": "Carregando...",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.show.error_loading",
+    "message": "Error loading record",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.show.error_loading",
+    "message": "रिकॉर्ड लोड करने में त्रुटि",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.show.error_loading",
+    "message": "Erreur lors du chargement de l'enregistrement",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.show.error_loading",
+    "message": "Erro ao carregar o registro",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.show.error_unexpected",
+    "message": "An unexpected error occurred",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.show.error_unexpected",
+    "message": "एक अप्रत्याशित त्रुटि हुई",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.show.error_unexpected",
+    "message": "Une erreur inattendue est survenue",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.show.error_unexpected",
+    "message": "Ocorreu um erro inesperado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.show.try_again",
+    "message": "Try again",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.show.try_again",
+    "message": "पुनः प्रयास करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.show.try_again",
+    "message": "Réessayer",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.show.try_again",
+    "message": "Tentar novamente",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.title",
+    "message": "Workflow: %{name}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.title",
+    "message": "वर्कफ़्लो: %{name}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.title",
+    "message": "Workflow : %{name}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.title",
+    "message": "Fluxo de trabalho: %{name}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.title_fallback",
+    "message": "Workflow Service",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.title_fallback",
+    "message": "वर्कफ़्लो सेवा",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.title_fallback",
+    "message": "Service de workflow",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.title_fallback",
+    "message": "Serviço de fluxo de trabalho",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.details",
+    "message": "Details",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.details",
+    "message": "विवरण",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.details",
+    "message": "Détails",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.details",
+    "message": "Detalhes",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.sla_days",
+    "message": "%{count} days",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.sla_days",
+    "message": "%{count} दिन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.sla_days",
+    "message": "%{count} jours",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.sla_days",
+    "message": "%{count} dias",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.state_machine",
+    "message": "State Machine",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.state_machine",
+    "message": "स्टेट मशीन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.state_machine",
+    "message": "Machine à états",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.state_machine",
+    "message": "Máquina de estados",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.app_status",
+    "message": "App Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.app_status",
+    "message": "आवेदन स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.app_status",
+    "message": "Statut de la demande",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.app_status",
+    "message": "Status da solicitação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.flags",
+    "message": "Flags",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.flags",
+    "message": "फ़्लैग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.flags",
+    "message": "Indicateurs",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.flags",
+    "message": "Sinalizadores",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.actions",
+    "message": "Actions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.actions",
+    "message": "क्रियाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.actions",
+    "message": "Actions",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.actions",
+    "message": "Ações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.start",
+    "message": "Start",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.start",
+    "message": "प्रारंभ",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.start",
+    "message": "Début",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.start",
+    "message": "Início",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.end",
+    "message": "End",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.end",
+    "message": "समाप्त",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.end",
+    "message": "Fin",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.end",
+    "message": "Fim",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.notifications",
+    "message": "Notifications:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.notifications",
+    "message": "सूचनाएं:",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.notifications",
+    "message": "Notifications :",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.notifications",
+    "message": "Notificações:",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.none",
+    "message": "— none —",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.none",
+    "message": "— कोई नहीं —",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.none",
+    "message": "— aucune —",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.none",
+    "message": "— nenhuma —",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.notification_configuration",
+    "message": "Notification Configuration",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.notification_configuration",
+    "message": "सूचना कॉन्फ़िगरेशन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.notification_configuration",
+    "message": "Configuration des notifications",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.notification_configuration",
+    "message": "Configuração de notificações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.validate_notifications",
+    "message": "Validate notifications",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.validate_notifications",
+    "message": "सूचनाएं सत्यापित करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.validate_notifications",
+    "message": "Valider les notifications",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.validate_notifications",
+    "message": "Validar notificações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.all_checks_passed",
+    "message": "All checks passed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.all_checks_passed",
+    "message": "सभी जाँचें सफल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.all_checks_passed",
+    "message": "Toutes les vérifications ont réussi",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.all_checks_passed",
+    "message": "Todas as verificações foram aprovadas",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.passed",
+    "message": "Passed",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.passed",
+    "message": "सफल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.passed",
+    "message": "Réussi",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.passed",
+    "message": "Aprovado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.error_count",
+    "message": "%{smart_count} error |||| %{smart_count} errors",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.error_count",
+    "message": "%{smart_count} त्रुटि |||| %{smart_count} त्रुटियाँ",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.error_count",
+    "message": "%{smart_count} erreur |||| %{smart_count} erreurs",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.error_count",
+    "message": "%{smart_count} erro |||| %{smart_count} erros",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.warning_count",
+    "message": "%{smart_count} warning |||| %{smart_count} warnings",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.warning_count",
+    "message": "%{smart_count} चेतावनी |||| %{smart_count} चेतावनियाँ",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.warning_count",
+    "message": "%{smart_count} avertissement |||| %{smart_count} avertissements",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.warning_count",
+    "message": "%{smart_count} aviso |||| %{smart_count} avisos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.show_details",
+    "message": "Show details",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.show_details",
+    "message": "विवरण दिखाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.show_details",
+    "message": "Afficher les détails",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.show_details",
+    "message": "Mostrar detalhes",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.workflow.hide_details",
+    "message": "Hide details",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.workflow.hide_details",
+    "message": "विवरण छिपाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.workflow.hide_details",
+    "message": "Masquer les détails",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.workflow.hide_details",
+    "message": "Ocultar detalhes",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.open_digit_docs",
+    "message": "Open DIGIT Docs",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.open_digit_docs",
+    "message": "DIGIT दस्तावेज़ खोलें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.open_digit_docs",
+    "message": "Ouvrir la documentation DIGIT",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.open_digit_docs",
+    "message": "Abrir documentação DIGIT",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
   }
 ]

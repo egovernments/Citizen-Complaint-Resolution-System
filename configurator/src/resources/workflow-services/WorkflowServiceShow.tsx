@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { DigitShow } from '@/admin';
+import { DigitShow, T } from '@/admin';
 import { FieldSection, FieldRow, StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +29,11 @@ function eq(a: unknown, b: unknown): boolean {
 /** Compact chips of `audience · channel` for the routing rows on a transition. */
 function NotificationChips({ rows }: { rows: RoutingRow[] }) {
   if (rows.length === 0) {
-    return <span className="text-xs text-muted-foreground">— none —</span>;
+    return (
+      <span className="text-xs text-muted-foreground">
+        <T i18nKey="app.workflow.none">— none —</T>
+      </span>
+    );
   }
   return (
     <div className="flex flex-wrap gap-1">
@@ -43,6 +47,14 @@ function NotificationChips({ rows }: { rows: RoutingRow[] }) {
         </Badge>
       ))}
     </div>
+  );
+}
+
+function WarningCount({ count }: { count: number }) {
+  return (
+    <T i18nKey="app.workflow.warning_count" options={{ smart_count: count }}>
+      {'%{smart_count} warning |||| %{smart_count} warnings'}
+    </T>
   );
 }
 
@@ -91,23 +103,39 @@ function ValidationPanel({ businessService }: { businessService: BusinessService
   const warnCount = findings?.filter((f) => f.level === 'warn').length ?? 0;
 
   return (
-    <FieldSection title="Notification Configuration">
+    <FieldSection title={<T i18nKey="app.workflow.notification_configuration">Notification Configuration</T>}>
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="outline" size="sm" onClick={run}>
-          Validate notifications
+          <T i18nKey="app.workflow.validate_notifications">Validate notifications</T>
         </Button>
         {findings !== null && (
           <>
             {errorCount === 0 ? (
               <Badge variant="success" className="text-xs">
-                {warnCount === 0
-                  ? 'All checks passed'
-                  : `Passed · ${warnCount} warning${warnCount === 1 ? '' : 's'}`}
+                {warnCount === 0 ? (
+                  <T i18nKey="app.workflow.all_checks_passed">All checks passed</T>
+                ) : (
+                  // One inline span: Badge is flex, which would trim the spaces around "·".
+                  <span>
+                    <T i18nKey="app.workflow.passed">Passed</T>
+                    {' · '}
+                    <WarningCount count={warnCount} />
+                  </span>
+                )}
               </Badge>
             ) : (
               <Badge variant="destructive" className="text-xs">
-                {`${errorCount} error${errorCount === 1 ? '' : 's'}`}
-                {warnCount > 0 ? ` · ${warnCount} warning${warnCount === 1 ? '' : 's'}` : ''}
+                <span>
+                  <T i18nKey="app.workflow.error_count" options={{ smart_count: errorCount }}>
+                    {'%{smart_count} error |||| %{smart_count} errors'}
+                  </T>
+                  {warnCount > 0 && (
+                    <>
+                      {' · '}
+                      <WarningCount count={warnCount} />
+                    </>
+                  )}
+                </span>
               </Badge>
             )}
             {findings.length > 0 && (
@@ -116,7 +144,11 @@ function ValidationPanel({ businessService }: { businessService: BusinessService
                 className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                 onClick={() => setExpanded((v) => !v)}
               >
-                {expanded ? 'Hide details' : 'Show details'}
+                {expanded ? (
+                  <T i18nKey="app.workflow.hide_details">Hide details</T>
+                ) : (
+                  <T i18nKey="app.workflow.show_details">Show details</T>
+                )}
               </button>
             )}
           </>
@@ -157,7 +189,17 @@ export function WorkflowServiceShow() {
   const { record } = useShowController();
 
   return (
-    <DigitShow title={record ? `Workflow: ${record.businessService ?? record.id}` : 'Workflow Service'}>
+    <DigitShow
+      title={
+        record ? (
+          <T i18nKey="app.workflow.title" options={{ name: record.businessService ?? record.id }}>
+            {'Workflow: %{name}'}
+          </T>
+        ) : (
+          <T i18nKey="app.workflow.title_fallback">Workflow Service</T>
+        )
+      }
+    >
       {(rec: Record<string, unknown>) => {
         const states = rec.states as Array<Record<string, unknown>> | undefined;
         const sla = Number(rec.businessServiceSla);
@@ -165,14 +207,24 @@ export function WorkflowServiceShow() {
 
         return (
           <div className="space-y-6">
-            <FieldSection title="Details">
-              <FieldRow label="Business Service">{String(rec.businessService ?? '')}</FieldRow>
-              <FieldRow label="Business">{String(rec.business ?? '')}</FieldRow>
-              <FieldRow label="SLA">{slaDays ? `${slaDays} days` : '--'}</FieldRow>
+            <FieldSection title={<T i18nKey="app.workflow.details">Details</T>}>
+              <FieldRow label={<T i18nKey="app.fields.business_service">Business Service</T>}>
+                {String(rec.businessService ?? '')}
+              </FieldRow>
+              <FieldRow label={<T i18nKey="app.fields.business">Business</T>}>
+                {String(rec.business ?? '')}
+              </FieldRow>
+              <FieldRow label={<T i18nKey="app.fields.sla">SLA</T>}>
+                {slaDays ? (
+                  <T i18nKey="app.workflow.sla_days" options={{ count: slaDays }}>{'%{count} days'}</T>
+                ) : (
+                  '--'
+                )}
+              </FieldRow>
             </FieldSection>
 
             {states && states.length > 0 && (
-              <FieldSection title="State Machine">
+              <FieldSection title={<T i18nKey="app.workflow.state_machine">State Machine</T>}>
                 <StateMachineTable states={states} businessService={String(rec.businessService ?? rec.id ?? '')} />
               </FieldSection>
             )}
@@ -227,10 +279,10 @@ function StateMachineTable({
     <Table>
       <TableHeader>
         <TableRow className="bg-muted/30">
-          <TableHead>State</TableHead>
-          <TableHead>App Status</TableHead>
-          <TableHead>Flags</TableHead>
-          <TableHead>Actions</TableHead>
+          <TableHead><T i18nKey="app.fields.state">State</T></TableHead>
+          <TableHead><T i18nKey="app.workflow.app_status">App Status</T></TableHead>
+          <TableHead><T i18nKey="app.workflow.flags">Flags</T></TableHead>
+          <TableHead><T i18nKey="app.workflow.actions">Actions</T></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -242,8 +294,8 @@ function StateMachineTable({
               <TableCell><StatusChip value={state.applicationStatus} /></TableCell>
               <TableCell>
                 <div className="flex gap-1">
-                  {!!state.isStartState && <Badge variant="outline" className="text-xs bg-green-50 text-green-700">Start</Badge>}
-                  {!!state.isTerminateState && <Badge variant="outline" className="text-xs bg-red-50 text-red-700">End</Badge>}
+                  {!!state.isStartState && <Badge variant="outline" className="text-xs bg-green-50 text-green-700"><T i18nKey="app.workflow.start">Start</T></Badge>}
+                  {!!state.isTerminateState && <Badge variant="outline" className="text-xs bg-red-50 text-red-700"><T i18nKey="app.workflow.end">End</T></Badge>}
                 </div>
               </TableCell>
               <TableCell>
@@ -261,7 +313,7 @@ function StateMachineTable({
                         </div>
                       )}
                       <div className="mt-1">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">Notifications:</span>
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1"><T i18nKey="app.workflow.notifications">Notifications:</T></span>
                         <NotificationChips rows={notificationsFor(action.action, action.nextState)} />
                       </div>
                     </div>

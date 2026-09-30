@@ -10,6 +10,7 @@ export {
   useColumnConfig,
   validationPatterns,
   commonValidations,
+  T,
 } from '@digit-ui/datagrid';
 
 // Filter components from @digit-ui/datagrid
@@ -33,6 +34,7 @@ export type {
   ValidationRule,
   EditableCellType,
   DigitListProps,
+  TProps,
 } from '@digit-ui/datagrid';
 
 // App-specific components (not in the package)

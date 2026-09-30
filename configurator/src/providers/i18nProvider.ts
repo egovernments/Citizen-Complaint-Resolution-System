@@ -17,9 +17,10 @@
  *   local-setup/ansible/files/configurator-localization/, seeded by the deploy
  *   playbook), add its `ra.*` bundle below, and add an entry to AVAILABLE_LOCALES.
  */
+import { useSyncExternalStore } from 'react';
 import polyglotI18nProvider from 'ra-i18n-polyglot';
 import englishMessages from 'ra-language-english';
-import type { TranslationMessages, Locale } from 'ra-core';
+import type { TranslationMessages, Locale, I18nProvider } from 'ra-core';
 import { digitClient } from './bridge';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,7 @@ const customEnglishMessages: TranslationMessages = {
       switch_to_onboarding: 'Switch to Onboarding',
       pgr_dashboard: 'PGR Dashboard',
       public_dashboard: 'Public Dashboard',
+      open_digit_docs: 'Open DIGIT Docs',
     },
     header: {
       management_mode: 'Management Mode',
@@ -169,6 +171,36 @@ const customEnglishMessages: TranslationMessages = {
       show_columns: 'Show columns',
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
+    },
+    show: {
+      back: 'Back',
+      edit: 'Edit',
+      loading: 'Loading...',
+      error_loading: 'Error loading record',
+      error_unexpected: 'An unexpected error occurred',
+      try_again: 'Try again',
+    },
+    workflow: {
+      title: 'Workflow: %{name}',
+      title_fallback: 'Workflow Service',
+      details: 'Details',
+      sla_days: '%{count} days',
+      state_machine: 'State Machine',
+      app_status: 'App Status',
+      flags: 'Flags',
+      actions: 'Actions',
+      start: 'Start',
+      end: 'End',
+      notifications: 'Notifications:',
+      none: '— none —',
+      notification_configuration: 'Notification Configuration',
+      validate_notifications: 'Validate notifications',
+      all_checks_passed: 'All checks passed',
+      passed: 'Passed',
+      error_count: '%{smart_count} error |||| %{smart_count} errors',
+      warning_count: '%{smart_count} warning |||| %{smart_count} warnings',
+      show_details: 'Show details',
+      hide_details: 'Hide details',
     },
     providers: {
       // Notification Providers screen — self-service actions.
@@ -699,3 +731,40 @@ export const i18nProvider = polyglotI18nProvider(
   AVAILABLE_LOCALES,
   { allowMissing: true },
 );
+
+// ---------------------------------------------------------------------------
+// In-session refresh
+// ---------------------------------------------------------------------------
+// polyglot only calls getMessages on init and on a locale change, so without
+// this the backend app.* strings are never swapped in mid-session: the boot
+// fetch runs before any tenant is known (→ nothing), and an admin's edit in
+// System → Localization would stay invisible behind the 24h cache.
+const refreshListeners = new Set<() => void>();
+let providerSnapshot: I18nProvider = i18nProvider;
+
+function subscribeToRefresh(listener: () => void): () => void {
+  refreshListeners.add(listener);
+  return () => refreshListeners.delete(listener);
+}
+
+/**
+ * Re-read the current locale's messages and swap them into polyglot.
+ * `force` also drops the localStorage cache — use it after the configurator
+ * itself writes localization messages, so the edit shows up straight away.
+ */
+export async function refreshTranslations({ force = false } = {}): Promise<void> {
+  const locale = i18nProvider.getLocale();
+  if (force) clearTranslationCache();
+  else memoryCache.delete(locale);
+  await getMessagesAsync(locale);
+  await i18nProvider.changeLocale(locale);
+  // A new object identity makes ra-core's I18nContext re-render every
+  // translate() consumer, without the full remount a locale change does.
+  providerSnapshot = { ...i18nProvider };
+  refreshListeners.forEach((listener) => listener());
+}
+
+/** The i18nProvider to hand to `<CoreAdminContext>`; changes on every refresh. */
+export function useLiveI18nProvider(): I18nProvider {
+  return useSyncExternalStore(subscribeToRefresh, () => providerSnapshot);
+}

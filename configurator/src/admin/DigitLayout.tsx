@@ -39,6 +39,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { T } from '@digit-ui/datagrid';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
@@ -203,7 +204,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             <div>
               <span className="font-condensed font-bold text-foreground">DIGIT</span>
               <span className="font-condensed font-medium text-muted-foreground ml-1">
-                {translate('app.header.brand', { _: 'Complaints Management' })}
+                <T i18nKey="app.header.brand">Complaints Management</T>
               </span>
             </div>
           )}
@@ -234,9 +235,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
               `}
               title={sidebarCollapsed ? translate('app.nav.dashboard') : undefined}
+              data-i18n-key-title={sidebarCollapsed ? 'app.nav.dashboard' : undefined}
             >
               <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.dashboard')}</span>}
+              {!sidebarCollapsed && <span className="text-sm font-medium"><T i18nKey="app.nav.dashboard" /></span>}
             </button>
             {LEGACY_PGR_DASHBOARD_ENABLED && (
               <button
@@ -248,9 +250,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                 `}
                 title={sidebarCollapsed ? translate('app.nav.pgr_dashboard') : undefined}
+                data-i18n-key-title={sidebarCollapsed ? 'app.nav.pgr_dashboard' : undefined}
               >
                 <BarChart3 className="w-5 h-5 flex-shrink-0" />
-                {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.pgr_dashboard')}</span>}
+                {!sidebarCollapsed && <span className="text-sm font-medium"><T i18nKey="app.nav.pgr_dashboard" /></span>}
               </button>
             )}
             <button
@@ -262,9 +265,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
               `}
               title={sidebarCollapsed ? translate('app.nav.public_dashboard') : undefined}
+              data-i18n-key-title={sidebarCollapsed ? 'app.nav.public_dashboard' : undefined}
             >
               <Globe2 className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.public_dashboard')}</span>}
+              {!sidebarCollapsed && <span className="text-sm font-medium"><T i18nKey="app.nav.public_dashboard" /></span>}
             </button>
           </div>
 
@@ -279,7 +283,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     className="w-full flex items-center px-3 mb-1 group cursor-pointer"
                   >
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 group-hover:text-muted-foreground flex-1 text-left">
-                      {translate(group.labelKey)}
+                      <T i18nKey={group.labelKey} />
                     </span>
                     <ChevronDown
                       className={`w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
@@ -304,6 +308,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
                           `}
                           title={sidebarCollapsed ? translate(item.nameKey) : undefined}
+                          data-i18n-key-title={sidebarCollapsed ? item.nameKey : undefined}
                         >
                           {/* w-4.5 is not a Tailwind v3 utility (no CSS emitted) — the
                               icon rendered at its intrinsic 24px and shrank the label box.
@@ -311,7 +316,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                               (buttons default to text-align:center). */}
                           <Icon className="w-4 h-4 flex-shrink-0" />
                           {!sidebarCollapsed && (
-                            <span className="text-sm font-medium flex-1 min-w-0 text-left">{translate(item.nameKey)}</span>
+                            <span className="text-sm font-medium flex-1 min-w-0 text-left"><T i18nKey={item.nameKey} /></span>
                           )}
                         </button>
                       );
@@ -340,11 +345,12 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 }
               `}
               title={sidebarCollapsed ? translate('app.nav.advanced') : undefined}
+              data-i18n-key-title={sidebarCollapsed ? 'app.nav.advanced' : undefined}
             >
               <Database className="w-5 h-5 flex-shrink-0" />
               {!sidebarCollapsed && (
                 <>
-                  <span className="text-sm font-medium flex-1 text-left">{translate('app.nav.advanced')}</span>
+                  <span className="text-sm font-medium flex-1 text-left"><T i18nKey="app.nav.advanced" /></span>
                   <ChevronDown
                     className={`w-4 h-4 transition-transform ${advancedExpanded ? '' : '-rotate-90'}`}
                   />
@@ -370,7 +376,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-40 flex-shrink-0" />
                       <span className="text-xs font-medium truncate">
-                        {translate(`app.resources.${item.id.replace(/-/g, '_')}`, { _: item.name })}
+                        <T i18nKey={`app.resources.${item.id.replace(/-/g, '_')}`}>{item.name}</T>
                       </span>
                     </button>
                   );
@@ -386,10 +392,11 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             onClick={handleSwitchToOnboarding}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             title={sidebarCollapsed ? translate('app.nav.switch_to_onboarding') : undefined}
+            data-i18n-key-title={sidebarCollapsed ? 'app.nav.switch_to_onboarding' : undefined}
           >
             <Settings className="w-5 h-5 flex-shrink-0" />
             {!sidebarCollapsed && (
-              <span className="text-sm">{translate('app.nav.switch_to_onboarding')}</span>
+              <span className="text-sm"><T i18nKey="app.nav.switch_to_onboarding" /></span>
             )}
           </button>
 
@@ -432,7 +439,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 variant="outline"
                 className="text-xs bg-blue-50 text-blue-700 border-blue-200"
               >
-                {translate('app.header.management_mode')}
+                <T i18nKey="app.header.management_mode" />
               </Badge>
               <Badge
                 variant="secondary"
@@ -479,7 +486,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              {translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })}
+              <T i18nKey="app.nav.open_digit_docs">Open DIGIT Docs</T>
             </a>
           </div>
         </footer>

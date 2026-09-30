@@ -46,10 +46,12 @@ vi.mock('ra-core', () => ({
     resource: 'test',
   }),
   ListContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
 }));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/test' }),
 }));
 
 // Stub filter element for testing

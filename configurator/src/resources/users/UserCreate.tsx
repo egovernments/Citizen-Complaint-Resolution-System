@@ -1,5 +1,4 @@
-import { useTranslate } from 'ra-core';
-import { DigitCreate, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { DigitCreate, DigitFormInput, DigitFormSelect, T, v } from '@/admin';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
 
 const GENDER_CHOICES = [
@@ -30,10 +29,9 @@ export function UserCreate() {
   // fallback), the same source EmployeeCreate/EmployeeEdit/ComplaintCreate use.
   // No hardcoded per-country regex here.
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
-  const translate = useTranslate();
-  const loginUsernameHelp = translate('app.fields.mobile_login_username_help', {
-    _: "Used as the citizen's login username.",
-  });
+  const loginUsernameHelp = (
+    <T i18nKey="app.fields.mobile_login_username_help">Used as the citizen's login username.</T>
+  );
 
   return (
     <DigitCreate title="Create User" record={defaultRecord} transform={transform}>
