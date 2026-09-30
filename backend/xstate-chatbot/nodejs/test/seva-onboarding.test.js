@@ -20,7 +20,7 @@ function textMessage(input) {
   return { type: "USER_MESSAGE", message: { type: "text", input } };
 }
 
-const RETRY_STATE = { onboarding: { onBoardingUserProfileConfirmation: "error" } };
+const RETRY_STATE = { onboarding: { onBoardingUserProfileConfirmation: "reprompt" } };
 
 test("REGRESSION: an unrecognised reply to the profile confirmation retries instead of wedging", (t) => {
   // The question state sends its prompt after a 3s delay; keep that off the clock.
@@ -75,4 +75,15 @@ test("'no' to the profile confirmation still leads to changing the name", (t) =>
   const outputs = [];
   const next = sevaMachine.transition(atProfileConfirmation(outputs), textMessage("no"));
   assert.deepEqual(next.value, { onboarding: { changeName: "invoke" } });
+});
+
+test("REGRESSION (review): an unknown name at retry asks for the name instead of printing undefined", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const outputs = [];
+  const start = atProfileConfirmation(outputs);
+  // The saved state drops `name`; a sandbox session resumed from its tracker has none.
+  delete start.context.user.name;
+  const next = sevaMachine.transition(start, textMessage("hello"));
+  assert.deepEqual(next.value, { onboarding: { changeName: "invoke" } });
+  assert.ok(outputs.every((m) => !String(m).includes("undefined")));
 });

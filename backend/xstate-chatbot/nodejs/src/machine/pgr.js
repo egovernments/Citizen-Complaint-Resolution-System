@@ -11,6 +11,7 @@ const pgr =  {
   onEntry: assign((context, event) => {
     context.slots.pgr = {}
     context.pgr = {slots: {}};
+    delete context.localityNames;
   }),
   states: {
     menu: {
@@ -804,9 +805,14 @@ const pgr =  {
                       cond: (context) => context.intention != dialog.INTENTION_UNKOWN,
                       actions: assign((context, event) => {
                         context.slots.pgr["locality"] = context.intention;
-                        context.slots.pgr.localityIsBoundaryCode = context.localityNames !== undefined;
-                        let name = context.localityNames && context.localityNames[context.intention];
-                        if (name) context.slots.pgr.localityName = name;
+                        // A boundary code only if this very code is in the names this version
+                        // built for the list. A list built by an older version (rollback, or a
+                        // replica on another version) offers stripped codes that are not in it.
+                        let names = context.localityNames || {};
+                        context.slots.pgr.localityIsBoundaryCode = Object.prototype.hasOwnProperty.call(names, context.intention);
+                        if (names[context.intention]) context.slots.pgr.localityName = names[context.intention];
+                        // Used once; not kept in the saved state for the rest of the session.
+                        delete context.localityNames;
                       })
                     },
                     {

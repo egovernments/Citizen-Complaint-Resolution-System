@@ -102,3 +102,10 @@ test("a changed number with a stored country code goes to the new number", async
   // Trunk 0 dropped; the stale saved +91 address is ignored.
   assert.equal(sent[0].user.whatsAppAddress, "whatsapp:+254712345678");
 });
+
+test("REGRESSION (review): the saved address beats a default-filled countryCode while it is the same number", async () => {
+  // egov-user may fill countryCode with the deployment default (+254) for a +91 citizen.
+  const { reminders, sent } = loadReminders({ mobileNumber: "6307817430", countryCode: "+254" }, CITIZEN.whatsAppAddress);
+  await reminders.sendMessages(["u-1"]);
+  assert.equal(sent[0].user.whatsAppAddress, CITIZEN.whatsAppAddress);
+});

@@ -373,8 +373,22 @@ const sevaMachine = Machine({
               ],
             },
             // Re-asks only the question. Going back to `question` would resend the
-            // nameInformation preamble, with its delays, on every invalid reply.
+            // nameInformation preamble, with its delays, on every invalid reply. The name is
+            // not kept in the saved state, so when it is unknown by now (a sandbox session
+            // resumed from its tracker) the citizen is asked for it instead of being shown
+            // "undefined".
             error: {
+              always: [
+                {
+                  target: "#changeName",
+                  cond: (context) => !context.user.name,
+                },
+                {
+                  target: "reprompt",
+                },
+              ],
+            },
+            reprompt: {
               onEntry: assign((context, event) => {
                 let retry = dialog.get_message(
                   dialog.global_messages.error.retry,

@@ -317,7 +317,7 @@ class SessionManager {
       } catch (error) {
         channelProvider.sendMessageToUser(
           replyTo,
-          [`Sorry, there was an error processing your request. Please check your mobile number format (should be 10 digits) and try again. Error: ${error.message}`],
+          [`Sorry, there was an error processing your request. Please check your mobile number and try again. Error: ${error.message}`],
           reformattedMessage.extraInfo
         );
         return;

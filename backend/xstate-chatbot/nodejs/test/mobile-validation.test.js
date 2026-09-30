@@ -397,3 +397,18 @@ test("REGRESSION (review): a permissive primary does not hide the row whose code
   // The primary still wins for its own numbers.
   assert.equal(s.resolveNational("whatsapp:+254712345678", ke).rule.countryCode, "+254");
 });
+
+test("REGRESSION (review): a bare national number is not read through an alternate's country code", () => {
+  const s = loadService();
+  const cfg = {
+    countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$",
+    alternates: [{ countryCode: "+7", mobileNumberRegex: "^[0-9]{9,10}$" }],
+  };
+  // 7912345678 is a valid Indian national number; it must not become +7 912345678.
+  const bare = s.resolveNational("7912345678", cfg);
+  assert.equal(bare.national, "7912345678");
+  assert.equal(bare.rule.countryCode, "+91");
+  assert.equal(s.toAddressableDigits("7912345678", cfg), "917912345678");
+  // Written in international form, the +7 row does apply.
+  assert.equal(s.resolveNational("+7912345678", cfg).rule.countryCode, "+7");
+});

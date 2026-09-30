@@ -36,20 +36,23 @@ class RemindersService {
   }
 
   /**
-   * The WhatsApp address a reminder goes to, from the citizen's egov-user record, which is
-   * current even if the number changed since the session was saved:
-   *   1. the record's own countryCode + mobile number, when it has one;
-   *   2. otherwise the address saved with the session, but only while it is still the
-   *      same number (a changed registered mobile must not keep receiving at the old one);
+   * The WhatsApp address a reminder goes to, checked against the citizen's current
+   * egov-user record:
+   *   1. the address saved with the session, while it is still the registered number. It
+   *      is the number the citizen actually wrote from, so it beats a stored countryCode,
+   *      which egov-user may have filled with the deployment default rather than the
+   *      citizen's real country;
+   *   2. otherwise the record's own countryCode + mobile number (the number changed, or
+   *      no address was saved);
    *   3. otherwise undefined, and the channel applies the tenant's default country code.
    */
   reminderAddress(contact, savedAddress) {
     const digits = (value) => String(value || '').replace(/\D/g, '');
     const national = digits(contact.mobileNumber).replace(/^0+/, '');
     if (!national) return undefined;
+    if (savedAddress && digits(savedAddress).endsWith(national)) return savedAddress;
     const countryCode = digits(contact.countryCode);
     if (countryCode) return `whatsapp:+${countryCode}${national}`;
-    if (savedAddress && digits(savedAddress).endsWith(national)) return savedAddress;
     return undefined;
   }
 

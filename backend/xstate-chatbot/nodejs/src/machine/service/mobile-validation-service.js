@@ -22,7 +22,7 @@ const fetch = require("node-fetch");
  * citizen's own egov-user `countryCode` (ComplaintDomainEventService.buildFullMobile,
  * NotificationService.buildMobileWithCountryCode), and novu-bridge sends a `+`-prefixed
  * number unchanged. novu-bridge's default row is only a fallback for a citizen record with
- * no `countryCode`.
+ * no `countryCode`. Either way outbound is only as right as that stored `countryCode`.
  */
 const SCHEMA_CODE = "common-masters.MobileNumberValidation";
 
@@ -122,9 +122,8 @@ class MobileValidationService {
       mobileNumberRegex: row.data.mobileNumberRegex || config.mobileValidation.defaultRegex,
     });
     // A state can carry more than one active row: ke serves ke.bomet (+254) and ke.india
-    // (+91) from one root. The chosen row stays authoritative; the others are only tried
-    // by toNational when it cannot reconcile an inbound number, so a +91 citizen is not
-    // rejected just because +254 happened to be listed first.
+    // (+91) from one root. The chosen row stays authoritative for bare national numbers;
+    // see resolveNational for when the others are tried.
     const alternates = active
       .filter((r) => r !== chosen && r.data.countryCode)
       .map(toConfig);
@@ -191,23 +190,32 @@ class MobileValidationService {
     if (!digits) return null;
     const rules = [mobileConfig, ...(mobileConfig.alternates || [])];
 
-    // 1. A rule whose country code actually prefixes the number, and which accepts what
-    //    is left once it is removed. This must run before any regex-only match: a
-    //    permissive primary such as ^[0-9]{9,12}$ also accepts the as-sent 916307817430
-    //    and would otherwise hide the +91 row.
-    for (const rule of rules) {
-      const cc = this.countryDigits(rule);
-      if (!cc || !digits.startsWith(cc) || digits.length <= cc.length) continue;
-      const national = this.nationalFor(digits, rule);
-      if (national && national !== digits) return { national, rule };
+    // 1. Only for a number written in international form (`+…`, e.g. Twilio's From): a
+    //    rule whose country code actually prefixes it, and which accepts what is left once
+    //    it is removed. This runs before any regex-only match, because a permissive
+    //    primary such as ^[0-9]{9,12}$ also accepts the as-sent 916307817430 and would
+    //    otherwise hide the +91 row. A bare number carries no country code, so it skips
+    //    this step: 7912345678 must not be read as +7 912345678.
+    if (this.isInternationalForm(raw)) {
+      for (const rule of rules) {
+        const cc = this.countryDigits(rule);
+        if (!cc || !digits.startsWith(cc) || digits.length <= cc.length) continue;
+        const national = this.nationalFor(digits, rule);
+        if (national && national !== digits) return { national, rule };
+      }
     }
 
-    // 2. Otherwise the as-sent form, primary first (a bare national number).
+    // 2. Each rule in turn, primary first, exactly as a single rule is applied.
     for (const rule of rules) {
       const national = this.nationalFor(digits, rule);
       if (national) return { national, rule };
     }
     return null;
+  }
+
+  /** `+254…`, `whatsapp:+254…`: the sender wrote the country code. */
+  isInternationalForm(raw) {
+    return /^\s*(whatsapp:)?\s*\+/i.test(String(raw == null ? "" : raw));
   }
 
   /** toNational against a single rule. */
@@ -310,7 +318,8 @@ class MobileValidationService {
   toAddressableDigits(raw, mobileConfig) {
     const digits = this.digitsOnly(raw);
     if (!digits) return null;
-    const resolved = this.resolveNational(digits, mobileConfig);
+    // `raw`, not `digits`: whether it was written with `+` matters to resolveNational.
+    const resolved = this.resolveNational(raw, mobileConfig);
     if (resolved) return this.toInternational(resolved.national, resolved.rule);
     return digits;
   }

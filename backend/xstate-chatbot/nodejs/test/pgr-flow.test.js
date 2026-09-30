@@ -532,3 +532,22 @@ test("a confirmed shared location files as a boundary code, with its name", asyn
   assert.equal(captured.localityIsBoundaryCode, true);
   assert.equal(captured.localityName, "LocalityA");
 });
+
+test("REGRESSION (review): a pick not in this version's name map is not a boundary code, and the map is not kept", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ geoSearch: false, serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  // At the locality question. Simulate a list whose names were built for other codes,
+  // as after a rollback: the offered loc-1 is not among them.
+  service.state.context.localityNames = { ADMIN_SUN04: "Sun 04" };
+  service.send(textMessage("1"));
+  await settle();
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, false);
+  assert.equal(service.state.context.localityNames, undefined);
+});

@@ -10,10 +10,12 @@ Citizens file and track complaints by messaging your WhatsApp number. Twilio cal
   approved sender for production.
 - **One sender = one webhook.** A Twilio number delivers incoming messages to a single URL.
   Pointing it at this deployment takes it away from any other environment using it.
-- The tenant has `ComplaintHierarchy`, boundaries, and a `tenant.citymodule` row with
-  `module: PGR.WHATSAPP` listing the cities offered on WhatsApp.
-- **Only registered citizens can use the bot.** A number with no citizen account cannot
-  self-register over WhatsApp yet; register it once through the citizen web UI.
+- The tenant has `ComplaintHierarchy` and boundaries. The bot offers the state's city tenants
+  (`tenant.tenants`); to offer only some, add a `tenant.citymodule` row with
+  `module: PGR.WHATSAPP` listing them.
+- **Only registered citizens can use the bot.** The bot tries to create an account for a new
+  number, but egov-user rejects it while registration requires an OTP (the default). Register
+  the number once through the citizen web UI.
 
 ## 1. Get the Account SID and Auth Token
 
@@ -104,5 +106,5 @@ follow it to file a complaint, then find it in the employee inbox.
 | No request reaches the server | Webhook not saved, message sent to a different number, or (Sandbox) phone not joined |
 | Chatbot logs `Rejected inbound webhook` | Auth Token wrong, or the Twilio URL differs from `https://<domain>` |
 | *Invalid mobile number format* | Add the country's row to `common-masters.MobileNumberValidation` for the state tenant |
-| City list is empty | Add the `PGR.WHATSAPP` row to `tenant.citymodule` |
-| No reply after the first message | The number has no citizen account — register it once via the web UI |
+| Too many cities offered, or the wrong ones | Add a `PGR.WHATSAPP` row to `tenant.citymodule` listing the cities to offer |
+| Bot replies *Sorry, there was an error processing your request* | The number has no citizen account (register it once via the web UI), or it does not match the state's `MobileNumberValidation` rule |
