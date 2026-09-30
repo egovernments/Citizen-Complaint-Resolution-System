@@ -251,7 +251,9 @@ configure_digit_ui_client() {
   ensure_mapper "clients/$client_uuid_value" digit-identity-bff-audience oidc-audience-mapper \
     -s "config.\"included.client.audience\"=$BFF_CLIENT" \
     -s 'config."id.token.claim"=false' -s 'config."access.token.claim"=true'
-  printf '%s' "$client_uuid_value"
+  # Returned through a variable, not stdout: inside $(...) bash drops `set -e`,
+  # so a failed kc update above would go unnoticed (review, #2199).
+  DIGIT_UI_CLIENT_UUID=$client_uuid_value
 }
 
 # Keeps every attribute an admin can see (ADMIN_EDIT, instead of silently
@@ -444,11 +446,11 @@ configure_user_profile
 digit_ui_clients=skipped
 if [ -n "${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}" ] && [ -n "${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}" ]; then
   configure_employee_flow
-  employee_uuid=$(configure_digit_ui_client "$EMPLOYEE_CLIENT" "$KEYCLOAK_EMPLOYEE_CLIENT_SECRET" \
-    employee "$EMPLOYEE_LOGIN_THEME" "$EMPLOYEE_SIGNIN_METHODS" "$EMPLOYEE_FLOW")
-  kc update "clients/$employee_uuid/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
+  configure_digit_ui_client "$EMPLOYEE_CLIENT" "$KEYCLOAK_EMPLOYEE_CLIENT_SECRET" \
+    employee "$EMPLOYEE_LOGIN_THEME" "$EMPLOYEE_SIGNIN_METHODS" "$EMPLOYEE_FLOW"
+  kc update "clients/$DIGIT_UI_CLIENT_UUID/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
   configure_digit_ui_client "$CITIZEN_CLIENT" "$KEYCLOAK_CITIZEN_CLIENT_SECRET" \
-    citizen '' "$CITIZEN_SIGNIN_METHODS" '' >/dev/null
+    citizen '' "$CITIZEN_SIGNIN_METHODS" ''
   digit_ui_clients="$EMPLOYEE_CLIENT,$CITIZEN_CLIENT"
 else
   printf 'KEYCLOAK_EMPLOYEE_CLIENT_SECRET / KEYCLOAK_CITIZEN_CLIENT_SECRET unset: digit-ui clients not configured\n' >&2

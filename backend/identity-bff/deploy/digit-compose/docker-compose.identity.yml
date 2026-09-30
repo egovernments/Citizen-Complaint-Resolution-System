@@ -5,6 +5,8 @@
 # operator's environment and 0600 env files, never from this repository.
 #
 #   IDENTITY_BFF_IMAGE    identity BFF image built from this repository
+#   KEYCLOAK_IMAGE        Keycloak image with the magic-link provider and themes
+#                         (keycloak/Dockerfile.magic-link), pinned by tag
 #   KEYCLOAK_PUBLIC_URL   public Keycloak base, e.g. https://example.org/auth
 #   IDENTITY_ENV_DIR      directory holding the env files below
 #
@@ -14,7 +16,9 @@ services:
   keycloak:
     # Same default as local-setup (build/build-config.yml publishes
     # keycloak/Dockerfile.magic-link as identity-keycloak).
-    image: ${KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
+    # Required, like IDENTITY_BFF_IMAGE: a moving default (nightly) would let
+    # Keycloak and its themes drift between hosts on every pull.
+    image: ${KEYCLOAK_IMAGE:?set KEYCLOAK_IMAGE}
     command: ["start"]
     # Replace the legacy start-dev environment: no KEYCLOAK_ADMIN bootstrap
     # account is created from a persisted file. A temporary admin is created
@@ -48,8 +52,9 @@ services:
     env_file:
       - ${IDENTITY_ENV_DIR:?set IDENTITY_ENV_DIR}/identity-bff.env
     environment:
-      # From the stack's .env, exactly as egov-user reads them (#2189).
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      # From the stack's .env, as egov-user reads them (#2189), but off unless
+      # .env turns it on: this overrides identity-bff.env.
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
     depends_on:
       keycloak:

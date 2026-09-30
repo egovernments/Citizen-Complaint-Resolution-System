@@ -1634,7 +1634,8 @@ services:
     cap_drop: [ALL]
     image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
-    profiles: [otp]
+    # citizen-otp: started alone for the identity BFF's citizen phone OTP.
+    profiles: [otp, citizen-otp]
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -3203,12 +3204,16 @@ services:
       KEYCLOAK_CITIZEN_CLIENT_ID: digit-ui-citizen
       KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}
       # Development fixed citizen OTP: the same switch and value egov-user reads,
-      # so the BFF accepts exactly the code egov-user accepts (#2189).
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      # so the BFF accepts exactly the code egov-user accepts (#2189). Off unless
+      # .env turns it on (the playbook does, only for development boxes).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
       # Citizen phone OTP (#2189): without both, phone_otp is never offered.
       IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}
       IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}
+      # Tenant-route backfill for existing roots (#2206); off unless .env sets it.
+      IDENTITY_TENANT_ROUTE_BACKFILL: ${IDENTITY_TENANT_ROUTE_BACKFILL:-false}
+      IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS: ${IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS:-}
       IDENTITY_EMPLOYEE_SCOPE: openid profile email
       IDENTITY_CITIZEN_SCOPE: openid profile phone
       KEYCLOAK_ADMIN_URL: http://keycloak:8180

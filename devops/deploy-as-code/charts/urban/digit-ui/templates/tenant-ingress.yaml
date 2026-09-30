@@ -10,9 +10,18 @@ metadata:
 {{- else }}
   namespace: {{ .Values.namespace }}
 {{- end }}
+  {{- /* The chart's usual annotations (ingress class, WAF, additionalAnnotations,
+       as in common.ingress), with this route's regex rewrite taking precedence. */}}
+  {{- $annotations := dict "nginx.ingress.kubernetes.io/use-regex" "true" "nginx.ingress.kubernetes.io/rewrite-target" "/digit-ui/$3" }}
+  {{- $annotations = merge $annotations (.Values.ingress.annotations | default dict) }}
+  {{- if .Values.ingress.waf.enabled }}
+  {{- $annotations = merge $annotations (.Values.ingress.waf.annotations | default dict) }}
+  {{- end }}
   annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /digit-ui/$3
+{{- toYaml $annotations | nindent 4 }}
+{{- if .Values.ingress.additionalAnnotations }}
+  {{- tpl .Values.ingress.additionalAnnotations . | nindent 4 }}
+{{- end }}
   labels:
 {{- include "common.labels" . | nindent 4 }}
 spec:
