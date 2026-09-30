@@ -9479,6 +9479,14 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   font-size: 13.5px;
 }
 
+/* .body-container clips sideways overflow with overflow-x:hidden, which also
+ * makes it a scroll container. It never scrolls itself (it grows with the
+ * page and the window scrolls), so a sticky footer inside it would pin to a
+ * box that doesn't move. clip clips the same without becoming a scroller. */
+.body-container:has(.cms-file) {
+  overflow-x: clip;
+}
+
 /* Footer: why Next is held, then Back / Next. Pinned to the bottom of the
  * screen at every width, so a long step (the map, the boundary levels, postal
  * code and landmark) never hides the way on behind a scroll. */
