@@ -127,7 +127,7 @@ services:
           - kafka-v2.kafka-cluster
 
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -152,7 +152,7 @@ services:
       - egov-network
 
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
