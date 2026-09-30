@@ -24,6 +24,7 @@ function DeactivationGuardForDepartment() {
   if (!code) return null;
   return (
     <DeactivationGuard
+      source="_isActive"
       probes={[
         {
           label: 'designations referencing this department',

@@ -3,7 +3,7 @@ import { DigitCreate } from './DigitCreate';
 import { DigitFormInput } from './DigitFormInput';
 import { WidgetForFieldSpec } from './widgets';
 import { useResourceContext, useInput, required } from 'ra-core';
-import { getResourceConfig } from '@/providers/bridge';
+import { getResourceConfig, DUPLICATE_ACTIVE_KEYS } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { orderFields, formatFieldLabel } from './schemaUtils';
@@ -22,16 +22,16 @@ function isComplex(prop: SchemaProperty): boolean {
   return prop.type === 'array' || prop.type === 'object';
 }
 
-// Data-level flags duplicating the MDMS record's root-level isActive. A new
-// record is always created active at the root, so these aren't offered as a
-// toggle on create — they default to true to match (see MdmsResourceEdit).
-const DUPLICATE_ACTIVE_KEYS = new Set(['isActive', 'active']);
+// DUPLICATE_ACTIVE_KEYS: data-level flags duplicating the MDMS record's
+// root-level isActive. A new record is always created active at the root, so
+// these aren't offered as a toggle on create — they default to true to match
+// (see MdmsResourceEdit).
 
 function buildDefaults(definition: SchemaDefinition): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
   const props = definition.properties ?? {};
   for (const [key, prop] of Object.entries(props)) {
-    if (prop.type === 'boolean') defaults[key] = DUPLICATE_ACTIVE_KEYS.has(key);
+    if (prop.type === 'boolean') defaults[key] = DUPLICATE_ACTIVE_KEYS.includes(key);
   }
   return defaults;
 }
@@ -80,7 +80,7 @@ function MdmsCreateFields({
       {descriptorFields.map((path) => {
         const spec = descriptor?.fields.find((f) => f.path === path);
         if (!spec || spec.hidden === 'create' || spec.hidden === 'always') return null;
-        if (spec.widget === 'boolean' && DUPLICATE_ACTIVE_KEYS.has(path)) return null;
+        if (spec.widget === 'boolean' && DUPLICATE_ACTIVE_KEYS.includes(path)) return null;
         return <WidgetForFieldSpec key={path} spec={spec} source={path} />;
       })}
 
@@ -90,7 +90,7 @@ function MdmsCreateFields({
         const prop = props[field];
         if (!prop || isComplex(prop)) return null;
         if (prop.type === 'boolean') {
-          if (DUPLICATE_ACTIVE_KEYS.has(field)) return null;
+          if (DUPLICATE_ACTIVE_KEYS.includes(field)) return null;
           return <BooleanInput key={field} source={field} label={formatFieldLabel(field)} />;
         }
         return (

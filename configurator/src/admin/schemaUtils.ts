@@ -7,6 +7,7 @@ import {
 } from '@digit-ui/datagrid';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { StatusChip } from '@/admin/fields';
+import { DUPLICATE_ACTIVE_KEYS } from '@/providers/bridge';
 
 // Re-export types and pure functions from the package
 export {
@@ -37,36 +38,36 @@ export type {
  * couldn't tell which rows were enabled without opening each one
  * (egovernments/CCRS#483 follow-up — Gurjeet flagged it on the
  * Gender Types list specifically). Replacing the inline toggle with
- * a `StatusChip` ("Active"/"Inactive" or "Yes"/"No") makes the state
- * legible. Inline-editing is dropped on the list page for boolean
+ * a "Yes"/"No" `StatusChip` makes the state legible. (A boolean
+ * `active`/`isActive` is dropped instead: it duplicates the root isActive
+ * that the master DigitDatagrid shows as Active/Inactive.) Inline-editing is dropped on the list page for boolean
  * cells; users edit through the row's dedicated Edit form, which
  * Chakshu's #46 fix already wired up correctly.
  */
 function withStatusChipForBooleans(columns: DigitColumn[]): DigitColumn[] {
-  return columns.map((col) => {
-    const isBoolean =
-      typeof col.editable === 'object' && col.editable?.type === 'boolean';
-    if (!isBoolean || col.render) return col;
-    // Pick a tighter label for the canonical "active" / "isActive" flag;
-    // fall back to Yes/No for any other boolean field so the chip stays
-    // readable for non-status flags.
-    const isActiveField =
-      col.source === 'active' || col.source === 'isActive';
-    const labels = isActiveField
-      ? { true: 'Active', false: 'Inactive' }
-      : { true: 'Yes', false: 'No' };
-    return {
-      ...col,
-      // Drop inline-editable so the chip is shown instead of the bare
-      // toggle. The Edit page remains the canonical way to flip the flag.
-      editable: undefined,
-      render: (record) =>
-        React.createElement(StatusChip, {
-          value: (record as Record<string, unknown>)[col.source],
-          labels,
-        }),
-    };
-  });
+  const isBooleanColumn = (col: DigitColumn): boolean =>
+    typeof col.editable === 'object' && col.editable?.type === 'boolean';
+  return (
+    columns
+      // A boolean `active`/`isActive` duplicates the record's root isActive,
+      // which the master DigitDatagrid already shows as the Status column. A
+      // second status column could disagree with it, so drop it.
+      .filter((col) => !(isBooleanColumn(col) && DUPLICATE_ACTIVE_KEYS.includes(col.source)))
+      .map((col) => {
+        if (!isBooleanColumn(col) || col.render) return col;
+        return {
+          ...col,
+          // Drop inline-editable so the chip is shown instead of the bare
+          // toggle. The Edit page remains the canonical way to flip the flag.
+          editable: undefined,
+          render: (record) =>
+            React.createElement(StatusChip, {
+              value: (record as Record<string, unknown>)[col.source],
+              labels: { true: 'Yes', false: 'No' },
+            }),
+        };
+      })
+  );
 }
 
 export function generateColumns(

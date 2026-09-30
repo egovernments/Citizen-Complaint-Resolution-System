@@ -27,14 +27,16 @@ export function DigitList(props: DigitListProps) {
 }
 
 /**
- * DigitDatagrid that appends a Status column bound to the MDMS record's
- * root-level isActive (`_isActive`) when the resource is an MDMS master and
- * the caller didn't define one. The complaint-type leaf adapter is skipped
- * (it maps its own active-only rows).
+ * DigitDatagrid for master screens. Inline edits and row deletes carry
+ * MASTER_SCREEN_META, since the rows they act on may be deactivated. It also
+ * appends a Status column bound to the MDMS record's root-level isActive
+ * (`_isActive`) when the resource is an MDMS master and the caller didn't
+ * define one. The complaint-type leaf adapter is skipped (its list defines its
+ * own status column).
  */
 export function DigitDatagrid<RecordType extends RaRecord = RaRecord>(props: DigitDatagridProps<RecordType>) {
   const contextResource = useResourceContext();
-  const { columns: baseColumns } = props;
+  const { columns: baseColumns, mutationOptions } = props;
   const columns = useMemo<DigitColumn<RecordType>[]>(() => {
     const config = contextResource ? getResourceConfig(contextResource) : undefined;
     const needsStatus =
@@ -54,5 +56,9 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>(props: Dig
       },
     ];
   }, [baseColumns, contextResource]);
-  return <BaseDigitDatagrid {...props} columns={columns} />;
+  const masterMutationOptions = useMemo(
+    () => ({ ...mutationOptions, meta: { ...MASTER_SCREEN_META, ...mutationOptions?.meta } }),
+    [mutationOptions],
+  );
+  return <BaseDigitDatagrid {...props} columns={columns} mutationOptions={masterMutationOptions} />;
 }

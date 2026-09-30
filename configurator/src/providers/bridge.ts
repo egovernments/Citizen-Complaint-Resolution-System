@@ -21,6 +21,7 @@ export {
   getResourceBySchema,
   isAccessControlGated,
   REGISTRY,
+  DUPLICATE_ACTIVE_KEYS,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';
 export { DigitApiClient } from '@digit-mcp/data-provider';

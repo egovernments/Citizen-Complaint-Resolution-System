@@ -27,6 +27,7 @@ function DeactivationGuardForDesignation() {
   if (!code) return null;
   return (
     <DeactivationGuard
+      source="_isActive"
       probes={[
         {
           label: 'employees currently holding this designation',

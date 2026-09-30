@@ -442,6 +442,182 @@ describe('createDigitDataProvider', () => {
     assert.equal((captured as { active: boolean }).active, false);
   });
 
+  describe('MDMS enable/disable via root isActive (egovernments/CCRS#1846)', () => {
+    const dept = (isActive: boolean, active?: boolean) => ({
+      id: 'abc-id',
+      tenantId: 'pg',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: 'DEPT_1',
+      data: { code: 'DEPT_1', name: 'Old Name', ...(active === undefined ? {} : { active }) },
+      isActive,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    });
+    const captureUpdate = () => {
+      const calls: { data: Record<string, unknown>; isActive: boolean }[] = [];
+      mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }, isActive: boolean) => {
+        calls.push({ data: { ...rec.data }, isActive });
+        return rec;
+      });
+      return calls;
+    };
+
+    it('keeps a legacy root-true/data-false record disabled on an edit that does not touch status', async () => {
+      // develop's Department checkbox wrote data.active=false while forcing root
+      // isActive=true; such records must read as disabled and stay so on save.
+      mock.method(client, 'mdmsSearch', async () => [dept(true, false)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+
+      const { data: shown } = await dp.getOne('departments', { id: 'DEPT_1', meta: { showInactive: true } });
+      assert.equal(shown._isActive, false);
+
+      // Inline name edit: the full row echoes both flags as loaded.
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { ...shown, name: 'New Name' },
+        previousData: shown,
+        meta: { showInactive: true },
+      });
+      // Dirty-fields-only payload: no status at all.
+      await dp.update('departments', { id: 'DEPT_1', data: { name: 'New Name' }, previousData: {} as never });
+
+      for (const call of calls) {
+        assert.equal(call.isActive, false);
+        assert.equal(call.data.active, false);
+      }
+    });
+
+    it('honours a status change made through a data flag even when _isActive echoes the old value', async () => {
+      // ComplaintTypeEdit binds `active`; its payload still carries the loaded `_isActive`.
+      mock.method(client, 'mdmsSearch', async () => [dept(true, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { code: 'DEPT_1', name: 'Old Name', active: false, _isActive: true },
+        previousData: {} as never,
+      });
+      assert.equal(calls[0].isActive, false);
+      assert.equal(calls[0].data.active, false);
+    });
+
+    it('re-enables a disabled record through either flag', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(false, false)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      const meta = { showInactive: true };
+      await dp.update('departments', { id: 'DEPT_1', data: { active: false, _isActive: true }, previousData: {} as never, meta });
+      await dp.update('departments', { id: 'DEPT_1', data: { active: true, _isActive: false }, previousData: {} as never, meta });
+      assert.deepEqual(calls.map((c) => [c.isActive, c.data.active]), [[true, true], [true, true]]);
+    });
+
+    it('saves an explicit data active=false under includeInactive (Twilio template sync)', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(true, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { code: 'DEPT_1', name: 'Old Name', active: false },
+        previousData: {} as never,
+        meta: { includeInactive: true },
+      });
+      assert.equal(calls[0].isActive, false);
+    });
+
+    it('still reactivates on the Remove -> re-Add flow when the payload carries no status', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(false, false)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.update('departments', {
+        id: 'DEPT_1',
+        data: { code: 'DEPT_1', name: 'Again' },
+        previousData: {} as never,
+        meta: { includeInactive: true },
+      });
+      assert.equal(calls[0].isActive, true);
+      assert.equal(calls[0].data.active, true);
+    });
+
+    it('updates and deletes an inactive row only when the caller is a master screen', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(false, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await assert.rejects(
+        dp.update('departments', { id: 'DEPT_1', data: { name: 'x' }, previousData: {} as never }),
+        /Record not found/,
+      );
+      await assert.rejects(dp.delete('departments', { id: 'DEPT_1', previousData: {} as never }), /Record not found/);
+
+      const meta = { showInactive: true };
+      await dp.update('departments', { id: 'DEPT_1', data: { name: 'x' }, previousData: {} as never, meta });
+      await dp.delete('departments', { id: 'DEPT_1', previousData: {} as never, meta });
+      assert.equal(calls.length, 2);
+      // Delete clears the stale data flag that develop's delete() left behind.
+      assert.deepEqual([calls[1].isActive, calls[1].data.active], [false, false]);
+    });
+
+    it('delete mirrors the root flag into the data flag', async () => {
+      mock.method(client, 'mdmsSearch', async () => [dept(true, true)]);
+      const calls = captureUpdate();
+      const dp = createDigitDataProvider(client, 'pg');
+      await dp.delete('departments', { id: 'DEPT_1', previousData: {} as never });
+      assert.deepEqual([calls[0].isActive, calls[0].data.active], [false, false]);
+    });
+
+    it('hides a legacy root-true/data-false record from lookups but lists it on master screens', async () => {
+      const records = [dept(true, false), { ...dept(true, true), uniqueIdentifier: 'DEPT_2', data: { code: 'DEPT_2', name: 'Two', active: true } }];
+      mock.method(client, 'mdmsCount', async () => records.length);
+      mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { offset?: number }) =>
+        (options?.offset ? [] : records));
+      const dp = createDigitDataProvider(client, 'pg');
+      const params = { pagination: { page: 1, perPage: 100 }, sort: { field: 'code', order: 'ASC' as const }, filter: {} };
+
+      const lookup = await dp.getList('departments', params);
+      assert.deepEqual(lookup.data.map((r) => r.id), ['DEPT_2']);
+      const master = await dp.getList('departments', { ...params, meta: { showInactive: true } });
+      assert.deepEqual(master.data.map((r) => [r.id, r._isActive]), [['DEPT_1', false], ['DEPT_2', true]]);
+      const inactiveOnly = await dp.getList('departments', { ...params, filter: { _isActive: 'false' }, meta: { showInactive: true } });
+      assert.deepEqual(inactiveOnly.data.map((r) => r.id), ['DEPT_1']);
+    });
+  });
+
+  it('creates permission masters at the state root even from a city session', async () => {
+    const tenants: string[] = [];
+    mock.method(client, 'mdmsCreate', async (t: string, schemaCode: string, uid: string, data: Record<string, unknown>) => {
+      tenants.push(t);
+      return { id: 'x', tenantId: t, schemaCode, uniqueIdentifier: uid, data, isActive: true };
+    });
+    const dp = createDigitDataProvider(client, 'pg.citya');
+    await dp.create('role-actions', { data: { id: 'R1', rolecode: 'GRO', actionid: 1, tenantId: 'pg' } });
+    await dp.create('access-roles', { data: { code: 'NEW_ROLE', name: 'New Role' } });
+    await dp.create('departments', { data: { code: 'DEPT_X', name: 'X' } });
+    assert.deepEqual(tenants, ['pg', 'pg', 'pg.citya']);
+  });
+
+  it('getList(access-actions) without a role filter lists every action in the actions master', async () => {
+    const actions = [
+      { id: 1, url: '/a', displayName: 'A' },
+      { id: 2, url: '/b', displayName: 'B' },
+    ].map((a) => ({
+      id: `id-${a.id}`, tenantId: 'pg', schemaCode: 'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+      uniqueIdentifier: String(a.id), data: a, isActive: true,
+    }));
+    const searched: string[] = [];
+    mock.method(client, 'mdmsCount', async () => actions.length);
+    mock.method(client, 'mdmsSearch', async (t: string, _s: string, options?: { offset?: number }) => {
+      searched.push(t);
+      return options?.offset ? [] : actions;
+    });
+    const byRole = mock.method(client, 'accessActionsSearch', async () => []);
+    const dp = createDigitDataProvider(client, 'pg.citya');
+    const { data } = await dp.getList('access-actions', {
+      pagination: { page: 1, perPage: 100 }, sort: { field: 'id', order: 'ASC' }, filter: {},
+    });
+    assert.deepEqual(data.map((r) => String(r.id)), ['1', '2']);
+    assert.ok(searched.every((t) => t === 'pg'));
+    assert.equal(byRole.mock.callCount(), 0);
+  });
+
   it('does not let a stale reActivateEmployee in the form payload override the fresh fetch (closes #813)', async () => {
     // EmployeeEdit.tsx has no input bound to reActivateEmployee, so any value
     // present in the submitted form data is a stale leftover from whatever
@@ -939,7 +1115,7 @@ describe('createDigitDataProvider', () => {
     const result = await dp.getList('access-actions', {
       pagination: { page: 1, perPage: 100 },
       sort: { field: 'name', order: 'ASC' },
-      filter: {},
+      filter: { roleCodes: ['GRO'] },
     });
 
     assert.equal(result.data.length, 3, 'no row may be dropped for lacking an id');
@@ -965,7 +1141,7 @@ describe('createDigitDataProvider', () => {
     const result = await dp.getList('access-actions', {
       pagination: { page: 1, perPage: 100 },
       sort: { field: 'name', order: 'ASC' },
-      filter: {},
+      filter: { roleCodes: ['GRO'] },
     });
 
     assert.equal(result.data.length, 3);

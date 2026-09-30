@@ -3,7 +3,6 @@ import { useEditContext, useResourceContext } from 'ra-core';
 import { DigitEdit } from '../DigitEdit';
 import { DigitFormInput } from '../DigitFormInput';
 import { ColorInput } from '../widgets/ColorInput';
-import { BooleanInput } from '../widgets/BooleanInput';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getDescriptor } from '../schemaDescriptors';
 import type { FieldGroup, FieldSpec } from '../schemaDescriptors/types';
@@ -112,8 +111,6 @@ export function ThemeConfigEditor() {
   return (
     <DigitEdit title={`Edit ${label}`}>
       <EditorBody />
-      {/* The MDMS record's root-level isActive — the enable/disable flag. */}
-      <BooleanInput source="_isActive" label="Active" />
     </DigitEdit>
   );
 }

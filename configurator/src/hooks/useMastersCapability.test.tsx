@@ -11,9 +11,9 @@ let authInfo: { user: { uuid: string; tenantId: string } } = { user: { uuid: 'u1
 // the policy check only ever applies to `type: 'mdms'` resources (see useMastersCapability.tsx).
 let resourceConfigOverrides: Record<string, unknown> = {};
 
-// Mirrors resourceRegistry.ts's real allowlist: `type: 'mdms'` plus the two
-// non-'mdms'-typed exceptions that still carry a real mdms-v2 write action.
-const EXPLICITLY_GATED_TYPES = new Set(['access-role', 'access-action']);
+// Mirrors resourceRegistry.ts's real allowlist: `type: 'mdms'` plus the one
+// non-'mdms'-typed exception that still carries a real mdms-v2 write action.
+const EXPLICITLY_GATED_TYPES = new Set(['access-action']);
 function isAccessControlGated(config: { type?: string } | undefined): boolean {
   if (!config) return false;
   return config.type === 'mdms' || EXPLICITLY_GATED_TYPES.has(config.type as string);
@@ -125,8 +125,8 @@ describe('canViewResource/canEditResource — the ACCESSCONTROL policy check onl
     expect(canEdit).not.toHaveBeenCalled();
   });
 
-  it('still consults masters.canView/canEdit for access-roles/access-actions despite their non-mdms type (#1826 review — type===\'mdms\' alone silently ungated these)', async () => {
-    resourceConfigOverrides['access-roles'] = { type: 'access-role', schema: 'ACCESSCONTROL-ROLES.roles' };
+  it('still consults masters.canView/canEdit for access-roles (mdms) and access-actions despite the latter\'s non-mdms type (#1826 review — type===\'mdms\' alone silently ungated it)', async () => {
+    resourceConfigOverrides['access-roles'] = { type: 'mdms', schema: 'ACCESSCONTROL-ROLES.roles' };
     resourceConfigOverrides['access-actions'] = { type: 'access-action', schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test' };
     const canView = vi.fn(() => false);
     const canEdit = vi.fn(() => false);

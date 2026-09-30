@@ -291,8 +291,6 @@ export function MapConfigEditor() {
 
   const [record, setRecord] = useState<MapRecord | null>(null);
   const [data, setData] = useState<Obj>({});
-  // The MDMS record's root-level isActive — the enable/disable flag.
-  const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -309,7 +307,6 @@ export function MapConfigEditor() {
           ?? records.find((r) => r.isActive) ?? records[0] ?? null;
         setRecord(target);
         setData(target ? { ...target.data } : { code: MAP_CONFIG_KEY });
-        setIsActive(target?.isActive !== false);
       } catch (e) {
         setLoadError((e as Error)?.message || 'Failed to load Map Configuration.');
       } finally {
@@ -330,7 +327,7 @@ export function MapConfigEditor() {
       // inherits it — so only update a record this tenant actually owns; otherwise
       // shadow it with a new record at this tenant.
       if (record && record.tenantId === tenantId) {
-        await digitClient.mdmsUpdate({ ...record, data: payload } as unknown as Parameters<typeof digitClient.mdmsUpdate>[0], isActive);
+        await digitClient.mdmsUpdate({ ...record, data: payload } as unknown as Parameters<typeof digitClient.mdmsUpdate>[0], record.isActive);
       } else {
         await digitClient.mdmsCreate(tenantId, SCHEMA, MAP_CONFIG_KEY, payload);
       }
@@ -363,9 +360,6 @@ export function MapConfigEditor() {
   const identity = groups.find((g) => g.title === 'Identity');
   const sections = groups.filter((g) => g.title !== 'Identity');
   const codeSpec = specByPath.get(identity?.fields[0] ?? 'code');
-  // Only a record this tenant owns can be enabled/disabled in place; an
-  // inherited parent record is shadowed by a new (active) one on save.
-  const ownsRecord = !!record && record.tenantId === tenantId;
 
   return (
     <TooltipProvider>
@@ -382,21 +376,6 @@ export function MapConfigEditor() {
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
             <div className="space-y-4 min-w-0">
               {codeSpec && <div className="max-w-xs"><FieldInput spec={codeSpec} data={data} setField={setField} /></div>}
-              {ownsRecord && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    id="isActive"
-                    className="h-4 w-4 accent-primary-main"
-                  />
-                  <Label htmlFor="isActive" className="text-sm">
-                    <span className="font-medium">Active</span>
-                    <span className="text-muted-foreground"> — the record's root-level isActive; unchecking disables it.</span>
-                  </Label>
-                </div>
-              )}
               {sections.map((g) => {
                 const specs = g.fields.map((p) => specByPath.get(p)).filter(Boolean) as FieldSpec[];
                 if (specs.length === 0) return null;

@@ -16,8 +16,8 @@ import { useMastersCapability } from '@/hooks/useMastersCapability';
 const filters = [
   <SearchFilterInput key="q" source="q" alwaysOn />,
   <SelectFilterInput
-    key="active"
-    source="active"
+    key="_isActive"
+    source="_isActive"
     label="Status"
     choices={[
       { id: 'true', name: 'Active' },
@@ -66,7 +66,7 @@ const exportColumns = [
   { header: 'name', value: (r: Record<string, unknown>) => r.name },
   { header: 'description', value: (r: Record<string, unknown>) => r.description },
   { header: 'department', value: (r: Record<string, unknown>) => r.department },
-  { header: 'active', value: (r: Record<string, unknown>) => r.active },
+  { header: 'active', value: (r: Record<string, unknown>) => r._isActive },
 ];
 
 export function DesignationList() {
