@@ -4,7 +4,14 @@ import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-com
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sameLevelName } from "../utils/boundaryLevels";
-import { disambiguateLabels, optionsForLevels, pathsByCode, selectionAfterPick } from "../utils/boundaryCascade";
+import {
+  disambiguateLabels,
+  levelsFilledAbove,
+  optionsForLevels,
+  pathsByCode,
+  selectionAfterPick,
+} from "../utils/boundaryCascade";
+import { trackEvent } from "../utils/analytics";
 
 // Humanize a boundary-type code for use as a graceful fallback when its
 // localization key isn't seeded: "SUB_COUNTY" -> "Sub County", "bairro" ->
@@ -335,6 +342,13 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
 
     setSelectedValues(newSelectedValues);
     setAutoFilledKeys(newAutoFilled);
+
+    // The option is chosen inside a menu, which the click tracking can't see.
+    trackEvent("pgr.boundary.selected", {
+      category: "pgr",
+      label: boundaryType,
+      value: levelsFilledAbove(selectedBoundary, selectedValues, newSelectedValues, boundaryHierarchy),
+    });
 
     // Send the deepest chosen boundary, tagged with `isLeaf` so validators can
     // trust hierarchy depth instead of the `.children` array (which isn't
