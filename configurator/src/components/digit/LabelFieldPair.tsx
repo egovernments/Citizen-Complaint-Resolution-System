@@ -31,7 +31,7 @@ const CardLabel: React.FC<CardLabelProps> = ({ children, className, required }) 
   return (
     <label
       className={cn(
-        'text-[19px] text-foreground font-medium mb-2 sm:mb-0 sm:w-[30%] sm:flex-shrink-0',
+        'text-sm text-foreground font-medium mb-2 sm:mb-0 sm:w-[30%] sm:flex-shrink-0',
         className
       )}
     >

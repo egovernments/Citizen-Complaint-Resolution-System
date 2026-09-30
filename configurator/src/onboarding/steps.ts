@@ -28,3 +28,13 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   { id: 'employees', number: 4, path: '/onboarding/employees', label: 'Employees', group: 'Organisation', icon: Users, master: 'employees' },
   { id: 'complaints', number: 5, path: '/onboarding/complaints', label: 'Complaints Template', group: 'Complaints', icon: MessageSquareText, master: 'complaint-hierarchy' },
 ];
+
+export function stepById(id: OnboardingStepId): OnboardingStep {
+  return ONBOARDING_STEPS.find((step) => step.id === id)!;
+}
+
+/** The steps either side of this one, for a step's Back and continue. */
+export function adjacentSteps(id: OnboardingStepId): { previous?: OnboardingStep; next?: OnboardingStep } {
+  const index = ONBOARDING_STEPS.findIndex((step) => step.id === id);
+  return { previous: ONBOARDING_STEPS[index - 1], next: ONBOARDING_STEPS[index + 1] };
+}

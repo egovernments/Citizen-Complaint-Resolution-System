@@ -13,6 +13,7 @@ import {
   AlertCircle,
   X,
   AlertTriangle,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -339,7 +340,7 @@ export default function Phase3Page() {
           </div>
 
           <div className="flex justify-between">
-            <Button variant="ghost" size="sm" onClick={() => setStep('landing')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
           </div>
         </DigitCard>
       )}
@@ -459,7 +460,7 @@ export default function Phase3Page() {
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="text-muted-foreground hover:text-primary">← Change File</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Change File</Button>
             <SubmitBar
               label={loading ? 'Creating...' : 'Create & Continue'}
               onSubmit={handleUpload}

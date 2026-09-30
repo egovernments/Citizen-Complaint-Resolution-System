@@ -11,6 +11,7 @@ import {
   AlertCircle,
   ChevronRight,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -650,9 +651,10 @@ export default function Phase4Page() {
               variant="ghost"
               size="sm"
               onClick={() => setStep('landing')}
-              className="text-muted-foreground hover:text-primary"
+              className="gap-1.5 text-primary hover:text-primary"
             >
-              ← Back
+              <ArrowLeft className="w-4 h-4" />
+              Back
             </Button>
           </div>
         </DigitCard>
@@ -749,9 +751,10 @@ export default function Phase4Page() {
               variant="ghost"
               size="sm"
               onClick={() => setStep('generate')}
-              className="text-muted-foreground hover:text-primary"
+              className="gap-1.5 text-primary hover:text-primary"
             >
-              ← Back
+              <ArrowLeft className="w-4 h-4" />
+              Back
             </Button>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               {errorCount > 0 && (
