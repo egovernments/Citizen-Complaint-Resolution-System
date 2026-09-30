@@ -853,7 +853,7 @@ function ReviewStep({ data, t, photos }: StepBodyProps & { photos: PickedPhoto[]
             [say("CS_FILE_ADDRESS", "Address"), addressLine(data, t) || notProvided],
             [say("CS_COMPLAINT_LANDMARK__DETAILS", "Landmark"), data.landmark?.trim() ? truncate(data.landmark, 60) : notProvided],
             [
-              say("CS_FILE_PIN_DROP", "Pin drop"),
+              say("CS_FILE_PIN_DROP", "Location"),
               pinned
                 ? point?.address || `${Number(point?.lat).toFixed(5)}, ${Number(point?.lng).toFixed(5)}`
                 : say("CS_FILE_NOT_CAPTURED", "Not captured"),

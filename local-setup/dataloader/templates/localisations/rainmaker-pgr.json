@@ -6691,7 +6691,7 @@
     },
     {
         "code": "CS_FILE_PIN_DROP",
-        "message": "Pin drop",
+        "message": "Location",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
