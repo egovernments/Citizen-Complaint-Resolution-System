@@ -56,9 +56,12 @@ describe('listMasters', () => {
     expect(listed.map((r) => r.uniqueIdentifier)).toEqual(['ROADS']);
   });
 
-  it("leaves out the state root's rows a city search falls back to", async () => {
+  it("offers the state root's rows a city inherits, except where records are edited", async () => {
     search.mockResolvedValue([record({ tenantId: 'ke' })]);
-    expect(await listMasters('ke.a', 'department')).toEqual([]);
+    // Pickers: a city employee can hold a state department.
+    expect((await listMasters('ke.a', 'department')).map((r) => r.uniqueIdentifier)).toEqual(['ROADS']);
+    // The Departments step edits and removes, so only the city's own.
+    expect(await listMasters('ke.a', 'department', { ownOnly: true })).toEqual([]);
   });
 });
 

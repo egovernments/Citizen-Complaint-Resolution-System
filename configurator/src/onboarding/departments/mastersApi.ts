@@ -45,14 +45,19 @@ export function recordDepartments(record: MdmsRecord): string[] {
 }
 
 /**
- * The workspace's own active records of one kind, oldest first. mdms-v2 falls
- * back to the state root's rows when a city has none; those belong to the
- * whole state, so they're left out rather than offered for editing here.
+ * The workspace's active records of one kind, oldest first. mdms-v2 falls back
+ * to the state root's rows when a city has none. Those belong to the whole
+ * state: a picker offers them (HRMS takes a state department for a city
+ * employee), but where records are edited or removed, pass `ownOnly`.
  */
-export async function listMasters(tenantId: string, kind: MasterKind): Promise<MdmsRecord[]> {
+export async function listMasters(
+  tenantId: string,
+  kind: MasterKind,
+  { ownOnly = false }: { ownOnly?: boolean } = {},
+): Promise<MdmsRecord[]> {
   const records = await mdmsService.searchRecords(tenantId, SCHEMA[kind], { limit: 5000 });
   return records
-    .filter((record) => record.tenantId === tenantId && record.isActive !== false)
+    .filter((record) => (!ownOnly || record.tenantId === tenantId) && record.isActive !== false)
     .sort((a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0));
 }
 

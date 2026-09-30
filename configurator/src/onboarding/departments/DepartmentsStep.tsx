@@ -186,7 +186,8 @@ export default function DepartmentsStep() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listMasters(tenant, 'department'), listMasters(tenant, 'designation')])
+    // Only the workspace's own records: this step edits and removes them.
+    Promise.all([listMasters(tenant, 'department', { ownOnly: true }), listMasters(tenant, 'designation', { ownOnly: true })])
       .then(([loadedDepartments, loadedDesignations]) => {
         if (cancelled) return;
         setDepartments(loadedDepartments);
