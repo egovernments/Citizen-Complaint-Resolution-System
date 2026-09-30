@@ -1,6 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
-import Layout from './components/layout/Layout';
+import OnboardingLayout from './onboarding/OnboardingLayout';
+import ComplaintsStep from './onboarding/ComplaintsStep';
+import { ONBOARDING_STEPS } from './onboarding/steps';
+import { isOnboardingComplete, resumePath } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
@@ -8,7 +11,6 @@ import Phase1Page from './pages/Phase1Page';
 import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
 import Phase4Page from './pages/Phase4Page';
-import CompletePage from './pages/CompletePage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
@@ -52,7 +54,7 @@ import { identifyUser, trackEvent } from './lib/telemetry';
 import { clearLocalSession, SESSION_EXPIRED_KEY } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
-import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
+import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
 
 // App context for global state
 type AppMode = 'onboarding' | 'management';
@@ -500,6 +502,10 @@ function App() {
     toggleHelp,
   };
 
+  const onboardingDone = isOnboardingComplete(state.completedPhases);
+  const inOnboarding = ONBOARDING_GATE_ENABLED ? !onboardingDone : state.mode === 'onboarding';
+  const onboardingResume = resumePath(state.completedPhases);
+
   return (
     <AppContext.Provider value={contextValue}>
       <ThemeProvider>
@@ -512,25 +518,30 @@ function App() {
               nobody has an account yet, so it sits outside the auth gate. */}
           <Route path="/signup" element={<SignupPage />} />
 
-          {/* Onboarding Mode Routes */}
+          {/* Onboarding. With the gate on, an account stays here until every
+              step is done; with it off, the mode switch decides as before. */}
           <Route path="/" element={
             state.isAuthenticated
-              ? state.mode === 'onboarding' ? <MastersCapabilityProvider><Layout /></MastersCapabilityProvider> : <Navigate to="/manage" />
+              ? inOnboarding ? <MastersCapabilityProvider><OnboardingLayout /></MastersCapabilityProvider> : <Navigate to="/manage" />
               : <RootLanding />
           }>
-            <Route index element={<Navigate to="/phase/1" />} />
-            <Route path="phase/1" element={<Phase1Page />} />
-            <Route path="phase/2" element={<Phase2Page />} />
-            <Route path="phase/3" element={<Phase3Page />} />
-            <Route path="phase/4" element={<Phase4Page />} />
-            <Route path="complete" element={<CompletePage />} />
+            <Route index element={<Navigate to={onboardingResume} replace />} />
+            <Route path="onboarding/branding" element={<Phase1Page />} />
+            <Route path="onboarding/geography" element={<Phase2Page />} />
+            <Route path="onboarding/departments" element={<Phase3Page />} />
+            <Route path="onboarding/employees" element={<Phase4Page />} />
+            <Route path="onboarding/complaints" element={<ComplaintsStep />} />
+            <Route path="onboarding/*" element={<Navigate to={onboardingResume} replace />} />
+            {/* The old numbered phases, for bookmarks and the pages that still link to them */}
+            <Route path="phase/:number" element={<LegacyPhaseRedirect />} />
+            <Route path="complete" element={<Navigate to="/onboarding/complaints" replace />} />
           </Route>
 
           {/* Management Mode Routes — react-admin powered */}
           <Route path="/manage/*" element={
-            state.isAuthenticated && state.mode === 'management'
+            state.isAuthenticated && !inOnboarding
               ? <ManagementAdmin />
-              : state.isAuthenticated ? <Navigate to="/phase/1" /> : <Navigate to="/login" />
+              : state.isAuthenticated ? <Navigate to={onboardingResume} /> : <Navigate to="/login" />
           } />
         </Routes>
 
@@ -541,6 +552,13 @@ function App() {
       </ThemeProvider>
     </AppContext.Provider>
   );
+}
+
+/** /phase/N, the old numbered route, to the step that replaced it. */
+function LegacyPhaseRedirect() {
+  const { number } = useParams();
+  const step = ONBOARDING_STEPS.find((candidate) => String(candidate.number) === number) ?? ONBOARDING_STEPS[0];
+  return <Navigate to={step.path} replace />;
 }
 
 export default App;

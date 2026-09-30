@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useLocaleState, useLocales, useTranslate } from 'ra-core';
+import { useTranslate } from 'ra-core';
 import { useApp } from '../App';
 import {
-  HelpCircle,
   LogOut,
   User,
+  Globe,
   Building2,
   MapPin,
   Briefcase,
@@ -19,10 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Menu,
-  X,
   Settings,
-  Globe,
   Database,
   Shield,
   GitBranch,
@@ -39,17 +36,17 @@ import {
   UserCog,
   Map,
   Globe2,
-  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
-import { useTheme } from '@/providers/ThemeProvider';
-import { THEMES } from '@/themes';
-import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
-import { DigitFooter } from '@/components/DigitFooter';
+import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
+import { NavRow, SectionLabel, ActiveBar, RailAvatar, RailBackdrop, RailCloseButton, RailMenuButton } from '@/components/layout/rail';
+import { railClasses, rowTone } from '@/components/layout/railStyles';
+import { useRailDrawer } from '@/components/layout/useRailDrawer';
+import { AppFooter, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
+import { resumePath } from '@/onboarding/progress';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
@@ -117,60 +114,6 @@ const mainLinks = [
   { path: '/manage/public-dashboard', nameKey: 'app.nav.public_dashboard', icon: Globe2 },
 ];
 
-/** Row states from the DIGIT admin console: tinted when current, a lighter tint on hover. */
-const rowTone = (active: boolean) =>
-  active ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-primary/5 hover:text-primary';
-
-/** The 3px primary bar on the current row's left edge. */
-function ActiveBar() {
-  return <span aria-hidden="true" className="absolute left-0 inset-y-0 w-[3px] bg-primary" />;
-}
-
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="h-8 px-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.5px] text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-/**
- * A full-bleed sidebar row: 36px for one line of text, growing when a long
- * label wraps (text-left keeps the wrapped line on the label's left edge;
- * buttons centre text by default).
- */
-function NavRow({
-  icon: Icon,
-  label,
-  active,
-  collapsed,
-  onClick,
-  trailing,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  label: string;
-  active: boolean;
-  collapsed: boolean;
-  onClick: () => void;
-  trailing?: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      aria-label={collapsed ? label : undefined}
-      aria-current={active ? 'page' : undefined}
-      className={`relative w-full min-h-9 flex items-center gap-3 py-2 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring ${collapsed ? 'justify-center px-0' : 'px-4'} ${rowTone(active)}`}
-    >
-      {active && <ActiveBar />}
-      <Icon className="w-4 h-4 flex-shrink-0" />
-      {!collapsed && <span className="flex-1 min-w-0">{label}</span>}
-      {!collapsed && trailing}
-    </button>
-  );
-}
-
 /** Generic MDMS resources for the Advanced section */
 const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => ({
   id: name,
@@ -217,9 +160,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [navQuery, setNavQuery] = useState('');
-  // Below md the rail is an off-canvas drawer. It is out only while the page it
-  // was opened on is still showing, so picking a link closes it.
-  const [mobileNavPath, setMobileNavPath] = useState<string | null>(null);
+  const drawer = useRailDrawer();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand groups that contain the active route, collapse others
     const initial: Record<string, boolean> = {};
@@ -246,7 +187,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
   const handleSwitchToOnboarding = () => {
     setMode('onboarding');
-    navigate('/phase/1');
+    navigate(resumePath(state.completedPhases));
   };
 
   const envName = state.environment.includes('api.egov.theflywheel') || state.environment.includes('chakshu')
@@ -282,36 +223,17 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
     setNavQuery('');
   };
 
-  const mobileNavOpen = mobileNavPath === location.pathname;
   const openMobileNav = () => {
     setSidebarCollapsed(false);
-    setMobileNavPath(location.pathname);
+    drawer.openDrawer();
   };
-  const closeMobileNav = () => setMobileNavPath(null);
-
-  useEffect(() => {
-    if (!mobileNavOpen) return undefined;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileNavPath(null);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [mobileNavOpen]);
-
-  const userInitial = state.user?.name?.trim().charAt(0).toUpperCase();
 
   return (
     <div className="h-screen overflow-hidden bg-background flex">
-      {mobileNavOpen && (
-        <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={closeMobileNav} />
-      )}
+      <RailBackdrop open={drawer.open} onClose={drawer.closeDrawer} />
 
-      {/* Sidebar: the DIGIT admin console's rail. On a phone it slides in over
-          the page; invisible while closed so its links leave the tab order. */}
-      <aside
-        className={`${sidebarCollapsed ? 'w-16' : 'w-64'
-          } bg-sidebar border-r border-border flex flex-col transition-all duration-200 h-full fixed inset-y-0 left-0 z-50 md:static md:z-auto md:translate-x-0 md:visible md:shadow-none ${mobileNavOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full invisible'}`}
-      >
+      {/* Sidebar: the DIGIT admin console's rail; a drawer on a phone */}
+      <aside className={railClasses(sidebarCollapsed, drawer.open)}>
         {/* Brand, collapse toggle and nav search */}
         <div className="border-b border-border p-3 space-y-5">
           <div className={`flex items-center min-h-9 ${sidebarCollapsed ? 'justify-center' : 'gap-2.5'}`}>
@@ -328,14 +250,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                 </div>
               </>
             )}
-            <button
-              type="button"
-              onClick={closeMobileNav}
-              aria-label={translate('app.nav.close_menu', { _: 'Close menu' })}
-              className="md:hidden inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-secondary hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <RailCloseButton
+              label={translate('app.nav.close_menu', { _: 'Close menu' })}
+              onClick={drawer.closeDrawer}
+            />
             <button
               type="button"
               onClick={toggleSidebar}
@@ -470,22 +388,21 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
         {/* Sidebar Footer */}
         <div className="border-t border-border py-2">
-          <NavRow
-            icon={Settings}
-            label={translate('app.nav.switch_to_onboarding')}
-            active={false}
-            collapsed={sidebarCollapsed}
-            onClick={handleSwitchToOnboarding}
-          />
+          {/* With onboarding compulsory there is nothing to switch back to: once
+              it is finished, everything is edited here. */}
+          {!ONBOARDING_GATE_ENABLED && (
+            <NavRow
+              icon={Settings}
+              label={translate('app.nav.switch_to_onboarding')}
+              active={false}
+              collapsed={sidebarCollapsed}
+              onClick={handleSwitchToOnboarding}
+            />
+          )}
 
           {/* User info */}
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3 px-4'} pt-2`}>
-            <div
-              className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 text-sm font-medium"
-              title={sidebarCollapsed ? state.user?.name : undefined}
-            >
-              {userInitial || <User className="w-4 h-4" />}
-            </div>
+            <RailAvatar name={state.user?.name} title={sidebarCollapsed ? state.user?.name : undefined} />
             {!sidebarCollapsed && (
               <>
                 <div className="flex-1 min-w-0">
@@ -515,15 +432,11 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         <header className="sticky top-0 z-30 h-14 flex-shrink-0 bg-card border-b border-border pl-4 pr-4 sm:pr-6 flex items-center justify-between gap-2">
           {/* Left: menu (phone), Management Mode + env badges */}
           <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
+            <RailMenuButton
+              open={drawer.open}
+              label={translate('app.nav.open_menu', { _: 'Open menu' })}
               onClick={openMobileNav}
-              aria-label={translate('app.nav.open_menu', { _: 'Open menu' })}
-              aria-expanded={mobileNavOpen}
-              className="md:hidden -ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            />
             <Badge
               variant="outline"
               className="hidden sm:inline-flex text-xs bg-blue-50 text-blue-700 border-blue-200"
@@ -540,16 +453,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
           {/* Right: help, locale, theme */}
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleHelp}
-              aria-label={translate('app.header.help', { _: 'Help' })}
-              className="h-8 gap-1.5 px-2 text-sm font-normal text-foreground hover:bg-muted hover:text-foreground"
-            >
-              <HelpCircle />
-              <span className="hidden sm:inline">{translate('app.header.help', { _: 'Help' })}</span>
-            </Button>
+            <HelpButton label={translate('app.header.help', { _: 'Help' })} onClick={toggleHelp} />
 
             <LocaleSwitcher />
 
@@ -563,85 +467,10 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         </main>
 
         {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
-        {/* Centred attribution from sm up; on a phone the spacer goes, so the
-            logo and the docs link share the row without wrapping. */}
-        <footer className="flex-shrink-0 flex items-center justify-between gap-4 border-t border-border bg-card px-4 sm:px-6 py-2">
-          <div className="hidden sm:block flex-1" />
-          <DigitFooter />
-          <div className="sm:flex-1 flex justify-end">
-            <a
-              href="https://docs.digit.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground hover:text-primary transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              {translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })}
-            </a>
-          </div>
-        </footer>
+        <AppFooter docsLabel={translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })} />
 
       </div>
 
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// LocaleSwitcher — compact dropdown using ra-core hooks
-// ---------------------------------------------------------------------------
-function LocaleSwitcher() {
-  const [locale, setLocale] = useLocaleState();
-  const locales = useLocales();
-
-  if (!locales || locales.length <= 1) return null;
-
-  return (
-    <Select value={locale} onValueChange={setLocale}>
-      <SelectTrigger className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-sm text-foreground shadow-none hover:bg-muted">
-        <Globe className="w-4 h-4 flex-shrink-0" />
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {locales.map((l) => (
-          <SelectItem key={l.locale} value={l.locale} className="text-xs">
-            {l.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ThemeSwitcher — compact dropdown with color swatch previews
-// ---------------------------------------------------------------------------
-function ThemeSwitcher() {
-  const { theme, setTheme } = useTheme();
-  const currentTheme = THEMES.find((t) => t.name === theme);
-
-  return (
-    <Select value={theme} onValueChange={setTheme}>
-      <SelectTrigger className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-sm text-foreground shadow-none hover:bg-muted">
-        <span
-          className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0"
-          style={{ backgroundColor: currentTheme?.primaryHex }}
-        />
-        <span className="max-sm:sr-only">Theme</span>
-      </SelectTrigger>
-      <SelectContent>
-        {THEMES.map((t) => (
-          <SelectItem key={t.name} value={t.name} className="text-xs">
-            <span className="flex items-center gap-2">
-              <span
-                className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0"
-                style={{ backgroundColor: t.primaryHex }}
-              />
-              {t.label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
