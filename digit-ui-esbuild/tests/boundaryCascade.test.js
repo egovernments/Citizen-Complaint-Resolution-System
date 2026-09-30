@@ -1,5 +1,6 @@
-// Pins the filing form's boundary cascade: every level listed from the start,
-// a pick fills the levels above it, and a lower pick survives only under it.
+// Pins the filing form's boundary cascade: every level listed from the start
+// (a very long one waits for the level above), a pick fills the levels above
+// it and clears the ones below.
 // Run from digit-ui-esbuild/:  node --test tests/boundaryCascade.test.js
 
 const { test } = require("node:test");
@@ -39,8 +40,7 @@ const shownLevels = ["County", "SubCounty", "Ward"];
 const paths = pathsByCode(tree);
 const byCode = (code) => paths.get(code).at(-1);
 const codes = (nodes) => nodes.map((n) => n.code);
-const pick = (code, selected = {}) =>
-  selectionAfterPick(byCode(code), selected, { hierarchy, shownLevels, paths });
+const pick = (code) => selectionAfterPick(byCode(code), { shownLevels, paths });
 const selectionCodes = (selected) =>
   Object.fromEntries(Object.entries(selected).map(([type, n]) => [type, n.code]));
 
@@ -70,19 +70,26 @@ test("a root above the shown levels never enters the selection", () => {
   assert.equal(pick("KAPSOIT").Country, undefined);
 });
 
-test("re-picking a level keeps a lower choice that is still under it", () => {
-  const selected = pick("SIGOR");
-  assert.deepEqual(selectionCodes(pick("BOMET", selected)), {
-    County: "BOMET",
-    SubCounty: "CHEPALUNGU",
-    Ward: "SIGOR",
-  });
+test("re-picking a level's current value clears the levels below it", () => {
+  // After a ward, picking its own county again widens back to the county
+  // (the inbox filter's way back from a ward).
+  assert.deepEqual(selectionCodes(pick("BOMET")), { County: "BOMET" });
+  assert.deepEqual(selectionCodes(pick("CHEPALUNGU")), { County: "BOMET", SubCounty: "CHEPALUNGU" });
 });
 
-test("picking another branch drops the lower choices outside it", () => {
-  const selected = pick("SIGOR");
-  assert.deepEqual(selectionCodes(pick("KERICHO", selected)), { County: "KERICHO" });
-  assert.deepEqual(selectionCodes(pick("BOMET_EAST", selected)), { County: "BOMET", SubCounty: "BOMET_EAST" });
+test("picking another branch keeps nothing from the old one", () => {
+  assert.deepEqual(selectionCodes(pick("KERICHO")), { County: "KERICHO" });
+  assert.deepEqual(selectionCodes(pick("BOMET_EAST")), { County: "BOMET", SubCounty: "BOMET_EAST" });
+});
+
+test("a level too long to list whole waits for the level above", () => {
+  const capped = optionsForLevels(shownLevels, {}, tree, { maxUnanchored: 4 });
+  // Five wards with nothing chosen is over the cap of four.
+  assert.equal(capped.Ward, null);
+  // The top level always lists, whatever its size.
+  assert.deepEqual(codes(capped.County), ["BOMET", "KERICHO"]);
+  const anchored = optionsForLevels(shownLevels, { SubCounty: byCode("CHEPALUNGU") }, tree, { maxUnanchored: 1 });
+  assert.deepEqual(codes(anchored.Ward), ["CH_TOWNSHIP", "SIGOR"]);
 });
 
 test("only names shared within a level carry their parent", () => {
@@ -104,7 +111,7 @@ test("a pick reports how many levels above it it filled in", () => {
   assert.equal(levelsFilledAbove(byCode("SIGOR"), {}, first, hierarchy), 2);
   // Walking down from a chosen county fills nothing above.
   const county = pick("BOMET");
-  assert.equal(levelsFilledAbove(byCode("CHEPALUNGU"), county, pick("CHEPALUNGU", county), hierarchy), 0);
+  assert.equal(levelsFilledAbove(byCode("CHEPALUNGU"), county, pick("CHEPALUNGU"), hierarchy), 0);
   // A ward from another sub-county changes the one above it.
-  assert.equal(levelsFilledAbove(byCode("CHEMANER"), first, pick("CHEMANER", first), hierarchy), 1);
+  assert.equal(levelsFilledAbove(byCode("CHEMANER"), first, pick("CHEMANER"), hierarchy), 1);
 });

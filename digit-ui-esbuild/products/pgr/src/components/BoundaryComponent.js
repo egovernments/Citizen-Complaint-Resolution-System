@@ -1,7 +1,7 @@
 import { Loader } from "@egovernments/digit-ui-components";
-import { selectPlaceholder } from "../utils/selectPlaceholder";
+import { selectPlaceholder, translateOr } from "../utils/selectPlaceholder";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { sameLevelName } from "../utils/boundaryLevels";
 import {
@@ -215,6 +215,20 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     setAutoFilledKeys({});
   }, [tenantId]);
 
+  // A caller that clears the value while this stays mounted (the inbox
+  // filter's Clear all resets the form) clears the picks behind it too, so
+  // they can't come back on the next pick or keep the lists narrowed.
+  const currentValue = formData?.[config?.key];
+  const hadValue = useRef(false);
+  useEffect(() => {
+    const hasValue = currentValue != null && currentValue !== "";
+    if (hadValue.current && !hasValue) {
+      setSelectedValues({});
+      setAutoFilledKeys({});
+    }
+    hadValue.current = hasValue;
+  }, [currentValue]);
+
   // Every level shows from the start, so a ward can be picked (and searched)
   // before its county; a pick fills the levels above it from the tree
   // (utils/boundaryCascade).
@@ -226,13 +240,16 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   );
   // A node's parent, named as the dropdowns name it, to tell apart two places
   // that share a name at one level.
-  const parentLabelOf = (node) => {
-    const path = pathByCode.get(node.code);
-    const parent = path && path[path.length - 2];
-    if (!parent) return null;
-    const translated = t(parent.code);
-    return translated && translated !== parent.code ? translated : parent.name || parent.code;
-  };
+  const parentLabelOf = useCallback(
+    (node) => {
+      const path = pathByCode.get(node.code);
+      const parent = path && path[path.length - 2];
+      if (!parent) return null;
+      const translated = t(parent.code);
+      return translated && translated !== parent.code ? translated : parent.name || parent.code;
+    },
+    [pathByCode, t]
+  );
 
   // CCRS#491: auto-fill the cascade when the citizen drops a pin on the
   // map. `GeoLocations.fetchAddress` runs `resolveWard` (turf
@@ -283,9 +300,12 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     if (!path || path.length === 0) return;
 
     // Rebuild the selection in one go; each level's options follow from it.
+    // Only the levels this form shows, as a manual pick keeps them: a tree
+    // root above the configured highest level stays out of the address.
+    const shownPath = path.filter((node, i) => i === path.length - 1 || hierarchy.includes(node.boundaryType));
     const newSelectedValues = {};
     const newAutoFilled = {};
-    for (const node of path) {
+    for (const node of shownPath) {
       newSelectedValues[node.boundaryType] = node;
       newAutoFilled[node.boundaryType] = true;
     }
@@ -312,7 +332,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
       (lowestLevelCapped && !(deepest?.children && deepest.children.length > 0));
     onSelect(
       config.key,
-      { ...deepest, isLeaf: isDeepestLevel, levels: levelsOf(path) },
+      { ...deepest, isLeaf: isDeepestLevel, levels: levelsOf(shownPath) },
       { shouldValidate: true, shouldDirty: true, shouldTouch: true }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,8 +346,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     if (!selectedBoundary) return;
 
     const boundaryType = selectedBoundary.boundaryType;
-    const newSelectedValues = selectionAfterPick(selectedBoundary, selectedValues, {
-      hierarchy: boundaryHierarchy,
+    const newSelectedValues = selectionAfterPick(selectedBoundary, {
       shownLevels: effectiveHierarchy,
       paths: pathByCode,
     });
@@ -388,9 +407,11 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   return (
     <div className="pgr-boundary-cascade" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         {effectiveHierarchy.map((key) => {
-          // Every level shows from the start (see optionsByLevel); a level
-          // with nothing under the current choice above it stays hidden.
-          if (optionsByLevel[key]?.length > 0) {
+          // Every level shows from the start (see optionsByLevel). A level
+          // too long to list whole (null) waits, disabled, for the level
+          // above; one with nothing under the current choice stays hidden.
+          const waiting = optionsByLevel[key] === null;
+          if (waiting || optionsByLevel[key]?.length > 0) {
             const selectedAtLevel =
               formData?.locality || formData?.SelectedBoundary ? selectedValues[key] : null;
             // Localized level header, with a humanized fallback when the
@@ -408,7 +429,8 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
                 key={key}
                 fieldKey={key}
                 label={levelLabel}
-                data={optionsByLevel[key]}
+                data={optionsByLevel[key] || []}
+                waitingForParent={waiting}
                 parentLabelOf={parentLabelOf}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
                 selected={selectedAtLevel}
@@ -420,7 +442,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
                 // cleared in handleSelection so the field flips back
                 // to interactive — they can keep refining without
                 // getting locked out by their own click.
-                disabled={!!readOnly && !!autoFilledKeys[key] && !!selectedAtLevel}
+                disabled={waiting || (!!readOnly && !!autoFilledKeys[key] && !!selectedAtLevel)}
               />
             );
           }
@@ -437,7 +459,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
  * carry through onChange unchanged so the parent's cascade logic /
  * SelectedBoundary payload stays byte-identical to the legacy.
  */
-const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled, parentLabelOf }) => {
+const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled, parentLabelOf, waitingForParent }) => {
   const { t } = useTranslation();
   const id = `boundary-${(fieldKey || label || "field").toString().toLowerCase().replace(/\s+/g, "-")}`;
   // Defensive dedup by code. The jurisdiction prune (filterTree above)
@@ -447,22 +469,25 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled,
   // overlapping HRMS jurisdictions, exact origin still being chased).
   // Dedup at render keeps the symptom contained regardless of where
   // the duplicate enters `data`.
-  const options = [];
-  const seen = new Set();
-  for (const node of data || []) {
-    if (seen.has(node.code)) continue;
-    seen.add(node.code);
-    // Localization-first: t(code) is the convention (configurator Phase 2
-    // writes the human name as the message for the code key). Fall back
-    // to a raw `name` only when no translation exists.
-    const translated = t(node.code);
-    options.push({
-      value: node.code,
-      label: translated && translated !== node.code ? translated : node.name || node.code,
-      node,
-    });
-  }
-  const labelled = disambiguateLabels(options, parentLabelOf || (() => null));
+  // Built once per list, not per render: a level can list hundreds of places.
+  const labelled = useMemo(() => {
+    const options = [];
+    const seen = new Set();
+    for (const node of data || []) {
+      if (seen.has(node.code)) continue;
+      seen.add(node.code);
+      // Localization-first: t(code) is the convention (configurator Phase 2
+      // writes the human name as the message for the code key). Fall back
+      // to a raw `name` only when no translation exists.
+      const translated = t(node.code);
+      options.push({
+        value: node.code,
+        label: translated && translated !== node.code ? translated : node.name || node.code,
+        node,
+      });
+    }
+    return disambiguateLabels(options, parentLabelOf || (() => null));
+  }, [data, t, parentLabelOf]);
   return (
     <V2Field label={t(label)} required htmlFor={id}>
       <V2Select
@@ -480,7 +505,13 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled,
         searchPlaceholder={t("CS_COMMON_SEARCH") === "CS_COMMON_SEARCH" ? "Search" : t("CS_COMMON_SEARCH")}
         // A tenant that seeds CS_COMMON_SELECT still gets its own text; otherwise
         // the verb is translated too, not just the field name.
-        placeholder={t("CS_COMMON_SELECT") === "CS_COMMON_SELECT" ? selectPlaceholder(t, t(label)) : t("CS_COMMON_SELECT")}
+        placeholder={
+          waitingForParent
+            ? translateOr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
+            : t("CS_COMMON_SELECT") === "CS_COMMON_SELECT"
+            ? selectPlaceholder(t, t(label))
+            : t("CS_COMMON_SELECT")
+        }
         disabled={!!disabled}
       />
     </V2Field>

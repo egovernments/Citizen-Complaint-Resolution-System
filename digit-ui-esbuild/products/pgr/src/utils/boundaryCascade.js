@@ -26,10 +26,19 @@ export const pathsByCode = (tree) => {
 };
 
 /**
+ * A level listing more than this with nothing chosen above it waits for the
+ * level above instead. A menu of thousands (Maputo's quarteirões) is unusable
+ * and mostly repeated names; a city's wards stay listed from the start.
+ */
+export const MAX_UNANCHORED_OPTIONS = 200;
+
+/**
  * What each shown level lists: the nodes of its type under the nearest chosen
  * level above it, or every node of its type when nothing above is chosen.
+ * `null` means the level is too long to list whole and waits for the level
+ * above.
  */
-export const optionsForLevels = (levels, selected, tree) => {
+export const optionsForLevels = (levels, selected, tree, { maxUnanchored = MAX_UNANCHORED_OPTIONS } = {}) => {
   const byLevel = {};
   levels.forEach((type, idx) => {
     let anchor = null;
@@ -42,29 +51,23 @@ export const optionsForLevels = (levels, selected, tree) => {
       }
     };
     collect(anchor ? anchor.children : tree);
-    byLevel[type] = found;
+    byLevel[type] = !anchor && idx > 0 && found.length > maxUnanchored ? null : found;
   });
   return byLevel;
 };
 
 /**
  * The selection after picking `picked`: its own path within the shown levels,
- * plus any lower choice that still sits under it. A tree root above the
- * configured highest level stays out, so it never lands in the address.
+ * and nothing below it. Changing a level, or picking its current value again,
+ * clears the levels under it, so a filter can widen back to a county. A tree
+ * root above the configured highest level stays out of the address.
  *
- * @param hierarchy  every level of the tree, top to bottom
- * @param shownLevels  the levels the form shows (hierarchy, possibly capped)
+ * @param shownLevels  the levels the form shows (the hierarchy, possibly capped)
  */
-export const selectionAfterPick = (picked, selected, { hierarchy, shownLevels, paths }) => {
+export const selectionAfterPick = (picked, { shownLevels, paths }) => {
   const next = {};
   for (const node of paths.get(picked.code) || [picked]) {
     if (node === picked || shownLevels.includes(node.boundaryType)) next[node.boundaryType] = node;
-  }
-  const index = hierarchy.indexOf(picked.boundaryType);
-  for (let i = index + 1; i < hierarchy.length; i++) {
-    const below = selected[hierarchy[i]];
-    const stillUnder = below && (paths.get(below.code) || []).some((node) => node.code === picked.code);
-    if (stillUnder) next[hierarchy[i]] = below;
   }
   return next;
 };
