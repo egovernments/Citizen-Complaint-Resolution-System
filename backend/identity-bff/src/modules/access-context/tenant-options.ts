@@ -3,6 +3,7 @@ import type { KeycloakClaims } from "../authentication/types.js";
 import {
   isOrganizationGroupMember,
   isOrganizationMember,
+  liveTenantMapping,
   readTenantMappingForTenant,
 } from "../organizations/organization-service.js";
 import {
@@ -55,7 +56,10 @@ export async function resolveTenantOption(
   subject: string,
   tenantId: string,
 ): Promise<TenantOption | null> {
-  const mapping = await readTenantMappingForTenant(tenantId);
+  const cached = await readTenantMappingForTenant(tenantId);
+  // The directory is cached; the Organization (or group) that authorizes
+  // this sign-in is re-read live, so disabling it takes effect at once.
+  const mapping = cached ? await liveTenantMapping(cached) : null;
   if (!mapping || !await isActiveDigitTenant(mapping.tenantId)) return null;
   const member = mapping.mappingType === "organization-group"
     ? await isOrganizationGroupMember(mapping.organizationId, mapping.groupId, subject)

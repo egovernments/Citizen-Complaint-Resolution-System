@@ -165,6 +165,9 @@ const tokenKey = (identity: ManagedIdentity) =>
 /** Session refs still relying on this identity's cached token. */
 const tokenHoldersKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-user-token-holders:${identity.key}`;
+/** The mobile number this BFF last wrote to a citizen account (searches may mask it). */
+const citizenMobileKey = (identity: ManagedIdentity) =>
+  `${config.cachePrefix}:digit-citizen-mobile:${identity.key}`;
 const leaseKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-user-lease:${identity.key}`;
 /** Hash of `${subject}|${tenantId}` -> issuer for every account this BFF provisioned. */
@@ -350,6 +353,9 @@ export async function ensureManagedAccount(
       // provisioning has none to attribute one to, so logging in now would
       // mint a token no logout could ever revoke. The first
       // /contexts/_select rotates the password and logs in for its session.
+      if (citizen && profile.mobileNumber) {
+        await getRedis().set(citizenMobileKey(identity), profile.mobileNumber.trim());
+      }
       // Citizen accounts stay out of the Organization-driven inventory, which
       // would otherwise deactivate them for having no membership; their
       // durable record is the CitizenRegistration.
@@ -413,6 +419,12 @@ export async function managedUserLogin(
         // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
         if (!verifiedMobileNumber) {
           throw new ManagedAccountError("A verified phone number is required", 403);
+        }
+        // egov-user checks the OTP against the STORED mobile number, so a
+        // citizen who verified a new number first has it written through.
+        if (await getRedis().get(citizenMobileKey(identity)) !== verifiedMobileNumber) {
+          await updateAccount(adminToken, { ...editable(account), mobileNumber: verifiedMobileNumber });
+          await getRedis().set(citizenMobileKey(identity), verifiedMobileNumber);
         }
         login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
       } else {

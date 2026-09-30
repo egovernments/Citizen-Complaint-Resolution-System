@@ -56,7 +56,8 @@ function digitFailure(error: unknown, response: express.Response, message: strin
       code: "TENANT_ROLES_MISSING",
     });
   }
-  if (error instanceof DigitUnavailableError) {
+  if (error instanceof DigitUnavailableError || error instanceof IdentityAdminError) {
+    // Keycloak Admin or DIGIT unreachable: a retryable 503, never a bare 500.
     console.warn(`${message}:`, error.message);
     return response.status(503).json({ error: message });
   }

@@ -313,20 +313,22 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     // them. A signup magic link is deliberately cross-device: possession of
     // Keycloak's single-use emailed action token is the browser binding, so it
     // is the sole attempt type allowed to return without our login cookie.
+    // Failures before the attempt is consumed still return to the surface
+    // and tenant route it started from. That returnTo was validated against
+    // the bound tenant's prefix when the attempt was created.
+    const failureDestination = preview && isTenantBoundSurface(previewSurface)
+      ? preview.returnTo
+      : config.identityPostLoginRedirect;
     if (!loginCookieMatches && preview?.requiresLoginCookie !== false) {
       response.setHeader("Set-Cookie", clearedLoginCookie(previewSurface));
-      await redirectWithResult(response, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
+      await redirectWithResult(response, failureDestination, "SIGN_IN_FAILED");
       return;
     }
 
     const attempt = await consumeLoginAttempt(state);
     if (!attempt) {
       response.setHeader("Set-Cookie", clearedLoginCookie(previewSurface));
-      await redirectWithResult(
-        response,
-        config.identityPostLoginRedirect,
-        "AUTH_ATTEMPT_EXPIRED",
-      );
+      await redirectWithResult(response, failureDestination, "AUTH_ATTEMPT_EXPIRED");
       return;
     }
     const surface = attemptSurface(attempt);

@@ -7,6 +7,7 @@ import {
 import type { IdentityAuthMethod } from "./types.js";
 import type { IdentityAuthIntent } from "./types.js";
 import { DEFAULT_SURFACE, type IdentitySurface } from "./surfaces.js";
+import { oidcClientForSurface } from "./oidc.js";
 
 const SIGNIN_METHODS = "digit.auth.signin.methods";
 const SIGNUP_METHODS = "digit.auth.signup.methods";
@@ -56,27 +57,19 @@ function providerLabel(alias: string, displayName: string): string {
     : `Continue with ${name}`;
 }
 
-function surfaceClient(surface: IdentitySurface): { clientId: string; secret: string } {
-  if (surface === "employee") {
-    return { clientId: config.keycloakEmployeeClientId, secret: config.keycloakEmployeeClientSecret };
-  }
-  if (surface === "citizen") {
-    return { clientId: config.keycloakCitizenClientId, secret: config.keycloakCitizenClientSecret };
-  }
-  return { clientId: config.keycloakBffClientId, secret: config.keycloakBffClientSecret };
-}
-
 /**
  * Each surface's sign-in policy is read from its OWN Keycloak client, so the
  * configurator, employee and citizen journeys can offer different methods
  * without sharing a client or a flow.
  */
 async function loadIdentityMethodCatalog(surface: IdentitySurface): Promise<IdentityMethodCatalog> {
-  const { clientId, secret } = surfaceClient(surface);
-  if (surface !== DEFAULT_SURFACE && !secret) {
+  // The same surface -> client mapping authorize uses; a client without a
+  // secret is absent from it.
+  const oidc = oidcClientForSurface(surface, "password");
+  if (!oidc) {
     throw new IdentityAdminError(`The ${surface} sign-in client is not configured`, 503);
   }
-  const client = await identityClient(clientId);
+  const client = await identityClient(oidc.clientId);
   if (!client?.enabled || !client.standardFlowEnabled) {
     throw new IdentityAdminError(`The Keycloak ${surface} sign-in client is not enabled`, 503);
   }

@@ -84,7 +84,9 @@ function citizenClaims(profile: string): Record<string, unknown> & { sub: string
     sub: subject,
     name: profile === "other" ? "Second Citizen" : "Wanjiku Citizen",
     preferred_username: profile === "foreign" ? "+14155550100" : "+254712345678",
-    phone_number: profile === "foreign" ? "+14155550100" : profile === "other" ? "+254722000111" : "+254712345678",
+    phone_number: profile === "foreign" ? "+14155550100" : profile === "other" ? "+254722000111"
+      // "newphone": the same citizen after verifying a different number.
+      : profile === "newphone" ? "+254712345679" : "+254712345678",
     phone_number_verified: profile !== "unverified",
   };
 }

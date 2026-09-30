@@ -86,18 +86,6 @@ export function oidcClientForSurface(
     client.clientId === clientId && client.surface === surface) || null;
 }
 
-/** Configurator client selection kept for existing callers. */
-export function oidcClientForMethod(type: "password" | "oauth" | "magic_link"): OidcClient {
-  return type === "magic_link"
-    ? {
-      clientId: config.keycloakMagicLinkClientId,
-      clientSecret: config.keycloakMagicLinkClientSecret,
-      surface: "configurator",
-      scope: config.identityScope,
-    }
-    : oidcClient(config.keycloakBffClientId);
-}
-
 function oidcUrl(path: string, backchannel = false): string {
   const base = backchannel
     ? config.keycloakOidcBackchannelUrl
