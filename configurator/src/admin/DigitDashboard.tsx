@@ -58,12 +58,13 @@ function ResourceCard({ resource }: { resource: string }) {
   return (
     <button
       onClick={() => navigate(`/manage/${resource}`)}
-      className="text-left w-full"
+      className="group text-left w-full"
     >
-      <DigitCard>
+      {/* The DIGIT console's stat card: a brand-tinted hairline that lifts on hover. */}
+      <DigitCard className="mb-0 p-5 sm:p-5 border-primary/10 transition duration-200 group-hover:shadow-md group-hover:-translate-y-0.5">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Icon className="w-6 h-6 text-primary" />
+          <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Icon className="w-5 h-5 text-primary" />
           </div>
           <div>
             <p className="text-2xl font-bold text-foreground">
@@ -74,7 +75,7 @@ function ResourceCard({ resource }: { resource: string }) {
                 {error instanceof Error ? error.message : 'Error loading data'}
               </p>
             ) : null}
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground mt-1">{label}</p>
           </div>
         </div>
       </DigitCard>
