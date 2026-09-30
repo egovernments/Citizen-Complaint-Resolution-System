@@ -3197,6 +3197,13 @@ services:
       KEYCLOAK_BFF_CLIENT_SECRET: ${KEYCLOAK_BFF_CLIENT_SECRET:-dev-only-change-me}
       KEYCLOAK_MAGIC_LINK_CLIENT_ID: digit-identity-bff-magic-link
       KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: ${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:-}
+      # digit-ui sign-in surfaces (#2167).
+      KEYCLOAK_EMPLOYEE_CLIENT_ID: digit-ui-employee
+      KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}
+      KEYCLOAK_CITIZEN_CLIENT_ID: digit-ui-citizen
+      KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}
+      IDENTITY_EMPLOYEE_SCOPE: openid profile email
+      IDENTITY_CITIZEN_SCOPE: openid profile phone
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
       KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
       KEYCLOAK_ADMIN_CLIENT_ID: digit-identity-admin
@@ -3245,6 +3252,21 @@ services:
       DIGIT_MDMS_SCHEMA_CREATE_URL: http://kong:8000/mdms-v2/schema/v1/_create
       DIGIT_FOUNDATION_SOURCE_TENANT: ${IDENTITY_FOUNDATION_SOURCE_TENANT:-pg}
       DIGIT_ENC_GENERATE_KEY_URL: http://egov-enc-service:1234/egov-enc-service/crypto/v1/_generatekey
+      # Public login branding for the digit-employee/digit-citizen Keycloak
+      # themes (#2167). The BFF's default
+      # (gateway:8080) does not exist in this stack, and a failed lookup only
+      # degrades to untranslated screens, so it must be set explicitly.
+      DIGIT_LOCALIZATION_SEARCH_URL: http://kong:8000/localization/messages/v1/_search
+      # Citizen DIGIT tokens (#2167): internal egov-otp create, never via Kong
+      # (the response carries the OTP). egov-otp runs under the `otp` profile;
+      # without it citizen context selection answers 503.
+      DIGIT_OTP_CREATE_URL: ${IDENTITY_DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
+      # Login-page branding, rendered by Ansible from the values that feed
+      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
+      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
+      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
+      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
+      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
     ports:
       - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:
