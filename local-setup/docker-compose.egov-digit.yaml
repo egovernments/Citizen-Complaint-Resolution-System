@@ -1903,7 +1903,7 @@ services:
   # (source: "whatsapp").
   #
   # Off by default. Ansible turns the profile on when `enable_chatbot: true`.
-  # Read docs/2.12/notifications/inbound-whatsapp.md before enabling: the webhook is
+  # Read docs/releases/2.12/notifications/inbound-whatsapp.md before enabling: the webhook is
   # necessarily public and unauthenticated at the network layer, so it relies on
   # Twilio signature validation (TWILIO_VALIDATE_SIGNATURE, on by default).
   xstate-chatbot-db:
@@ -3286,6 +3286,9 @@ services:
       STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
       # Per-tenant recipient for OTP routing; set in host_vars when wiring SMS.
       OTP_RECIPIENT_USER_ID: ${OTP_RECIPIENT_USER_ID:-}
+      # Resolves the username the employee Forgot Password screen sends to the
+      # account's mobile number (the request carries no mobileNumber).
+      EGOV_USER_HOST: http://egov-user:8107
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s

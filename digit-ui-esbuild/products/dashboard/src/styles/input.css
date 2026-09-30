@@ -496,9 +496,44 @@
   }
 
   .dashboard-add-kpi-header {
-    @apply tw-shrink-0 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider;
+    @apply tw-shrink-0 tw-px-4 tw-pt-2.5 tw-pb-1 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider;
     color: var(--muted-foreground, #6b6860);
     background-color: #ffffff;
+  }
+
+  .dashboard-add-kpi-search-wrap {
+    flex-shrink: 0;
+    padding: 0.25rem 0.75rem 0.5rem;
+    background-color: #ffffff;
+  }
+
+  .dashboard-add-kpi-search {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    height: 1.5rem;
+    margin: 0;
+    border: 1px solid var(--border, #e5e2db);
+    border-radius: 4px;
+    padding: 0 0.5rem;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--foreground, #1a1917);
+    background-color: #ffffff;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+         appearance: none;
+  }
+
+  .dashboard-add-kpi-search::placeholder {
+    color: var(--muted-foreground, #6b6860);
+  }
+
+  .dashboard-add-kpi-search:focus {
+    outline: none;
+    border-color: var(--foreground, #1a1917);
   }
 
   .dashboard-add-kpi-list {
@@ -2481,7 +2516,6 @@
   min-width: 0;
   overflow-x: clip;
   box-sizing: border-box;
-  --digit-sidebar-width: 3rem;
   /* Matches the employee app's own content inset. An internal page — Create
    * Complaint is the honest comparison, not the landing screen — clears the
    * nav rail by 52px before its first card begins. At 12px the dashboard read
@@ -2579,7 +2613,7 @@
    * this was reserving 48px for something that is not on screen. At 420px that
    * is a ninth of the viewport, and it showed as a lopsided left gutter
    * (60px left against 23px right). */
-  padding-left: var(--digit-sidebar-width, 3rem) !important;
+  padding-left: var(--app-rail-w, 0px) !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -2613,22 +2647,13 @@
   }
 }
 
-/* A pinned nav rail has to move the dashboard too.
- *
- * The rule above pins this surface to `margin-left: 0` and insets it with
- * padding instead, so the employee chrome's pinned rule — which moves
- * `.employee .main` by its margin — cannot reach it. The dashboard would sit
- * still while every other employee page slid across.
- *
- * Distance and easing are taken from the same 3rem/15rem pair SideNav
- * animates between, so the surface and the panel travel together. */
+/* The rail moves the dashboard too. The rule above pins this surface to
+ * `margin-left: 0` and insets it with padding, which reads --app-rail-w (set
+ * in public/vendor/overrides.css from the rail's state), so it slides with the
+ * panel on the panel's curve. */
 @media (min-width: 48rem) {
   .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
     transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  html[data-sidebar-pinned="true"]
-    .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
-    padding-left: 15rem !important;
   }
 }
 

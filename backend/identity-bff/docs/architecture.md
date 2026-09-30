@@ -3,7 +3,7 @@
 This page is the short architectural map for DIGIT browser identity. For API
 payloads and operational details, use the [BFF guide](identity-bff.md). For a
 deployment walkthrough, use the repository-level
-[setup guide](../../../docs/identity-bff-deployment.md).
+[setup guide](../../../docs/setup/deployment/identity-bff.md).
 
 ## Boundary
 
@@ -81,6 +81,6 @@ public; the Admin API and `/internal/identity/v1` remain private.
 
 - [Identity BFF README](../README.md)
 - [Complete API and operations guide](identity-bff.md)
-- [Deployment and integration setup](../../../docs/identity-bff-deployment.md)
+- [Deployment and integration setup](../../../docs/setup/deployment/identity-bff.md)
 - [Environment reference](../deploy/digit-compose/identity-bff.env.example)
 - [Keycloak provisioning script](../deploy/digit-compose/configure-keycloak.sh)

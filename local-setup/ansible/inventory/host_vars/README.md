@@ -70,7 +70,7 @@ override what's actually different for your tenant.
   whatever was there. Preflight refuses to proceed until you set the
   ack, and the playbook additionally checks the box itself for an
   existing cluster. On a box that has one, migrate it first:
-  `docs/2.12/operations/postgres-volume-migration.md`.
+  `docs/releases/2.12/operations/postgres-volume-migration.md`.
 
 - **Master password lock-in when fast-path is on.** The dump's
   `eg_enc_*_keys` were generated with `MASTER_PASSWORD=asd@#$@$!132123`.

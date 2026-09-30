@@ -20,7 +20,7 @@ onboarding worker is disabled unless explicitly configured.
 
 Start with the [architecture one-pager](docs/architecture.md), then use the
 [full API and operations guide](docs/identity-bff.md) or the repository-level
-[deployment and integration setup](../../docs/identity-bff-deployment.md).
+[deployment and integration setup](../../docs/setup/deployment/identity-bff.md).
 
 ## Browser API
 

@@ -1,11 +1,14 @@
 import React, { useCallback, useLayoutEffect, useState } from "react";
 import { SideNav } from "@egovernments/digit-ui-components";
-import { SidebarHead, SidebarFoot } from "./SidebarBrand";
+import { RailToggle, SidebarFoot } from "./SidebarBrand";
 
 /**
  * The collapsible rail the employee and citizen apps both render. They differ
  * only in their rows and in where the open/closed choice is kept, so the rail
- * itself, its head and foot, and the page offset it publishes live here once.
+ * itself, its toggle and foot, and the page offset it publishes live here once.
+ *
+ * It sits below the full-width top bar, which carries the tenant crest, and
+ * opens or closes only from the blue toggle on its edge.
  */
 
 /**
@@ -28,7 +31,7 @@ function readPinned(storageKey) {
   }
 }
 
-export const AppSideNav = ({ t, items, storageKey, crestUrl, crestAlt, onItemSelect }) => {
+export const AppSideNav = ({ t, items, storageKey, onItemSelect, onLogout }) => {
   const [pinned, setPinned] = useState(() => readPinned(storageKey));
 
   /**
@@ -61,40 +64,36 @@ export const AppSideNav = ({ t, items, storageKey, crestUrl, crestAlt, onItemSel
   );
 
   return (
-    <SideNav
-      items={items}
-      hideAccessbilityTools={true}
-      // No search box: SideNav defaults it on, which buys a magnifier over a
-      // handful of rows.
-      enableSearch={false}
-      onSelect={({ item }) => onItemSelect?.(item)}
-      theme={"dark"}
-      variant={"primary"}
-      // Concrete widths so the width genuinely animates; the stylesheet's open
-      // state is `width: auto`, which cannot be interpolated.
-      transitionDuration={0.28}
-      expandedWidth="15rem"
-      collapsedWidth="3rem"
-      className=""
-      styles={{}}
-      pinnable={true}
-      pinned={pinned}
-      onPinnedChange={onPinnedChange}
-      // The toggle beside the crest is the only way to open or close the rail;
-      // no foot control, no hover-to-open.
-      hoverExpand={false}
-      pinPlacement="none"
-      renderHeader={({ expanded }) => (
-        <SidebarHead
-          t={t}
-          crestUrl={crestUrl}
-          crestAlt={crestAlt}
-          expanded={expanded}
-          onToggle={() => onPinnedChange(!pinned)}
-        />
-      )}
-      renderFooter={({ expanded }) => <SidebarFoot expanded={expanded} />}
-      onBottomItemClick={() => {}}
-    />
+    <React.Fragment>
+      <SideNav
+        items={items}
+        hideAccessbilityTools={true}
+        // No search box: SideNav defaults it on, which buys a magnifier over a
+        // handful of rows.
+        enableSearch={false}
+        onSelect={({ item }) => onItemSelect?.(item)}
+        theme={"dark"}
+        variant={"primary"}
+        // Concrete widths so the width genuinely animates; the stylesheet's open
+        // state is `width: auto`, which cannot be interpolated. The same two
+        // values are --app-rail-open / --app-rail-closed in overrides.css,
+        // which every page inset reads, so the page travels with the rail.
+        transitionDuration={0.28}
+        expandedWidth="17rem"
+        collapsedWidth="5rem"
+        className=""
+        styles={{}}
+        pinnable={true}
+        pinned={pinned}
+        onPinnedChange={onPinnedChange}
+        // The edge toggle is the only way to open or close the rail; no foot
+        // control, no hover-to-open.
+        hoverExpand={false}
+        pinPlacement="none"
+        renderFooter={({ expanded }) => <SidebarFoot t={t} expanded={expanded} onLogout={onLogout} />}
+        onBottomItemClick={() => {}}
+      />
+      <RailToggle t={t} expanded={pinned} onToggle={() => onPinnedChange(!pinned)} />
+    </React.Fragment>
   );
 };

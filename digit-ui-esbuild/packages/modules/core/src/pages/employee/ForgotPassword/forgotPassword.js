@@ -87,11 +87,14 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
       },
     };
     try {
-      await Digit.UserService.sendOtp(requestData, city.code);
+      const response = await Digit.UserService.sendOtp(requestData, city.code);
+      // otp-publisher returns the recipient's number masked; the stock
+      // user-otp service returns none. Router state keeps it out of the URL.
       history.push(
         `/${window?.contextPath}/employee/user/change-password?USERNAME=${encodeURIComponent(
           username.trim()
-        )}&tenantId=${encodeURIComponent(city.code)}`
+        )}&tenantId=${encodeURIComponent(city.code)}`,
+        { maskedMobileNumber: response?.otp?.maskedMobileNumber || null }
       );
     } catch (err) {
       setSubmitting(false);
