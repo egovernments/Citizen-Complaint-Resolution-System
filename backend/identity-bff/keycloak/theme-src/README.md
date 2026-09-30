@@ -1,7 +1,9 @@
 # DIGIT Keycloak login themes
 
-One jar, three themes chosen per client by `login_theme`: `configurator-blue`
-(`src/login`), and `digit-employee` / `digit-citizen` (`src/digit`, #2167).
+One jar, two themes chosen per client by `login_theme`: `configurator-blue`
+(`src/login`), and `digit-employee` (`src/digit`, #2167).
+
+`digit-citizen` comes back with the first citizen sign-in method that goes through Keycloak (such as Google); phone OTP runs on digit-ui pages (#2205).
 
 ## Configurator Blue
 
@@ -126,10 +128,9 @@ matching the image's Keycloak 26.7.3. When Keycloak is upgraded:
 3. run `npm test` and `npm run screenshots`;
 4. rebuild the image — `kc.sh build` fails loudly if the jar does not fit.
 
-## digit-employee and digit-citizen
+## digit-employee
 
-The legacy digit-ui login pages rendered by Keycloak (#2167); citizen sign-in
-methods are open (#2189). The tenant slug comes from the `digit_tenant`
+The legacy digit-ui employee login pages rendered by Keycloak (#2167). The tenant slug comes from the `digit_tenant`
 authorize parameter; branding is fetched from
 `{DIGIT_IDENTITY_BFF_BASE_URL}/identity/v1/tenant-contexts/{slug}/branding`
 (default: same origin) and ThemeConfig is applied by a port of digit-ui's

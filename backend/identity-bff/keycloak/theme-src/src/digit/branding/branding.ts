@@ -1,5 +1,5 @@
 /**
- * Tenant branding for the digit-employee / digit-citizen themes.
+ * Tenant branding for the digit-employee theme.
  *
  * Keycloak renders these screens for a tenant that only the BFF knows about:
  * the tenant comes from `/{slug}/digit-ui/{surface}/...` and the BFF passes the

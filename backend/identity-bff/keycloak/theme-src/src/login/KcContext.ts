@@ -14,7 +14,7 @@ export type KcContextExtension = {
         baseUrl?: string;
     };
     /**
-     * The DIGIT tenant slug the digit-employee / digit-citizen screens are
+     * The DIGIT tenant slug the digit-employee screens are
      * branded for (#2167), if a login-forms provider sets it. None does since
      * the DIGIT SPI was removed (#2189); the theme falls back to the
      * `digit_tenant` authorization parameter. Display only.

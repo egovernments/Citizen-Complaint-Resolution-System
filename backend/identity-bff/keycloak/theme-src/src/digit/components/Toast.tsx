@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 /**
  * digit-ui-components <Toast type="error">: the bar the legacy login raises
- * for a failed sign-in (login.js `showToast`, citizen `setError`). It hides
+ * for a failed sign-in (login.js `showToast`). It hides
  * itself after five seconds as the legacy pages do; `persistent` keeps it for
  * messages the user has to act on.
  */

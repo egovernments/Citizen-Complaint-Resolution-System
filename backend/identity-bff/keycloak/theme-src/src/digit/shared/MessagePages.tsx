@@ -3,14 +3,9 @@ import type { KcContext } from "../../login/KcContext";
 import { useBranding } from "../branding/BrandingContext";
 import type { DigitPageProps } from "./kc";
 
-/** Body copy class for the surface: centred on the employee card, left on citizen. */
-function textClass(kcContext: KcContext) {
-    return kcContext.themeName === "digit-citizen" ? "dg-citizen-text" : "dg-text";
-}
-
 /**
  * info.ftl — "we have sent you something" / "you are done here", in the
- * surface's legacy card. Keycloak's own text, since digit-ui has no screen
+ * legacy employee card. Keycloak's own text, since digit-ui has no screen
  * for these states.
  */
 export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ftl" }>>) {
@@ -53,8 +48,8 @@ export function Info(props: DigitPageProps<Extract<KcContext, { pageId: "info.ft
                 />
             }
         >
-            <div id="kc-info-message" className="dg-form dg-form--citizen">
-                <p className={textClass(kcContext)} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+            <div id="kc-info-message" className="dg-form dg-form--message">
+                <p className="dg-text" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
                 {next !== null && (
                     <a className="dg-button" href={next.href}>
                         {next.label}
@@ -80,9 +75,9 @@ export function ErrorPage(props: DigitPageProps<Extract<KcContext, { pageId: "er
             displayMessage={false}
             headerNode={msg("errorTitle")}
         >
-            <div id="kc-error-message" className="dg-form dg-form--citizen">
+            <div id="kc-error-message" className="dg-form dg-form--message">
                 <p
-                    className={textClass(kcContext)}
+                    className="dg-text"
                     dangerouslySetInnerHTML={{ __html: kcSanitize(message.summary) }}
                 />
                 {!skipLink && !!client?.baseUrl && (
@@ -110,14 +105,14 @@ export function LoginPageExpired(props: DigitPageProps<Extract<KcContext, { page
             classes={classes}
             headerNode={msg("pageExpiredTitle")}
         >
-            <div className="dg-form dg-form--citizen">
-                <p className={textClass(kcContext)} id="instruction1">
+            <div className="dg-form dg-form--message">
+                <p className="dg-text" id="instruction1">
                     {msg("pageExpiredMsg1")}
                 </p>
                 <a id="loginRestartLink" className="dg-button" href={url.loginRestartFlowUrl}>
                     {digit.t("CORE_COMMON_LOGIN")}
                 </a>
-                <p className={textClass(kcContext)}>{msg("pageExpiredMsg2")}</p>
+                <p className="dg-text">{msg("pageExpiredMsg2")}</p>
                 <a id="loginContinueLink" className="dg-button dg-button--secondary" href={url.loginAction}>
                     {digit.t("CORE_COMMON_CONTINUE")}
                 </a>

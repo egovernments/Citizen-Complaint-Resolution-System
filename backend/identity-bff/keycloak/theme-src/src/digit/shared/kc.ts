@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import type { ClassKey } from "keycloakify/login";
 import type { PageProps } from "keycloakify/login/pages/PageProps";
 import type { TemplateProps } from "keycloakify/login/TemplateProps";
@@ -6,10 +6,6 @@ import type { I18n } from "../../login/i18n";
 import type { KcContext } from "../../login/KcContext";
 
 export type DigitTemplateProps = TemplateProps<KcContext, I18n> & {
-    /** Citizen: sentence under the title. */
-    lede?: ReactNode;
-    /** Citizen: "card" or the FormStep look. */
-    variant?: "card" | "formstep";
     /** Toast raised by the page itself (e.g. invalid credentials). */
     toast?: string;
 };
