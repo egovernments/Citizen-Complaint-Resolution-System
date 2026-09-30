@@ -137,8 +137,10 @@ export function useSpeechToText() {
       return heard;
     };
     rec.onerror = (event: any) => {
-      // "aborted" is our own teardown; the rest are real failures.
-      if (event?.error === "aborted") return;
+      // Our own teardown clears these handlers before it aborts, so an error
+      // that arrives here is a real failure. That includes "aborted", which is
+      // how Safari reports a failed recognition.
+      if (recRef.current !== rec) return;
       stopTimer();
       // A failure mid-dictation (the network dropping, say) keeps what was
       // already heard rather than discarding it.
@@ -305,8 +307,11 @@ export function VoiceSheet({ open, onClose, onUse, tr }: VoiceSheetProps) {
   const failed = state === "error";
 
   const errorText =
-    errorCode === "not-allowed" || errorCode === "service-not-allowed"
+    errorCode === "not-allowed"
       ? tr("CS_VOICE_MIC_BLOCKED", "Microphone access is blocked. Allow it for this site in your browser settings, then try again.")
+      : errorCode === "service-not-allowed"
+      ? // Safari refuses speech recognition while Siri is switched off.
+        tr("CS_VOICE_SERVICE_OFF", "Voice input is turned off on this device. On an iPhone or Mac, turn on Siri in Settings, then try again.")
       : errorCode === "no-speech"
       ? tr("CS_VOICE_NO_SPEECH", "We didn't hear anything. Try again and speak close to the microphone.")
       : errorCode === "audio-capture"
