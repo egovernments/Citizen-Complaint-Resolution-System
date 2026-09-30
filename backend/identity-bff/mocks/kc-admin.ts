@@ -336,6 +336,16 @@ export function createKcAdminMock() {
       const matches = realm.users.filter((u) => u.email === emailFilter);
       return res.json(matches);
     }
+    const usernameFilter = req.query.username as string | undefined;
+    if (usernameFilter) return res.json(realm.users.filter((u) => u.username === usernameFilter));
+    // Keycloak's `q=key:value` custom-attribute search (exact value match).
+    const attributeQuery = req.query.q as string | undefined;
+    if (attributeQuery) {
+      const separator = attributeQuery.indexOf(":");
+      const key = attributeQuery.slice(0, separator);
+      const value = attributeQuery.slice(separator + 1);
+      return res.json(realm.users.filter((u) => u.attributes?.[key]?.includes(value)));
+    }
     const first = Number(req.query.first || 0);
     const max = Number(req.query.max || realm.users.length);
     res.json(realm.users.slice(first, first + max));

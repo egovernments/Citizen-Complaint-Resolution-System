@@ -108,6 +108,28 @@ export const config = {
     process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
   ),
   identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
+  // Citizen phone OTP sign-in (#2189). The secret keys the code and phone
+  // hashes; without it, or without a sender, `phone_otp` is never offered.
+  identityCitizenOtpSecret: process.env.IDENTITY_CITIZEN_OTP_SECRET || "",
+  identityCitizenOtpTtlSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_TTL_SECONDS || "300"),
+  identityCitizenOtpMaxAttempts: parseInt(process.env.IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS || "5"),
+  identityCitizenOtpResendSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_RESEND_SECONDS || "30"),
+  identityCitizenOtpSendWindowSeconds: parseInt(
+    process.env.IDENTITY_CITIZEN_OTP_SEND_WINDOW_SECONDS || "3600",
+  ),
+  identityCitizenOtpPhoneSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT || "5"),
+  identityCitizenOtpIpSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT || "20"),
+  identityCitizenOtpLockoutFailures: parseInt(
+    process.env.IDENTITY_CITIZEN_OTP_LOCKOUT_FAILURES || "10",
+  ),
+  identityCitizenOtpLockoutSeconds: parseInt(
+    process.env.IDENTITY_CITIZEN_OTP_LOCKOUT_SECONDS || "3600",
+  ),
+  // novu-bridge's synchronous send endpoint. The BFF hands it a thin event and
+  // holds no provider credentials. Empty = no sender, so no `phone_otp`.
+  notificationMessageSendUrl: process.env.NOTIFICATION_MESSAGE_SEND_URL || "",
+  notificationOtpEventType: process.env.NOTIFICATION_OTP_EVENT_TYPE || "IDENTITY_OTP",
+  identityAuditStreamMaxLength: parseInt(process.env.IDENTITY_AUDIT_STREAM_MAXLEN || "100000"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
   ),

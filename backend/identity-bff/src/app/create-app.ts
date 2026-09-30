@@ -9,6 +9,7 @@ import { registerPasswordSetupRoutes } from "../modules/authentication/password-
 import { registerOperationalRoutes } from "../modules/operations/routes.js";
 import { registerOrganizationRoutes } from "../modules/organizations/routes.js";
 import { registerSessionRoutes } from "../modules/sessions/routes.js";
+import { registerCitizenOtpRoutes } from "../modules/citizen-otp/routes.js";
 
 /**
  * The standalone identity boundary. Keep this application free of DIGIT
@@ -43,6 +44,7 @@ export function createIdentityApp(): express.Application {
   registerAuthenticationRoutes(app);
   registerMagicLinkRoutes(app);
   registerPasswordSetupRoutes(app);
+  registerCitizenOtpRoutes(app);
   registerSessionRoutes(app);
   registerAccessContextRoutes(app);
   registerBrandingRoutes(app);

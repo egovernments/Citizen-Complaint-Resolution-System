@@ -252,11 +252,19 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       }
       throw error;
     }
+    // Without an explicit method, the first one that runs through Keycloak.
     const requestedMethod = typeof request.query.method === "string"
       ? request.query.method
-      : surface === DEFAULT_SURFACE ? "password" : methods[0]?.id;
+      : surface === DEFAULT_SURFACE
+        ? "password"
+        : methods.find((candidate) => candidate.type !== "magic_link" && candidate.type !== "phone_otp")?.id;
     const method = methods.find((candidate) => candidate.id === requestedMethod);
     if (!method) return response.status(400).json({ error: "Unsupported sign-in method" });
+    if (method.type === "phone_otp") {
+      return response.status(400).json({
+        error: "Phone sign-in must be started through the citizen OTP API",
+      });
+    }
     if (method.type === "magic_link") {
       return response.status(400).json({
         error: "Email sign-up must be started through the magic-link request API",

@@ -26,6 +26,10 @@ export async function currentSession(
   if (!sessionId) return null;
   let session = await getIdentitySession(sessionId);
   if (!session || identitySessionSurface(session) !== surface) return null;
+  if (session.authMethod === "phone_otp") {
+    // No Keycloak token to refresh: valid until its absolute expiry only.
+    return session.sessionExpiresAt > Date.now() ? { sessionId, session } : null;
+  }
 
   if (session.accessExpiresAt > Date.now() + 30_000) {
     return { sessionId, session };

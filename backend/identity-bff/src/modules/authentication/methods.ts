@@ -8,6 +8,7 @@ import type { IdentityAuthMethod } from "./types.js";
 import type { IdentityAuthIntent } from "./types.js";
 import { DEFAULT_SURFACE, type IdentitySurface } from "./surfaces.js";
 import { oidcClientForSurface } from "./oidc.js";
+import { phoneOtpAvailable } from "../citizen-otp/otp-sender.js";
 
 const SIGNIN_METHODS = "digit.auth.signin.methods";
 const SIGNUP_METHODS = "digit.auth.signup.methods";
@@ -88,7 +89,7 @@ async function loadIdentityMethodCatalog(surface: IdentitySurface): Promise<Iden
   );
   const configured = [...new Set([...signin, ...signup])];
   const [providers, magicClient] = await Promise.all([
-    configured.some((id) => id !== "password" && id !== "magic_link")
+    configured.some((id) => id !== "password" && id !== "magic_link" && id !== "phone_otp")
       ? enabledIdentityProviders()
       : Promise.resolve(new Map()),
     surface === DEFAULT_SURFACE && configured.includes("magic_link")
@@ -149,6 +150,12 @@ export async function enabledIdentityMethods(
         type: "password",
         intents,
       }];
+    }
+    if (id === "phone_otp") {
+      // Citizen only, and only when the BFF can hash and deliver a code.
+      return surface === "citizen" && phoneOtpAvailable()
+        ? [{ id, label: "Mobile number and one-time code", type: "phone_otp", intents }]
+        : [];
     }
     if (id === "magic_link") {
       return surface === DEFAULT_SURFACE && magicLinkEnabled

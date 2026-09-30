@@ -22,6 +22,12 @@ export interface IdentitySession {
   surface?: IdentitySurface;
   /** Route-resolved tenant of an employee/citizen session. */
   boundTenant?: BoundTenant;
+  /**
+   * `phone_otp`: a citizen session opened by the BFF's own OTP check (#2189).
+   * It holds no Keycloak tokens (`accessToken` is empty, no refresh token),
+   * is never refreshed, and ends at `sessionExpiresAt`.
+   */
+  authMethod?: "phone_otp";
 }
 
 /** Surface binding persisted with a session and preserved across refresh. */

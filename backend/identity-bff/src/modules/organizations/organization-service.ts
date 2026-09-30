@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
@@ -901,6 +901,78 @@ async function findIdentityUserByEmail(email: string): Promise<UserRepresentatio
     throw new IdentityAdminError("Multiple Keycloak users use this email address", 409);
   }
   return matches[0] || null;
+}
+
+const PHONE_ATTRIBUTE = "phoneNumber";
+const PHONE_VERIFIED_ATTRIBUTE = "phoneNumberVerified";
+const BFF_PHONE_USER_ATTRIBUTE = "digit.identityBffPhoneOtp";
+
+export interface PhoneIdentityUser {
+  id: string;
+  name: string;
+  created: boolean;
+}
+
+function verifiedPhoneOwner(user: UserRepresentation, phoneNumber: string): boolean {
+  return user.attributes?.[PHONE_ATTRIBUTE]?.includes(phoneNumber) === true &&
+    user.attributes?.[PHONE_VERIFIED_ATTRIBUTE]?.includes("true") === true;
+}
+
+function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIdentityUser {
+  if (!user.id || user.enabled === false) {
+    throw new IdentityAdminError("The Keycloak user for this phone number is disabled", 403);
+  }
+  const name = [user.firstName, user.lastName].map((part) => part?.trim()).filter(Boolean).join(" ");
+  return { id: user.id, name: name || "Citizen", created };
+}
+
+async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserRepresentation[]> {
+  const query = new URLSearchParams({
+    q: `${PHONE_ATTRIBUTE}:${phoneNumber}`,
+    briefRepresentation: "false",
+    max: "5",
+  });
+  const response = await request(`/users?${query}`);
+  return (await response.json() as UserRepresentation[])
+    .filter((user) => verifiedPhoneOwner(user, phoneNumber));
+}
+
+/**
+ * The Keycloak user who owns a phone number the caller has just proved with a
+ * citizen OTP (#2189): the one user whose VERIFIED phone matches, or a new
+ * user created with that number marked verified. An unverified match is never
+ * taken over. Two verified owners, or a disabled owner, fail closed.
+ */
+export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<PhoneIdentityUser> {
+  const owners = await findVerifiedPhoneUsers(phoneNumber);
+  if (owners.length > 1) {
+    throw new IdentityAdminError("Multiple Keycloak users have verified this phone number", 409);
+  }
+  if (owners[0]) return phoneIdentityUser(owners[0], false);
+
+  // Deterministic, so a concurrent verify for the same number collides on
+  // the username instead of creating a second identity.
+  const username = `phone-${createHash("sha256").update(phoneNumber).digest("hex").slice(0, 24)}`;
+  const response = await request("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      enabled: true,
+      attributes: {
+        [PHONE_ATTRIBUTE]: [phoneNumber],
+        [PHONE_VERIFIED_ATTRIBUTE]: ["true"],
+        [BFF_PHONE_USER_ATTRIBUTE]: ["true"],
+      },
+    }),
+  }, [201, 409]);
+  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  if (response.status === 201 && id) return { id, name: "Citizen", created: true };
+
+  const query = new URLSearchParams({ username, exact: "true", briefRepresentation: "false" });
+  const raced = (await (await request(`/users?${query}`)).json() as UserRepresentation[])
+    .find((user) => user.username === username && verifiedPhoneOwner(user, phoneNumber));
+  if (!raced) throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+  return phoneIdentityUser(raced, false);
 }
 
 export interface PasswordSetupInspection {

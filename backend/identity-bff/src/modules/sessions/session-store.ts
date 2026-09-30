@@ -275,6 +275,44 @@ export async function saveIdentitySession(
   );
 }
 
+/**
+ * A citizen session proved by a BFF phone OTP (#2189). It carries the same
+ * claims `contexts/citizen/_select` reads from a Keycloak-issued citizen
+ * session, so that route stays unchanged, but no Keycloak token.
+ */
+export async function createPhoneOtpSession(input: {
+  subject: string;
+  name: string;
+  phoneNumber: string;
+  boundTenant: BoundTenant;
+}): Promise<{ sessionId: string; maxAge: number }> {
+  const sessionId = randomId();
+  const maxAge = config.identitySessionTtlSeconds;
+  const sessionExpiresAt = Date.now() + maxAge * 1000;
+  const session: IdentitySession = {
+    claims: {
+      sub: input.subject,
+      email: "",
+      name: input.name,
+      phone_number: input.phoneNumber,
+      phone_number_verified: true,
+      azp: config.keycloakCitizenClientId,
+    },
+    oidcClientId: config.keycloakCitizenClientId,
+    surface: "citizen",
+    boundTenant: input.boundTenant,
+    authMethod: "phone_otp",
+    accessToken: "",
+    accessExpiresAt: sessionExpiresAt,
+    sessionExpiresAt,
+  };
+  if (!validBinding(session.surface, session.boundTenant)) {
+    throw new Error("Invalid identity session surface binding");
+  }
+  await getRedis().set(sessionKey(sessionId), JSON.stringify(session), "EX", maxAge);
+  return { sessionId, maxAge };
+}
+
 export async function getIdentitySession(
   sessionId: string,
 ): Promise<IdentitySession | null> {
