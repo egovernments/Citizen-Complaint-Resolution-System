@@ -138,6 +138,27 @@ export const mdmsService = {
   },
 
   /**
+   * Soft-delete (or restore) a record by flipping isActive, as management's
+   * delete does. mdms-v2 keeps a deactivated row's uniqueIdentifier taken, so a
+   * later create of the same code has to restore it instead.
+   */
+  async setActive(record: MdmsRecord, isActive: boolean, data?: Record<string, unknown>): Promise<MdmsRecord> {
+    const response = await apiClient.post(`${ENDPOINTS.MDMS_UPDATE}/${record.schemaCode}`, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      Mdms: {
+        tenantId: record.tenantId,
+        schemaCode: record.schemaCode,
+        uniqueIdentifier: record.uniqueIdentifier,
+        id: record.id,
+        data: data ?? record.data,
+        auditDetails: record.auditDetails,
+        isActive,
+      },
+    });
+    return response.Mdms as MdmsRecord;
+  },
+
+  /**
    * Merges `patch` into this tenant's MapConfig, creating the record if it has
    * none.
    *
