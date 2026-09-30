@@ -5607,7 +5607,6 @@
         KEYCLOAK_EMPLOYEE_CLIENT_SECRET: "{{ identity_secrets.keycloak_employee_client_secret }}"
         KEYCLOAK_CITIZEN_CLIENT_SECRET: "{{ identity_secrets.keycloak_citizen_client_secret }}"
         KEYCLOAK_EMPLOYEE_LOGIN_THEME: "{{ identity_employee_login_theme | default('digit-employee') }}"
-        KEYCLOAK_CITIZEN_LOGIN_THEME: "{{ identity_citizen_login_theme | default('digit-citizen') }}"
         KEYCLOAK_EMPLOYEE_SIGNIN_METHODS: "{{ identity_employee_signin_methods | default(['password']) | join(',') }}"
         # Development boxes (no real OTP stack, so egov-user's fixed OTP is on)
         # offer phone_otp, with codes in the BFF log (#2189). Elsewhere it stays

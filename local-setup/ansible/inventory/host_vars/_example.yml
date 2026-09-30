@@ -704,9 +704,10 @@ identity_smtp_starttls: true
 # MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak' on any
 # of the three keys below.
 # digit-ui sign-in through Keycloak (#2167): clients digit-ui-employee and
-# digit-ui-citizen, each with its own browser flow and theme.
+# digit-ui-citizen. The employee client has its own browser flow and theme; the
+# citizen client has no Keycloak theme until citizens get a Keycloak sign-in
+# method (phone OTP runs inside digit-ui).
 identity_employee_login_theme: "digit-employee"
-identity_citizen_login_theme: "digit-citizen"
 identity_employee_signin_methods: [password]
 # Citizen sign-in methods (#2189). Unset: [phone_otp] on development boxes
 # (enable_otp_services: false; codes go to the BFF log, see

@@ -635,3 +635,20 @@ describe('citizen OTP localization seed', () => {
       .toContain("/files/digit-ui-localization/identity-otp.json') | from_json");
   });
 });
+
+// Citizens sign in with phone OTP inside digit-ui, so digit-ui-citizen has no
+// Keycloak login theme until a Keycloak citizen method exists; the client,
+// its surface attribute and redirect URIs stay.
+describe('digit-ui-citizen client', () => {
+  const script = read('backend/identity-bff/deploy/digit-compose/configure-keycloak.sh');
+
+  test('is configured without a login theme', () => {
+    expect(script).toMatch(/configure_digit_ui_client "\$CITIZEN_CLIENT" "\$KEYCLOAK_CITIZEN_CLIENT_SECRET" \\\n\s+citizen '' "\$CITIZEN_SIGNIN_METHODS" ''/);
+    expect(script).not.toContain('KEYCLOAK_CITIZEN_LOGIN_THEME');
+    expect(read('local-setup/ansible/playbook-deploy.yml')).not.toContain('KEYCLOAK_CITIZEN_LOGIN_THEME');
+  });
+
+  test('a digit-citizen realm theme set earlier is still cleared', () => {
+    expect(script).toMatch(/OWNED_REALM_THEMES="[^"]*\bdigit-citizen\b/);
+  });
+});
