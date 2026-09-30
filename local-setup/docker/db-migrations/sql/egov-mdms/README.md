@@ -96,3 +96,20 @@ must stay identical to** `RAINMAKER-PGR.json`.
 Guarded and idempotent: it matches only the REOPENSLA-keyed schema shape and
 `code`-less records, so a box seeded from the corrected `full-dump.sql` and a
 re-run are both no-ops.
+
+## V20260930000000__uiconstants_voice_input
+
+Adds the optional `VOICE_INPUT` boolean to every tenant's
+`RAINMAKER-PGR.UIConstants` schema. File a Complaint shows its voice input
+unless a tenant sets `VOICE_INPUT: false`, and the Configurator's UIConstants
+form carries the toggle. The schema is `additionalProperties: false`, so without
+this a tenant whose schema predates the flag would reject the save with a 400.
+
+It only adds the property; no data row changes, because the field is optional and
+a record without it keeps voice on. V20260827 above embeds the definition as it
+stood before the flag, and this migration brings existing schemas level with
+`RAINMAKER-PGR.json`. **The embedded property must stay identical to**
+`VOICE_INPUT` in that file.
+
+Guarded and idempotent: a definition that already has `VOICE_INPUT` is skipped,
+so a fresh box and a re-run are no-ops.

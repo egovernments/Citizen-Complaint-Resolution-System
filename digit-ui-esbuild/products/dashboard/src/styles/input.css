@@ -750,11 +750,22 @@
     color: var(--dashboard-muted-foreground, #6b6860);
   }
 
+  /* A link while there is something to clear, so it reads as clickable; grey
+     and inert once the filters are back at their defaults. */
   .dashboard-filters-clear-inline {
-    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-shrink-0 tw-items-center tw-self-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-px-1.5 tw-py-0 tw-text-[11px] tw-font-medium tw-leading-none tw-text-muted-foreground hover:tw-text-foreground;
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-shrink-0 tw-items-center tw-self-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-px-1.5 tw-py-0 tw-text-[11px] tw-font-medium tw-leading-none;
+    color: var(--color-link-normal, var(--primary));
+    cursor: pointer;
+  }
+
+  .dashboard-filters-clear-inline:hover {
+    color: var(--color-link-hover, var(--primary));
+    text-decoration: underline;
   }
 
   .dashboard-filters-clear-inline:disabled {
+    color: var(--muted-foreground);
+    text-decoration: none;
     opacity: 0.4;
     cursor: default;
     pointer-events: none;

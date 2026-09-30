@@ -185,6 +185,7 @@ const DashboardFilters = ({
           disabled={!canClear}
           className="dashboard-filters-clear-inline"
           aria-disabled={!canClear}
+          data-analytics-event="dashboard.filters.clear"
         >
           {t("DASHBOARD_FILTERS_CLEAR", "Clear")}
         </button>

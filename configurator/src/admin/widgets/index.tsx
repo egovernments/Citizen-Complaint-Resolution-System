@@ -35,7 +35,7 @@ export function WidgetForFieldSpec({ spec, source }: WidgetDispatchProps) {
     case 'json':
       return <JsonInput {...shared} help={spec.help} />;
     case 'boolean':
-      return <BooleanInput {...shared} help={spec.help} />;
+      return <BooleanInput {...shared} help={spec.help} whenUnset={spec.whenUnset} />;
     case 'integer':
     case 'number':
       return <DigitFormInput {...shared} type="number" help={spec.help} />;
