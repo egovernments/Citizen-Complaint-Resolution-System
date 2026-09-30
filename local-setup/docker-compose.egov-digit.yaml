@@ -3206,6 +3206,9 @@ services:
       # so the BFF accepts exactly the code egov-user accepts (#2189).
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      # Citizen phone OTP (#2189): without both, phone_otp is never offered.
+      IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}
+      IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}
       IDENTITY_EMPLOYEE_SCOPE: openid profile email
       IDENTITY_CITIZEN_SCOPE: openid profile phone
       KEYCLOAK_ADMIN_URL: http://keycloak:8180

@@ -50,6 +50,7 @@ describe('ansible playbook-deploy.yml', () => {
       'identity_control_plane_token',
       'identity_session_introspection_token',
       'pgr_onboarding_worker_token',
+      'identity_citizen_otp_secret',
     ];
 
     test('none of them is derived from another secret', () => {
@@ -577,5 +578,31 @@ describe('fixed citizen OTP settings are shared with egov-user', () => {
   test('the identity overlay passes them from the stack .env', () => {
     const overlay = read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml');
     for (const v of vars) expect(service(overlay, 'identity-bff')).toContain(v);
+  });
+});
+
+// #2189 / #2201: citizen phone OTP on development boxes, and the realm setting
+// it needs (without ADMIN_EDIT Keycloak drops new citizens' phone attributes).
+describe('citizen phone OTP deployment', () => {
+  test('configure-keycloak keeps unmanaged user attributes', () => {
+    const script = read('backend/identity-bff/deploy/digit-compose/configure-keycloak.sh');
+    expect(script).toContain(`jq '.unmanagedAttributePolicy = "ADMIN_EDIT"'`);
+    expect(script).toMatch(/\nconfigure_user_profile\n/);
+  });
+
+  test('development boxes offer phone_otp with the log sender', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain(
+      "identity_citizen_signin_methods | default([] if (enable_otp_services | default(false)) else ['phone_otp'])");
+    expect(playbook).toContain('IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}');
+    expect(read('local-setup/ansible/templates/digit.env.j2')).toContain(
+      "IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('' if (enable_otp_services | default(false)) else 'log') }}");
+  });
+
+  test('the BFF receives the OTP secret and sender', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    const bff = compose.slice(compose.indexOf('\n  identity-bff:\n'));
+    expect(bff).toContain('IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}');
+    expect(bff).toContain('IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}');
   });
 });

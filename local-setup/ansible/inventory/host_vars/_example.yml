@@ -708,8 +708,11 @@ identity_smtp_starttls: true
 identity_employee_login_theme: "digit-employee"
 identity_citizen_login_theme: "digit-citizen"
 identity_employee_signin_methods: [password]
-# Which citizen sign-in methods to offer is open (#2189); empty = none.
-identity_citizen_signin_methods: []
+# Citizen sign-in methods (#2189). Unset: [phone_otp] on development boxes
+# (enable_otp_services: false; codes go to the BFF log, see
+# identity_citizen_otp_sender) and [] elsewhere until a real SMS sender exists.
+# identity_citizen_signin_methods: [phone_otp]
+# identity_citizen_otp_sender: log
 
 #
 # 'keycloak' used to mean "SSO via the digit-ui auth-adapter", which called the

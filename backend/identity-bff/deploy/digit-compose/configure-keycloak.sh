@@ -252,6 +252,16 @@ configure_digit_ui_client() {
   printf '%s' "$client_uuid_value"
 }
 
+# Keeps every attribute an admin can see (ADMIN_EDIT, instead of silently
+# dropping unmanaged attributes). Written as JSON because kcadm cannot set the
+# dotted `unmanagedAttributePolicy` key.
+configure_user_profile() {
+  kc get users/profile -r "$REALM" |
+    jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' |
+    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+      update users/profile -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
+}
+
 configure_first_broker_login() {
   # Pin the account-linking behaviour instead of inheriting whatever a realm's
   # default happens to contain. Keycloak 26's built-in flow already has the
@@ -424,6 +434,8 @@ ensure_mapper "client-scopes/$organization_scope" 'organization groups' \
   -s 'config."userinfo.token.claim"=true' -s 'config."introspection.token.claim"=true' \
   -s 'config."addGroupRoleMappings"=true'
 kc update "clients/$bff_uuid/optional-client-scopes/$organization_scope" -r "$REALM" -n >/dev/null
+
+configure_user_profile
 
 # digit-ui employee and citizen sign-in (CCRS #2167). Skipped, not failed,
 # while an older installer has not generated their secrets yet.
