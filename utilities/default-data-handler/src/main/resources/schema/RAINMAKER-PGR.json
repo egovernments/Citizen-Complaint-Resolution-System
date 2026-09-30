@@ -23,6 +23,10 @@
         "REOPENSLA": {
           "type": "number",
           "description": "Milliseconds a resolved or rejected complaint stays reopenable. Shipped default 259200000 (72 hours)."
+        },
+        "VOICE_INPUT": {
+          "type": "boolean",
+          "description": "Whether File a Complaint offers voice input (the mic on the description). Unset or true offers it wherever the browser supports speech recognition; false hides it."
         }
       },
       "x-ref-schema": [],

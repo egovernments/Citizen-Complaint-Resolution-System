@@ -9479,14 +9479,30 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   font-size: 13.5px;
 }
 
-/* Footer: why Next is held, then Back / Next */
+/* .body-container clips sideways overflow with overflow-x:hidden, which also
+ * makes it a scroll container. It never scrolls itself (it grows with the
+ * page and the window scrolls), so a sticky footer inside it would pin to a
+ * box that doesn't move. clip clips the same without becoming a scroller. */
+.body-container:has(.cms-file) {
+  overflow-x: clip;
+}
+
+/* Footer: why Next is held, then Back / Next. Pinned to the bottom of the
+ * screen at every width, so a long step (the map, the boundary levels, postal
+ * code and landmark) never hides the way on behind a scroll. */
 .cms-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   padding: 16px 28px 20px;
+  background: #FFFFFF;
   border-top: 1px solid #EEF1F6;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 -8px 16px -12px rgba(17, 24, 39, 0.18);
 }
 .cms-hint {
   flex: 1;
@@ -9907,15 +9923,13 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
     height: 82px;
   }
 
-  /* Footer pinned to the bottom of the screen */
+  /* Full width on a phone, clear of the home indicator */
   .cms-footer {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
     display: block;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
     background: #FFFFFF;
     border-top: 1px solid var(--cms-line);
+    border-radius: 0;
   }
   .cms-hint {
     margin-bottom: 10px;
