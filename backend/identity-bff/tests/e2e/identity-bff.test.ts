@@ -1956,7 +1956,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       (config as any).identityCitizenOtpSecret = "";
       resetIdentityMethodCatalog();
       expect(await methods("citizen")).toEqual(["password"]);
-      expect((await send("799000100")).status).toBe(400);
+      const disabled = await send("799000100");
+      expect(disabled.status).toBe(400);
+      expect((await disabled.json()).code).toBe("PHONE_OTP_DISABLED");
       (config as any).identityCitizenOtpSecret = otpConfig.identityCitizenOtpSecret;
       resetIdentityMethodCatalog();
 
@@ -1975,8 +1977,12 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
     it("checks the tenant route and the tenant's mobile rule before sending", async () => {
       const count = sent.length;
-      expect((await post("_send", { tenantSlug: "no-such-county", mobileNumber: "799000101" })).status).toBe(404);
-      expect((await post("_send", { mobileNumber: "799000101" })).status).toBe(400);
+      const unknown = await post("_send", { tenantSlug: "no-such-county", mobileNumber: "799000101" });
+      expect([unknown.status, (await unknown.json()).code]).toEqual([404, "TENANT_ROUTE_NOT_FOUND"]);
+      const noSlug = await post("_send", { mobileNumber: "799000101" });
+      expect([noSlug.status, (await noSlug.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      const malformed = await post("_verify", { tenantSlug: "bomet-county", challengeId: "x", code: "12" });
+      expect([malformed.status, (await malformed.json()).code]).toEqual([400, "INVALID_REQUEST"]);
       const invalid = await send("12345");
       expect(invalid.status).toBe(400);
       expect((await invalid.json()).code).toBe("INVALID_MOBILE_NUMBER");
@@ -1985,7 +1991,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
         body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber: "799000101" }),
       });
-      expect(foreignOrigin.status).toBe(403);
+      expect([foreignOrigin.status, (await foreignOrigin.json()).code]).toEqual([403, "UNTRUSTED_ORIGIN"]);
       expect(sent.length).toBe(count);
     });
 

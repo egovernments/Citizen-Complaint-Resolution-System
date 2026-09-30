@@ -485,7 +485,10 @@ when `IDENTITY_CITIZEN_OTP_SECRET` is set, never on another surface, and
   reason) to the capped Redis stream `<CACHE_PREFIX>:identity:audit` and to
   stdout. Phones, IPs and session ids appear only as keyed hashes.
 
-Stable error codes: `INVALID_MOBILE_NUMBER`, `OTP_RESEND_TOO_SOON`,
+Every error response carries a stable `code` (`error` is display text only):
+`INVALID_REQUEST`, `UNTRUSTED_ORIGIN`, `TENANT_ROUTE_NOT_FOUND`,
+`TENANT_ROUTE_UNAVAILABLE`, `PHONE_OTP_DISABLED`, `CITIZEN_SIGNIN_NOT_CONFIGURED`,
+`INVALID_MOBILE_NUMBER`, `OTP_RESEND_TOO_SOON`,
 `OTP_RATE_LIMITED` and `OTP_LOCKED` (429, with `Retry-After`),
 `OTP_CHANNEL_UNAVAILABLE`, `OTP_INVALID` (with `attemptsRemaining`),
 `OTP_EXPIRED`, `IDENTITY_DISABLED`, `IDENTITY_CONFLICT`, `IDENTITY_UNAVAILABLE`.

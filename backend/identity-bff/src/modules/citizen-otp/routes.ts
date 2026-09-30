@@ -42,6 +42,9 @@ const locked = (retryAfter: number): Refusal => ({
 });
 
 /**
+ * Every response of these routes carries a stable `code`; `error` is display
+ * text only and may change.
+ *
  * The tenant comes from the route slug exactly as `/identity/v1/authorize`
  * resolves it: server-side, mapped and live, or refused.
  */
@@ -50,17 +53,17 @@ async function routeTenant(
   response: express.Response,
 ): Promise<PublicTenantRoute | null> {
   if (typeof tenantSlug !== "string" || !tenantSlug) {
-    response.status(400).json({ error: "tenantSlug is required" });
+    response.status(400).json({ error: "tenantSlug is required", code: "INVALID_REQUEST" });
     return null;
   }
   try {
     const tenant = await resolvePublicTenantRoute(tenantSlug);
-    if (!tenant) response.status(404).json({ error: "Tenant route is not available" });
+    if (!tenant) response.status(404).json({ error: "Tenant route is not available", code: "TENANT_ROUTE_NOT_FOUND" });
     return tenant;
   } catch (error) {
     if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
       console.warn("Tenant route resolution failed:", error.message);
-      response.status(503).json({ error: "Tenant routes are temporarily unavailable" });
+      response.status(503).json({ error: "Tenant routes are temporarily unavailable", code: "TENANT_ROUTE_UNAVAILABLE" });
       return null;
     }
     throw error;
@@ -83,7 +86,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
    */
   app.post("/identity/v1/citizen/otp/_send", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
-      return response.status(403).json({ error: "Untrusted request origin" });
+      return response.status(403).json({ error: "Untrusted request origin", code: "UNTRUSTED_ORIGIN" });
     }
     const route = await routeTenant(request.body?.tenantSlug, response);
     if (!route) return;
@@ -91,19 +94,19 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     const locale = request.body?.locale;
     if (typeof mobileNumber !== "string" || !/^\d{4,15}$/.test(mobileNumber) ||
         (locale !== undefined && (typeof locale !== "string" || !LOCALE.test(locale)))) {
-      return response.status(400).json({ error: "A valid mobile number is required" });
+      return response.status(400).json({ error: "A valid mobile number is required", code: "INVALID_REQUEST" });
     }
     const tenant = boundTenant(route);
     const ipRef = privateRef("ip", request.ip || "unknown");
 
     try {
       if (!await phoneOtpEnabled()) {
-        return response.status(400).json({ error: "Unsupported sign-in method" });
+        return response.status(400).json({ error: "Phone sign-in is not enabled", code: "PHONE_OTP_DISABLED" });
       }
       const rule = await mobileValidationForRoute(route);
       if (!rule) {
         console.warn("Citizen OTP: tenant has no MobileNumberValidation rule");
-        return response.status(503).json({ error: "Citizen sign-in is not configured for this tenant" });
+        return response.status(503).json({ error: "Citizen sign-in is not configured for this tenant", code: "CITIZEN_SIGNIN_NOT_CONFIGURED" });
       }
       const phoneNumber = `+${rule.countryCode.replace(/^\+/, "")}${mobileNumber}`;
       if (!splitE164(phoneNumber, rule)) {
@@ -180,7 +183,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     } catch (error) {
       if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
         console.warn("Citizen OTP send failed:", error.message);
-        return response.status(503).json({ error: "Citizen sign-in is temporarily unavailable" });
+        return response.status(503).json({ error: "Citizen sign-in is temporarily unavailable", code: "IDENTITY_UNAVAILABLE" });
       }
       throw error;
     }
@@ -193,14 +196,14 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
    */
   app.post("/identity/v1/citizen/otp/_verify", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
-      return response.status(403).json({ error: "Untrusted request origin" });
+      return response.status(403).json({ error: "Untrusted request origin", code: "UNTRUSTED_ORIGIN" });
     }
     const route = await routeTenant(request.body?.tenantSlug, response);
     if (!route) return;
     const { challengeId, code } = request.body ?? {};
     if (typeof challengeId !== "string" || !CHALLENGE_ID.test(challengeId) ||
         typeof code !== "string" || !CODE.test(code)) {
-      return response.status(400).json({ error: "A challenge and a six-digit code are required" });
+      return response.status(400).json({ error: "A challenge and a six-digit code are required", code: "INVALID_REQUEST" });
     }
     const ipRef = privateRef("ip", request.ip || "unknown");
     const expired = () => response.status(400).json({
