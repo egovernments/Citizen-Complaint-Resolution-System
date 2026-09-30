@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useTranslate } from 'ra-core';
+import { T } from '@digit-ui/datagrid';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -172,7 +172,6 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
 // -- Main Dashboard ---------------------------------------------------------
 
 export default function PgrDashboard() {
-  const translate = useTranslate();
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const dateRange = useMemo(() => dateRangeFromPreset(datePreset), [datePreset]);
   const { stats, isLoading, error } = usePgrDashboardData(dateRange);
@@ -322,7 +321,7 @@ export default function PgrDashboard() {
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-            {translate('app.nav.pgr_dashboard')}
+            <T i18nKey="app.nav.pgr_dashboard" />
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isLoading
@@ -369,7 +368,7 @@ export default function PgrDashboard() {
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
             }`}
           >
-            {translate(`app.dashboard.date.${p.value}`, { _: p.label })}
+            <T i18nKey={`app.dashboard.date.${p.value}`}>{p.label}</T>
           </button>
         ))}
         {isLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-2" />}

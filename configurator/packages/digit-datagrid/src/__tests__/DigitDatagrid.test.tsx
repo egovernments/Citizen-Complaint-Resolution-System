@@ -22,6 +22,8 @@ vi.mock('ra-core', () => ({
   useUpdate: () => [vi.fn()],
   useDelete: () => [vi.fn()],
   useGetList: () => ({ data: [], isPending: false }),
+  // No messages loaded: every lookup falls back to the `_` default, as polyglot does.
+  useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -49,6 +51,21 @@ describe('DigitDatagrid', () => {
     render(<DigitDatagrid columns={columns} />);
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
+  });
+
+  it('tags each column header with its localization code', () => {
+    render(
+      <DigitDatagrid
+        columns={[...columns, { source: 'businessService', label: 'app.fields.business_service' }]}
+      />,
+    );
+    // English label → code derived from the field source.
+    expect(screen.getByText('Name')).toHaveAttribute('data-i18n-key', 'app.fields.name');
+    // Label that already is a code is used as-is.
+    expect(screen.getByText('app.fields.business_service')).toHaveAttribute(
+      'data-i18n-key',
+      'app.fields.business_service',
+    );
   });
 
   it('shows auto row actions when rowActions is auto', () => {
