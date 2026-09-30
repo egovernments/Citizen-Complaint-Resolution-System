@@ -2,12 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
 import OnboardingLayout from './onboarding/OnboardingLayout';
 import ComplaintsStep from './onboarding/ComplaintsStep';
+import BrandingStep from './onboarding/BrandingStep';
 import { ONBOARDING_STEPS } from './onboarding/steps';
 import { isOnboardingComplete, resumePath } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
-import Phase1Page from './pages/Phase1Page';
 import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
 import Phase4Page from './pages/Phase4Page';
@@ -526,7 +526,7 @@ function App() {
               : <RootLanding />
           }>
             <Route index element={<Navigate to={onboardingResume} replace />} />
-            <Route path="onboarding/branding" element={<Phase1Page />} />
+            <Route path="onboarding/branding" element={<BrandingStep />} />
             <Route path="onboarding/geography" element={<Phase2Page />} />
             <Route path="onboarding/departments" element={<Phase3Page />} />
             <Route path="onboarding/employees" element={<Phase4Page />} />

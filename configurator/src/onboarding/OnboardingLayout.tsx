@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, LayoutGrid, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
-import { mdmsService } from '@/api';
 import { NavRow, SectionLabel, RailAvatar, RailBackdrop, RailCloseButton, RailMenuButton } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
 import { AppFooter, HelpButton, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { ONBOARDING_STEPS } from './steps';
 import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
+import { initialsOf, useOrganisation } from './organisation';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -38,28 +38,6 @@ function StepMark({ status }: { status: StepStatus }) {
 
 const STATUS_WORD: Record<StepStatus, string> = { done: 'done', 'in-progress': 'to do', locked: 'locked' };
 
-/** The account's display name: its tenant record's name, else the tenant code. */
-function useOrganisationName(tenant: string, targetTenant: string): string {
-  const [name, setName] = useState<string | null>(null);
-  const stateRoot = tenant.split('.')[0];
-  useEffect(() => {
-    let cancelled = false;
-    mdmsService
-      .getTenants(stateRoot)
-      .then((tenants) => {
-        const match = tenants.find((t) => t.code === targetTenant) ?? tenants.find((t) => t.code === tenant);
-        if (!cancelled && match?.name) setName(match.name);
-      })
-      .catch(() => {
-        // The code stands in for the name; nothing to surface.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [stateRoot, tenant, targetTenant]);
-  return name ?? tenant;
-}
-
 export default function OnboardingLayout() {
   const { state, logout, setMode, toggleHelp } = useApp();
   const navigate = useNavigate();
@@ -67,7 +45,8 @@ export default function OnboardingLayout() {
   const { canEditResource } = useMastersCapability();
   const drawer = useRailDrawer();
   const [collapsed, setCollapsed] = useState(false);
-  const orgName = useOrganisationName(state.tenant, state.targetTenant);
+  const organisation = useOrganisation(state.tenant);
+  const orgName = organisation.name;
 
   const completed = state.completedPhases;
   const done = completedCount(completed);
@@ -79,12 +58,6 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
-  const initials = orgName
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join('');
 
   const handleLogout = () => {
     logout();
@@ -111,8 +84,12 @@ export default function OnboardingLayout() {
           <div className={`flex items-center min-h-9 ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
             {!collapsed && (
               <>
-                <div className="w-7 h-7 rounded bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center flex-shrink-0">
-                  {initials}
+                <div className="w-7 h-7 rounded bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {organisation.logoUrl ? (
+                    <img src={organisation.logoUrl} alt="" className="w-full h-full object-contain bg-card" />
+                  ) : (
+                    initialsOf(orgName)
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-5 text-foreground truncate" title={orgName}>{orgName}</p>
