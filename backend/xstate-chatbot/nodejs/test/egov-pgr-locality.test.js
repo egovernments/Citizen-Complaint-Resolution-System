@@ -79,3 +79,47 @@ test("REGRESSION: the complaint carries the boundary code, not an ADMIN_-prefixe
   // With no localityName slot the name is looked up under the same code.
   assert.equal(sent.service.address.locality.name, "Ward One");
 });
+
+test("REGRESSION (review): a generated label drops the ADMIN_ prefix, the code keeps it", async () => {
+  // No localisation and no boundary name, so the label is generated from the code.
+  const { svc } = load((url) => {
+    if (url.includes("boundary-relationships/_search")) {
+      return { body: { TenantBoundary: [{ boundary: [{ code: "ADMIN_SUN04" }] }] } };
+    }
+    return { body: { messages: [] } };
+  });
+  const { localities, messageBundle } = await svc.fetchLocalities("pg.citya");
+  assert.deepEqual(localities, ["ADMIN_SUN04"]);
+  assert.equal(messageBundle["ADMIN_SUN04"].en_IN, "Sun 04");
+});
+
+test("REGRESSION (review): the MDMS fallback offers the ADMIN_ form PGR validates", async () => {
+  const { svc } = load(() => ({ status: 500, body: {} })); // boundary-service down
+  svc.fetchMdmsData = async () => [{ code: "SUN04" }, { code: "ADMIN_SUN05" }];
+  require(locPath).getMessagesForCodesAndTenantId = async () => ({});
+  const { localities } = await svc.fetchLocalities("pg.citya");
+  // persistComplaint used to add this prefix for every source; now only this one needs it.
+  assert.deepEqual(localities, ["ADMIN_SUN04", "ADMIN_SUN05"]);
+});
+
+test("REGRESSION (review): a code saved without its prefix is matched back to the list when filing", async () => {
+  // A session saved before the deploy holds SUN04 (the old code stripped ADMIN_), and the
+  // NLP fuzzy search returns bare codes too. Both must still file as ADMIN_SUN04.
+  const { svc, calls } = load((url) => {
+    if (url.includes("boundary-relationships/_search")) {
+      return { body: { TenantBoundary: [{ boundary: [{ code: "ADMIN_SUN04" }] }] } };
+    }
+    if (url.includes("request/_create")) return { status: 400, body: {} };
+    return { body: { messages: [] } };
+  });
+  const user = { authToken: "t", userId: "u", userInfo: {}, locale: "en_IN" };
+  await svc.persistComplaint(user, { complaint: "StreetLight", city: "pg.citya", locality: "SUN04", localityName: "Sun 04" });
+  const sent = JSON.parse(calls.find((c) => c.url.includes("request/_create")).options.body);
+  assert.equal(sent.service.address.locality.code, "ADMIN_SUN04");
+});
+
+test("a code already in the list, or unknown to it, is filed unchanged", async () => {
+  const { svc } = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]));
+  assert.equal(await svc.resolveLocalityCode("ke.bomet", "W1_ADMIN_WARD"), "W1_ADMIN_WARD");
+  assert.equal(await svc.resolveLocalityCode("ke.bomet", "NOT_IN_LIST"), "NOT_IN_LIST");
+});

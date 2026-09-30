@@ -652,8 +652,9 @@ class PGRService {
           if (localityObj && localityObj.name) {
             displayName = localityObj.name;
           } else {
-            // Generate a readable name from the code (e.g., "ADMIN_SUN04" -> "Sun 04")
-            const cleanCode = localityCodeForPGR;
+            // Generate a readable name from the code (e.g., "ADMIN_SUN04" -> "Sun 04").
+            // The hierarchy prefix is dropped for the label only; the code keeps it.
+            const cleanCode = localityCodeForPGR.replace(/^ADMIN_/, '');
             displayName = cleanCode
               .replace(/([A-Z]+)(\d+)/, '$1 $2')  // Add space between letters and numbers
               .replace(/_/g, ' ')  // Replace underscores with spaces
@@ -709,14 +710,20 @@ class PGRService {
               tenantId
             );
 
+          // This legacy master stores bare codes (SUN04) while PGR validates the ADMIN_
+          // form, which persistComplaint used to add for every source. The prefix is now
+          // applied here, at the only source that needs it.
           let messageBundle = {};
+          let pgrLocalities = [];
           for (let locality of localities) {
             let localisationCode =
               tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
-            messageBundle[locality] = localisedMessages[localisationCode];
+            let pgrCode = locality.startsWith("ADMIN_") ? locality : "ADMIN_" + locality;
+            pgrLocalities.push(pgrCode);
+            messageBundle[pgrCode] = localisedMessages[localisationCode];
           }
 
-          return { localities, messageBundle };
+          return { localities: pgrLocalities, messageBundle };
         }
       } catch (mdmsError) {
       }
@@ -944,14 +951,33 @@ class PGRService {
     return results["ServiceWrappers"];
   }
 
+  /**
+   * Match a locality code against the city's current pick-list before filing, so a code
+   * that is missing only its ADMIN_ prefix still files. That covers sessions saved before
+   * persistComplaint stopped adding the prefix (they hold SUN04) and the NLP fuzzy-search
+   * code, which is not taken from the list. Anything else is sent unchanged.
+   */
+  async resolveLocalityCode(city, locality, user) {
+    if (!locality) return locality;
+    try {
+      const { localities } = await this.fetchLocalities(city, user);
+      if (localities.includes(locality)) return locality;
+      const prefixed = "ADMIN_" + locality;
+      if (localities.includes(prefixed)) return prefixed;
+    } catch (error) {
+      console.error(`Could not check locality ${locality} for ${city}: ${error.message}`);
+    }
+    return locality;
+  }
+
   async persistComplaint(user, slots, extraInfo) {
     let requestBody = JSON.parse(pgrCreateRequestBody);
 
     let authToken = user.authToken;
     let userId = user.userId;
     let complaintType = slots.complaint;
-    let locality = slots.locality;
     let city = slots.city;
+    let locality = await this.resolveLocalityCode(city, slots.locality, user);
     let userInfo = user.userInfo;
 
     requestBody["RequestInfo"]["authToken"] = authToken;

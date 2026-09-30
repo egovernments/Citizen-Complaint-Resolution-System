@@ -25,7 +25,9 @@ class RemindersService {
         if(mobileNumber == null)
           continue;
 
-        let user = { mobileNumber: mobileNumber };
+        // The saved session keeps the address the citizen wrote from; egov-user's national
+        // number alone would be re-prefixed with the tenant's default country code.
+        let user = { mobileNumber: mobileNumber, whatsAppAddress: chatState.context.user.whatsAppAddress };
         let message = dialog.get_message(messages.reminder, chatState.context.user.locale);
         channelProvider.sendMessageToUser(user, [message], extraInfo);
       }

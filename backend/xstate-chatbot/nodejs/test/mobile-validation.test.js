@@ -338,3 +338,40 @@ test("a number no row accepts is still rejected", async () => {
   const ke = await s.getConfig("ke");
   assert.equal(s.toNational("whatsapp:+447700900123", ke), null);
 });
+
+test("REGRESSION (review): toAddressableDigits keeps the country of the rule that matched", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  // Reconciled through the +91 alternate; rebuilding with the primary gave 2546307817430.
+  assert.equal(s.toAddressableDigits("916307817430", ke), "916307817430");
+  assert.equal(s.toAddressableDigits("whatsapp:+916307817430", ke), "916307817430");
+  // Primary-rule numbers are unchanged.
+  assert.equal(s.toAddressableDigits("254712345678", ke), "254712345678");
+  assert.equal(s.toAddressableDigits("0712345678", ke), "254712345678");
+});
+
+test("resolveNational reports which rule matched", async () => {
+  const s = loadKeTwoRows();
+  const ke = await s.getConfig("ke");
+  assert.equal(s.resolveNational("whatsapp:+916307817430", ke).rule.countryCode, "+91");
+  assert.equal(s.resolveNational("whatsapp:+254712345678", ke).rule.countryCode, "+254");
+  assert.equal(s.resolveNational("whatsapp:+447700900123", ke), null);
+});
+
+test("normalise builds the international form from the matched rule", async () => {
+  const s = loadKeTwoRows();
+  const result = await s.normalise("whatsapp:+916307817430", "ke");
+  assert.equal(result.national, "6307817430");
+  assert.equal(result.international, "916307817430");
+  assert.equal(result.e164, "+916307817430");
+});
+
+test("each mobileNumberRegex is compiled once", () => {
+  const s = loadService();
+  const rule = { countryCode: "+254", mobileNumberRegex: "^0?[17][0-9]{8}$" };
+  const first = s.nationalRegex(rule);
+  assert.equal(s.nationalRegex({ ...rule }), first);
+  // A malformed pattern falls back, and the fallback is cached too.
+  const bad = { countryCode: "+1", mobileNumberRegex: "([" };
+  assert.equal(s.nationalRegex(bad), s.nationalRegex(bad));
+});

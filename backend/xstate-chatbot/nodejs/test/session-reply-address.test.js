@@ -1,0 +1,66 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const path = require("node:path");
+
+const projectRoot = path.resolve(__dirname, "..");
+const src = (p) => path.join(projectRoot, "src", p);
+const channelPath = src("channel/index.js");
+const repoPath = src("session/repo/index.js");
+const sessionPath = src("session/session-manager.js");
+const remindersPath = src("machine/service/reminders-service.js");
+const emailTenantPath = src("machine/service/email-tenant-service.js");
+
+// A +91 citizen on a ke deployment: the national number alone would be re-prefixed +254.
+const CITIZEN = { mobileNumber: "6307817430", whatsAppAddress: "whatsapp:+916307817430" };
+
+function stub(modulePath, exports) {
+  require.cache[modulePath] = { id: modulePath, filename: modulePath, loaded: true, exports };
+}
+
+/** Load a module with the channel and session repo replaced; returns what was sent. */
+function loadWithStubs(modulePath, repo = {}) {
+  const sent = [];
+  stub(channelPath, { sendMessageToUser: (user, messages) => sent.push({ user, messages }) });
+  stub(repoPath, repo);
+  stub(emailTenantPath, { findTenantByEmail: async () => null });
+  delete require.cache[modulePath];
+  return { module: require(modulePath), sent };
+}
+
+test("REGRESSION (review): sandbox-mode replies go to the address the citizen wrote from", async (t) => {
+  // session-manager starts a cleanup interval at load; keep it off the real clock.
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const config = require(src("env-variables.js"));
+  const previous = config.enableSandboxMode;
+  config.enableSandboxMode = true;
+  t.after(() => { config.enableSandboxMode = previous; });
+  const { module: sessionManager, sent } = loadWithStubs(sessionPath);
+
+  // "hi" -> the email prompt; then an unknown email -> the registration hint.
+  await sessionManager.fromUser({ user: { ...CITIZEN }, message: { type: "text", input: "hi" }, extraInfo: {} });
+  await sessionManager.fromUser({ user: { ...CITIZEN }, message: { type: "text", input: "nobody@example.org" }, extraInfo: {} });
+
+  assert.equal(sent.length, 2);
+  for (const { user } of sent) assert.equal(user.whatsAppAddress, CITIZEN.whatsAppAddress);
+});
+
+test("REGRESSION (review): the saved session keeps the reply address", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { module: sessionManager } = loadWithStubs(sessionPath);
+  const saved = sessionManager.removeUserDataFromState({
+    context: { user: { ...CITIZEN, userId: "u-1", locale: "en_IN", authToken: "secret" } },
+  });
+  assert.deepEqual(saved.context.user, { ...CITIZEN, userId: "u-1", locale: "en_IN" });
+});
+
+test("REGRESSION (review): reminders use the saved reply address", async () => {
+  const chatState = { value: { pgr: "question" }, context: { user: { ...CITIZEN, locale: "en_IN" } } };
+  const { module: reminders, sent } = loadWithStubs(remindersPath, {
+    getActiveStateForUserId: async () => chatState,
+  });
+  // egov-user returns only the national number.
+  reminders.getMobileNumberFromUserId = async () => CITIZEN.mobileNumber;
+  await reminders.sendMessages(["u-1"]);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].user.whatsAppAddress, CITIZEN.whatsAppAddress);
+});

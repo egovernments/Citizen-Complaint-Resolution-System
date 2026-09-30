@@ -371,15 +371,24 @@ const sevaMachine = Machine({
                 },
               ],
             },
+            // Re-asks only the question. Going back to `question` would resend the
+            // nameInformation preamble, with its delays, on every invalid reply.
             error: {
               onEntry: assign((context, event) => {
-                let message = dialog.get_message(
+                let retry = dialog.get_message(
                   dialog.global_messages.error.retry,
                   context.user.locale
                 );
-                dialog.sendMessage(context, message, true);
+                dialog.sendMessage(context, retry, false);
+                let question = dialog.get_message(
+                  messages.onboarding.onBoardingUserProfileConfirmation.question,
+                  context.user.locale
+                );
+                dialog.sendMessage(context, question.replace("{{name}}", context.user.name));
               }),
-              always: "question",
+              on: {
+                USER_MESSAGE: "process",
+              },
             },
           },
         },

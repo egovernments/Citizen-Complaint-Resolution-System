@@ -23,6 +23,8 @@ class MobileValidationService {
   constructor() {
     // tenantId -> { value: {countryCode, mobileNumberRegex}, expiresAt }
     this.cache = new Map();
+    // mobileNumberRegex source -> compiled RegExp
+    this.regexCache = new Map();
   }
 
   clearCache() {
@@ -134,16 +136,23 @@ class MobileValidationService {
     return this.digitsOnly(mobileConfig.countryCode);
   }
 
-  /** Compile the tenant rule, falling back rather than throwing on a malformed regex. */
+  /**
+   * Compile the tenant rule, falling back rather than throwing on a malformed regex.
+   * Compiled once per pattern: this runs for every candidate form of every row, several
+   * times per message.
+   */
   nationalRegex(mobileConfig) {
+    const pattern = mobileConfig.mobileNumberRegex;
+    let compiled = this.regexCache.get(pattern);
+    if (compiled) return compiled;
     try {
-      return new RegExp(mobileConfig.mobileNumberRegex);
+      compiled = new RegExp(pattern);
     } catch (error) {
-      console.error(
-        `Invalid mobileNumberRegex '${mobileConfig.mobileNumberRegex}': ${error.message}`,
-      );
-      return new RegExp(config.mobileValidation.defaultRegex);
+      console.error(`Invalid mobileNumberRegex '${pattern}': ${error.message}`);
+      compiled = new RegExp(config.mobileValidation.defaultRegex);
     }
+    this.regexCache.set(pattern, compiled);
+    return compiled;
   }
 
   /** Does this candidate satisfy the tenant's national-number rule? */
@@ -160,12 +169,22 @@ class MobileValidationService {
    * rather than silently file a complaint against a mangled number.
    */
   toNational(raw, mobileConfig) {
+    const resolved = this.resolveNational(raw, mobileConfig);
+    return resolved ? resolved.national : null;
+  }
+
+  /**
+   * toNational plus the rule that matched. Anything that rebuilds an international number
+   * must use `rule`, not the primary config: a +91 citizen reconciled through ke's +91
+   * alternate would otherwise get +254 put back on.
+   */
+  resolveNational(raw, mobileConfig) {
     const national = this.nationalFor(raw, mobileConfig);
-    if (national) return national;
+    if (national) return { national, rule: mobileConfig };
     // Only when the primary rule cannot reconcile the number: try the state's other rows.
     for (const alternate of (mobileConfig && mobileConfig.alternates) || []) {
       const viaAlternate = this.nationalFor(raw, alternate);
-      if (viaAlternate) return viaAlternate;
+      if (viaAlternate) return { national: viaAlternate, rule: alternate };
     }
     return null;
   }
@@ -270,22 +289,23 @@ class MobileValidationService {
   toAddressableDigits(raw, mobileConfig) {
     const digits = this.digitsOnly(raw);
     if (!digits) return null;
-    const national = this.toNational(digits, mobileConfig);
-    if (national) return this.toInternational(national, mobileConfig);
+    const resolved = this.resolveNational(digits, mobileConfig);
+    if (resolved) return this.toInternational(resolved.national, resolved.rule);
     return digits;
   }
 
   /** Convenience: resolve the tenant rule and normalise in one call. */
   async normalise(raw, tenantId, user) {
     const mobileConfig = await this.getConfig(tenantId, user);
-    const national = this.toNational(raw, mobileConfig);
+    const resolved = this.resolveNational(raw, mobileConfig);
+    const national = resolved ? resolved.national : null;
     return {
       config: mobileConfig,
       national: national,
-      international: national
-        ? this.toInternational(national, mobileConfig)
+      international: resolved
+        ? this.toInternational(national, resolved.rule)
         : null,
-      e164: national ? this.toE164(national, mobileConfig) : null,
+      e164: resolved ? this.toE164(national, resolved.rule) : null,
     };
   }
 }

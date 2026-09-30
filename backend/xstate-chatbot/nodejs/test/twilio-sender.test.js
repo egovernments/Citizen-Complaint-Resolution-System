@@ -49,11 +49,12 @@ test("REGRESSION #6/#7: an unset sender fails loudly instead of using the eGov d
   }
 });
 
-test("REGRESSION: replies go to the address the citizen wrote from, not a re-prefixed national number", async () => {
+test("REGRESSION: replies go to the address the citizen wrote from, not a re-prefixed national number", async (t) => {
   const provider = loadProvider("whatsapp:+14155238886");
   // ke's first row: +254, whose regex also admits 10-digit Indian numbers.
+  // t.mock.method restores the shared singleton when the test ends.
   const mobile = require(mobilePath);
-  mobile.getConfig = async () => ({ countryCode: "+254", mobileNumberRegex: "^(0?[17][0-9]{8}|[6-9][0-9]{9})$" });
+  t.mock.method(mobile, "getConfig", async () => ({ countryCode: "+254", mobileNumberRegex: "^(0?[17][0-9]{8}|[6-9][0-9]{9})$" }));
   const sent = [];
   provider.sendTwilioRequest = async (params) => sent.push(params.get("To"));
 
