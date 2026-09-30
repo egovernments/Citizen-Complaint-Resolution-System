@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
-import { Menu, User, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { rowTone } from './railStyles';
+import { DigitFooter } from '@/components/DigitFooter';
 
 /** The 3px primary bar on the current row's left edge. */
 export function ActiveBar() {
@@ -95,15 +96,12 @@ export function RailCloseButton({ label, onClick }: { label: string; onClick: ()
   );
 }
 
-/** Initial in a secondary circle, the console's avatar. */
-export function RailAvatar({ name, title }: { name?: string; title?: string }) {
-  const initial = name?.trim().charAt(0).toUpperCase();
+/** "Powered by DIGIT" (CCRS#1841) closing the rail, as the DIGIT console does. Too wide for the collapsed rail. */
+export function RailPoweredBy({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) return null;
   return (
-    <div
-      className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 text-sm font-medium"
-      title={title}
-    >
-      {initial || <User className="w-4 h-4" />}
+    <div className="border-t border-border px-4 py-3 flex justify-center">
+      <DigitFooter />
     </div>
   );
 }

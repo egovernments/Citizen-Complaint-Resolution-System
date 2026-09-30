@@ -87,6 +87,8 @@ const customEnglishMessages: TranslationMessages = {
       title: 'DIGIT Management Studio',
       brand: 'Complaints Management',
       help: 'Help',
+      account: 'Account',
+      sign_out: 'Sign out',
     },
     dashboard: {
       date: {

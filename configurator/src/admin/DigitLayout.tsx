@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslate } from 'ra-core';
 import { useApp } from '../App';
 import {
-  LogOut,
   User,
   Globe,
   Building2,
@@ -37,15 +36,14 @@ import {
   Map,
   Globe2,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
-import { NavRow, SectionLabel, ActiveBar, RailAvatar, RailBackdrop, RailCloseButton, RailMenuButton } from '@/components/layout/rail';
+import { NavRow, SectionLabel, ActiveBar, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses, rowTone } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
-import { AppFooter, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
+import { AccountMenu, HelpButton, LocaleSwitcher, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { resumePath } from '@/onboarding/progress';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
@@ -386,11 +384,11 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           )}
         </nav>
 
-        {/* Sidebar Footer */}
-        <div className="border-t border-border py-2">
-          {/* With onboarding compulsory there is nothing to switch back to: once
-              it is finished, everything is edited here. */}
-          {!ONBOARDING_GATE_ENABLED && (
+        {/* Sidebar footer: the way back to onboarding while switching is
+            allowed (with onboarding compulsory there is nothing to go back to),
+            then "Powered by DIGIT" */}
+        {!ONBOARDING_GATE_ENABLED && (
+          <div className="border-t border-border py-2">
             <NavRow
               icon={Settings}
               label={translate('app.nav.switch_to_onboarding')}
@@ -398,32 +396,9 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               collapsed={sidebarCollapsed}
               onClick={handleSwitchToOnboarding}
             />
-          )}
-
-          {/* User info */}
-          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3 px-4'} pt-2`}>
-            <RailAvatar name={state.user?.name} title={sidebarCollapsed ? state.user?.name : undefined} />
-            {!sidebarCollapsed && (
-              <>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {state.user?.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">{state.tenant}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  aria-label={translate('ra.auth.logout', { _: 'Logout' })}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 flex-shrink-0"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </>
-            )}
           </div>
-        </div>
+        )}
+        <RailPoweredBy collapsed={sidebarCollapsed} />
       </aside>
 
       {/* Main Content Area */}
@@ -451,13 +426,22 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             </Badge>
           </div>
 
-          {/* Right: help, locale, theme */}
+          {/* Right: help, locale, theme, and the account */}
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <HelpButton label={translate('app.header.help', { _: 'Help' })} onClick={toggleHelp} />
 
             <LocaleSwitcher />
 
             <ThemeSwitcher />
+
+            <AccountMenu
+              name={state.user?.name}
+              tenant={state.tenant}
+              accountLabel={translate('app.header.account', { _: 'Account' })}
+              docsLabel={translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })}
+              signOutLabel={translate('app.header.sign_out', { _: 'Sign out' })}
+              onSignOut={handleLogout}
+            />
           </div>
         </header>
 
@@ -467,7 +451,6 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         </main>
 
         {/* Powered by DIGIT (CCRS#1841) + Open DIGIT Docs */}
-        <AppFooter docsLabel={translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })} />
 
       </div>
 

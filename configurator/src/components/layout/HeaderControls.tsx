@@ -1,10 +1,17 @@
 import { useLocaleState, useLocales } from 'ra-core';
-import { ExternalLink, Globe, HelpCircle } from 'lucide-react';
+import { ExternalLink, Globe, HelpCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
-import { DigitFooter } from '@/components/DigitFooter';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 /** Help as the console draws it: a quiet text button, icon-only on a phone. */
 export function HelpButton({ label, onClick }: { label: string; onClick: () => void }) {
@@ -82,25 +89,56 @@ export function ThemeSwitcher() {
 }
 
 /**
- * "Powered by DIGIT" (CCRS#1841) and the docs link. Centred from sm up; on a
- * phone the spacer goes, so the logo and the link share the row unwrapped.
+ * The signed-in user as the DIGIT console shows them: an initial in a circle
+ * at the top bar's end, opening their name, the docs and Sign out.
  */
-export function AppFooter({ docsLabel }: { docsLabel: string }) {
+export function AccountMenu({
+  name,
+  tenant,
+  accountLabel,
+  docsLabel,
+  signOutLabel,
+  onSignOut,
+}: {
+  name?: string;
+  tenant: string;
+  accountLabel: string;
+  docsLabel: string;
+  signOutLabel: string;
+  onSignOut: () => void;
+}) {
+  const initial = name?.trim().charAt(0).toUpperCase() || '?';
   return (
-    <footer className="flex-shrink-0 flex items-center justify-between gap-4 border-t border-border bg-card px-4 sm:px-6 py-2">
-      <div className="hidden sm:block flex-1" />
-      <DigitFooter />
-      <div className="sm:flex-1 flex justify-end">
-        <a
-          href="https://docs.digit.org"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground hover:text-primary transition-colors"
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={accountLabel}
+          className="ml-1 w-9 h-9 rounded-full bg-secondary text-secondary-foreground text-sm font-medium flex items-center justify-center flex-shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <ExternalLink className="w-3.5 h-3.5" />
-          {docsLabel}
-        </a>
-      </div>
-    </footer>
+          {initial}
+        </button>
+      </DropdownMenuTrigger>
+      {/* Radix focuses the menu box itself on open; the app-wide focus ring
+          would outline the whole menu, so it keeps its plain shadow and the
+          items carry the keyboard highlight. */}
+      <DropdownMenuContent align="end" sideOffset={6} className="w-52 focus-visible:shadow-md">
+        <DropdownMenuLabel className="font-normal">
+          <p className="text-sm font-medium text-foreground truncate">{name}</p>
+          <p className="text-xs text-muted-foreground truncate">{tenant}</p>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href="https://docs.digit.org" target="_blank" rel="noopener noreferrer">
+            <ExternalLink />
+            {docsLabel}
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onSignOut}>
+          <LogOut />
+          {signOutLabel}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

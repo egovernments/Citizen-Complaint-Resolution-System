@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, LayoutGrid, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Check, ChevronRight, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
-import { NavRow, SectionLabel, RailAvatar, RailBackdrop, RailCloseButton, RailMenuButton } from '@/components/layout/rail';
+import { NavRow, SectionLabel, RailBackdrop, RailCloseButton, RailMenuButton, RailPoweredBy } from '@/components/layout/rail';
 import { railClasses } from '@/components/layout/railStyles';
 import { useRailDrawer } from '@/components/layout/useRailDrawer';
-import { AppFooter, HelpButton, ThemeSwitcher } from '@/components/layout/HeaderControls';
+import { AccountMenu, HelpButton, ThemeSwitcher } from '@/components/layout/HeaderControls';
 import { ONBOARDING_STEPS } from './steps';
 import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
@@ -159,32 +158,13 @@ export default function OnboardingLayout() {
           ))}
         </nav>
 
-        {/* Footer: the way out while switching is allowed, and the user */}
-        <div className="border-t border-border py-2">
-          {!ONBOARDING_GATE_ENABLED && (
+        {/* Footer: the way out while switching is allowed, then "Powered by DIGIT" */}
+        {!ONBOARDING_GATE_ENABLED && (
+          <div className="border-t border-border py-2">
             <NavRow icon={LayoutGrid} label="Go to Management" active={false} collapsed={collapsed} onClick={handleGoToManagement} />
-          )}
-          <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-4'} pt-2`}>
-            <RailAvatar name={state.user?.name} title={collapsed ? state.user?.name : undefined} />
-            {!collapsed && (
-              <>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{state.user?.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{state.tenant}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  aria-label="Logout"
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 flex-shrink-0"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </>
-            )}
           </div>
-        </div>
+        )}
+        <RailPoweredBy collapsed={collapsed} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -198,6 +178,14 @@ export default function OnboardingLayout() {
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <HelpButton label="Help" onClick={toggleHelp} />
             <ThemeSwitcher />
+            <AccountMenu
+              name={state.user?.name}
+              tenant={state.tenant}
+              accountLabel="Account"
+              docsLabel="Open DIGIT Docs"
+              signOutLabel="Sign out"
+              onSignOut={handleLogout}
+            />
           </div>
         </header>
 
@@ -215,7 +203,6 @@ export default function OnboardingLayout() {
           </div>
         </main>
 
-        <AppFooter docsLabel="Open DIGIT Docs" />
       </div>
     </div>
   );
