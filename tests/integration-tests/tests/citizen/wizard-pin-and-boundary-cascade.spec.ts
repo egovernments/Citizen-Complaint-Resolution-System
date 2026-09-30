@@ -147,17 +147,20 @@ The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, s
       `Expected every cascade level to render from the start; got ${initialCount}.`,
     ).toBeGreaterThan(1);
 
-    // Pick the deepest level first.
-    const deepest = cascadeDropdowns.nth(initialCount - 1);
+    // Pick the deepest level that lists from the start. On a very large tree
+    // (Maputo's quarteirões) the lowest level waits, disabled, for its parent.
+    let deepestIndex = initialCount - 1;
+    while (deepestIndex > 0 && !(await cascadeDropdowns.nth(deepestIndex).isEnabled())) deepestIndex--;
+    const deepest = cascadeDropdowns.nth(deepestIndex);
     await expect(deepest).toBeEnabled({ timeout: 6000 });
     await deepest.click();
     await page.waitForTimeout(800);
     await page.locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible').first().click();
     await page.waitForTimeout(1500);
 
-    // Every level above it now holds that ward's own ancestors. Use /^Select/i
+    // Every level above it now holds that place's own ancestors. Use /^Select/i
     // (no trailing space) to also match "Select…" (ke shadcn placeholder).
-    for (let i = 0; i < initialCount; i++) {
+    for (let i = 0; i < deepestIndex; i++) {
       const text = await cascadeDropdowns.nth(i).evaluate((el) => (el as HTMLElement).innerText.trim());
       expect(text, `Cascade level ${i + 1} should be filled by the deepest pick`).not.toMatch(/^Select/i);
     }
