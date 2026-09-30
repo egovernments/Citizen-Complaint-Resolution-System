@@ -16,6 +16,7 @@ export {
   getAllResources,
   getDedicatedResources,
   getGenericMdmsResources,
+  getAdvancedMdmsResources,
   getResourceIdField,
   getResourceLabel,
   getResourceBySchema,

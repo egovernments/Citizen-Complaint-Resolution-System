@@ -41,7 +41,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { getAdvancedMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
@@ -106,7 +106,7 @@ const navGroups = [
 ];
 
 /** Generic MDMS resources for the Advanced section */
-const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => ({
+const advancedResources = Object.keys(getAdvancedMdmsResources()).map((name) => ({
   id: name,
   name: getResourceLabel(name),
   path: `/manage/${name}`,
