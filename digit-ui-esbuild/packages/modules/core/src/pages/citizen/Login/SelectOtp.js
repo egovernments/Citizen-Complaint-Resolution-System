@@ -128,8 +128,16 @@ const SelectOtp = ({
   userType = "citizen",
   canSubmit,
   recipient,
+  // Identity BFF sign-in: seconds until Resend is allowed, and the error to
+  // show in place of CS_INVALID_OTP. `onResend` may resolve to the next wait.
+  resendAfter,
+  errorMessage,
 }) => {
-  const [timeLeft, setTimeLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(resendAfter ?? 30);
+
+  useEffect(() => {
+    if (resendAfter !== undefined) setTimeLeft(resendAfter);
+  }, [resendAfter]);
 
   useInterval(
     () => {
@@ -138,9 +146,10 @@ const SelectOtp = ({
     timeLeft > 0 ? 1000 : null
   );
 
-  const handleResendOtp = () => {
-    onResend();
+  const handleResendOtp = async () => {
     setTimeLeft(30);
+    const next = await onResend();
+    if (typeof next === "number") setTimeLeft(next);
   };
 
   const tr = (key, fallback) => {
@@ -208,7 +217,7 @@ const SelectOtp = ({
                 color: "var(--color-error, #d4351c)",
               }}
             >
-              {tr("CS_INVALID_OTP", "The OTP you entered is invalid.")}
+              {errorMessage || tr("CS_INVALID_OTP", "The OTP you entered is invalid.")}
             </p>
           ) : null}
           <V2Button type="submit" disabled={!isReady} width="full">

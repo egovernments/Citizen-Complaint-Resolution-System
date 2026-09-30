@@ -47,6 +47,7 @@ import {
   restrictDestination as restrictIdentityBffDestination,
   surfaceBase as identityBffSurfaceBase,
 } from "./services/auth/identityBffLogin";
+import { fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp } from "./services/auth/citizenOtp";
 
 const setupLibraries = (Library, props) => {
   window.Digit = window.Digit || {};
@@ -103,4 +104,5 @@ const initLibraries = () => {
 export * from "./constants/mobileValidation";
 
 export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter, isIdentityBffAuth,
-  buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase };
+  buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase,
+  fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp };
