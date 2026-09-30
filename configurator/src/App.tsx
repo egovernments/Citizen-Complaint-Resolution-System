@@ -7,7 +7,7 @@ import GeographyStep from './onboarding/geography/GeographyStep';
 import DepartmentsStep from './onboarding/departments/DepartmentsStep';
 import EmployeesStep from './onboarding/employees/EmployeesStep';
 import { ONBOARDING_STEPS } from './onboarding/steps';
-import { isOnboardingComplete, resumePath } from './onboarding/progress';
+import { finishesOnboarding, isOnboardingComplete, resumePath } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
@@ -418,12 +418,11 @@ function App() {
     setState(s => ({
       ...s,
       completedPhases: [...new Set([...s.completedPhases, phase])],
-      currentPhase: Math.min(phase + 1, 5),
+      currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length),
     }));
-    trackEvent('phase_complete', { phase, tenant: state.tenant });
-
-    // Track onboarding completion (final phase is Phase 4 — Employees)
-    if (phase === 4) {
+    const step = ONBOARDING_STEPS.find((candidate) => candidate.number === phase);
+    trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
+    if (finishesOnboarding(phase, state.completedPhases)) {
       trackEvent('onboarding_complete', { tenant: state.tenant });
     }
   };

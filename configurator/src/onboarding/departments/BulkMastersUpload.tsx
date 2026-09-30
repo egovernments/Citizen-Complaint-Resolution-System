@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { parseDepartmentExcel, parseDesignationExcel, parseExcelFile } from '@/utils/excelParser';
 import { downloadCommonMastersTemplate } from '@/utils/templateBuilder';
 import { describeSaveError } from '../errors';
+import { reportStepError } from '../telemetry';
 import { importMasters, type ImportResult, type MasterInput } from './mastersApi';
 
 interface Parsed {
@@ -83,6 +84,7 @@ export function BulkMastersUpload({
       const designations = await importMasters(tenantId, 'designation', parsed.designations, existingDesignations);
       onDone({ departments, designations });
     } catch (err) {
+      reportStepError('departments', 'import_bulk', err, tenantId);
       setError(describeSaveError(err, 'Importing failed. Try again.'));
     } finally {
       setImporting(false);

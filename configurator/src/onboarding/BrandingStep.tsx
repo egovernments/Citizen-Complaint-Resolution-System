@@ -12,6 +12,7 @@ import { BRAND_THEMES, DEFAULT_BRAND_THEME_ID } from './brandThemes';
 import { loadBranding, saveBranding, ThemeSaveError, type Branding, type LogoChange } from './brandingApi';
 import { announceOrganisation, initialsOf } from './organisation';
 import { describeSaveError } from './errors';
+import { reportStepError, trackStepAction } from './telemetry';
 
 const STEP = ONBOARDING_STEPS.find((step) => step.id === 'branding')!;
 const NEXT = ONBOARDING_STEPS.find((step) => step.number === STEP.number + 1)!;
@@ -132,12 +133,20 @@ export default function BrandingStep() {
     try {
       const theme = BRAND_THEMES.find((candidate) => candidate.id === themeId) ?? null;
       const saved = await saveBranding(branding, { name: trimmed, logo, theme });
+      trackStepAction('branding', 'entity_update', 'branding', {
+        tenant: state.tenant,
+        theme: theme?.id ?? 'none',
+        logo: logo?.kind ?? 'unchanged',
+        renamed: trimmed !== branding.name,
+      });
       setBranding(saved);
       setLogo(null);
       announceOrganisation({ name: saved.name, logoUrl: saved.logoUrl });
       completePhase(STEP.number);
       navigate(NEXT.path);
     } catch (err) {
+      if (err instanceof ThemeSaveError) reportStepError('branding', 'save_theme', err.cause, state.tenant);
+      else reportStepError('branding', 'save', err, state.tenant);
       if (err instanceof ThemeSaveError) {
         // What did save stays saved; only the theme is left to retry.
         setBranding(err.saved);

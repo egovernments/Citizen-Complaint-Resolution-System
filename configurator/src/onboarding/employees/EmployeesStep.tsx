@@ -11,6 +11,7 @@ import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { describeSaveError } from '../errors';
+import { reportStepError, trackStepAction } from '../telemetry';
 import { EmployeeDialog } from './EmployeeDialog';
 import BulkEmployeeImport from './BulkEmployeeImport';
 import {
@@ -75,7 +76,18 @@ export default function EmployeesStep() {
 
   const add = async (input: NewEmployee) => {
     if (!options) return;
-    const created = await addEmployee(tenant, input, options);
+    const created = await addEmployee(tenant, input, options).catch((err: unknown) => {
+      reportStepError('employees', 'create_employee', err, tenant);
+      throw err;
+    });
+    trackStepAction('employees', 'entity_create', 'employee', {
+      tenant,
+      source: 'form',
+      departments: input.departments.length,
+      roles: input.roles.length,
+      jurisdictions: input.jurisdictions.length,
+      email: !!input.emailId,
+    });
     toast({ title: `${created.user.name} added`, description: `They sign in as ${created.user.userName}.` });
     reload();
   };
@@ -85,8 +97,10 @@ export default function EmployeesStep() {
     try {
       await removeEmployee(employee);
     } catch (err) {
+      reportStepError('employees', 'delete_employee', err, tenant);
       throw new Error(describeSaveError(err, 'Removing failed. Try again.'));
     }
+    trackStepAction('employees', 'entity_delete', 'employee', { tenant });
     toast({ title: `${employee.user.name} removed` });
     reload();
   };

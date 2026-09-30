@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, LayoutGrid, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../App';
@@ -12,6 +12,7 @@ import { AccountMenu, HelpButton, ThemeSwitcher } from '@/components/layout/Head
 import { ONBOARDING_STEPS } from './steps';
 import { completedCount, resumePath, stepForPath, stepStatus, type StepStatus } from './progress';
 import { initialsOf, useOrganisation } from './organisation';
+import { trackEvent } from '@/lib/telemetry';
 
 /**
  * The step marks in place of icons: a tick once a step is done, a filled dot
@@ -57,6 +58,13 @@ export default function OnboardingLayout() {
   // than from a failed submit deep in the step.
   const currentStepEditable = !currentStep || canEditResource(currentStep.master);
   const groups = [...new Set(ONBOARDING_STEPS.map((step) => step.group))];
+
+  // A step opened, from the rail, a Back or continue, or a resume.
+  const openedStep = currentStepLocked ? undefined : currentStep;
+  useEffect(() => {
+    if (openedStep) trackEvent('phase_start', { phase: openedStep.number, step: openedStep.id, tenant: state.tenant });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
+  }, [openedStep?.id]);
 
   const handleLogout = () => {
     logout();

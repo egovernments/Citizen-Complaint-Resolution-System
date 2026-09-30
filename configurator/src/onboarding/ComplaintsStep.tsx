@@ -12,6 +12,7 @@ import { StepHeader } from './StepHeader';
 import { EmptyState, OptionCard, StepActions } from './StepParts';
 import { adjacentSteps, stepById } from './steps';
 import { describeSaveError } from './errors';
+import { reportStepError, trackStepAction } from './telemetry';
 import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import {
@@ -118,10 +119,19 @@ export default function ComplaintsStep() {
     setSaveError(null);
     try {
       const filable = await saveComplaints(tenant, loaded, draft);
+      trackStepAction('complaints', 'entity_update', 'complaint_type', {
+        tenant,
+        source: 'form',
+        count: draft.types.length,
+        subtypes: draft.types.reduce((total, type) => total + type.subtypes.length, 0),
+        filable,
+        slaHours: draft.slaHours,
+      });
       writeDraft(tenant, null);
       toast({ title: `${filable} complaint ${filable === 1 ? 'type is' : 'types are'} ready` });
       finish();
     } catch (err) {
+      reportStepError('complaints', 'save', err, tenant);
       setSaveError(describeSaveError(err, 'Saving your complaint types failed. Try again.'));
     } finally {
       setSaving(false);
@@ -167,8 +177,12 @@ export default function ComplaintsStep() {
           <ComplaintHierarchySetup
             targetTenant={tenant}
             stateTenant={state.tenant}
-            onError={setSaveError}
+            onError={(message) => {
+              reportStepError('complaints', 'import_bulk', new Error(message), tenant);
+              setSaveError(message);
+            }}
             onDone={({ defs }) => {
+              trackStepAction('complaints', 'entity_import', 'complaint_type', { tenant, source: 'bulk', count: defs });
               setBulk(false);
               writeDraft(tenant, null);
               toast({ title: `${defs} complaint ${defs === 1 ? 'type' : 'types'} imported` });

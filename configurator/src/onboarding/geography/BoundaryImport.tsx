@@ -28,6 +28,7 @@ import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldP
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
+import { reportStepError, trackStepAction } from '../telemetry';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
@@ -372,9 +373,16 @@ export default function BoundaryImport({
       setSelectedHierarchy(newHierarchy);
       setExistingHierarchies(prev => [...prev, newHierarchy]);
       addUndo('create_hierarchy', `Created hierarchy: ${hierarchyType}`);
+      trackStepAction('geography', 'entity_create', 'boundary', {
+        tenant: boundaryTenant,
+        source: 'excel',
+        kind: 'hierarchy',
+        levels: validLevels.length,
+      });
       setStep('template');
     } catch (err) {
       console.error('Hierarchy creation error:', err);
+      reportStepError('geography', 'create_hierarchy', err, boundaryTenant);
       if (err instanceof ApiClientError) {
         setError(err.firstError);
       } else if (err instanceof Error) {
@@ -541,6 +549,12 @@ export default function BoundaryImport({
       );
 
       addUndo('create_boundaries', `Created ${result.success.length} boundaries`);
+      trackStepAction('geography', 'entity_import', 'boundary', {
+        tenant: boundaryTenant,
+        source: 'excel',
+        count: result.success.length,
+        failed: result.failed.length,
+      });
       setStep('complete');
 
       if (result.failed.length > 0) {
@@ -548,6 +562,7 @@ export default function BoundaryImport({
       }
     } catch (err) {
       console.error('Boundary upload error:', err);
+      reportStepError('geography', 'import_excel', err, boundaryTenant);
       if (err instanceof ApiClientError) {
         setError(err.firstError);
       } else if (err instanceof Error) {
@@ -819,6 +834,13 @@ out skel qt;`;
         levelNames.map(n => ({ boundaryType: n }))
       );
 
+      trackStepAction('geography', 'entity_import', 'boundary', {
+        tenant: boundaryTenant,
+        source: 'osm',
+        count: result.success.length,
+        failed: result.failed.length,
+        levels: levelNames.length,
+      });
       setStep('complete');
 
       if (result.failed.length > 0) {
@@ -826,6 +848,7 @@ out skel qt;`;
       }
     } catch (e) {
       console.error(e);
+      reportStepError('geography', 'import_osm', e, boundaryTenant);
       setError(e instanceof Error ? e.message : "Failed to create boundaries.");
       setStep('map-levels');
     } finally {

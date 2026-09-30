@@ -36,6 +36,7 @@ import {
 } from '@/api';
 import { parseExcelFile, parseEmployeeExcel } from '@/utils/excelParser';
 import { downloadEmployeeTemplate } from '@/utils/templateBuilder';
+import { reportStepError, trackStepAction } from '../telemetry';
 import type {
   EmployeeExcelRow,
   Employee,
@@ -291,6 +292,8 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
     setCreatedEmployees([]);
 
     const validEmployees = employees.filter((e) => e.status === 'valid');
+    let createdTotal = 0;
+    let failedTotal = 0;
 
     try {
       for (let i = 0; i < validEmployees.length; i++) {
@@ -364,6 +367,7 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
           const created = await hrmsService.createEmployee(employee);
           setCreatedEmployees((prev) => [...prev, created]);
           setCreatedCount((prev) => prev + 1);
+          createdTotal += 1;
         } catch (err) {
           console.error(`Failed to create employee ${emp.name}:`, err);
           // Surface the reason, don't just count it. ApiClientError.firstError
@@ -376,15 +380,23 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
             : (err instanceof Error ? err.message : String(err));
           setFailures((prev) => [...prev, { name: emp.name, reason }]);
           setFailedCount((prev) => prev + 1);
+          failedTotal += 1;
         }
 
         setProgress(Math.round(((i + 1) / validEmployees.length) * 100));
       }
 
       addUndo('create_employees', `Created ${createdCount} employees`);
+      trackStepAction('employees', 'entity_import', 'employee', {
+        tenant: targetTenant,
+        source: 'bulk',
+        count: createdTotal,
+        failed: failedTotal,
+      });
       setStep('complete');
     } catch (err) {
       console.error('Employee creation error:', err);
+      reportStepError('employees', 'import_bulk', err, targetTenant);
       if (err instanceof ApiClientError) {
         setError(err.firstError);
       } else if (err instanceof Error) {

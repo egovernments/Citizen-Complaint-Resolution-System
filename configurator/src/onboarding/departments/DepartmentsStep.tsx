@@ -12,6 +12,7 @@ import { StepHeader } from '../StepHeader';
 import { EmptyState, OptionCard, StepActions } from '../StepParts';
 import { adjacentSteps, stepById } from '../steps';
 import { describeSaveError } from '../errors';
+import { reportStepError, trackStepAction } from '../telemetry';
 import { MasterDialog } from './MasterDialog';
 import { BulkMastersUpload, type BulkImportSummary } from './BulkMastersUpload';
 import {
@@ -209,18 +210,26 @@ export default function DepartmentsStep() {
   const codes = (records: MdmsRecord[] | null) => new Set((records ?? []).map((record) => record.uniqueIdentifier));
 
   const save = async (kind: MasterKind, input: MasterInput, record?: MdmsRecord) => {
-    await saveMaster(tenant, kind, input, record);
+    try {
+      await saveMaster(tenant, kind, input, record);
+    } catch (err) {
+      reportStepError('departments', record ? `update_${kind}` : `create_${kind}`, err, tenant);
+      throw err;
+    }
+    trackStepAction('departments', record ? 'entity_update' : 'entity_create', kind, { tenant, source: 'form' });
     toast({ title: record ? `${input.name} updated` : `${input.name} added` });
     reload();
   };
 
   // The confirm dialog shows a thrown error and stays open, so the wording is set here.
-  const remove = async (record: MdmsRecord) => {
+  const remove = async (kind: MasterKind, record: MdmsRecord) => {
     try {
       await removeMaster(record);
     } catch (err) {
+      reportStepError('departments', `delete_${kind}`, err, tenant);
       throw new Error(describeSaveError(err, 'Removing failed. Try again.'));
     }
+    trackStepAction('departments', 'entity_delete', kind, { tenant });
     toast({ title: `${recordName(record)} removed` });
     reload();
   };
@@ -254,6 +263,16 @@ export default function DepartmentsStep() {
           onCancel={() => setBulk(false)}
           onDone={(summary) => {
             setBulk(false);
+            for (const kind of ['department', 'designation'] as const) {
+              const result = kind === 'department' ? summary.departments : summary.designations;
+              trackStepAction('departments', 'entity_import', kind, {
+                tenant,
+                source: 'bulk',
+                count: result.created,
+                skipped: result.skipped,
+                failed: result.failed.length,
+              });
+            }
             toast({ title: importToast(summary) });
             const failed = summary.departments.failed.length + summary.designations.failed.length;
             if (failed) setActionError(`${failed} couldn’t be added. ${summary.departments.failed[0]?.error ?? summary.designations.failed[0]?.error ?? ''}`);
@@ -292,7 +311,7 @@ export default function DepartmentsStep() {
             onAdd={() => setDialog({ kind: 'department' })}
             onUpload={() => setBulk(true)}
             onEdit={(record) => setDialog({ kind: 'department', record })}
-            onRemove={remove}
+            onRemove={(record) => remove('department', record)}
           />
           <MasterSection
             kind="designation"
@@ -301,7 +320,7 @@ export default function DepartmentsStep() {
             onAdd={() => setDialog({ kind: 'designation' })}
             onUpload={() => setBulk(true)}
             onEdit={(record) => setDialog({ kind: 'designation', record })}
-            onRemove={remove}
+            onRemove={(record) => remove('designation', record)}
           />
         </div>
       )}

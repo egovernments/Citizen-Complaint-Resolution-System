@@ -13,6 +13,11 @@ export function isOnboardingComplete(completed: number[]): boolean {
   return ONBOARDING_STEPS.every((step) => completed.includes(step.number));
 }
 
+/** Whether finishing `phase` completes onboarding for the first time. */
+export function finishesOnboarding(phase: number, completedBefore: number[]): boolean {
+  return !isOnboardingComplete(completedBefore) && isOnboardingComplete([...completedBefore, phase]);
+}
+
 export function completedCount(completed: number[]): number {
   return ONBOARDING_STEPS.filter((step) => completed.includes(step.number)).length;
 }

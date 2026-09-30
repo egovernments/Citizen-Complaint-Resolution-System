@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ONBOARDING_STEPS } from './steps';
-import { completedCount, isOnboardingComplete, resumePath, stepForPath, stepStatus } from './progress';
+import { completedCount, finishesOnboarding, isOnboardingComplete, resumePath, stepForPath, stepStatus } from './progress';
 
 const step = (id: string) => ONBOARDING_STEPS.find((candidate) => candidate.id === id)!;
 
@@ -36,5 +36,13 @@ describe('onboarding progress', () => {
     expect(stepForPath('/onboarding/employees')?.id).toBe('employees');
     expect(stepForPath('/onboarding/employees/new')?.id).toBe('employees');
     expect(stepForPath('/manage')).toBeUndefined();
+  });
+
+  it('counts onboarding finished on the step that completes the last one, once', () => {
+    // The complaints template (step 5) ends onboarding, not employees (step 4).
+    expect(finishesOnboarding(4, [1, 2, 3])).toBe(false);
+    expect(finishesOnboarding(5, [1, 2, 3, 4])).toBe(true);
+    // Re-saving a step after onboarding is done doesn't finish it again.
+    expect(finishesOnboarding(1, [1, 2, 3, 4, 5])).toBe(false);
   });
 });

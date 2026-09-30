@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
+import { trackEvent } from '@/lib/telemetry';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,7 +40,13 @@ export function LocaleSwitcher() {
   if (!locales || locales.length <= 1) return null;
 
   return (
-    <Select value={locale} onValueChange={setLocale}>
+    <Select
+      value={locale}
+      onValueChange={(next) => {
+        trackEvent('locale_change', { from: locale, to: next });
+        setLocale(next);
+      }}
+    >
       <SelectTrigger className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-sm text-foreground shadow-none hover:bg-muted">
         <Globe className="w-4 h-4 flex-shrink-0" />
         <SelectValue />
@@ -63,7 +70,13 @@ export function ThemeSwitcher() {
   const currentTheme = THEMES.find((t) => t.name === theme);
 
   return (
-    <Select value={theme} onValueChange={setTheme}>
+    <Select
+      value={theme}
+      onValueChange={(next) => {
+        trackEvent('theme_change', { from: theme, to: next });
+        setTheme(next);
+      }}
+    >
       <SelectTrigger className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-sm text-foreground shadow-none hover:bg-muted">
         <span
           className="inline-block w-3 h-3 rounded-full border border-border flex-shrink-0"
@@ -129,7 +142,12 @@ export function AccountMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href="https://docs.digit.org" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://docs.digit.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackEvent('docs_click', { from: 'account_menu' })}
+          >
             <ExternalLink />
             {docsLabel}
           </a>
