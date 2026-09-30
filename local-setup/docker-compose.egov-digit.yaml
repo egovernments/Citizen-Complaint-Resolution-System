@@ -2147,6 +2147,11 @@ services:
     volumes:
       - ./kong/kong.yml:/kong/kong.yml:ro
     ports:
+      # Must stay loopback wherever host nginx runs on the host (every Linux
+      # deploy): nginx SETS X-Forwarded-For for /auth/realms/ and Keycloak
+      # trusts its leftmost entry, so a caller reaching 18000 directly could
+      # choose the client IP Keycloak records (#2193). Only the macOS thin
+      # deploy widens it, for its containerised nginx; do not publish it wider.
       - "${PROXY_BIND_IP:-127.0.0.1}:18000:8000"   # Proxy (HTTP)
       - "${BIND_IP:-127.0.0.1}:18443:8443"   # Proxy (HTTPS)
       # Admin API (8001) is container-loopback-only (see KONG_ADMIN_LISTEN

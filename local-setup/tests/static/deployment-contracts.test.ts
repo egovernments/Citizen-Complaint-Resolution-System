@@ -354,6 +354,21 @@ describe('Keycloak sees the real client IP', () => {
     expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
     expect(block).not.toContain('$proxy_add_x_forwarded_for');
   });
+
+  // Setting the header only helps if nothing reaches Kong or Keycloak except
+  // through that nginx. Kong's proxy port widens solely for the macOS thin
+  // deploy, whose nginx is a container on host.docker.internal.
+  test('Kong and Keycloak are published on loopback on Linux', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    expect(compose).toContain('- "${PROXY_BIND_IP:-127.0.0.1}:18000:8000"');
+    expect(compose).not.toMatch(/- "(0\.0\.0\.0:)?18000:8000"/);
+    expect(compose).toContain('- "${BIND_IP:-127.0.0.1}:18180:8180"');
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain('BIND_IP=127.0.0.1');
+    expect(env).toContain("PROXY_BIND_IP={{ '0.0.0.0' if ansible_system == 'Darwin' else '127.0.0.1' }}");
+    expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml'))
+      .toContain('- "127.0.0.1:18180:8180"');
+  });
 });
 
 describe('Novu workflow creation deployment contract', () => {
