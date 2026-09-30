@@ -160,16 +160,19 @@ export async function saveBranding(
         ? await mdmsService.update(themeRecord, themeData)
         : await mdmsService.create(stateRoot, THEME_SCHEMA, THEME_UID, themeData);
     } catch (err) {
-      throw new ThemeSaveError(savedSoFar, err);
+      throw new ThemeSaveError(await loadBranding(tenantId).catch(() => savedSoFar), err);
     }
   }
 
-  return {
+  // Re-read rather than trust what the writes echoed: the next save needs each
+  // record's current id and audit details, and a write may be accepted without
+  // returning the record.
+  return loadBranding(tenantId).catch(() => ({
     tenantId,
     tenantRecord: tenantRecordAfter,
     themeRecord,
     name,
     logoUrl,
     themeId: changes.theme?.id ?? current.themeId,
-  };
+  }));
 }

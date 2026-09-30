@@ -88,13 +88,15 @@ export async function saveMaster(
   if (existing) {
     saved = await mdmsService.update(existing, dataFor(kind, { ...input, code: existing.uniqueIdentifier }, existing.data));
   } else {
+    // A record that still holds the code (removed, or written by a save that
+    // failed before its label) is brought back and refreshed, not created again.
     const all = await mdmsService.searchRecords(tenantId, SCHEMA[kind], { limit: 5000 });
-    const removed = all.find((record) => record.uniqueIdentifier === input.code && record.tenantId === tenantId);
-    saved = removed
-      ? await mdmsService.setActive(removed, true, dataFor(kind, input, removed.data))
+    const held = all.find((record) => record.uniqueIdentifier === input.code && record.tenantId === tenantId);
+    saved = held
+      ? await mdmsService.setActive(held, true, dataFor(kind, input, held.data))
       : await mdmsService.create(tenantId, SCHEMA[kind], input.code, dataFor(kind, input));
   }
-  await label(tenantId, kind, [{ ...input, code: saved.uniqueIdentifier }]);
+  await label(tenantId, kind, [{ ...input, code: existing?.uniqueIdentifier ?? input.code }]);
   await refreshLabels();
   return saved;
 }

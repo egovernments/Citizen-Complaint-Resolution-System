@@ -253,7 +253,7 @@ export function EmployeeDialog({
 
           <CheckList
             legend="System roles"
-            hint="What they can do. Employee is enough to sign in; GRO and PGR_LME handle complaints."
+            hint="What they can do. Employee is enough to sign in; complaint roles like GRO let them handle complaints."
             choices={options.roles}
             picked={roles}
             onChange={setRoles}

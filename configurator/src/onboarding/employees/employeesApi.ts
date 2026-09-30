@@ -1,4 +1,4 @@
-import { boundaryService, hrmsService, mdmsService } from '@/api';
+import { boundaryService, hrmsService, localizationService, mdmsService } from '@/api';
 import type { Employee } from '@/api/types';
 import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
 
@@ -54,13 +54,19 @@ export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOpt
   const boundaries: BoundaryChoice[] = [];
   for (const hierarchy of hierarchies) {
     const levels = (hierarchy.boundaryHierarchy ?? []).map((level) => level.boundaryType);
-    const found = await boundaryService
-      .searchBoundaries(tenantId, { hierarchyType: hierarchy.hierarchyType })
-      .catch(() => []);
+    // Relationship search returns codes only; a boundary's name is its label in
+    // rainmaker-boundary-<hierarchy>, keyed by the code, as Geography writes it.
+    const [found, labels] = await Promise.all([
+      boundaryService.searchBoundaries(tenantId, { hierarchyType: hierarchy.hierarchyType }).catch(() => []),
+      localizationService
+        .searchMessages(tenantId, 'en_IN', `rainmaker-boundary-${hierarchy.hierarchyType.toLowerCase()}`)
+        .catch(() => []),
+    ]);
+    const nameOf = new Map(labels.map((label) => [label.code, label.message]));
     for (const boundary of found) {
       boundaries.push({
         code: boundary.code,
-        name: boundary.name || boundary.code,
+        name: boundary.name || nameOf.get(boundary.code) || boundary.code,
         boundaryType: boundary.boundaryType,
         hierarchyType: hierarchy.hierarchyType,
         depth: Math.max(0, levels.indexOf(boundary.boundaryType)),
