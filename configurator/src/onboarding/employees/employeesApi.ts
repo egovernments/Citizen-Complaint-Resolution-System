@@ -1,0 +1,157 @@
+import { boundaryService, hrmsService, mdmsService } from '@/api';
+import type { Employee } from '@/api/types';
+import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
+
+/**
+ * Employees for the Employees step: the choices the add dialog offers (from
+ * the steps before it), the workspace's employees, adding one and removing one.
+ */
+
+export interface Choice {
+  code: string;
+  name: string;
+}
+
+export interface BoundaryChoice extends Choice {
+  boundaryType: string;
+  hierarchyType: string;
+  /** Position of its level in the hierarchy, 0 at the top. */
+  depth: number;
+}
+
+export interface EmployeeOptions {
+  departments: Choice[];
+  designations: (Choice & { departments: string[] })[];
+  roles: Choice[];
+  boundaries: BoundaryChoice[];
+  /** The workspace's own mobile rule (common-masters.MobileNumberValidation). */
+  mobilePattern: RegExp;
+}
+
+export interface NewEmployee {
+  code: string;
+  name: string;
+  mobileNumber: string;
+  emailId?: string;
+  departments: string[];
+  designation: string;
+  roles: string[];
+  jurisdictions: string[];
+}
+
+/** Used when the workspace has no mobile rule of its own. */
+const FALLBACK_MOBILE = /^\d{9,10}$/;
+
+export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOptions> {
+  const [departments, designations, roles, hierarchies, mobileRule] = await Promise.all([
+    listMasters(tenantId, 'department'),
+    listMasters(tenantId, 'designation'),
+    mdmsService.getRoles(tenantId).catch(() => []),
+    boundaryService.getHierarchies(tenantId).catch(() => []),
+    mdmsService.getMobileValidation(tenantId).catch(() => null),
+  ]);
+
+  const boundaries: BoundaryChoice[] = [];
+  for (const hierarchy of hierarchies) {
+    const levels = (hierarchy.boundaryHierarchy ?? []).map((level) => level.boundaryType);
+    const found = await boundaryService
+      .searchBoundaries(tenantId, { hierarchyType: hierarchy.hierarchyType })
+      .catch(() => []);
+    for (const boundary of found) {
+      boundaries.push({
+        code: boundary.code,
+        name: boundary.name || boundary.code,
+        boundaryType: boundary.boundaryType,
+        hierarchyType: hierarchy.hierarchyType,
+        depth: Math.max(0, levels.indexOf(boundary.boundaryType)),
+      });
+    }
+  }
+  boundaries.sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name));
+
+  let mobilePattern = FALLBACK_MOBILE;
+  if (mobileRule?.mobileNumberRegex) {
+    try {
+      mobilePattern = new RegExp(mobileRule.mobileNumberRegex);
+    } catch {
+      // A malformed rule falls back rather than blocking every number.
+    }
+  }
+
+  return {
+    departments: departments.map((record) => ({ code: record.uniqueIdentifier, name: recordName(record) })),
+    designations: designations.map((record) => ({
+      code: record.uniqueIdentifier,
+      name: recordName(record),
+      departments: recordDepartments(record),
+    })),
+    roles: roles.map((role) => ({ code: role.code, name: role.name || role.code })),
+    boundaries,
+    mobilePattern,
+  };
+}
+
+type EmployeeRecord = Employee & { isActive?: boolean };
+
+export async function listEmployees(tenantId: string): Promise<Employee[]> {
+  const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
+  return employees.filter((employee) => employee.isActive !== false);
+}
+
+/**
+ * One past the highest EMP_0001-style code. Counting up from the highest, not
+ * filling gaps, keeps a removed employee's code (still held by HRMS) unused.
+ */
+export function suggestEmployeeCode(existing: Employee[]): string {
+  const highest = existing.reduce((max, employee) => {
+    const match = /^EMP_(\d+)$/.exec(employee.code ?? '');
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return hrmsService.generateEmployeeCode('EMP', highest + 1);
+}
+
+export async function addEmployee(tenantId: string, input: NewEmployee, options: EmployeeOptions): Promise<Employee> {
+  const boundaryByCode = new Map(options.boundaries.map((boundary) => [boundary.code, boundary]));
+  const roleByCode = new Map(options.roles.map((role) => [role.code, role]));
+  // The username comes from the name; two people can share a name, so a taken
+  // one gets the (unique) employee code added.
+  const base = hrmsService.generateUsername(input.name.trim());
+  const userName = (await hrmsService.checkUsernameAvailable(tenantId, base))
+    ? base
+    : `${base}.${input.code.toLowerCase()}`;
+  const employee = hrmsService.buildEmployee({
+    tenantId,
+    code: input.code,
+    name: input.name.trim(),
+    userName,
+    mobileNumber: input.mobileNumber,
+    emailId: input.emailId?.trim() || undefined,
+    // buildEmployee makes the first the current assignment and the rest history.
+    department: input.departments.join(','),
+    designation: input.designation,
+    roles: input.roles.map((code) => ({ code, name: roleByCode.get(code)?.name ?? code })),
+    jurisdictions: input.jurisdictions.map((code) => {
+      const boundary = boundaryByCode.get(code);
+      return {
+        boundary: code,
+        boundaryType: boundary?.boundaryType ?? '',
+        hierarchyType: boundary?.hierarchyType ?? 'ADMIN',
+      };
+    }),
+  });
+  return hrmsService.createEmployee(employee);
+}
+
+/** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
+export async function removeEmployee(employee: Employee): Promise<void> {
+  const deactivated = {
+    ...employee,
+    isActive: false,
+    deactivationDetails: [{ reasonForDeactivation: 'OTHERS', effectiveFrom: Date.now() }],
+  } as Employee;
+  await hrmsService.updateEmployee(deactivated);
+}
+
+export function currentAssignment(employee: Employee) {
+  return employee.assignments?.find((assignment) => assignment.isCurrentAssignment) ?? employee.assignments?.[0];
+}

@@ -5,12 +5,12 @@ import ComplaintsStep from './onboarding/ComplaintsStep';
 import BrandingStep from './onboarding/BrandingStep';
 import GeographyStep from './onboarding/geography/GeographyStep';
 import DepartmentsStep from './onboarding/departments/DepartmentsStep';
+import EmployeesStep from './onboarding/employees/EmployeesStep';
 import { ONBOARDING_STEPS } from './onboarding/steps';
 import { isOnboardingComplete, resumePath } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import RootLanding from './pages/RootLanding';
-import Phase4Page from './pages/Phase4Page';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
@@ -529,7 +529,7 @@ function App() {
             <Route path="onboarding/branding" element={<BrandingStep />} />
             <Route path="onboarding/geography" element={<GeographyStep />} />
             <Route path="onboarding/departments" element={<DepartmentsStep />} />
-            <Route path="onboarding/employees" element={<Phase4Page />} />
+            <Route path="onboarding/employees" element={<EmployeesStep />} />
             <Route path="onboarding/complaints" element={<ComplaintsStep />} />
             <Route path="onboarding/*" element={<Navigate to={onboardingResume} replace />} />
             {/* The old numbered phases, for bookmarks and the pages that still link to them */}

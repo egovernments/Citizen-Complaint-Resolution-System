@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useApp } from '../App';
+import { useApp } from '../../App';
 import {
-  Users,
   Download,
   Upload,
   Check,
@@ -27,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { DigitCard } from '@/components/digit/DigitCard';
-import { Header, SubHeader } from '@/components/digit/Header';
+import { SubHeader } from '@/components/digit/Header';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
 import {
@@ -53,10 +51,15 @@ interface ParsedEmployee extends EmployeeExcelRow {
   error?: string;
 }
 
-export default function Phase4Page() {
-  const { completePhase, addUndo, state } = useApp();
+/**
+ * The staff-list route into Employees: a template built from the workspace's
+ * own departments, designations, roles and boundaries, filled in and uploaded,
+ * checked row by row, then created. Hands back to the Employees list when done
+ * (onDone) or backed out of (onCancel).
+ */
+export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const { addUndo, state } = useApp();
   const targetTenant = state.targetTenant || state.tenant;
-  const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>('landing');
   const [loading, setLoading] = useState(false);
@@ -395,11 +398,6 @@ export default function Phase4Page() {
     }
   };
 
-  const handleContinue = () => {
-    completePhase(4);
-    navigate('/complete');
-  };
-
   const handleDownloadTemplate = () => {
     downloadEmployeeTemplate();
   };
@@ -446,19 +444,6 @@ export default function Phase4Page() {
         className="hidden"
         disabled={loading || loadingRefs || !!refsError}
       />
-      {/* Header - DIGIT style */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 border-2 border-primary rounded flex items-center justify-center flex-shrink-0">
-          <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-        </div>
-        <div className="min-w-0">
-          <Header className="mb-0 text-lg sm:text-2xl">Phase 4: Employee Onboarding</Header>
-          <p className="text-sm sm:text-base text-muted-foreground truncate">
-            Bulk create employee accounts with roles and jurisdictions
-          </p>
-        </div>
-      </div>
-
       {/* Reference data unavailable — blocking, with retry. Not dismissible:
           without departments/designations/boundaries, row validation would
           mark every jurisdiction as not-found. */}
@@ -493,25 +478,6 @@ export default function Phase4Page() {
         </Alert>
       )}
 
-      {/* Prerequisites check */}
-      <div className="p-4 bg-success/10 border border-success/20 rounded">
-        <div className="flex items-center gap-2 text-success mb-2">
-          <Check className="w-5 h-5" />
-          <strong className="text-sm font-condensed">Prerequisites Met:</strong>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-1 sm:gap-4 text-xs sm:text-sm text-foreground">
-          <span className="flex items-center gap-1">
-            <Check className="w-3 h-3 text-success" /> Phase 1: Tenant created
-          </span>
-          <span className="flex items-center gap-1">
-            <Check className="w-3 h-3 text-success" /> Phase 2: Boundaries configured
-          </span>
-          <span className="flex items-center gap-1">
-            <Check className="w-3 h-3 text-success" /> Phase 3: Departments & Designations created
-          </span>
-        </div>
-      </div>
-
       {/* Landing */}
       {step === 'landing' && (
         <DigitCard>
@@ -541,9 +507,13 @@ export default function Phase4Page() {
             </ul>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </Button>
             <SubmitBar
-              label={loading || loadingRefs ? 'Loading...' : 'Start Phase 4'}
+              label={loading || loadingRefs ? 'Loading...' : 'Get the template'}
               onSubmit={handleGenerateTemplate}
               disabled={loading || loadingRefs || !!refsError}
               icon={
@@ -953,8 +923,8 @@ export default function Phase4Page() {
               Download Credentials CSV
             </Button>
             <SubmitBar
-              label="Complete Setup"
-              onSubmit={handleContinue}
+              label="Back to Employees"
+              onSubmit={onDone}
               icon={<ChevronRight className="w-4 h-4" />}
             />
           </div>
