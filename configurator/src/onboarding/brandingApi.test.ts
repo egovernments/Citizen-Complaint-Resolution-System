@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient, localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { BRAND_THEMES } from './brandThemes';
-import { loadBranding, matchBrandTheme, saveBranding, type Branding } from './brandingApi';
+import { loadBranding, matchBrandTheme, saveBranding, ThemeSaveError, type Branding } from './brandingApi';
 
 vi.mock('@/api', () => ({
   ENDPOINTS: { FILESTORE_FILE: '/filestore/v1/files/id' },
@@ -147,5 +147,22 @@ describe('saveBranding', () => {
     expect(update).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
     expect(upsertMessages).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveBranding when only the theme fails', () => {
+  it('reports what did save, so a retry does not upload the logo again', async () => {
+    upload.mockResolvedValue({ fileStoreId: 'file-2', fileName: 'logo.png' });
+    create.mockRejectedValueOnce(new Error('Schema definition against which data is being created is not found'));
+    const file = new File(['x'], 'logo.png', { type: 'image/png' });
+
+    const failure = await saveBranding(branding(), { name: 'Acme', logo: { kind: 'upload', file }, theme: cmsBlue }).catch(
+      (err) => err,
+    );
+
+    expect(failure).toBeInstanceOf(ThemeSaveError);
+    expect(failure.saved.name).toBe('Acme');
+    expect(failure.saved.logoUrl).toBe('https://digit.example/filestore/v1/files/id?tenantId=acme&fileStoreId=file-2');
+    expect(failure.saved.themeId).toBeNull();
   });
 });

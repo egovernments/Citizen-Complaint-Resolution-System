@@ -24,6 +24,23 @@ export interface Branding {
 
 export type LogoChange = { kind: 'upload'; file: File } | { kind: 'remove' } | null;
 
+/**
+ * The name and logo saved but the theme did not. `saved` is the branding as it
+ * now stands, so a retry writes only the theme instead of uploading the logo
+ * again.
+ */
+export class ThemeSaveError extends Error {
+  readonly saved: Branding;
+  readonly cause: unknown;
+
+  constructor(saved: Branding, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'ThemeSaveError';
+    this.saved = saved;
+    this.cause = cause;
+  }
+}
+
 const stateRootOf = (tenantId: string) => tenantId.split('.')[0];
 
 /** Colour sets compared regardless of key order. */
@@ -128,6 +145,7 @@ export async function saveBranding(
     });
   }
 
+  const savedSoFar: Branding = { ...current, tenantRecord: tenantRecordAfter, name, logoUrl };
   let themeRecord = current.themeRecord;
   if (changes.theme && changes.theme.id !== current.themeId) {
     const themeData = {
@@ -137,9 +155,13 @@ export async function saveBranding(
       version: changes.theme.version,
       colors: changes.theme.colors,
     };
-    themeRecord = themeRecord
-      ? await mdmsService.update(themeRecord, themeData)
-      : await mdmsService.create(stateRoot, THEME_SCHEMA, THEME_UID, themeData);
+    try {
+      themeRecord = themeRecord
+        ? await mdmsService.update(themeRecord, themeData)
+        : await mdmsService.create(stateRoot, THEME_SCHEMA, THEME_UID, themeData);
+    } catch (err) {
+      throw new ThemeSaveError(savedSoFar, err);
+    }
   }
 
   return {

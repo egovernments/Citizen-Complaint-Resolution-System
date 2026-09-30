@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ONBOARDING_STEPS } from './steps';
 import { StepHeader } from './StepHeader';
 import { BRAND_THEMES, DEFAULT_BRAND_THEME_ID } from './brandThemes';
-import { loadBranding, saveBranding, type Branding, type LogoChange } from './brandingApi';
+import { loadBranding, saveBranding, ThemeSaveError, type Branding, type LogoChange } from './brandingApi';
 import { announceOrganisation, initialsOf } from './organisation';
 import { describeSaveError } from './errors';
 
@@ -138,7 +138,17 @@ export default function BrandingStep() {
       completePhase(STEP.number);
       navigate(NEXT.path);
     } catch (err) {
-      setSaveError(describeSaveError(err, 'Saving your branding failed. Try again.'));
+      if (err instanceof ThemeSaveError) {
+        // What did save stays saved; only the theme is left to retry.
+        setBranding(err.saved);
+        setLogo(null);
+        announceOrganisation({ name: err.saved.name, logoUrl: err.saved.logoUrl });
+        setSaveError(
+          `Your name and logo are saved, but the theme isn’t. ${describeSaveError(err.cause, 'Try again.')}`,
+        );
+      } else {
+        setSaveError(describeSaveError(err, 'Saving your branding failed. Try again.'));
+      }
     } finally {
       setSaving(false);
     }

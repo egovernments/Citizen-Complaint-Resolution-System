@@ -8,5 +8,9 @@ export function describeSaveError(err: unknown, fallback: string): string {
   if (denied) {
     return 'Your account doesn’t have permission to change this workspace yet, so nothing was saved.';
   }
+  // mdms-v2 has no parent fallback on _create: a workspace missing a schema cannot hold its records.
+  if (/SCHEMA_DEFINITION_NOT_FOUND|Schema definition .*not found/i.test(message)) {
+    return 'This workspace isn’t fully set up on the server yet, so this couldn’t be saved.';
+  }
   return message || fallback;
 }
