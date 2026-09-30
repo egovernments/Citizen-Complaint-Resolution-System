@@ -8,30 +8,24 @@
  * Framework-free so it can be unit tested with a fake fetch.
  */
 
+import { requestJson } from "./identityBffLogin";
+
 const OTP_SEND_PATH = "/identity/v1/citizen/otp/_send";
 const OTP_VERIFY_PATH = "/identity/v1/citizen/otp/_verify";
 
-const getJson = async (fetchImpl, url) => {
-  const response = await fetchImpl(url, { credentials: "include", headers: { Accept: "application/json" } });
-  return { response, body: await response.json().catch(() => null) };
-};
-
-const postJson = async (fetchImpl, url, body) => {
-  const response = await fetchImpl(url, {
+const postJson = (fetchImpl, url, body) =>
+  requestJson(fetchImpl, url, {
     method: "POST",
-    credentials: "include",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return { response, body: await response.json().catch(() => null) };
-};
 
 /**
  * The citizen sign-in methods the BFF offers. `phoneOtp` is shown in digit-ui;
  * any other method is a Keycloak redirect through `/identity/v1/authorize`.
  */
 export async function fetchCitizenSigninMethods({ fetchImpl }) {
-  const { response, body } = await getJson(fetchImpl, "/identity/v1/auth-methods?intent=signin&surface=citizen");
+  const { response, body } = await requestJson(fetchImpl, "/identity/v1/auth-methods?intent=signin&surface=citizen");
   if (!response.ok) return { ok: false, phoneOtp: false, redirect: false };
   const methods = Array.isArray(body?.methods) ? body.methods : [];
   return {
@@ -42,7 +36,8 @@ export async function fetchCitizenSigninMethods({ fetchImpl }) {
 }
 
 // messageKey and English fallback per BFF error code. `{{seconds}}` and
-// `{{attempts}}` are filled from the response.
+// `{{attempts}}` are filled from the response; when the response lacks the
+// number, NO_COUNT gives a sentence without it.
 const OTP_ERRORS = Object.freeze({
   INVALID_MOBILE_NUMBER: ["CORE_IDENTITY_OTP_INVALID_MOBILE", "This mobile number cannot be used here."],
   OTP_CHANNEL_UNAVAILABLE: [
@@ -59,6 +54,14 @@ const OTP_ERRORS = Object.freeze({
   IDENTITY_UNAVAILABLE: ["CORE_IDENTITY_SIGNIN_FAILED", "Sign-in could not be completed. Please try again."],
 });
 
+const TRY_LATER = ["CORE_IDENTITY_OTP_TRY_LATER", "Too many attempts. Please try again later."];
+const NO_COUNT = Object.freeze({
+  OTP_RESEND_TOO_SOON: TRY_LATER,
+  OTP_RATE_LIMITED: TRY_LATER,
+  OTP_LOCKED: TRY_LATER,
+  OTP_INVALID: ["CORE_IDENTITY_OTP_INVALID_CODE", "That code is not correct."],
+});
+
 const retryAfterOf = (response, body) => {
   const value = Number(body?.retryAfter ?? response.headers?.get?.("Retry-After"));
   return Number.isFinite(value) && value > 0 ? Math.ceil(value) : undefined;
@@ -72,7 +75,8 @@ export function citizenOtpFailure(response, body) {
   const code = typeof body?.code === "string" ? body.code : undefined;
   const retryAfter = retryAfterOf(response, body);
   const attemptsRemaining = Number.isInteger(body?.attemptsRemaining) ? body.attemptsRemaining : undefined;
-  const [messageKey, template] = OTP_ERRORS[code] ||
+  const missingCount = code === "OTP_INVALID" ? attemptsRemaining === undefined : retryAfter === undefined;
+  const [messageKey, template] = (missingCount && NO_COUNT[code]) || OTP_ERRORS[code] ||
     (response.status === 404
       ? ["CORE_IDENTITY_TENANT_UNAVAILABLE", "This site is not available."]
       : ["CORE_IDENTITY_SIGNIN_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again."]);
@@ -104,7 +108,7 @@ export async function sendCitizenOtp({ tenant, mobileNumber, locale, fetchImpl }
     mobileNumber,
     ...(locale ? { locale } : {}),
   });
-  if (response.status === 202 && typeof body?.challengeId === "string") {
+  if (response.ok && typeof body?.challengeId === "string") {
     return {
       ok: true,
       challengeId: body.challengeId,

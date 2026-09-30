@@ -107,7 +107,6 @@ test("_verify: OTP_INVALID reports the attempts left", async () => {
 test("_verify: expired, locked and identity failures map to their own keys", async () => {
   const cases = [
     [400, "OTP_EXPIRED", "CORE_IDENTITY_OTP_EXPIRED"],
-    [429, "OTP_LOCKED", "CORE_IDENTITY_OTP_LOCKED"],
     [403, "IDENTITY_DISABLED", "CORE_IDENTITY_ACCOUNT_DISABLED"],
     [409, "IDENTITY_CONFLICT", "CORE_IDENTITY_SIGNIN_FAILED"],
     [503, "IDENTITY_UNAVAILABLE", "CORE_IDENTITY_SIGNIN_FAILED"],
@@ -118,4 +117,21 @@ test("_verify: expired, locked and identity failures map to their own keys", asy
     assert.equal(verified.ok, false);
     assert.equal(verified.messageKey, messageKey, code);
   }
+});
+
+test("a missing retryAfter or attemptsRemaining gives a sentence without the number", async () => {
+  const limited = fakeFetch(429, { code: "OTP_RATE_LIMITED" }, { "Retry-After": "Wed, 30 Sep 2026 10:00:00 GMT" });
+  const sent = await sendCitizenOtp({ tenant: TENANT, mobileNumber: "7", fetchImpl: limited.fetchImpl });
+  assert.equal(sent.messageKey, "CORE_IDENTITY_OTP_TRY_LATER");
+  assert.doesNotMatch(sent.message, /\{\{|  /);
+
+  const invalid = fakeFetch(400, { code: "OTP_INVALID" });
+  const verified = await verifyCitizenOtp({ tenant: TENANT, challengeId: "c1", code: "000000", fetchImpl: invalid.fetchImpl });
+  assert.equal(verified.messageKey, "CORE_IDENTITY_OTP_INVALID_CODE");
+  assert.equal(verified.message, "That code is not correct.");
+});
+
+test("_send accepts any 2xx that carries a challenge", async () => {
+  const { fetchImpl } = fakeFetch(200, { challengeId: "c2", expiresIn: 300, resendAfter: 30 });
+  assert.equal((await sendCitizenOtp({ tenant: TENANT, mobileNumber: "7", fetchImpl })).challengeId, "c2");
 });

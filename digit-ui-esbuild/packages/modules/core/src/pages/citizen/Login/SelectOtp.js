@@ -128,16 +128,14 @@ const SelectOtp = ({
   userType = "citizen",
   canSubmit,
   recipient,
-  // Identity BFF sign-in: seconds until Resend is allowed, and the error to
-  // show in place of CS_INVALID_OTP. `onResend` may resolve to the next wait.
+  // Identity BFF sign-in: seconds until Resend is allowed (read on mount),
+  // the error to show in place of CS_INVALID_OTP, and a way back to the
+  // number. `onResend` may resolve to the next wait.
   resendAfter,
   errorMessage,
+  onChangeNumber,
 }) => {
   const [timeLeft, setTimeLeft] = useState(resendAfter ?? 30);
-
-  useEffect(() => {
-    if (resendAfter !== undefined) setTimeLeft(resendAfter);
-  }, [resendAfter]);
 
   useInterval(
     () => {
@@ -258,6 +256,25 @@ const SelectOtp = ({
               {tr("CS_RESEND_OTP", "Resend OTP")}
             </button>
           )}
+          {onChangeNumber ? (
+            <button
+              type="button"
+              onClick={onChangeNumber}
+              className="v2-change-number"
+              style={{
+                background: "transparent",
+                border: 0,
+                padding: 0,
+                marginLeft: "16px",
+                cursor: "pointer",
+                color: "var(--color-button-tertiary-text, var(--color-link-normal, #2563EB))",
+                fontWeight: 500,
+                fontSize: "0.875rem",
+              }}
+            >
+              {tr("CORE_IDENTITY_OTP_CHANGE_NUMBER", "Change number")}
+            </button>
+          ) : null}
         </div>
       </SignInCard>
     </V2LoginShell>
