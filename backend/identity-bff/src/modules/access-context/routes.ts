@@ -47,6 +47,15 @@ function digitFailure(error: unknown, response: express.Response, message: strin
   if (error instanceof ManagedAccountError) {
     return response.status(error.status).json({ error: error.message });
   }
+  if (error instanceof DigitUnavailableError && error.digitCodes.includes("INVALID_ROLE")) {
+    // egov-user rejects a role that is not defined at the tenant. Seeding
+    // roles is the platform baseline's job (#2169), not the BFF's.
+    console.warn(`${message}: DIGIT roles are not installed for this tenant`);
+    return response.status(503).json({
+      error: "This tenant is not ready for sign-in yet",
+      code: "TENANT_ROLES_MISSING",
+    });
+  }
   if (error instanceof DigitUnavailableError) {
     console.warn(`${message}:`, error.message);
     return response.status(503).json({ error: message });

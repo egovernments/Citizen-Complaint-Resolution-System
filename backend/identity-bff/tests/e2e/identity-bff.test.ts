@@ -1788,4 +1788,28 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     }
     await getRedis().del(tokenCache);
   });
+
+  it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
+    const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
+    for (const [key, account] of digit.accounts) {
+      if (account.userName === identity.username) digit.accounts.delete(key);
+    }
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    const creates = digit.stats.creates;
+    const rolesKey = digit.mdmsKey("ke", "ACCESSCONTROL-ROLES.roles");
+    const roles = JSON.stringify(digit.mdms.get(rolesKey) ?? null);
+    digit.setUndefinedRoles(["CITIZEN"]);
+    try {
+      const response = await citizenSelect(await signIn("citizen"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "This tenant is not ready for sign-in yet",
+        code: "TENANT_ROLES_MISSING",
+      });
+      expect(digit.stats.creates).toBe(creates);
+      expect(JSON.stringify(digit.mdms.get(rolesKey) ?? null)).toBe(roles);
+    } finally {
+      digit.setUndefinedRoles([]);
+    }
+  });
 });

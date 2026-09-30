@@ -50,6 +50,8 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
   // egov-user can mask PII in search responses; tests turn this on to prove
   // callers never depend on the searched mobileNumber.
   let maskSearchMobileNumbers = false;
+  /** Role codes that account writes reject as undefined at the tenant. */
+  const undefinedRoles = new Set<string>();
   /** egov-otp store: `${identity}|${tenantId}` -> live one-time codes. */
   const otps = new Map<string, Set<string>>();
   /** egov-localization rows. */
@@ -181,12 +183,16 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     if (!POLICY.test(user.password || "") || !user.mobileNumber || !user.roles?.length) {
       return res.status(400).json({ error: "invalid user" });
     }
+    // egov-user's answer to a role that is not defined at the tenant.
+    if (user.roles.some((role: Role) => undefinedRoles.has(role.code))) {
+      return res.status(400).json({ Errors: [{ code: "INVALID_ROLE", message: "Unable to validate role from MDMS" }] });
+    }
     if (options.validateRoles) {
       const validRoles = new Set((mdms.get(mdmsKey(user.tenantId, "ACCESSCONTROL-ROLES.roles")) || [])
         .filter((record) => record.isActive !== false)
         .map((record) => record.data?.code));
       if (user.roles.some((role: Role) => role.tenantId !== user.tenantId || !validRoles.has(role.code))) {
-        return res.status(400).json({ error: "INVALID_ROLE" });
+        return res.status(400).json({ Errors: [{ code: "INVALID_ROLE", message: "Unable to validate role from MDMS" }] });
       }
       const mobileRule = (mdms.get(mdmsKey(user.tenantId, "common-masters.MobileNumberValidation")) || [])
         .find((record) => record.isActive !== false && record.data?.default === true)?.data;
@@ -337,6 +343,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     otps, localization, mdmsKey,
     setTokenTtlSeconds(seconds: number) { tokenTtlSeconds = seconds; },
     setMaskSearchMobileNumbers(mask: boolean) { maskSearchMobileNumbers = mask; },
+    setUndefinedRoles(codes: string[]) { undefinedRoles.clear(); codes.forEach((code) => undefinedRoles.add(code)); },
     expireAllTokens() { for (const entry of tokens.values()) entry.expiresAt = Date.now() - 1; },
     async start(): Promise<string> {
       server = app.listen(0);
