@@ -415,11 +415,17 @@ class SessionManager {
     context.chatInterface = this;
     let locale = context.user.locale;
     let savedMobileNumber = context.user.mobileNumber; // Preserve the saved mobileNumber
+    let savedWhatsAppAddress = context.user.whatsAppAddress;
     context.user = reformattedMessage.user;
     context.user.locale = locale;
     // Ensure mobileNumber is always present
     if (!context.user.mobileNumber && savedMobileNumber) {
       context.user.mobileNumber = savedMobileNumber;
+    }
+    // Same for the reply address: one message without a usable From must not wipe it,
+    // or later sends fall back to the tenant's default country code.
+    if (!context.user.whatsAppAddress && savedWhatsAppAddress) {
+      context.user.whatsAppAddress = savedWhatsAppAddress;
     }
     context.extraInfo = reformattedMessage.extraInfo;
 

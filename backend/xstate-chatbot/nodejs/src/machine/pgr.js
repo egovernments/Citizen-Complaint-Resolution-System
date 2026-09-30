@@ -419,6 +419,9 @@ const pgr =  {
                       context.slots.pgr.city = context.pgr.detectedLocation.city;
                       if(context.pgr.detectedLocation.locality) {
                         context.slots.pgr.locality = context.pgr.detectedLocation.locality;
+                        context.slots.pgr.localityIsBoundaryCode = !!context.pgr.detectedLocation.localityIsBoundaryCode;
+                        let bundle = context.pgr.detectedLocation.matchedLocalityMessageBundle;
+                        if (bundle) context.slots.pgr.localityName = dialog.get_message(bundle, context.user.locale);
                       }
 
                       context.message = {
@@ -628,6 +631,8 @@ const pgr =  {
                         context.slots.pgr["predictedLocality"] = predictedLocality;
                         context.slots.pgr["isLocalityDataMatch"] = isLocalityDataMatch;
                         context.slots.pgr["locality"] = predictedLocalityCode;
+                        // nlp-engine returns bare codes; filing adds ADMIN_ (see persistComplaint).
+                        context.slots.pgr.localityIsBoundaryCode = false;
                       })
                     }, 
                     onError: {
@@ -771,6 +776,13 @@ const pgr =  {
                         let preamble = dialog.get_message(messages.fileComplaint.locality.question.preamble, context.user.locale);
                         let {prompt, grammer} = dialog.constructListPromptAndGrammer(localities, messageBundle, context.user.locale);
                         context.grammer = grammer;
+                        // Names of the offered codes, so filing needs no second localisation
+                        // fetch. Its presence also marks the list as boundary codes, which a
+                        // list saved by an older version is not (see persistComplaint).
+                        context.localityNames = {};
+                        for (let code of localities) {
+                          context.localityNames[code] = dialog.get_message(messageBundle[code], context.user.locale);
+                        }
                         dialog.sendMessage(context, `${preamble}${prompt}`);
                       })
                     },
@@ -790,7 +802,12 @@ const pgr =  {
                     {
                       target: '#persistComplaint',
                       cond: (context) => context.intention != dialog.INTENTION_UNKOWN,
-                      actions: assign((context, event) => context.slots.pgr["locality"] = context.intention)
+                      actions: assign((context, event) => {
+                        context.slots.pgr["locality"] = context.intention;
+                        context.slots.pgr.localityIsBoundaryCode = context.localityNames !== undefined;
+                        let name = context.localityNames && context.localityNames[context.intention];
+                        if (name) context.slots.pgr.localityName = name;
+                      })
                     },
                     {
                       target: 'error',

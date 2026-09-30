@@ -53,14 +53,52 @@ test("REGRESSION (review): the saved session keeps the reply address", (t) => {
   assert.deepEqual(saved.context.user, { ...CITIZEN, userId: "u-1", locale: "en_IN" });
 });
 
-test("REGRESSION (review): reminders use the saved reply address", async () => {
-  const chatState = { value: { pgr: "question" }, context: { user: { ...CITIZEN, locale: "en_IN" } } };
+test("REGRESSION (review): a message without a usable From keeps the saved reply address", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { module: sessionManager } = loadWithStubs(sessionPath);
+  // A real saved state, as removeUserDataFromState leaves it.
+  const saved = JSON.parse(JSON.stringify(require(src("machine/seva.js")).initialState));
+  saved.context = { ...(saved.context || {}), user: { ...CITIZEN, userId: "u-1", locale: "en_IN" } };
+  const service = sessionManager.getChatServiceFor(saved, {
+    user: { userId: "u-1", mobileNumber: undefined, whatsAppAddress: undefined },
+    extraInfo: {},
+  });
+  assert.equal(service.state.context.user.whatsAppAddress, CITIZEN.whatsAppAddress);
+  assert.equal(service.state.context.user.mobileNumber, CITIZEN.mobileNumber);
+  service.stop();
+});
+
+function loadReminders(contact, savedAddress) {
+  const chatState = { value: { pgr: "question" }, context: { user: { whatsAppAddress: savedAddress, locale: "en_IN" } } };
   const { module: reminders, sent } = loadWithStubs(remindersPath, {
     getActiveStateForUserId: async () => chatState,
   });
-  // egov-user returns only the national number.
-  reminders.getMobileNumberFromUserId = async () => CITIZEN.mobileNumber;
+  reminders.getContactFromUserId = async () => contact;
+  return { reminders, sent };
+}
+
+test("REGRESSION (review): reminders use egov-user's own country code first", async () => {
+  const { reminders, sent } = loadReminders({ mobileNumber: "6307817430", countryCode: "+91" }, undefined);
   await reminders.sendMessages(["u-1"]);
-  assert.equal(sent.length, 1);
+  assert.equal(sent[0].user.whatsAppAddress, "whatsapp:+916307817430");
+});
+
+test("REGRESSION (review): reminders use the saved address only while it is the same number", async () => {
+  // No countryCode on the record: the saved address is used while it matches...
+  let { reminders, sent } = loadReminders({ mobileNumber: "6307817430" }, CITIZEN.whatsAppAddress);
+  await reminders.sendMessages(["u-1"]);
   assert.equal(sent[0].user.whatsAppAddress, CITIZEN.whatsAppAddress);
+
+  // ...and dropped once the registered number has changed.
+  ({ reminders, sent } = loadReminders({ mobileNumber: "7012345678" }, CITIZEN.whatsAppAddress));
+  await reminders.sendMessages(["u-1"]);
+  assert.equal(sent[0].user.whatsAppAddress, undefined);
+  assert.equal(sent[0].user.mobileNumber, "7012345678");
+});
+
+test("a changed number with a stored country code goes to the new number", async () => {
+  const { reminders, sent } = loadReminders({ mobileNumber: "0712345678", countryCode: "+254" }, CITIZEN.whatsAppAddress);
+  await reminders.sendMessages(["u-1"]);
+  // Trunk 0 dropped; the stale saved +91 address is ignored.
+  assert.equal(sent[0].user.whatsAppAddress, "whatsapp:+254712345678");
 });

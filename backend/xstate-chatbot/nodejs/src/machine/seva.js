@@ -5,6 +5,13 @@ const emailTenantService = require("./service/email-tenant-service");
 const config = require("../env-variables");
 const dialog = require("./util/dialog.js");
 
+/** The profile-confirmation prompt, shared by its question and its retry. */
+function profileConfirmationQuestion(context) {
+  return dialog
+    .get_message(messages.onboarding.onBoardingUserProfileConfirmation.question, context.user.locale)
+    .replace("{{name}}", context.user.name);
+}
+
 const sevaMachine = Machine({
   id: "mseva",
   initial: "start",
@@ -334,13 +341,7 @@ const sevaMachine = Machine({
                   );
                   dialog.sendMessage(context, nameInformationMessage, false);
                   await new Promise((resolve) => setTimeout(resolve, 1000));
-                  let message = dialog.get_message(
-                    messages.onboarding.onBoardingUserProfileConfirmation
-                      .question,
-                    context.user.locale
-                  );
-                  message = message.replace("{{name}}", context.user.name);
-                  dialog.sendMessage(context, message);
+                  dialog.sendMessage(context, profileConfirmationQuestion(context));
                 })();
               }),
               on: {
@@ -380,11 +381,7 @@ const sevaMachine = Machine({
                   context.user.locale
                 );
                 dialog.sendMessage(context, retry, false);
-                let question = dialog.get_message(
-                  messages.onboarding.onBoardingUserProfileConfirmation.question,
-                  context.user.locale
-                );
-                dialog.sendMessage(context, question.replace("{{name}}", context.user.name));
+                dialog.sendMessage(context, profileConfirmationQuestion(context));
               }),
               on: {
                 USER_MESSAGE: "process",

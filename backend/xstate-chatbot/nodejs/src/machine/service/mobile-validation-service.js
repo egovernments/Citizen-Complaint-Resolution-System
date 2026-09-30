@@ -14,8 +14,15 @@ const fetch = require("node-fetch");
  * Row shape (MDMS v2 `mdms[].data`), matching the seeded masters:
  *   { "countryCode": "+254", "mobileNumberRegex": "^0?[17][0-9]{8}$", "default": true }
  *
- * Resolution mirrors novu-bridge's MdmsServiceClient so inbound and outbound agree on the
- * same number for the same citizen: the first active row whose `default` is true wins.
+ * The primary rule matches novu-bridge's MdmsServiceClient: the first active row whose
+ * `default` is true wins. A state can carry more rows (ke: +254 and +91); inbound also
+ * accepts those as `alternates`, so a +91 citizen is not turned away.
+ *
+ * Outbound does not depend on the alternates. PGR builds the notification number from the
+ * citizen's own egov-user `countryCode` (ComplaintDomainEventService.buildFullMobile,
+ * NotificationService.buildMobileWithCountryCode), and novu-bridge sends a `+`-prefixed
+ * number unchanged. novu-bridge's default row is only a fallback for a citizen record with
+ * no `countryCode`.
  */
 const SCHEMA_CODE = "common-masters.MobileNumberValidation";
 
@@ -179,12 +186,26 @@ class MobileValidationService {
    * alternate would otherwise get +254 put back on.
    */
   resolveNational(raw, mobileConfig) {
-    const national = this.nationalFor(raw, mobileConfig);
-    if (national) return { national, rule: mobileConfig };
-    // Only when the primary rule cannot reconcile the number: try the state's other rows.
-    for (const alternate of (mobileConfig && mobileConfig.alternates) || []) {
-      const viaAlternate = this.nationalFor(raw, alternate);
-      if (viaAlternate) return { national: viaAlternate, rule: alternate };
+    if (!mobileConfig) return null;
+    const digits = this.digitsOnly(raw);
+    if (!digits) return null;
+    const rules = [mobileConfig, ...(mobileConfig.alternates || [])];
+
+    // 1. A rule whose country code actually prefixes the number, and which accepts what
+    //    is left once it is removed. This must run before any regex-only match: a
+    //    permissive primary such as ^[0-9]{9,12}$ also accepts the as-sent 916307817430
+    //    and would otherwise hide the +91 row.
+    for (const rule of rules) {
+      const cc = this.countryDigits(rule);
+      if (!cc || !digits.startsWith(cc) || digits.length <= cc.length) continue;
+      const national = this.nationalFor(digits, rule);
+      if (national && national !== digits) return { national, rule };
+    }
+
+    // 2. Otherwise the as-sent form, primary first (a bare national number).
+    for (const rule of rules) {
+      const national = this.nationalFor(digits, rule);
+      if (national) return { national, rule };
     }
     return null;
   }

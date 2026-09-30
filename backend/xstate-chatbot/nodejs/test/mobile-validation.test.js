@@ -375,3 +375,25 @@ test("each mobileNumberRegex is compiled once", () => {
   const bad = { countryCode: "+1", mobileNumberRegex: "([" };
   assert.equal(s.nationalRegex(bad), s.nationalRegex(bad));
 });
+
+test("REGRESSION (review): a permissive primary does not hide the row whose code prefixes the number", async () => {
+  // This file's own example of a permissive rule, as the primary, with a +91 alternate.
+  const s = loadService({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        mdms: [
+          { isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^[0-9]{9,12}$", default: true } },
+          { isActive: true, data: { countryCode: "+91", mobileNumberRegex: "^[6-9][0-9]{9}$" } },
+        ],
+      }),
+    }),
+  });
+  const ke = await s.getConfig("ke");
+  // 916307817430 also matches ^[0-9]{9,12}$ as sent; the +91 row must still win.
+  const resolved = s.resolveNational("whatsapp:+916307817430", ke);
+  assert.equal(resolved.national, "6307817430");
+  assert.equal(resolved.rule.countryCode, "+91");
+  // The primary still wins for its own numbers.
+  assert.equal(s.resolveNational("whatsapp:+254712345678", ke).rule.countryCode, "+254");
+});

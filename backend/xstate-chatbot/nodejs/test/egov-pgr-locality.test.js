@@ -71,7 +71,7 @@ test("REGRESSION: locality codes are offered exactly as boundary-service returns
 test("REGRESSION: the complaint carries the boundary code, not an ADMIN_-prefixed copy", async () => {
   const { svc, calls } = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]));
   const user = { authToken: "t", userId: "u", userInfo: {}, locale: "en_IN" };
-  await svc.persistComplaint(user, { complaint: "StreetLight", city: "ke.bomet", locality: "W1_ADMIN_WARD" });
+  await svc.persistComplaint(user, { complaint: "StreetLight", city: "ke.bomet", locality: "W1_ADMIN_WARD", localityIsBoundaryCode: true });
 
   const create = calls.find((c) => c.url.includes("request/_create"));
   const sent = JSON.parse(create.options.body);
@@ -96,30 +96,59 @@ test("REGRESSION (review): a generated label drops the ADMIN_ prefix, the code k
 test("REGRESSION (review): the MDMS fallback offers the ADMIN_ form PGR validates", async () => {
   const { svc } = load(() => ({ status: 500, body: {} })); // boundary-service down
   svc.fetchMdmsData = async () => [{ code: "SUN04" }, { code: "ADMIN_SUN05" }];
-  require(locPath).getMessagesForCodesAndTenantId = async () => ({});
-  const { localities } = await svc.fetchLocalities("pg.citya");
+  let requestedKeys;
+  require(locPath).getMessagesForCodesAndTenantId = async (codes) => {
+    requestedKeys = codes;
+    return { PG_CITYA_ADMIN_SUN04: { en_IN: "Sunshine 4" }, PG_CITYA_ADMIN_SUN05: {} };
+  };
+  const { localities, messageBundle } = await svc.fetchLocalities("pg.citya");
   // persistComplaint used to add this prefix for every source; now only this one needs it.
   assert.deepEqual(localities, ["ADMIN_SUN04", "ADMIN_SUN05"]);
+  // A code that already has ADMIN_ is not prefixed a second time in the key either.
+  assert.deepEqual(requestedKeys, ["PG_CITYA_ADMIN_SUN04", "PG_CITYA_ADMIN_SUN05"]);
+  assert.equal(messageBundle["ADMIN_SUN04"].en_IN, "Sunshine 4");
+  // A missing translation falls back to a generated label instead of undefined, which
+  // made the pick-list throw.
+  assert.equal(messageBundle["ADMIN_SUN05"].en_IN, "Sun 05");
 });
 
-test("REGRESSION (review): a code saved without its prefix is matched back to the list when filing", async () => {
-  // A session saved before the deploy holds SUN04 (the old code stripped ADMIN_), and the
-  // NLP fuzzy search returns bare codes too. Both must still file as ADMIN_SUN04.
-  const { svc, calls } = load((url) => {
-    if (url.includes("boundary-relationships/_search")) {
-      return { body: { TenantBoundary: [{ boundary: [{ code: "ADMIN_SUN04" }] }] } };
-    }
-    if (url.includes("request/_create")) return { status: 400, body: {} };
-    return { body: { messages: [] } };
-  });
-  const user = { authToken: "t", userId: "u", userInfo: {}, locale: "en_IN" };
-  await svc.persistComplaint(user, { complaint: "StreetLight", city: "pg.citya", locality: "SUN04", localityName: "Sun 04" });
-  const sent = JSON.parse(calls.find((c) => c.url.includes("request/_create")).options.body);
-  assert.equal(sent.service.address.locality.code, "ADMIN_SUN04");
+function filingHarness() {
+  const { svc, calls } = load((url) => (url.includes("request/_create") ? { status: 400, body: {} } : { body: { messages: [] } }));
+  const file = async (slots) => {
+    const before = calls.length;
+    await svc.persistComplaint(
+      { authToken: "t", userId: "u", userInfo: {}, locale: "en_IN" },
+      { complaint: "StreetLight", city: "pg.citya", localityName: "Named", ...slots },
+    );
+    const made = calls.slice(before);
+    return { made, sent: JSON.parse(made.find((c) => c.url.includes("request/_create")).options.body) };
+  };
+  return { file };
+}
+
+test("REGRESSION (review): filing makes no boundary or localisation lookup", async () => {
+  const { file } = filingHarness();
+  const { made } = await file({ locality: "W1_ADMIN_WARD", localityIsBoundaryCode: true });
+  // Only the create call: no per-filing boundary search, and the name came from the slot.
+  assert.deepEqual(made.map((c) => new URL(c.url).pathname), ["/pgr-services/v2/request/_create"]);
 });
 
-test("a code already in the list, or unknown to it, is filed unchanged", async () => {
-  const { svc } = load(boundaryAndLocalisation(["W1_ADMIN_WARD"]));
-  assert.equal(await svc.resolveLocalityCode("ke.bomet", "W1_ADMIN_WARD"), "W1_ADMIN_WARD");
-  assert.equal(await svc.resolveLocalityCode("ke.bomet", "NOT_IN_LIST"), "NOT_IN_LIST");
+test("REGRESSION (review): a boundary code is sent unchanged", async () => {
+  const { file } = filingHarness();
+  const { sent } = await file({ locality: "W1_ADMIN_WARD", localityIsBoundaryCode: true });
+  assert.equal(sent.service.address.locality.code, "W1_ADMIN_WARD");
+  assert.equal(sent.service.address.locality.name, "Named");
+});
+
+test("REGRESSION (review): an unmarked code keeps the old ADMIN_ rule, with no lookup", async () => {
+  // A session saved before this change holds SUN04; NLP codes are bare too. Both file as
+  // ADMIN_SUN04 exactly as before, even while boundary-service is unreachable.
+  const { file } = filingHarness();
+  assert.equal((await file({ locality: "SUN04" })).sent.service.address.locality.code, "ADMIN_SUN04");
+  assert.equal(
+    (await file({ locality: "SUN04", localityIsBoundaryCode: false })).sent.service.address.locality.code,
+    "ADMIN_SUN04",
+  );
+  // Never prefixed twice.
+  assert.equal((await file({ locality: "ADMIN_SUN05" })).sent.service.address.locality.code, "ADMIN_SUN05");
 });
