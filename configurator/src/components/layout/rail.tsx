@@ -100,7 +100,7 @@ export function RailCloseButton({ label, onClick }: { label: string; onClick: ()
 export function RailPoweredBy({ collapsed }: { collapsed: boolean }) {
   if (collapsed) return null;
   return (
-    <div className="border-t border-border px-4 py-3 flex justify-center">
+    <div className="border-t border-muted p-3 flex items-center justify-center">
       <DigitFooter />
     </div>
   );
