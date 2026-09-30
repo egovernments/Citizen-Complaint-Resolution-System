@@ -99,18 +99,28 @@ export async function loadEmployeeOptions(tenantId: string): Promise<EmployeeOpt
 
 type EmployeeRecord = Employee & { isActive?: boolean };
 
-export async function listEmployees(tenantId: string): Promise<Employee[]> {
+export interface EmployeeList {
+  /** The employees who can sign in: what the step lists. */
+  active: Employee[];
+  /** Every code HRMS holds, removed employees' included: none can be given out again. */
+  codes: string[];
+}
+
+export async function listEmployees(tenantId: string): Promise<EmployeeList> {
   const employees = (await hrmsService.searchEmployees(tenantId, { limit: 500 })) as EmployeeRecord[];
-  return employees.filter((employee) => employee.isActive !== false);
+  return {
+    active: employees.filter((employee) => employee.isActive !== false),
+    codes: employees.map((employee) => employee.code).filter((code): code is string => !!code),
+  };
 }
 
 /**
- * One past the highest EMP_0001-style code. Counting up from the highest, not
- * filling gaps, keeps a removed employee's code (still held by HRMS) unused.
+ * One past the highest EMP_0001-style code HRMS holds, removed employees'
+ * included, so a removed employee's code is never offered again.
  */
-export function suggestEmployeeCode(existing: Employee[]): string {
-  const highest = existing.reduce((max, employee) => {
-    const match = /^EMP_(\d+)$/.exec(employee.code ?? '');
+export function suggestEmployeeCode(codes: string[]): string {
+  const highest = codes.reduce((max, code) => {
+    const match = /^EMP_(\d+)$/.exec(code);
     return match ? Math.max(max, Number(match[1])) : max;
   }, 0);
   return hrmsService.generateEmployeeCode('EMP', highest + 1);

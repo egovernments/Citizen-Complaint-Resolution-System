@@ -42,16 +42,20 @@ beforeEach(() => {
 describe('suggestEmployeeCode', () => {
   it('suggests one past the highest EMP_ code', () => {
     expect(suggestEmployeeCode([])).toBe('EMP_0001');
-    expect(suggestEmployeeCode([employee('ADMIN'), employee('EMP_0001')])).toBe('EMP_0002');
+    expect(suggestEmployeeCode(['ADMIN', 'EMP_0001'])).toBe('EMP_0002');
     // Never fills a gap: EMP_0002 may belong to someone removed
-    expect(suggestEmployeeCode([employee('EMP_0001'), employee('EMP_0003')])).toBe('EMP_0004');
+    expect(suggestEmployeeCode(['EMP_0001', 'EMP_0003'])).toBe('EMP_0004');
   });
 });
 
 describe('listEmployees', () => {
-  it('leaves out deactivated employees', async () => {
-    hrms.searchEmployees.mockResolvedValue([employee('A'), { ...employee('B'), isActive: false } as Employee]);
-    expect((await listEmployees('acme')).map((e) => e.code)).toEqual(['A']);
+  it('lists active employees but keeps every code HRMS holds', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('EMP_0001'), { ...employee('EMP_0003'), isActive: false } as Employee]);
+    const list = await listEmployees('acme');
+    expect(list.active.map((e) => e.code)).toEqual(['EMP_0001']);
+    expect(list.codes).toEqual(['EMP_0001', 'EMP_0003']);
+    // Removing the highest (EMP_0003) doesn't hand its code out again.
+    expect(suggestEmployeeCode(list.codes)).toBe('EMP_0004');
   });
 });
 

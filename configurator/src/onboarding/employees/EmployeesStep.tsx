@@ -37,6 +37,8 @@ export default function EmployeesStep() {
 
   const [options, setOptions] = useState<EmployeeOptions | null>(null);
   const [employees, setEmployees] = useState<Employee[] | null>(null);
+  // Every code HRMS holds, removed employees' included.
+  const [codes, setCodes] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [bulk, setBulk] = useState(false);
@@ -48,7 +50,8 @@ export default function EmployeesStep() {
       .then(([loadedOptions, loadedEmployees]) => {
         if (cancelled) return;
         setOptions(loadedOptions);
-        setEmployees(loadedEmployees);
+        setEmployees(loadedEmployees.active);
+        setCodes(loadedEmployees.codes);
         setLoadError(null);
       })
       .catch((err) => {
@@ -296,8 +299,8 @@ export default function EmployeesStep() {
       <EmployeeDialog
         open={adding}
         options={options}
-        suggestedCode={suggestEmployeeCode(employees)}
-        takenCodes={new Set(employees.map((employee) => employee.code))}
+        suggestedCode={suggestEmployeeCode(codes)}
+        takenCodes={new Set(codes)}
         onOpenChange={setAdding}
         onSave={add}
       />

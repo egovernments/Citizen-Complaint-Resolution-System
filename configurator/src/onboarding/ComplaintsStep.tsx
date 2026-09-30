@@ -17,6 +17,7 @@ import { listMasters, recordName } from './departments/mastersApi';
 import { TypeDialog } from './complaints/TypeDialog';
 import {
   loadComplaints,
+  rowsFingerprint,
   saveComplaints,
   subtypeCount,
   DEFAULT_SLA_HOURS,
@@ -35,19 +36,28 @@ const RESOLUTION_CHOICES = [
   { hours: 336, label: '2 weeks' },
 ];
 
-/** Unsaved work survives a reload, per workspace, until it is saved or discarded. */
+/**
+ * Unsaved work survives a reload, per workspace, until it is saved or
+ * discarded. It keeps a fingerprint of the server rows it was made against,
+ * so a draft outlived by someone else's changes is dropped, not saved over them.
+ */
+interface StoredDraft {
+  draft: ComplaintDraft;
+  basis: string;
+}
 const draftKey = (tenant: string) => `ccrs-complaints-draft:${tenant}`;
-function readDraft(tenant: string): ComplaintDraft | null {
+function readDraft(tenant: string): StoredDraft | null {
   try {
     const raw = window.localStorage.getItem(draftKey(tenant));
-    return raw ? (JSON.parse(raw) as ComplaintDraft) : null;
+    const stored = raw ? (JSON.parse(raw) as Partial<StoredDraft>) : null;
+    return stored?.draft && typeof stored.basis === 'string' ? (stored as StoredDraft) : null;
   } catch {
     return null;
   }
 }
-function writeDraft(tenant: string, draft: ComplaintDraft | null) {
+function writeDraft(tenant: string, stored: StoredDraft | null) {
   try {
-    if (draft) window.localStorage.setItem(draftKey(tenant), JSON.stringify(draft));
+    if (stored) window.localStorage.setItem(draftKey(tenant), JSON.stringify(stored));
     else window.localStorage.removeItem(draftKey(tenant));
   } catch {
     // Storage unavailable: the draft just lives as long as the page.
@@ -84,7 +94,16 @@ export default function ComplaintsStep() {
         if (cancelled) return;
         setLoaded(result);
         setDepartments(departmentRecords.map((record) => ({ code: record.uniqueIdentifier, name: recordName(record) })));
-        const stored = result.editable ? readDraft(tenant) : null;
+        const basis = result.editable ? rowsFingerprint(result.records) : '';
+        const saved = result.editable ? readDraft(tenant) : null;
+        const stored = saved && saved.basis === basis ? saved.draft : null;
+        if (saved && !stored) {
+          writeDraft(tenant, null);
+          toast({
+            title: 'Unsaved changes dropped',
+            description: 'The complaint types were changed somewhere else since, so you’re seeing the saved version.',
+          });
+        }
         setDraft(result.editable ? stored ?? result.draft : null);
         setDirty(!!stored);
         setLoadError(null);
@@ -102,7 +121,7 @@ export default function ComplaintsStep() {
   const change = (next: ComplaintDraft) => {
     setDraft(next);
     setDirty(true);
-    writeDraft(tenant, next);
+    if (loaded?.editable) writeDraft(tenant, { draft: next, basis: rowsFingerprint(loaded.records) });
   };
 
   const departmentName = useMemo(() => new Map(departments.map((choice) => [choice.code, choice.name])), [departments]);

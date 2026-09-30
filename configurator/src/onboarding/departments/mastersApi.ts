@@ -44,11 +44,15 @@ export function recordDepartments(record: MdmsRecord): string[] {
   return Array.isArray(departments) ? departments.filter((code): code is string => typeof code === 'string') : [];
 }
 
-/** The workspace's active records of one kind, oldest first. */
+/**
+ * The workspace's own active records of one kind, oldest first. mdms-v2 falls
+ * back to the state root's rows when a city has none; those belong to the
+ * whole state, so they're left out rather than offered for editing here.
+ */
 export async function listMasters(tenantId: string, kind: MasterKind): Promise<MdmsRecord[]> {
   const records = await mdmsService.searchRecords(tenantId, SCHEMA[kind], { limit: 5000 });
   return records
-    .filter((record) => record.isActive !== false)
+    .filter((record) => record.tenantId === tenantId && record.isActive !== false)
     .sort((a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0));
 }
 

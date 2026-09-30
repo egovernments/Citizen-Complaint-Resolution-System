@@ -17,15 +17,16 @@ import { reportStepError, trackStepAction } from './telemetry';
 const STEP = ONBOARDING_STEPS.find((step) => step.id === 'branding')!;
 const NEXT = ONBOARDING_STEPS.find((step) => step.number === STEP.number + 1)!;
 
-// What egov-filestore accepts for images, so a wrong file fails here rather than as a 400.
-const LOGO_TYPES = ['image/png', 'image/svg+xml', 'image/jpeg'];
+// What egov-filestore accepts for images, so a wrong file fails here rather than
+// as a 400. It takes no SVG, and serving an uploaded SVG from our own origin
+// would open a stored-XSS path anyway.
+const LOGO_TYPES = ['image/png', 'image/jpeg'];
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const LOGO_MIN_PX = 128;
 const NAME_MAX = 100;
 
-/** A raster logo's pixel size; SVGs scale, so they have none worth checking. */
+/** The logo's pixel size, or null when the image can't be read. */
 function imageSize(file: File): Promise<{ width: number; height: number } | null> {
-  if (file.type === 'image/svg+xml') return Promise.resolve(null);
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -95,7 +96,7 @@ export default function BrandingStep() {
     if (!file) return;
     setLogoError(null);
     if (!LOGO_TYPES.includes(file.type)) {
-      setLogoError('Use a PNG, SVG or JPG image.');
+      setLogoError('Use a PNG or JPG image.');
       return;
     }
     if (file.size > LOGO_MAX_BYTES) {
@@ -207,7 +208,7 @@ export default function BrandingStep() {
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  {shownLogo ? 'Logo uploaded.' : 'PNG or SVG, at least 128px square.'}
+                  {shownLogo ? 'Logo uploaded.' : 'PNG or JPG, at least 128px square.'}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>

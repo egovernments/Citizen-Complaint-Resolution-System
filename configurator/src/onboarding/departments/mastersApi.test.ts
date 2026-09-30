@@ -55,6 +55,11 @@ describe('listMasters', () => {
     const listed = await listMasters('acme', 'department');
     expect(listed.map((r) => r.uniqueIdentifier)).toEqual(['ROADS']);
   });
+
+  it("leaves out the state root's rows a city search falls back to", async () => {
+    search.mockResolvedValue([record({ tenantId: 'ke' })]);
+    expect(await listMasters('ke.a', 'department')).toEqual([]);
+  });
 });
 
 describe('saveMaster', () => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
-import { loadComplaints, rowsFor, saveComplaints, type ComplaintDraft } from './complaintsApi';
+import { loadComplaints, nextData, rowsFingerprint, rowsFor, saveComplaints, type ComplaintDraft } from './complaintsApi';
 
 vi.mock('@/api', () => ({
   mdmsService: { searchRecords: vi.fn(), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), setActive: vi.fn(async () => ({})) },
@@ -87,6 +87,16 @@ describe('loadComplaints', () => {
     });
   });
 
+  it("ignores the state root's rows a city search falls back to", async () => {
+    search.mockImplementation(async (_tenant, schema) =>
+      schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition'
+        ? []
+        : [row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Garbage', department: 'HEALTH', slaHours: 72 }, { tenantId: 'ke' })],
+    );
+    const loaded = await loadComplaints('ke.a');
+    expect(loaded.editable && loaded.draft.types).toEqual([]);
+  });
+
   it('leaves a spreadsheet hierarchy with other levels alone', async () => {
     search.mockImplementation(async (_tenant, schema) =>
       schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition'
@@ -122,5 +132,65 @@ describe('saveComplaints', () => {
       expect.objectContaining({ parentCode: 'StreetLighting', path: 'StreetLighting.StreetLightsBrokenLamp', department: 'ROADS', slaHours: 72 }),
     );
     expect(setActive).toHaveBeenCalledWith(existing[1], false);
+  });
+});
+
+describe('a type that gains subtypes', () => {
+  it('loses the leaf fields it had as a leaf', () => {
+    const asLeaf = { hierarchyType: 'PGR', levelCode: 'COMPLAINT_TYPE', code: 'Garbage', name: 'Garbage', department: 'HEALTH', slaHours: 72, keywords: '' };
+    const [typeRow] = rowsFor({ slaHours: 72, types: [{ code: 'Garbage', name: 'Garbage', department: 'HEALTH', subtypes: [{ name: 'Overflowing bin' }] }] }, ['Garbage']);
+    const next = nextData(asLeaf, typeRow);
+    expect(next).not.toHaveProperty('department');
+    expect(next).not.toHaveProperty('slaHours');
+    expect(next).not.toHaveProperty('keywords');
+  });
+
+  it('is updated on save even though its own fields did not change', async () => {
+    const existing = [row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Garbage', parentCode: null, order: 1, active: true, path: 'Garbage', department: 'HEALTH', slaHours: 72, keywords: '' })];
+    search.mockResolvedValue(existing);
+    const withSubtype: ComplaintDraft = { slaHours: 72, types: [{ code: 'Garbage', name: 'Garbage', department: 'HEALTH', subtypes: [{ name: 'Overflowing bin' }] }] };
+    await saveComplaints('acme', { editable: true, draft: withSubtype, records: existing, hasDefinition: true }, withSubtype);
+    const [, sent] = update.mock.calls.find(([record]) => record === existing[0])!;
+    expect(sent).not.toHaveProperty('department');
+    expect(sent).not.toHaveProperty('slaHours');
+  });
+});
+
+describe('a city workspace', () => {
+  it("only adds its codes at the state root, never changing or switching off another city's", async () => {
+    const cityRows = [row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Garbage', department: 'HEALTH', slaHours: 72 }, { tenantId: 'ke.a' })];
+    const rootRows = [
+      row('Garbage', { levelCode: 'COMPLAINT_TYPE', name: 'Rubbish', department: 'SANITATION', slaHours: 24 }, { id: 'root-garbage', tenantId: 'ke' }),
+      row('Potholes', { levelCode: 'COMPLAINT_TYPE', name: 'Potholes', department: 'ROADS', slaHours: 72 }, { id: 'root-potholes', tenantId: 'ke' }),
+    ];
+    search.mockImplementation(async (tenant, schema) =>
+      schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition' ? [] : tenant === 'ke' ? rootRows : cityRows,
+    );
+    const saved: ComplaintDraft = {
+      slaHours: 72,
+      types: [
+        { code: 'Garbage', name: 'Garbage', department: 'HEALTH', subtypes: [] },
+        { name: 'Water leak', department: 'WATER', subtypes: [] },
+      ],
+    };
+    await saveComplaints('ke.a', { editable: true, draft: saved, records: cityRows, hasDefinition: true }, saved);
+
+    // Another city's Potholes stays on, and the shared Garbage row keeps its data.
+    expect(setActive).not.toHaveBeenCalledWith(rootRows[1], false);
+    expect(update).not.toHaveBeenCalledWith(rootRows[0], expect.anything());
+    // The new type is added at the root so pgr-services can validate it.
+    expect(create).toHaveBeenCalledWith('ke', 'RAINMAKER-PGR.ComplaintHierarchy', 'WaterLeak', expect.objectContaining({ code: 'WaterLeak' }));
+    expect(update.mock.calls.filter(([record]) => record.tenantId === 'ke')).toEqual([]);
+    expect(setActive.mock.calls.filter(([record, isActive]) => record.tenantId === 'ke' && !isActive)).toEqual([]);
+  });
+});
+
+describe('rowsFingerprint', () => {
+  it('changes when a row is edited or switched off, not when the order does', () => {
+    const a = row('A', {}, { auditDetails: { createdBy: 'x', createdTime: 1, lastModifiedBy: 'x', lastModifiedTime: 1 } });
+    const b = row('B', {});
+    expect(rowsFingerprint([a, b])).toBe(rowsFingerprint([b, a]));
+    expect(rowsFingerprint([{ ...a, auditDetails: { ...a.auditDetails!, lastModifiedTime: 2 } }, b])).not.toBe(rowsFingerprint([a, b]));
+    expect(rowsFingerprint([{ ...a, isActive: false }, b])).not.toBe(rowsFingerprint([a, b]));
   });
 });

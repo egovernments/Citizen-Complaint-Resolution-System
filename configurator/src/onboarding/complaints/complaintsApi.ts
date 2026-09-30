@@ -54,10 +54,13 @@ export function subtypeCount(draft: ComplaintDraft): number {
 }
 
 export async function loadComplaints(tenantId: string): Promise<LoadedComplaints> {
-  const [definitions, records] = await Promise.all([
+  const [definitions, searched] = await Promise.all([
     mdmsService.searchRecords(tenantId, DEFINITION_SCHEMA).catch(() => [] as MdmsRecord[]),
     mdmsService.searchRecords(tenantId, HIERARCHY_SCHEMA, { limit: 5000 }),
   ]);
+  // mdms-v2 falls back to the state root's rows when a city has none of its
+  // own. Those belong to the whole state, so a city workspace edits only its own.
+  const records = searched.filter((record) => record.tenantId === tenantId);
   const definition = definitions.find(
     (record) => record.isActive !== false && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE,
   );
@@ -160,11 +163,51 @@ export function rowsFor(draft: ComplaintDraft, existingCodes: Iterable<string>):
   return rows;
 }
 
-const sameData = (a: Record<string, unknown>, b: Record<string, unknown>) =>
-  Object.keys(b).every((key) => JSON.stringify(a[key] ?? null) === JSON.stringify(b[key] ?? null));
+/** The fields that make a row something people file against. */
+const LEAF_FIELDS = ['department', 'slaHours', 'keywords'];
 
-/** Make one tenant's hierarchy match the rows: create, update, restore or deactivate. */
-async function sync(tenantId: string, rows: { code: string; data: Record<string, unknown> }[], hasDefinition: boolean): Promise<void> {
+/**
+ * What a row's record should hold: its current data with the row's on top. A
+ * type that now has subtypes loses the leaf fields it had as a leaf: digit-ui
+ * and the analytics decide "fileable" from exactly those fields.
+ */
+export function nextData(current: Record<string, unknown>, row: { data: Record<string, unknown> }): Record<string, unknown> {
+  const next = { ...current, ...row.data };
+  if (row.data.levelCode === LEVELS[0] && !('department' in row.data)) {
+    for (const field of LEAF_FIELDS) delete next[field];
+  }
+  return next;
+}
+
+const sameData = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  [...new Set([...Object.keys(a), ...Object.keys(b)])].every(
+    (key) => JSON.stringify(a[key] ?? null) === JSON.stringify(b[key] ?? null),
+  );
+
+/**
+ * A fingerprint of the server's rows, kept with a local draft: a draft made
+ * against rows that have changed since (another admin, another browser) is
+ * stale, and saving it would undo their work.
+ */
+export function rowsFingerprint(records: MdmsRecord[]): string {
+  return records
+    .map((record) => `${record.id}:${record.isActive !== false}:${record.auditDetails?.lastModifiedTime ?? 0}`)
+    .sort()
+    .join('|');
+}
+
+/**
+ * Make one tenant's hierarchy match the rows. At the workspace's own tenant:
+ * create, update, restore or deactivate. At the state root (`shared`), where
+ * every city's copy lives: only create what is missing and restore what was
+ * removed, never change or switch off a row another city may rely on.
+ */
+async function sync(
+  tenantId: string,
+  rows: { code: string; data: Record<string, unknown> }[],
+  hasDefinition: boolean,
+  { shared = false }: { shared?: boolean } = {},
+): Promise<void> {
   if (!hasDefinition) {
     await mdmsService.create(tenantId, DEFINITION_SCHEMA, HIERARCHY_TYPE, {
       hierarchyType: HIERARCHY_TYPE,
@@ -188,9 +231,13 @@ async function sync(tenantId: string, rows: { code: string; data: Record<string,
   for (const row of rows) {
     const record = byCode.get(row.code);
     if (!record) await mdmsService.create(tenantId, HIERARCHY_SCHEMA, row.code, row.data);
-    else if (record.isActive === false) await mdmsService.setActive(record, true, { ...dataOf(record), ...row.data });
-    else if (!sameData(dataOf(record), row.data)) await mdmsService.update(record, { ...dataOf(record), ...row.data });
+    else if (record.isActive === false) await mdmsService.setActive(record, true, shared ? undefined : nextData(dataOf(record), row));
+    else if (!shared) {
+      const next = nextData(dataOf(record), row);
+      if (!sameData(dataOf(record), next)) await mdmsService.update(record, next);
+    }
   }
+  if (shared) return;
   for (const record of existing) {
     if (record.isActive !== false && !wanted.has(codeOf(record))) await mdmsService.setActive(record, false);
   }
@@ -214,6 +261,7 @@ export async function saveComplaints(
       stateRoot,
       rows,
       rootDefinitions.some((record) => record.tenantId === stateRoot && text(dataOf(record).hierarchyType) === HIERARCHY_TYPE),
+      { shared: true },
     ).catch(() => undefined);
   }
 
