@@ -47,6 +47,10 @@ services:
     restart: unless-stopped
     env_file:
       - ${IDENTITY_ENV_DIR:?set IDENTITY_ENV_DIR}/identity-bff.env
+    environment:
+      # From the stack's .env, exactly as egov-user reads them (#2189).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
     depends_on:
       keycloak:
         condition: service_healthy

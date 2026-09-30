@@ -551,3 +551,31 @@ describe('Novu workflow creation deployment contract', () => {
     expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
 });
+
+// #2189: the BFF's development fixed citizen OTP must follow egov-user's, or
+// the two accept different codes for the same citizen.
+describe('fixed citizen OTP settings are shared with egov-user', () => {
+  const service = (compose: string, name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = compose.slice(start + 1);
+    const end = rest.slice(1).search(/\n  [a-z0-9-]+:\n/);
+    return end < 0 ? rest : rest.slice(0, end + 1);
+  };
+  const vars = [
+    'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}',
+    'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}',
+  ];
+
+  test('egov-user and identity-bff read the same variables', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    for (const name of ['egov-user', 'identity-bff']) {
+      for (const v of vars) expect(service(compose, name)).toContain(v);
+    }
+  });
+
+  test('the identity overlay passes them from the stack .env', () => {
+    const overlay = read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml');
+    for (const v of vars) expect(service(overlay, 'identity-bff')).toContain(v);
+  });
+});
