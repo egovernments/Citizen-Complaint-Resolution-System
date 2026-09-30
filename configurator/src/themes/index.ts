@@ -280,30 +280,11 @@ const THEME_MAP = new Map(THEMES.map((t) => [t.name, t]));
 const STORAGE_KEY = 'digit-theme';
 
 export function getStoredTheme(): string {
-  return localStorage.getItem(STORAGE_KEY) || 'digit-orange';
+  // CMS Blue until someone picks another preset from the top bar.
+  return localStorage.getItem(STORAGE_KEY) || 'cms-blue';
 }
 
-/**
- * A preset's variables, for a surface that wants to scope a palette to its own
- * subtree rather than to the document.
- *
- * Scoping beats setting them on `documentElement` from a child, because
- * ThemeProvider sits above and its effect runs after any child's — so a child
- * that paints the root gets quietly overwritten on mount. Custom properties
- * cascade, so the nearest ancestor wins and there is nothing to restore.
- */
-export function themeVariables(name: string): Record<string, string> {
-  return { ...(THEME_MAP.get(name)?.variables ?? {}) };
-}
-
-/**
- * Paint a theme without remembering it.
- *
- * Split out from `applyTheme` for surfaces that set their own look for as long
- * as they are mounted and hand it back afterwards — the signup flow does this,
- * and persisting there would leave the admin console wearing the onboarding
- * palette for every later visit.
- */
+/** Paint a theme on the document without remembering it; `applyTheme` also saves it. */
 export function applyThemeVariables(name: string): boolean {
   const preset = THEME_MAP.get(name);
   if (!preset) return false;
