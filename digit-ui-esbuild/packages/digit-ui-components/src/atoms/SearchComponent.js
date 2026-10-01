@@ -317,7 +317,7 @@ const SearchComponent = ({ uiConfig, header = "", screenType = "search", fullCon
                   )}
                   {uiConfig?.secondaryLabel && (
                     <Button
-                      variation="teritiary"
+                      variation={uiConfig?.secondaryLabelVariation || "teritiary"}
                       label={t(uiConfig?.secondaryLabel)}
                       type="button"
                       size={"medium"}
