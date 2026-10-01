@@ -248,6 +248,10 @@ const CreateComplaintForm = ({
             // key would otherwise show it raw.
             return [{ ...field, label: translateOr(t, "CS_FILE_DESCRIBE", "Describe your complaint") }];
           }
+          if (fname === "GeoLocationsPoint") {
+            // Not every tenant seeds it, and a missing key renders raw.
+            return [{ ...field, label: translateOr(t, "CS_COMPLAINT_DETAILS_PIN_LOCATION", "Pin Location") }];
+          }
           if (fname === "postalCode") {
             // Show the SAME dynamic, length-aware message the citizen flows
             // show ("Please enter a valid 4-digit postal code" on a 4-digit
