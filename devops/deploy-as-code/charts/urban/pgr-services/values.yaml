@@ -15,7 +15,7 @@ labels:
 # both pass it.) So the release must stop the old pod before starting the new one.
 #
 # Upgrade order: novu-bridge BEFORE this chart. A bridge from before the thin-event
-# stack dead-letters thin events and nothing replays them (docs/2.20/notifications/
+# stack dead-letters thin events and nothing replays them (docs/releases/2.20/notifications/
 # migration.md). digit-helmfile.yaml applies common-services (novu-bridge, with
 # wait: true) before urban for that reason.
 #

@@ -6448,5 +6448,467 @@
         "message": "Dear Citizen, Your complaint for <complaint_type> has been submitted with ID <id> on <date>. You can track your complaint status on the web portal.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_BREADCRUMB",
+        "message": "Breadcrumb",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_COPIED",
+        "message": "Copied",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_COPY",
+        "message": "Copy",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_REMOVE",
+        "message": "Remove",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_TRY_AGAIN",
+        "message": "Try Again",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_VIEW_COMPLAINT",
+        "message": "View Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_LOAD_ERROR",
+        "message": "Couldn't load this complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_LOAD_ERROR_DESC",
+        "message": "The complaint details aren't reachable right now. Please try refreshing in a moment.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_ONE",
+        "message": "Select…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_PARENT_FIRST",
+        "message": "Select the level above first",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_SUBTYPE",
+        "message": "Select a subtype",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_TYPE",
+        "message": "Select a complaint type",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_ADDRESS",
+        "message": "Address",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_ANOTHER",
+        "message": "File another complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_ATTACHMENTS",
+        "message": "Attachments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_CATEGORY",
+        "message": "Complaint category",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_CATEGORY_LABEL",
+        "message": "Category",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_CHECK_SUBMIT",
+        "message": "Check and submit",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_COMPLAINANT",
+        "message": "Complainant details",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_COMPLAINT_NUMBER",
+        "message": "Complaint number",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_DESCRIBE",
+        "message": "Describe your complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_DESCRIBE_PLACEHOLDER",
+        "message": "Type your complaint here…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_FILED_ON",
+        "message": "Filed on",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_HINT_CATEGORY",
+        "message": "Select a category and sub-category to continue.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_HINT_DESCRIBE",
+        "message": "Describe your complaint to continue.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_HINT_LETTERS",
+        "message": "Use at least three letters to describe the complaint.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_HINT_LOCATION",
+        "message": "Select every level of the location to continue.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_HINT_UPLOADING",
+        "message": "Wait for your photos to finish uploading.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_HINT_UPLOAD_FAILED",
+        "message": "A photo didn't upload. Retry it or remove it.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NEXT_STEP",
+        "message": "Next: {step}",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NONE",
+        "message": "None",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NOT_CAPTURED",
+        "message": "Not captured",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NOT_PINNED",
+        "message": "No location pinned yet (Optional)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NOT_PROVIDED",
+        "message": "Not provided",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NOT_SELECTED",
+        "message": "Not selected",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_NO_PHOTOS",
+        "message": "None attached",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PHOTO",
+        "message": "Upload a photo",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PHOTOS",
+        "message": "Photos",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PHOTOS_ATTACHED",
+        "message": "{count} attached",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PINNED",
+        "message": "Pinned location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PIN_DROP",
+        "message": "Location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PIN_HINT",
+        "message": "Search, drag the map, or use current location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_PROGRESS",
+        "message": "Progress",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_REVIEW_HEADING",
+        "message": "Review before you submit",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_STEP_LOCATION",
+        "message": "Location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_STEP_OF",
+        "message": "Step {current} of {total}",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_SUBCATEGORY_LABEL",
+        "message": "Sub-category",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FILE_TODAY",
+        "message": "Today",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_LANDMARK_PLACEHOLDER",
+        "message": "e.g. Near Jamia Mosque",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_DROP",
+        "message": "Click to upload or drag and drop a photo",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_FAILED",
+        "message": "Upload failed",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_GALLERY",
+        "message": "Choose from gallery",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_LIMIT",
+        "message": "You can attach up to 5 photos.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_RULES",
+        "message": "JPG or PNG, up to 5 MB each, 5 at most",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_SHEET_TITLE",
+        "message": "Upload a photo",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_TAKE",
+        "message": "Take a photo",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_TOO_LARGE",
+        "message": "That photo is over 5 MB. Choose a smaller one.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_TYPE",
+        "message": "Only JPG or PNG photos can be attached.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PHOTO_UPLOADING",
+        "message": "Uploading…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_PIN_LOCATION_HINT",
+        "message": "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_ENGLISH_ONLY",
+        "message": "Voice input currently works in English only.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_FAILED",
+        "message": "Voice input stopped unexpectedly. Try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_MIC_BLOCKED",
+        "message": "Microphone access is blocked. Allow it for this site in your browser settings, then try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_SERVICE_OFF",
+        "message": "Voice input is turned off on this device. On an iPhone or Mac, turn on Siri in Settings, then try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_NETWORK",
+        "message": "Voice input needs an internet connection. Check it and try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_NO_MIC",
+        "message": "No microphone was found on this device.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_NO_SPEECH",
+        "message": "We didn't hear anything. Try again and speak close to the microphone.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_READY",
+        "message": "Transcription ready",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_READY_HINT",
+        "message": "Add it to your description, record again, or delete it.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_RECORD",
+        "message": "Record your complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_RECORDING",
+        "message": "Recording…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_RETAKE",
+        "message": "Retake",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_RETRY",
+        "message": "Try again",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_STOP",
+        "message": "Stop",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_TRY_AGAIN",
+        "message": "Couldn't record",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_USE",
+        "message": "Upload",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_SEARCH",
+        "message": "Search",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]

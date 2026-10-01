@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Checks a built event against the published thin-event contract,
  * {@code backend/novu-bridge/src/main/resources/contract/thin-event-v1.schema.json} (identical copy
- * under {@code docs/2.20/notifications/contract/}). The Docker test runner builds this module on its
+ * under {@code docs/releases/2.20/notifications/contract/}). The Docker test runner builds this module on its
  * own, so the schema cannot be read from here; the sets below are taken from it by hand and must
  * follow it when it changes.
  */

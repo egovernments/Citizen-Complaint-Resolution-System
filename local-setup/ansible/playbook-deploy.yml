@@ -1399,7 +1399,7 @@
     # runs ahead of them. Always layered: it IS the migration model (it turns the
     # apps' embedded Flyway off and gates them on their migrator), so a deploy
     # without it silently falls back to embedded Flyway and, on an
-    # operator-supplied dump, can destroy data. See docs/db-migration-flow.md.
+    # operator-supplied dump, can destroy data. See docs/operations/data-migration/README.md.
     #
     # db/ is already synchronized below (digit_config_dirs), which carries
     # db/normalize/ (the guard's build context) and db/flyway-history-map.yml.
@@ -2460,7 +2460,7 @@
     # The status board's key is collected only when OpenBao has nothing AND the
     # operator did not pin one in host_vars — a host_vars password is the
     # operator's to manage, and copying it into OpenBao would quietly create a
-    # second source of truth. (That is also why `docs/2.12/deployment/README.md`
+    # second source of truth. (That is also why `docs/releases/2.12/deployment/README.md`
     # points at the host_vars value as well as the `bao kv get`.)
     - name: "OpenBao — collect the passwords this deploy generated"
       ansible.builtin.set_fact:
@@ -6948,7 +6948,7 @@
     #     left exactly as it is — novu-bridge keeps serving it through its legacy
     #     adapter. It is reported (NOTIFICATIONS-MIGRATION-PENDING) and migrated by an
     #     operator, per tenant, after reviewing `migrate-notifications.py plan`
-    #     (docs/2.20/notifications/migration.md). No row is copied, no default merged.
+    #     (docs/releases/2.20/notifications/migration.md). No row is copied, no default merged.
     #   • already on NOTIFICATIONS.*: left exactly as it is.
     #   • no configuration at all AND no complaint ever filed at the tenant (a fresh
     #     install): the shipped defaults, written straight into NOTIFICATIONS.* (routing
@@ -7435,7 +7435,7 @@
           `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
           DIGIT_LOGIN_TENANT={{ item }} python3 migrate-notifications.py plan --tenant {{ item }}`,
           then the same with `apply ... --yes`. {{ notif_provider_owner_note }}
-          See docs/2.20/notifications/migration.md.
+          See docs/releases/2.20/notifications/migration.md.
 
     # No configuration in either namespace, and not provably a fresh install (complaints
     # have been filed at the root, or they could not be counted). The deploy wrote no
@@ -7483,7 +7483,7 @@
           then the same with `apply ... --adopt-defaults --yes`. {{ notif_provider_owner_note }}
           Demo complaints only (a restored dump): add {{ item }} to `notifications_adopt_defaults`
           in host_vars (e.g. `notifications_adopt_defaults: [{{ item }}]`) and re-run
-          `--tags notifications` instead. See docs/2.20/notifications/migration.md.
+          `--tags notifications` instead. See docs/releases/2.20/notifications/migration.md.
 
     - name: "notif-seed — WARNING: channel rows were not written"
       when:
@@ -7518,7 +7518,7 @@
           {{ notif_seed_user | default('ADMIN') }} cannot log in there, so this deploy did not
           seed or decide it and its complaints may send nothing (#1943). Either provision that
           admin at {{ item }} (holding MDMS_ADMIN) and re-run `--tags notifications`, or seed it
-          by hand with an admin that exists there — docs/2.20/notifications/setup-guide.md §8.2
+          by hand with an admin that exists there — docs/releases/2.20/notifications/setup-guide.md §8.2
           (NOTIF_TENANT={{ item }} DIGIT_LOGIN_TENANT={{ item }}). If those complaints are test
           data nobody is notified about, add the root to `notifications_seed_exclude`.
 
@@ -7572,7 +7572,7 @@
           MDMS could not be read at {{ item }} (nothing was written then).
           {%- endif %}
           Then re-run `./deploy.sh {{ inventory_hostname }} --tags notifications`, or seed it by hand with an
-          admin of {{ item }} — docs/2.20/notifications/setup-guide.md §8.2 (NOTIF_TENANT={{ item }}
+          admin of {{ item }} — docs/releases/2.20/notifications/setup-guide.md §8.2 (NOTIF_TENANT={{ item }}
           DIGIT_LOGIN_TENANT={{ item }}). If those complaints are demo or test data nobody is
           notified about, add the root to `notifications_seed_exclude` instead.
 

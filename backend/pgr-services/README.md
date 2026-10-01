@@ -115,16 +115,16 @@ flag: rollback means redeploying the previous image.
 
 A token PGR cannot fill is omitted, not blanked; `download_link` is blanked to `""` on a
 shortener outage. The event must stay valid against
-[`thin-event-v1.schema.json`](../../docs/2.20/notifications/contract/thin-event-v1.schema.json)
-([examples](../../docs/2.20/notifications/contract/examples/thin/)); see the
-[notifications developer guide](../../docs/2.20/notifications/developer-guide.md).
+[`thin-event-v1.schema.json`](../../docs/releases/2.20/notifications/contract/thin-event-v1.schema.json)
+([examples](../../docs/releases/2.20/notifications/contract/examples/thin/)); see the
+[notifications developer guide](../../docs/releases/2.20/notifications/developer-guide.md).
 
 
 ### Configurable properties
 
 | Environment Variables                     | Description                                                                                                                                               | Value                                             |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
-| `pgr.complain.idle.time`                  | **Fallback only.** The reopen window is MDMS `RAINMAKER-PGR.UIConstants.REOPENSLA`, per tenant; this applies only when MDMS has no usable value. Do not set `PGR_COMPLAIN_IDLE_TIME` — see `docs/reopen-window.md`. | 259200000                                         |
+| `pgr.complain.idle.time`                  | **Fallback only.** The reopen window is MDMS `RAINMAKER-PGR.UIConstants.REOPENSLA`, per tenant; this applies only when MDMS has no usable value. Do not set `PGR_COMPLAIN_IDLE_TIME` — see `docs/features/reopen-window/README.md`. | 259200000                                         |
 | `pgr.default.offset`                      | The default offset in any search                                                                                                                          | 0                                                 |
 | `pgr.default.limit`                       | The default limit in any search call.                                                                                                                     | 100                                               |
 | `pgr.search.max.limit`                    | The maximum number of record returned in any search call                                                                                                  | 200                                               |
@@ -132,7 +132,7 @@ shortener outage. The event must stay valid against
 | `pgr.notification.mdms.cache.ttl.ms`      | Shared MDMS cache window (SLA map, reopen window, department code→name). Named for the notification masters it was introduced for; those are novu-bridge's now | 60000                                          |
 
 Removed notification properties are listed in
-[docs/2.20/notifications/migration.md](../../docs/2.20/notifications/migration.md#removed-settings).
+[docs/releases/2.20/notifications/migration.md](../../docs/releases/2.20/notifications/migration.md#removed-settings).
 
 ### API Details
 

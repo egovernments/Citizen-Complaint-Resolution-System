@@ -345,7 +345,7 @@ db_fast_path: true
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright) at the end of the

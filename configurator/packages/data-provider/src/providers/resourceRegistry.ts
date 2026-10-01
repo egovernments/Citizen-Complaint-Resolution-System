@@ -138,7 +138,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'access-role', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
     // `schema` here is a masters-visibility policy key only (see
-    // docs/design/masters-configurator-access-policy-design.md §3.2) — this
+    // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.2) — this
     // resource still fetches via the accesscontrol role API (`type:
     // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
     // every fetch branch in dataProvider.ts before `config.schema` is ever

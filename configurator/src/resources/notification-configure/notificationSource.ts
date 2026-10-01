@@ -78,7 +78,7 @@ function total(counts: MasterCounts | undefined): number {
  * writes defaults into an existing tenant with no configuration — that tenant may have run
  * 2.12's hard-coded notifications, and the defaults would change what its citizens receive.
  * Both are the per-tenant migration script, one-way, after its plan has been reviewed
- * (docs/2.20/notifications/migration.md). Reused by every screen that says "move it".
+ * (docs/releases/2.20/notifications/migration.md). Reused by every screen that says "move it".
  */
 export const NOTIFICATION_SEED_COMMAND = './deploy.sh <tenant> --tags notifications';
 export const NOTIFICATION_MIGRATE_COMMAND =

@@ -12,7 +12,7 @@ import java.util.Set;
 
 /**
  * Local projection of the HRMS reporting hierarchy (eg_pgr_hrms_projection,
- * VISIBILITY-DESIGN.md §4.3). Written by HrmsProjectionConsumer / the rebuild
+ * docs/features/visibility/README.md §4.3). Written by HrmsProjectionConsumer / the rebuild
  * sweep; read by VisibilityService to resolve a supervisor's reportees with
  * zero live HRMS calls.
  */

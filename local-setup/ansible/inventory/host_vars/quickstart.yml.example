@@ -191,7 +191,7 @@ db_fast_path: true
 # db_fast_path without this ack, so every install is stopped once and must
 # confirm the wipe deliberately before it proceeds. Flip to true only after
 # confirming this box has NO postgres data in an anonymous volume. If it does,
-# migrate it first: docs/2.12/operations/postgres-volume-migration.md
+# migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
 # Off by default, and each one costs real memory:
@@ -207,7 +207,7 @@ requires_nairobi_mdms: false   # an external config submodule most deployments d
 # at every state root that has complaints — the dump's demo complaints sit under `pg`,
 # so `pg` is reported as having complaints but no configuration (it sends nothing).
 # They are demo data: this installs the shipped defaults there too. Leave it out if
-# `pg` carries complaints real people filed (docs/2.20/notifications/migration.md §3).
+# `pg` carries complaints real people filed (docs/releases/2.20/notifications/migration.md §3).
 # notifications_adopt_defaults: [pg]
 install_claude_code: false
 

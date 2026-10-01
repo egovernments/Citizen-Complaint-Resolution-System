@@ -7,7 +7,9 @@
  *     and stepping forward still validated against the stale code.
  *   - egovernments/CCRS#477: locality cascade allowed selecting Ward
  *     directly without picking County → Sub-County, because every
- *     dropdown rendered as soon as the boundary tree loaded.
+ *     dropdown rendered as soon as the boundary tree loaded. Every level
+ *     renders from the start again (so a ward can be searched for
+ *     directly), and picking one now fills its own County → Sub-County.
  *
  * The fix lives in the citizen FormExplorer + BoundaryComponent. We
  * exercise the wizard end-to-end against the configured deployment
@@ -26,7 +28,7 @@ test.describe('06-citizen-pin-and-cascade — PR #74 regression', () => {
   test('pin step + locality cascade no longer trap the citizen', {
     annotation: {
       type: 'description',
-      description: `Catches the two pre-fix traps in the citizen wizard. CCRS#469: picking a pin would leak its reverse-geocoded pincode onto formData.postalCode, and stale validation would re-fire on step advance ("Pincode not serviceable"). CCRS#477: the cascade rendered every level immediately, so a citizen could pick a Ward without picking County → Sub-County. Post-fix the cascade gates each level and the pincode toast is gone.
+      description: `Catches the two pre-fix traps in the citizen wizard. CCRS#469: picking a pin would leak its reverse-geocoded pincode onto formData.postalCode, and stale validation would re-fire on step advance ("Pincode not serviceable"). CCRS#477: the cascade rendered every level immediately, so a citizen could pick a Ward without picking County → Sub-County. Every level still renders from the start, but picking the deepest level fills the levels above it from the boundary tree, and the pincode toast is gone.
 
 Steps:
 1. test.slow(); setTimeout 180s.
@@ -36,14 +38,13 @@ Steps:
 5. Step 1: open type dropdown → pick first item; if a subtype dropdown appears, pick its first item too. NEXT.
 6. Step 2: Pin Location — assert the optional map starts with no marker and NEXT is enabled.
 7. Assert no "pincode not serviceable" toast appeared after step 2.
-8. Step 3 Location Details (cascade): assert exactly 1 cascade dropdown initially (top-level Region/County) — true on every tenant, regardless of hierarchy depth.
-9. Pick the top level; assert dropdown count grows to MORE than 1 (at least one child level appeared).
-10. Walk any remaining unset levels generically until none are left. NEXT becomes enabled once the leaf is picked.
-11. Assert pageErrors === [].
+8. Step 3 Location Details (cascade): assert more than 1 cascade dropdown initially — every level renders from the start.
+9. Pick the deepest level first; assert every level above it now shows a value (its own ancestors).
+10. Assert pageErrors === [].
 
 The cascade dropdowns use button[role="combobox"] on modern digit-ui (Ethiopia) or
 input[class*="select-wrap--elipses"] on older builds — the locator covers both.
-Long-running with explicit DOM count assertions to lock in the cascade gating contract — pre-fix the count was already >1 (every level rendered eagerly); post-fix it starts at exactly 1 and grows by at least one level per pick. The total depth is NOT pinned — it varies by tenant boundary tree (2 levels on some deployments, 4 on mz.maputo) — only the "gate one at a time, starting from 1" shape is asserted.`,
+The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, so the complaint-type dropdowns on the (hidden, still mounted) first step don't count. The total depth is NOT pinned — it varies by tenant boundary tree (2 levels on some deployments, 4 on mz.maputo) — only "every level from the start, and a deep pick fills its ancestors" is asserted.`,
     },
     tag: ['@area:pgr', '@ccrs:74', '@kind:regression', '@layer:ui', '@persona:citizen', '@pr:74'] }, async ({ page }) => {
     test.setTimeout(180_000);
@@ -80,10 +81,11 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
     const dropdowns = page.locator(
       'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
     );
-    // Cascade-specific: matches both modern button comboboxes and older inputs.
-    const cascadeDropdowns = page.locator(
-      'button[role="combobox"], input[class*="select-wrap--elipses"]',
-    );
+    // Cascade-specific: matches both modern button comboboxes and older inputs,
+    // inside the cascade only (earlier steps stay mounted while hidden).
+    const cascadeDropdowns = page
+      .locator('.pgr-boundary-cascade')
+      .locator('button[role="combobox"], input[class*="select-wrap--elipses"]');
     // ── Step 1: Complaint Details — walk EVERY hierarchy level ──────
     // The complaint-type hierarchy depth is tenant-defined (MDMS
     // RAINMAKER-PGR.ComplaintHierarchyDefinition): 2 levels on mz.maputo
@@ -134,52 +136,33 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
     await expect(pincodeToast).toHaveCount(0);
 
     // ── Step 3: Location Details (boundary cascade) ──────────────────
-    // Wait for the cascade to mount. The cascade is part of the Location
-    // Details step — it starts with only the top-level boundary (Region
-    // or County) visible and gates each child level until the parent is
-    // selected (CCRS#477 fix).
+    // Every level renders from the start so a citizen can search for their
+    // ward directly. What CCRS#477 needs is that a ward never stands without
+    // its own County → Sub-County: picking the deepest level fills them.
     await page.waitForTimeout(3000);
 
-    // Post-fix: only the top-level dropdown (Region/County) is visible
-    // initially. Pre-fix this was already ≥2 because every level rendered
-    // eagerly. The exact depth varies by tenant boundary tree (e.g. 2
-    // levels Region → Ward, or deeper County → … → Bairro on mz.maputo).
     const initialCount = await cascadeDropdowns.count();
     expect(
       initialCount,
-      `Expected only 1 cascade dropdown (top-level boundary) initially; got ${initialCount}. ` +
-        `Pre-fix this was >1 because every level rendered eagerly.`,
-    ).toBe(1);
-
-    // Pick top-level (Region/County) → next level should appear.
-    await cascadeDropdowns.first().click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1500);
-    const afterFirstPick = await cascadeDropdowns.count();
-    expect(
-      afterFirstPick,
-      `Cascade should add at least one child level after picking the top-level boundary (got ${afterFirstPick}).`,
+      `Expected every cascade level to render from the start; got ${initialCount}.`,
     ).toBeGreaterThan(1);
 
-    // Walk any remaining unset cascade dropdowns (second and third levels if present).
-    // On ke child dropdowns render immediately but start disabled — wait for each
-    // to become enabled before interacting (Playwright polls via toBeEnabled).
-    for (let i = 1; i < afterFirstPick; i++) {
-      const dd = cascadeDropdowns.nth(i);
-      // Wait up to 6 s for the dropdown to become enabled after the parent pick.
-      await expect(dd).toBeEnabled({ timeout: 6000 }).catch(() => {});
-      const ddEnabled = await dd.isEnabled().catch(() => false);
-      if (!ddEnabled) break; // still disabled — no further levels
-      // Use /^Select/i (no trailing space) to also match "Select…" (ke shadcn placeholder).
-      const hasValue = await dd.evaluate(
-        (el) => !(el as HTMLElement).innerText.match(/^Select/i),
-      ).catch(() => false);
-      if (hasValue) continue; // already auto-filled
-      await dd.click();
-      await page.waitForTimeout(800);
-      await page.locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible').first().click();
-      await page.waitForTimeout(1500);
+    // Pick the deepest level that lists from the start. On a very large tree
+    // (Maputo's quarteirões) the lowest level waits, disabled, for its parent.
+    let deepestIndex = initialCount - 1;
+    while (deepestIndex > 0 && !(await cascadeDropdowns.nth(deepestIndex).isEnabled())) deepestIndex--;
+    const deepest = cascadeDropdowns.nth(deepestIndex);
+    await expect(deepest).toBeEnabled({ timeout: 6000 });
+    await deepest.click();
+    await page.waitForTimeout(800);
+    await page.locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible').first().click();
+    await page.waitForTimeout(1500);
+
+    // Every level above it now holds that place's own ancestors. Use /^Select/i
+    // (no trailing space) to also match "Select…" (ke shadcn placeholder).
+    for (let i = 0; i < deepestIndex; i++) {
+      const text = await cascadeDropdowns.nth(i).evaluate((el) => (el as HTMLElement).innerText.trim());
+      expect(text, `Cascade level ${i + 1} should be filled by the deepest pick`).not.toMatch(/^Select/i);
     }
 
     expect(pageErrors, 'no uncaught errors during the wizard').toEqual([]);

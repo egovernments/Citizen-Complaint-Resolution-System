@@ -423,7 +423,7 @@ function getPersonaTag() {
 /**
  * layout_id = pack id (PR2), suffixed "+custom" when the persisted local layout
  * override exists. Coarse on purpose: the storage key is global (not
- * per-pack/tenant/user) — documented in docs/observability/dashboard-metrics.md.
+ * per-pack/tenant/user) — documented in docs/operations/monitoring/dashboard-metrics.md.
  */
 function getLayoutIdTag() {
   const packId = state.packMeta?.packId || "unknown";

@@ -268,8 +268,8 @@ any of the values below still reads `nightly-develop`. Whoever cuts that release
    ```
 4. Leave `global.notificationStackTag` in `charts/environments/env.yaml` empty — it
    overrides the chart pins when set — and update the `Default` column of the tag
-   table in `docs/2.20/notifications/migration.md` (and the `notification_stack_tag`
-   row in `docs/2.20/notifications/setup-guide.md` §8.1) to the pinned tag.
+   table in `docs/releases/2.20/notifications/migration.md` (and the `notification_stack_tag`
+   row in `docs/releases/2.20/notifications/setup-guide.md` §8.1) to the pinned tag.
 
 Later releases bump the same nine values to the new build's tag. Boxes that must track
 `develop` keep setting `notification_stack_tag: nightly-develop` (or Helm

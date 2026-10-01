@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useLayoutEffect, type ReactNode } from 'react';
 import { applyTheme, getStoredTheme, THEMES } from '@/themes';
 
 interface ThemeContextValue {
@@ -17,8 +17,8 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState(() => getStoredTheme());
 
-  // Apply on mount
-  useEffect(() => {
+  // Before the first paint, so a saved preset never flashes the CSS default.
+  useLayoutEffect(() => {
     applyTheme(theme);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

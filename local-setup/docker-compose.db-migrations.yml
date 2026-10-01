@@ -133,7 +133,7 @@ services:
 
   # MinIO - S3-compatible object storage for filestore
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -159,7 +159,7 @@ services:
 
   # MinIO init - creates the bucket
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:

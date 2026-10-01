@@ -282,7 +282,7 @@ worker:
   # NODE_OPTIONS. It is a copy of backend/novu-bridge/novu-worker-providers, kept
   # identical by local-setup/tests/static/deployment-contracts.test.ts. The worker
   # refuses to boot if they fail to load or the image is not the Novu version they
-  # were verified against. See docs/2.20/notifications/providers.md.
+  # were verified against. See docs/releases/2.20/notifications/providers.md.
   digitProviders:
     enabled: true
   replicas: 1

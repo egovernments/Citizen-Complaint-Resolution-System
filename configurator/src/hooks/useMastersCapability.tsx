@@ -6,7 +6,7 @@ import type { DigitPermissions } from '@digit-mcp/data-provider';
  * Masters visibility/edit capability for the logged-in user, computed
  * client-side from existing accesscontrol MDMS data (no server-side
  * enforcement for masters — see
- * docs/design/masters-configurator-access-policy-design.md §3.3). Fetched
+ * docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3). Fetched
  * via authProvider.getPermissions() and shared through context so nav,
  * resource routing, and edit/create screens all read the same capability
  * without re-fetching.
@@ -95,7 +95,7 @@ export function useMastersCapability() {
     // (hrms, boundary, pgr, localization, user, workflow-*, mdms-schema, custom,
     // ...) stays unrestricted — same as before this whole masters-gating feature
     // existed. Do not extend the allowlist without an explicit decision to gate
-    // that specific resource; see docs/design/masters-configurator-access-policy-design.md.
+    // that specific resource; see docs/reference/architecture/access-control/masters-configurator-access-policy-design.md.
     canViewResource: (name: string) => {
       const config = getResourceConfig(name);
       if (!isAccessControlGated(config)) return true;

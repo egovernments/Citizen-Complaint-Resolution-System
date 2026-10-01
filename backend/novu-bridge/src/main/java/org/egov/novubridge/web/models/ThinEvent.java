@@ -19,7 +19,7 @@ import static org.springframework.util.StringUtils.hasText;
  * rendered text are absent on purpose.
  *
  * <p>Wire form: {@code contract/thin-event-v1.schema.json} (packaged in this jar, published at
- * {@code docs/2.20/notifications/contract/}). Keep them in step by hand; the schema's required set
+ * {@code docs/releases/2.20/notifications/contract/}). Keep them in step by hand; the schema's required set
  * is exactly what {@code ThinEventValidator} enforces.
  */
 @Data

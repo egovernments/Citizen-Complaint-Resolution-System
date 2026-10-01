@@ -68,6 +68,11 @@ export interface FieldSpec {
   optionValue?: string;
   /** For `reference-select`: the referenced record's field to show (default 'name'). */
   optionText?: string;
+  /**
+   * For boolean widgets: what an unset value means to the app reading it. The
+   * box shows that, but nothing is written until the operator changes it.
+   */
+  whenUnset?: boolean;
 }
 
 /** A grouping of fields shown as a titled section in the form. */

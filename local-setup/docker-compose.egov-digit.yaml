@@ -1870,7 +1870,7 @@ services:
   # (source: "whatsapp").
   #
   # Off by default. Ansible turns the profile on when `enable_chatbot: true`.
-  # Read docs/2.12/notifications/inbound-whatsapp.md before enabling: the webhook is
+  # Read docs/releases/2.12/notifications/inbound-whatsapp.md before enabling: the webhook is
   # necessarily public and unauthenticated at the network layer, so it relies on
   # Twilio signature validation (TWILIO_VALIDATE_SIGNATURE, on by default).
   xstate-chatbot-db:

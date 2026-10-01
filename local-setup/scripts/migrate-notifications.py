@@ -63,7 +63,7 @@ inside Novu (redeploy with the current compose file first). It is ALSO refused w
 cannot be checked at all — no docker here, a worker container by another name, a remote box
 reached with --digit-url, a Kubernetes install — unless you have checked the worker yourself
 and pass --assume-worker-providers (Kubernetes: the novu chart's worker.digitProviders.enabled,
-see docs/2.20/notifications/providers.md).
+see docs/releases/2.20/notifications/providers.md).
 
 WHO LOGS IN
 -----------
@@ -522,7 +522,7 @@ def plan_provider_creation(ctx, args):
             "%s provider(s) are DIGIT providers mounted into the Novu worker, but the %s container "
             "does not preload them (its NODE_OPTIONS has no %s): the provider would save and every "
             "send through it would fail inside Novu while the bridge records SENT. Redeploy with "
-            "the current compose file first (docs/2.20/notifications/providers.md)"
+            "the current compose file first (docs/releases/2.20/notifications/providers.md)"
             % (", ".join(mounted_kinds), worker, WORKER_PROVIDERS_PRELOAD))
     if mounted_kinds and loads is None:
         # Not knowing is not the same as "it preloads them". Guessing wrong saves a provider

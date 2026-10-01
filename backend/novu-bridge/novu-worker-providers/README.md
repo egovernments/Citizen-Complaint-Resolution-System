@@ -21,4 +21,4 @@ A change here must be copied to
 (helm reads only inside the chart); a static contract test fails until it is.
 
 How it works, how it is deployed, upgrading Novu and adding a provider:
-[docs/2.20/notifications/providers.md](../../../docs/2.20/notifications/providers.md#digits-worker-providers).
+[docs/releases/2.20/notifications/providers.md](../../../docs/releases/2.20/notifications/providers.md#digits-worker-providers).

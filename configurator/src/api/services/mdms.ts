@@ -21,6 +21,18 @@ import {
 const MAP_CONFIG_KEY = 'DEFAULT';
 const DASHBOARD_CONFIG_KEY = 'default';
 
+/**
+ * The record a _create or _update wrote. mdms-v2 answers with an `mdms` array
+ * (MdmsResponseV2); reading `Mdms` returned undefined to every caller. A write
+ * that is accepted without echoing the record (a bare 202) still resolves,
+ * rather than turning a successful write into an error, so callers that need
+ * the stored record re-read it.
+ */
+function writtenRecord(response: Record<string, unknown>): MdmsRecord {
+  const written = response.mdms ?? response.Mdms;
+  return (Array.isArray(written) ? written[0] : written) as MdmsRecord;
+}
+
 export const mdmsService = {
   /**
    * Generic MDMS search. **Returns ACTIVE records only** unless
@@ -99,7 +111,7 @@ export const mdmsService = {
       },
     });
 
-    return response.Mdms as MdmsRecord;
+    return writtenRecord(response);
   },
 
   // Raw search: keeps `uniqueIdentifier` / `id` / `auditDetails` / `isActive`,
@@ -134,7 +146,28 @@ export const mdmsService = {
         isActive: true,
       },
     });
-    return response.Mdms as MdmsRecord;
+    return writtenRecord(response);
+  },
+
+  /**
+   * Soft-delete (or restore) a record by flipping isActive, as management's
+   * delete does. mdms-v2 keeps a deactivated row's uniqueIdentifier taken, so a
+   * later create of the same code has to restore it instead.
+   */
+  async setActive(record: MdmsRecord, isActive: boolean, data?: Record<string, unknown>): Promise<MdmsRecord> {
+    const response = await apiClient.post(`${ENDPOINTS.MDMS_UPDATE}/${record.schemaCode}`, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      Mdms: {
+        tenantId: record.tenantId,
+        schemaCode: record.schemaCode,
+        uniqueIdentifier: record.uniqueIdentifier,
+        id: record.id,
+        data: data ?? record.data,
+        auditDetails: record.auditDetails,
+        isActive,
+      },
+    });
+    return writtenRecord(response);
   },
 
   /**

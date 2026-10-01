@@ -1,5 +1,5 @@
 # Every NB_* error code this build can emit, one per line.
-# Machine-readable twin of docs/2.20/notifications/contract/error-codes.md, which has the
+# Machine-readable twin of docs/releases/2.20/notifications/contract/error-codes.md, which has the
 # meaning, surface, retryability and operator action for each. Add a code here, and to
 # that page, in the same change that first emits it.
 NB_ADMIN_ROLE_REQUIRED

@@ -82,7 +82,7 @@ function DigitEditContent({
   const resource = useResourceContext();
   const { canEditResource } = useMastersCapability();
   // UI-level only (not a security boundary) — see
-  // docs/design/masters-configurator-access-policy-design.md §3.3. A role
+  // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3. A role
   // that can view but not edit this master's schema loses the Save button;
   // the resource keeps working read-only via the same Edit screen.
   const canEdit = !resource || canEditResource(resource);

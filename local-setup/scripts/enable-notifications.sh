@@ -753,7 +753,7 @@ do_step6() {
   done < <(_complaint_roots)
   if [[ -n "$others" ]]; then
     warn "complaints are also filed under other state roots:${others} — this step seeds only ${NOTIF_TENANT}, and novu-bridge reads each complaint's notification configuration at its OWN root, so those send nothing until seeded."
-    note "Seed each with this step again: NOTIF_TENANT=<root> $0 --only step6 (ADMIN_USER must exist at that root), or deploy with Ansible, which seeds every root with complaints. See docs/2.20/notifications/setup-guide.md §8.2."
+    note "Seed each with this step again: NOTIF_TENANT=<root> $0 --only step6 (ADMIN_USER must exist at that root), or deploy with Ansible, which seeds every root with complaints. See docs/releases/2.20/notifications/setup-guide.md §8.2."
   fi
 
   # seed-notifications.py env interface: DIGIT_URL/NOTIF_TENANT/DIGIT_USERNAME/

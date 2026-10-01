@@ -1,74 +1,100 @@
 import React from "react";
 import { DEFAULT_EGOV_LOGO_ON_DARK } from "../brandLogos";
 
-/**
- * The crest the sidebar head shows, named for assistive tech by the tenant it
- * belongs to. Same key convention as the logout dialog's tenant line.
- */
-export const crestAltFor = (t) => {
-  const stateId = Digit.ULBService.getStateId?.();
-  return stateId ? t(`TENANT_TENANTS_${String(stateId).toUpperCase().replace(/\./g, "_")}`) : "";
-};
-
-/**
- * The panel icon every sidebar toggle people already use draws: a frame with
- * the rail marked off on the left, and a chevron pointing the way the rail will
- * move. Drawn inline so it takes `currentColor` from the sidebar's own text.
- */
-const PanelIcon = ({ open }) => (
+/** Chevron for the rail toggle; points the way the rail will move. */
+const Chevron = ({ open }) => (
   <svg
-    width="20"
-    height="20"
+    width="16"
+    height="16"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="2.5"
     strokeLinecap="round"
     strokeLinejoin="round"
     aria-hidden="true"
     focusable="false"
   >
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <path d="M9 3v18" />
-    {open ? <path d="m16 15-3-3 3-3" /> : <path d="m14 9 3 3-3 3" />}
+    {open ? <path d="m15 18-6-6 6-6" /> : <path d="m9 18 6-6-6-6" />}
+  </svg>
+);
+
+const LogoutGlyph = () => (
+  <svg
+    width="22"
+    height="22"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="m16 17 5-5-5-5" />
+    <path d="M21 12H9" />
   </svg>
 );
 
 /**
- * Top of the sidebar: the tenant's crest, and the one control that opens or
- * closes the rail. Open, they share a row; at 3rem there is no room for both
- * side by side, so the toggle drops under the crest.
+ * The one control that opens or closes the rail: a blue square that sits on
+ * the rail's edge, just under the top bar. It is fixed to the viewport rather
+ * than placed inside the rail, whose own overflow would clip the half that
+ * hangs over the page; the stylesheet moves it with the rail's width.
  */
-export const SidebarHead = ({ t, crestUrl, crestAlt, expanded, onToggle }) => {
+export const RailToggle = ({ t, expanded, onToggle }) => {
   const label = expanded
     ? t("CORE_SIDEBAR_CLOSE", "Close sidebar")
     : t("CORE_SIDEBAR_OPEN", "Open sidebar");
   return (
-    <div className={`digit-sidebar-head ${expanded ? "open" : "closed"}`}>
-      {crestUrl ? <img className="digit-sidebar-crest" src={crestUrl} alt={crestAlt || ""} /> : null}
-      {onToggle ? (
-        <button
-          type="button"
-          className="digit-sidebar-toggle"
-          aria-expanded={expanded}
-          aria-label={label}
-          title={label}
-          onClick={onToggle}
-        >
-          <PanelIcon open={expanded} />
-        </button>
-      ) : null}
-    </div>
+    <button
+      type="button"
+      className="digit-rail-toggle"
+      aria-expanded={expanded}
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+      data-analytics-event="shell.rail.toggle"
+      data-analytics-label={expanded ? "collapse" : "expand"}
+    >
+      <Chevron open={expanded} />
+    </button>
   );
 };
 
 /**
- * Foot of the sidebar: the eGov lockup, only while the rail is open. At 3rem
- * a 112px wordmark would have to shrink to a smudge.
+ * Foot of the desktop rail: Logout, then the eGov lockup. Closed, Logout keeps
+ * only its icon and the lockup shrinks to fit the rail.
  */
-export const SidebarFoot = ({ expanded }) =>
-  expanded ? (
-    <div className="digit-sidebar-foot">
+export const SidebarFoot = ({ t, expanded, onLogout }) => (
+  <div className={`digit-sidebar-foot ${expanded ? "open" : "closed"}`}>
+    {onLogout ? (
+      <button
+        type="button"
+        className="digit-sidebar-logout"
+        onClick={onLogout}
+        data-analytics-event="shell.rail.logout"
+        title={t ? t("CORE_COMMON_LOGOUT", "Logout") : "Logout"}
+      >
+        <LogoutGlyph />
+        {expanded ? <span className="digit-sidebar-logout-label">{t ? t("CORE_COMMON_LOGOUT", "Logout") : "Logout"}</span> : null}
+      </button>
+    ) : null}
+    <div className="digit-sidebar-egov-band">
       <img className="digit-sidebar-egov" src={DEFAULT_EGOV_LOGO_ON_DARK} alt="eGov Foundation" />
     </div>
-  ) : null;
+  </div>
+);
+
+/**
+ * Foot of the phone drawer: the eGov lockup, as at the foot of the desktop
+ * rail. The drawer's own Logout row sits above it (the stylesheet orders it),
+ * and "Powered by DIGIT" is the page footer's, not repeated here.
+ */
+export const DrawerFoot = () => (
+  <div className="digit-sidebar-foot digit-drawer-foot">
+    <img className="digit-sidebar-egov" src={DEFAULT_EGOV_LOGO_ON_DARK} alt="eGov Foundation" />
+  </div>
+);
