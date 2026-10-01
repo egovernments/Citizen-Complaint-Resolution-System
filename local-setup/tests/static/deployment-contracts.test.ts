@@ -290,6 +290,51 @@ describe('one-tag deploys (#1729)', () => {
     expect(deploySh).toMatch(/--image-tag=\*\)/);
     expect(deploySh).toMatch(/--image-tag-services=\*\)/);
     expect(deploySh).toContain('\\"image_tag\\": \\"${image_tag}\\"');
+    // Only what was given: an always-sent `image_tag_services: []` outranked
+    // and widened a scope stored in host_vars (Vinoth review on #2166).
+    expect(deploySh).not.toContain('\\"image_tag_services\\": []');
+    // CCRS_-scoped env names: a bare IMAGE_TAG exported by a CI docker step
+    // re-tagged every image of a plain deploy.
+    expect(deploySh).toContain('${CCRS_IMAGE_TAG:-}');
+    expect(deploySh).toContain('${CCRS_IMAGE_TAG_SERVICES:-}');
+    expect(deploySh).not.toMatch(/\$\{IMAGE_TAG(_SERVICES)?:-/);
+  });
+
+  test('no tracked tenant overlay hard-codes an image the tag should move', () => {
+    // The playbook layers docker-compose.<tenant>.yml LAST, so a literal
+    // `image:` there on a catalog service beats .env: the plan would say
+    // <tag> while compose ran something else (Vinoth review on #2166). The
+    // deploy warns for untracked overlays at runtime; tracked ones must not
+    // do it at all. A tenant overlay is one whose name has a host_vars example.
+    const serviceEnv = new Map<string, string>();
+    const catalogEnvs = new Set(catalog.map((c) => c.env));
+    for (const [, body] of deployedCompose) {
+      for (const block of body.split(/^(?=  [\w.-]+:\s*$)/m)) {
+        const name = block.match(/^  ([\w.-]+):\s*$/m)?.[1];
+        const env = block.match(/^ {4}image:\s*\$\{(\w+):-/m)?.[1];
+        if (name && env && catalogEnvs.has(env)) serviceEnv.set(name, env);
+      }
+    }
+    expect(serviceEnv.get('pgr-services')).toBe('PGR_SERVICES_IMAGE');
+    const hostVarsDir = path.join(REPO_ROOT, 'local-setup/ansible/inventory/host_vars');
+    const tenants = fs.readdirSync(hostVarsDir)
+      .map((f) => f.match(/^([\w-]+)\.yml\.example$/)?.[1])
+      .filter((t): t is string => !!t);
+    const overlays = tenants
+      .map((t) => `local-setup/docker-compose.${t}.yml`)
+      .filter((f) => fs.existsSync(path.join(REPO_ROOT, f)));
+    expect(overlays.length).toBeGreaterThan(0);
+    const hardCoded: string[] = [];
+    for (const f of overlays) {
+      for (const block of read(f).split(/^(?=  [\w.-]+:\s*$)/m)) {
+        const name = block.match(/^  ([\w.-]+):\s*$/m)?.[1];
+        const image = block.match(/^ {4}image:\s*(\S+)/m)?.[1];
+        if (name && image && serviceEnv.has(name) && !image.startsWith('${')) {
+          hardCoded.push(`${f}: ${name} -> ${image} (use \${${serviceEnv.get(name)}})`);
+        }
+      }
+    }
+    expect(hardCoded).toEqual([]);
   });
 });
 

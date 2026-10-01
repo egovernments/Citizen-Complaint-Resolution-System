@@ -153,8 +153,9 @@ Pass that tag to the deploy. Nothing to edit:
 # One service from a dispatch build — the rest keep their defaults
 ./deploy.sh <tenant> --image-tag=master-3f9e2a1 --image-tag-services=pgr-services
 
-# Same thing via the environment (handy in CI / wrapper scripts)
-IMAGE_TAG=v2.12.1 ./deploy.sh <tenant>
+# Same thing via the environment (handy in CI / wrapper scripts). CCRS_-prefixed
+# on purpose: a bare IMAGE_TAG is often already exported by CI docker steps.
+CCRS_IMAGE_TAG=v2.12.1 ./deploy.sh <tenant>
 ```
 
 What the deploy then does:
@@ -188,12 +189,25 @@ Rules worth knowing:
   `build_mcp: true` / `build_otp_publisher: true`, outrank the tag for that
   image. The plan flags each one (`<-- NOT <tag>: pinned by …`), so delete the
   old pins once you switch to tags.
-- **A `-db` migration image follows its service's pin.** With
-  `pgr_services_image: egovio/pgr-services:X` and no `pgr_services_db_image`,
-  the tag does not move `pgr-services-db` either: it deploys
-  `egovio/pgr-services-db:X`, so a newer build's schema migrations never run
-  under an older service. A service pinned by digest cannot hand its tag on;
-  the deploy then stops and asks for the `-db` pin explicitly.
+- **A service and its `-db` migration image move together.** Naming either
+  one in `--image-tag-services` covers both. And when a service is pinned
+  (`pgr_services_image: …`) but its `-db` image is not, the tag does not move
+  `pgr-services-db` either: it stays on its compose-file default, as without a
+  tag, and the deploy prints a warning, so a newer build's schema migrations
+  never run under an older service. If the pinned service needs newer
+  migrations, pin `pgr_services_db_image` to the matching image yourself.
+- **A tenant overlay that hard-codes an image wins over everything.** If
+  `docker-compose.<tenant>.yml` sets a literal `image:` on one of these
+  services, compose runs that image whatever the tag, pin or `.env` say. The
+  plan shows the image that will actually run, the deploy warns, and the
+  registry check skips it. Use `image: ${PGR_SERVICES_IMAGE}` in the overlay
+  (or drop the line) to let the tag apply.
+- **Quote numeric-looking tags** in host_vars: `image_tag: "2.10"`. Unquoted,
+  YAML reads `2.10` as the number 2.1, and the deploy refuses it.
+- `--image-tag` alone keeps an `image_tag_services` scope set in host_vars;
+  `--image-tag-services` alone narrows an `image_tag` set there.
+- The check also runs under `--check`, so a dry run with a bad tag fails the
+  same way the real run would.
 - **Images this tenant doesn't run are not checked.** Notification images
   (profile `notifications`, i.e. `enable_novu`) and digit-mcp (`enable_mcp` /
   `enable_mcp_readonly`) are skipped by the registry check when their profile

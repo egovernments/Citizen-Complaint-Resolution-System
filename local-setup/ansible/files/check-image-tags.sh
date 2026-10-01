@@ -20,14 +20,36 @@ set -uo pipefail
 
 ACCEPT='application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json'
 
-check_hub() {
-  local ref=$1 repo=${1%:*} tag=${1##*:} token code
+hub_repo() {
+  local repo=${1%:*}
   [[ $repo == */* ]] || repo="library/$repo"
-  token=$(curl -fsS --max-time 20 \
-    "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${repo}:pull" 2>/dev/null \
-    | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+  printf '%s' "$repo"
+}
+
+is_hub() {
+  # Docker Hub unless the first path component names a registry host.
+  local first=${1%%/*}
+  [[ $1 != */* || ( $first != *.* && $first != *:* && $first != localhost ) ]]
+}
+
+# ONE anonymous token for every Docker Hub repo being checked: the token
+# endpoint takes repeated `scope=` parameters, so a dozen refs cost one token
+# round-trip instead of a dozen (Vinoth review on #2166). No token (network
+# down) leaves HUB_TOKEN empty; the HEADs then come back 401 → UNVERIFIED.
+hub_token() {
+  local url="https://auth.docker.io/token?service=registry.docker.io" ref
+  for ref in "$@"; do
+    is_hub "$ref" && url+="&scope=repository:$(hub_repo "$ref"):pull"
+  done
+  [[ $url == *scope=* ]] || return 0
+  curl -fsS --max-time 20 "$url" 2>/dev/null | sed -n 's/.*"token":"\([^"]*\)".*/\1/p'
+}
+
+check_hub() {
+  local ref=$1 repo tag=${1##*:} code
+  repo=$(hub_repo "$1")
   code=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -I \
-    -H "Authorization: Bearer ${token}" -H "Accept: ${ACCEPT}" \
+    -H "Authorization: Bearer ${HUB_TOKEN}" -H "Accept: ${ACCEPT}" \
     "https://registry-1.docker.io/v2/${repo}/manifests/${tag}")
   case $code in
     200) echo "ok          $ref" ;;
@@ -51,14 +73,14 @@ check_other() {
 }
 
 check() {
-  # Docker Hub unless the first path component names a registry host.
-  local first=${1%%/*}
-  if [[ $1 != */* || ( $first != *.* && $first != *:* && $first != localhost ) ]]; then
+  if is_hub "$1"; then
     check_hub "$1"
   else
     check_other "$1"
   fi
 }
+
+HUB_TOKEN=$(hub_token "$@")
 
 # In parallel: each check is a registry round-trip of a few seconds.
 dir=$(mktemp -d)
