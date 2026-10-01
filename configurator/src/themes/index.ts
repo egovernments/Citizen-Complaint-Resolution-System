@@ -277,11 +277,26 @@ export const THEMES: ThemePreset[] = [
 
 const THEME_MAP = new Map(THEMES.map((t) => [t.name, t]));
 
-const STORAGE_KEY = 'digit-theme';
+/**
+ * Where a preset picked from the top bar is kept. Only a pick is saved; the
+ * default never is. The old key, `digit-theme`, was written on every load
+ * whatever was showing, so for anyone who visited while DIGIT Orange was the
+ * default it holds that default as if it were a choice. It is no longer read.
+ *
+ * Exported for the Keycloak login theme: it is served from the same origin and
+ * follows the same choice, so the sign-in screens don't change colour midway.
+ */
+export const THEME_STORAGE_KEY = 'digit-theme-choice';
 
 export function getStoredTheme(): string {
   // CMS Blue until someone picks another preset from the top bar.
-  return localStorage.getItem(STORAGE_KEY) || 'cms-blue';
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return saved && THEME_MAP.has(saved) ? saved : 'cms-blue';
+  } catch {
+    // Storage blocked (private windows, site data off): the default it is.
+    return 'cms-blue';
+  }
 }
 
 /** Paint a theme on the document without remembering it; `applyTheme` also saves it. */
@@ -301,7 +316,12 @@ export function applyThemeVariables(name: string): boolean {
   return true;
 }
 
+/** Paint a theme and remember it: for an explicit pick, never for a default. */
 export function applyTheme(name: string): void {
   if (!applyThemeVariables(name)) return;
-  localStorage.setItem(STORAGE_KEY, name);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, name);
+  } catch {
+    // Storage blocked: the pick holds for this page only.
+  }
 }

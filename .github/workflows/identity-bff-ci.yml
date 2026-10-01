@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - "backend/identity-bff/**"
+      # The login theme's palettes are generated from these presets; its tests fail on drift.
+      - "configurator/src/themes/**"
       - ".github/workflows/identity-bff-ci.yml"
   push:
     branches: [develop]
     paths:
       - "backend/identity-bff/**"
+      # The login theme's palettes are generated from these presets; its tests fail on drift.
+      - "configurator/src/themes/**"
       - ".github/workflows/identity-bff-ci.yml"
 
 jobs:
