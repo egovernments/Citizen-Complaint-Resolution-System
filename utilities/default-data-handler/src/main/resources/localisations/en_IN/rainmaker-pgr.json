@@ -870,6 +870,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_COMMON_CLEAR",
+        "message": "CLEAR",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_COMMON_CLOSED",
         "message": "Closed",
         "module": "rainmaker-pgr",

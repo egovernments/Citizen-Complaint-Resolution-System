@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { InboxSearchComposer, HeaderComponent, Toast, Loader } from "@egovernments/digit-ui-components";
 import { useTranslation } from "react-i18next";
+import { translateOr } from "../../utils/selectPlaceholder";
 import _ from "lodash";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
@@ -49,7 +50,7 @@ function isSafeMobilePattern(pattern) {
  */
 
 const PGRSearchInbox = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Detect if the user is on a mobile device
   const isMobile = window.Digit.Utils.browser.isMobile();
@@ -170,6 +171,22 @@ const PGRSearchInbox = () => {
     };
   }
 
+  // The search card's reset reads "Clear". The composer translates the label
+  // itself, so it gets the text: a tenant that hasn't seeded CS_COMMON_CLEAR
+  // would otherwise show the raw key.
+  if (configs?.sections?.search?.uiConfig?.secondaryLabel === "CS_COMMON_CLEAR") {
+    configs = {
+      ...configs,
+      sections: {
+        ...configs.sections,
+        search: {
+          ...configs.sections.search,
+          uiConfig: { ...configs.sections.search.uiConfig, secondaryLabel: translateOr(t, "CS_COMMON_CLEAR", "CLEAR") },
+        },
+      },
+    };
+  }
+
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
@@ -221,8 +238,10 @@ const PGRSearchInbox = () => {
    */
   useEffect(() => {
     if (!visLoading) setPageConfig(_.cloneDeep(configs));
+    // The language is a dependency because the Clear label above is baked in
+    // as text, not a key the composer translates on each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, visLoading, visibilityEnabled]);
+  }, [location, visLoading, visibilityEnabled, i18n?.language]);
 
   /**
    * Show loader until necessary data is available
