@@ -45,6 +45,8 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                     headerStyle: null,
                     primaryLabel: 'ACTION_TEST_SEARCH',
                     secondaryLabel: 'CS_COMMON_CLEAR',
+                    // An outlined button beside Search, not a bare text link.
+                    secondaryLabelVariation: 'secondary',
                     minReqFields: 1,
                     defaultValues: {
                         complaintNumber: "",

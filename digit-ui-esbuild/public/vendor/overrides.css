@@ -8354,6 +8354,119 @@ html .header-dropdown-option:focus-visible {
   }
 }
 
+/* An error under one field (an invalid mobile number, say) made that cell
+ * taller, and with the cells bottom-aligned its input rose above the inputs
+ * beside it. Each field is a label, an input and an optional error, so the
+ * cells of a row share those three tracks (subgrid): labels sit level above
+ * the inputs even when one wraps, the inputs stay in line, and an error only
+ * opens space under its own row. Tablet and up; phones stack the fields. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    row-gap: 0 !important;
+    align-items: stretch !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair {
+    display: grid !important;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0 !important;
+    margin: 0 !important;
+    /* Room under each row of fields, carried into the error track by the
+     * empty item below so the track keeps it with no error in it. */
+    padding-bottom: 16px;
+  }
+  /* Every part placed outright, in one column. Left to auto-placement, two
+   * items pinned to the error track would open a second column for the
+   * cell. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > * {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair::after {
+    content: "";
+    grid-column: 1;
+    grid-row: 3;
+  }
+  /* A short label sits on its input when a neighbour's label wraps. The
+   * vendor spaced label and input with an 8px flex gap; a margin does it here,
+   * since a gap would also open under every input with no error below it. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > :first-child {
+    grid-row: 1;
+    align-self: end;
+    margin-bottom: 8px !important;
+  }
+  /* Date Range renders an empty spacer between its label and its picker,
+   * which would push the picker down into the error track; the picker also
+   * carried a -8px pull-up written for the old flex layout. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .filter-label:empty {
+    display: none !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .digit-employee-select-wrap {
+    margin-top: 0 !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .digit-error-icon-message-wrap {
+    grid-row: 3;
+    align-self: start;
+    margin-top: 4px !important;
+  }
+}
+/* One row of fields with the actions inline: the buttons go in the input
+ * track, so an error under a field never moves them, and nothing pads the
+ * card below the row. */
+@container pgr-inbox-search (min-width: 50rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair {
+    padding-bottom: 0;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    /* Both lines: a row alone would auto-place it in the first column. */
+    grid-row: 2 !important;
+    grid-column: -2 / -1 !important;
+    align-self: center !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Search and Clear, sized to their labels. Both took the vendor's 105px
+ * minimum, so two five-letter labels spanned 234px of the row. Clear is an
+ * outlined Secondary beside Search: the same height, padding and corners,
+ * where the vendor drew it 32px tall and square-cornered, with a 16px label.
+ * Its stroke and label take the theme's secondary tokens: the vendor paints
+ * both in --color-primary-main, a pale yellow on white on yellow-primary
+ * tenants. */
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper {
+  gap: 12px !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper :is(.digit-button-primary, .digit-button-secondary) {
+  width: auto !important;
+  min-width: 5rem !important;
+  height: 40px !important;
+  padding: 0 20px !important;
+  border-radius: 6px !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
+/* The phone search and filter sheets stack Clear over a full-width Search.
+ * Clear kept the vendor's square corners and its stroke and label in
+ * --color-primary-main; the same corners and secondary tokens as above. */
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+  border-radius: 6px !important;
+}
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
 /* The filter card was padded twice: 20px on the card, then 24px again on
  * its header and on its content, so the fields started 45px in while the
  * cards above start 24px in. One inset, the same as theirs. */
