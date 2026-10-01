@@ -3120,6 +3120,16 @@ button[class*="toast-close"] svg,
   align-self: stretch !important;
 }
 
+/* The side column (the links card and the filter) took a flat 20% of the row:
+ * 230px on a wide desktop but 130px on an 820px tablet, where "Assigned to Me"
+ * broke mid-word and the filter dropdowns cut their labels short. It keeps its
+ * 20% wherever that's enough, and never drops below 13rem. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox {
+    grid-template-columns: minmax(13rem, 20%) minmax(0, 1fr) !important;
+  }
+}
+
 /* ...except the links panel, which is in the FIRST grid row, not the second.
  * The rule above was written for the table/filter row and catching row 1 as
  * well left the links card stretched to the height of the search form beside
@@ -8098,6 +8108,39 @@ html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"
   padding: 8px 28px !important;
 }
 
+/* Labels stay on one line while the rail widens.
+ *
+ * A row's label lands the moment the rail starts to open, while the rail is
+ * still 80px wide. Free to wrap, "File a Complaint" and "My Complaints" ran to
+ * two lines until the rail passed about 230px, so their rows grew and every row
+ * below dropped 12px and came back up as the width caught up: the jitter on
+ * open. On one line, clipped until the rail has room, each row keeps its final
+ * height for the whole animation. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item .item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Icons hold their place while the rail narrows.
+ *
+ * Collapsed, vendor centres each row and its wrapper. The class lands the
+ * moment the rail starts to close, while it is still 272px wide, so every icon
+ * jumped from x=28 to the middle (x=124) and then slid back as the width
+ * shrank: the jitter on close. Left-aligned, the 28px padding keeps the icon at
+ * x=28 throughout, and at the final 80px that is still dead centre (28 + 24 + 28).
+ * Vendor also gives a collapsed icon 12px of side margin, which the centring
+ * hid; open, the icon has none, so it goes here too. */
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-items-container .item-child-wrapper,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed {
+  justify-content: flex-start !important;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed .icon {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
 /* Optical alignment of the bar's right edge.
  *
  * Both sides sit 24px from the edge geometrically — measured, the boxes agree
@@ -8284,6 +8327,18 @@ html .header-dropdown-option:focus-visible {
   .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
     grid-column: 1 / -1 !important;
     justify-content: flex-end !important;
+  }
+}
+
+/* A narrow search card (a tablet, beside the filter column) can't hold three
+ * fields in a row: at 418px the phone input behind its +254 prefix was about
+ * 30px wide. Two to a row there, the actions still on their own row below.
+ * Tablets and up only: phones keep their one-field-per-row layout. */
+@media (min-width: 48rem) {
+  @container pgr-inbox-search (max-width: 37.99rem) {
+    .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
   }
 }
 
@@ -8572,15 +8627,27 @@ html .header-dropdown-option:focus-visible {
   box-sizing: border-box;
   padding: 0 0 0 28px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
+  /* The lockup travels with the rail rather than jumping (the rail's own
+   * 0.28s and easing, AppSideNav's transitionDuration). Clipped, not squeezed,
+   * while the rail is still too narrow for it. */
+  overflow: hidden;
+  transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Closed, the lockup sits centred in the 80px rail: (80 - 56) / 2 = 12px. A
+ * padding, not justify-content: center, because centring can't animate and
+ * snapped the lockup from x=28 to the middle of the still-wide rail. */
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov-band {
-  justify-content: center;
-  padding-left: 0;
+  padding-left: 12px;
 }
 .digit-sidebar-foot .digit-sidebar-egov {
   display: block;
   height: 18px;
   width: auto;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-egov {
+  flex: 0 0 auto;
+  max-width: none;
+  transition: height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 :is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov {
   height: 14px;
