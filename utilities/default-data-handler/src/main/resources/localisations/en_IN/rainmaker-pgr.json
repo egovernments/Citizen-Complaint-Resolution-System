@@ -6799,7 +6799,7 @@
     },
     {
         "code": "CS_PHOTO_RULES",
-        "message": "JPG or PNG, up to 5 MB each, 5 at most",
+        "message": "JPG or PNG, up to 5 MB each",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
