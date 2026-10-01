@@ -12,6 +12,10 @@ import { createRoot } from "react-dom/client";
 import { KcPage } from "./kc.gen";
 import { getKcContextMock } from "./login/KcContextMock";
 import { withFieldErrors } from "./login/mockStates";
+import { followSavedTheme } from "./login/themeChoice";
+
+// As in main.tsx: preview with whatever preset this browser picked in the Configurator.
+followSavedTheme();
 
 const params = new URLSearchParams(window.location.search);
 const pageId = (params.get("page") ?? "login.ftl") as Parameters<
