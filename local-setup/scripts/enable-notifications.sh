@@ -260,13 +260,16 @@ _svc_env_get() {   # _svc_env_get <service> <VAR> — the value of VAR in the co
 # _remove_retired_notification_containers — containers of services this release removed.
 # `up -d` leaves them running as orphans, and egov-notification-sms keeps consuming
 # egov.core.notification.sms alongside novu-bridge — every login OTP sent twice, through two
-# providers. They go only once a bridge is there to take over (same rule as the playbook):
-#   • step 1, a bridge was already running: right after it is recreated and running — its
-#     consumer group resumes from the offsets the old bridge committed;
-#   • step 2, the first bridge on this box: after `up -d` and once novu-bridge is HEALTHY
-#     (_remove_retired_after_bridge_healthy). Removed before, nothing consumed the topic while
-#     the stack came up, the new bridge's first subscription starts at the latest offset so
-#     those OTPs were lost, and a failed up left the box with no OTP sender at all.
+# providers. They go only once novu-bridge has TAKEN OVER that topic (same rule as the playbook,
+# core-sms-handoff.sh): healthy, and every partition of it either has an offset committed by the
+# bridge's group (it resumes from there) or is owned by a live member of the group. A running
+# bridge is not enough: its core-SMS listener starts at the END of the topic when the group has
+# no committed offset there (a 2.12 box whose OTPs went through egov-notification-sms), so every
+# OTP published while it boots would be skipped — and lost with the old sender gone.
+#   • step 1, a bridge was already running (an upgrade): after it is recreated, waiting up to 5
+#     minutes for the handoff; none in time leaves them to step 2;
+#   • step 2: after `up -d`, waiting up to 10 minutes. No handoff keeps them (warned): an OTP may
+#     then arrive twice, but it arrives.
 # Only a container compose made for that service in $DIGIT_HOME is removed. Idempotent.
 _remove_retired_notification_containers() {
   local svc owner
@@ -282,23 +285,61 @@ _remove_retired_notification_containers() {
   done
 }
 
-# _remove_retired_after_bridge_healthy — the first-bridge case above: wait (up to 10 min)
-# for novu-bridge's healthcheck, then remove the retired senders. A bridge that never gets
-# healthy keeps them — OTPs may go out twice, but they go out.
-_remove_retired_after_bridge_healthy() {
-  [[ "$DRY_RUN" == true ]] && { note "would remove the retired OTP senders once novu-bridge is healthy"; return 0; }
-  local cid status="" i
-  for i in $(seq 1 60); do
-    cid=$(container_of novu-bridge)
-    [[ -n "$cid" ]] && status="$(sudo docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
-    [[ "$status" == healthy ]] && break
-    sleep 10
+# _retired_senders_present — the retired containers still on the box (space-separated).
+_retired_senders_present() {
+  local svc out=""
+  for svc in egov-notification-sms otp-publisher novu-bridge-endpoint; do
+    sudo docker inspect "$svc" >/dev/null 2>&1 && out="$out $svc"
   done
-  if [[ "$status" != healthy ]]; then
-    warn "novu-bridge is not healthy after 10 minutes (status: ${status:-absent}) — the retired OTP senders (egov-notification-sms, otp-publisher) are LEFT RUNNING so OTPs keep going out; a login OTP may arrive twice until you fix the bridge and re-run this step"
+  printf '%s' "${out# }"
+}
+
+# _core_sms_handoff_lib — source core-sms-handoff.sh (next to this script, else in $CCRS_HOME).
+_core_sms_handoff_lib() {
+  local f
+  for f in "$(dirname "${BASH_SOURCE[0]}")/core-sms-handoff.sh" "$CCRS_HOME/local-setup/scripts/core-sms-handoff.sh"; do
+    if [[ -f "$f" ]]; then
+      # shellcheck source=core-sms-handoff.sh
+      source "$f"
+      DOCKER="sudo docker"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# _remove_retired_after_handoff TRIES — wait (TRIES × 10 s) for novu-bridge to take over the OTP
+# topic, then remove the retired senders. No handoff in time keeps them (returns 0: step 2, or a
+# re-run, tries again).
+_remove_retired_after_handoff() {
+  local tries="${1:-60}" present
+  [[ "$DRY_RUN" == true ]] && { note "would remove the retired OTP senders once novu-bridge has taken over egov.core.notification.sms"; return 0; }
+  present="$(_retired_senders_present)"
+  [[ -n "$present" ]] || return 0
+  if ! _core_sms_handoff_lib; then
+    warn "core-sms-handoff.sh not found next to this script or under \$CCRS_HOME/local-setup/scripts — cannot prove novu-bridge took over egov.core.notification.sms, so the retired OTP senders ($present) are LEFT RUNNING; a login OTP may arrive twice until they are removed"
     return 0
   fi
+  if ! core_sms_wait_handoff "$tries" 10; then
+    warn "novu-bridge has not taken over egov.core.notification.sms after $((tries / 6)) minute(s) ($CSH_STATE: $CSH_WHY) — the retired OTP senders ($present) are LEFT RUNNING so OTPs keep going out; a login OTP may arrive twice until the bridge takes over and this step runs again"
+    return 0
+  fi
+  ok "handoff ${CSH_STATE}: ${CSH_WHY}"
   _remove_retired_notification_containers
+}
+
+# _bridge_is_current — the novu-bridge container is the one compose configures NOW (its image
+# and config hash), not an old one left in place.
+_bridge_is_current() {
+  local cid want_image want_id want_hash have
+  cid=$(container_of novu-bridge); [[ -n "$cid" ]] || return 1
+  # `config --images <svc>` also lists the service's dependencies: read the one image.
+  want_image="$(cd "$DIGIT_HOME" && eval "${DC} config --format json novu-bridge" 2>/dev/null \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["novu-bridge"]["image"])' 2>/dev/null || true)"
+  want_id="$(sudo docker image inspect -f '{{.Id}}' "$want_image" 2>/dev/null || true)"
+  want_hash="$(cd "$DIGIT_HOME" && eval "${DC} config --hash novu-bridge" 2>/dev/null | awk '$1 == "novu-bridge" {print $2}')"
+  have="$(sudo docker inspect -f '{{.Image}}|{{index .Config.Labels "com.docker.compose.config-hash"}}' "$cid" 2>/dev/null || true)"
+  [[ -n "$want_id" && -n "$want_hash" && "$have" == "$want_id|$want_hash" ]]
 }
 
 # _tenant_complaints <tenant> — how many PGR complaints have ever been filed at <tenant> and
@@ -464,14 +505,17 @@ do_step1() {
   if [[ -n "$(container_of novu-bridge)" ]]; then
     log "A bridge is running — recreating it on the same build BEFORE pgr-services…"
     set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
+    # A failed up stops the run here (set -e), before pgr-services and with the old OTP
+    # senders untouched.
     compose up -d novu-bridge-migration novu-bridge
-    # The recreated bridge consumes egov.core.notification.sms: the old OTP senders go now,
-    # and only once it is running (see the function).
-    if [[ "$DRY_RUN" == true ]] || _svc_running novu-bridge; then
-      _remove_retired_notification_containers
-    else
-      warn "novu-bridge is not running after the recreate — the retired OTP senders are left running"
+    if [[ "$DRY_RUN" != true ]] && ! _bridge_is_current; then
+      err "novu-bridge is not the container compose configures now (image/config hash) after the recreate."
+      err "Stopping before pgr-services; the retired OTP senders were left running. Check \`${DC} ps novu-bridge\`."
+      return 1
     fi
+    # The old OTP senders go once the recreated bridge has taken over their topic (up to 5
+    # minutes here; otherwise step 2 waits again — see the function).
+    _remove_retired_after_handoff 30
   fi
 
   # Per-recipient language is resolved by novu-bridge now (NOVU_BRIDGE_PREFERENCE_HOST in the
@@ -526,8 +570,8 @@ do_step2() {
   compose up -d novu-mongo novu-api novu-worker novu-ws novu-dashboard novu-bridge \
     digit-config-service novu-bridge-migration digit-config-service-migration
 
-  # The retired OTP senders go only now that a bridge can take over (see the function).
-  _remove_retired_after_bridge_healthy
+  # The retired OTP senders go only once the bridge has taken over their topic (see the function).
+  _remove_retired_after_handoff 60
 
   verify "novu-api responds on ${NOVU_API_LOCAL}" "http_reachable '$NOVU_API_LOCAL'"
   verify "novu-bridge container is running" "_svc_running novu-bridge"

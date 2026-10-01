@@ -2698,6 +2698,9 @@ services:
       IS_EMAIL_INLINE_CSS_DISABLED: 'false'
       IS_USE_MERGED_DIGEST_ID_ENABLED: 'false'
       NODE_OPTIONS: --require /opt/digit-novu-providers/register.js
+      # Every node process in this container registers DIGIT's providers or crashes —
+      # a wrapper, pm2 or a moved entrypoint cannot start a worker without them (register.js).
+      DIGIT_NOVU_PROVIDERS: required
     # The deploy stages the providers at /opt/digit/novu-worker-providers and sets
     # NOVU_WORKER_PROVIDERS_DIR; the default is the repo copy, for a compose run from
     # local-setup/. A missing source becomes an empty directory, and the worker

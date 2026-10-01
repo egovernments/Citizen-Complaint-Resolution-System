@@ -535,6 +535,9 @@ describe('Novu workflow creation deployment contract', () => {
     const workerBlock = next === -1 ? rest : rest.slice(0, next);
     expect(workerBlock).toMatch(/^ {4}image: ghcr\.io\/novuhq\/novu\/worker:2\.3\.0$/m);
     expect(workerBlock).toMatch(/^ {6}NODE_OPTIONS: --require \/opt\/digit-novu-providers\/register\.js$/m);
+    // Vinoth re-review 4141822062: any node process in the worker registers the providers or
+    // crashes, so a wrapper or a moved entrypoint cannot start a worker without them.
+    expect(workerBlock).toMatch(/^ {6}DIGIT_NOVU_PROVIDERS: required$/m);
     expect(workerBlock).toMatch(
       /^ {6}- \$\{NOVU_WORKER_PROVIDERS_DIR:-\.\.\/backend\/novu-bridge\/novu-worker-providers\}:\/opt\/digit-novu-providers:ro$/m
     );
@@ -570,6 +573,9 @@ describe('Novu workflow creation deployment contract', () => {
 
     const workerTemplate = read('devops/deploy-as-code/charts/backbone-services/novu/templates/worker/worker-deployment.yaml');
     expect(workerTemplate).toContain('value: "--require /opt/digit-novu-providers/register.js"');
+    // inside the same digitProviders.enabled block as NODE_OPTIONS
+    expect(workerTemplate).toMatch(
+      /- name: NODE_OPTIONS\n\s+value: "--require \/opt\/digit-novu-providers\/register\.js"\n(\s+#[^\n]*\n)?\s+- name: DIGIT_NOVU_PROVIDERS\n\s+value: "required"\n\s+\{\{- end \}\}/);
     expect(workerTemplate).toContain('mountPath: /opt/digit-novu-providers');
     expect(workerTemplate).toContain('checksum/digit-providers');
     expect(read('devops/deploy-as-code/charts/backbone-services/novu/templates/worker/worker-providers-configmap.yaml')).toContain(
@@ -777,40 +783,60 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
   // egov.core.notification.sms and every login OTP went out twice.
   // 4118608332 (re-review): removing them before the up on a box with NO bridge yet left
   // nothing consuming the topic for the whole start (OTPs dropped), and a failed up left
-  // the box with no OTP sender at all. So: early only when a recreated bridge is running,
-  // otherwise after the main up once novu-bridge is healthy.
-  test('the retired OTP senders go early only when a recreated bridge is running', () => {
+  // the box with no OTP sender at all.
+  // Vinoth 4141822018: a failed `up -d novu-bridge` was swallowed (pipefail, no -e) and the
+  // OLD bridge, still running, printed BRIDGE-RUNNING. 4141822022: "running" is not "consuming":
+  // CoreSmsConsumer starts at the END of the topic when its group has no committed offset there.
+  // So: the bridge-first step fails on a failed up and names only the CURRENT container, and both
+  // removals wait for the handoff (core-sms-handoff.sh — run for real in
+  // local-setup/tests/test_core_sms_handoff.py).
+  test('the retired OTP senders go only once a current novu-bridge has taken over the OTP topic', () => {
     const bridgeFirst = playbook.indexOf('- name: "notification stack — recreate novu-bridge before pgr-services');
     const early = playbook.indexOf('- name: "notification stack — remove the retired OTP senders now');
     const mainStart = playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)');
-    const late = playbook.indexOf('- name: "notification stack — remove the retired OTP senders once novu-bridge is healthy');
+    const late = playbook.indexOf('- name: "notification stack — remove the retired OTP senders once novu-bridge took over the OTP topic');
     const pull = playbook.indexOf('- name: Pull all images from VPC registry');
+    const stage = playbook.indexOf('- name: "Copy the core-SMS handoff check"');
     expect(pull).toBeGreaterThan(-1);
+    expect(stage).toBeGreaterThan(-1);
+    expect(stage).toBeLessThan(bridgeFirst);
     expect(bridgeFirst).toBeGreaterThan(pull);
     expect(early).toBeGreaterThan(bridgeFirst);
     expect(mainStart).toBeGreaterThan(early);
     expect(late).toBeGreaterThan(mainStart);
+    expect(task('Copy the core-SMS handoff check')).toContain('src: ../scripts/core-sms-handoff.sh');
 
-    expect(task('notification stack — recreate novu-bridge before pgr-services')).toContain('echo "BRIDGE-RUNNING');
+    const first = task('notification stack — recreate novu-bridge before pgr-services');
+    expect(first).toMatch(/if ! dc up -d novu-bridge 2>&1 \| tee -a \{\{ compose_progress_file \}\}; then\n[\s\S]*?exit 1\n/);
+    expect(first).toContain('dc config --hash novu-bridge');
+    // `config --images <svc>` lists the dependencies' images too: the one service's image is read
+    expect(first).toContain('dc config --format json novu-bridge');
+    expect(first).not.toContain('dc config --images');
+    expect(first.indexOf('[ "${have%|*}" != "$want_image_id|$want_hash" ]')).toBeLessThan(first.indexOf('echo "BRIDGE-RUNNING'));
+
     const earlyTask = task('notification stack — remove the retired OTP senders now');
     expect(earlyTask).toContain('enable_novu | default(false)');
     expect(earlyTask).toContain('- bridge_first is changed');
     expect(earlyTask).toContain(`- "'BRIDGE-RUNNING' in (bridge_first.stdout | default(''))"`);
+    expect(earlyTask).toContain('source "{{ digit_dir }}/core-sms-handoff.sh"');
+    expect(earlyTask.indexOf('if ! core_sms_wait_handoff 30 10; then')).toBeLessThan(earlyTask.indexOf('docker rm -f'));
+    expect(earlyTask).toMatch(/if ! core_sms_wait_handoff 30 10; then\n\s+echo "DEFERRED:/);
     expect(earlyTask).toContain('"$svc|{{ digit_dir }}"');
     expect(earlyTask).toContain('register: retired_notification_containers\n');
 
-    const lateTask = task('notification stack — remove the retired OTP senders once novu-bridge is healthy');
-    expect(lateTask).toContain('- retired_notification_containers is skipped');
+    const lateTask = task('notification stack — remove the retired OTP senders once novu-bridge took over the OTP topic');
+    expect(lateTask).toContain('(retired_notification_containers is skipped)');
+    expect(lateTask).toContain("or ('DEFERRED:' in (retired_notification_containers.stdout | default('')))");
     expect(lateTask).toContain('enable_novu | default(false)');
-    // removal waits for the bridge's healthcheck, and a bridge that never gets healthy keeps them
-    expect(lateTask).toMatch(/\[ "\$status" != "healthy" \]; then\n\s+echo "KEPT:/);
-    expect(lateTask.indexOf('"$status" != "healthy"')).toBeLessThan(lateTask.indexOf('docker rm -f'));
+    // no handoff keeps them
+    expect(lateTask).toMatch(/if ! core_sms_wait_handoff 60 10; then\n\s+echo "KEPT:/);
+    expect(lateTask.indexOf('core_sms_wait_handoff')).toBeLessThan(lateTask.indexOf('docker rm -f'));
     expect(lateTask).toContain('"$svc|{{ digit_dir }}"');
     expect(task('notification stack — WARNING: the retired OTP senders were kept')).toContain(
       "'KEPT:' in (retired_notification_containers_late.stdout | default(''))");
   });
 
-  test('enable-notifications.sh removes the retired OTP senders only once a bridge can take over', () => {
+  test('enable-notifications.sh removes the retired OTP senders only once the bridge has taken over', () => {
     const sh = read('local-setup/scripts/enable-notifications.sh');
     const body = (fn: string) => {
       const start = sh.indexOf(`\n${fn}() {`);
@@ -818,14 +844,15 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
       return sh.slice(start, sh.indexOf('\n}\n', start));
     };
     const step1 = body('do_step1');
-    expect(step1.indexOf('compose up -d novu-bridge-migration novu-bridge')).toBeLessThan(
-      step1.indexOf('_remove_retired_notification_containers'));
-    expect(step1).toContain('_svc_running novu-bridge');
+    expect(step1.indexOf('compose up -d novu-bridge-migration novu-bridge')).toBeLessThan(step1.indexOf('_bridge_is_current'));
+    expect(step1.indexOf('_bridge_is_current')).toBeLessThan(step1.indexOf('_remove_retired_after_handoff 30'));
+    expect(step1).not.toContain('_remove_retired_notification_containers');
     const step2 = body('do_step2');
     expect(step2).not.toContain('_remove_retired_notification_containers');
-    expect(step2.indexOf('compose up -d novu-mongo')).toBeLessThan(step2.indexOf('_remove_retired_after_bridge_healthy'));
-    const wait = body('_remove_retired_after_bridge_healthy');
-    expect(wait.indexOf('[[ "$status" != healthy ]]')).toBeLessThan(wait.indexOf('_remove_retired_notification_containers'));
+    expect(step2.indexOf('compose up -d novu-mongo')).toBeLessThan(step2.indexOf('_remove_retired_after_handoff 60'));
+    const wait = body('_remove_retired_after_handoff');
+    expect(wait.indexOf('if ! core_sms_wait_handoff "$tries" 10; then')).toBeLessThan(wait.indexOf('_remove_retired_notification_containers'));
+    expect(body('_core_sms_handoff_lib')).toContain('core-sms-handoff.sh');
   });
 
   // 4079418208: the pg → state_root rewrite of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT only
@@ -906,15 +933,36 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
     expect(legacy).toContain("' state=legacy '");
     expect(legacy).toContain('--tenant {{ item }}');
 
-    // one bad root does not hide the others: the only fail is after the report, and a refused
-    // login at a root other than state_root is a warning
-    const fail = task('notif-seed — fail: a state root could not be seeded');
-    expect(playbook.indexOf('notif-seed — fail: a state root could not be seeded')).toBeGreaterThan(
+    // one bad root does not hide the others: the only fail is after the report, and it is about
+    // state_root alone. Vinoth 4141822048: a `ke` box restored from full-dump.sql carries the stock
+    // `pg.*` demo complaints, so a 403 / unreadable schema at `pg` must warn, not abort the deploy.
+    const fail = task('notif-seed — fail: state_root could not be seeded');
+    expect(playbook.indexOf('notif-seed — fail: state_root could not be seeded')).toBeGreaterThan(
       playbook.indexOf('notif-seed — result per state root'));
-    expect(fail).toContain("reject('in', notif_seed_login_refused_roots | reject('equalto', notif_seed_tenant | trim) | list)");
+    expect(fail).toContain("{{ [notif_seed_tenant | trim] | reject('in', notif_seed_done_roots) | list }}");
+    expect(fail).not.toContain('notif_seed_roots');
     const block = playbook.slice(playbook.indexOf('notif-seed — list the state roots'),
-      playbook.indexOf('notif-seed — fail: a state root could not be seeded'));
+      playbook.indexOf('notif-seed — fail: state_root could not be seeded'));
     expect(block).not.toContain('ansible.builtin.fail:');
+    const other = task('notif-seed — WARNING: a complaint root other than state_root could not be seeded');
+    expect(other).toContain('ansible.builtin.debug:');
+    expect(other).toContain('loop: "{{ notif_seed_roots }}"');
+    expect(other).toContain('- item != (notif_seed_tenant | trim)');
+    expect(other).toContain('- item not in notif_seed_done_roots');
+    expect(other).toContain('- item not in notif_seed_login_refused_roots');
+    expect(other).toContain('--tags notifications');
+    expect(other).toContain('notifications_seed_exclude');
+    expect(playbook.indexOf('notif-seed — roots that did not finish')).toBeLessThan(
+      playbook.indexOf('notif-seed — WARNING: a complaint root other than state_root'));
+
+    // Vinoth 4141822040: a root's admin may plan/apply (and preview) its own root, but only an
+    // owning-state admin may create a provider — every ACTION line says so for ITS root.
+    for (const t of [none, legacy]) {
+      expect(t).toContain('{{ notif_provider_owner_note }}');
+      expect(t).toContain("{{ ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))");
+      expect(t).toContain('403 NB_TENANT_NOT_ALLOWED');
+      expect(t).toContain("--provider SMS=<identifier>");
+    }
     expect(task('notif-seed — WARNING: could not log in at a complaint root')).toContain('item != (notif_seed_tenant | trim)');
   });
 

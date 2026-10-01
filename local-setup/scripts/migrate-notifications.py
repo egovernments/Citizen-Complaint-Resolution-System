@@ -65,10 +65,23 @@ reached with --digit-url, a Kubernetes install — unless you have checked the w
 and pass --assume-worker-providers (Kubernetes: the novu chart's worker.digitProviders.enabled,
 see docs/2.20/notifications/providers.md).
 
-Exit: 0 ok · 1 finished with warnings (preview differences, verification mismatch, a
-required operator action) · 2 a tenant failed or could not be read · 3 a write was
+WHO LOGS IN
+-----------
+plan/apply for a tenant log in at that tenant (DIGIT_LOGIN_TENANT=<tenant>): its MDMS rows are
+written with that admin's roles, and novu-bridge previews (_resolve) a tenant's events for an
+admin of its own root. Creating a provider is different: providers are shared by the whole
+deployment, so novu-bridge lets only an admin of a state that OWNS them create one — the root of
+NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (the deploy's state_root) plus NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS
+(Ansible: novu_bridge_provider_admin_tenants). For another root: create it logged in at the
+owning state (or in the Configurator there), then pin it with --provider CH=<identifier> logged
+in at the root; or list the root in novu_bridge_provider_admin_tenants. A refused creation
+(403 NB_TENANT_NOT_ALLOWED) stops the run before any tenant is written, with these commands.
+
+Exit: 0 ok · 1 finished with warnings (preview differences or a refused preview, verification
+mismatch, a required operator action) · 2 a tenant failed or could not be read · 3 a write was
 refused with 403 (egov-accesscontrol cache / missing role-action) · 4 refused to start
-(apply without --yes, --all without --only, bad credentials file, bad --provider).
+(apply without --yes, --all without --only, bad credentials file, bad --provider, provider
+creation refused by novu-bridge for this login).
 """
 from __future__ import annotations
 
@@ -249,6 +262,68 @@ def _error_code(payload):
             return errors[0].get("code") or errors[0].get("message")
         return payload.get("code") or payload.get("error")
     return None
+
+
+def _error_message(payload):
+    if isinstance(payload, dict):
+        errors = payload.get("Errors") or payload.get("errors") or []
+        if errors and isinstance(errors[0], dict):
+            return errors[0].get("message") or ""
+        return payload.get("message") or ""
+    return ""
+
+
+# The bridge's refusals of a caller (ProxyAuthFilter): no admin role at a state tenant, or an
+# admin of a state that does not own the deployment's providers.
+CALLER_REFUSALS = ("NB_TENANT_NOT_ALLOWED", "NB_ADMIN_ROLE_REQUIRED")
+
+
+def provider_owners(args):
+    """The states whose admins may create providers, from the running bridge container:
+    the root of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (the deploy sets it to state_root) plus
+    NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS. None when the container cannot be read."""
+    env = container_env(getattr(args, "bridge_container", None))
+    if env is None:
+        return None
+    owners = []
+    core = str(env.get("NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT") or "").strip().split(".")[0]
+    for code in [core] + str(env.get("NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS") or "").split(","):
+        code = code.strip().split(".")[0]
+        if code and code not in owners:
+            owners.append(code)
+    return owners
+
+
+def provider_refusal_help(ctx, code, message, ahead=False):
+    """What to do when novu-bridge refuses to let this login create a provider (Vinoth re-review
+    of #2097, 4141822040): a root's own admin may plan/apply it, but providers are shared by the
+    deployment, so only an admin of a state that owns them may create one."""
+    login = str(sn.LOGIN_TENANT or "?").split(".")[0]
+    owners = getattr(ctx, "provider_owners", None)
+    owner_txt = (" or ".join(owners) if owners else
+                 "the state of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (the deployment's state_root) or "
+                 "one listed in NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS")
+    owner = owners[0] if owners else "<state_root>"
+    tenants = ctx.args.tenant or [login]
+    kinds = " ".join("--create-provider %s" % p["type"] for p in ctx.provider_plans)
+    if code == "NB_ADMIN_ROLE_REQUIRED":
+        why = ("%s logged in at %s holds none of novu-bridge's admin roles at a state tenant"
+               % (sn.USERNAME, sn.LOGIN_TENANT))
+    else:
+        why = ("an admin of %s may plan and apply %s, but providers are shared by the whole "
+               "deployment: only an admin of %s may create one" % (login, login, owner_txt))
+    return ("provider creation %s by novu-bridge (403 %s%s): %s.%s "
+            "Create the provider as an admin of the owning state: Configurator → Notifications → "
+            "Providers logged in at %s, or — only when %s is already on NOTIFICATIONS.* (its plan "
+            "says `migrated`; an apply would otherwise migrate it too) — `DIGIT_LOGIN_TENANT=%s "
+            "migrate-notifications.py apply --tenant %s %s --credentials-file <0600 json> --yes`. "
+            "Then re-run this for %s with `--provider <SMS|EMAIL|WHATSAPP>=<identifier>` instead of "
+            "--create-*. Or let %s's admins manage providers: add it to "
+            "novu_bridge_provider_admin_tenants (NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS) and redeploy." % (
+                "will be refused" if ahead else "refused", code,
+                (" — " + _short(message, 200)) if message else "", why,
+                "" if ahead else " Nothing was written.", owner, owner, owner, owner, kinds,
+                ",".join(tenants), login))
 
 
 def mdms_update(ctx, code, record, tenant):
@@ -506,13 +581,20 @@ def plan_provider_creation(ctx, args):
 
 
 def create_providers(ctx, plans):
-    """POST each planned provider. Returns [plan with state created|exists|failed]."""
+    """POST each planned provider. Returns [plan with state created|exists|failed|refused];
+    `refused` (403 NB_TENANT_NOT_ALLOWED / NB_ADMIN_ROLE_REQUIRED) stops at the first one."""
     for plan in plans:
         if plan["state"] != "create":
             continue
         body = {"type": plan["type"], "name": plan["name"], "identifier": plan["identifier"],
                 "credentials": plan["_credentials"], "active": True}
         status, payload = bridge_call(ctx, "POST", BRIDGE + "/providers", body)
+        if status == 403 and _error_code(payload) in CALLER_REFUSALS:
+            # The caller, not this provider, is refused: every other create would be too.
+            plan["state"] = "refused"
+            plan["error"] = "HTTP 403 %s" % _error_code(payload)
+            plan["help"] = provider_refusal_help(ctx, _error_code(payload), _error_message(payload))
+            break
         if status in (200, 201) and isinstance(payload, dict):
             data = payload.get("data") or {}
             plan["identifier"] = data.get("identifier") or plan["identifier"]
@@ -1218,6 +1300,12 @@ def apply_tenant(ctx, t):
         why = "novu-bridge unreachable (%s)" % ctx.integrations_error
     else:
         before, why = preview(ctx, event_tenant, t["_catalogue_rows"], locales)
+        if before is None and any(code in (why or "") for code in CALLER_REFUSALS):
+            # Not silently dropped (Vinoth 4141822040): the before/after diff is the safety net.
+            t["operatorActions"].append(
+                "the before/after preview was refused (%s): novu-bridge previews %s's events for "
+                "an admin of %s (or of a state that owns the providers) — run this logged in at "
+                "%s (DIGIT_LOGIN_TENANT=%s) to get it" % (why, tenant, tenant, tenant, tenant))
     run["previewTenant"] = event_tenant
 
     result = sn.write_new_namespace(ctx.tok, t["_planned"], tenant, label="apply")
@@ -1468,7 +1556,7 @@ def print_providers(ctx):
     for plan in ctx.provider_plans:
         print("  %s %s provider %s \"%s\" (identifier %s; credential keys %s — values not shown)%s" % (
             {"create": "WILL CREATE", "exists": "exists:", "created": "CREATED",
-             "failed": "FAILED to create"}.get(plan["state"], plan["state"]),
+             "failed": "FAILED to create", "refused": "REFUSED to create"}.get(plan["state"], plan["state"]),
             plan["type"], plan["channel"], plan["name"], plan["identifier"], ", ".join(plan["keys"]),
             (" — " + plan["error"]) if plan.get("error") else ""))
     s = ctx.settings
@@ -1677,6 +1765,7 @@ def run(argv=None):
                                     % (item, ch))
             ctx.explicit_pins[ch] = ident.strip()
         ctx.provider_plans = plan_provider_creation(ctx, args)
+        ctx.provider_owners = provider_owners(args) if ctx.provider_plans else None
         for plan in ctx.provider_plans:
             if plan["channel"] in ctx.explicit_pins:
                 raise RefuseToStart("both --provider %s=… and a provider to create for %s"
@@ -1692,12 +1781,23 @@ def run(argv=None):
         args.mode, report["generatedAt"], sn.URL,
         ("roots %s (%s)" % (",".join(ctx.roots), roots_source)) if args.all else "tenants " + ",".join(args.tenant),
         "  [--adopt-defaults]" if args.adopt_defaults else ""))
-    tenants, excluded, notes = discover(ctx, args)
-    for note in notes:
-        print("note: %s" % note)
+    login_root = str(sn.LOGIN_TENANT or "").split(".")[0]
+    if (ctx.provider_owners and login_root not in ctx.provider_owners
+            and any(p["state"] == "create" for p in ctx.provider_plans)):
+        print("WARNING: %s" % provider_refusal_help(ctx, "NB_TENANT_NOT_ALLOWED", "", ahead=True),
+              file=sys.stderr)
     if args.mode == "apply" and args.yes and ctx.provider_plans:
         create_providers(ctx, ctx.provider_plans)
     print_providers(ctx)
+    refused = [p for p in ctx.provider_plans if p["state"] == "refused"]
+    if refused:
+        # Before any tenant is read or written: the operator asked for this provider to be
+        # created and pinned, and a migration without it is not what was reviewed.
+        print("REFUSED: %s" % refused[0]["help"], file=sys.stderr)
+        return 4
+    tenants, excluded, notes = discover(ctx, args)
+    for note in notes:
+        print("note: %s" % note)
 
     entries = []
     for code in tenants:

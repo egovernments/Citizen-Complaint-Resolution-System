@@ -38,7 +38,8 @@ who sends OTPs.
 | To | You need a role from | Default |
 |---|---|---|
 | Use the screens: logs, providers, preferences; **Check status** | `novu_bridge_proxy_allowed_roles` | `EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN` |
-| Create a provider, rotate its credentials, disable or delete it, **Test** it; `POST /dispatch/_resolve`, `/dispatch/_dry-run` | `novu_bridge_proxy_admin_roles`, **held at a state that owns the providers** (below) | `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN` |
+| Create a provider, rotate its credentials, disable or delete it, **Test** it; `POST /dispatch/_dry-run` with `"send": true` | `novu_bridge_proxy_admin_roles`, **held at a state that owns the providers** (below) | `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN` |
+| Preview one tenant's events: `POST /dispatch/_resolve`, `/dispatch/_dry-run` without `send` (what `migrate-notifications.py` uses for its before/after preview) | `novu_bridge_proxy_admin_roles`, held at **the event tenant's own state root**, or at a state that owns the providers | `SUPERUSER,MDMS_ADMIN,ACCOUNT_ADMIN` |
 
 Without an admin role at a state tenant those calls answer `403 NB_ADMIN_ROLE_REQUIRED`: a
 provider serves the whole deployment, so an admin role held only at a city (`ke.bomet`) does not
@@ -47,8 +48,11 @@ count. The state must also **own** the deployment's providers: the deployment's 
 `state_root` and checks on the running container), plus any state listed in
 `novu_bridge_provider_admin_tenants` (`NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`, comma-separated,
 default empty). An admin of any other root on the same box — a second state root or an onboarded
-workspace (#1999) — gets `403 NB_TENANT_NOT_ALLOWED`; list that root there if its admins should
-manage providers. With neither set, every one of these calls is refused
+workspace (#1999) — gets `403 NB_TENANT_NOT_ALLOWED` on the provider calls; list that root there if
+its admins should manage providers. That admin may still preview its own root's events, so
+`migrate-notifications.py plan/apply` for a root runs logged in at that root; only
+`--create-provider` / `--create-smscountry-provider` needs an owning state (see
+[migration.md](./migration.md#who-logs-in)). With neither set, every provider call is refused
 ([providers.md](./providers.md#who-may-manage-providers)). An admin role also satisfies the first tier. Logs and the config-source report answer only
 for your own tenant — for a user at the state tenant, the state and its cities — and
 `403 NB_TENANT_NOT_ALLOWED` for any other. Editing Channels / Routing / Templates / Provider Templates is
@@ -399,6 +403,9 @@ Checklist:
 | "This needs one of these roles held at a state tenant…" (`NB_ADMIN_ROLE_REQUIRED`) | No admin role, or one held only at a city | Be granted one at the state tenant |
 | `403 NB_TENANT_NOT_ALLOWED` on Logs, or on Disable / Delete | Looking at another state's tenant, or managing a provider for a state you are not an admin of | Log in at the tenant you mean |
 | `403 NB_TENANT_NOT_ALLOWED` on any provider action, as an admin of your own state | Your state does not own the deployment's providers (it is not `state_root`, and not in `novu_bridge_provider_admin_tenants`) | Add it to `novu_bridge_provider_admin_tenants` and redeploy, or use an admin of `state_root` |
+| `migrate-notifications.py` stops with `REFUSED: provider creation refused by novu-bridge (403 NB_TENANT_NOT_ALLOWED …)` | `--create-provider` run logged in at a root that does not own the providers; nothing was written | Create the provider as an admin of `state_root` (Configurator → Providers), then re-run for your root with `--provider SMS=<identifier>`; or list the root in `novu_bridge_provider_admin_tenants` |
+| The deploy prints `notif-seed — WARNING: a complaint root other than state_root could not be seeded` | That root (often the stock `pg` demo complaints of a restored dump) refused a write (exit 3) or could not be read (exit 2). Only a failure at `state_root` fails the deploy | Follow the warning: grant the seeding admin `MDMS_ADMIN` at that root and re-run `--tags notifications`, seed it by hand ([§8.2](#82-whatsapp-server-side)), or add it to `notifications_seed_exclude` |
+| The deploy prints `notification stack — WARNING: the retired OTP senders were kept` | novu-bridge had not taken over `egov.core.notification.sms` within 10 minutes (not healthy, its listener off, or its consumer group owns / has committed none of the topic's partitions), so `egov-notification-sms` and `otp-publisher` were left running. A login OTP can arrive twice meanwhile | Fix novu-bridge (`docker logs novu-bridge`; `docker exec digit-redpanda rpk group describe novu-bridge`), then re-run the deploy |
 | `409 NB_PROVIDER_IN_USE` on Disable / Delete | A channel still selects the provider; or it is the last active integration on its Novu channel and a channel with no provider selected sends through it; or MDMS could not be read | Point the channel at another provider (or add another active integration first); retry if MDMS was down |
 | `400 NB_PROVIDER_TYPE_UNAVAILABLE` creating / testing an SMSCountry, Ozeki or Jasmin provider | The Novu worker does not load DIGIT's providers (`NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS=false`) | Use a Novu-native provider, or turn them on: Helm `global.novuWorkerDigitProviders: true` ([providers.md](./providers.md#digits-worker-providers)) |
 | Banner "not been migrated yet" | Tenant still on its 2.12 configuration | `migrate-notifications.py plan --tenant mycity`, review, then `apply` ([migration.md](./migration.md#3-copy-each-tenants-configuration)) |
@@ -422,7 +429,7 @@ Ansible `host_vars/<tenant>.yml` (re-run `./deploy.sh` after changing):
 | `seed_notifications` | Create the notification schemas and access-control rows, channel rows for a tenant with none, and the shipped defaults on a fresh install (no configuration, no complaint ever filed). Never copies legacy rows — that is [migrate-notifications.py](./migration.md#3-copy-each-tenants-configuration) | `enable_novu` |
 | `notifications_adopt_defaults` | Also seed the shipped defaults into a state root with no configuration that already has complaints. Only for roots whose complaints are demo data (a restored dump); otherwise use `migrate-notifications.py plan/apply --adopt-defaults`. `true` = every root the deploy seeds; a list (`[pg]`) = those roots only. Never touches a root that has configuration | `false` |
 | `notifications_seed_exclude` | Regex of state roots the seed skips (and lists) even though they have complaints. The seed covers `state_root` and **every state root with complaints** — novu-bridge reads a complaint's configuration at its own root (#1943) | `(?i)^(PW_\|pwt)` (test-suite junk) |
-| `notif_seed_user` / `notif_seed_pass` | The admin the seed logs in as, **at each root** it seeds. A root where it does not exist is reported and skipped (fatal only at `state_root`) | `ADMIN` / `eGov@123` |
+| `notif_seed_user` / `notif_seed_pass` | The admin the seed logs in as, **at each root** it seeds. At a root other than `state_root`, any failure — the user does not exist there, a write refused with 403, MDMS unreadable — is a warning with the command that finishes it; only `state_root` fails the deploy | `ADMIN` / `eGov@123` |
 | `novu_bridge_provider_admin_tenants` | Extra state tenants whose admins may manage providers, besides `state_root` (#1999 multi-root boxes) | blank |
 | `enable_otp_services` | Real OTP login; requires `enable_novu` | `false` |
 | `novu_bridge_proxy_allowed_roles` / `novu_bridge_proxy_admin_roles` | The two role tiers ([§1](#1-before-you-start)) | see §1 |

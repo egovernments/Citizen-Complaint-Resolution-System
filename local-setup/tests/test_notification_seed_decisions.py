@@ -336,6 +336,103 @@ class ProviderIdentifier(unittest.TestCase):
         self.assertEqual(plans[0]["state"], "exists")
 
 
+class ProviderCreationRefused(unittest.TestCase):
+    """Vinoth re-review 4141822040: novu-bridge lets a root's own admin plan/apply (and preview)
+    it, but only an admin of a state that owns the providers may create one. A refusal must
+    say so, and how to do it, before any tenant is written."""
+
+    def setUp(self):
+        self.calls = []
+        original_call, original_env, original_login = mn.bridge_call, mn.container_env, mn.sn.LOGIN_TENANT
+        self.addCleanup(setattr, mn, "bridge_call", original_call)
+        self.addCleanup(setattr, mn, "container_env", original_env)
+        self.addCleanup(setattr, mn.sn, "LOGIN_TENANT", original_login)
+        mn.sn.LOGIN_TENANT = "pg"
+        mn.container_env = lambda _name: {"NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT": "ke",
+                                          "NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS": " mz, ke.bomet ,"}
+
+    def ctx(self, answer):
+        def call(_ctx, method, path, body=None, timeout=60):
+            self.calls.append((method, path))
+            return answer
+        mn.bridge_call = call
+        plans = [{"type": t, "channel": ch, "name": t, "identifier": t + "-main", "keys": [],
+                  "state": "create", "_credentials": {}} for t, ch in (("smscountry", "SMS"), ("smtp", "EMAIL"))]
+        args = types.SimpleNamespace(tenant=["pg"], bridge_container="novu-bridge")
+        ctx = types.SimpleNamespace(integrations=[], provider_plans=plans, args=args)
+        ctx.provider_owners = mn.provider_owners(args)
+        return ctx
+
+    REFUSED = (403, {"Errors": [{"code": "NB_TENANT_NOT_ALLOWED",
+                                 "message": "only an admin of ke, mz may manage them"}]})
+
+    def test_the_owners_are_read_from_the_running_bridge(self):
+        self.assertEqual(mn.provider_owners(types.SimpleNamespace(bridge_container="novu-bridge")),
+                         ["ke", "mz"])
+        mn.container_env = lambda _name: None
+        self.assertIsNone(mn.provider_owners(types.SimpleNamespace(bridge_container="novu-bridge")))
+
+    def test_a_refusal_stops_at_the_first_provider_and_says_how(self):
+        ctx = self.ctx(self.REFUSED)
+        plans = mn.create_providers(ctx, ctx.provider_plans)
+        self.assertEqual(len(self.calls), 1)  # the caller is refused: no second attempt
+        self.assertEqual([p["state"] for p in plans], ["refused", "create"])
+        help_text = plans[0]["help"]
+        self.assertIn("403 NB_TENANT_NOT_ALLOWED", help_text)
+        self.assertIn("only an admin of ke or mz may create one", help_text)
+        self.assertIn("Nothing was written", help_text)
+        self.assertIn("DIGIT_LOGIN_TENANT=ke migrate-notifications.py apply --tenant ke "
+                      "--create-provider smscountry --create-provider smtp", help_text)
+        self.assertIn("--provider <SMS|EMAIL|WHATSAPP>=<identifier>", help_text)
+        self.assertIn("novu_bridge_provider_admin_tenants", help_text)
+
+    def test_a_missing_admin_role_is_named_as_such(self):
+        ctx = self.ctx((403, {"Errors": [{"code": "NB_ADMIN_ROLE_REQUIRED", "message": "x"}]}))
+        plans = mn.create_providers(ctx, ctx.provider_plans)
+        self.assertEqual(plans[0]["state"], "refused")
+        self.assertIn("holds none of novu-bridge's admin roles", plans[0]["help"])
+
+    def test_another_403_is_an_ordinary_failure(self):
+        ctx = self.ctx((403, {"Errors": [{"code": "SOMETHING_ELSE"}]}))
+        plans = mn.create_providers(ctx, ctx.provider_plans)
+        self.assertEqual([p["state"] for p in plans], ["failed", "failed"])
+
+    def test_apply_stops_before_any_tenant_is_read(self):
+        import contextlib
+        import io
+        self.ctx(self.REFUSED)  # installs the refusing bridge_call
+        patches = {
+            "resolve_files": lambda ctx, args: None,
+            "bridge_settings": lambda args: settings(),
+            "read_integrations": lambda ctx: ([], None),
+            "plan_provider_creation": lambda ctx, args: [
+                {"type": "smscountry", "channel": "SMS", "name": "SMSCountry",
+                 "identifier": "smscountry-main", "keys": ["user"], "state": "create",
+                 "active": True, "_credentials": {"user": "u"}}],
+            "discover": lambda ctx, args: self.fail("a tenant was read after the refusal"),
+        }
+        for name, fn in patches.items():
+            self.addCleanup(setattr, mn, name, getattr(mn, name))
+            setattr(mn, name, fn)
+        self.addCleanup(setattr, mn.sn, "token", mn.sn.token)
+        mn.sn.token = lambda: "tok"
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = mn.run(["apply", "--tenant", "pg", "--create-provider", "smscountry",
+                         "--credentials-file", "/dev/null", "--yes", "--digit-url", "http://kong"])
+        self.assertEqual(rc, 4)
+        self.assertIn("WARNING: provider creation will be refused by novu-bridge", err.getvalue())  # said up front
+        self.assertIn("REFUSED: provider creation refused by novu-bridge (403 NB_TENANT_NOT_ALLOWED", err.getvalue())
+        self.assertIn("REFUSED to create smscountry", out.getvalue())
+
+    def test_without_the_container_the_owners_are_described(self):
+        mn.container_env = lambda _name: None
+        ctx = self.ctx(self.REFUSED)
+        help_text = mn.create_providers(ctx, ctx.provider_plans)[0]["help"]
+        self.assertIn("NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT", help_text)
+        self.assertIn("DIGIT_LOGIN_TENANT=<state_root>", help_text)
+
+
 class SeederLogin(unittest.TestCase):
     """#1943 / Kanav re-review 4118608347: the deploy now seeds every state root that has
     complaints, each with its own login. A root where the admin does not exist must be a

@@ -73,7 +73,11 @@ bridge accepts both the old pre-rendered envelopes and thin events, so upgrading
 safe.
 
 - **Docker Compose**: the deploy recreates `novu-bridge` (and runs its migrator) on its own
-  before the full `up -d`, whenever a bridge is already running. Doing it by hand:
+  before the full `up -d`, whenever a bridge is already running. A failed `up -d novu-bridge`
+  (image pull, `novu-bridge-migration`) **stops the deploy** there, before pgr-services and with
+  the old OTP senders untouched (`BRIDGE-UP-FAILED`); so does a `novu-bridge` container that is
+  not the image and config hash compose resolves now (`BRIDGE-NOT-CURRENT`), because the old
+  bridge is still running at that point and must not be taken for the new one. Doing it by hand:
   `docker compose <files> up -d novu-bridge` first, then `up -d pgr-services`.
 - **Kubernetes**: `digit-helmfile.yaml` applies `common-services` (novu-bridge, released with
   `wait: true`) before `urban` (pgr-services), so a plain `helmfile -e env sync` waits for the new
@@ -134,9 +138,12 @@ novu-bridge resolves a complaint's configuration at the complaint's own state ro
 own login (`notif_seed_user` at that root). A box whose `state_root` is `ke` but which still
 carries the dump's `pg` complaints therefore gets `pg` decided and reported too. The deploy prints
 one line per root (`notif-seed — result per state root`): `fresh`, `notifications`, `legacy` or
-`none`, each `legacy` / `none` root with its own `ACTION` and command. A root where the seeding
-user cannot log in is a `WARNING` and is skipped (fatal only for `state_root`); a root that fails
-does not stop the others, and the run fails once, at the end, naming every failed root. Roots
+`none`, each `legacy` / `none` root with its own `ACTION` and command. **Only `state_root` can
+fail the deploy.** At any other root — typically the dump's `pg` demo complaints on a `ke` box —
+a refused login (`WARNING: could not log in at a complaint root`), a write still refused with 403,
+or MDMS that cannot be read (`WARNING: a complaint root other than state_root could not be
+seeded`) is a warning that names the exit code and the command that finishes the root; that
+root's configuration is left as it was. A root that fails does not stop the others. Roots
 matching `notifications_seed_exclude` (default `(?i)^(PW_|pwt)`, the test suite's junk tenants)
 are listed and skipped. To see the roots yourself:
 
@@ -168,10 +175,37 @@ MDMS has no delete), and no command or setting moves it back. The legacy rows ar
 ```bash
 cd /opt/digit/notification-seed                 # or local-setup/scripts in a checkout
 export DIGIT_URL=http://127.0.0.1:18000         # Kong; DIGIT_USERNAME / DIGIT_PASSWORD default ADMIN / eGov@123
+export DIGIT_LOGIN_TENANT=mycity                # the root you migrate (see "Who logs in")
 python3 migrate-notifications.py plan  --all --report plan.json
 python3 migrate-notifications.py apply --all --only defaults --yes --report apply.json
 python3 migrate-notifications.py apply --tenant mycity --yes --report apply-mycity.json
 ```
+
+### Who logs in
+
+Log in **at the root you migrate** (`DIGIT_LOGIN_TENANT=<root>`, default: the first root): its
+MDMS rows are written with that admin's roles, and novu-bridge previews a tenant's events
+(`_resolve`, `_dry-run` without `send`) for an admin of the event tenant's own state root. That is
+what each deploy `ACTION` line prints. One exception: **creating a provider**
+(`--create-provider` / `--create-smscountry-provider`). Providers are shared by the whole
+deployment, so novu-bridge lets only an admin of a state that **owns** them create one —
+`state_root` (it reads it from `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`) plus any root listed in
+`novu_bridge_provider_admin_tenants`. Logged in anywhere else the creation is refused with
+`403 NB_TENANT_NOT_ALLOWED`; the script then stops with `REFUSED: provider creation refused by
+novu-bridge …` and exit `4` **before any tenant is read or written** (the plan already prints the
+same as a `WARNING` when it can read the bridge's settings from the `novu-bridge` container). For
+such a root:
+
+1. create the provider as an admin of `state_root` — Configurator → Notifications → Providers,
+   or `migrate-notifications.py apply --tenant <state_root> --create-provider …` logged in there
+   (only when `state_root` is already `migrated`; otherwise that apply migrates it too);
+2. pin it at the root, logged in at the root:
+   `DIGIT_LOGIN_TENANT=pg python3 migrate-notifications.py apply --tenant pg --provider SMS=<identifier> --yes`.
+
+Or list the root in `novu_bridge_provider_admin_tenants` and redeploy, so its admins manage
+providers themselves. A preview refused for the login (`403 NB_TENANT_NOT_ALLOWED` /
+`NB_ADMIN_ROLE_REQUIRED` from `_resolve`) is an `ACTION` that makes the tenant `WARN`, never a
+silent skip: re-run logged in at that tenant.
 
 ### Plan (read-only)
 
@@ -224,7 +258,9 @@ inactive. Default rows it never had are not added.
   locale through `POST /novu-bridge/novu-adapter/v1/dispatch/_resolve` (nothing is sent, no
   ledger row is written), with made-up citizen and assignee contacts and the tenant's real role
   pools, and compares recipient, channel, locale and text. Any difference is listed and makes the
-  tenant `WARN`. When the bridge cannot answer, the preview is skipped and the output says so.
+  tenant `WARN`. When the bridge cannot answer, the preview is skipped and the output says so;
+  when it refuses this login, that is an `ACTION` and the tenant ends `WARN`
+  ([Who logs in](#who-logs-in)).
 - It then re-reads every master and reports counts and any row that is missing or reads back
   different.
 - Re-running skips rows already there and reports them as present. A failed tenant does not
@@ -233,7 +269,8 @@ inactive. Default rows it never had are not added.
 Exit codes: `0` ok · `1` warnings · `2` a tenant failed · `3` a write was refused with 403
 (restart `egov-accesscontrol`; a tenant that never had the deploy's notification step also lacks
 its access-control rows — run `NOTIF_TENANT=<tenant> NOTIF_SEED_PHASE=access python3
-seed-notifications.py` first) · `4` refused to start.
+seed-notifications.py` first) · `4` refused to start (including provider creation refused for
+this login — [Who logs in](#who-logs-in)).
 
 ### Providers
 
@@ -251,7 +288,8 @@ each channel that is on:
 
 `--create-smscountry-provider` (or `--create-provider <type>`, for `twilio-sms`,
 `twilio-whatsapp`, `smtp`, `smscountry`, `ozeki`, `jasmin`) creates a catalog provider through
-`POST /novu-bridge/novu-adapter/v1/providers` and pins it for the tenants in the run.
+`POST /novu-bridge/novu-adapter/v1/providers` and pins it for the tenants in the run. It needs a
+login at a state that owns the providers ([Who logs in](#who-logs-in)).
 Credentials are read only from `--credentials-file`, a JSON object keyed by type, with the
 catalog's field keys (the Novu provider's credential keys):
 
@@ -343,20 +381,30 @@ There is no setting that chooses old or new — the data does. Check with any of
   `up -d` does not stop containers of services it no longer knows, and a leftover
   `egov-notification-sms` still consumes `egov.core.notification.sms` next to novu-bridge — every
   OTP sent twice, through two providers. The deploy removes the three containers when
-  `enable_novu` is on (only a container this deployment's compose created), right after the image
-  pull and **before** it starts the new bridge, so no OTP is ever sent by both. An OTP requested in
-  the seconds the new bridge takes to boot is not sent (see the offset note below); the user asks
-  again. By hand, do the same — remove them first, then start the new bridge:
-  `docker rm -f egov-notification-sms otp-publisher novu-bridge-endpoint`, or
-  `docker compose <files> up -d --remove-orphans` (which also removes any other orphan of the
-  project). On Helm `egov-notification-sms` is `installed: false` in
+  `enable_novu` is on (only a container this deployment's compose created), **once novu-bridge has
+  taken over `egov.core.notification.sms`**: it is healthy, and every partition of the topic
+  either has an offset committed by the `novu-bridge` consumer group (it resumes from there) or is
+  owned by a live member of it (`docker exec digit-redpanda rpk group describe novu-bridge`).
+  "Running" is not enough: on a 2.12 box whose OTPs went through `egov-notification-sms` the group
+  has never committed an offset on that topic, and the bridge's first subscription starts at the
+  **latest** offset (below), so every OTP published while it boots would be skipped — and lost if
+  the old sender were already gone. On an upgrade the deploy recreates novu-bridge first (a failed
+  `up -d novu-bridge` stops the deploy there, old senders untouched), waits up to 5 minutes for
+  the handoff, and removes them before the main `up -d`; otherwise (a first enable, or no handoff
+  yet) it waits up to 10 minutes after the main `up -d`. Without a handoff they are **kept**, with
+  `WARNING: the retired OTP senders were kept`: until then an OTP can arrive twice, never not at
+  all. `enable-notifications.sh` does the same (step 1 and step 2). By hand: start the new bridge,
+  wait until `rpk group describe novu-bridge` lists every partition of `egov.core.notification.sms`
+  with a member or a committed offset, then
+  `docker rm -f egov-notification-sms otp-publisher novu-bridge-endpoint`. On Helm `egov-notification-sms` is `installed: false` in
   `devops/deploy-as-code/charts/core-services/coreservices-helmfile.yaml` (kept for a
   one-release rollback).
 - `egov-otp` + `user-otp` still generate and validate OTPs and publish the SMS to
   `egov.core.notification.sms`; novu-bridge translates it (`eventType CORE_SMS`, ledger event
   `CORE.SMS.OTP`) and delivers it through the tenant's SMS channel.
 - The bridge's first subscription to `egov.core.notification.sms` starts at the **latest**
-  offset, not the beginning: OTPs queued before the upgrade are not sent. An OTP whose
+  offset, not the beginning, so it never replays old OTPs; the old senders stay until it is
+  subscribed (above), so none published meanwhile is lost. An OTP whose
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
 - The tenant an OTP is checked against is `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` when the
