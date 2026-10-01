@@ -343,9 +343,9 @@ class UnifiedExcelReader:
             'active': True,
             'levels': [
                 {'levelCode': self.COMPLAINT_CATEGORY_LEVEL, 'order': 1, 'parentLevel': None,
-                 'isFreeText': False, 'isLeafServiceCode': False, 'label': 'Category'},
+                 'isFreeText': False, 'isLeafServiceCode': False, 'label': 'Complaint Category'},
                 {'levelCode': self.COMPLAINT_LEAF_LEVEL, 'order': 2, 'parentLevel': self.COMPLAINT_CATEGORY_LEVEL,
-                 'isFreeText': False, 'isLeafServiceCode': True, 'label': 'Sub-Type'},
+                 'isFreeText': False, 'isLeafServiceCode': True, 'label': 'Complaint Subcategory'},
             ],
         }
 

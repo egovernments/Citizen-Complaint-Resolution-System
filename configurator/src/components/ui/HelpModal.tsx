@@ -83,7 +83,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
                 Create or select existing hierarchy.
               </p>
               <p>
-                <strong className="text-gray-900">Phase 3:</strong> Configure departments, designations, and complaint types.
+                <strong className="text-gray-900">Phase 3:</strong> Configure departments, designations, and complaint categories.
                 Upload "Common and Complaint Master.xlsx".
               </p>
               <p>

@@ -537,7 +537,7 @@ export default function PgrDashboard() {
           <TabsList>
             <TabsTrigger value="boundary">Boundary</TabsTrigger>
             <TabsTrigger value="department">Department</TabsTrigger>
-            <TabsTrigger value="type">Complaint Type</TabsTrigger>
+            <TabsTrigger value="type">Complaint Category</TabsTrigger>
             <TabsTrigger value="channel">Channel</TabsTrigger>
           </TabsList>
           <TabsContent value="boundary">
