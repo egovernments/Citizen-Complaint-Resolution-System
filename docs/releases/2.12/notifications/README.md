@@ -88,6 +88,9 @@ creation and test-send unauthenticated. Enforcing this is tracked in
 
 ## Enable WhatsApp
 
+This section is **outbound** (complaint updates sent to citizens). For **inbound** — citizens
+filing complaints by messaging you — see [Enable Inbound WhatsApp](inbound-whatsapp.md).
+
 WhatsApp goes through Twilio. Set these and re-run `./deploy.sh mycity`:
 
 | Setting | What it is | Example |

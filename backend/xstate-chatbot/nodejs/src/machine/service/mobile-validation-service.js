@@ -14,8 +14,15 @@ const fetch = require("node-fetch");
  * Row shape (MDMS v2 `mdms[].data`), matching the seeded masters:
  *   { "countryCode": "+254", "mobileNumberRegex": "^0?[17][0-9]{8}$", "default": true }
  *
- * Resolution mirrors novu-bridge's MdmsServiceClient so inbound and outbound agree on the
- * same number for the same citizen: the first active row whose `default` is true wins.
+ * The primary rule matches novu-bridge's MdmsServiceClient: the first active row whose
+ * `default` is true wins. A state can carry more rows (ke: +254 and +91); inbound also
+ * accepts those as `alternates`, so a +91 citizen is not turned away.
+ *
+ * Outbound does not depend on the alternates. PGR builds the notification number from the
+ * citizen's own egov-user `countryCode` (ComplaintDomainEventService.buildFullMobile,
+ * NotificationService.buildMobileWithCountryCode), and novu-bridge sends a `+`-prefixed
+ * number unchanged. novu-bridge's default row is only a fallback for a citizen record with
+ * no `countryCode`. Either way outbound is only as right as that stored `countryCode`.
  */
 const SCHEMA_CODE = "common-masters.MobileNumberValidation";
 
@@ -23,6 +30,8 @@ class MobileValidationService {
   constructor() {
     // tenantId -> { value: {countryCode, mobileNumberRegex}, expiresAt }
     this.cache = new Map();
+    // mobileNumberRegex source -> compiled RegExp
+    this.regexCache = new Map();
   }
 
   clearCache() {
@@ -108,11 +117,18 @@ class MobileValidationService {
     const chosen = active.find((r) => r.data.default === true) || active[0];
     if (!chosen || !chosen.data.countryCode) return null;
 
-    return {
-      countryCode: String(chosen.data.countryCode).trim(),
-      mobileNumberRegex:
-        chosen.data.mobileNumberRegex || config.mobileValidation.defaultRegex,
-    };
+    const toConfig = (row) => ({
+      countryCode: String(row.data.countryCode).trim(),
+      mobileNumberRegex: row.data.mobileNumberRegex || config.mobileValidation.defaultRegex,
+    });
+    // A state can carry more than one active row: ke serves ke.bomet (+254) and ke.india
+    // (+91) from one root. The chosen row stays authoritative for bare national numbers;
+    // see resolveNational for when the others are tried.
+    const alternates = active
+      .filter((r) => r !== chosen && r.data.countryCode)
+      .map(toConfig);
+
+    return { ...toConfig(chosen), alternates };
   }
 
   /** Digits only — drops `whatsapp:`, `+`, spaces, dashes and brackets. */
@@ -126,16 +142,23 @@ class MobileValidationService {
     return this.digitsOnly(mobileConfig.countryCode);
   }
 
-  /** Compile the tenant rule, falling back rather than throwing on a malformed regex. */
+  /**
+   * Compile the tenant rule, falling back rather than throwing on a malformed regex.
+   * Compiled once per pattern: this runs for every candidate form of every row, several
+   * times per message.
+   */
   nationalRegex(mobileConfig) {
+    const pattern = mobileConfig.mobileNumberRegex;
+    let compiled = this.regexCache.get(pattern);
+    if (compiled) return compiled;
     try {
-      return new RegExp(mobileConfig.mobileNumberRegex);
+      compiled = new RegExp(pattern);
     } catch (error) {
-      console.error(
-        `Invalid mobileNumberRegex '${mobileConfig.mobileNumberRegex}': ${error.message}`,
-      );
-      return new RegExp(config.mobileValidation.defaultRegex);
+      console.error(`Invalid mobileNumberRegex '${pattern}': ${error.message}`);
+      compiled = new RegExp(config.mobileValidation.defaultRegex);
     }
+    this.regexCache.set(pattern, compiled);
+    return compiled;
   }
 
   /** Does this candidate satisfy the tenant's national-number rule? */
@@ -152,6 +175,51 @@ class MobileValidationService {
    * rather than silently file a complaint against a mangled number.
    */
   toNational(raw, mobileConfig) {
+    const resolved = this.resolveNational(raw, mobileConfig);
+    return resolved ? resolved.national : null;
+  }
+
+  /**
+   * toNational plus the rule that matched. Anything that rebuilds an international number
+   * must use `rule`, not the primary config: a +91 citizen reconciled through ke's +91
+   * alternate would otherwise get +254 put back on.
+   */
+  resolveNational(raw, mobileConfig) {
+    if (!mobileConfig) return null;
+    const digits = this.digitsOnly(raw);
+    if (!digits) return null;
+    const rules = [mobileConfig, ...(mobileConfig.alternates || [])];
+
+    // 1. Only for a number written in international form (`+…`, e.g. Twilio's From): a
+    //    rule whose country code actually prefixes it, and which accepts what is left once
+    //    it is removed. This runs before any regex-only match, because a permissive
+    //    primary such as ^[0-9]{9,12}$ also accepts the as-sent 916307817430 and would
+    //    otherwise hide the +91 row. A bare number carries no country code, so it skips
+    //    this step: 7912345678 must not be read as +7 912345678.
+    if (this.isInternationalForm(raw)) {
+      for (const rule of rules) {
+        const cc = this.countryDigits(rule);
+        if (!cc || !digits.startsWith(cc) || digits.length <= cc.length) continue;
+        const national = this.nationalFor(digits, rule);
+        if (national && national !== digits) return { national, rule };
+      }
+    }
+
+    // 2. Each rule in turn, primary first, exactly as a single rule is applied.
+    for (const rule of rules) {
+      const national = this.nationalFor(digits, rule);
+      if (national) return { national, rule };
+    }
+    return null;
+  }
+
+  /** `+254…`, `whatsapp:+254…`: the sender wrote the country code. */
+  isInternationalForm(raw) {
+    return /^\s*(whatsapp:)?\s*\+/i.test(String(raw == null ? "" : raw));
+  }
+
+  /** toNational against a single rule. */
+  nationalFor(raw, mobileConfig) {
     const digits = this.digitsOnly(raw);
     if (!digits) return null;
 
@@ -250,22 +318,24 @@ class MobileValidationService {
   toAddressableDigits(raw, mobileConfig) {
     const digits = this.digitsOnly(raw);
     if (!digits) return null;
-    const national = this.toNational(digits, mobileConfig);
-    if (national) return this.toInternational(national, mobileConfig);
+    // `raw`, not `digits`: whether it was written with `+` matters to resolveNational.
+    const resolved = this.resolveNational(raw, mobileConfig);
+    if (resolved) return this.toInternational(resolved.national, resolved.rule);
     return digits;
   }
 
   /** Convenience: resolve the tenant rule and normalise in one call. */
   async normalise(raw, tenantId, user) {
     const mobileConfig = await this.getConfig(tenantId, user);
-    const national = this.toNational(raw, mobileConfig);
+    const resolved = this.resolveNational(raw, mobileConfig);
+    const national = resolved ? resolved.national : null;
     return {
       config: mobileConfig,
       national: national,
-      international: national
-        ? this.toInternational(national, mobileConfig)
+      international: resolved
+        ? this.toInternational(national, resolved.rule)
         : null,
-      e164: national ? this.toE164(national, mobileConfig) : null,
+      e164: resolved ? this.toE164(national, resolved.rule) : null,
     };
   }
 }
