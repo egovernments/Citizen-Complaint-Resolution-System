@@ -35,6 +35,28 @@ describe('default-data-handler tenant template', () => {
 describe('ansible playbook-deploy.yml', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');
 
+  // #2179. Under pipefail, a consumer that stops reading early (`grep -q`, awk `exit`)
+  // SIGPIPEs the writer, and the pipeline reports 141 even though the consumer got
+  // what it needed. The Kong CORS check aborted ~half of naipepea's deploys this way.
+  describe('pipefail tasks never pipe into a consumer that stops reading early', () => {
+    const tasks = playbook.split(/\n(?=\s*- name: )/);
+    const pipefailTasks = tasks.filter((t) => /set -[a-z]*o pipefail/.test(t));
+
+    test('no pipefail task pipes into grep -q / grep -qx / an awk that exits', () => {
+      const offenders = pipefailTasks
+        .filter((t) => /\|\s*grep -qx?\b/.test(t) || /\|\s*awk '[^']*\bexit\b/.test(t))
+        .map((t) => t.trim().split('\n')[0]);
+      expect(offenders).toEqual([]);
+    });
+
+    test('the Kong CORS check reads kong.yml first, then filters it without a pipe', () => {
+      const task = tasks.find((t) => t.includes('Kong — verify the CORS wildcard is gone'));
+      expect(task).toBeDefined();
+      expect(task).toContain('cfg=$(docker exec kong-gateway cat /kong/kong.yml)');
+      expect(task).toContain('<<<"$cfg"');
+    });
+  });
+
   // #2088, Dhruv review finding 5. The identity tier's six secrets used to be
   // sha256(keycloak_admin_password ~ ':<label>') with `default('')`, so on a
   // box with no admin password set they all collapsed to constants computable
