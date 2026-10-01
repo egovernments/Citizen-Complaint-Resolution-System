@@ -3,7 +3,6 @@ package org.egov.novubridge.service.policy;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.util.ServiceUrl;
-import org.egov.novubridge.util.Values;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -83,30 +82,93 @@ public class ChannelPolicyClient {
     }
 
     /**
-     * The state tenants among {@code stateTenants} whose channel rows select this integration, by
-     * identifier or Novu {@code _id} (a row may name either). Read from MDMS now, never from the
-     * cache, with the same new-then-legacy choice dispatch makes. Fails CLOSED: throws when a
-     * tenant's rows cannot be read, so a delete is never allowed on a guess. Empty when the
-     * policy is off, since dispatch then never reads a pin.
+     * Who still sends through an integration, from ONE read of each state's channel rows (MDMS now,
+     * never the cache, with the same new-then-legacy choice dispatch makes).
+     *
+     * @param selecting the state tenants whose rows select it, by identifier or Novu {@code _id} (a
+     *                  row may name either); empty when the policy is off, since dispatch then
+     *                  never reads a pin
+     * @param unpinned  per requested DIGIT channel code, the enabled channels that send through
+     *                  Novu with no provider selected (see {@link #providerUsage})
      */
-    public List<String> tenantsUsingProvider(Collection<String> stateTenants, String identifier, String id) {
-        List<String> using = new ArrayList<>();
+    public record ProviderUsage(List<String> selecting, Map<String, List<String>> unpinned) {
+        public List<String> unpinned(String code) {
+            return unpinned.getOrDefault(code.toUpperCase(Locale.ROOT), List.of());
+        }
+    }
+
+    /**
+     * Who sends through this integration, for the provider delete/disable guard.
+     *
+     * <p>{@code unpinnedCodes} are DIGIT channel codes ({@code SMS}, {@code WHATSAPP}, {@code EMAIL}).
+     * For each, the enabled channels with that code that name no provider: a row without
+     * {@code provider}, or, for a state with no rows at all, the {@code novu.bridge.channels.enabled}
+     * list. An SMS channel on the direct SMSCountry gateway does not use Novu and is left out. Labels
+     * read {@code <state>:<CHANNEL>}; with the policy off every tenant runs on the env list, labelled
+     * {@code all tenants:<CHANNEL>}.
+     *
+     * <p>Fails CLOSED: throws when a state's rows cannot be read, so a delete is never allowed on a
+     * guess.
+     */
+    public ProviderUsage providerUsage(Collection<String> stateTenants, String identifier, String id,
+                                       Collection<String> unpinnedCodes) {
+        List<String> selecting = new ArrayList<>();
+        Map<String, List<String>> unpinned = new LinkedHashMap<>();
+        Set<String> codes = new LinkedHashSet<>();
+        for (String code : unpinnedCodes) {
+            if (StringUtils.hasText(code)) {
+                codes.add(code.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        codes.forEach(code -> unpinned.put(code, new ArrayList<>()));
         if (!enabled()) {
-            return using;
+            codes.forEach(code -> envUnpinned("all tenants", code, unpinned.get(code)));
+            return new ProviderUsage(selecting, unpinned);
         }
         for (String stateTenant : new LinkedHashSet<>(stateTenants)) {
             if (!StringUtils.hasText(stateTenant)) {
                 continue;
             }
-            Map<String, ChannelSetting> rows = fetchOrThrow(stateTenant, config.getChannelPolicySchema());
-            if (rows.isEmpty() && hasDistinctLegacySchema()) {
-                rows = fetchOrThrow(stateTenant, config.getChannelPolicyLegacySchema());
-            }
+            Map<String, ChannelSetting> rows = currentRowsOrThrow(stateTenant);
             if (usesProvider(rows, identifier) || usesProvider(rows, id)) {
-                using.add(stateTenant);
+                selecting.add(stateTenant);
+            }
+            for (String code : codes) {
+                if (rows.isEmpty()) {
+                    envUnpinned(stateTenant, code, unpinned.get(code));
+                    continue;
+                }
+                ChannelSetting s = rows.get(code);
+                if (s != null && s.enabled() && !StringUtils.hasText(s.provider())
+                        && !directSmsCountry(s.code(), s.gateway())) {
+                    unpinned.get(code).add(stateTenant + ":" + code);
+                }
             }
         }
-        return using;
+        return new ProviderUsage(selecting, unpinned);
+    }
+
+    /** The states whose rows select this integration: {@link #providerUsage} without the unpinned part. */
+    public List<String> tenantsUsingProvider(Collection<String> stateTenants, String identifier, String id) {
+        return providerUsage(stateTenants, identifier, id, List.of()).selecting();
+    }
+
+    /** The enabled channels with this DIGIT code that select no provider: {@link #providerUsage}'s second half. */
+    public List<String> unpinnedChannels(Collection<String> stateTenants, String code) {
+        return providerUsage(stateTenants, null, null, List.of(code)).unpinned(code);
+    }
+
+    /**
+     * The integrations the bridge names by env var rather than by channel row, keyed by DIGIT
+     * channel: {@code novu.bridge.integration.id.whatsapp} is what every WhatsApp trigger without a
+     * selected provider names.
+     */
+    public Map<String, String> envPinnedIntegrations() {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (StringUtils.hasText(config.getWhatsappIntegrationId())) {
+            out.put("WHATSAPP", config.getWhatsappIntegrationId().trim());
+        }
+        return out;
     }
 
     /**
@@ -120,53 +182,18 @@ public class ChannelPolicyClient {
         return states;
     }
 
-    /**
-     * The enabled channels that send through Novu's default integration for {@code novuChannel}
-     * ({@code sms} carries SMS and WHATSAPP, {@code email} EMAIL) because nothing pins them: a row
-     * with no {@code provider}, or a state with no rows at all that runs on
-     * {@code novu.bridge.channels.enabled}. An SMS channel on the direct SMSCountry gateway does
-     * not use Novu and is left out. Labels read {@code <state>:<CHANNEL>}. With the policy off every
-     * tenant runs on the env list, labelled {@code all tenants:<CHANNEL>}. Read from MDMS now, and
-     * fails CLOSED like {@link #tenantsUsingProvider}.
-     */
-    public List<String> channelsOnNovuDefault(Collection<String> stateTenants, String novuChannel) {
-        List<String> out = new ArrayList<>();
-        if (!StringUtils.hasText(novuChannel)) {
-            return out;
+    /** A state's rows as dispatch would choose them (new schema, else legacy), read now; throws on failure. */
+    private Map<String, ChannelSetting> currentRowsOrThrow(String stateTenant) {
+        Map<String, ChannelSetting> rows = fetchOrThrow(stateTenant, config.getChannelPolicySchema());
+        if (rows.isEmpty() && hasDistinctLegacySchema()) {
+            rows = fetchOrThrow(stateTenant, config.getChannelPolicyLegacySchema());
         }
-        if (!enabled()) {
-            envChannelsOnNovuDefault("all tenants", novuChannel, out);
-            return out;
-        }
-        for (String stateTenant : new LinkedHashSet<>(stateTenants)) {
-            if (!StringUtils.hasText(stateTenant)) {
-                continue;
-            }
-            Map<String, ChannelSetting> rows = fetchOrThrow(stateTenant, config.getChannelPolicySchema());
-            if (rows.isEmpty() && hasDistinctLegacySchema()) {
-                rows = fetchOrThrow(stateTenant, config.getChannelPolicyLegacySchema());
-            }
-            if (rows.isEmpty()) {
-                envChannelsOnNovuDefault(stateTenant, novuChannel, out);
-                continue;
-            }
-            for (ChannelSetting s : rows.values()) {
-                if (s.enabled() && !StringUtils.hasText(s.provider())
-                        && novuChannel.equalsIgnoreCase(Values.novuChannel(s.code()))
-                        && !directSmsCountry(s.code(), s.gateway())) {
-                    out.add(stateTenant + ":" + s.code());
-                }
-            }
-        }
-        return out;
+        return rows;
     }
 
-    private void envChannelsOnNovuDefault(String label, String novuChannel, List<String> out) {
-        for (String code : List.of("SMS", "WHATSAPP", "EMAIL")) {
-            if (config.isChannelEnabled(code) && novuChannel.equalsIgnoreCase(Values.novuChannel(code))
-                    && !directSmsCountry(code, null)) {
-                out.add(label + ":" + code);
-            }
+    private void envUnpinned(String label, String code, List<String> out) {
+        if (config.isChannelEnabled(code) && !directSmsCountry(code, null)) {
+            out.add(label + ":" + code);
         }
     }
 

@@ -254,6 +254,29 @@ public class ProviderCatalog {
         return null;
     }
 
+    /** The DIGIT channel each catalog type delivers; WhatsApp and SMS share Novu's {@code sms} channel. */
+    private static final Map<String, String> CHANNEL_BY_TYPE = Map.of(
+            TWILIO_SMS, "SMS", TWILIO_WHATSAPP, "WHATSAPP", SMTP, "EMAIL",
+            SMSCOUNTRY, "SMS", OZEKI, "SMS", JASMIN, "SMS");
+
+    /**
+     * The DIGIT channel ({@code SMS}, {@code WHATSAPP}, {@code EMAIL}) an integration delivers, which
+     * Novu's own channel cannot tell apart for SMS and WhatsApp: the catalog type first (identifier
+     * marker, then providerId), else Novu's channel, where an unmarked {@code sms} integration (a
+     * hand-made {@code generic-sms}, say) is SMS. Null for a channel DIGIT does not send on.
+     */
+    public static String digitChannelOf(Map<String, Object> integration) {
+        String type = deriveType(integration);
+        if (type != null) {
+            return CHANNEL_BY_TYPE.get(type);
+        }
+        String channel = integration == null ? null : Values.lower(Values.str(integration.get("channel")));
+        if ("email".equals(channel)) {
+            return "EMAIL";
+        }
+        return "sms".equals(channel) ? "SMS" : null;
+    }
+
     /** Novu stores a half-filled integration and then fails every send, so check first. Names keys only. */
     public void validateRequired(ProviderType type, Map<String, Object> credentials) {
         List<String> missing = new ArrayList<>();

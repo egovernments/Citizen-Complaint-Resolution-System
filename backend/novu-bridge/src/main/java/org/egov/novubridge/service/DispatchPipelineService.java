@@ -7,6 +7,7 @@ import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.core.CoreSmsTranslator;
 import org.egov.novubridge.service.delivery.DeliveryProvider;
 import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.service.delivery.DeliveryResult;
 import org.egov.novubridge.service.delivery.Dispatch;
 import org.egov.novubridge.service.policy.ChannelPolicyClient;
@@ -155,9 +156,14 @@ public class DispatchPipelineService {
         }
 
         String pinned = channelPolicy.provider(event.getTenantId(), channel);
+        DeliveryProvider provider = providers.select(event.getTenantId(), channel);
         // Novu ACCEPTS a trigger naming a deleted/disabled/wrong-channel integration and fails it
         // internally, so without this check the row would read SENT for a message that never left.
-        ProviderAvailability.Result availability = providerAvailability.check(pinned, channel);
+        // Nothing pinned and through Novu: Novu's default could be a worker provider the worker lacks.
+        ProviderAvailability.Result availability = !StringUtils.hasText(pinned)
+                && NovuDeliveryProvider.ID.equals(provider.id())
+                ? providerAvailability.checkUnpinned(channel)
+                : providerAvailability.check(pinned, channel);
         if (!availability.usable()) {
             return skip(event, context, "NB_PROVIDER_UNAVAILABLE", availability.message(), availability.message());
         }
@@ -177,7 +183,6 @@ public class DispatchPipelineService {
                 .contentVariables(event.getContentVariables())
                 .integrationIdentifier(integrationIdentifier)
                 .build();
-        DeliveryProvider provider = providers.select(event.getTenantId(), channel);
 
         DeliveryResult result;
         try {

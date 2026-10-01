@@ -250,17 +250,22 @@ public class ProviderController {
      * {@code NB_PROVIDER_IN_USE}):
      * <ul>
      *   <li>a channel row selects it, by identifier OR Novu {@code _id};</li>
-     *   <li>or it is the last ACTIVE integration on its Novu channel and a channel sends through
-     *       Novu's default for that channel because nothing pins it: a row without
-     *       {@code provider} (every legacy row), a state on the {@code novu.bridge.channels.enabled}
-     *       fallback, or every tenant when the channel policy is off.</li>
+     *   <li>it is the integration an env var names for a channel ({@code NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP}:
+     *       every WhatsApp trigger without a selected provider names it) and such a channel is on;</li>
+     *   <li>or it is the last ACTIVE integration of its DIGIT channel (SMS, WHATSAPP or EMAIL, from
+     *       its catalog type: Twilio WhatsApp is a Novu {@code sms} integration but no substitute for
+     *       SMS, nor SMS for WhatsApp) and a channel with that code sends through Novu's default
+     *       because nothing pins it: a row without {@code provider} (every legacy row), a state on
+     *       the {@code novu.bridge.channels.enabled} fallback, or every tenant when the channel
+     *       policy is off. Unpinned WhatsApp with the env pin set names that integration instead, so
+     *       it is covered by the rule above.</li>
      * </ul>
      * {@code tenantId} is required (the caller's state tenant) and must be a state the caller is an
-     * admin of (403 {@code NB_TENANT_NOT_ALLOWED}). The rows are read from MDMS now, for that state,
-     * every state the caller administers, every state this instance has dispatched for and the
-     * states that own the providers; the check fails CLOSED: a state whose rows cannot be read
-     * refuses too, and so does an unreadable Novu integration list (the lookup before this throws).
-     * Integrations are deployment-wide, so a state outside that set is not checked.
+     * admin of (403 {@code NB_TENANT_NOT_ALLOWED}). The rows are read from MDMS now, once per state,
+     * for that state, every state the caller administers, every state this instance has dispatched
+     * for and the states that own the providers; the check fails CLOSED: a state whose rows cannot
+     * be read refuses too, and so does an unreadable Novu integration list (the lookup before this
+     * throws). Integrations are deployment-wide, so a state outside that set is not checked.
      */
     private void requireNotInUse(Map<String, Object> body, Map<String, Object> integration,
                                  List<Map<String, Object>> integrations, String verb) {
@@ -283,14 +288,28 @@ public class ProviderController {
         states.addAll(channelPolicy.knownStateTenants());
 
         String identifier = str(integration.get("identifier"));
-        String label = StringUtils.hasText(identifier) ? identifier : str(integration.get("_id"));
-        String novuChannel = Values.lower(str(integration.get("channel")));
-        boolean lastActive = isLastActiveOnItsChannel(integration, integrations);
-        List<String> using;
-        List<String> onDefault;
+        String id = str(integration.get("_id"));
+        String label = StringUtils.hasText(identifier) ? identifier : id;
+
+        // The channels an env var points at this integration for, and the one whose default it is.
+        Map<String, String> envPins = channelPolicy.envPinnedIntegrations();
+        Set<String> envPinnedFor = new LinkedHashSet<>();
+        envPins.forEach((code, pinned) -> {
+            if (sameIntegration(pinned, identifier, id)) {
+                envPinnedFor.add(code);
+            }
+        });
+        String digitChannel = ProviderCatalog.digitChannelOf(integration);
+        boolean lastActive = digitChannel != null && !envPins.containsKey(digitChannel)
+                && isLastActiveOfItsChannel(integration, integrations, digitChannel);
+        Set<String> codes = new LinkedHashSet<>(envPinnedFor);
+        if (lastActive) {
+            codes.add(digitChannel);
+        }
+
+        ChannelPolicyClient.ProviderUsage usage;
         try {
-            using = channelPolicy.tenantsUsingProvider(states, identifier, str(integration.get("_id")));
-            onDefault = lastActive ? channelPolicy.channelsOnNovuDefault(states, novuChannel) : List.of();
+            usage = channelPolicy.providerUsage(states, identifier, id, codes);
         } catch (RuntimeException e) {
             log.warn("Refusing to {} provider {}: channel rows for {} could not be read ({})",
                     verb, label, states, e.getMessage());
@@ -298,31 +317,51 @@ public class ProviderController {
                     + "selects provider " + label + " (channel rows unreadable: " + e.getMessage()
                     + "). Nothing was changed; try again once MDMS answers.");
         }
-        if (!using.isEmpty()) {
+        if (!usage.selecting().isEmpty()) {
             throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
-                    + " is still selected on a channel for tenant(s) " + String.join(", ", using)
+                    + " is still selected on a channel for tenant(s) " + String.join(", ", usage.selecting())
                     + ". Point that channel at another provider first.");
         }
+        for (String code : envPinnedFor) {
+            List<String> onEnvPin = usage.unpinned(code);
+            if (!onEnvPin.isEmpty()) {
+                throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                        + " is the integration NOVU_BRIDGE_INTEGRATION_ID_" + code + " names, and every " + code
+                        + " message without a selected provider is sent through it: " + String.join(", ", onEnvPin)
+                        + ". Select a provider on those channels, or point the env var at another integration "
+                        + "and restart novu-bridge, first.");
+            }
+        }
+        List<String> onDefault = lastActive ? usage.unpinned(digitChannel) : List.of();
         if (!onDefault.isEmpty()) {
             throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
-                    + " is the last active Novu '" + novuChannel + "' integration, and these channels are on "
+                    + " is the last active " + digitChannel + " integration, and these channels are on "
                     + "with no provider selected, so Novu sends them through it: " + String.join(", ", onDefault)
-                    + ". Select a provider on those channels (or add and enable another '" + novuChannel
-                    + "' provider) first.");
+                    + ". Select a provider on those channels (or add and enable another " + digitChannel
+                    + " provider) first.");
         }
     }
 
+    /** An env var names an integration by identifier or Novu {@code _id}, like a channel row. */
+    private static boolean sameIntegration(String key, String identifier, String id) {
+        if (!StringUtils.hasText(key)) {
+            return false;
+        }
+        String k = key.trim();
+        return (identifier != null && k.equalsIgnoreCase(identifier.trim())) || (id != null && k.equalsIgnoreCase(id.trim()));
+    }
+
     /**
-     * Removing it would leave its Novu channel with no active integration. False for an inactive
+     * Removing it would leave its DIGIT channel with no active integration. False for an inactive
      * one (Novu never selects it, so removing it changes nothing) and when another active
-     * integration on the same Novu channel remains.
+     * integration of the same DIGIT channel remains: a Twilio WhatsApp integration does not stand in
+     * for SMS (nor SMS for WhatsApp), although Novu stores both on its {@code sms} channel.
      */
-    private static boolean isLastActiveOnItsChannel(Map<String, Object> integration,
-                                                    List<Map<String, Object>> integrations) {
+    private static boolean isLastActiveOfItsChannel(Map<String, Object> integration,
+                                                    List<Map<String, Object>> integrations, String digitChannel) {
         if (!Boolean.TRUE.equals(integration.get("active"))) {
             return false;
         }
-        String channel = Values.lower(str(integration.get("channel")));
         for (Map<String, Object> other : integrations) {
             if (other == integration || !Boolean.TRUE.equals(other.get("active"))) {
                 continue;
@@ -331,7 +370,7 @@ public class ProviderController {
             if (otherId != null && otherId.equals(str(integration.get("_id")))) {
                 continue;
             }
-            if (channel == null || channel.equals(Values.lower(str(other.get("channel"))))) {
+            if (digitChannel.equals(ProviderCatalog.digitChannelOf(other))) {
                 return false;
             }
         }
@@ -356,16 +395,20 @@ public class ProviderController {
         String code() {
             return code;
         }
+
+        ResponseEntity<Map<String, Object>> toResponse() {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("code", code);
+            error.put("message", getMessage());
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("Errors", List.of(error));
+            return new ResponseEntity<>(out, status);
+        }
     }
 
     @ExceptionHandler(Refusal.class)
     ResponseEntity<Map<String, Object>> refused(Refusal refusal) {
-        Map<String, Object> error = new LinkedHashMap<>();
-        error.put("code", refusal.code());
-        error.put("message", refusal.getMessage());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("Errors", List.of(error));
-        return new ResponseEntity<>(out, refusal.status());
+        return refusal.toResponse();
     }
 
     /** By Novu {@code _id} or {@code identifier}; Novu v2.3.0 has no GET-by-id, so this lists. */

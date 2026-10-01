@@ -173,37 +173,65 @@ class ChannelPolicyClientTest {
     // ---- channels that send through Novu's default integration (no pin) ----------
 
     @Test
-    void unpinnedEnabledChannelsRideTheNovuDefault_perNovuChannel() {
+    void unpinnedEnabledChannels_perDigitChannel_notPerNovuChannel() {
         stubRows(row("SMS", true, "novu", null), row("WHATSAPP", true, null, null),
                 row("EMAIL", true, null, null, "smtp-deadbeef"));
-        assertEquals(List.of("ke:SMS", "ke:WHATSAPP"), client.channelsOnNovuDefault(List.of("ke"), "sms"));
-        assertEquals(List.of(), client.channelsOnNovuDefault(List.of("ke"), "email"), "EMAIL is pinned");
+        // SMS and WHATSAPP share Novu's sms channel, but neither one's integration serves the other.
+        assertEquals(List.of("ke:SMS"), client.unpinnedChannels(List.of("ke"), "SMS"));
+        assertEquals(List.of("ke:WHATSAPP"), client.unpinnedChannels(List.of("ke"), "whatsapp"));
+        assertEquals(List.of(), client.unpinnedChannels(List.of("ke"), "EMAIL"), "EMAIL is pinned");
     }
 
     @Test
     void disabledPinnedAndDirectSmsCountryChannelsDoNot() {
         stubRows(row("SMS", true, "smscountry", "KE-GOV"), row("WHATSAPP", false, null, null));
-        assertEquals(List.of(), client.channelsOnNovuDefault(List.of("ke"), "sms"));
+        assertEquals(List.of(), client.unpinnedChannels(List.of("ke"), "SMS"));
+        assertEquals(List.of(), client.unpinnedChannels(List.of("ke"), "WHATSAPP"));
     }
 
     @Test
     void aStateWithNoRowsRunsOnTheEnvAllowlist_andPolicyOffMeansEveryTenant() {
         stubRows();
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        assertEquals(List.of("mz:SMS"), client.channelsOnNovuDefault(List.of("mz"), "sms"));
+        assertEquals(List.of("mz:SMS"), client.unpinnedChannels(List.of("mz"), "SMS"));
+        assertEquals(List.of(), client.unpinnedChannels(List.of("mz"), "WHATSAPP"));
         config.setSmsProvider("smscountry");   // env direct route: the SMS leg never reaches Novu
-        assertEquals(List.of(), client.channelsOnNovuDefault(List.of("mz"), "sms"));
+        assertEquals(List.of(), client.unpinnedChannels(List.of("mz"), "SMS"));
 
         config.setSmsProvider("");
         config.setChannelPolicyEnabled(false);
-        assertEquals(List.of("all tenants:EMAIL"), client.channelsOnNovuDefault(List.of(), "email"));
+        assertEquals(List.of("all tenants:EMAIL"), client.unpinnedChannels(List.of(), "EMAIL"));
     }
 
     @Test
     void theDefaultCheckFailsClosedToo() {
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new ResourceAccessException("down"));
-        assertThrows(RuntimeException.class, () -> client.channelsOnNovuDefault(List.of("ke"), "sms"));
+        assertThrows(RuntimeException.class, () -> client.unpinnedChannels(List.of("ke"), "SMS"));
+    }
+
+    // Review (10): the delete guard asked "who pins it" and "who rides the default" with a fetch each.
+    @Test
+    void oneReadPerStateAnswersBothQuestions() {
+        config.setChannelPolicySchema("NOTIFICATIONS.Channel");
+        config.setChannelPolicyLegacySchema("RAINMAKER-PGR.NotificationChannel");
+        stubRows(row("SMS", true, null, null), row("EMAIL", true, null, null, "smtp-deadbeef"));
+
+        ChannelPolicyClient.ProviderUsage usage = client.providerUsage(List.of("ke", "mz"), "smtp-deadbeef", "i9",
+                List.of("SMS", "WHATSAPP"));
+
+        assertEquals(List.of("ke", "mz"), usage.selecting());
+        assertEquals(List.of("ke:SMS", "mz:SMS"), usage.unpinned("SMS"));
+        assertEquals(List.of(), usage.unpinned("WHATSAPP"));
+        // The new schema answered for both states, so neither the legacy one nor a second pass is read.
+        verify(restTemplate, times(2)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+    }
+
+    @Test
+    void theWhatsappEnvPinIsAnIntegrationTheBridgeNames() {
+        assertEquals(Map.of(), client.envPinnedIntegrations());
+        config.setWhatsappIntegrationId(" twilio-whatsapp-aa ");
+        assertEquals(Map.of("WHATSAPP", "twilio-whatsapp-aa"), client.envPinnedIntegrations());
     }
 
     @Test

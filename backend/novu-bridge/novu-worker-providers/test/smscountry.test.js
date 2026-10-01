@@ -62,6 +62,28 @@ test('fails when a 200 response does not start with OK:', async () => {
   await assert.rejects(provider.sendMessage({ to: '+254700000001', content: 'hi' }), /SMSCountry request failed: Invalid Username or Password/);
 });
 
+// Review (8): an ASP.NET error page can echo the posted form, and the error lands in Novu's activity feed.
+test('masks the panel credentials in the reply before it reaches the error', async () => {
+  const provider = new SmsCountryProvider({ ...config, password: 'p@ss w&rd<1>' });
+  const page =
+    '<!DOCTYPE html><html><body>Server Error. Form: User=test-user&passwd=p%40ss+w%26rd%3C1%3E&mobilenumber=1 ' +
+    'raw p@ss w&rd<1> html p@ss w&amp;rd&lt;1&gt; link /retry?to=x#p%40ss%20w%26rd%3C1%3E ' +
+    'json {"password":"other-secret"}</body></html>';
+  stubHttp(provider, { status: 200, data: page });
+  const error = await provider.sendMessage({ to: '+254700000001', content: 'hi' }).catch((e) => e);
+  assert.match(error.message, /^SMSCountry request failed: <!DOCTYPE html>/);
+  assert.doesNotMatch(error.message, /test-user|p@ss|p%40ss|w&amp;rd|other-secret/);
+});
+
+test('masks a credential that straddles the 200-character cut', async () => {
+  const provider = new SmsCountryProvider(config);
+  // Cut first and the first ten characters of the password would survive.
+  stubHttp(provider, { status: 200, data: `${'x'.repeat(190)}test-password and more` });
+  const error = await provider.sendMessage({ to: '+254700000001', content: 'hi' }).catch((e) => e);
+  assert.doesNotMatch(error.message, /test-pa/);
+  assert.match(error.message, /\*\*\*/);
+});
+
 test('fails on an empty response body', async () => {
   const provider = new SmsCountryProvider(config);
   stubHttp(provider, { data: '' });

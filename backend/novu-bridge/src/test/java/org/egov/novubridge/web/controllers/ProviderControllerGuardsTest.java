@@ -154,16 +154,67 @@ class ProviderControllerGuardsTest {
         rows(channel("SMS", true, "novu", null));                    // legacy row: no `provider` field
 
         assertRefusedInUse(() -> controller().deleteProvider(delete("i1")),
-                "last active Novu 'sms' integration", "ke:SMS");
+                "last active SMS integration", "ke:SMS");
+        assertRefusedInUse(() -> controller().updateProvider(disable("i1")), "ke:SMS");
+    }
+
+    // Review (4): Novu stores Twilio WhatsApp as an `sms` integration, but it cannot carry SMS.
+    @Test
+    void aWhatsappIntegrationIsNoSubstituteForSms() {
+        integration("i1", "twilio-sms-aa", "twilio", "sms", true);
+        integration("i2", "twilio-whatsapp-bb", "twilio", "sms", true);
+        integration("i3", "whatsapp-cc", "twilio", "sms", true);      // pre-catalog WhatsApp marker
+        rows(channel("SMS", true, "novu", null));
+
+        assertRefusedInUse(() -> controller().deleteProvider(delete("i1")),
+                "last active SMS integration", "ke:SMS");
         assertRefusedInUse(() -> controller().updateProvider(disable("i1")), "ke:SMS");
     }
 
     @Test
-    void anUnpinnedWhatsappRowAlsoRidesTheNovuSmsChannel() {
+    void norAnSmsIntegrationForWhatsapp_andAnSmsOneServesNoUnpinnedWhatsapp() {
         integration("i1", "twilio-sms-aa", "twilio", "sms", true);
+        integration("i2", "twilio-whatsapp-bb", "twilio", "sms", true);
         rows(channel("WHATSAPP", true, null, null));
 
-        assertRefusedInUse(() -> controller().deleteProvider(delete("i1")), "ke:WHATSAPP");
+        assertRefusedInUse(() -> controller().deleteProvider(delete("i2")),
+                "last active WHATSAPP integration", "ke:WHATSAPP");
+
+        controller().deleteProvider(delete("i1"));   // no SMS channel is on; WhatsApp never needed it
+        verify(novuClient).deleteIntegration("i1");
+    }
+
+    @Test
+    void theIntegrationTheWhatsappEnvVarNames_isInUse_whileUnpinnedWhatsappIsOn() {
+        config.setWhatsappIntegrationId("twilio-whatsapp-bb");
+        integration("i1", "twilio-sms-aa", "twilio", "sms", true);
+        integration("i2", "twilio-whatsapp-bb", "twilio", "sms", true);
+        integration("i3", "twilio-whatsapp-cc", "twilio", "sms", true);  // another WhatsApp one remains
+        rows(channel("WHATSAPP", true, null, null));
+
+        assertRefusedInUse(() -> controller().deleteProvider(delete("i2")),
+                "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP", "ke:WHATSAPP");
+        assertRefusedInUse(() -> controller().updateProvider(disable("i2")), "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP");
+
+        // Unpinned WhatsApp names i2 alone, so i3 is no one's default even though it is WhatsApp.
+        controller().deleteProvider(delete("i3"));
+        verify(novuClient).deleteIntegration("i3");
+    }
+
+    @Test
+    void theEnvVarMayNameTheNovuId_andAPinNobodyRidesMayGo() {
+        config.setWhatsappIntegrationId("i2");
+        integration("i2", "twilio-whatsapp-bb", "twilio", "sms", true);
+        rows(channel("WHATSAPP", true, null, null));
+        assertRefusedInUse(() -> controller().deleteProvider(delete("twilio-whatsapp-bb")),
+                "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP");
+
+        rows(channel("WHATSAPP", true, null, "twilio-whatsapp-bb"));   // pinned on the row instead
+        assertRefusedInUse(() -> controller().deleteProvider(delete("i2")), "still selected");
+
+        rows(channel("WHATSAPP", false, null, null));                  // WhatsApp off everywhere
+        controller().deleteProvider(delete("i2"));
+        verify(novuClient).deleteIntegration("i2");
     }
 
     @Test

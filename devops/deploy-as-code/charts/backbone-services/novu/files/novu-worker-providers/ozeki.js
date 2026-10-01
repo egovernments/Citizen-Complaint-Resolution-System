@@ -1,6 +1,6 @@
 'use strict';
 
-const { axios, BaseProvider, CasingEnum, ChannelTypeEnum, BaseSmsHandler } = require('./novu');
+const { axios, BaseProvider, CasingEnum, ChannelTypeEnum, BaseSmsHandler, redact } = require('./novu');
 
 const PROVIDER_ID = 'ozeki';
 
@@ -68,7 +68,10 @@ class OzekiSmsProvider extends BaseProvider {
       validateStatus: () => true,
     });
 
-    return { id: parseMessageId(data, messageId), date: new Date().toISOString() };
+    return {
+      id: parseMessageId(data, messageId, [this.config.username, this.config.password]),
+      date: new Date().toISOString(),
+    };
   }
 
   authHeader() {
@@ -82,32 +85,34 @@ class OzekiSmsProvider extends BaseProvider {
 
 /**
  * The envelope decides the outcome: `response_code` must be SUCCESS, nothing may
- * have failed, and the echoed per-message entry must itself be SUCCESS.
+ * have failed, and the echoed per-message entry must itself be SUCCESS. The gateway's
+ * own words go into the error, and so into Novu's activity feed, with the
+ * credentials masked.
  */
-function parseMessageId(body, sentMessageId) {
+function parseMessageId(body, sentMessageId, secrets = []) {
+  const gateway = (value, fallback) => (value == null ? fallback : redact(value, secrets));
   const responseCode = body?.response_code;
+  const reason = (fallback) => gateway(body?.response_msg, fallback);
 
   if (!body || typeof responseCode !== 'string' || responseCode.toUpperCase() !== 'SUCCESS') {
     throw new Error(
-      `Ozeki request failed${responseCode ? ` (${responseCode})` : ''}: ${body?.response_msg ?? 'unrecognised response'}`
+      `Ozeki request failed${responseCode ? ` (${gateway(responseCode)})` : ''}: ${reason('unrecognised response')}`
     );
   }
 
   const failed = body.data?.failed_count ?? 0;
   if (failed > 0) {
-    throw new Error(
-      `Ozeki rejected ${failed} of ${body.data?.total_count ?? failed} messages: ${body.response_msg ?? 'no reason given'}`
-    );
+    throw new Error(`Ozeki rejected ${failed} of ${body.data?.total_count ?? failed} messages: ${reason('no reason given')}`);
   }
 
   const message = body.data?.messages?.[0];
   if (!message) {
     // An authentication failure lands here: HTTP 200, no messages in the envelope.
-    throw new Error(`Ozeki returned no message result: ${body.response_msg ?? 'empty data.messages'}`);
+    throw new Error(`Ozeki returned no message result: ${reason('empty data.messages')}`);
   }
 
   if (typeof message.status === 'string' && message.status.toUpperCase() !== 'SUCCESS') {
-    throw new Error(`Ozeki rejected the message (${message.status}): ${body.response_msg ?? 'no reason given'}`);
+    throw new Error(`Ozeki rejected the message (${gateway(message.status)}): ${reason('no reason given')}`);
   }
 
   return message.message_id || sentMessageId;

@@ -16,6 +16,18 @@
 // with a [digit-novu-providers] error instead of starting without our providers,
 // where every send through them would fail inside Novu while novu-bridge records
 // SENT.
+//
+// Which process registers. NODE_OPTIONS reaches every node process in the container,
+// including the image's dotenv helper (dist/dotenvcreate.mjs) that runs before the
+// worker, so the process is chosen by decide():
+//
+//   - the worker entrypoint (apps/worker/dist/main.js), or DIGIT_NOVU_PROVIDERS_FORCE=true:
+//     register or crash;
+//   - DIGIT_NOVU_PROVIDERS=required (set by the compose file and the helm chart): every
+//     process but the dotenv helper registers or crashes, so a wrapper, pm2 or a moved
+//     entrypoint cannot start the worker without our providers;
+//   - otherwise the process is skipped, with a stderr warning unless it is the dotenv
+//     helper, naming the process and the variable that makes registration mandatory.
 
 const SUPPORTED_WORKER_VERSIONS = ['2.3.0'];
 const TAG = '[digit-novu-providers]';
@@ -67,12 +79,42 @@ function register() {
   return getHandler.digitProviders;
 }
 
-// NODE_OPTIONS reaches every node process in the container, including the image's
-// dotenv helper that runs before the worker. Patch only the worker itself.
-const isWorkerMain = /[\\/]apps[\\/]worker[\\/]dist[\\/]main\.js$/.test(process.argv[1] || '');
-if (isWorkerMain || process.env.DIGIT_NOVU_PROVIDERS_FORCE === 'true') {
-  const ids = register();
-  console.log(`${TAG} SMS providers registered in the Novu worker: ${ids.join(', ')}`);
+const WORKER_MAIN = /[\\/]apps[\\/]worker[\\/]dist[\\/]main\.js$/;
+const DOTENV_HELPER = /[\\/]dotenvcreate\.m?js$/;
+
+/**
+ * What this process does with the preload: 'register' (or crash trying), 'skip' quietly
+ * (the image's dotenv helper), or 'warn' (skip, saying so on stderr).
+ */
+function decide(argv1 = process.argv[1] || '', env = process.env) {
+  if (WORKER_MAIN.test(argv1) || env.DIGIT_NOVU_PROVIDERS_FORCE === 'true') {
+    return 'register';
+  }
+  if (DOTENV_HELPER.test(argv1)) {
+    return 'skip';
+  }
+  if (String(env.DIGIT_NOVU_PROVIDERS || '').trim().toLowerCase() === 'required') {
+    return 'register';
+  }
+  return 'warn';
 }
 
-module.exports = { register, SUPPORTED_WORKER_VERSIONS };
+function run(argv1 = process.argv[1] || '', env = process.env, log = console) {
+  const decision = decide(argv1, env);
+  if (decision === 'register') {
+    const ids = register();
+    log.log(`${TAG} SMS providers registered in the Novu worker: ${ids.join(', ')}`);
+  } else if (decision === 'warn') {
+    log.error(
+      `${TAG} WARNING: NOT registering SMSCountry/Jasmin/Ozeki in this process (${argv1 || 'no script'}): only ` +
+        'apps/worker/dist/main.js registers by default. If this is the Novu worker, every send through those ' +
+        'providers will fail inside Novu while novu-bridge records SENT. Set DIGIT_NOVU_PROVIDERS=required on ' +
+        'the worker to make registration mandatory.'
+    );
+  }
+  return decision;
+}
+
+run();
+
+module.exports = { register, decide, run, SUPPORTED_WORKER_VERSIONS };

@@ -33,11 +33,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * egov-user {@code /user/_details}; the caller must be an EMPLOYEE with a role from
  * {@code novu.bridge.proxy.allowed.roles}. Credential-bearing, destructive, PII-expanding and
  * message-sending POSTs additionally need a role from {@code novu.bridge.proxy.admin.roles} held
- * at a STATE tenant (403 {@code NB_ADMIN_ROLE_REQUIRED}), and that state must be one that owns
- * the deployment's providers (403 {@code NB_TENANT_NOT_ALLOWED}): the core-SMS default tenant's
- * state plus {@code novu.bridge.provider.admin.tenants}. Providers are deployment-wide, so neither
- * a city admin nor the admin of another root on the same box (a #1999 workspace) may rotate or
- * delete the one the owning state sends its OTPs through. Tenant-scoped reads
+ * at a STATE tenant (403 {@code NB_ADMIN_ROLE_REQUIRED}). Provider create, _update, _delete and
+ * test-send also need that state to be one that owns the deployment's providers (403
+ * {@code NB_TENANT_NOT_ALLOWED}): the core-SMS default tenant's state plus
+ * {@code novu.bridge.provider.admin.tenants}. Providers are deployment-wide, so neither a city admin
+ * nor the admin of another root on the same box (a #1999 workspace) may rotate or delete the one the
+ * owning state sends its OTPs through. {@code /dispatch/_resolve} and {@code /dispatch/_dry-run} are
+ * about one tenant's events instead, so DispatchController admits the admin of the event tenant's
+ * state root (or of an owning state). Tenant-scoped reads
  * ({@code /logs}, {@code /config/source}) are limited to the caller's tenants (403
  * {@code NB_TENANT_NOT_ALLOWED}). The resolved {@link Caller} is cached 60s keyed by SHA-256 of
  * the token, never the raw token, and handed to the controllers as a request attribute.
@@ -49,18 +52,34 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String NAMESPACE = "/novu-adapter/v1";
 
-    /** Exact paths, not prefixes: every other {@code /providers/*} path stays on the broad allowlist. */
+    /**
+     * The admin tier, exact paths, not prefixes: every other {@code /providers/*} path stays on the
+     * broad allowlist. Each needs an admin role held at a state tenant.
+     */
     private static final Set<String> ADMIN_ONLY_PATHS = Set.of(
             NAMESPACE + "/providers",
             NAMESPACE + "/providers/_update",
             NAMESPACE + "/providers/_delete",
-            // Both send a real message, of the caller's wording, to any number, through the
-            // government sender. _dry-run always: its send flag is in the body, and without it
-            // _dry-run is _validate.
+            // Sends a real message, of the caller's wording, to any number, through the
+            // government sender.
             NAMESPACE + "/providers/test-send",
+            // _dry-run always: its send flag is in the body, and without it _dry-run is _validate.
             NAMESPACE + "/dispatch/_dry-run",
             // _resolve answers with filled contact blocks: recipient PII for every holder of a role.
             NAMESPACE + "/dispatch/_resolve");
+
+    /**
+     * The part of the admin tier that acts on the deployment-wide providers, so the admin role must
+     * be held at a state that OWNS them. The rest ({@code _dry-run}, {@code _resolve}) is about one
+     * tenant's events: DispatchController lets an admin of the event's own state root through (and
+     * an owning-state admin for any), and keeps {@code _dry-run} with {@code send:true}, a real send
+     * through the shared providers, to the owning state like test-send.
+     */
+    private static final Set<String> OWNING_STATE_PATHS = Set.of(
+            NAMESPACE + "/providers",
+            NAMESPACE + "/providers/_update",
+            NAMESPACE + "/providers/_delete",
+            NAMESPACE + "/providers/test-send");
 
     /** GETs whose {@code tenantId} query parameter must be one of the caller's tenants. */
     private static final Set<String> TENANT_SCOPED_READS = Set.of(
@@ -78,6 +97,26 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
      * @param adminStateTenants the state tenants (no dot) at which it holds an admin role
      */
     public record Caller(Set<String> roles, Set<String> scopeTenants, Set<String> adminStateTenants) {
+
+        /** Holds an admin role at {@code tenantId}'s state root ({@code ke} for {@code ke.bomet}). */
+        public boolean administersStateOf(String tenantId) {
+            if (!StringUtils.hasText(tenantId)) {
+                return false;
+            }
+            String trimmed = tenantId.trim();
+            int dot = trimmed.indexOf('.');
+            return adminStateTenants.contains(dot < 0 ? trimmed : trimmed.substring(0, dot));
+        }
+
+        /** Holds an admin role at one of {@code owningStates}, the states that own the providers. */
+        public boolean administersAnyOf(Set<String> owningStates) {
+            for (String state : adminStateTenants) {
+                if (owningStates.contains(state)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         /** One of its tenants, or, for a state-level caller, a city of that state. Exact, like the SQL. */
         public boolean mayRead(String tenantId) {
@@ -210,11 +249,13 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
                             + String.join(", ", config.getProxyAdminRoles()));
             return false;
         }
+        if (!OWNING_STATE_PATHS.contains(normalize(pathOf(request)))) {
+            // Tenant-scoped: the controller checks the event's tenant against the caller's states.
+            return true;
+        }
         Set<String> owning = config.providerAdminStateTenants();
-        for (String state : caller.adminStateTenants()) {
-            if (owning.contains(state)) {
-                return true;
-            }
+        if (caller.administersAnyOf(owning)) {
+            return true;
         }
         log.warn("Proxy auth: refusing {} {} — caller is an admin at {}, not at a state that owns the providers {}",
                 request.getMethod(), pathOf(request), caller.adminStateTenants(), owning);
@@ -223,7 +264,7 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
                 ? "No state tenant owns this deployment's notification providers: set "
                         + "NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT or NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS"
                 : "Notification providers are shared by the whole deployment, so only an admin of "
-                        + String.join(", ", owning) + " may manage them or send through them; "
+                        + String.join(", ", owning) + " may manage them or test-send through them; "
                         + "your admin role is at another state tenant");
         return false;
     }

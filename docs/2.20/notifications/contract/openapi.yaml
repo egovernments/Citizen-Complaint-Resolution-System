@@ -18,17 +18,21 @@ info:
     | Tier | Endpoints | Who may call |
     |---|---|---|
     | Operator (read) | `/config/source`, `/logs`, `/integrations`, `/preferences`, `/providers/catalog`, `/providers/templates`, `/providers/twilio-templates`, `/providers/verify`, `POST /dispatch/_validate` | DIGIT bearer token, `type == EMPLOYEE`, a role from `novu.bridge.proxy.allowed.roles` (or from the admin list, which is a superset by intent). `/logs` and `/config/source` answer only for the caller's own tenants: see below |
-    | Admin (credentials, sends) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /providers/test-send`, `POST /dispatch/_dry-run`, `POST /dispatch/_resolve` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (`ke`, not `ke.bomet`); otherwise `403 NB_ADMIN_ROLE_REQUIRED`. That state must own the deployment's providers: the core-SMS default tenant's state (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root) or one listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`; otherwise `403 NB_TENANT_NOT_ALLOWED` |
+    | Admin, providers (credentials, sends) | `POST /providers`, `POST /providers/_update`, `POST /providers/_delete`, `POST /providers/test-send` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (`ke`, not `ke.bomet`); otherwise `403 NB_ADMIN_ROLE_REQUIRED`. That state must own the deployment's providers: the core-SMS default tenant's state (`NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root) or one listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`; otherwise `403 NB_TENANT_NOT_ALLOWED` |
+    | Admin, one tenant's events | `POST /dispatch/_resolve`, `POST /dispatch/_dry-run` | the above **and** a role from `novu.bridge.proxy.admin.roles` held at a STATE tenant (else `403 NB_ADMIN_ROLE_REQUIRED`), at the state root of the event's `tenantId` or at a state that owns the providers; otherwise `403 NB_TENANT_NOT_ALLOWED`. `_dry-run` with `send: true` is a real send through the shared providers and, like test-send, needs a state that owns them |
     | Machine callback | `/receipts/{provider}` | shared secret `novu.bridge.receipts.secret`, header `X-Receipt-Secret` or query `secret`. `403` while the secret is blank |
     | Unauthenticated | `/contract/envelope`, `/contract/thin-event`, `/contract/openapi` | anyone who can reach the service |
 
     **Tenant scope.** egov-user returns every role with its own `tenantId`. The caller's
     tenants are its own `tenantId` plus every tenant at which it holds an allowed or admin
     role; a STATE tenant among them also covers that state's cities. `/logs` and
-    `/config/source` answer `403 NB_TENANT_NOT_ALLOWED` for any other `tenantId`. Admin roles
-    count only at a state tenant that owns the providers, because provider integrations are
-    deployment-wide: neither a city admin nor the admin of another root on the same box (an
-    onboarded workspace) may rotate or delete the provider the owning state's OTPs go through.
+    `/config/source` answer `403 NB_TENANT_NOT_ALLOWED` for any other `tenantId`. For the
+    provider calls, admin roles count only at a state tenant that owns the providers, because
+    provider integrations are deployment-wide: neither a city admin nor the admin of another
+    root on the same box (an onboarded workspace) may rotate or delete the provider the owning
+    state's OTPs go through. `_resolve` and `_dry-run` (without `send: true`) are about one
+    tenant's events, so the admin of each root runs them for its own tenants, as
+    `migrate-notifications.py` does when it previews a root.
 
     `ProxyAuthFilter` is registered on `/novu-adapter/v1/*` but gates only the namespaces
     `config`, `logs`, `integrations`, `preferences`, `providers` and `dispatch`. Anything else — the
@@ -440,11 +444,16 @@ paths:
         `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`). It refuses when:
 
         - a row selects the provider by `identifier` OR Novu `_id` (case-insensitive);
-        - the provider is the LAST active integration on its Novu channel (`sms` carries SMS and
-          WhatsApp, `email` Email) and a channel on that Novu channel sends through Novu's
-          default because nothing pins it: an enabled row with no `provider` (every legacy row),
-          a state with no rows on `NOVU_BRIDGE_CHANNELS_ENABLED`, or every tenant when the
-          channel policy is off. An SMS channel on the direct SMSCountry route does not count;
+        - it is the integration `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP` names (by identifier or
+          `_id`) and an enabled WhatsApp channel selects no provider: every such trigger names it;
+        - the provider is the LAST active integration of its DIGIT channel (SMS, WhatsApp or
+          Email, from its catalog type; Novu stores Twilio WhatsApp on its `sms` channel, but a
+          WhatsApp integration does not stand in for SMS, nor SMS for WhatsApp) and a channel
+          with that code sends through Novu's default because nothing pins it: an enabled row
+          with no `provider` (every legacy row), a state with no rows on
+          `NOVU_BRIDGE_CHANNELS_ENABLED`, or every tenant when the channel policy is off. An SMS
+          channel on the direct SMSCountry route does not count, and neither does WhatsApp while
+          `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP` is set (the rule above covers it);
         - a state's rows cannot be read.
 
         The Novu integration list is read first; when it cannot be, the call fails
@@ -637,8 +646,10 @@ paths:
         `NB_NO_RECIPIENTS`, `NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_RECIPIENT_LIMIT_EXCEEDED`) and
         `diagnostics` lists every decision taken on the way, including per-recipient skips.
 
-        **Admin-only.** It expands role pools and returns recipient PII for every holder of a
-        role, which is broader than the Logs screen's read tier should hand out.
+        **Admin of the event's state.** It expands role pools and returns recipient PII for every
+        holder of a role, which is broader than the Logs screen's read tier should hand out. The
+        caller needs an admin role at the state root of `event.tenantId` (or at a state that owns
+        the providers); otherwise `403 NB_TENANT_NOT_ALLOWED`.
       requestBody:
         required: true
         content:
@@ -656,7 +667,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
 
   /novu-bridge/novu-adapter/v1/dispatch/_validate:
     post:
@@ -695,7 +706,10 @@ paths:
         Diagnostic. With `send` absent or false this behaves exactly like `_validate`. With
         `send: true` the envelope goes down the full live path, gates and all, and a real
         message is delivered. **Admin role required**, whatever `send` says: the flag is in the
-        body, and without it this is `_validate`. **Not routed publicly by Kong.**
+        body, and without it this is `_validate`. The role must be held at the state root of
+        `event.tenantId` or at a state that owns the providers; `send: true` needs the latter,
+        like test-send, because it sends the caller's text through the deployment-wide
+        providers. Otherwise `403 NB_TENANT_NOT_ALLOWED`. **Not routed publicly by Kong.**
       requestBody:
         required: true
         content:
@@ -826,7 +840,9 @@ components:
         `novu.bridge.proxy.admin.roles` at a state tenant (one held only at a city does not
         count). `NB_TENANT_NOT_ALLOWED` — it holds one, but not at a state that owns the
         deployment's providers (the core-SMS default tenant's state, or one in
-        `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`), or neither setting names one. The body carries
+        `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`), or neither setting names one; for `_resolve` and
+        `_dry-run`, not at the state root of the event's `tenantId` either (and `_dry-run` with
+        `send: true` always needs an owning state). The body carries
         BOTH the flat `error` key the read-only paths have always written and the `Errors`
         envelope the controllers use.
       content:

@@ -1,6 +1,6 @@
 'use strict';
 
-const { axios, BaseProvider, CasingEnum, ChannelTypeEnum, BaseSmsHandler } = require('./novu');
+const { axios, BaseProvider, CasingEnum, ChannelTypeEnum, BaseSmsHandler, redactedSnippet } = require('./novu');
 
 const PROVIDER_ID = 'jasmin';
 
@@ -13,6 +13,15 @@ const GSM_7_CHARACTERS = new Set(
     'ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà' +
     '\f^{}\\[~]|€'
 );
+
+/**
+ * UTF-16BE as hex: what Jasmin's `hex-content` carries for coding 8. UCS-2 proper is
+ * the BMP subset; characters beyond it (emoji) go out as surrogate pairs, which is
+ * what handsets decode.
+ */
+function toUcs2Hex(text) {
+  return Buffer.from(text, 'utf16le').swap16().toString('hex');
+}
 
 function fitsGsm7(text) {
   for (const character of text) {
@@ -44,6 +53,13 @@ function fitsGsm7(text) {
  * - `coding` is the SMPP data coding and defaults to 0 (GSM 03.38). Non-Latin
  *   alphabets need `coding: 8` (UCS-2), which also shortens a single segment from
  *   160 to 70 characters.
+ * - Jasmin does not transcode for any coding but 0. `route_routable` converts
+ *   `content` from UTF-8 to GSM 03.38 when coding is 0, and otherwise forwards the
+ *   bytes as they arrived, so UTF-8 `content` labelled coding 8 reaches the handset
+ *   garbled while Jasmin answers Success. For coding 8 this provider therefore sends
+ *   `hex-content`, the UTF-16BE bytes in hex, which Jasmin unhexlifies into the PDU
+ *   as is (`content` and `hex-content` together are a 400). `hex-content` needs the
+ *   user's `set_hex_content` MT authorization, which Jasmin grants by default.
  *
  * Config: baseUrl, username, password, from; optional coding (0 | 8; when unset it is
  * chosen per message), dlr ('yes' asks for a receipt), dlrUrl, dlrLevel.
@@ -77,8 +93,15 @@ class JasminSmsProvider extends BaseProvider {
       ...(wantsDlr ? { 'dlr-url': this.config.dlrUrl, 'dlr-level': this.config.dlrLevel ?? '3' } : {}),
     });
 
+    // After the passthrough merge, so an overridden coding or content is encoded too.
+    const body = { ...payload.body };
+    if (String(body.coding) === '8' && body.content != null && body['hex-content'] == null) {
+      body['hex-content'] = toUcs2Hex(String(body.content));
+      delete body.content;
+    }
+
     const form = new URLSearchParams();
-    for (const [key, value] of Object.entries(payload.body)) {
+    for (const [key, value] of Object.entries(body)) {
       if (value !== undefined && value !== null) {
         form.append(key, String(value));
       }
@@ -95,23 +118,22 @@ class JasminSmsProvider extends BaseProvider {
       validateStatus: () => true,
     });
 
-    return { id: parseMessageId(data), date: new Date().toISOString() };
+    return { id: parseMessageId(data, [this.config.username, this.config.password]), date: new Date().toISOString() };
   }
 }
 
-/** `Success "<msgid>"` on acceptance; `Error "<message>"` otherwise. */
-function parseMessageId(body) {
+/**
+ * `Success "<msgid>"` on acceptance; `Error "<message>"` otherwise. Gateway text goes
+ * into the error (and Novu's activity feed) with the credentials masked.
+ */
+function parseMessageId(body, secrets = []) {
   const trimmed = typeof body === 'string' ? body.trim() : '';
   const success = /^Success\s+"(.*)"$/s.exec(trimmed);
   if (success) {
     return success[1];
   }
   const failure = /^Error\s+"(.*)"$/s.exec(trimmed);
-  throw new Error(`Jasmin request failed: ${failure ? failure[1] : abbreviate(trimmed) || 'empty response'}`);
-}
-
-function abbreviate(value) {
-  return value.length <= 200 ? value : `${value.slice(0, 200)}…`;
+  throw new Error(`Jasmin request failed: ${redactedSnippet(failure ? failure[1] : trimmed, secrets) || 'empty response'}`);
 }
 
 class JasminHandler extends BaseSmsHandler {
@@ -129,4 +151,4 @@ class JasminHandler extends BaseSmsHandler {
   }
 }
 
-module.exports = { PROVIDER_ID, JasminSmsProvider, JasminHandler, fitsGsm7 };
+module.exports = { PROVIDER_ID, JasminSmsProvider, JasminHandler, fitsGsm7, toUcs2Hex };

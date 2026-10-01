@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -246,18 +247,21 @@ class ProxyAuthFilterTest {
         }
     }
 
-    private static final List<String> ADMIN_TIER = List.of("/novu-adapter/v1/providers",
+    /** The admin tier that acts on the deployment-wide providers themselves. */
+    private static final List<String> OWNING_STATE_TIER = List.of("/novu-adapter/v1/providers",
             "/novu-adapter/v1/providers/_update",
             "/novu-adapter/v1/providers/_delete",
-            "/novu-adapter/v1/providers/test-send",
-            "/novu-adapter/v1/dispatch/_dry-run",
+            "/novu-adapter/v1/providers/test-send");
+
+    /** The admin tier about one tenant's events: scoped to the event's tenant by DispatchController. */
+    private static final List<String> TENANT_SCOPED_TIER = List.of("/novu-adapter/v1/dispatch/_dry-run",
             "/novu-adapter/v1/dispatch/_resolve");
 
     @Test
-    void anAdminOfAnotherRootOnTheBoxIsRefusedEveryAdminCall() throws Exception {
+    void anAdminOfAnotherRootOnTheBoxIsRefusedEveryProviderCall() throws Exception {
         // #1999 multi-root box: `acme` is an onboarded workspace, `pg` owns the providers. An
         // ACCOUNT_ADMIN at acme must not rotate or delete the provider pg's login OTPs go through.
-        for (String path : ADMIN_TIER) {
+        for (String path : OWNING_STATE_TIER) {
             MockFilterChain chain = new MockFilterChain();
             filter = new ProxyAuthFilter(restTemplate, config);
             MockHttpServletResponse res = callAt(post(path), chain, "acme", "ACCOUNT_ADMIN");
@@ -267,6 +271,48 @@ class ProxyAuthFilterTest {
             assertTrue(res.getContentAsString().contains("NB_TENANT_NOT_ALLOWED"), res.getContentAsString());
             assertTrue(res.getContentAsString().contains("only an admin of pg"), res.getContentAsString());
         }
+    }
+
+    // Review (5): migrate-notifications.py previews each root through _resolve, logged in at that root.
+    @Test
+    void anAdminOfAnotherRootReachesResolveAndDryRun_whichScopeThemselvesToTheEventTenant() throws Exception {
+        for (String path : TENANT_SCOPED_TIER) {
+            MockFilterChain chain = new MockFilterChain();
+            filter = new ProxyAuthFilter(restTemplate, config);
+            MockHttpServletResponse res = callAt(post(path), chain, "acme", "ACCOUNT_ADMIN");
+
+            assertEquals(200, res.getStatus(), path);
+            assertNotNull(chain.getRequest(), path + " must reach the controller, which checks the event tenant");
+            assertNotNull(chain.getRequest().getAttribute(ProxyAuthFilter.CALLER_ATTRIBUTE),
+                    "the controller needs the caller to scope the call");
+        }
+    }
+
+    @Test
+    void theTenantScopedTierStillNeedsAnAdminRoleAtAState() throws Exception {
+        for (String path : TENANT_SCOPED_TIER) {
+            MockFilterChain chain = new MockFilterChain();
+            filter = new ProxyAuthFilter(restTemplate, config);
+            // A city-level admin role is not a state admin.
+            MockHttpServletResponse res = callAt(post(path), chain, "acme.city", "ACCOUNT_ADMIN");
+
+            assertEquals(403, res.getStatus(), path);
+            assertNull(chain.getRequest(), path);
+            assertTrue(res.getContentAsString().contains("NB_ADMIN_ROLE_REQUIRED"), res.getContentAsString());
+        }
+    }
+
+    @Test
+    void callerKnowsWhichStatesItAdministers() {
+        ProxyAuthFilter.Caller caller = new ProxyAuthFilter.Caller(java.util.Set.of("MDMS_ADMIN"),
+                java.util.Set.of("acme"), java.util.Set.of("acme"));
+        assertTrue(caller.administersStateOf("acme.city"));
+        assertTrue(caller.administersStateOf(" acme "));
+        assertFalse(caller.administersStateOf("pg"));
+        assertFalse(caller.administersStateOf("acmex.city"));
+        assertFalse(caller.administersStateOf(null));
+        assertTrue(caller.administersAnyOf(java.util.Set.of("pg", "acme")));
+        assertFalse(caller.administersAnyOf(java.util.Set.of("pg")));
     }
 
     @Test

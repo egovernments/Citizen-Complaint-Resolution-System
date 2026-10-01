@@ -1,6 +1,6 @@
 'use strict';
 
-const { axios, BaseProvider, CasingEnum, ChannelTypeEnum, BaseSmsHandler } = require('./novu');
+const { axios, BaseProvider, CasingEnum, ChannelTypeEnum, BaseSmsHandler, redactedSnippet } = require('./novu');
 
 const PROVIDER_ID = 'smscountry';
 const DEFAULT_BASE_URL = 'http://api.smscountry.com/SMSCwebservice_bulk.aspx';
@@ -64,19 +64,21 @@ class SmsCountryProvider extends BaseProvider {
       responseType: 'text',
     });
 
-    return { id: parseJobId(data), date: new Date().toISOString() };
+    return { id: parseJobId(data, [this.config.user, this.config.password]), date: new Date().toISOString() };
   }
 }
 
 /**
  * `OK:<jobid>` is the only accepted reply. Anything else (an error string, an HTML
  * error page, an empty body) is a failure whatever the HTTP status, which this
- * gateway reports as 200 either way.
+ * gateway reports as 200 either way. The reply goes into the error, and so into
+ * Novu's activity feed, only with the panel credentials masked: an ASP.NET error
+ * page can echo the posted form.
  */
-function parseJobId(body) {
+function parseJobId(body, secrets = []) {
   const trimmed = typeof body === 'string' ? body.trim() : '';
   if (!trimmed.startsWith('OK:')) {
-    throw new Error(`SMSCountry request failed: ${abbreviate(trimmed) || 'empty response'}`);
+    throw new Error(`SMSCountry request failed: ${redactedSnippet(trimmed, secrets) || 'empty response'}`);
   }
   return trimmed.slice('OK:'.length).trim();
 }
@@ -84,10 +86,6 @@ function parseJobId(body) {
 /** The gateway wants the country code with no leading `+`. */
 function toNationalDigits(phone) {
   return (phone || '').replace(/[^0-9]/g, '');
-}
-
-function abbreviate(value) {
-  return value.length <= 200 ? value : `${value.slice(0, 200)}…`;
 }
 
 class SmsCountryHandler extends BaseSmsHandler {

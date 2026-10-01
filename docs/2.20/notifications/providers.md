@@ -38,13 +38,15 @@ Novu's own answer is one provider class per gateway (v2.3.0 ships 38 SMS provide
 | `novu.js` | Resolves Novu's internals (`BaseProvider`, `BaseSmsHandler`, `SmsFactory`, axios) from inside the image |
 | `test/`, `run-tests.sh` | Tests, run inside the stock worker image they patch |
 
-The worker is started with `NODE_OPTIONS=--require /opt/digit-novu-providers/register.js` and the directory mounted read-only at `/opt/digit-novu-providers`. This works because the Novu worker is not bundled: its packages resolve to plain files, so `register.js` patches the same `SmsFactory` the worker uses. Only the worker is touched:
+The worker is started with `NODE_OPTIONS=--require /opt/digit-novu-providers/register.js` and `DIGIT_NOVU_PROVIDERS=required`, and the directory mounted read-only at `/opt/digit-novu-providers`. This works because the Novu worker is not bundled: its packages resolve to plain files, so `register.js` patches the same `SmsFactory` the worker uses. Only the worker is touched:
 
 - **API.** Stays stock. It accepts any `providerId` string and stores credentials under a fixed set of key names, encrypting the secret ones by name. These providers use existing keys (`user`, `password`, `from`, `baseUrl`).
 - **ws.** Stays stock.
 - **Dashboard.** Stays stock. It lists these integrations without a logo or credential form, which does not matter because providers are managed from the Configurator.
 
-**Failure is loud by design.** The worker refuses to boot, with a `[digit-novu-providers]` error in its log, if a provider file does not load, or if the image is not the Novu version these internals were verified against (`SUPPORTED_WORKER_VERSIONS` in `register.js`, today `2.3.0`). On success it logs `[digit-novu-providers] SMS providers registered in the Novu worker: smscountry, jasmin, ozeki`. A worker without the preload would otherwise fail quietly:
+**Failure is loud by design.** The worker refuses to boot, with a `[digit-novu-providers]` error in its log, if a provider file does not load, or if the image is not the Novu version these internals were verified against (`SUPPORTED_WORKER_VERSIONS` in `register.js`, today `2.3.0`). On success it logs `[digit-novu-providers] SMS providers registered in the Novu worker: smscountry, jasmin, ozeki`.
+
+`NODE_OPTIONS` reaches every node process in the container, so `register.js` decides per process. The image's entrypoint (`apps/worker/dist/main.js`) always registers. With `DIGIT_NOVU_PROVIDERS=required`, which the compose file and the Helm chart set on the worker, every other process registers too, except the image's dotenv helper (`dist/dotenvcreate.mjs`), which is left alone. A wrapper script, pm2 or a moved entrypoint therefore cannot start the worker without the providers; it registers, or crashes on the same checks. Without the variable, any other process is skipped with a `[digit-novu-providers] WARNING: NOT registering ...` line on stderr. A worker without the providers would otherwise fail quietly:
 
 1. The Configurator saves an SMSCountry, Ozeki or Jasmin provider.
 2. novu-bridge's trigger is accepted, and the dispatch row reads `SENT`.
@@ -58,7 +60,7 @@ A deployment that runs the worker **without** the preload (Helm `worker.digitPro
 - refuses to create, rotate, re-enable or test one with `400 NB_PROVIDER_TYPE_UNAVAILABLE`, while renaming, disabling and deleting still work so that old ones can be cleaned up;
 - records a channel that still selects one as `SKIPPED / NB_PROVIDER_UNAVAILABLE` instead of triggering it.
 
-A channel with no provider selected is not covered: if Novu's default `sms` integration is one of these, the bridge cannot tell and the row still reads `SENT`. With the flag off, the bridge refuses to create such integrations, so this only happens to one created before the flag was turned off, or created in Novu directly.
+- records a channel with **no** provider selected the same way when Novu's default for it is one of them: the integration `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP` names (WhatsApp), else Novu's primary active integration on the channel, else, when none is flagged primary, every active one. With the flag off the bridge refuses to create such integrations, so this only catches one created before the flag was turned off, or in Novu directly. The check uses the same cached integration list as a selected provider's (one Novu call per `NOVU_BRIDGE_PROVIDER_AVAILABILITY_CACHE_TTL_MS`). When that list cannot be read the bridge delivers anyway, as it does for a selected provider: an unpinned channel carries login OTPs and every legacy row, and a blip on Novu's list endpoint should not stop them.
 
 ### How it is deployed
 
@@ -77,13 +79,13 @@ Bumping the image without step 2 leaves the worker refusing to boot, which is th
 
 ## Gateway notes
 
-Each provider fails the Novu step whenever the gateway did not accept the message. The step still fails when the gateway answered HTTP 200, so Novu's activity feed shows the gateway's reason.
+Each provider fails the Novu step whenever the gateway did not accept the message. The step still fails when the gateway answered HTTP 200, so Novu's activity feed shows the gateway's reason. That reason is redacted first: the integration's username and password are masked (as sent, and URL-, form- or HTML-encoded, and as the Basic-auth token), as is the value of any `password=`-style pair, before the text is cut to 200 characters. A gateway error page that echoes the request therefore never shows the panel credentials to someone with Novu dashboard access.
 
 | Provider | Request | Accepted when… | Notes |
 |---|---|---|---|
 | SMSCountry | form-encoded `User`, `passwd`, `mobilenumber` (digits only), `message`, `sid`, `mtype=N`, `DR=Y` to the legacy bulk API (`http://api.smscountry.com/SMSCwebservice_bulk.aspx` unless **Gateway URL** is set) | the body starts `OK:`; the job id after it becomes Novu's message id | HTTP 200 is not success: a malformed request gets 200 and an ASP.NET error page. Accepted is not delivered: a message the operator drops (an unregistered DLT template) still gets `OK:`. The legacy bulk API only; a panel showing AuthKey/AuthToken is the REST API, which is not supported. |
 | Ozeki | `POST` JSON `{"messages":[{message_id, to_address, text, from_address?}]}` to the **HTTP API URL**, HTTP Basic auth | `response_code` is `SUCCESS`, `failed_count` is 0 and the message's `status` is `SUCCESS` | Rejections, **including a wrong password**, come back as HTTP 200 with an error envelope. `message_id` is Novu's message id, echoed back. Ozeki has no delivery webhook, so accepted means submitted. |
-| Jasmin | form-encoded `username`, `password`, `to`, `from`, `content`, `coding`, `dlr=no` to the **Send URL** (`:1401/send`) | the plain-text reply `Success "<msgid>"` | Failures carry a real status (400, 403, 412 or 500) and `Error "<message>"`. **Text outside the GSM 03.38 alphabet (Amharic, Arabic, emoji) is sent as UCS-2 (`coding=8`), with 70 characters per SMS segment instead of 160**, so the same complaint message can cost two or three times as many segments. The provider picks the coding per message. |
+| Jasmin | form-encoded `username`, `password`, `to`, `from`, `content` (or `hex-content`), `coding`, `dlr=no` to the **Send URL** (`:1401/send`) | the plain-text reply `Success "<msgid>"` | Failures carry a real status (400, 403, 412 or 500) and `Error "<message>"`. **Text outside the GSM 03.38 alphabet (Amharic, Arabic, emoji) is sent as UCS-2 (`coding=8`), with 70 characters per SMS segment instead of 160**, so the same complaint message can cost two or three times as many segments. The provider picks the coding per message. Jasmin converts `content` to GSM 03.38 only for coding 0 and forwards it byte for byte otherwise, so UCS-2 text goes as `hex-content`, its UTF-16BE bytes in hex. That needs the Jasmin user's `set_hex_content` authorization, which Jasmin grants unless an operator revoked it (then every UCS-2 message fails with 403). |
 
 `from` is optional for Ozeki and Jasmin, in which case the gateway's or route's default sender is used. It is required for SMSCountry, which rejects an unregistered sender. A blank optional field is left out of the Novu credentials, so the provider's default applies.
 
@@ -112,18 +114,21 @@ The check cannot see whether the worker loads DIGIT's providers. It relies on `N
 Integrations are deployment-wide, so `POST /providers/_delete`, and `_update` with `active: false`, refuse with `409 NB_PROVIDER_IN_USE` while a tenant still sends through the provider:
 
 - a channel row selects it, by identifier or Novu `_id`;
-- it is the **last active** integration on its Novu channel (`sms` carries SMS and WhatsApp, `email` carries Email), and some enabled channel on that Novu channel has no provider selected. Such a channel sends through Novu's default integration. It can be a legacy `RAINMAKER-PGR.NotificationChannel` row, which has no `provider` field; a state with no rows that runs on `NOVU_BRIDGE_CHANNELS_ENABLED`; or any tenant while the channel policy is off. An SMS channel on the [legacy direct route](#the-legacy-direct-route) does not count, because it never reaches Novu.
+- it is the integration `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP` names (by identifier or Novu `_id`), and some enabled WhatsApp channel has no provider selected: every such trigger names it;
+- it is the **last active** integration of its kind (SMS, WhatsApp or Email, from its catalog type), and some enabled channel of that kind has no provider selected. Such a channel sends through Novu's default integration. It can be a legacy `RAINMAKER-PGR.NotificationChannel` row, which has no `provider` field; a state with no rows that runs on `NOVU_BRIDGE_CHANNELS_ENABLED`; or any tenant while the channel policy is off. Novu stores Twilio WhatsApp on its `sms` channel, but a remaining WhatsApp integration does not keep an SMS one deletable, nor the reverse. An SMS channel on the [legacy direct route](#the-legacy-direct-route) does not count, because it never reaches Novu; neither does WhatsApp while `NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP` is set, which the rule above covers.
 
-The channel rows are read from MDMS at the time of the call. The states checked are: the request's `tenantId`, every state the caller is an admin of, every state the bridge has dispatched for since it started, and the states that own the providers. The check fails closed: a state whose rows cannot be read refuses, and an unreadable Novu integration list fails the call before anything changes.
+The channel rows are read from MDMS at the time of the call, once per state for both checks. The states checked are: the request's `tenantId`, every state the caller is an admin of, every state the bridge has dispatched for since it started, and the states that own the providers. The check fails closed: a state whose rows cannot be read refuses, and an unreadable Novu integration list fails the call before anything changes.
 
 ### Who may manage providers
 
-Creating, updating, deleting and test-sending a provider, as well as `/dispatch/_dry-run` and `/dispatch/_resolve`, need a role from `NOVU_BRIDGE_PROXY_ADMIN_ROLES`. That role must be held at a state tenant that owns the deployment's providers:
+Creating, updating, deleting and test-sending a provider need a role from `NOVU_BRIDGE_PROXY_ADMIN_ROLES`. That role must be held at a state tenant that owns the deployment's providers:
 
 - the state of `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, which the deploy sets to its state root;
 - any state listed in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS` (comma-separated, default empty).
 
-An admin of any other root on the same box, such as an onboarded workspace, gets `403 NB_TENANT_NOT_ALLOWED`. If neither setting names a state, every one of these calls is refused, and the bridge logs a warning at start-up.
+An admin of any other root on the same box, such as an onboarded workspace, gets `403 NB_TENANT_NOT_ALLOWED`. If neither setting names a state, every one of these calls is refused, and the bridge logs a warning at start-up. `migrate-notifications.py --create-provider` creates providers through `POST /providers`, so for that step log in at an owning state.
+
+`/dispatch/_resolve` and `/dispatch/_dry-run` need the same role, held at a state tenant, but they act on one tenant's events: the admin of the event `tenantId`'s state root may run them, as may an owning state's admin for any tenant. `migrate-notifications.py plan` previews each root through `_resolve` while logged in at that root. `_dry-run` with `"send": true` is a real send of the caller's text through the shared providers, so like test-send it needs an owning state.
 
 ## Adding a provider
 

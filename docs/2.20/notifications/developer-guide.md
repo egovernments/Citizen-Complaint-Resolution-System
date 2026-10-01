@@ -127,8 +127,9 @@ outage degrades to the literal.
   runs the real resolver against the tenant's real configuration and returns `envelopes`
   (fully rendered), `terminalCode` (`NB_NO_ROUTING`, `NB_NO_RECIPIENTS`,
   `NB_UNKNOWN_AUDIENCE_SCHEME`, `NB_RECIPIENT_LIMIT_EXCEEDED`) and `diagnostics`. Nothing is sent
-  or written. Admin tier because it returns role holders' contacts: an admin role at a state
-  that owns the providers ([providers.md](./providers.md#who-may-manage-providers)), else
+  or written. Admin tier because it returns role holders' contacts: an admin role at the state
+  root of the event's `tenantId`, or at a state that owns the providers
+  ([providers.md](./providers.md#who-may-manage-providers)), else
   `NB_ADMIN_ROLE_REQUIRED` / `NB_TENANT_NOT_ALLOWED`.
 - Then publish and check the Logs screen / `GET …/logs?referenceNumber=…`; `source_path` is
   `RESOLVED` for thin events. Where things land:
@@ -240,8 +241,10 @@ NB_PREFERENCE_DENIED`.
 - **Test** on the Providers screen exercises one provider; `_resolve` shows what a thin event
   would produce; `POST /novu-bridge/novu-adapter/v1/dispatch/_dry-run` with `"send": true`
   pushes one envelope through the full pipeline (container network only — not routed by Kong).
-  All three need an admin role at a state that owns the providers: the state of
-  `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, or one in `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`.
+  Test and `_dry-run` with `"send": true` need an admin role at a state that owns the
+  providers (the state of `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT`, or one in
+  `NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS`); `_resolve`, and `_dry-run` without `send`, also accept
+  an admin role at the state root of the event's `tenantId`.
 - To check that a producer change changed no message, resolve the old and new events for the
   same flows with `_resolve` and diff the envelopes.
 - After editing the legacy seed or the PGR workflow, run

@@ -43,11 +43,12 @@ class DispatchPipelineWorkerProvidersTest {
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
     private DispatchPipelineService service;
+    private RestTemplate mdms;
 
     @BeforeEach
     @SuppressWarnings({"unchecked", "rawtypes"})
     void setUp() {
-        RestTemplate mdms = mock(RestTemplate.class);
+        mdms = mock(RestTemplate.class);
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         PreferenceServiceClient preferences = mock(PreferenceServiceClient.class);
@@ -127,5 +128,40 @@ class DispatchPipelineWorkerProvidersTest {
         service.process(sms(), true, null);
 
         assertEquals("SENT", row().getStatus());
+    }
+
+    /** The same SMS channel with no provider selected: a legacy row, sent through Novu's default. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void unpinnedSmsRow() {
+        Map<String, Object> sms = new HashMap<>(Map.of("code", "SMS", "enabled", true, "active", true));
+        when(mdms.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenReturn(new ResponseEntity(Map.of("mdms", List.of(
+                        Map.of("uniqueIdentifier", "SMS", "isActive", true, "data", sms))), HttpStatus.OK));
+    }
+
+    // Review (9): the only active Novu sms integration is the leftover SMSCountry one.
+    @Test
+    void withTheWorkerProvidersOff_anUnpinnedChannelOnAWorkerProviderDefault_isSkippedVisiblyToo() {
+        config.setDigitWorkerProviders(false);
+        unpinnedSmsRow();
+
+        service.process(sms(), true, null);
+
+        DispatchLogEntry row = row();
+        assertEquals("SKIPPED", row.getStatus());
+        assertEquals("NB_PROVIDER_UNAVAILABLE", row.getLastErrorCode());
+        assertTrue(row.getLastErrorMessage().contains("no provider selected"), row.getLastErrorMessage());
+        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(),
+                anyString(), any(), any(), any(), any());
+    }
+
+    @Test
+    void withTheWorkerProvidersOn_theUnpinnedChannelIsDelivered_withoutListingNovu() {
+        unpinnedSmsRow();
+
+        service.process(sms(), true, null);
+
+        assertEquals("SENT", row().getStatus());
+        verify(novuClient, never()).listIntegrations();
     }
 }

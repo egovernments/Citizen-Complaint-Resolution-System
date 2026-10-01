@@ -92,3 +92,15 @@ test('fails when the per-message status is not SUCCESS', async () => {
   });
   await assert.rejects(send(provider), /Ozeki rejected the message \(INVALID_RECIPIENT\)/);
 });
+
+// Review (8): response_msg is gateway text, and the error lands in Novu's activity feed.
+test('masks the credentials in the gateway reason', async () => {
+  const provider = new OzekiSmsProvider(config);
+  const token = Buffer.from(`${config.username}:${config.password}`).toString('base64');
+  stubHttp(provider, {
+    status: 200,
+    data: { response_code: 'ERROR', response_msg: `Invalid login ${config.username}/${config.password} (Basic ${token})` },
+  });
+  const error = await send(provider).catch((e) => e);
+  assert.match(error.message, /^Ozeki request failed \(ERROR\): Invalid login \*\*\*\/\*\*\* \(Basic \*\*\*\)$/);
+});
