@@ -30,7 +30,7 @@ const DigitUIWrapper = ({ stateCode, enabledModules, moduleReducers, defaultLand
     <Provider store={data}>
       <Router>
         <BodyContainer>
-          {Digit.Utils.getMultiRootTenant() && !window.__digitTenantContext ? (
+          {Digit.Utils.getMultiRootTenant() ? (
             <DigitAppWrapper
               initData={initData}
               stateCode={stateCode}
