@@ -135,3 +135,12 @@ test("_send accepts any 2xx that carries a challenge", async () => {
   const { fetchImpl } = fakeFetch(200, { challengeId: "c2", expiresIn: 300, resendAfter: 30 });
   assert.equal((await sendCitizenOtp({ tenant: TENANT, mobileNumber: "7", fetchImpl })).challengeId, "c2");
 });
+
+test("no attempts left gets its own message, whatever the code", async () => {
+  for (const code of ["OTP_INVALID", "OTP_EXPIRED"]) {
+    const { fetchImpl } = fakeFetch(400, { code, attemptsRemaining: 0 });
+    const verified = await verifyCitizenOtp({ tenant: TENANT, challengeId: "c1", code: "000000", fetchImpl });
+    assert.equal(verified.messageKey, "CORE_IDENTITY_OTP_NO_ATTEMPTS_LEFT", code);
+    assert.equal(verified.attemptsRemaining, 0);
+  }
+});

@@ -17,8 +17,22 @@ function OtpBoxes({ value = "", onChange, hasError }) {
   const inputs = useRef([]);
   const chars = (value || "").split("").concat(new Array(OTP_LENGTH).fill("")).slice(0, OTP_LENGTH);
 
+  const fill = (digits, from = 0) => {
+    const next = chars.slice();
+    digits.split("").forEach((digit, k) => { if (from + k < OTP_LENGTH) next[from + k] = digit; });
+    onChange(next.join("").slice(0, OTP_LENGTH));
+    inputs.current[Math.min(from + digits.length, OTP_LENGTH) - 1]?.focus();
+  };
+
   const handleInput = (i, e) => {
-    const v = e.target.value.replace(/\D/g, "").slice(-1);
+    const digits = e.target.value.replace(/\D/g, "");
+    // SMS autofill (`one-time-code`) delivers the whole code into one box;
+    // typing over a filled box gives at most two digits.
+    if (digits.length > 2) {
+      fill(digits.slice(0, OTP_LENGTH - i), i);
+      return;
+    }
+    const v = digits.slice(-1);
     const next = chars.slice();
     next[i] = v;
     const joined = next.join("").slice(0, OTP_LENGTH);
@@ -40,9 +54,7 @@ function OtpBoxes({ value = "", onChange, hasError }) {
     const txt = (e.clipboardData?.getData("text") || "").replace(/\D/g, "").slice(0, OTP_LENGTH);
     if (!txt) return;
     e.preventDefault();
-    onChange(txt);
-    const lastIdx = Math.min(txt.length, OTP_LENGTH) - 1;
-    inputs.current[lastIdx]?.focus();
+    fill(txt);
   };
 
   useEffect(() => {
@@ -76,7 +88,7 @@ function OtpBoxes({ value = "", onChange, hasError }) {
           type="tel"
           inputMode="numeric"
           autoComplete={i === 0 ? "one-time-code" : "off"}
-          maxLength={1}
+          maxLength={i === 0 ? OTP_LENGTH : 1}
           value={chars[i]}
           onChange={(e) => handleInput(i, e)}
           onKeyDown={(e) => handleKeyDown(i, e)}
@@ -145,9 +157,9 @@ const SelectOtp = ({
   );
 
   const handleResendOtp = async () => {
-    setTimeLeft(30);
     const next = await onResend();
-    if (typeof next === "number") setTimeLeft(next);
+    // `null`: nothing was sent, keep the current state.
+    if (next !== null) setTimeLeft(typeof next === "number" ? next : 30);
   };
 
   const tr = (key, fallback) => {
@@ -240,6 +252,7 @@ const SelectOtp = ({
             <button
               type="button"
               onClick={handleResendOtp}
+              disabled={canSubmit === false}
               className="v2-resend-otp"
               style={{
                 background: "transparent",

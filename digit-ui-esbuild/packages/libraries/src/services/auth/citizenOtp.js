@@ -54,6 +54,9 @@ const OTP_ERRORS = Object.freeze({
   IDENTITY_UNAVAILABLE: ["CORE_IDENTITY_SIGNIN_FAILED", "Sign-in could not be completed. Please try again."],
 });
 
+// The last wrong code ends the challenge (#2201 answers OTP_EXPIRED or
+// OTP_INVALID with attemptsRemaining 0): say why, not "expired".
+const NO_ATTEMPTS_LEFT = ["CORE_IDENTITY_OTP_NO_ATTEMPTS_LEFT", "Too many wrong codes. Request a new code."];
 const TRY_LATER = ["CORE_IDENTITY_OTP_TRY_LATER", "Too many attempts. Please try again later."];
 const NO_COUNT = Object.freeze({
   OTP_RESEND_TOO_SOON: TRY_LATER,
@@ -76,7 +79,8 @@ export function citizenOtpFailure(response, body) {
   const retryAfter = retryAfterOf(response, body);
   const attemptsRemaining = Number.isInteger(body?.attemptsRemaining) ? body.attemptsRemaining : undefined;
   const missingCount = code === "OTP_INVALID" ? attemptsRemaining === undefined : retryAfter === undefined;
-  const [messageKey, template] = (missingCount && NO_COUNT[code]) || OTP_ERRORS[code] ||
+  const [messageKey, template] = (attemptsRemaining === 0 && NO_ATTEMPTS_LEFT) ||
+    (missingCount && NO_COUNT[code]) || OTP_ERRORS[code] ||
     (response.status === 404
       ? ["CORE_IDENTITY_TENANT_UNAVAILABLE", "This site is not available."]
       : ["CORE_IDENTITY_SIGNIN_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again."]);

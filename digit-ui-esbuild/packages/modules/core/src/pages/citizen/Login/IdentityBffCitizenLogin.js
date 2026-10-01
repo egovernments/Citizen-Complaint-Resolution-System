@@ -34,6 +34,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
   const [phoneAlert, setPhoneAlert] = useState("");
   const [otpError, setOtpError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [phoneWait, setPhoneWait] = useState(false);
   const validationConfig = useMobileValidationConfig();
   const fetchImpl = window.fetch.bind(window);
 
@@ -85,7 +86,9 @@ const IdentityBffCitizenLogin = ({ t }) => {
   const sendCode = () =>
     sendCitizenOtp({
       tenant,
-      mobileNumber,
+      // National number without a trunk 0: `0712…` and `712…` are one
+      // subscriber, and the BFF prefixes the country code.
+      mobileNumber: mobileNumber.replace(/^0+/, ""),
       locale: Digit.StoreData?.getCurrentLanguage?.(),
       fetchImpl,
     });
@@ -97,6 +100,10 @@ const IdentityBffCitizenLogin = ({ t }) => {
     setBusy(false);
     if (!sent?.ok) {
       setPhoneAlert(sent ? failureText(sent) : unavailable());
+      if (sent?.retryAfter) {
+        setPhoneWait(true);
+        setTimeout(() => setPhoneWait(false), sent.retryAfter * 1000);
+      }
       return;
     }
     setChallengeId(sent.challengeId);
@@ -110,7 +117,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
   // Resolves to the seconds until the next resend, for SelectOtp's timer.
   const resendCode = async () => {
     // One request at a time: a resend replaces the challenge being verified.
-    if (busy) return 0;
+    if (busy) return null;
     setBusy(true);
     const sent = await sendCode().catch(() => null);
     setBusy(false);
@@ -138,7 +145,11 @@ const IdentityBffCitizenLogin = ({ t }) => {
     try {
       const verified = await verifyCitizenOtp({ tenant, challengeId, code: otp, fetchImpl });
       if (!verified.ok) {
-        if (verified.code === "OTP_INVALID" && verified.attemptsRemaining !== 0) {
+        if (verified.attemptsRemaining === 0 || ["IDENTITY_DISABLED", "IDENTITY_CONFLICT", "OTP_LOCKED"].includes(verified.code)) {
+          // The challenge is spent or the account can't sign in: start again
+          // from the number.
+          backToPhone(failureText(verified));
+        } else if (verified.code === "OTP_INVALID") {
           setOtp("");
           setOtpError(failureText(verified));
         } else if (verified.code === "OTP_EXPIRED") {
@@ -147,9 +158,9 @@ const IdentityBffCitizenLogin = ({ t }) => {
           setResendAfter(0);
           setOtpStep((step) => step + 1);
         } else {
-          // No attempts left, locked, disabled or a failed sign-in: this
-          // challenge is spent, so start again from the number.
-          backToPhone(failureText(verified));
+          // IDENTITY_UNAVAILABLE or another transient failure: the BFF keeps
+          // the challenge, so the same code can be tried again.
+          setOtpError(failureText(verified));
         }
         return;
       }
@@ -163,7 +174,8 @@ const IdentityBffCitizenLogin = ({ t }) => {
         ? tr(result.messageKey, result.message)
         : tr("CORE_IDENTITY_SIGNIN_FAILED", "Sign-in could not be completed. Please try again."));
     } catch (e) {
-      backToPhone(unavailable());
+      // A dropped request: the challenge is still valid, retry the same code.
+      setOtpError(unavailable());
     } finally {
       setBusy(false);
     }
@@ -182,7 +194,7 @@ const IdentityBffCitizenLogin = ({ t }) => {
           setPhoneAlert("");
         }}
         onSelect={submitMobileNumber}
-        canSubmit={!busy}
+        canSubmit={!busy && !phoneWait}
         validationConfig={validationConfig}
         alert={phoneAlert}
       />
