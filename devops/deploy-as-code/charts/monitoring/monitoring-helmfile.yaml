@@ -30,6 +30,7 @@ environments:
           probes: false
           kafkaUi: false
           gatus: false
+          opensre: false
       - ../environments/env-secrets.yaml
       - ../environments/env.yaml
 ---
@@ -343,6 +344,28 @@ releases:
   installed: {{ default false (index $mon "gatus") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: ./gatus
+  version: 0.1.0
+  values:
+  - {{ .Values | toYaml | nindent 8 }}
+
+- name: opensre
+  # Diagnose-only AI SRE agent (docs/operations/monitoring/opensre.md). It watches Gatus
+  # and, when checks fail, runs one READ-ONLY investigation over Grafana
+  # (Prometheus + Loki), Kafka consumer lag and the Kubernetes API, then writes
+  # the diagnosis to its pod log. It changes nothing and sends no alerts.
+  #
+  # Local chart, so the whole-values passthrough is both safe and needed -- it
+  # reads .Values.namespace like gatus above. It hard-depends on nothing here:
+  # with metrics/logs off it still reads Gatus, Kafka lag and the cluster, and
+  # its log says what it could not see.
+  #
+  # Two things an operator must supply, neither of which lives in this repo: the
+  # image (built and pushed from local-setup/opensre) and a Secret holding the
+  # model API key. Both are documented in ./opensre/values.yaml. Investigations
+  # cost money per run, which is the other reason this defaults to false.
+  installed: {{ default false (index $mon "opensre") }}
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: ./opensre
   version: 0.1.0
   values:
   - {{ .Values | toYaml | nindent 8 }}

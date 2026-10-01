@@ -299,6 +299,8 @@ The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
 [-f docker-compose.fast-path.yml]          # when db_fast_path is set
 -f docker-compose.migrations.yml
 -f docker-compose.monitoring.yml
+-f docker-compose.matomo.yml               # services start only with enable_matomo
+-f docker-compose.opensre.yml              # service starts only with enable_opensre
 [-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
 ```
 

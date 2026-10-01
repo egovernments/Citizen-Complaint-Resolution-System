@@ -1,0 +1,83 @@
+# Diagnose-only AI SRE agent (OpenSRE). Off by default via the helmfile's
+# `monitoring.opensre` toggle; nothing here runs until an operator sets it.
+#
+# This file is the DEFAULT layer. monitoring-helmfile.yaml also passes the merged
+# environment tree in after it, so anything environment-specific belongs in
+# charts/environments, not here.
+
+namespace: monitoring
+
+image:
+  # No public image carries the release this agent needs (upstream's newest
+  # published image predates the headless `opensre ask` command), so the
+  # deployment runs an image this repo builds and pushes:
+  #   docker build local-setup/opensre -t egovio/opensre:0.1.2026.9.21
+  #   docker push  egovio/opensre:0.1.2026.9.21
+  # Pinned, never :latest — OpenSRE is alpha upstream and ships daily.
+  repository: egovio/opensre
+  tag: 0.1.2026.9.21
+  pullPolicy: IfNotPresent
+
+# How the sweep loop paces itself. A sweep with nothing failing costs nothing:
+# it is one HTTP call to Gatus and no model call.
+sweep:
+  intervalMinutes: 15
+  # Do not re-investigate the same set of failing checks within this window.
+  dedupeHours: 6
+  investigationTimeoutSeconds: 900
+
+# What the agent reads. Empty values switch that integration off.
+endpoints:
+  # Gatus drives the sweep: no Gatus, no investigations.
+  gatusUrl: http://gatus.monitoring:8080
+  grafanaUrl: http://grafana.monitoring
+  # Redpanda/Kafka bootstrap for consumer-group lag.
+  kafkaBootstrapServers: kafka-kraft-controller-headless.backbone:9092
+  kafkaSecurityProtocol: PLAINTEXT
+  # Tempo is a compose-tier component; the Helm tier runs Jaeger, which OpenSRE
+  # has no integration for. Left empty deliberately.
+  tempoUrl: ""
+
+model:
+  # Sent as both ANTHROPIC_REASONING_MODEL and ANTHROPIC_TOOLCALL_MODEL.
+  name: claude-opus-5
+  provider: anthropic
+
+# Credentials come from a Secret an operator creates — never from this repo,
+# which is public. Create it once per cluster in the release namespace:
+#   kubectl -n monitoring create secret generic opensre \
+#     --from-literal=anthropic-api-key='<key>' \
+#     --from-literal=grafana-token='<grafana service account token>'
+# The Grafana token is optional: without it the agent still sees Gatus, Kafka
+# lag and Kubernetes, but no metrics or logs. Mint it in Grafana as a Viewer
+# service account.
+secret:
+  name: opensre
+  anthropicApiKeyKey: anthropic-api-key
+  grafanaTokenKey: grafana-token
+
+# Read-only access to the cluster: this is what lets the agent see restart
+# counts, OOM kills and crash-loop events — the things the compose tier cannot
+# see because it has no Docker access. Verbs are get/list only.
+rbac:
+  create: true
+  serviceAccountName: opensre
+  # Namespace the agent looks at first; it can read others through the
+  # ClusterRole below.
+  defaultNamespace: egov
+
+# Optional: a ConfigMap holding a runbook the agent attaches to every
+# investigation, with the file under the key `known-issues.md`. Create it from
+# this repo's operations handbook:
+#   kubectl -n monitoring create configmap opensre-runbook \
+#     --from-file=known-issues.md=docs/releases/2.12/operations/known-issues.md
+runbook:
+  configMapName: ""
+
+resources:
+  limits:
+    memory: 1Gi
+    cpu: "1000m"
+  requests:
+    memory: 256Mi
+    cpu: "50m"

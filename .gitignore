@@ -154,3 +154,7 @@ charts/*.tgz
 # ─── Operator Local Testing ──────────────────────────────────────────────────
 local-testing/
 .agent/
+
+# OpenSRE agent output and the runbook copy the deploy drops beside it
+local-setup/opensre/logs/
+local-setup/opensre/known-issues.md

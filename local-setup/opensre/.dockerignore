@@ -1,0 +1,4 @@
+# On the box this directory is also the agent's log mount and holds the runbook
+# the deploy copies in; neither belongs in the image.
+logs/
+known-issues.md
