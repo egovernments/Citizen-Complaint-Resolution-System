@@ -3120,6 +3120,16 @@ button[class*="toast-close"] svg,
   align-self: stretch !important;
 }
 
+/* The side column (the links card and the filter) took a flat 20% of the row:
+ * 230px on a wide desktop but 130px on an 820px tablet, where "Assigned to Me"
+ * broke mid-word and the filter dropdowns cut their labels short. It keeps its
+ * 20% wherever that's enough, and never drops below 13rem. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox {
+    grid-template-columns: minmax(13rem, 20%) minmax(0, 1fr) !important;
+  }
+}
+
 /* ...except the links panel, which is in the FIRST grid row, not the second.
  * The rule above was written for the table/filter row and catching row 1 as
  * well left the links card stretched to the height of the search form beside
@@ -8317,6 +8327,18 @@ html .header-dropdown-option:focus-visible {
   .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
     grid-column: 1 / -1 !important;
     justify-content: flex-end !important;
+  }
+}
+
+/* A narrow search card (a tablet, beside the filter column) can't hold three
+ * fields in a row: at 418px the phone input behind its +254 prefix was about
+ * 30px wide. Two to a row there, the actions still on their own row below.
+ * Tablets and up only: phones keep their one-field-per-row layout. */
+@media (min-width: 48rem) {
+  @container pgr-inbox-search (max-width: 37.99rem) {
+    .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
   }
 }
 

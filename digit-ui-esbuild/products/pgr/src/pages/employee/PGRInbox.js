@@ -171,17 +171,36 @@ const PGRSearchInbox = () => {
     };
   }
 
-  // The search card's reset reads "Clear". The composer translates the label
-  // itself, so it gets the text: a tenant that hasn't seeded CS_COMMON_CLEAR
-  // would otherwise show the raw key.
+  // The search card's reset reads "Clear", and the phone search sheet has a
+  // "Search By" header. The composer translates both itself, so they arrive as
+  // text: a tenant that hasn't seeded a key would otherwise show it raw.
   if (configs?.sections?.search?.uiConfig?.secondaryLabel === "CS_COMMON_CLEAR") {
+    const uiConfig = configs.sections.search.uiConfig;
     configs = {
       ...configs,
       sections: {
         ...configs.sections,
         search: {
           ...configs.sections.search,
-          uiConfig: { ...configs.sections.search.uiConfig, secondaryLabel: translateOr(t, "CS_COMMON_CLEAR", "CLEAR") },
+          uiConfig: {
+            ...uiConfig,
+            secondaryLabel: translateOr(t, "CS_COMMON_CLEAR", "CLEAR"),
+            headerLabel: translateOr(t, uiConfig.headerLabel || "ES_COMMON_SEARCH_BY", "Search By"),
+          },
+        },
+      },
+    };
+  }
+  // The phone filter sheet is the same component as the search sheet, so
+  // without a header of its own it was titled "Search By".
+  if (configs?.sections?.filter?.uiConfig && !configs.sections.filter.uiConfig.headerLabel) {
+    configs = {
+      ...configs,
+      sections: {
+        ...configs.sections,
+        filter: {
+          ...configs.sections.filter,
+          uiConfig: { ...configs.sections.filter.uiConfig, headerLabel: translateOr(t, "ES_COMMON_FILTER_BY", "Filter By") },
         },
       },
     };
