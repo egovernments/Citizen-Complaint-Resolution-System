@@ -44,7 +44,7 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                 uiConfig: {
                     headerStyle: null,
                     primaryLabel: 'ACTION_TEST_SEARCH',
-                    secondaryLabel: 'CS_COMMON_CLEAR_SEARCH',
+                    secondaryLabel: 'CS_COMMON_CLEAR',
                     minReqFields: 1,
                     defaultValues: {
                         complaintNumber: "",
