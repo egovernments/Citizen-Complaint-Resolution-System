@@ -1,15 +1,22 @@
 import { test as setup, expect } from '@playwright/test';
 import path from 'node:path';
+import { loginConfigurator } from '../utils/configurator-auth';
 
 const AUTH_FILE = path.resolve('auth.json');
 
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'eGov@123';
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Optional overrides (deploy/*.env); unset falls back to tests/utils/env.ts.
+const ADMIN_USER = process.env.ADMIN_USER;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const TENANT_CODE = process.env.TENANT_CODE;
 
-// UI login flow against the configurator. We intentionally walk the form
-// rather than injecting localStorage so the spec exercises the same login
-// surface a real admin uses (and catches regressions in the login form).
+// Admin session for the configurator, minted through the API rather than the
+// login UI. The configurator's login is now hosted sign-in (#2107): Keycloak
+// through identity-bff, with no credential fields of its own, so there is no
+// form to walk, and a deployment's Keycloak users need not map to the tenant
+// under test. The app restores its session from localStorage['crs-auth-state'],
+// which is what identity-bff writes after sign-in too, so seeding it with an
+// API-minted DIGIT token reaches the same /manage surface. The login pages
+// themselves are covered by admin/login.spec.ts.
 setup('authenticate', async ({ page }) => {
   // Not every target under test deploys the configurator (e.g. a local-setup
   // stack that only runs digit-ui-esbuild for PGR). `chromium`'s project
@@ -28,34 +35,12 @@ setup('authenticate', async ({ page }) => {
     return;
   }
 
-  // The login page boots client-side — wait for the username field to mount.
-  const usernameInput = page.locator('#username');
-  await expect(usernameInput).toBeVisible();
+  await loginConfigurator(page, { username: ADMIN_USER, password: ADMIN_PASSWORD, tenant: TENANT_CODE });
 
-  await usernameInput.fill(ADMIN_USER);
-  await page.locator('#password').fill(ADMIN_PASSWORD);
-
-  const tenantInput = page.locator('#tenantCode');
-  await tenantInput.click();
-  await tenantInput.fill(TENANT_CODE);
-
-  // Choose Management mode so we land on /manage rather than /phase/1.
-  // The button has no role=button — it's a styled <button type="button">.
-  // Match by visible text. Onboarding is the default so this is required.
-  const managementButton = page.getByRole('button', { name: /^Management$/ });
-  await managementButton.click();
-
-  // Submit and wait for navigation away from the login screen.
-  await Promise.all([
-    page.waitForURL(/\/configurator\/(manage|phase\/1)/, { timeout: 30_000 }),
-    page.getByRole('button', { name: /Sign In/i }).click(),
-  ]);
-
-  // Sanity: localStorage should now hold the configurator session blob.
-  // We don't print the token — only assert presence.
-  const hasAuthState = await page.evaluate(
-    () => !!localStorage.getItem('crs-auth-state'),
-  );
+  // The app accepted the seeded session: it stayed on /manage instead of
+  // bouncing to /login (a rejected token clears the session and redirects).
+  await expect(page).toHaveURL(/\/configurator\/manage/, { timeout: 30_000 });
+  const hasAuthState = await page.evaluate(() => !!localStorage.getItem('crs-auth-state'));
   expect(hasAuthState).toBe(true);
 
   await page.context().storageState({ path: AUTH_FILE });

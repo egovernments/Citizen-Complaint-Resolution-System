@@ -5,7 +5,7 @@
  * under key 'crs-auth-state'. This helper acquires a DIGIT token via API
  * and injects it so we bypass the configurator login form entirely.
  */
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { getDigitToken } from './auth';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from './env';
 
@@ -13,11 +13,36 @@ const CONFIGURATOR_BASE = process.env.CONFIGURATOR_BASE_URL || `${BASE_URL}/conf
 
 export { CONFIGURATOR_BASE };
 
-export async function loginConfigurator(page: Page): Promise<void> {
+/**
+ * `form`: the legacy username / password / tenant form.
+ * `hosted`: the hosted sign-in (#2107), which hands off to Keycloak through
+ * identity-bff and has no credential fields of its own.
+ */
+export type ConfiguratorLogin = 'form' | 'hosted';
+
+/** Opens /configurator/login and reports which login it serves. */
+export async function detectConfiguratorLogin(page: Page): Promise<ConfiguratorLogin> {
+  await page.goto(`${CONFIGURATOR_BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  const form = page.locator('#username');
+  const hosted = page
+    .getByRole('button', { name: /^Log in$/ })
+    .or(page.getByText(/Hosted sign-in is not enabled/i));
+  await expect(form.or(hosted).first()).toBeVisible({ timeout: 20_000 });
+  return (await form.count()) > 0 ? 'form' : 'hosted';
+}
+
+export interface ConfiguratorCredentials {
+  username?: string;
+  password?: string;
+  tenant?: string;
+}
+
+export async function loginConfigurator(page: Page, creds: ConfiguratorCredentials = {}): Promise<void> {
+  const sessionTenant = creds.tenant || ROOT_TENANT;
   const tokenResponse = await getDigitToken({
-    tenant: ROOT_TENANT,
-    username: ADMIN_USER,
-    password: ADMIN_PASS,
+    tenant: sessionTenant,
+    username: creds.username || ADMIN_USER,
+    password: creds.password || ADMIN_PASS,
   });
 
   const user = tokenResponse.UserRequest as Record<string, unknown> | undefined;
@@ -57,7 +82,7 @@ export async function loginConfigurator(page: Page): Promise<void> {
       token: tokenResponse.access_token,
       userObj: user || {},
       baseUrl: BASE_URL, // The DIGIT API base (not the configurator path)
-      tenant: ROOT_TENANT,
+      tenant: sessionTenant,
     },
   );
 
