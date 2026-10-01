@@ -9,6 +9,9 @@ const FilterCard = ({
   children,
   primaryActionLabel,
   secondaryActionLabel,
+  // The secondary action's Button variation; tertiary (a text button) unless a
+  // caller asks for another, as SearchComponent's secondaryLabelVariation does.
+  secondaryActionVariation = "teritiary",
   onPrimaryPressed,
   onSecondaryPressed,
   layoutType = "horizontal",
@@ -110,7 +113,7 @@ const FilterCard = ({
           <Button
             label={secondaryActionLabel}
             onClick={onSecondaryPressed}
-            variation="teritiary"
+            variation={secondaryActionVariation}
           />
         )}
       </div>
@@ -124,7 +127,7 @@ const FilterCard = ({
           <Button
             label={secondaryActionLabel}
             onClick={onSecondaryPressed}
-            variation="teritiary"
+            variation={secondaryActionVariation}
           />
         )}
         {primaryActionLabel && onPrimaryPressed && (
@@ -235,6 +238,7 @@ FilterCard.propTypes = {
   children: PropTypes.node.isRequired,
   primaryActionLabel: PropTypes.string,
   secondaryActionLabel: PropTypes.string,
+  secondaryActionVariation: PropTypes.string,
   onPrimaryPressed: PropTypes.func,
   onSecondaryPressed: PropTypes.func,
   layoutType: PropTypes.oneOf(['horizontal', 'vertical']),

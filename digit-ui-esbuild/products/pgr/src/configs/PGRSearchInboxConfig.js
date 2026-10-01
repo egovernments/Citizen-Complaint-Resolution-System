@@ -193,6 +193,8 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                     primaryLabel: 'ES_COMMON_APPLY',
                     formClassName: "filter",
                     secondaryLabel: 'ES_CLEAR_ALL',
+                    // Outlined, like Clear on the search card above.
+                    secondaryLabelVariation: 'secondary',
                     minReqFields: 0,
                     defaultValues: {
                         locality: null,

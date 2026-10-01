@@ -871,7 +871,7 @@
     },
     {
         "code": "CS_COMMON_CLEAR",
-        "message": "CLEAR",
+        "message": "Clear",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
