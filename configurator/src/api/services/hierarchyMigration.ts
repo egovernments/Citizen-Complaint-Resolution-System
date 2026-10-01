@@ -43,7 +43,7 @@ export const MIGRATION_STEPS: MigrationStep[] = [
   { key: 'derive', label: 'Determine hierarchy shape (preserve existing, or derive 2-level)' },
   { key: 'define', label: 'Create / keep the hierarchy definition' },
   { key: 'nodes', label: 'Create interior nodes in ComplaintHierarchy' },
-  { key: 'leaves', label: 'Create leaf complaint types in ComplaintHierarchy' },
+  { key: 'leaves', label: 'Create complaint subcategories in ComplaintHierarchy' },
   { key: 'localize', label: 'Seed localization keys' },
   { key: 'verify', label: 'Verify the merged hierarchy is in place' },
   { key: 'refresh', label: 'Refresh caches' },
@@ -105,8 +105,8 @@ export function resolveMigrationTenants(): { managing: string; state: string; ta
 }
 
 const flatLevels = () => [
-  { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Category' },
-  { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Sub-Type' },
+  { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Complaint Category' },
+  { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Complaint Subcategory' },
 ];
 
 // Tolerate "already exists" on re-run; the verify step reads back the real end state.
@@ -219,11 +219,11 @@ export async function runComplaintHierarchyMigration({
   }
   const existingDef = defRows.find((d) => d.hierarchyType === hierarchyType) || defRows[0];
 
-  onStep('read', 'done', `${defs.length} sub-types · ${interiorByCode.size} existing nodes · def:${existingDef ? 'yes' : 'no'} · depts:${deptByCode.size}`);
+  onStep('read', 'done', `${defs.length} subcategories · ${interiorByCode.size} existing nodes · def:${existingDef ? 'yes' : 'no'} · depts:${deptByCode.size}`);
 
   if (defs.length === 0) {
     for (const s of ['derive', 'define', 'nodes', 'leaves', 'localize', 'verify', 'refresh']) onStep(s, 'skipped');
-    return fail(`No complaint types (ServiceDefs) found on ${targets.join(' / ')}. Nothing to migrate.`);
+    return fail(`No complaint categories (ServiceDefs) found on ${targets.join(' / ')}. Nothing to migrate.`);
   }
 
   // ── 2) DETERMINE SHAPE (Q2b dual-mode) ─────────────────────────────────────
@@ -315,7 +315,7 @@ export async function runComplaintHierarchyMigration({
     }
     onStep('leaves', 'running', `${li}/${defs.length}`);
   }
-  onStep('leaves', 'done', `${defs.length} leaf complaint type${defs.length === 1 ? '' : 's'} created`);
+  onStep('leaves', 'done', `${defs.length} complaint subcategor${defs.length === 1 ? 'y' : 'ies'} created`);
 
   // ── 6) LOCALIZATION (Q9) — seed SERVICEDEFS.<code> keys for EVERY node ──────
   onStep('localize', 'running');
