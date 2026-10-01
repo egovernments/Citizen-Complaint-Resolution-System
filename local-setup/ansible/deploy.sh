@@ -9,8 +9,8 @@
 #   ./deploy.sh mytenant --image-tag=master-3f9e2a1 --image-tag-services=pgr-services
 #                                     # ...for only some images (+ their -db image)
 #
-# --image-tag / --image-tag-services (or IMAGE_TAG / IMAGE_TAG_SERVICES in the
-# environment) set `image_tag` / `image_tag_services` for this run only; see
+# --image-tag / --image-tag-services (or CCRS_IMAGE_TAG / CCRS_IMAGE_TAG_SERVICES
+# in the environment) set `image_tag` / `image_tag_services` for this run only; see
 # "One-tag deploys" in inventory/group_vars/digit.yml. Without them every image
 # keeps its compose-file default (or its host_vars pin).
 #
@@ -231,10 +231,19 @@ shift
 # other argument still goes to ansible-playbook untouched) and hand them over
 # as JSON extra vars, which outrank host_vars. Validated here as well as in the
 # playbook so a typo fails before ansible ever connects to the box.
+#
+# Each var is passed ONLY when it was actually given: an extra var outranks
+# host_vars, so always sending `image_tag_services: []` silently widened a
+# scope stored in host_vars to every image (Vinoth review on #2166).
+#
+# The environment names carry a CCRS_ prefix on purpose: a bare IMAGE_TAG is
+# what many CI runners already export for their own docker builds, and would
+# have re-tagged every image of a plain `./deploy.sh <tenant>`.
+#
 # The ${arr[@]+...} expansions below keep `set -u` happy on macOS's bash 3.2,
 # which treats an empty array as unbound.
-image_tag="${IMAGE_TAG:-}"
-image_tag_services="${IMAGE_TAG_SERVICES:-}"
+image_tag="${CCRS_IMAGE_TAG:-}"
+image_tag_services="${CCRS_IMAGE_TAG_SERVICES:-}"
 passthrough=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -246,24 +255,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-extra_vars=()
-if [[ -n "$image_tag" || -n "$image_tag_services" ]]; then
+extra_json=""
+if [[ -n "$image_tag" ]]; then
   # Same rule build-images.yml applies before it pushes a tag.
   if [[ ! "$image_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
     echo "ERROR: --image-tag '${image_tag}' is not a Docker tag (letters, digits, . _ -; max 128)." >&2
-    [[ -z "$image_tag" ]] && echo "  --image-tag-services needs --image-tag too." >&2
     exit 1
   fi
-  services_json=""
-  if [[ -n "$image_tag_services" ]]; then
-    if [[ ! "$image_tag_services" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]]; then
-      echo "ERROR: --image-tag-services '${image_tag_services}' must be comma-separated image names, e.g. pgr-services,novu-bridge." >&2
-      exit 1
-    fi
-    services_json="\"${image_tag_services//,/\",\"}\""
+  extra_json="\"image_tag\": \"${image_tag}\""
+fi
+if [[ -n "$image_tag_services" ]]; then
+  if [[ ! "$image_tag_services" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]]; then
+    echo "ERROR: --image-tag-services '${image_tag_services}' must be comma-separated image names, e.g. pgr-services,novu-bridge." >&2
+    exit 1
   fi
-  extra_vars=(-e "{\"image_tag\": \"${image_tag}\", \"image_tag_services\": [${services_json}]}")
-  echo "──── image tag: ${image_tag}${image_tag_services:+ (only: ${image_tag_services})} ────" >&2
+  extra_json="${extra_json:+${extra_json}, }\"image_tag_services\": [\"${image_tag_services//,/\",\"}\"]"
+fi
+extra_vars=()
+if [[ -n "$extra_json" ]]; then
+  extra_vars=(-e "{${extra_json}}")
+  echo "──── image tag: ${image_tag:-<from host_vars>}${image_tag_services:+ (only: ${image_tag_services})} ────" >&2
 fi
 
 ansible-playbook \

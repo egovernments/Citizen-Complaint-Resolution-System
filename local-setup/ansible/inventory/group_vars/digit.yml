@@ -422,14 +422,18 @@ digit_ui_bundle_image: >-
 #   1. a per-image pin in host_vars (`pgr_services_image:` …) or a local build
 #      (`build_mcp:` / `build_otp_publisher:`) — the tag is NOT applied to that
 #      image, and the deploy prints which ones it skipped. An unpinned `-db`
-#      image whose service is pinned follows the service's pin;
+#      image whose service is pinned off the tag stays on its compose-file
+#      default (with a warning) rather than run newer migrations under it;
 #   2. image_tag, when it covers the image (see image_tag_services);
 #   3. the compose-file default.
 image_tag: ""
 
-# Limit image_tag to some images, by build-config image-name. A `-db`
-# migration image follows its service, because the pipelines build the pair
-# under one tag. Empty = every image in ccrs_image_catalog.
+# Limit image_tag to some images, by build-config image-name. A service and
+# its `-db` migration image always move together, whichever of the two is
+# named, because the pipelines build the pair under one tag. Empty = every
+# image in ccrs_image_catalog.
+# Quote a numeric-looking tag ("2.10"): unquoted, YAML reads it as the number
+# 2.1 and the deploy refuses it.
 image_tag_services: []
 
 # Registry namespace the CI pipelines push to (PUSH_NAMESPACE in
@@ -446,11 +450,12 @@ image_tag_verify: true
 # The images image_tag moves. `image` is the build-config image-name (and the
 # registry repository), `env` the variable the compose files read, `var` the
 # host_vars pin that overrides it. `follows` ties a migration image to its
-# service: it moves with the service under image_tag_services, and when the
-# service is pinned it follows that pin instead of the tag (so a newer build's
-# migrations never run under an older service). `profiles` copies the compose
-# profiles the service sits behind; the registry check skips images whose
-# profiles are all off, since they are never pulled. Adding a CI-built image to the stack
+# service: the pair moves together under image_tag_services, and when the
+# service is pinned off the tag the migration image stays on its compose
+# default (so a newer build's migrations never run under an older service).
+# `profiles` copies the compose profiles the service sits behind; the registry
+# check skips images whose profiles are all off, since they are never pulled.
+# Adding a CI-built image to the stack
 # means adding it here, parameterising its compose `image:` as
 # `${ENV:-egovio/<image>:<default>}` and writing ENV in templates/digit.env.j2
 # — tests/static/deployment-contracts.test.ts checks all three. Keep `image`,

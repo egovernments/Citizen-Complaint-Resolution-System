@@ -836,7 +836,8 @@ grafana_anonymous_enabled: false
 # Set here only to keep this tenant on a tag across routine redeploys. Covers
 # every image in ccrs_image_catalog (group_vars/digit.yml); empty = the
 # compose-file defaults. See "Deploying a specific image tag" in README.md.
-# image_tag: ""                 # e.g. develop-98c33580, nightly-develop, v2.12.1
+# image_tag: ""                 # e.g. develop-98c33580, nightly-develop, v2.12.1 — always QUOTED:
+#                               #   image_tag: "2.10", never image_tag: 2.10 (YAML reads that as 2.1)
 # image_tag_services: []        # e.g. [pgr-services] — only these (+ their -db image)
 
 # ── Pin a specific image instead of the compose-file default ──
