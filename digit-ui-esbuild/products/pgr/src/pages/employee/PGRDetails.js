@@ -15,7 +15,7 @@ import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
 import { trackEvent } from "../../utils/analytics";
-import { isCurrentAssignee } from "./escalationVisibility";
+import { currentAssigneesInOccupancy, isCurrentAssignee } from "./escalationVisibility";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -403,7 +403,9 @@ const PGRDetails = () => {
   // Fetch workflow details
   const { isLoading: isWorkflowLoading, data: workflowData, revalidate: workFlowRevalidate } = Digit.Hooks.useCustomAPIHook({
     url: "/egov-workflow-v2/egov-wf/process/_search",
-    params: { tenantId: complaintTenantId, history: true, businessIds: id },
+    // The holder may be named several self-loop transitions ago. Match the backend's
+    // explicit bound instead of accepting workflow-v2's default 10-row truncation.
+    params: { tenantId: complaintTenantId, history: true, limit: 200, businessIds: id },
     config: { enabled: !!pgrData },
     changeQueryName: id,
   });
@@ -611,7 +613,7 @@ const PGRDetails = () => {
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
-    const currentAssignees = workflowData?.ProcessInstances?.[0]?.assignes || [];
+    const currentAssignees = currentAssigneesInOccupancy(workflowData?.ProcessInstances);
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];

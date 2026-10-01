@@ -43,7 +43,6 @@ public class EscalationService {
     public static final String ASSIGNMENT_CHANGED_AT = "assignmentChangedAt";
     public static final String ASSIGNMENT_CHANGE_SOURCE = "assignmentChangeSource";
     public static final String ESCALATION_LEVEL = "escalationLevel";
-    public static final String ESCALATION_WINDOW_STARTED_AT = "escalationWindowStartedAt";
     public static final String LAST_ESCALATED_AT = "lastEscalatedAt";
     public static final String ESCALATED_FROM = "escalatedFrom";
     public static final String ESCALATED_TO = "escalatedTo";
@@ -53,7 +52,6 @@ public class EscalationService {
             ASSIGNMENT_CHANGED_AT,
             ASSIGNMENT_CHANGE_SOURCE,
             ESCALATION_LEVEL,
-            ESCALATION_WINDOW_STARTED_AT,
             LAST_ESCALATED_AT,
             ESCALATED_FROM,
             ESCALATED_TO,
@@ -107,15 +105,6 @@ public class EscalationService {
         String action = request.getWorkflow().getAction();
         if (action != null && ESCALATE.equalsIgnoreCase(action)) {
             prepareEscalation(request, persistedService, incoming, automatic);
-        } else if ("REOPEN".equalsIgnoreCase(action)) {
-            // A reopened complaint starts a fresh cumulative escalation cycle. Using the
-            // original creation time would make an old complaint immediately consume rungs.
-            incoming.put(ESCALATION_LEVEL, 0);
-            incoming.put(ESCALATION_WINDOW_STARTED_AT, System.currentTimeMillis());
-            incoming.remove(LAST_ESCALATED_AT);
-            incoming.remove(ESCALATED_FROM);
-            incoming.remove(ESCALATED_TO);
-            incoming.remove(ESCALATION_TRIGGER);
         } else if (changesAssignment(action, request.getWorkflow())) {
             long now = System.currentTimeMillis();
             incoming.put(ASSIGNMENT_CHANGED_AT, now);
@@ -197,12 +186,11 @@ public class EscalationService {
         return event;
     }
 
-    /** Escalation thresholds are cumulative from creation, or from the latest reopen. */
+    /**
+     * Escalation thresholds are cumulative from creation. REOPEN does not restart the
+     * ladder, so a reopened complaint keeps the rungs it has already consumed.
+     */
     public long escalationWindowStartedAt(Service complaint) {
-        Object configuredStart = details(complaint).get(ESCALATION_WINDOW_STARTED_AT);
-        if (configuredStart instanceof Number number && number.longValue() > 0) {
-            return number.longValue();
-        }
         if (complaint.getAuditDetails() == null) {
             return 0L;
         }
