@@ -58,10 +58,18 @@ function App() {
   }, []);
 
   if (window.__digitTenantContextError) {
+    // English only: no tenant means no localization to load yet. Only the
+    // tenant resolver's own errors (they carry a status) are shown verbatim.
+    const error = window.__digitTenantContextError;
     return (
       <main style={{ maxWidth: "42rem", margin: "12vh auto", padding: "2rem", fontFamily: "Roboto, sans-serif" }}>
         <h1>Tenant unavailable</h1>
-        <p>{window.__digitTenantContextError.message}</p>
+        <p>{error.status ? error.message : "Tenant configuration could not be loaded."}</p>
+        {error.status !== 404 ? (
+          <button type="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        ) : null}
       </main>
     );
   }

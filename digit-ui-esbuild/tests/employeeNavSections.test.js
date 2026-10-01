@@ -136,3 +136,15 @@ test("a route that already has the tenant, or is not an app route, is left alone
   assert.equal(withTenantSegment("/sandbox-ui/citizen/x", "sandbox-ui", undefined), "/sandbox-ui/citizen/x");
 });
 
+
+test("on a tenant route MDMS rows match the app id and move onto the tenant route", () => {
+  const rows = mdmsLinkRows(LINK_DATA, {
+    contextPath: "digit-ui",
+    rebaseUrl: (url) => url.replace(/^\/digit-ui\//, "/kd/digit-ui/"),
+  });
+  assert.deepEqual(rows.map((r) => r.navigationUrl), [
+    "/kd/digit-ui/citizen/ws-home",
+    "/kd/digit-ui/citizen/pgr-home",
+    "https://example.org/faq",
+  ]);
+});
