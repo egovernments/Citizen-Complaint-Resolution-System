@@ -6715,7 +6715,7 @@
     },
     {
         "code": "CS_FILE_PIN_DROP",
-        "message": "Pin drop",
+        "message": "Location",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6848,6 +6848,12 @@
     {
         "code": "CS_VOICE_MIC_BLOCKED",
         "message": "Microphone access is blocked. Allow it for this site in your browser settings, then try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_VOICE_SERVICE_OFF",
+        "message": "Voice input is turned off on this device. On an iPhone or Mac, turn on Siri in Settings, then try again.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

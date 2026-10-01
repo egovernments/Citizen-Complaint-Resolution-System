@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useApp } from '../App';
+import { useApp } from '../../App';
 import {
   MapPin,
-  Globe,
   Search,
   Plus,
   FolderOpen,
@@ -16,6 +14,7 @@ import {
   AlertCircle,
   X,
   RefreshCw,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,6 +28,7 @@ import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldP
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
 import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
+import { reportStepError, trackStepAction } from '../telemetry';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
@@ -39,7 +39,7 @@ import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types'
 
 type Step =
   // shared
-  | 'landing' | 'complete'
+  | 'complete'
   // Excel path (develop's original flow)
   | 'excel-landing' | 'create-hierarchy' | 'select-hierarchy' | 'template' | 'upload' | 'verify'
   // OSM path
@@ -178,10 +178,10 @@ async function runPostCreatePipeline(
         boundaryTenantId: tenantId,
       });
     } else {
-      console.warn('[Phase 2] no boundary geometry — leaving MapConfig at its defaults');
+      console.warn('[geography] no boundary geometry — leaving MapConfig at its defaults');
     }
   } catch (e) {
-    console.warn('[Phase 2] map position not written (non-fatal)', e);
+    console.warn('[geography] map position not written (non-fatal)', e);
   }
 
   // Clear ancestralmaterializedpath so boundary-service includeChildren=true
@@ -203,15 +203,32 @@ async function runPostCreatePipeline(
       body: JSON.stringify({ tenant_id: tenantId }),
     });
     clearTimeout(timer);
-    if (!res.ok) console.warn(`[Phase 2] boundary path fix returned ${res.status}`);
+    if (!res.ok) console.warn(`[geography] boundary path fix returned ${res.status}`);
   } catch (e) {
-    console.warn('[Phase 2] boundary path fix skipped (MCP not reachable):', e);
+    console.warn('[geography] boundary path fix skipped (MCP not reachable):', e);
   }
 }
 
-export default function Phase2Page() {
-  const { completePhase, addUndo, state } = useApp();
-  const navigate = useNavigate();
+export type BoundarySource = 'osm' | 'excel';
+
+/**
+ * Bringing a boundary hierarchy in, from OpenStreetMap or from an Excel sheet.
+ * Geography opens it for the source picked there, and it hands back when the
+ * boundaries are created (onDone) or the operator backs out (onCancel).
+ */
+export default function BoundaryImport({
+  source,
+  hasHierarchies,
+  onDone,
+  onCancel,
+}: {
+  source: BoundarySource;
+  /** With none yet, "create a hierarchy" is the only way in, so the choice is skipped. */
+  hasHierarchies: boolean;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { addUndo, state } = useApp();
   // Phase 2 writes boundaries at the onboarding tenant (the Phase-1 city, e.g.
   // mz.maputo). The configurator reads boundaries at THIS tenant everywhere —
   // its reference-data fetches and later phases all query targetTenant — so the
@@ -223,8 +240,8 @@ export default function Phase2Page() {
   // tenant if Phase 1 was skipped (URL-direct).
   const boundaryTenant = state.targetTenant || state.tenant;
 
-  const [step, setStep] = useState<Step>('landing');
-  const [path, setPath] = useState<BoundaryPath>(null);
+  const [step, setStep] = useState<Step>(source === 'osm' ? 'osm-search' : hasHierarchies ? 'excel-landing' : 'create-hierarchy');
+  const [path] = useState<BoundaryPath>(source);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -356,9 +373,16 @@ export default function Phase2Page() {
       setSelectedHierarchy(newHierarchy);
       setExistingHierarchies(prev => [...prev, newHierarchy]);
       addUndo('create_hierarchy', `Created hierarchy: ${hierarchyType}`);
+      trackStepAction('geography', 'entity_create', 'boundary', {
+        tenant: boundaryTenant,
+        source: 'excel',
+        kind: 'hierarchy',
+        levels: validLevels.length,
+      });
       setStep('template');
     } catch (err) {
       console.error('Hierarchy creation error:', err);
+      reportStepError('geography', 'create_hierarchy', err, boundaryTenant);
       if (err instanceof ApiClientError) {
         setError(err.firstError);
       } else if (err instanceof Error) {
@@ -525,6 +549,12 @@ export default function Phase2Page() {
       );
 
       addUndo('create_boundaries', `Created ${result.success.length} boundaries`);
+      trackStepAction('geography', 'entity_import', 'boundary', {
+        tenant: boundaryTenant,
+        source: 'excel',
+        count: result.success.length,
+        failed: result.failed.length,
+      });
       setStep('complete');
 
       if (result.failed.length > 0) {
@@ -532,6 +562,7 @@ export default function Phase2Page() {
       }
     } catch (err) {
       console.error('Boundary upload error:', err);
+      reportStepError('geography', 'import_excel', err, boundaryTenant);
       if (err instanceof ApiClientError) {
         setError(err.firstError);
       } else if (err instanceof Error) {
@@ -542,11 +573,6 @@ export default function Phase2Page() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleContinue = () => {
-    completePhase(2);
-    navigate('/phase/3');
   };
 
   const getHierarchyLevels = (hierarchy: BoundaryHierarchy): string[] => {
@@ -808,6 +834,13 @@ out skel qt;`;
         levelNames.map(n => ({ boundaryType: n }))
       );
 
+      trackStepAction('geography', 'entity_import', 'boundary', {
+        tenant: boundaryTenant,
+        source: 'osm',
+        count: result.success.length,
+        failed: result.failed.length,
+        levels: levelNames.length,
+      });
       setStep('complete');
 
       if (result.failed.length > 0) {
@@ -815,6 +848,7 @@ out skel qt;`;
       }
     } catch (e) {
       console.error(e);
+      reportStepError('geography', 'import_osm', e, boundaryTenant);
       setError(e instanceof Error ? e.message : "Failed to create boundaries.");
       setStep('map-levels');
     } finally {
@@ -848,17 +882,6 @@ out skel qt;`;
         className="hidden"
         disabled={loading}
       />
-      {/* Header - DIGIT style */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 border-2 border-primary rounded flex items-center justify-center flex-shrink-0">
-          <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-        </div>
-        <div className="min-w-0">
-          <Header className="mb-0 text-lg sm:text-2xl">Phase 2: Boundary Setup</Header>
-          <p className="text-sm sm:text-base text-muted-foreground truncate">Define geographic hierarchy for your tenant</p>
-        </div>
-      </div>
-
       {/* Error display */}
       {error && (
         <Alert variant="destructive">
@@ -872,119 +895,44 @@ out skel qt;`;
         </Alert>
       )}
 
-      {/* Landing: pick a data source */}
-      {step === 'landing' && (
-        <DigitCard>
-          {existingHierarchies.length > 0 && (
-            <Alert className="mb-4 sm:mb-6 bg-blue-50/50 border-blue-200">
-              <AlertCircle className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-blue-800">
-                A boundary hierarchy already exists for this tenant.
-                You can proceed to the next phase, or create more boundaries below.
-              </AlertDescription>
-              <div className="mt-4">
-                <Button variant="outline" onClick={handleContinue}>Proceed to Phase 3</Button>
-              </div>
-            </Alert>
-          )}
-
-          <Alert variant="info" className="mb-4 sm:mb-6">
-            <AlertDescription>
-              <strong className="block mb-2 text-sm sm:text-base">What are Boundaries?</strong>
-              <span className="text-xs sm:text-sm">
-                Boundaries define the geographic hierarchy of your tenant:
-                <span className="font-mono block sm:inline sm:ml-2 mt-1 sm:mt-0 text-primary">State → District → City → Zone → Ward → Locality</span>
-              </span>
-            </AlertDescription>
-          </Alert>
-
-          <SubHeader>Choose Your Data Source</SubHeader>
-
-          <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
-            <button
-              onClick={() => { setPath('osm'); setStep('osm-search'); }}
-              className="p-4 sm:p-6 border-2 border-border rounded hover:border-primary hover:bg-primary/5 transition-all text-left group"
-            >
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary/20">
-                <Globe className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-              </div>
-              <h4 className="font-condensed font-semibold text-foreground mb-2 text-sm sm:text-base">Fetch from OpenStreetMap</h4>
-              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                One click: search your city or region and pull administrative boundaries with real map polygons from OSM.
-              </p>
-              <span className="text-primary font-medium text-xs sm:text-sm flex items-center gap-1">
-                Search OSM <ChevronRight className="w-4 h-4" />
-              </span>
-            </button>
-
-            <button
-              onClick={() => { setPath('excel'); setStep('excel-landing'); }}
-              className="p-4 sm:p-6 border-2 border-border rounded hover:border-primary hover:bg-primary/5 transition-all text-left group"
-            >
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary/20">
-                <Upload className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-              </div>
-              <h4 className="font-condensed font-semibold text-foreground mb-2 text-sm sm:text-base">Upload from Excel</h4>
-              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                Full control: define your own hierarchy, fill the XLSX template, optionally attach a GeoJSON polygon file.
-              </p>
-              <span className="text-primary font-medium text-xs sm:text-sm flex items-center gap-1">
-                Upload Excel <ChevronRight className="w-4 h-4" />
-              </span>
-            </button>
-          </div>
-        </DigitCard>
-      )}
-
       {/* Excel landing: new vs existing hierarchy */}
       {step === 'excel-landing' && (
         <DigitCard>
-          <SubHeader>Choose Your Path</SubHeader>
+          <SubHeader>Add to an existing hierarchy or start a new one?</SubHeader>
 
-          <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid sm:grid-cols-2 gap-4">
             <button
-              onClick={() => setStep('create-hierarchy')}
-              className="p-4 sm:p-6 border-2 border-border rounded hover:border-primary hover:bg-primary/5 transition-all text-left group"
+              onClick={() => setStep('select-hierarchy')}
+              disabled={loadingHierarchies}
+              className="flex flex-col rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary/60 hover:bg-primary/5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary/20">
-                <Plus className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-              </div>
-              <h4 className="font-condensed font-semibold text-foreground mb-2 text-sm sm:text-base">Option 1: Create New Hierarchy</h4>
-              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                For first-time setup. Define levels like: State → City → Ward
-              </p>
-              <span className="text-primary font-medium text-xs sm:text-sm flex items-center gap-1">
-                Create New <ChevronRight className="w-4 h-4" />
+              <span className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                {loadingHierarchies ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+              </span>
+              <span className="mt-3 text-base font-medium text-foreground">Use an existing hierarchy</span>
+              <span className="mt-1 text-sm text-muted-foreground">
+                {existingHierarchies.length === 1
+                  ? 'Upload more areas into the hierarchy you already have.'
+                  : `Upload more areas into one of your ${existingHierarchies.length} hierarchies.`}
               </span>
             </button>
 
             <button
-              onClick={() => setStep('select-hierarchy')}
-              disabled={loadingHierarchies}
-              className="p-4 sm:p-6 border-2 border-border rounded hover:border-primary hover:bg-primary/5 transition-all text-left group disabled:opacity-50"
+              onClick={() => setStep('create-hierarchy')}
+              className="flex flex-col rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary/60 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary/20">
-                {loadingHierarchies ? (
-                  <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary animate-spin" />
-                ) : (
-                  <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-                )}
-              </div>
-              <h4 className="font-condensed font-semibold text-foreground mb-2 text-sm sm:text-base">Option 2: Use Existing Hierarchy</h4>
-              <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                {existingHierarchies.length > 0
-                  ? `${existingHierarchies.length} hierarchy(s) found for this tenant.`
-                  : 'Check if hierarchy already exists in DIGIT.'}
-              </p>
-              <span className="text-primary font-medium text-xs sm:text-sm flex items-center gap-1">
-                {loadingHierarchies ? 'Loading...' : 'Select Existing'} <ChevronRight className="w-4 h-4" />
+              <span className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                <Plus className="w-5 h-5" />
               </span>
+              <span className="mt-3 text-base font-medium text-foreground">Create a new hierarchy</span>
+              <span className="mt-1 text-sm text-muted-foreground">Define its levels, like County → Sub-county → Ward.</span>
             </button>
           </div>
 
           <div className="mt-6">
-            <Button variant="ghost" size="sm" onClick={() => setStep('landing')} className="text-muted-foreground hover:text-primary">
-              ← Back
+            <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
+              <ArrowLeft className="w-4 h-4" />
+              Back
             </Button>
           </div>
         </DigitCard>
@@ -1053,8 +1001,9 @@ out skel qt;`;
           </div>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="text-muted-foreground hover:text-primary">
-              ← Back
+            <Button variant="ghost" size="sm" onClick={hasHierarchies ? () => setStep('excel-landing') : onCancel} className="gap-1.5 text-primary hover:text-primary">
+              <ArrowLeft className="w-4 h-4" />
+              Back
             </Button>
             <SubmitBar
               label={loading ? 'Creating...' : 'Create Hierarchy'}
@@ -1128,7 +1077,7 @@ out skel qt;`;
           )}
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
             <SubmitBar
               label="Use Selected Hierarchy"
               onSubmit={handleSelectHierarchy}
@@ -1209,7 +1158,7 @@ out skel qt;`;
           </Alert>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('excel-landing')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
           </div>
         </DigitCard>
       )}
@@ -1316,7 +1265,7 @@ out skel qt;`;
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               {invalidBoundaries.length > 0 && (
                 <Button
@@ -1394,8 +1343,9 @@ out skel qt;`;
           </div>
 
           <div className="mt-6">
-            <Button variant="ghost" size="sm" onClick={() => setStep('landing')} className="text-muted-foreground hover:text-primary">
-              ← Back
+            <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1.5 text-primary hover:text-primary">
+              <ArrowLeft className="w-4 h-4" />
+              Back
             </Button>
           </div>
         </DigitCard>
@@ -1474,7 +1424,7 @@ out skel qt;`;
             )}
 
             <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-              <Button variant="ghost" size="sm" onClick={() => setStep('osm-search')} className="text-muted-foreground hover:text-primary">← Back</Button>
+              <Button variant="ghost" size="sm" onClick={() => setStep('osm-search')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
               <SubmitBar
                 label={loading ? "Creating..." : "Create Hierarchy & Boundaries"}
                 onSubmit={handlePrepareOsmCreate}
@@ -1517,7 +1467,7 @@ out skel qt;`;
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setStep('map-levels')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('map-levels')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
             <SubmitBar
               label={loading ? 'Creating...' : `Create ${pendingBoundaries.length} Boundaries`}
               onSubmit={() => runOsmCreate(pendingBoundaries)}
@@ -1548,7 +1498,7 @@ out skel qt;`;
         <DigitCard>
           <Banner
             successful={true}
-            message="Boundaries Created Successfully!"
+            message="Boundaries created"
             info={`Hierarchy: ${selectedHierarchy.hierarchyType} • Tenant: ${boundaryTenant.toUpperCase()}`}
           />
 
@@ -1579,8 +1529,8 @@ out skel qt;`;
 
           <div className="mt-6 flex justify-center">
             <SubmitBar
-              label="Continue to Phase 3"
-              onSubmit={handleContinue}
+              label="Back to Geography"
+              onSubmit={onDone}
               icon={<ChevronRight className="w-4 h-4" />}
             />
           </div>
@@ -1593,7 +1543,7 @@ out skel qt;`;
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Banner
               successful={true}
-              message="Phase 2 Complete!"
+              message="Boundaries created"
               info={`Successfully generated ${totalCreated} boundaries from OSM data.`}
             />
 
@@ -1615,8 +1565,8 @@ out skel qt;`;
             </div>
 
             <SubmitBar
-              label="Continue to Common Masters"
-              onSubmit={handleContinue}
+              label="Back to Geography"
+              onSubmit={onDone}
               icon={<ChevronRight className="w-4 h-4" />}
             />
           </div>

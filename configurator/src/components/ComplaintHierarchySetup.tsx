@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, Upload, Check, ChevronRight, Loader2, AlertTriangle, X } from 'lucide-react';
+import { Plus, Download, Upload, Check, ChevronRight, Loader2, AlertTriangle, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
@@ -298,7 +298,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
               </>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setStep('define')} className="text-muted-foreground hover:text-primary">← Back to levels</Button>
+          <Button variant="ghost" size="sm" onClick={() => setStep('define')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back to levels</Button>
         </div>
       )}
 
@@ -367,7 +367,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             {stateTenant !== targetTenant ? ` (on ${targetTenant} and ${stateTenant})` : ''}.
           </p>
           <div className="flex justify-between">
-            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
             <SubmitBar
               label={loading ? 'Creating…' : `Create ${leaves.length} Sub-types`}
               onSubmit={handleIngest}

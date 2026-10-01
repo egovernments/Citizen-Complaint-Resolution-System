@@ -1022,6 +1022,9 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
 }
 
+/* A link while there is something to clear, so it reads as clickable; grey
+     and inert once the filters are back at their defaults. */
+
 .dashboard-filters-clear-inline{
   margin: 0px;
   box-sizing: border-box;
@@ -1040,14 +1043,18 @@
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
-  color: var(--muted-foreground);
+  color: var(--color-link-normal, var(--primary));
+  cursor: pointer;
 }
 
-.dashboard-filters-clear-inline:hover{
-  color: var(--foreground);
+.dashboard-filters-clear-inline:hover {
+  color: var(--color-link-hover, var(--primary));
+  text-decoration: underline;
 }
 
 .dashboard-filters-clear-inline:disabled {
+  color: var(--muted-foreground);
+  text-decoration: none;
   opacity: 0.4;
   cursor: default;
   pointer-events: none;

@@ -6504,6 +6504,12 @@ b195f803-345d-4251-982b-ac7aa8b6fa49	en_IN	DIGIT_TABLE_OF_CONTENTS	Privacy Polic
 77350760-ea16-43c3-b794-fda90f0e4751	en_IN	CS_COMMON_CLOSEDAFTERREJECTION	Closed After Rejection	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
 1a49d98d-4077-4d36-a2bf-d5806d51dcea	en_IN	CS_COMMON_CLOSEDAFTERRESOLUTION	Closed After Resolution	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
 7d7ebadf-3919-47ec-be27-7b1123ff2a98	en_IN	ESCALATE	Escalate	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
+fe8c1a64-c041-4e3f-92b4-f50b2202cb30	default	sms.login.otp.msg	Dear Citizen, Your Login OTP is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:27:52.28	\N	\N
+9efd7919-c114-4e35-b2de-a00672c92e07	default	sms.pwd.reset.otp.msg	Dear Citizen, Your OTP for recovering password is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:27:52.28	\N	\N
+aa1ac4d7-9e8b-4166-999c-4b90003ded58	default	sms.register.otp.msg	Dear Citizen, Your OTP to complete your DIGIT Registration is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:27:52.28	\N	\N
+4206b3dd-fa80-432d-964d-29b8214fa409	en_IN	sms.login.otp.msg	Dear Citizen, Your Login OTP is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:28:02.141	\N	\N
+57770145-d60c-44e8-894f-48e895565855	en_IN	sms.pwd.reset.otp.msg	Dear Citizen, Your OTP for recovering password is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:28:02.141	\N	\N
+e0302fe2-c05d-4f52-8976-ef3647f98f41	en_IN	sms.register.otp.msg	Dear Citizen, Your OTP to complete your DIGIT Registration is %s.\n\nEGOVS	pg	egov-user	128	2026-02-09 05:28:02.141	\N	\N
 \.
 
 
