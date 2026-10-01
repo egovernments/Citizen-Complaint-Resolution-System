@@ -276,7 +276,7 @@ export function PhotoPicker({ photos, onChange, tenantId, tr }: PhotoPickerProps
         </span>
         <span className="cms-drop-label">{tr("CS_PHOTO_DROP", "Click to upload or drag and drop a photo")}</span>
         <span className="cms-drop-hint">
-          {tr("CS_PHOTO_RULES", `JPG or PNG, up to 5 MB each, ${MAX_PHOTOS} at most`)}
+          {tr("CS_PHOTO_RULES", "JPG or PNG, up to 5 MB each")}
         </span>
       </div>
 
