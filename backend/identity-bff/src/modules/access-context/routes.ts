@@ -232,11 +232,11 @@ export function registerAccessContextRoutes(app: express.Application): void {
       }
       // Only a number the BFF proved, or one users cannot edit in Keycloak,
       // may link an existing DIGIT citizen (#2167).
+      // A failed check is retryable (503), never "untrusted": treating it as
+      // untrusted would create a new account and split a legacy citizen from
+      // their existing one for good.
       const phoneTrusted = current.session.authMethod === "phone_otp" ||
-        await keycloakPhoneIsAdminControlled().catch((error: Error) => {
-          console.warn("Keycloak user-profile check failed:", error.message);
-          return false;
-        });
+        await keycloakPhoneIsAdminControlled();
       const { identity } = await ensureCitizenRegistration({
         phoneTrusted,
         subject: claims.sub,

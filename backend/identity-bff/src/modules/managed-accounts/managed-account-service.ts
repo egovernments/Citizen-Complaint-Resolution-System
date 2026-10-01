@@ -143,6 +143,26 @@ async function releaseLinkedLogins(
   }
 }
 
+/**
+ * Writes `changes` to an account the BFF does NOT own (a linked legacy
+ * account). egov-user's update writes most fields exactly as sent and clears
+ * absent ones, so the record goes back whole, as searched, with only
+ * `changes` applied. A record with masked personal data (`******1234`) is
+ * never written back: that would store the mask on a real person.
+ */
+async function writeLinkedAccount(
+  adminToken: string,
+  account: DigitAccount,
+  changes: Partial<DigitAccountInput>,
+): Promise<void> {
+  if (Object.values(account).some((value) => typeof value === "string" && /\*{2,}/.test(value))) {
+    console.error("egov-user returned masked personal data for a linked account; nothing was written. " +
+      "The BFF's DIGIT admin must be allowed to read unmasked user records.");
+    throw new ManagedAccountError("The linked DIGIT account cannot be updated safely", 503, "DIGIT_PII_MASKED");
+  }
+  await updateAccount(adminToken, { ...(account as DigitAccountInput), ...changes });
+}
+
 /** Unlink: revoke the linked account's cached token for every session. */
 export async function dropLinkedLogin(identity: ManagedIdentity): Promise<void> {
   await withUserLease(identity, () => dropCachedLogin(identity));
@@ -512,13 +532,18 @@ export async function managedUserLogin(
         // egov-user checks the OTP against the STORED mobile number, so a
         // citizen who verified a new number first has it written through.
         if (await getRedis().get(citizenMobileKey(identity)) !== verifiedMobileNumber) {
-          await updateAccount(adminToken, { ...editable(account), mobileNumber: verifiedMobileNumber });
+          if (identity.linkedUuid) {
+            await writeLinkedAccount(adminToken, account, { mobileNumber: verifiedMobileNumber });
+          } else {
+            await updateAccount(adminToken, { ...editable(account), mobileNumber: verifiedMobileNumber });
+          }
           await getRedis().set(citizenMobileKey(identity), verifiedMobileNumber);
         }
         login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
       } else {
         const password = oneTimePassword();
-        await updateAccount(adminToken, { ...editable(account), password });
+        if (identity.linkedUuid) await writeLinkedAccount(adminToken, account, { password });
+        else await updateAccount(adminToken, { ...editable(account), password });
         // A linked account keeps its own username; its legacy password is
         // replaced here, as for every account the BFF signs in (#2167).
         login = await passwordLogin({

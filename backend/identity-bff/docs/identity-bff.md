@@ -651,6 +651,13 @@ legacy-account guard still refuses every `kcbff-` username collision.
   rotates the linked account's DIGIT password at sign-in, as it does for every
   account it signs in. Legacy passwords are ignored, and an admin resets one
   through DIGIT on demand.
+- **Writes to a linked account:** egov-user's update clears fields that are
+  absent from the request. The BFF therefore writes a linked account back
+  whole, exactly as searched, with only the password (or a citizen's new
+  verified mobile number) changed.
+  - If the search returned masked personal data (`******1234`), nothing is
+    written. Sign-in answers 503 `DIGIT_PII_MASKED`, and the log says the BFF's
+    DIGIT admin needs unmasked read access.
 
 ### Citizen links (verified phone)
 - Before creating a `kcbff-` citizen account, `contexts/citizen/_select`
@@ -668,6 +675,9 @@ legacy-account guard still refuses every `kcbff-` username collision.
   `phoneNumber` and `phoneNumberVerified` must not grant `user` edit, and when
   undeclared, `unmanagedAttributePolicy` must not be `ENABLED`. Any other
   number never links; the citizen gets a managed account, as before.
+- **Failed check:** if the user-profile check itself fails, `_select` answers
+  503 and creates nothing. Treating the number as untrusted would create a
+  managed account and split the citizen from their existing one for good.
 - **Tokens:** they come from the egov-otp grant, so the account's password and
   profile are never changed.
 

@@ -18,6 +18,9 @@ interface Account {
   identificationMark: string | null;
   roles: Role[];
   passwordHash: string;
+  /** Fields egov-user clears when an update omits them. */
+  pan?: string | null;
+  gender?: string | null;
 }
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -237,6 +240,8 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
       name: user.name, mobileNumber: user.mobileNumber ?? account.mobileNumber, emailId: user.emailId,
       countryCode: user.countryCode ?? account.countryCode,
       active: user.active ?? account.active, identificationMark: user.identificationMark, roles: user.roles,
+      // Like egov-user's UserRepository.update: absent means cleared.
+      pan: user.pan ?? null, gender: user.gender ?? null,
     });
     return res.json({ user: [publicAccount(account)] });
   });

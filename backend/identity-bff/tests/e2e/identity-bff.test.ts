@@ -5,7 +5,9 @@ import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { getRedis } from "../../src/infrastructure/redis.js";
 import {
   citizenIdentity,
+  linkedIdentity,
   managedAccountsKey,
+  managedUserLogin,
 } from "../../src/modules/managed-accounts/managed-account-service.js";
 import {
   citizenTokenMinter,
@@ -2369,7 +2371,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       await kcAdmin("/users", {
         id: "identity-user-unlinked", username: "legacy.employee", email: "legacy.employee@example.com", enabled: true,
       });
-      for (const [id, phone] of [["citizen-user-3", "+254799000881"], ["citizen-user-4", "+254799000882"]]) {
+      for (const [id, phone] of [
+        ["citizen-user-3", "+254799000881"], ["citizen-user-4", "+254799000882"], ["citizen-user-5", "+254799000883"],
+      ]) {
         await kcAdmin("/users", {
           id, username: phone, enabled: true,
           attributes: { phoneNumber: [phone], phoneNumberVerified: ["true"] },
@@ -2521,6 +2525,48 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const trusted = await citizenSelect(await signIn("citizen", "legacyb"));
       expect(trusted.status).toBe(200);
       expect((await trusted.json()).UserRequest.uuid).toBe(b.uuid);
+    });
+
+    it("answers 503 when the phone-trust check fails, and links on the retry instead of splitting the citizen", async () => {
+      const c = legacy({ userName: "799000883", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000883", roles: ["CITIZEN"] });
+      await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+      await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "GET", path: "/users/profile", status: 503, count: 1 }),
+      });
+      resetPhoneTrustCache();
+      const creates = digit.stats.creates;
+      const failed = await citizenSelect(await signIn("citizen", "legacyc"));
+      expect(failed.status).toBe(503);
+      expect(digit.stats.creates).toBe(creates);
+      const retried = await citizenSelect(await signIn("citizen", "legacyc"));
+      expect((await retried.json()).UserRequest.uuid).toBe(c.uuid);
+    });
+
+    it("never writes masked or partial data over a linked employee's record", async () => {
+      const account = legacy({ userName: "EMP-LEGACY-3", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000103", roles: ["EMPLOYEE", "GRO"] });
+      Object.assign(digit.accounts.get(account.uuid)!, { pan: "ABCDE1234F", gender: "FEMALE", emailId: "emp3@example.com" });
+      await kcAdmin("/users", { id: "linked-employee-3", username: "emp3", email: "emp3.kc@example.com", enabled: true });
+      await cp("account-links/_link", { links: [{ subject: "linked-employee-3", tenantId: "ke.bomet", digitUserUuid: account.uuid }] });
+      const identity = linkedIdentity(config.keycloakIssuer, "linked-employee-3", {
+        userType: "EMPLOYEE", tenantId: "ke.bomet", digitUuid: account.uuid,
+      });
+      const login = () => managedUserLogin(identity, "session-emp3");
+      const updates = digit.stats.updates;
+      digit.setMaskSearchMobileNumbers(true);
+      try {
+        await expect(login()).rejects.toMatchObject({ status: 503, code: "DIGIT_PII_MASKED" });
+        expect(digit.stats.updates).toBe(updates);
+        expect(digit.accounts.get(account.uuid)!.mobileNumber).toBe("700000103");
+      } finally {
+        digit.setMaskSearchMobileNumbers(false);
+      }
+      await login();
+      // The whole record went back: nothing egov-user would clear was lost.
+      expect(digit.accounts.get(account.uuid)).toMatchObject({
+        mobileNumber: "700000103", pan: "ABCDE1234F", gender: "FEMALE", emailId: "emp3@example.com",
+        roles: [{ code: "EMPLOYEE", tenantId: "ke.bomet" }, { code: "GRO", tenantId: "ke.bomet" }],
+      });
     });
 
     it("lets an admin undo a citizen link, and a blocked link does not re-form", async () => {

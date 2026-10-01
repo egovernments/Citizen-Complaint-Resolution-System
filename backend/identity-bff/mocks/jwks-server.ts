@@ -82,6 +82,7 @@ const CLIENT_SURFACES = new Map([
 const LEGACY_CITIZENS: Record<string, { sub: string; phone: string }> = {
   "legacya": { sub: "citizen-user-3", phone: "+254799000881" },
   "legacyb": { sub: "citizen-user-4", phone: "+254799000882" },
+  "legacyc": { sub: "citizen-user-5", phone: "+254799000883" },
 };
 
 function citizenClaims(profile: string): Record<string, unknown> & { sub: string; name: string; email?: string } {
