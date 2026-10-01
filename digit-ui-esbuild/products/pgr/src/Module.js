@@ -7,6 +7,7 @@ import { getPGRSidebarSection, getPGRCitizenSidebarSection } from "./utils/emplo
 import { overrideHooks, updateCustomConfigs } from "./utils";
 import { ProviderContext } from "./utils/context";
 import BoundaryComponent from "./components/BoundaryComponent";
+import ComplaintCategoryFilter from "./components/ComplaintCategoryFilter";
 import ComplaintHierarchyComponent from "./components/ComplaintHierarchyComponent";
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
@@ -108,6 +109,7 @@ const componentsToRegister = {
   PGRSidebarSection: getPGRSidebarSection,
   PGRCitizenSidebarSection: getPGRCitizenSidebarSection,
   PGRBoundaryComponent: BoundaryComponent,
+  PGRComplaintCategoryFilter: ComplaintCategoryFilter,
   PGRComplaintHierarchyComponent: ComplaintHierarchyComponent,
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,
