@@ -471,10 +471,17 @@ ccrs_image_catalog:
   - {image: digit-config-service-db, env: DIGIT_CONFIG_SERVICE_DB_IMAGE, var: digit_config_service_db_image,
      follows: digit-config-service, profiles: [notifications]}
   - {image: digit-user-preferences-service, env: DIGIT_USER_PREFERENCES_SERVICE_IMAGE, var: digit_user_preferences_service_image, profiles: [notifications]}
+  - {image: digit-user-preferences-service-db, env: DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE, var: digit_user_preferences_service_db_image,
+     follows: digit-user-preferences-service, profiles: [notifications]}
   - {image: digit-ui-esbuild, env: DIGIT_UI_IMAGE, var: digit_ui_image}
   - {image: configurator, env: CONFIGURATOR_IMAGE, var: configurator_image}
   - {image: digit-mcp, env: MCP_IMAGE, var: mcp_image, profiles: [mcp, mcp-readonly]}
   - {image: otp-publisher, env: OTP_PUBLISHER_IMAGE, var: otp_publisher_image, profiles: [notifications]}
+  # Organization-aware identity tier; identity-keycloak is Keycloak plus the magic-link provider.
+  - {image: identity-bff, env: IDENTITY_BFF_IMAGE, var: identity_bff_image, profiles: [keycloak]}
+  - {image: identity-keycloak, env: IDENTITY_KEYCLOAK_IMAGE, var: identity_keycloak_image, profiles: [keycloak]}
+  - {image: xstate-chatbot, env: XSTATE_CHATBOT_IMAGE, var: chatbot_image, profiles: [chatbot]}
+  - {image: xstate-chatbot-db, env: XSTATE_CHATBOT_DB_IMAGE, var: chatbot_db_image, follows: xstate-chatbot, profiles: [chatbot]}
 
 # Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
 # the default for every tenant: gatus warns about the unusable provider and
