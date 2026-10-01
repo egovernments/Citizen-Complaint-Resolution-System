@@ -183,7 +183,11 @@ function ForgotPassword(
                     event.preventDefault();
                     if (!valid || state === "sending") return;
                     setState("sending");
-                    void requestPasswordSetup({ email, returnTo: props.returnTo }).then(ok =>
+                    void requestPasswordSetup({
+                        baseUrl: kcContext.properties.DIGIT_IDENTITY_BFF_BASE_URL,
+                        email,
+                        returnTo: props.returnTo
+                    }).then(ok =>
                         setState(ok ? "sent" : "failed")
                     );
                 }}

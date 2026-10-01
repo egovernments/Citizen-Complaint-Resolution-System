@@ -371,8 +371,12 @@ body.dg-body {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    /* A card taller than the viewport (landscape phone, privacy text open)
+       grows the page instead of overflowing above it. */
+    justify-content: safe center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
+    min-height: 100dvh;
     background-image: none;
     background-color: var(--color-digitv2-header-sidenav, #0b4b66);
 }
