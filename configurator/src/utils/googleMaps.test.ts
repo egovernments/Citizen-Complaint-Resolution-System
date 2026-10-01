@@ -35,7 +35,9 @@ function fakeGoogle() {
       forEach() {},
       addListener: () => ({ remove() {} }),
     };
-    constructor(public div: HTMLElement) {
+    div: HTMLElement;
+    constructor(div: HTMLElement) {
+      this.div = div;
       div.appendChild(document.createElement('canvas'));
       maps.push(this);
     }

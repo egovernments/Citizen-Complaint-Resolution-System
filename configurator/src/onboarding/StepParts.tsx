@@ -28,23 +28,28 @@ export function OptionCard({
   children,
   action,
   onClick,
+  disabledReason,
 }: {
   icon: Icon;
   title: string;
   children: ReactNode;
   action: string | null;
   onClick?: () => void;
+  /** Why the option can't be used on this deployment; shown instead of the action. */
+  disabledReason?: string;
 }) {
   const soon = action === null;
   return (
-    <div className={`flex flex-col rounded-lg border border-border bg-card p-4 ${soon ? 'opacity-75' : ''}`}>
+    <div className={`flex flex-col rounded-lg border border-border bg-card p-4 ${soon || disabledReason ? 'opacity-75' : ''}`}>
       <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
         <IconComponent className="w-5 h-5" />
       </div>
       <h4 className="mt-3 text-base font-medium text-foreground">{title}</h4>
       <p className="mt-1 flex-1 text-sm leading-5 text-muted-foreground">{children}</p>
       <div className="mt-4">
-        {soon ? (
+        {disabledReason ? (
+          <p className="text-xs leading-5 text-muted-foreground" data-testid="option-unavailable">{disabledReason}</p>
+        ) : soon ? (
           <span className="inline-flex h-9 items-center px-3 text-sm font-medium text-primary/70">Coming soon</span>
         ) : (
           <Button variant="outline" size="sm" onClick={onClick} className="h-9 gap-1.5 px-3">
