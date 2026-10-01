@@ -97,7 +97,26 @@ export const CreateComplaintConfig = {
         },
         {
           head: "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS",
+          // What happened first, then what kind of complaint it is.
           body: [
+            {
+              label: "CS_FILE_DESCRIBE",
+              isMandatory: true,
+              type: "textarea",
+              key: "ComplaintDescription",
+              populators: {
+                name: "description",
+                maxLength: 1000,
+                validation: {
+                  required: true,
+                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
+                  // (e.g. "000000000000") — require at least 3 letters (any
+                  // language). Non-empty is implied.
+                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
+                },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
             {
               isMandatory: true,
               key: "SelectComplaintType",
@@ -305,31 +324,6 @@ export const CreateComplaintConfig = {
 
           ],
         },
-
-        {
-          head: "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS",
-          body: [
-            {
-              label: "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION",
-              isMandatory: true,
-              type: "textarea",
-              key: "ComplaintDescription",
-              populators: {
-                name: "description",
-                maxLength: 1000,
-                validation: {
-                  required: true,
-                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
-                  // (e.g. "000000000000") — require at least 3 letters (any
-                  // language). Non-empty is implied.
-                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
-                },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-
       ],
     }
   ],
