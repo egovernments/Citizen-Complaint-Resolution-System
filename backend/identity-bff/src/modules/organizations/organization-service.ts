@@ -160,14 +160,14 @@ export function updateAccountLinkValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  return updateUserAttributeValues(userId, ACCOUNT_LINKS_ATTRIBUTE, update);
+  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINKS_ATTRIBUTE, update));
 }
 
 export function updateAccountLinkBlockValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  return updateUserAttributeValues(userId, ACCOUNT_LINK_BLOCKS_ATTRIBUTE, update);
+  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINK_BLOCKS_ATTRIBUTE, update));
 }
 
 /** Keycloak users holding exactly this link value (for one-owner checks). */

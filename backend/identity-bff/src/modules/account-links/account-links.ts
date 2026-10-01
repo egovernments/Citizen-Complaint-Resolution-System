@@ -167,15 +167,17 @@ export async function removeAccountLink(input: AccountLink & {
 }): Promise<{ removed: boolean }> {
   const link: AccountLink = { userType: input.userType, tenantId: input.tenantId, digitUuid: input.digitUuid };
   const value = encodeLink(link);
+  // Block first: a phone sign-in racing this unlink then finds either the
+  // link (still valid) or the block, never a gap in which to re-link.
+  if (input.block) {
+    await updateAccountLinkBlockValues(input.subject, (values) =>
+      values.includes(value) ? null : [...values, value].sort());
+  }
   let removed = false;
   await updateAccountLinkValues(input.subject, (values) => {
     removed = values.includes(value);
     return removed ? values.filter((candidate) => candidate !== value) : null;
   });
-  if (input.block) {
-    await updateAccountLinkBlockValues(input.subject, (values) =>
-      values.includes(value) ? null : [...values, value].sort());
-  }
   await dropLinkedLogin(linkedIdentity(config.keycloakIssuer, input.subject, link));
   await audit({
     event: "ACCOUNT_LINK_REVOKE", outcome: "SUCCESS", subject: input.subject, tenantId: link.tenantId,
