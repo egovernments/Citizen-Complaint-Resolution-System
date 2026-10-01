@@ -22,11 +22,11 @@ states automation scans; the shipped value is the assigned resolver state
 `PENDINGATLME`. Every configured state still requires a concrete workflow
 assignee and an `ESCALATE` self-loop that authorizes `SYSTEM`; listing a state
 in `eligibleStatuses` does not create that transition. Ladders are cumulative
-from complaint creation (or the latest `REOPEN`); percentage ladders use the
-exact leaf `ComplaintHierarchy.slaHours`. Manual escalation consumes a rung, so
-automation next evaluates the following cumulative threshold. `ASSIGN` and
-`REASSIGN` do not reset the clock or the escalation level. `REOPEN` resets both
-for a fresh complaint cycle.
+from complaint creation; percentage ladders use the exact leaf
+`ComplaintHierarchy.slaHours`. Manual escalation consumes a rung, so automation
+next evaluates the following cumulative threshold. `ASSIGN`, `REASSIGN` and
+`REOPEN` do not reset the clock or the escalation level; a reopened complaint
+keeps the rungs it has already consumed.
 
 ## Per-complaint-type overrides
 
