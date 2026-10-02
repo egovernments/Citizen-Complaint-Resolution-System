@@ -583,43 +583,43 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE",
-        "message": "Complaint Sub-Type ",
+        "message": "Complaint Subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE_PLACEHOLDER",
-        "message": "Choose Complaint Sub-Type",
+        "message": "Choose Complaint Subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE",
-        "message": "Complaint Sub-Type",
+        "message": "Complaint Subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE",
-        "message": "Complaint Type",
+        "message": "Complaint Category",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_ADDCOMPLAINT_COMPLAINT_TYPE_PLACEHOLDER",
-        "message": "Select complaint type",
+        "message": "Select complaint category",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_ADDCOMPLAINT_ERROR_COMPLAINT_SUBTYPE",
-        "message": "Select the complaint sub-type",
+        "message": "Select the complaint subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
     {
         "code": "CS_ADDCOMPLAINT_ERROR_COMPLAINT_TYPE",
-        "message": "Select the complaint type",
+        "message": "Select the complaint category",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -1705,7 +1705,7 @@
     },
     {
         "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
-        "message": "Complaint Subtype",
+        "message": "Complaint Subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -1717,7 +1717,7 @@
     },
     {
         "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
-        "message": "Complaint Type",
+        "message": "Complaint Category",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -2137,7 +2137,7 @@
     },
     {
         "code": "CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE",
-        "message": "Complaint Sub-Type",
+        "message": "Complaint Subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -2263,7 +2263,7 @@
     },
     {
         "code": "CS_COMPLAINT_SUBTYPE_TEXT",
-        "message": "The complaint type you have chosen has following complaint sub-types. Select the option of your choice from the list given below.",
+        "message": "The complaint category you have chosen has the following subcategories. Select the option of your choice from the list given below.",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -2311,7 +2311,7 @@
     },
     {
         "code": "CS_COMPLAINT_TYPE_TEXT",
-        "message": "Select the option related to your complaint from the list given below. If the complaint type you are looking for is not listed select others.",
+        "message": "Select the option related to your complaint from the list given below. If the complaint category you are looking for is not listed, select others.",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -3536,6 +3536,24 @@
     {
         "code": "NO_RESULTS_FOUND",
         "message": "No Results Found",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_CATEGORY",
+        "message": "Complaint Category",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_COMPLAINT_TYPE",
+        "message": "Complaint Category",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_SUB_TYPE",
+        "message": "Complaint Subcategory",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
