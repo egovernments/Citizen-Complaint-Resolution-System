@@ -19,7 +19,7 @@ process.on("exit", () => {
     // Best effort; the temp file is process-scoped.
   }
 });
-const { complaintCategories, serviceCodesForFilter } = require(OUT);
+const { complaintCategories, serviceCodesForFilter, subcategoryFits } = require(OUT);
 
 // The inbox's complaint types: a subcategory each, carrying its category.
 const defs = [
@@ -49,4 +49,15 @@ test("a subcategory searches itself; a category alone searches all of its subcat
   // Nothing picked: no constraint at all, not an empty match.
   assert.deepEqual(serviceCodesForFilter(null, null), []);
   assert.deepEqual(serviceCodesForFilter(undefined, { code: "Empty", serviceCodes: [] }), []);
+});
+
+test("picking a category drops a subcategory that isn't one of its own, a parentless one included", () => {
+  const [garbage, streetLights] = complaintCategories(defs, t);
+  assert.equal(subcategoryFits({ serviceCode: "DamagedGarbageBin", menuPath: "Garbage" }, garbage), true);
+  assert.equal(subcategoryFits({ serviceCode: "DamagedGarbageBin", menuPath: "Garbage" }, streetLights), false);
+  // "Others" has no parent (menuPath ""), so no category keeps it.
+  assert.equal(subcategoryFits({ serviceCode: "Others", menuPath: "" }, garbage), false);
+  // Nothing to check against: no subcategory, or no category picked.
+  assert.equal(subcategoryFits(null, garbage), true);
+  assert.equal(subcategoryFits({ serviceCode: "Others", menuPath: "" }, null), true);
 });
