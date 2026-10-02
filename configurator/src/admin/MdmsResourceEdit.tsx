@@ -3,9 +3,17 @@ import { DigitFormInput } from './DigitFormInput';
 import { BooleanInput } from './widgets/BooleanInput';
 import { WidgetForFieldSpec } from './widgets';
 import { useEditContext, useResourceContext } from 'ra-core';
-import { getResourceConfig, getResourceLabel } from '@/providers/bridge';
+import { getResourceConfig, getResourceLabel, DUPLICATE_ACTIVE_KEYS } from '@/providers/bridge';
 import { getDescriptor } from './schemaDescriptors';
 import { customEditors } from './themeEditor';
+
+// DUPLICATE_ACTIVE_KEYS: data-level flags that duplicate the MDMS envelope's root isActive in some
+// masters (e.g. NotificationRouting.active, MobileNumberValidation.isActive).
+// Enable/disable is driven only by the root flag (the `_isActive` checkbox
+// below); update() mirrors it into these on save so they never disagree.
+function isDuplicateActiveFlag(key: string, value: unknown): boolean {
+  return DUPLICATE_ACTIVE_KEYS.includes(key) && typeof value === 'boolean';
+}
 
 function MdmsEditFields() {
   const resource = useResourceContext() ?? '';
@@ -33,6 +41,7 @@ function MdmsEditFields() {
       {descriptorFields.map((path) => {
         const spec = descriptor?.fields.find((f) => f.path === path);
         if (!spec || spec.hidden === 'edit' || spec.hidden === 'always') return null;
+        if (spec.widget === 'boolean' && DUPLICATE_ACTIVE_KEYS.includes(path)) return null;
         return <WidgetForFieldSpec key={path} spec={spec} source={path} />;
       })}
 
@@ -43,6 +52,8 @@ function MdmsEditFields() {
 
         // Skip complex objects the descriptor didn't handle — same behavior as before.
         if (value != null && typeof value === 'object') return null;
+
+        if (isDuplicateActiveFlag(key, value)) return null;
 
         // Boolean fields must render as a checkbox so the form value stays a
         // real bool. Falling back to a text input lets operators type 'false',
@@ -62,6 +73,16 @@ function MdmsEditFields() {
           />
         );
       })}
+
+      {/* The MDMS envelope's own root-level isActive (normalizeMdmsRecord's
+          `_isActive`), not a schema field — every master gets this the same
+          way, and it is the only enable/disable control (duplicate in-`data`
+          isActive/active flags are hidden above). dataProvider.ts's update()
+          reads this back out of the submit payload; a caller that doesn't
+          send it keeps the record's current status. Unchecking + Save is the
+          same soft-delete `mdmsUpdate(..., false)` path as the resource's
+          Delete action. */}
+      <BooleanInput source="_isActive" label="Active" />
     </>
   );
 }

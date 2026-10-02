@@ -15,8 +15,8 @@ import { useMastersCapability } from '@/hooks/useMastersCapability';
 const filters = [
   <SearchFilterInput key="q" source="q" alwaysOn />,
   <SelectFilterInput
-    key="active"
-    source="active"
+    key="_isActive"
+    source="_isActive"
     label="Status"
     choices={[
       { id: 'true', name: 'Active' },
@@ -30,10 +30,10 @@ const columns: DigitColumn[] = [
   { source: 'code', label: 'app.fields.code' },
   { source: 'name', label: 'app.fields.name', editable: true },
   {
-    source: 'active',
+    source: '_isActive',
     label: 'app.fields.status',
     render: (record) => (
-      <StatusChip value={record.active} labels={{ true: 'Active', false: 'Inactive' }} />
+      <StatusChip value={record._isActive} labels={{ true: 'Active', false: 'Inactive' }} />
     ),
   },
   { source: 'description', label: 'app.fields.description', editable: true },
@@ -43,7 +43,7 @@ const exportColumns = [
   { header: 'code', value: (r: Record<string, unknown>) => r.code },
   { header: 'name', value: (r: Record<string, unknown>) => r.name },
   { header: 'description', value: (r: Record<string, unknown>) => r.description },
-  { header: 'active', value: (r: Record<string, unknown>) => r.active },
+  { header: 'active', value: (r: Record<string, unknown>) => r._isActive },
 ];
 
 export function DepartmentList() {

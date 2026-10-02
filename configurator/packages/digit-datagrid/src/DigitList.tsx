@@ -49,6 +49,8 @@ export interface DigitListProps {
   preferenceKey?: string;
   /** Filter input elements (react-admin style) */
   filters?: FilterElement[];
+  /** Extra `meta` forwarded to the data provider's getList */
+  meta?: Record<string, unknown>;
 }
 
 export function DigitList({
@@ -67,6 +69,7 @@ export function DigitList({
   alwaysVisibleSources,
   preferenceKey,
   filters,
+  meta,
 }: DigitListProps) {
   const [searchValue, setSearchValue] = useState('');
   const navigate = useNavigate();
@@ -79,6 +82,7 @@ export function DigitList({
     perPage,
     filter,
     disableSyncWithLocation: true,
+    ...(meta ? { queryOptions: { meta } } : {}),
   };
 
   const listContext = useListController(controllerProps);
