@@ -1,0 +1,39 @@
+
+
+/* ── Sign-in backdrops ───────────────────────────────────────── */
+/* Both sign-in pages paint StateInfo.bannerUrl (--banner-url) behind the card:
+   the employee page through the vendored .banner-container rule, the citizen
+   page through the form wrapper (Login/index.js sets the var). The vendored
+   rule tints in Maputo teal; retint in the county green. The first
+   declaration is the plain fallback; the color-mix one, where supported,
+   follows the tenant's MDMS header colour instead of a fixed green. */
+.employee .loginContainer .banner,
+.employee .loginContainer .banner-container,
+.citizen .citizen-home-container > .citizen-form-wrapper {
+  background:
+    linear-gradient(rgba(11, 45, 30, 0.62), rgba(11, 45, 30, 0.62)),
+    var(--banner-url) no-repeat center center / cover !important;
+}
+.employee .loginContainer .banner,
+.employee .loginContainer .banner-container,
+.citizen .citizen-home-container > .citizen-form-wrapper {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--color-header-bg, #0b2d1e) 62%, transparent),
+      color-mix(in srgb, var(--color-header-bg, #0b2d1e) 62%, transparent)
+    ),
+    var(--banner-url) no-repeat center center / cover !important;
+}
+/* No photo configured: stay on the plain page rather than a green slab. */
+.citizen .citizen-home-container > .citizen-form-wrapper:not([style*="--banner-url"]) {
+  background: none !important;
+}
+/* The citizen card is white-on-white today; on the photo it needs its own
+   surface and a little breathing room at phone widths. */
+.citizen .citizen-form-wrapper[style*="--banner-url"] {
+  padding: 1.5rem 1rem !important;
+}
+.citizen .citizen-form-wrapper[style*="--banner-url"] > .v2-scope > .rounded-lg {
+  background-color: #fff;
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.45);
+}
