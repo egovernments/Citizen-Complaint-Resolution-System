@@ -7,50 +7,55 @@ import {
 import type { DigitColumn } from '@/admin';
 import { StatusChip, DateField } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
+import {
+  CHANNEL_CHOICES,
+  SOURCE_PATH_CHOICES,
+  SOURCE_PATH_HELP,
+  STATUS_CHOICES,
+  TEST_CHOICES,
+  channelDisplay,
+  recipientDisplay,
+  sourcePathDisplay,
+  tenantDisplay,
+} from './notificationLogDisplay';
 
-// Delivery channels novu-bridge writes to nb_dispatch_log. Every event lands
-// here with an explicit terminal status; WHATSAPP has no enabled provider yet,
-// so those rows show up as SKIPPED/NB_NO_PROVIDER rather than being invisible
-// (see the backend DispatchLogController javadoc).
-const CHANNEL_CHOICES = [
-  { id: 'SMS', name: 'SMS' },
-  { id: 'EMAIL', name: 'Email' },
-  { id: 'WHATSAPP', name: 'WhatsApp' },
-];
-
-// Coarse delivery states persisted on the log row.
-const STATUS_CHOICES = [
-  { id: 'SENT', name: 'Sent' },
-  { id: 'DELIVERED', name: 'Delivered' },
-  { id: 'FAILED', name: 'Failed' },
-  { id: 'PENDING', name: 'Pending' },
-  { id: 'SKIPPED', name: 'Skipped' },
-];
+// Every choice list, label and row→cell rule lives in notificationLogDisplay.ts
+// (pure, unit-tested). This file is wiring only.
+//
+// Delivery outcomes novu-bridge writes to nb_dispatch_log. Every event lands
+// here with an explicit terminal status; a channel with no enabled provider
+// shows up as SKIPPED/NB_NO_PROVIDER rather than being invisible (see the
+// backend DispatchLogController javadoc). A channel whose SELECTED provider has
+// been deleted, disabled or points at another Novu channel is
+// SKIPPED/NB_PROVIDER_UNAVAILABLE instead — the bridge refuses to trigger it
+// rather than reporting SENT for a message Novu would silently drop. Some
+// outcomes have no channel at all (nobody routed, nobody found): those rows
+// carry channel NONE and are reachable from the Channel filter.
+// Error codes are rendered verbatim in the Error column (there is no code->label
+// map): the bridge's message already names the provider and the reason.
 
 const filters = [
   // referenceNumber is the real search — the data provider maps the explicit
   // inputs below onto server-side query params. (A generic `q` quick-search was
   // removed: the dataProvider drops `q` for this resource, so it was a dead
   // field operators typed into.)
-  <TextFilterInput key="referenceNumber" source="referenceNumber" label="Complaint #" alwaysOn />,
+  // "Reference #", not "Complaint #": `referenceNumber` is whatever the
+  // producing module put on the event, and the OTP rows — which have no
+  // complaint at all — carry a transaction UUID there.
+  <TextFilterInput key="referenceNumber" source="referenceNumber" label="Reference #" alwaysOn />,
   <SelectFilterInput key="channel" source="channel" label="Channel" choices={CHANNEL_CHOICES} alwaysOn />,
   <SelectFilterInput key="status" source="status" label="Status" choices={STATUS_CHOICES} alwaysOn />,
+  <SelectFilterInput key="sourcePath" source="sourcePath" label="Produced by" choices={SOURCE_PATH_CHOICES} alwaysOn />,
+  <SelectFilterInput key="includeTest" source="includeTest" label="Test sends" choices={TEST_CHOICES} alwaysOn />,
 ];
 
-/** Mask a recipient (phone/email) so the log never renders a full PII value:
- *  keep the domain for emails, the last 3 digits for phones.
- *  Server also masks recipient_value/transaction_id (novu-bridge PiiMask) — this
- *  is defense-in-depth for older bridges. */
-function maskRecipient(value: unknown): string {
-  const s = String(value ?? '');
-  if (!s) return '--';
-  if (s.includes('@')) {
-    const [local, domain] = s.split('@');
-    const head = local.slice(0, 1);
-    return `${head}***@${domain}`;
-  }
-  if (s.length <= 3) return '***';
-  return `***${s.slice(-3)}`;
+/** Muted text is a non-value ("--", "none", "No channel") — never a badge, so a
+ *  channel-less row does not paint an empty chip. */
+function Cell({ text, muted, mono }: { text: string; muted: boolean; mono?: boolean }) {
+  const cls = [mono ? 'font-mono text-xs' : '', muted ? 'text-muted-foreground' : '']
+    .filter(Boolean)
+    .join(' ');
+  return <span className={cls || undefined}>{text}</span>;
 }
 
 const columns: DigitColumn[] = [
@@ -60,19 +65,37 @@ const columns: DigitColumn[] = [
     render: (record) => <DateField value={record.createdTime} />,
   },
   {
+    source: 'tenantId',
+    label: 'Tenant',
+    sortable: false,
+    // A state-level search also returns its city tenants' rows (signed in at
+    // `mz`, rows written at `mz.maputo`), so the row has to say which one it is.
+    render: (record) => <Cell {...tenantDisplay(record)} mono />,
+  },
+  {
     source: 'referenceNumber',
-    label: 'Complaint',
+    // NOT "Complaint": an OTP row has no complaint, and this column showed its
+    // transaction UUID under a heading that promised one.
+    label: 'Reference',
     sortable: false,
     render: (record) => {
       const ref = String(record.referenceNumber ?? '');
-      return ref ? (
+      if (!ref) return <span className="text-muted-foreground">--</span>;
+      // Only a Complaints row's reference is a complaint number; an OTP's (module CORE)
+      // is an opaque id with nothing to open.
+      return String(record.module ?? '').toLowerCase() === 'complaints' ? (
         <EntityLink resource="complaints" id={ref} label={ref} />
       ) : (
-        <span className="text-muted-foreground">--</span>
+        <span className="font-mono text-xs">{ref}</span>
       );
     },
   },
-  { source: 'channel', label: 'Channel', sortable: false },
+  {
+    source: 'channel',
+    label: 'Channel',
+    sortable: false,
+    render: (record) => <Cell {...channelDisplay(record.channel)} />,
+  },
   {
     source: 'status',
     label: 'app.fields.status',
@@ -80,12 +103,16 @@ const columns: DigitColumn[] = [
     render: (record) => <StatusChip value={record.status} />,
   },
   {
+    source: 'sourcePath',
+    label: 'Produced by',
+    sortable: false,
+    render: (record) => <Cell {...sourcePathDisplay(record.sourcePath)} />,
+  },
+  {
     source: 'recipientValue',
     label: 'Recipient',
     sortable: false,
-    render: (record) => (
-      <span className="font-mono text-xs">{maskRecipient(record.recipientValue)}</span>
-    ),
+    render: (record) => <Cell {...recipientDisplay(record)} mono />,
   },
   {
     source: 'templateKey',
@@ -99,6 +126,16 @@ const columns: DigitColumn[] = [
       ) : (
         <span className="text-muted-foreground">--</span>
       );
+    },
+  },
+  {
+    source: 'providerRef',
+    label: 'Provider ref',
+    sortable: false,
+    render: (record) => {
+      const ref = String(record.providerRef ?? '');
+      const test = record.isTest ? ' · test' : '';
+      return ref || test ? <span className="font-mono text-xs">{ref}{test}</span> : <span className="text-muted-foreground">--</span>;
     },
   },
   {
@@ -129,17 +166,19 @@ const columns: DigitColumn[] = [
  * Read-only delivery-log viewer backed by the novu-bridge proxy
  * (`GET /novu-bridge/novu-adapter/v1/logs`). Lists every notification event
  * novu-bridge processed, newest first, with an explicit terminal status
- * (SENT / SKIPPED / FAILED); WHATSAPP has no enabled provider yet, so those
- * rows appear as SKIPPED/NB_NO_PROVIDER.
+ * (SENT / SKIPPED / FAILED / REJECTED, and DELIVERED / BOUNCED once provider receipts are
+ * wired), and which half produced it (`sourcePath`). Test sends are flagged rows
+ * at this tenant, shown on request.
  */
 export function NotificationLogList() {
   return (
     <DigitList
       title="Notification Logs"
-      subtitle="SMS/Email delivered via Novu — WHATSAPP shows as SKIPPED (no provider yet)"
+      subtitle="One row per recipient × channel — SENT means the transport accepted it; DELIVERED needs provider receipts"
       sort={{ field: 'createdTime', order: 'DESC' }}
       filters={filters}
     >
+      <p className="mb-3 text-xs text-muted-foreground">{SOURCE_PATH_HELP}</p>
       <DigitDatagrid columns={columns} />
     </DigitList>
   );

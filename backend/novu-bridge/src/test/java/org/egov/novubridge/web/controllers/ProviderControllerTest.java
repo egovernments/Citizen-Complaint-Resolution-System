@@ -1,14 +1,19 @@
 package org.egov.novubridge.web.controllers;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+import org.egov.novubridge.service.provider.ProviderCatalog;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
 import org.egov.novubridge.service.TwilioTemplateSyncService;
-import org.egov.novubridge.service.provider.GenericProviderStrategy;
-import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
-import org.egov.novubridge.service.provider.TwilioProviderStrategy;
+import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,20 +24,23 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * Happy-path coverage of the four {@code /novu-adapter/v1/providers} endpoints
- * (mock {@link NovuClient}, real strategy factory) plus the invariant that
+ * (mock {@link NovuClient}) plus the invariant that
  * operator {@code credentials} never appear in the {@code POST /providers}
  * response — the ALLOWLIST projection drops them.
  */
@@ -47,12 +55,14 @@ class ProviderControllerTest {
     void setUp() {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
-        GenericProviderStrategy generic = new GenericProviderStrategy();
-        TwilioProviderStrategy twilio = new TwilioProviderStrategy();
-        NovuProviderStrategyFactory factory =
-                new NovuProviderStrategyFactory(List.of(twilio, generic), generic);
         TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
-        controller = new ProviderController(novuClient, factory, dispatchLogRepository, twilioTemplateSyncService);
+        NovuBridgeConfiguration config = new NovuBridgeConfiguration();
+        config.setSmsCountryUrl("http://api.smscountry.com/SMSCwebservice_bulk.aspx");
+        controller = new ProviderController(novuClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
+                dispatchLogRepository, twilioTemplateSyncService,
+                new ProviderCatalog(config), new ChannelPolicyClient(null, config),
+                new ProviderAvailability(novuClient, config));
         // Default: pass overrides through unchanged, as if no dedicated WhatsApp
         // integration were configured (NovuClient's own no-op default).
         when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))
@@ -138,6 +148,153 @@ class ProviderControllerTest {
 
         verify(novuClient).createIntegration(nullable(String.class), eq("my-wa-sender"),
                 eq("twilio"), anyString(), nullable(Map.class));
+    }
+
+    // ---- POST /providers, catalog form: the identifier must read back as the type ----
+
+    private Map<String, Object> twilioSmsCatalogBody(String identifier) {
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("type", "twilio-sms");
+        req.put("name", "Twilio SMS");
+        if (identifier != null) req.put("identifier", identifier);
+        req.put("credentials", Map.of("accountSid", "AC123", "token", "SECRET", "from", "+15551234567"));
+        return req;
+    }
+
+    private String createdIdentifier() {
+        ArgumentCaptor<String> identifier = ArgumentCaptor.forClass(String.class);
+        verify(novuClient).createIntegration(nullable(String.class), identifier.capture(),
+                eq("twilio"), eq("sms"), nullable(Map.class), anyBoolean());
+        return identifier.getValue();
+    }
+
+    @Test
+    void createFromCatalog_refusesAnIdentifierThatReadsBackAsAnotherType_orAsNone() {
+        // Novu would accept it: the refusal has to be the bridge's own.
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9", "providerId", "twilio"))));
+        for (String bad : new String[] {"ozeki-x", "twilio-whatsapp-x", "my-sms", "twiliosms"}) {
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> controller.createProvider(twilioSmsCatalogBody(bad)), bad);
+            assertEquals("NB_INVALID_PROVIDER", ex.getCode(), bad);
+        }
+        verify(novuClient, never()).createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean());
+    }
+
+    @Test
+    void createFromCatalog_keepsATypedIdentifier_andDerivesOneWhenAbsent() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9", "providerId", "twilio"))));
+
+        controller.createProvider(twilioSmsCatalogBody("twilio-sms-primary"));
+        assertEquals("twilio-sms-primary", createdIdentifier());
+        assertEquals("twilio-sms", ProviderCatalog.typeFromIdentifier(createdIdentifier()));
+    }
+
+    @Test
+    void createFromCatalog_derivesATypedIdentifierWhenNoneIsGiven() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9", "providerId", "twilio"))));
+
+        controller.createProvider(twilioSmsCatalogBody(null));
+        assertTrue(createdIdentifier().startsWith("twilio-sms-"), createdIdentifier());
+    }
+
+    @Test
+    void createFromCatalog_digitGatewaysAreCreatedAsTheirOwnNovuProvider_withNativeCredentials() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class), anyBoolean()))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i9"))));
+        Map<String, Map<String, Object>> forms = new LinkedHashMap<>();
+        forms.put("smscountry", Map.of("user", "u", "password", "p", "from", "KEGOV"));
+        forms.put("ozeki", Map.of("baseUrl", "http://ozeki:9509/api?action=sendmsg", "user", "u", "password", "p"));
+        forms.put("jasmin", Map.of("baseUrl", "http://jasmin:1401/send", "user", "u", "password", "p"));
+
+        for (Map.Entry<String, Map<String, Object>> e : forms.entrySet()) {
+            Map<String, Object> req = new LinkedHashMap<>();
+            req.put("type", e.getKey());
+            req.put("name", e.getKey() + " main");
+            req.put("credentials", e.getValue());
+            controller.createProvider(req);
+
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            ArgumentCaptor<Map<String, Object>> creds = ArgumentCaptor.forClass((Class) Map.class);
+            ArgumentCaptor<String> identifier = ArgumentCaptor.forClass(String.class);
+            verify(novuClient).createIntegration(eq(e.getKey() + " main"), identifier.capture(),
+                    eq(e.getKey()), eq("sms"), creds.capture(), eq(true));
+            assertEquals(e.getValue(), creds.getValue(), e.getKey());
+            assertEquals(e.getKey(), ProviderCatalog.typeFromIdentifier(identifier.getValue()));
+        }
+    }
+
+    private void stubIntegration(String identifier, String providerId) {
+        Map<String, Object> integ = new LinkedHashMap<>();
+        integ.put("_id", "i7");
+        integ.put("identifier", identifier);
+        integ.put("providerId", providerId);
+        integ.put("channel", "sms");
+        integ.put("active", true);
+        when(novuClient.listIntegrations()).thenReturn(novuResp(200, Map.of("data", List.of(integ))));
+    }
+
+    @Test
+    void rotate_refusesAnSmsCountryIntegrationStillOnGenericSms_insteadOfStoringKeysItCannotRead() {
+        stubIntegration("smscountry-0011aabbccddeeff", "generic-sms");
+        // Novu itself would accept the PUT: the refusal has to be the bridge's own.
+        when(novuClient.updateIntegration(anyString(), nullable(String.class), nullable(Map.class),
+                nullable(Boolean.class))).thenReturn(novuResp(200, Map.of("data", Map.of("_id", "i7"))));
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id", "i7");
+        req.put("credentials", Map.of("user", "u", "password", "p", "from", "KEGOV"));
+
+        CustomException ex = assertThrows(CustomException.class, () -> controller.updateProvider(req));
+        assertEquals("NB_INVALID_PROVIDER", ex.getCode());
+        assertTrue(ex.getMessage().contains("generic-sms"), ex.getMessage());
+        verify(novuClient, never()).updateIntegration(anyString(), nullable(String.class),
+                nullable(Map.class), nullable(Boolean.class));
+    }
+
+    @Test
+    void rotate_writesNativeCredentialsToANativeSmsCountryIntegration() {
+        stubIntegration("smscountry-0011aabbccddeeff", "smscountry");
+        when(novuClient.updateIntegration(anyString(), nullable(String.class), nullable(Map.class),
+                nullable(Boolean.class))).thenReturn(novuResp(200, Map.of("data", Map.of("_id", "i7"))));
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id", "i7");
+        req.put("credentials", Map.of("user", "u2", "password", "p2", "from", "KEGOV"));
+
+        controller.updateProvider(req);
+
+        verify(novuClient).updateIntegration(eq("i7"), isNull(),
+                eq(Map.of("user", "u2", "password", "p2", "from", "KEGOV")), isNull());
+    }
+
+    @Test
+    void testSend_throughAnOzekiProvider_pinsTheIntegration_andAddsNoGatewayBody() {
+        stubIntegration("ozeki-0011aabbccddeeff", "ozeki");
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
+                .thenReturn(novuResp(201, Map.of("acknowledged", true)));
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id", "i7");
+        req.put("channel", "SMS");
+        req.put("to", Map.of("phone", "+15550100"));
+        req.put("body", "hello");
+        controller.testSend(req);
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        ArgumentCaptor<Map<String, Object>> overrides = ArgumentCaptor.forClass((Class) Map.class);
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), eq("+15550100"),
+                nullable(String.class), anyMap(), anyString(), overrides.capture());
+        // DIGIT's Ozeki provider builds its own {messages:[…]} body; a generic-sms
+        // passthrough here would be dead weight at best.
+        assertEquals(Map.of("sms", Map.of("integrationIdentifier", "ozeki-0011aabbccddeeff")),
+                overrides.getValue());
     }
 
     // ---- GET /providers/templates ---------------------------------------
@@ -228,7 +385,7 @@ class ProviderControllerTest {
     @Test
     void testSend_sms_triggersSmsWorkflow_writesTestLog() {
         when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
-                nullable(String.class), anyMap(), anyString()))
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -243,7 +400,7 @@ class ProviderControllerTest {
 
         ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
         verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(),
-                nullable(String.class), anyMap(), anyString());
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class));
         assertEquals("+15550100", phone.getValue());
 
         ArgumentCaptor<DispatchLogEntry> logged = ArgumentCaptor.forClass(DispatchLogEntry.class);
@@ -259,8 +416,8 @@ class ProviderControllerTest {
 
     @Test
     void testSend_whatsapp_prefixesPhone_andBuildsTwilioContentOverrides() {
-        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
-                anyString(), nullable(Map.class), nullable(String.class)))
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), nullable(String.class),
+                anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -274,8 +431,8 @@ class ProviderControllerTest {
 
         ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
-        verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(), anyMap(),
-                anyString(), overrides.capture(), isNull());
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(), nullable(String.class),
+                anyMap(), anyString(), overrides.capture());
 
         assertEquals("whatsapp:+14155550123", phone.getValue());
 
@@ -303,8 +460,8 @@ class ProviderControllerTest {
                     merged.put("sms", Map.of("integrationIdentifier", "twilio-whatsapp"));
                     return merged;
                 });
-        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
-                anyString(), nullable(Map.class), nullable(String.class)))
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), nullable(String.class),
+                anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -315,8 +472,8 @@ class ProviderControllerTest {
         controller.testSend(req);
 
         ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
-        verify(novuClient).trigger(eq("complaints-sms"), anyString(), anyString(), anyMap(),
-                anyString(), overrides.capture(), isNull());
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), anyString(), nullable(String.class),
+                anyMap(), anyString(), overrides.capture());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> sms = (Map<String, Object>) overrides.getValue().get("sms");
@@ -330,7 +487,7 @@ class ProviderControllerTest {
     @Test
     void testSend_subscriberIdIsStable_reproducibleAcrossCalls() {
         when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
-                nullable(String.class), anyMap(), anyString()))
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of()));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -345,7 +502,7 @@ class ProviderControllerTest {
     @Test
     void testSend_email_passesRecipientEmailToNovu() {
         when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
-                nullable(String.class), anyMap(), anyString()))
+                nullable(String.class), anyMap(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -361,7 +518,7 @@ class ProviderControllerTest {
         // stored email, so dropping it makes the email step silently deliver nothing.
         ArgumentCaptor<String> email = ArgumentCaptor.forClass(String.class);
         verify(novuClient).trigger(eq("complaints-email"), anyString(), nullable(String.class),
-                email.capture(), anyMap(), anyString());
+                email.capture(), anyMap(), anyString(), nullable(Map.class));
         assertEquals("operator@example.com", email.getValue());
     }
 }

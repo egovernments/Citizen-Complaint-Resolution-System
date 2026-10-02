@@ -103,6 +103,11 @@ export function useMastersCapability() {
     },
     canEditResource: (name: string) => {
       const config = getResourceConfig(name);
+      // A `readOnly` resource is read-only for EVERYONE, including an
+      // MDMS_ADMIN: it is a property of the master (its configuration moved
+      // elsewhere), not of the operator's permissions. Checked first so no
+      // policy outcome can re-open it. See resourceRegistry.isReadOnlyResource.
+      if (config?.readOnly) return false;
       if (!isAccessControlGated(config)) return true;
       return masters.canEdit(config!.schema);
     },

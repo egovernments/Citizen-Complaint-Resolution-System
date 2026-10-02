@@ -265,9 +265,13 @@ function rolesOf(uuid) {
   return set;
 }
 
-// All dispatch rows for a complaint. transactionId format (NotificationService.java):
-//   serviceRequestId:action:toState:tenantId:subKey:channel   (6 colon-separated parts;
-// subKey is normally the recipient uuid). E2E-0.4: include last_error_code for E2E-5.
+// All dispatch rows for a complaint. transactionId = <transactionSeed>:<subscriberId>:<channel>,
+// with PGR's seed from ThinEventBuilder:
+//   serviceRequestId:action:toState:processInstanceId:tenantId:subKey:channel
+// (7 colon-separated parts; the 4th is the workflow ProcessInstance id, or lastModifiedTime
+// when there is none; subKey is normally the recipient uuid). Parsing reads action/toState from
+// the front and the uuid from the end, so it holds either way. E2E-0.4: include
+// last_error_code for E2E-5.
 function queryDispatch(complaintId) {
   return psql(`SELECT channel, recipient_value, status, transaction_id, last_error_code `
     + `FROM nb_dispatch_log WHERE reference_number='${complaintId}'`)

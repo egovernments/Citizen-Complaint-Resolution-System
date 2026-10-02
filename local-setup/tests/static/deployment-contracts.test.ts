@@ -473,7 +473,7 @@ describe('Novu workflow creation deployment contract', () => {
     );
   });
 
-  test('the SMSCountry settings are rendered AND handed to the container', () => {
+  test('the legacy direct SMSCountry settings are rendered AND handed to the container', () => {
     const vars = [
       'NOVU_BRIDGE_SMS_PROVIDER',
       'NOVU_BRIDGE_SMS_SENDER_ID',
@@ -499,7 +499,523 @@ describe('Novu workflow creation deployment contract', () => {
       expect(bridgeBlock).toContain(`${v}: \${${v}`);
     }
 
-    // nothing routes SMSCountry through Novu — it is a direct client
+    // the direct route is a client of its own, not a Novu integration
     expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
+  });
+
+  // The bridge-side SMSCountry adapter (and its apiUrl allow-list) is gone: settings for
+  // it would be dead config that reads as if something still consumed it.
+  test('no bridge-side gateway adapter settings are left', () => {
+    for (const text of [composeFile, composeEnv]) {
+      expect(text).not.toContain('SMSCOUNTRY_ALLOWED_HOSTS');
+      expect(text).not.toContain('SMSCOUNTRY_ADAPTER');
+    }
+  });
+
+  // SMSCountry / Ozeki / Jasmin are DIGIT's providers, mounted into the STOCK Novu worker
+  // (backend/novu-bridge/novu-worker-providers). Without the mount and the preload their
+  // integrations save and every send through them fails inside Novu while the bridge
+  // records SENT, so each link of the chain is pinned here.
+  const PROVIDERS_SRC = 'backend/novu-bridge/novu-worker-providers';
+  const PROVIDERS_CHART = 'devops/deploy-as-code/charts/backbone-services/novu/files/novu-worker-providers';
+  const runtimeFiles = (dir: string) =>
+    fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.js')).sort();
+  const taskBody = (name: string) => {
+    const at = playbookFile.indexOf(`- name: "${name}"`);
+    expect(at).toBeGreaterThan(-1);
+    const next = playbookFile.indexOf('\n    - name:', at + 1);
+    return playbookFile.slice(at, next === -1 ? undefined : next);
+  };
+
+  test('compose runs the stock Novu worker and mounts + preloads DIGIT providers', () => {
+    const start = composeFile.indexOf('\n  novu-worker:');
+    expect(start).toBeGreaterThan(-1);
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const workerBlock = next === -1 ? rest : rest.slice(0, next);
+    expect(workerBlock).toMatch(/^ {4}image: ghcr\.io\/novuhq\/novu\/worker:2\.3\.0$/m);
+    expect(workerBlock).toMatch(/^ {6}NODE_OPTIONS: --require \/opt\/digit-novu-providers\/register\.js$/m);
+    // Vinoth re-review 4141822062: any node process in the worker registers the providers or
+    // crashes, so a wrapper or a moved entrypoint cannot start a worker without them.
+    expect(workerBlock).toMatch(/^ {6}DIGIT_NOVU_PROVIDERS: required$/m);
+    expect(workerBlock).toMatch(
+      /^ {6}- \$\{NOVU_WORKER_PROVIDERS_DIR:-\.\.\/backend\/novu-bridge\/novu-worker-providers\}:\/opt\/digit-novu-providers:ro$/m
+    );
+    // The compose default is relative to local-setup/ and must land on the real directory.
+    expect(fs.existsSync(path.join(REPO_ROOT, 'local-setup', '../backend/novu-bridge/novu-worker-providers/register.js'))).toBe(true);
+    expect(composeEnv).toMatch(/^NOVU_WORKER_PROVIDERS_DIR=\{\{ digit_dir \}\}\/novu-worker-providers$/m);
+  });
+
+  test('the deploy stages the providers before the stack starts and restarts the worker when they change', () => {
+    const stage = taskBody('Novu worker providers — stage on target');
+    expect(stage).toContain('enable_novu');
+    expect(stage).toContain(`src: "../../${PROVIDERS_SRC}/"`);
+    expect(stage).toContain('dest: "{{ digit_dir }}/novu-worker-providers/"');
+    expect(stage).toContain('delete: true');
+    expect(stage).toContain('register: novu_worker_providers_sync');
+    expect(playbookFile.indexOf('Novu worker providers — stage on target')).toBeLessThan(
+      playbookFile.indexOf('- name: Start DIGIT stack (Linux/Debian)')
+    );
+
+    const restart = taskBody('Novu worker — restart when its mounted providers changed');
+    expect(restart).toContain('docker restart novu-worker');
+    expect(restart).toContain('novu_worker_providers_sync is changed');
+  });
+
+  // helm can only read files inside the chart, so the chart carries a copy. It must be
+  // the same code, or k8s and compose would send differently.
+  test('the helm chart ships the same provider code and mounts + preloads it', () => {
+    expect(runtimeFiles(PROVIDERS_CHART)).toEqual(runtimeFiles(PROVIDERS_SRC));
+    expect(runtimeFiles(PROVIDERS_SRC)).toEqual(['jasmin.js', 'novu.js', 'ozeki.js', 'register.js', 'smscountry.js']);
+    for (const file of runtimeFiles(PROVIDERS_SRC)) {
+      expect(read(`${PROVIDERS_CHART}/${file}`)).toBe(read(`${PROVIDERS_SRC}/${file}`));
+    }
+
+    const workerTemplate = read('devops/deploy-as-code/charts/backbone-services/novu/templates/worker/worker-deployment.yaml');
+    expect(workerTemplate).toContain('value: "--require /opt/digit-novu-providers/register.js"');
+    // inside the same digitProviders.enabled block as NODE_OPTIONS
+    expect(workerTemplate).toMatch(
+      /- name: NODE_OPTIONS\n\s+value: "--require \/opt\/digit-novu-providers\/register\.js"\n(\s+#[^\n]*\n)?\s+- name: DIGIT_NOVU_PROVIDERS\n\s+value: "required"\n\s+\{\{- end \}\}/);
+    expect(workerTemplate).toContain('mountPath: /opt/digit-novu-providers');
+    expect(workerTemplate).toContain('checksum/digit-providers');
+    expect(read('devops/deploy-as-code/charts/backbone-services/novu/templates/worker/worker-providers-configmap.yaml')).toContain(
+      '.Files.Glob "files/novu-worker-providers/*.js"'
+    );
+    expect(novuValues).toMatch(/^ {2}digitProviders:\n {4}enabled: true$/m);
+    expect(novuValues).toMatch(/^ {4}repository: "ghcr\.io\/novuhq\/novu\/worker"\n {4}tag: "2\.3\.0"$/m);
+  });
+
+  // M1 (re-review): novu-bridge must know whether the worker preloads those providers
+  // (NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS), and it must come from the SAME switch as the mount,
+  // or the two can disagree and the bridge offers providers whose every send fails.
+  test('the bridge is told whether the worker preloads DIGIT providers, from the mount switch', () => {
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const bridgeBlock = next === -1 ? rest : rest.slice(0, next);
+    // Compose mounts + preloads unconditionally (pinned above), so the bridge is told "true", literally.
+    expect(bridgeBlock).toMatch(/^ {6}NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS: 'true'$/m);
+
+    expect(read('devops/deploy-as-code/charts/environments/env.yaml')).toMatch(/^ {2}novuWorkerDigitProviders: true$/m);
+    const helmfile = read('devops/deploy-as-code/charts/backbone-services/backboneservices-helmfile.yaml');
+    expect(helmfile).toContain(
+      'enabled: {{ if hasKey .Values.global "novuWorkerDigitProviders" }}{{ .Values.global.novuWorkerDigitProviders }}{{ else }}true{{ end }}');
+    const bridgeValues = read('devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml');
+    expect(bridgeValues).toMatch(
+      /- name: NOVU_BRIDGE_DIGIT_WORKER_PROVIDERS\n {4}value: \{\{ if hasKey \(\.Values\.global \| default dict\) "novuWorkerDigitProviders" \}\}\{\{ \.Values\.global\.novuWorkerDigitProviders /);
+    expect(bridgeValues).toMatch(/^digit-worker-providers: true$/m);
+  });
+
+  // Provider admin calls are allowed only for admins of the owning state (the state root of
+  // NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT) plus NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS.
+  test('the provider-owning tenant is state_root, checked on the running bridge, and extra admin tenants are plumbed', () => {
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    const bridgeBlock = composeFile.slice(start, composeFile.indexOf('\n  # ====', start));
+    expect(bridgeBlock).toContain('NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS: ${NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS:-}');
+    expect(composeEnv).toContain("NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS={{ novu_bridge_provider_admin_tenants | default('') }}");
+    expect(read('local-setup/ansible/inventory/host_vars/_example.yml')).toMatch(/^# novu_bridge_provider_admin_tenants: /m);
+    expect(read('devops/deploy-as-code/charts/common-services/novu-bridge/values.yaml')).toContain(
+      '- name: NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS');
+
+    const readTenant = taskBody('novu-bootstrap — read the OTP / provider-owning tenant novu-bridge runs with');
+    expect(readTenant).toContain("sed -n 's/^NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT=//p'"); // never the whole env: it holds secrets
+    const fail = taskBody('novu-bootstrap — fail: novu-bridge does not run with state_root as its OTP / provider-owning tenant');
+    expect(fail).toContain("(bridge_core_tenant.stdout | default('') | trim) != state_root");
+    expect(playbookFile.indexOf('novu-bootstrap — read the OTP / provider-owning tenant')).toBeGreaterThan(
+      playbookFile.indexOf('novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY'));
+  });
+
+  // The fork (a custom-built worker image) was retired for the mounted providers.
+  test('nothing deploys or documents the retired Novu fork worker', () => {
+    const hostVarsExample = read('local-setup/ansible/inventory/host_vars/_example.yml');
+    for (const text of [composeFile, composeEnv, playbookFile, novuValues, hostVarsExample]) {
+      for (const stale of ['NOVU_WORKER_IMAGE', 'novu_worker_image', 'dhruv-1001/novu', '2.3.0-digit']) {
+        expect(text).not.toContain(stale);
+      }
+    }
+  });
+
+  // These were documented as "add them to /opt/digit/.env by hand" — and every deploy
+  // regenerates that file from digit.env.j2, so the receipts secret, the consent gate
+  // and the OTP country code silently reverted on the next deploy.
+  test('the bridge settings an operator sets survive a redeploy', () => {
+    const vars = [
+      'NOVU_BRIDGE_RECEIPTS_SECRET',
+      'NOVU_BRIDGE_PREFERENCE_ENABLED',
+      'NOVU_BRIDGE_PREFERENCE_FAIL_OPEN',
+      'NOVU_BRIDGE_CORE_SMS_COUNTRY_CODE',
+      'NOVU_BRIDGE_PROVIDER_ADMIN_TENANTS',
+    ];
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const bridgeBlock = next === -1 ? rest : rest.slice(0, next);
+    for (const v of vars) {
+      expect(composeEnv).toMatch(new RegExp(`^${v}=\\{\\{ `, 'm'));
+      expect(bridgeBlock).toContain(`${v}: \${${v}`);
+    }
+  });
+});
+
+describe('notification stack images come from one build', () => {
+  // pgr-services emits thin events only a novu-bridge of the same build resolves (an
+  // older bridge dead-letters them), and each app needs the Flyway migrations its -db
+  // image carries. The migrator used to be hard-pinned to 2.12 while the app image was
+  // overridable, so a new bridge ran on the old schema and every ledger write failed.
+  const base = read('local-setup/docker-compose.egov-digit.yaml');
+  const migrations = read('local-setup/docker-compose.migrations.yml');
+  const env = read('local-setup/ansible/templates/digit.env.j2');
+
+  const CHARTS = [
+    'devops/deploy-as-code/charts/urban/pgr-services',
+    'devops/deploy-as-code/charts/common-services/novu-bridge',
+  ];
+  // The app image (top-level `image:`) and the Flyway image (initContainers.dbMigration
+  // .image) of a chart, read from its values.yaml by layout (no YAML parser is a declared
+  // dependency here). A null means the layout moved: fix the pattern, do not drop the test.
+  const chartImages = (dir: string) => {
+    const v = read(`${dir}/values.yaml`);
+    const app = v.match(/^image:\n {2}repository: "[^"]+"\n {2}tag: "([^"]+)"[^\n]*\n {2}pullPolicy: (\S+)/m);
+    const db = v.match(/^ {4}image:\n {6}repository: "[^"]+-db"\n {6}tag: "([^"]+)"[^\n]*\n {6}pullPolicy: (\S+)/m);
+    expect(app).not.toBeNull();
+    expect(db).not.toBeNull();
+    return { app: { tag: app![1], pullPolicy: app![2] }, db: { tag: db![1], pullPolicy: db![2] } };
+  };
+  const images: Array<[string, string, string]> = [
+    [base, 'PGR_SERVICES_IMAGE', 'egovio/pgr-services'],
+    [base, 'NOVU_BRIDGE_IMAGE', 'egovio/novu-bridge'],
+    [migrations, 'PGR_SERVICES_DB_IMAGE', 'egovio/pgr-services-db'],
+    [migrations, 'NOVU_BRIDGE_DB_IMAGE', 'egovio/novu-bridge-db'],
+  ];
+  // The default tag of one image line: ${OVERRIDE:-<image>:${NOTIFICATION_STACK_TAG:-<tag>}}.
+  const composeDefault = (file: string, override: string, image: string) => {
+    const m = file.match(new RegExp(
+      `image: \\$\\{${override}:-${image.replace(/[/.]/g, '\\$&')}:\\$\\{NOTIFICATION_STACK_TAG:-([^}]+)\\}\\}`));
+    return m ? m[1] : null;
+  };
+
+  test.each(images)('%#: %s defaults to the shared NOTIFICATION_STACK_TAG', (file, override, image) => {
+    expect(composeDefault(file, override, image)).not.toBeNull();
+    expect(env).toMatch(new RegExp(`^${override}=\\{\\{ `, 'm'));
+  });
+
+  // The release step (build/NIGHTLY-BUILDS.md) swaps the stopgap rolling default for an
+  // immutable develop-<sha8> in SIX places — four compose lines and two charts. Bumping
+  // only some of them is exactly the split build this block exists to prevent.
+  test('all four images default to ONE tag, in compose and in both Helm charts', () => {
+    const tags = new Set(images.map(([file, override, image]) => composeDefault(file, override, image)));
+    for (const dir of CHARTS) {
+      const { app, db } = chartImages(dir);
+      tags.add(app.tag);
+      tags.add(db.tag);
+    }
+    expect([...tags]).toHaveLength(1);
+  });
+
+  test('the shared tag is rendered from host_vars', () => {
+    expect(env).toContain("NOTIFICATION_STACK_TAG={{ notification_stack_tag | default('') }}");
+  });
+
+  // Kanav/Vinoth review of #2097: the charts pulled a rolling tag with Always while
+  // env.yaml forced `nightly-develop` over any chart pin. The charts now default to
+  // IfNotPresent and switch to Always only for a rolling tag, and env.yaml leaves the tag
+  // to the charts unless a deployment pins one.
+  test.each(CHARTS)('%s pulls IfNotPresent unless the tag is rolling', (chartDir) => {
+    const { app, db } = chartImages(chartDir);
+    expect(app.pullPolicy).toBe('IfNotPresent');
+    expect(db.pullPolicy).toBe('IfNotPresent');
+    const tpl = read(`${chartDir}/templates/deployment.yaml`);
+    expect(tpl).toContain('regexMatch "^(latest|nightly-.*|develop|main|master)$"');
+    expect(tpl).toContain('$_ := set $img "pullPolicy" "Always"');
+  });
+
+  test('env.yaml does not force a rolling notificationStackTag over the chart pins', () => {
+    const m = read('devops/deploy-as-code/charts/environments/env.yaml').match(/^ {2}notificationStackTag: "([^"]*)"/m);
+    expect(m).not.toBeNull();
+    expect(m![1]).not.toMatch(/^(latest|nightly-.*|develop|main|master)$/);
+  });
+});
+
+describe('tenant-master repair is report-only unless opted in', () => {
+  // Kanav review of #2097 (4079418087): the repair ran with APPLY=1 by default on every
+  // non-pg deploy, so a live tenant that deliberately withheld grants got pg's back.
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  const script = read('local-setup/scripts/repair-tenant-masters.py');
+
+  test('the playbook writes only for repair_tenant_masters: true', () => {
+    expect(playbook).toContain(`APPLY: "{{ '1' if (repair_tenant_masters | default(false) | bool) else '0' }}"`);
+    expect(playbook).not.toMatch(/APPLY[=:] *"?1"?\s*$/m);
+    expect(playbook).not.toMatch(/repair_tenant_masters \| default\(true\)/);
+  });
+
+  test('the script itself defaults to report-only', () => {
+    expect(script).toContain('APPLY = os.environ.get("APPLY", "0")');
+  });
+
+  test('RBAC_BLOCKED fails the deploy only on an opted-in run', () => {
+    const task = playbook.slice(playbook.indexOf('master-repair — fail when the tenant cannot be repaired'));
+    const when = task.slice(0, task.indexOf('ansible.builtin.fail'));
+    expect(when).toContain('repair_tenant_masters | default(false) | bool');
+  });
+
+  test('a restart of egov-accesscontrol is followed by a readiness wait', () => {
+    const restart = playbook.indexOf('master-repair — restart egov-accesscontrol');
+    const wait = playbook.indexOf('master-repair — wait for egov-accesscontrol to come back');
+    expect(restart).toBeGreaterThan(-1);
+    expect(wait).toBeGreaterThan(restart);
+    expect(playbook.slice(wait, wait + 600)).toContain('/access/health');
+  });
+});
+
+// Kanav review of #2097, second round.
+describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
+  const playbook = read('local-setup/ansible/playbook-deploy.yml');
+  /** The text of the task named `name` (up to the next task at the same indent). */
+  const task = (name: string) => {
+    const start = playbook.indexOf(`- name: "${name}`);
+    expect(start).toBeGreaterThan(-1);
+    const next = playbook.indexOf('\n    - name:', start + 1);
+    return playbook.slice(start, next === -1 ? undefined : next);
+  };
+
+  // 4079418204: the retired OTP senders were removed AFTER the main `up -d`, so for the
+  // whole stack start egov-notification-sms and the new novu-bridge both consumed
+  // egov.core.notification.sms and every login OTP went out twice.
+  // 4118608332 (re-review): removing them before the up on a box with NO bridge yet left
+  // nothing consuming the topic for the whole start (OTPs dropped), and a failed up left
+  // the box with no OTP sender at all.
+  // Vinoth 4141822018: a failed `up -d novu-bridge` was swallowed (pipefail, no -e) and the
+  // OLD bridge, still running, printed BRIDGE-RUNNING. 4141822022: "running" is not "consuming":
+  // CoreSmsConsumer starts at the END of the topic when its group has no committed offset there.
+  // So: the bridge-first step fails on a failed up and names only the CURRENT container, and both
+  // removals wait for the handoff (core-sms-handoff.sh — run for real in
+  // local-setup/tests/test_core_sms_handoff.py).
+  test('the retired OTP senders go only once a current novu-bridge has taken over the OTP topic', () => {
+    const bridgeFirst = playbook.indexOf('- name: "notification stack — recreate novu-bridge before pgr-services');
+    const early = playbook.indexOf('- name: "notification stack — remove the retired OTP senders now');
+    const mainStart = playbook.indexOf('- name: Start DIGIT stack (Linux/Debian)');
+    const late = playbook.indexOf('- name: "notification stack — remove the retired OTP senders once novu-bridge took over the OTP topic');
+    const pull = playbook.indexOf('- name: Pull all images from VPC registry');
+    const stage = playbook.indexOf('- name: "Copy the core-SMS handoff check"');
+    expect(pull).toBeGreaterThan(-1);
+    expect(stage).toBeGreaterThan(-1);
+    expect(stage).toBeLessThan(bridgeFirst);
+    expect(bridgeFirst).toBeGreaterThan(pull);
+    expect(early).toBeGreaterThan(bridgeFirst);
+    expect(mainStart).toBeGreaterThan(early);
+    expect(late).toBeGreaterThan(mainStart);
+    expect(task('Copy the core-SMS handoff check')).toContain('src: ../scripts/core-sms-handoff.sh');
+
+    const first = task('notification stack — recreate novu-bridge before pgr-services');
+    expect(first).toMatch(/if ! dc up -d novu-bridge 2>&1 \| tee -a \{\{ compose_progress_file \}\}; then\n[\s\S]*?exit 1\n/);
+    expect(first).toContain('dc config --hash novu-bridge');
+    // `config --images <svc>` lists the dependencies' images too: the one service's image is read
+    expect(first).toContain('dc config --format json novu-bridge');
+    expect(first).not.toContain('dc config --images');
+    expect(first.indexOf('[ "${have%|*}" != "$want_image_id|$want_hash" ]')).toBeLessThan(first.indexOf('echo "BRIDGE-RUNNING'));
+
+    const earlyTask = task('notification stack — remove the retired OTP senders now');
+    expect(earlyTask).toContain('enable_novu | default(false)');
+    expect(earlyTask).toContain('- bridge_first is changed');
+    expect(earlyTask).toContain(`- "'BRIDGE-RUNNING' in (bridge_first.stdout | default(''))"`);
+    expect(earlyTask).toContain('source "{{ digit_dir }}/core-sms-handoff.sh"');
+    expect(earlyTask.indexOf('if ! core_sms_wait_handoff 30 10; then')).toBeLessThan(earlyTask.indexOf('docker rm -f'));
+    expect(earlyTask).toMatch(/if ! core_sms_wait_handoff 30 10; then\n\s+echo "DEFERRED:/);
+    expect(earlyTask).toContain('"$svc|{{ digit_dir }}"');
+    expect(earlyTask).toContain('register: retired_notification_containers\n');
+
+    const lateTask = task('notification stack — remove the retired OTP senders once novu-bridge took over the OTP topic');
+    expect(lateTask).toContain('(retired_notification_containers is skipped)');
+    expect(lateTask).toContain("or ('DEFERRED:' in (retired_notification_containers.stdout | default('')))");
+    expect(lateTask).toContain('enable_novu | default(false)');
+    // no handoff keeps them
+    expect(lateTask).toMatch(/if ! core_sms_wait_handoff 60 10; then\n\s+echo "KEPT:/);
+    expect(lateTask.indexOf('core_sms_wait_handoff')).toBeLessThan(lateTask.indexOf('docker rm -f'));
+    expect(lateTask).toContain('"$svc|{{ digit_dir }}"');
+    expect(task('notification stack — WARNING: the retired OTP senders were kept')).toContain(
+      "'KEPT:' in (retired_notification_containers_late.stdout | default(''))");
+  });
+
+  test('enable-notifications.sh removes the retired OTP senders only once the bridge has taken over', () => {
+    const sh = read('local-setup/scripts/enable-notifications.sh');
+    const body = (fn: string) => {
+      const start = sh.indexOf(`\n${fn}() {`);
+      expect(start).toBeGreaterThan(-1);
+      return sh.slice(start, sh.indexOf('\n}\n', start));
+    };
+    const step1 = body('do_step1');
+    expect(step1.indexOf('compose up -d novu-bridge-migration novu-bridge')).toBeLessThan(step1.indexOf('_bridge_is_current'));
+    expect(step1.indexOf('_bridge_is_current')).toBeLessThan(step1.indexOf('_remove_retired_after_handoff 30'));
+    expect(step1).not.toContain('_remove_retired_notification_containers');
+    const step2 = body('do_step2');
+    expect(step2).not.toContain('_remove_retired_notification_containers');
+    expect(step2.indexOf('compose up -d novu-mongo')).toBeLessThan(step2.indexOf('_remove_retired_after_handoff 60'));
+    const wait = body('_remove_retired_after_handoff');
+    expect(wait.indexOf('if ! core_sms_wait_handoff "$tries" 10; then')).toBeLessThan(wait.indexOf('_remove_retired_notification_containers'));
+    expect(body('_core_sms_handoff_lib')).toContain('core-sms-handoff.sh');
+  });
+
+  // 4079418208: the pg → state_root rewrite of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT only
+  // reached the container through a recreate gated on a non-empty Novu key.
+  test('novu-bridge is recreated whenever the OTP default-tenant rewrite changed', () => {
+    expect(task('post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT')).toContain('register: core_sms_tenant_rewrite');
+    const recreate = task('novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY');
+    expect(recreate).toContain('--force-recreate novu-bridge');
+    expect(recreate).toContain("or ((core_sms_tenant_rewrite | default({})) is changed)");
+  });
+
+  // 4079418212: the admin password was spliced into the shell command, and a failed task
+  // prints `cmd`.
+  test('no task passes DIGIT_PASSWORD on its command line', () => {
+    for (const name of [
+      'master-repair — compare',
+      'notif-seed — access-control rows (phase 1 of 2)',
+      'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
+      'notif-seed — data phase again with the role-actions loaded',
+    ]) {
+      const t = task(name);
+      expect(t).toMatch(/\n {6}environment:\n/);
+      expect(t).toContain(`DIGIT_PASSWORD: "{{ notif_seed_pass | default('eGov@123') }}"`);
+      expect(t).not.toMatch(/DIGIT_PASSWORD=/);
+    }
+    expect(playbook).not.toMatch(/DIGIT_PASSWORD=\{\{/);
+  });
+
+  // 4079418103: a tenant with no MDMS notification rows was always "fresh", so an upgrade
+  // wrote the shipped defaults over every tenant that ran 2.12's hard-coded path.
+  // 4118608347 / #1943: the decision (and the count) covered state_root only, while
+  // novu-bridge resolves each complaint's configuration at the complaint's own root.
+  test('the seed runs per state root with complaints, each with its own complaint count', () => {
+    const roots = task('notif-seed — list the state roots complaints are filed under');
+    // the same derivation the bridge applies, from the database, grouped per root
+    expect(roots).toContain("select split_part(tenantid, '.', 1), count(*) from eg_pgr_service_v2");
+    expect(roots).toContain('group by 1');
+    expect(roots).toContain('failed_when: false');
+    expect(roots).not.toMatch(/\{\{[^}]*state_root/); // no tenant spliced into the SQL
+    const pick = task('notif-seed — the state roots to seed');
+    expect(pick).toContain('[notif_seed_tenant | trim] + (notif_complaint_counts.keys()');
+    expect(pick).toContain("select('match', '^[A-Za-z][A-Za-z0-9_-]*$')");
+    expect(pick).toContain("notifications_seed_exclude | default('(?i)^(PW_|pwt)')");
+    for (const name of [
+      'notif-seed — access-control rows (phase 1 of 2)',
+      'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
+      'notif-seed — data phase again with the role-actions loaded',
+    ]) {
+      const t = task(name);
+      expect(t).toMatch(/\n {6}loop: "\{\{ /);
+      expect(t).toContain('NOTIF_TENANT: "{{ item }}"');
+      expect(t).toContain('DIGIT_LOGIN_TENANT: "{{ item }}"');
+      expect(t).toContain('failed_when: false');
+    }
+    expect(task('notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)')).toContain(
+      'loop: "{{ notif_acl_ok_roots | default([]) }}"');
+    for (const name of [
+      'notif-seed — schemas, channel rows, fresh-tenant defaults (phase 2 of 2)',
+      'notif-seed — data phase again with the role-actions loaded',
+    ]) {
+      const t = task(name);
+      // THIS root's count; an unreadable count must reach the seeder as EMPTY (unknown), never as 0
+      expect(t).toContain(`NOTIF_TENANT_COMPLAINTS: "{{ (notif_complaint_counts[item] | default('0')) if (notif_complaint_counts_known | bool) else '' }}"`);
+      expect(t).toContain(`NOTIF_ADOPT_DEFAULTS: "{{ '1' if item in notif_adopt_roots else '' }}"`);
+    }
+    expect(task('notif-seed — complaint counts per state root')).toContain(
+      "if (notif_complaint_roots.rc | default(1)) == 0 else {}");
+    expect(playbook.indexOf('notif-seed — list the state roots')).toBeLessThan(
+      playbook.indexOf('notif-seed — schemas, channel rows, fresh-tenant defaults'));
+
+    // every root reported, and each ACTION names ITS root
+    expect(task('notif-seed — result per state root')).toContain('loop: "{{ notif_seed_roots }}"');
+    const none = task('notif-seed — ACTION: this tenant has no notification configuration');
+    expect(none).toContain("' state=none '");
+    expect(none).toContain('--tenant {{ item }} --adopt-defaults');
+    expect(none).toContain('loop: "{{ notif_seed_roots }}"');
+    const legacy = task("notif-seed — ACTION: this tenant's notification configuration is not migrated");
+    expect(legacy).toContain("' state=legacy '");
+    expect(legacy).toContain('--tenant {{ item }}');
+
+    // one bad root does not hide the others: the only fail is after the report, and it is about
+    // state_root alone. Vinoth 4141822048: a `ke` box restored from full-dump.sql carries the stock
+    // `pg.*` demo complaints, so a 403 / unreadable schema at `pg` must warn, not abort the deploy.
+    const fail = task('notif-seed — fail: state_root could not be seeded');
+    expect(playbook.indexOf('notif-seed — fail: state_root could not be seeded')).toBeGreaterThan(
+      playbook.indexOf('notif-seed — result per state root'));
+    expect(fail).toContain("{{ [notif_seed_tenant | trim] | reject('in', notif_seed_done_roots) | list }}");
+    expect(fail).not.toContain('notif_seed_roots');
+    const block = playbook.slice(playbook.indexOf('notif-seed — list the state roots'),
+      playbook.indexOf('notif-seed — fail: state_root could not be seeded'));
+    expect(block).not.toContain('ansible.builtin.fail:');
+    const other = task('notif-seed — WARNING: a complaint root other than state_root could not be seeded');
+    expect(other).toContain('ansible.builtin.debug:');
+    expect(other).toContain('loop: "{{ notif_seed_roots }}"');
+    expect(other).toContain('- item != (notif_seed_tenant | trim)');
+    expect(other).toContain('- item not in notif_seed_done_roots');
+    expect(other).toContain('- item not in notif_seed_login_refused_roots');
+    expect(other).toContain('--tags notifications');
+    expect(other).toContain('notifications_seed_exclude');
+    expect(playbook.indexOf('notif-seed — roots that did not finish')).toBeLessThan(
+      playbook.indexOf('notif-seed — WARNING: a complaint root other than state_root'));
+
+    // Vinoth 4141822040: a root's admin may plan/apply (and preview) its own root, but only an
+    // owning-state admin may create a provider — every ACTION line says so for ITS root.
+    for (const t of [none, legacy]) {
+      expect(t).toContain('{{ notif_provider_owner_note }}');
+      expect(t).toContain("{{ ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))");
+      expect(t).toContain('403 NB_TENANT_NOT_ALLOWED');
+      expect(t).toContain("--provider SMS=<identifier>");
+    }
+    expect(task('notif-seed — WARNING: could not log in at a complaint root')).toContain('item != (notif_seed_tenant | trim)');
+  });
+
+  test('notifications_adopt_defaults is validated and may name roots', () => {
+    expect(task('notif-seed — notifications_adopt_defaults is true, false, or a list of state roots')).toContain(
+      'ansible.builtin.assert:');
+    const adopt = task('notif-seed — the roots notifications_adopt_defaults covers');
+    expect(adopt).toContain("notif_seed_roots if (notifications_adopt_defaults | default(false) | bool) else []");
+    expect(adopt).toContain("notifications_adopt_defaults.split(',')");
+    const example = read('local-setup/ansible/inventory/host_vars/_example.yml');
+    expect(example).toMatch(/^# notifications_adopt_defaults: false$/m);
+    expect(example).toMatch(/^# notifications_adopt_defaults: \[pg\]/m);
+    expect(example).toMatch(/^# notifications_seed_exclude: /m);
+  });
+});
+
+// Kanav re-review 4118608379: ~50 `#L<n>` anchors in the e2e README pointed past the end of
+// files or at unrelated code once the code moved. The links now name `Class.member` instead;
+// this keeps every name true.
+describe('e2e notifications README code links', () => {
+  const readme = read('local-setup/tests/e2e/notifications/README.md');
+  const links = [...readme.matchAll(/\[`([^`]+)`\]\((\/[^)\s]+)\)/g)].map((m) => ({ label: m[1], target: m[2] }));
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  test('carries no line anchors', () => {
+    expect(readme).not.toMatch(/#L\d/);
+    expect(links.length).toBeGreaterThan(80);
+  });
+
+  test('every linked file exists and every named member is declared in it', () => {
+    const problems: string[] = [];
+    for (const { label, target } of links) {
+      const rel = target.replace(/^\//, '').replace(/#.*$/, '');
+      if (!fs.existsSync(path.join(REPO_ROOT, rel))) {
+        problems.push(`${label} → ${rel}: file missing`);
+        continue;
+      }
+      const src = read(rel);
+      if (rel.endsWith('.json') && /^[A-Z][\w-]*\.[A-Z]\w+$/.test(label)) {
+        if (!src.includes(`"code": "${label}"`)) problems.push(`${label}: no schema with that code in ${rel}`);
+        continue;
+      }
+      if (!rel.endsWith('.java') || !label.includes('.')) continue;
+      const parts = label.split('.');
+      if (parts[0] !== path.basename(rel, '.java')) problems.push(`${label}: class is not ${path.basename(rel)}`);
+      const member = esc(parts[parts.length - 1]);
+      const declared = [
+        new RegExp(`^\\s*(?:@\\w+(?:\\([^)]*\\))?\\s+)*(?:(?:public|private|protected|static|final|synchronized|abstract|default)\\s+)*[\\w<>\\[\\],.? ]+\\s+${member}\\s*\\(`, 'm'),
+        new RegExp(`[\\w>\\]]\\s+${member}\\s*(?:=|;)`),
+        new RegExp(`\\b(?:class|record|interface|enum)\\s+${member}\\b`),
+      ].some((re) => re.test(src));
+      if (!declared) problems.push(`${label}: ${parts[parts.length - 1]} is not declared in ${rel}`);
+    }
+    expect(problems).toEqual([]);
   });
 });

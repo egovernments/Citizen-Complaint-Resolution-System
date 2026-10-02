@@ -3,17 +3,26 @@ package org.egov.novubridge.web.controllers;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
-import org.egov.novubridge.service.provider.NovuProviderStrategy;
-import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
+import org.egov.novubridge.service.TwilioTemplateSyncService;
+import org.egov.novubridge.service.delivery.DeliveryProvider;
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.DeliveryResult;
+import org.egov.novubridge.service.delivery.Dispatch;
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+import org.egov.novubridge.service.provider.ProviderCatalog;
+import org.egov.novubridge.service.provider.ProviderType;
 import org.egov.novubridge.util.PiiMask;
+import org.egov.novubridge.util.Values;
+import org.egov.novubridge.web.filters.ProxyAuthFilter;
+import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
-import org.egov.novubridge.web.models.ResolvedProvider;
-import org.egov.novubridge.web.models.ResolvedTemplate;
 import org.egov.tracer.model.CustomException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,124 +30,410 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
+import static org.egov.novubridge.util.Values.asList;
+import static org.egov.novubridge.util.Values.asMap;
+import static org.egov.novubridge.util.Values.firstText;
+import static org.egov.novubridge.util.Values.stableId;
+import static org.egov.novubridge.util.Values.str;
+import static org.egov.novubridge.util.Values.truthy;
+import static org.egov.novubridge.util.Values.unwrapData;
+
 /**
- * Self-service provider management for the configurator's Notification Providers
- * screen. Sits alongside {@link IntegrationController} and {@code DispatchController}
- * under the same {@code /novu-adapter/v1} namespace, behind the same
- * {@link org.egov.novubridge.web.filters.ProxyAuthFilter} EMPLOYEE+role gate.
+ * The configurator's Notification Providers screen, behind ProxyAuthFilter (create, _update,
+ * _delete and test-send additionally need an admin role held at a state that owns the
+ * deployment's providers: {@link org.egov.novubridge.config.NovuBridgeConfiguration#providerAdminStateTenants()}).
  *
- * <p><b>Secrets stay server-side.</b> Novu is the provider/credential store; this
- * service holds only the Novu ApiKey (never exposed to the keyless SPA). Operator
- * credentials entered in the UI POST straight through to Novu over TLS via
- * {@link NovuClient#createIntegration}; they are never persisted here, never logged
- * (only credential key names are), and never echoed back — every response is built
- * by the shared {@link IntegrationProjection} ALLOWLIST (no {@code credentials} key
- * in any shape ever leaves). There is deliberately NO endpoint that returns a raw
- * provider secret or the Novu key.
- *
- * <p>Every {@code /providers/test-send} writes one {@code nb_dispatch_log} row
- * tagged {@code TEST} (event_name/template_key = {@code "TEST"}) with a masked
- * recipient, so live tests are auditable and separable from real traffic.
+ * <p>Secrets stay server-side: operator credentials go straight to Novu and are never persisted,
+ * logged (key names only) or echoed. Every response goes through the {@link IntegrationProjection}
+ * allowlist. Each write invalidates {@link ProviderAvailability} so dispatch sees it on the next event.
  */
 @RestController
 @RequestMapping("/novu-adapter/v1")
 @Slf4j
 public class ProviderController {
 
-    private static final String NOVU_CHANNEL_SMS = "sms";
-    private static final String NOVU_CHANNEL_EMAIL = "email";
     private static final String WORKFLOW_SMS = "complaints-sms";
     private static final String WORKFLOW_EMAIL = "complaints-email";
 
     private final NovuClient novuClient;
-    private final NovuProviderStrategyFactory strategyFactory;
+    private final DeliveryProviderRegistry providers;
     private final DispatchLogRepository dispatchLogRepository;
-    private final org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService;
+    private final TwilioTemplateSyncService twilioTemplateSyncService;
+    private final ProviderCatalog catalog;
+    private final ChannelPolicyClient channelPolicy;
+    private final ProviderAvailability providerAvailability;
 
     public ProviderController(NovuClient novuClient,
-                              NovuProviderStrategyFactory strategyFactory,
+                              DeliveryProviderRegistry providers,
                               DispatchLogRepository dispatchLogRepository,
-                              org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService) {
+                              TwilioTemplateSyncService twilioTemplateSyncService,
+                              ProviderCatalog catalog,
+                              ChannelPolicyClient channelPolicy,
+                              ProviderAvailability providerAvailability) {
         this.novuClient = novuClient;
-        this.strategyFactory = strategyFactory;
+        this.providers = providers;
         this.dispatchLogRepository = dispatchLogRepository;
         this.twilioTemplateSyncService = twilioTemplateSyncService;
+        this.catalog = catalog;
+        this.channelPolicy = channelPolicy;
+        this.providerAvailability = providerAvailability;
     }
 
-    // ---- GET /providers/twilio-templates ---------------------------------
+    /** Provider types and their credential forms: what to ASK for, never what is stored. */
+    @GetMapping("/providers/catalog")
+    public ResponseEntity<Map<String, Object>> catalog() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("data", catalog.types());
+        return ResponseEntity.ok(out);
+    }
 
-    /**
-     * §4 sync: pull the linked Twilio account's approved WhatsApp Content templates
-     * and auto-match them to PGR routing keys. Returns {@code {matched:[…proposed
-     * NotificationProviderTemplate rows…], unmatched:[…diagnostics…], total}} — the
-     * configurator persists the matched rows to MDMS. Never returns credentials.
-     */
+    /** The linked Twilio account's WhatsApp Content templates. Never returns credentials. */
     @GetMapping("/providers/twilio-templates")
     public ResponseEntity<Map<String, Object>> twilioTemplates() {
         return ResponseEntity.ok(twilioTemplateSyncService.syncWhatsappTemplates());
     }
 
-    // ---- POST /providers -------------------------------------------------
-
     /**
-     * Create a Novu provider integration from operator-entered credentials.
-     * {@code WHATSAPP} maps to the Twilio {@code sms} Novu channel (WhatsApp is the
-     * Twilio SMS integration used with a {@code whatsapp:} sender, not a separate
-     * Novu channel). Returns the created integration via the ALLOWLIST projection —
-     * never any {@code credentials}.
+     * Catalog form {@code {type, name, credentials, active?}}, or the legacy form
+     * {@code {channel, providerId, name, identifier, credentials}} for a Novu provider the catalog
+     * does not cover.
      */
     @PostMapping("/providers")
     public ResponseEntity<ProviderCreateResponse> createProvider(@RequestBody Map<String, Object> body) {
+        if (StringUtils.hasText(str(body.get("type")))) {
+            return createFromCatalog(body);
+        }
         String channel = str(body.get("channel"));
         String providerId = str(body.get("providerId"));
         String name = str(body.get("name"));
         String identifier = str(body.get("identifier"));
-        Map<String, Object> credentials = asMap(body.get("credentials"));
-
         if (!StringUtils.hasText(providerId)) {
             throw new CustomException("NB_INVALID_PROVIDER", "providerId is required");
         }
+        catalog.requireAvailable(providerId);
         String novuChannel = toNovuChannel(channel);
-
-        // WHATSAPP is stored as a Novu `sms` integration, which destroys the
-        // channel designation in every subsequent list/projection. Preserve it in
-        // the integration identifier (the only round-trippable field — credentials
-        // are never echoed back) so the UI can derive WHATSAPP for display.
-        // Deterministic (stableId of the name), no clock/random.
+        // WHATSAPP is stored as a Novu `sms` integration; the identifier is the only round-trippable
+        // field that can remember it was WhatsApp.
         if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(identifier)) {
             identifier = "whatsapp-" + stableId(StringUtils.hasText(name) ? name : providerId);
         }
-
         NovuClient.NovuResponse novuResponse =
-                novuClient.createIntegration(name, identifier, providerId, novuChannel, credentials);
-        Map<String, Object> created = extractCreatedIntegration(novuResponse.getResponse());
-        Map<String, Object> projected = IntegrationProjection.project(created);
-
-        return new ResponseEntity<>(
-                ProviderCreateResponse.builder().data(projected).build(), HttpStatus.OK);
+                novuClient.createIntegration(name, identifier, providerId, novuChannel, asMap(body.get("credentials")));
+        providerAvailability.invalidate();
+        return projected(unwrapData(novuResponse.getResponse()));
     }
 
-    // ---- GET /providers/templates ---------------------------------------
+    /**
+     * The bridge resolves Novu provider id, channel, credential mapping and a typed identifier. A
+     * caller's own identifier must read back as the same type (start {@code <type>-}): rotation
+     * picks the credential form from the identifier alone, so {@code ozeki-x} on a twilio-sms
+     * integration would be rotated with Ozeki's form and a prefix-less one could never be rotated.
+     */
+    private ResponseEntity<ProviderCreateResponse> createFromCatalog(Map<String, Object> body) {
+        ProviderType type = catalog.require(str(body.get("type")));
+        Map<String, Object> credentials = asMap(body.get("credentials"));
+        catalog.validateRequired(type, credentials);
+
+        String name = StringUtils.hasText(str(body.get("name"))) ? str(body.get("name")) : type.getLabel();
+        String identifier = str(body.get("identifier"));
+        if (!StringUtils.hasText(identifier)) {
+            identifier = ProviderCatalog.identifierFor(type.getType(), name);
+        } else if (!type.getType().equals(ProviderCatalog.typeFromIdentifier(identifier))) {
+            throw new CustomException("NB_INVALID_PROVIDER", "identifier '" + identifier + "' must start with '"
+                    + type.getType() + "-': the provider type is read back from it. Omit it to have one derived.");
+        }
+        // Absent means active: Novu's own default (inactive) would make it invisible to every trigger.
+        boolean active = !body.containsKey("active") || truthy(body.get("active"));
+
+        NovuClient.NovuResponse novuResponse = novuClient.createIntegration(
+                name, identifier, type.getNovuProviderId(), type.novuChannel(),
+                catalog.toNovuCredentials(type, credentials), active);
+        providerAvailability.invalidate();
+        return projected(unwrapData(novuResponse.getResponse()));
+    }
 
     /**
-     * Read-only discovery of Novu workflows (delivery shells). Lists
-     * {@code {workflowId, name, channels}} — does NOT call Twilio (Twilio has no
-     * SMS template registry; SMS/EMAIL message text lives in MDMS
-     * NotificationTemplate, approved WhatsApp ContentSids in
-     * NotificationProviderTemplate). {@code channel} filters by the workflow's
-     * Novu step types ({@code stepTypeOverviews}): SMS/WHATSAPP → {@code sms}
-     * steps (WhatsApp rides the Twilio SMS integration), EMAIL → {@code email}.
-     * {@code providerId} is accepted but not filterable — Novu workflows are
-     * channel-scoped, not provider-scoped.
+     * Rename, toggle or rotate. The id is in the body because the gateway's access control matches
+     * exact URLs. Novu REPLACES credentials wholesale on PUT, so a rotation is validated as complete
+     * against the type derived from the integration's own identifier. Deactivating
+     * ({@code active:false}) is guarded like a delete: see {@link #requireNotInUse}. Rotating or
+     * re-enabling a DIGIT worker provider the worker does not load is {@code NB_PROVIDER_TYPE_UNAVAILABLE}.
+     */
+    @PostMapping("/providers/_update")
+    public ResponseEntity<ProviderCreateResponse> updateProvider(@RequestBody Map<String, Object> body) {
+        String id = str(body.get("id"));
+        if (!StringUtils.hasText(id)) {
+            throw new CustomException("NB_INVALID_PROVIDER", "id is required");
+        }
+        List<Map<String, Object>> integrations = listIntegrations();
+        Map<String, Object> existing = findIntegration(integrations, id);
+
+        String name = str(body.get("name"));
+        Boolean active = body.containsKey("active") ? truthy(body.get("active")) : null;
+        Map<String, Object> credentials = asMap(body.get("credentials"));
+        if (credentials != null || Boolean.TRUE.equals(active)) {
+            catalog.requireAvailable(str(existing.get("providerId")));
+        }
+        Map<String, Object> novuCredentials = null;
+        if (credentials != null) {
+            String derived = ProviderCatalog.deriveType(existing);
+            if (derived == null) {
+                throw new CustomException("NB_UNKNOWN_PROVIDER_TYPE",
+                        "Cannot rotate credentials for integration " + id
+                                + ": its provider type cannot be derived. Re-create it from the catalog.");
+            }
+            ProviderType type = catalog.require(derived);
+            // Novu cannot change an integration's provider, and PUT replaces credentials wholesale:
+            // rotating an SMSCountry/Ozeki integration made before they became native providers
+            // (generic-sms) would store keys generic-sms cannot read.
+            String existingProvider = str(existing.get("providerId"));
+            if (StringUtils.hasText(existingProvider) && !type.getNovuProviderId().equalsIgnoreCase(existingProvider.trim())) {
+                throw new CustomException("NB_INVALID_PROVIDER", "Integration " + id + " is a Novu '"
+                        + existingProvider.trim() + "' integration, but the " + type.getType() + " provider type is now Novu's '"
+                        + type.getNovuProviderId() + "' provider. Novu cannot change an integration's provider: "
+                        + "add a new " + type.getLabel() + " provider, select it on the channel, then delete this one.");
+            }
+            catalog.validateRequired(type, credentials);
+            novuCredentials = catalog.toNovuCredentials(type, credentials);
+        }
+        // Novu answers an opaque 400 on an empty change set; name the accepted fields instead.
+        if (!StringUtils.hasText(name) && novuCredentials == null && active == null) {
+            throw new CustomException("NB_INVALID_PROVIDER",
+                    "Nothing to update: supply at least one of name, credentials, active");
+        }
+        if (Boolean.FALSE.equals(active)) {
+            requireNotInUse(body, existing, integrations, "disable");
+        }
+
+        NovuClient.NovuResponse novuResponse =
+                novuClient.updateIntegration(str(existing.get("_id")), name, novuCredentials, active);
+        providerAvailability.invalidate();
+        Map<String, Object> updated = unwrapData(novuResponse.getResponse());
+        return projected(updated.isEmpty() ? existing : updated);
+    }
+
+    /**
+     * Delete a provider and its Novu-held credentials, but never one a tenant still routes through:
+     * Novu would delete it and every send on that channel would fail. See {@link #requireNotInUse}.
+     */
+    @PostMapping("/providers/_delete")
+    public ResponseEntity<Map<String, Object>> deleteProvider(@RequestBody Map<String, Object> body) {
+        String id = str(body.get("id"));
+        if (!StringUtils.hasText(id)) {
+            throw new CustomException("NB_INVALID_PROVIDER", "id is required");
+        }
+        List<Map<String, Object>> integrations = listIntegrations();
+        Map<String, Object> existing = findIntegration(integrations, id);
+        requireNotInUse(body, existing, integrations, "delete");
+
+        novuClient.deleteIntegration(str(existing.get("_id")));
+        providerAvailability.invalidate();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", id);
+        data.put("deleted", true);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("data", data);
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Refuses to delete or disable an integration a tenant still sends through (409
+     * {@code NB_PROVIDER_IN_USE}):
+     * <ul>
+     *   <li>a channel row selects it, by identifier OR Novu {@code _id};</li>
+     *   <li>it is the integration an env var names for a channel ({@code NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP}:
+     *       every WhatsApp trigger without a selected provider names it) and such a channel is on;</li>
+     *   <li>or it is the last ACTIVE integration of its DIGIT channel (SMS, WHATSAPP or EMAIL, from
+     *       its catalog type: Twilio WhatsApp is a Novu {@code sms} integration but no substitute for
+     *       SMS, nor SMS for WhatsApp) and a channel with that code sends through Novu's default
+     *       because nothing pins it: a row without {@code provider} (every legacy row), a state on
+     *       the {@code novu.bridge.channels.enabled} fallback, or every tenant when the channel
+     *       policy is off. Unpinned WhatsApp with the env pin set names that integration instead, so
+     *       it is covered by the rule above.</li>
+     * </ul>
+     * {@code tenantId} is required (the caller's state tenant) and must be a state the caller is an
+     * admin of (403 {@code NB_TENANT_NOT_ALLOWED}). The rows are read from MDMS now, once per state,
+     * for that state, every state the caller administers, every state this instance has dispatched
+     * for and the states that own the providers; the check fails CLOSED: a state whose rows cannot
+     * be read refuses too, and so does an unreadable Novu integration list (the lookup before this
+     * throws). Integrations are deployment-wide, so a state outside that set is not checked.
+     */
+    private void requireNotInUse(Map<String, Object> body, Map<String, Object> integration,
+                                 List<Map<String, Object>> integrations, String verb) {
+        String tenantId = str(body.get("tenantId"));
+        if (!StringUtils.hasText(tenantId)) {
+            throw new CustomException("NB_INVALID_PROVIDER",
+                    "tenantId (your state tenant) is required to " + verb + " a provider");
+        }
+        String state = ChannelPolicyClient.stateTenant(tenantId.trim());
+        ProxyAuthFilter.Caller caller = ProxyAuthFilter.currentCaller();
+        Set<String> states = new LinkedHashSet<>();
+        states.add(state);
+        if (caller != null) {
+            if (!caller.adminStateTenants().contains(state)) {
+                throw new Refusal(HttpStatus.FORBIDDEN, "NB_TENANT_NOT_ALLOWED", "You hold no admin role at state tenant "
+                        + state + ", so you cannot " + verb + " a provider on its behalf");
+            }
+            states.addAll(caller.adminStateTenants());
+        }
+        states.addAll(channelPolicy.knownStateTenants());
+
+        String identifier = str(integration.get("identifier"));
+        String id = str(integration.get("_id"));
+        String label = StringUtils.hasText(identifier) ? identifier : id;
+
+        // The channels an env var points at this integration for, and the one whose default it is.
+        Map<String, String> envPins = channelPolicy.envPinnedIntegrations();
+        Set<String> envPinnedFor = new LinkedHashSet<>();
+        envPins.forEach((code, pinned) -> {
+            if (sameIntegration(pinned, identifier, id)) {
+                envPinnedFor.add(code);
+            }
+        });
+        String digitChannel = ProviderCatalog.digitChannelOf(integration);
+        boolean lastActive = digitChannel != null && !envPins.containsKey(digitChannel)
+                && isLastActiveOfItsChannel(integration, integrations, digitChannel);
+        Set<String> codes = new LinkedHashSet<>(envPinnedFor);
+        if (lastActive) {
+            codes.add(digitChannel);
+        }
+
+        ChannelPolicyClient.ProviderUsage usage;
+        try {
+            usage = channelPolicy.providerUsage(states, identifier, id, codes);
+        } catch (RuntimeException e) {
+            log.warn("Refusing to {} provider {}: channel rows for {} could not be read ({})",
+                    verb, label, states, e.getMessage());
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Could not confirm that no channel "
+                    + "selects provider " + label + " (channel rows unreadable: " + e.getMessage()
+                    + "). Nothing was changed; try again once MDMS answers.");
+        }
+        if (!usage.selecting().isEmpty()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                    + " is still selected on a channel for tenant(s) " + String.join(", ", usage.selecting())
+                    + ". Point that channel at another provider first.");
+        }
+        for (String code : envPinnedFor) {
+            List<String> onEnvPin = usage.unpinned(code);
+            if (!onEnvPin.isEmpty()) {
+                throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                        + " is the integration NOVU_BRIDGE_INTEGRATION_ID_" + code + " names, and every " + code
+                        + " message without a selected provider is sent through it: " + String.join(", ", onEnvPin)
+                        + ". Select a provider on those channels, or point the env var at another integration "
+                        + "and restart novu-bridge, first.");
+            }
+        }
+        List<String> onDefault = lastActive ? usage.unpinned(digitChannel) : List.of();
+        if (!onDefault.isEmpty()) {
+            throw new Refusal(HttpStatus.CONFLICT, "NB_PROVIDER_IN_USE", "Provider " + label
+                    + " is the last active " + digitChannel + " integration, and these channels are on "
+                    + "with no provider selected, so Novu sends them through it: " + String.join(", ", onDefault)
+                    + ". Select a provider on those channels (or add and enable another " + digitChannel
+                    + " provider) first.");
+        }
+    }
+
+    /** An env var names an integration by identifier or Novu {@code _id}, like a channel row. */
+    private static boolean sameIntegration(String key, String identifier, String id) {
+        if (!StringUtils.hasText(key)) {
+            return false;
+        }
+        String k = key.trim();
+        return (identifier != null && k.equalsIgnoreCase(identifier.trim())) || (id != null && k.equalsIgnoreCase(id.trim()));
+    }
+
+    /**
+     * Removing it would leave its DIGIT channel with no active integration. False for an inactive
+     * one (Novu never selects it, so removing it changes nothing) and when another active
+     * integration of the same DIGIT channel remains: a Twilio WhatsApp integration does not stand in
+     * for SMS (nor SMS for WhatsApp), although Novu stores both on its {@code sms} channel.
+     */
+    private static boolean isLastActiveOfItsChannel(Map<String, Object> integration,
+                                                    List<Map<String, Object>> integrations, String digitChannel) {
+        if (!Boolean.TRUE.equals(integration.get("active"))) {
+            return false;
+        }
+        for (Map<String, Object> other : integrations) {
+            if (other == integration || !Boolean.TRUE.equals(other.get("active"))) {
+                continue;
+            }
+            String otherId = str(other.get("_id"));
+            if (otherId != null && otherId.equals(str(integration.get("_id")))) {
+                continue;
+            }
+            if (digitChannel.equals(ProviderCatalog.digitChannelOf(other))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A refusal with its own status (403, 409), in the {@code Errors} shape the tracer handler uses. */
+    static final class Refusal extends RuntimeException {
+        private final HttpStatus status;
+        private final String code;
+
+        Refusal(HttpStatus status, String code, String message) {
+            super(message);
+            this.status = status;
+            this.code = code;
+        }
+
+        HttpStatus status() {
+            return status;
+        }
+
+        String code() {
+            return code;
+        }
+
+        ResponseEntity<Map<String, Object>> toResponse() {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("code", code);
+            error.put("message", getMessage());
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("Errors", List.of(error));
+            return new ResponseEntity<>(out, status);
+        }
+    }
+
+    @ExceptionHandler(Refusal.class)
+    ResponseEntity<Map<String, Object>> refused(Refusal refusal) {
+        return refusal.toResponse();
+    }
+
+    /** By Novu {@code _id} or {@code identifier}; Novu v2.3.0 has no GET-by-id, so this lists. */
+    private Map<String, Object> findIntegration(String id) {
+        return findIntegration(listIntegrations(), id);
+    }
+
+    /** Throws {@code NB_NOVU_INTEGRATIONS_FAILED} when Novu cannot be asked. */
+    private List<Map<String, Object>> listIntegrations() {
+        return IntegrationProjection.extractList(novuClient.listIntegrations().getResponse());
+    }
+
+    private static Map<String, Object> findIntegration(List<Map<String, Object>> integrations, String id) {
+        for (Map<String, Object> i : integrations) {
+            if (id.equals(str(i.get("_id"))) || id.equals(str(i.get("identifier")))) {
+                return i;
+            }
+        }
+        throw new CustomException("NB_PROVIDER_NOT_FOUND", "No provider integration with id " + id);
+    }
+
+    /**
+     * Novu workflows ({@code workflowId, name, channels}); does NOT call Twilio. {@code channel}
+     * filters by step type; {@code providerId} is accepted but not filterable (workflows are
+     * channel-scoped).
      */
     @GetMapping("/providers/templates")
     public ResponseEntity<Map<String, Object>> templates(
@@ -150,8 +445,7 @@ public class ProviderController {
         List<Map<String, Object>> data = new ArrayList<>(workflows.size());
         for (Map<String, Object> wf : workflows) {
             List<String> steps = stepTypes(wf);
-            // Skip-on-mismatch only when the workflow declares steps: a response
-            // without stepTypeOverviews (older Novu) degrades to the unfiltered list.
+            // Older Novu omits stepTypeOverviews: degrade to the unfiltered list.
             if (wantedStep != null && !steps.isEmpty() && !steps.contains(wantedStep)) {
                 continue;
             }
@@ -167,15 +461,13 @@ public class ProviderController {
         return ResponseEntity.ok(out);
     }
 
-    /** Lower-cased step types of a Novu v2 workflow ({@code stepTypeOverviews}). */
-    @SuppressWarnings("unchecked")
     private static List<String> stepTypes(Map<String, Object> workflow) {
-        Object raw = workflow.get("stepTypeOverviews");
-        if (!(raw instanceof List)) {
+        List<Object> raw = asList(workflow.get("stepTypeOverviews"));
+        if (raw == null) {
             return List.of();
         }
         List<String> steps = new ArrayList<>();
-        for (Object step : (List<Object>) raw) {
+        for (Object step : raw) {
             if (step != null) {
                 steps.add(String.valueOf(step).toLowerCase());
             }
@@ -183,22 +475,18 @@ public class ProviderController {
         return steps;
     }
 
-    /**
-     * Novu {@code GET /v2/workflows} nests the list at {@code data.workflows}
-     * (unlike {@code /v1/integrations} whose list is {@code data} directly).
-     * Tolerant of both plus a bare {@code workflows} key.
-     */
+    /** {@code GET /v2/workflows} nests the list at {@code data.workflows}; tolerate {@code data} and {@code workflows}. */
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> extractWorkflows(Map<String, Object> response) {
         if (response == null) {
             return List.of();
         }
-        Object data = response.get("data");
-        if (data instanceof Map && ((Map<String, Object>) data).get("workflows") instanceof List) {
-            return (List<Map<String, Object>>) ((Map<String, Object>) data).get("workflows");
+        Map<String, Object> data = asMap(response.get("data"));
+        if (data != null && data.get("workflows") instanceof List) {
+            return (List<Map<String, Object>>) data.get("workflows");
         }
-        if (data instanceof List) {
-            return (List<Map<String, Object>>) data;
+        if (response.get("data") instanceof List) {
+            return (List<Map<String, Object>>) response.get("data");
         }
         if (response.get("workflows") instanceof List) {
             return (List<Map<String, Object>>) response.get("workflows");
@@ -206,37 +494,35 @@ public class ProviderController {
         return List.of();
     }
 
-    // ---- POST /providers/verify -----------------------------------------
-
     /**
-     * Verify connectivity of a configured integration by matching it in
-     * {@code GET /v1/integrations} — by {@code integrationId} (matches Novu
-     * {@code _id} or {@code identifier}), or by {@code channel}+{@code providerId}.
-     * Returns {@code {ok, active, detail}}.
+     * Is a configured integration present and active? Matched by {@code integrationId}/{@code id}
+     * ({@code _id} or identifier), else by catalog {@code type}, else by {@code channel}+{@code providerId}.
      */
     @PostMapping("/providers/verify")
     public ResponseEntity<Map<String, Object>> verify(@RequestBody Map<String, Object> body) {
-        String integrationId = str(body.get("integrationId"));
+        String integrationId = firstText(str(body.get("integrationId")), str(body.get("id")));
+        String type = str(body.get("type"));
         String channel = str(body.get("channel"));
         String providerId = str(body.get("providerId"));
 
         NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
         List<Map<String, Object>> integrations = IntegrationProjection.extractList(novuResponse.getResponse());
-
         String novuChannel = StringUtils.hasText(channel) ? toNovuChannel(channel) : null;
         Map<String, Object> match = null;
         for (Map<String, Object> i : integrations) {
+            boolean hit;
             if (StringUtils.hasText(integrationId)) {
-                if (integrationId.equals(str(i.get("_id"))) || integrationId.equals(str(i.get("identifier")))) {
-                    match = i;
-                    break;
-                }
-            } else if (novuChannel != null && StringUtils.hasText(providerId)) {
-                if (novuChannel.equalsIgnoreCase(str(i.get("channel")))
-                        && providerId.equalsIgnoreCase(str(i.get("providerId")))) {
-                    match = i;
-                    break;
-                }
+                hit = integrationId.equals(str(i.get("_id"))) || integrationId.equals(str(i.get("identifier")));
+            } else if (StringUtils.hasText(type)) {
+                hit = catalog.require(type).getType().equals(ProviderCatalog.deriveType(i));
+            } else {
+                hit = novuChannel != null && StringUtils.hasText(providerId)
+                        && novuChannel.equalsIgnoreCase(str(i.get("channel")))
+                        && providerId.equalsIgnoreCase(str(i.get("providerId")));
+            }
+            if (hit) {
+                match = i;
+                break;
             }
         }
 
@@ -254,16 +540,10 @@ public class ProviderController {
         return ResponseEntity.ok(out);
     }
 
-    // ---- POST /providers/test-send --------------------------------------
-
     /**
-     * Send a live test message through Novu. SMS/EMAIL trigger the per-channel
-     * workflow with a {@code {body, subject}} payload. WHATSAPP rides the Twilio SMS
-     * integration: {@code to.phone = "whatsapp:+<E164>"} plus
-     * {@code overrides.providers.twilio} built by {@link org.egov.novubridge.service.provider.TwilioProviderStrategy}
-     * for an approved {@code contentSid}. The recipient-derived {@code subscriberId}
-     * is stable (no clock/random) so a repeated test is reproducible. Writes one
-     * {@code TEST}-tagged {@code nb_dispatch_log} row with a masked recipient.
+     * A live test through the same provider seam as dispatch. The subscriberId is derived from the
+     * input (no clock/random) so a re-test is reproducible. Writes one masked, {@code is_test} row
+     * at the operator's tenant.
      */
     @PostMapping("/providers/test-send")
     public ResponseEntity<Map<String, Object>> testSend(@RequestBody Map<String, Object> body) {
@@ -272,125 +552,91 @@ public class ProviderController {
         String phone = to != null ? str(to.get("phone")) : null;
         String email = to != null ? str(to.get("email")) : null;
         String workflowId = str(body.get("workflowId"));
-        String bodyText = str(body.get("body"));
-        String subject = str(body.get("subject"));
-        String contentSid = str(body.get("contentSid"));
-        List<Object> variables = asList(body.get("variables"));
         String txnInput = str(body.get("transactionId"));
+        String tenantId = StringUtils.hasText(str(body.get("tenantId"))) ? str(body.get("tenantId")) : "TEST";
+
+        // `id` pins the trigger to one integration; `type` alone fills in the channel.
+        String integrationId = firstText(str(body.get("integrationId")), str(body.get("id")));
+        String integrationIdentifier = null;
+        if (StringUtils.hasText(integrationId)) {
+            Map<String, Object> integration = findIntegration(integrationId);
+            // Novu would accept the trigger and the test would read ok:true for a message the worker drops.
+            catalog.requireAvailable(str(integration.get("providerId")));
+            integrationIdentifier = str(integration.get("identifier"));
+        }
+        if (StringUtils.hasText(str(body.get("type")))) {
+            ProviderType type = catalog.require(str(body.get("type")));
+            if (!StringUtils.hasText(channel)) {
+                channel = type.getChannel();
+            }
+        }
 
         String upperChannel = channel == null ? "" : channel.toUpperCase();
         String recipient = StringUtils.hasText(phone) ? phone : email;
-
-        // Stable, reproducible subscriberId — derived from the transactionId input
-        // when supplied, else the recipient; NO clock/random so a re-test is idempotent.
-        String seed = StringUtils.hasText(txnInput) ? txnInput
-                : (recipient != null ? recipient : upperChannel);
+        String seed = StringUtils.hasText(txnInput) ? txnInput : (recipient != null ? recipient : upperChannel);
         String subscriberId = "nb-test-" + stableId(seed);
         String transactionId = StringUtils.hasText(txnInput) ? txnInput : subscriberId;
+        String workflow = StringUtils.hasText(workflowId) ? workflowId
+                : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
 
-        Map<String, Object> payload = new HashMap<>();
-        if (bodyText != null) {
-            payload.put("body", bodyText);
-        }
-        if (subject != null) {
-            payload.put("subject", subject);
-        }
+        Dispatch dispatch = Dispatch.builder()
+                .test(true)
+                .channel(upperChannel)
+                .subscriberId(subscriberId)
+                .contact(Contact.builder().phone(phone).email(email).build())
+                .body(str(body.get("body")))
+                .subject(str(body.get("subject")))
+                .transactionId(transactionId)
+                .templateId(str(body.get("contentSid")))
+                .contentVariables(toContentVariables(asList(body.get("variables"))))
+                .workflowOverride(workflow)
+                .integrationIdentifier(integrationIdentifier)
+                .build();
+        // A named integration is a Novu integration by construction (SMSCountry included), so the
+        // legacy direct-gateway route must not swallow it.
+        DeliveryProvider transport = StringUtils.hasText(integrationIdentifier)
+                ? providers.novu() : providers.select(null, upperChannel);
+        DeliveryResult result = transport.send(dispatch);
 
-        NovuClient.NovuResponse novuResponse;
-        if ("WHATSAPP".equals(upperChannel)) {
-            String phoneArg = "whatsapp:+" + digitsOnly(phone);
-            Map<String, Object> overrides = buildWhatsappOverrides(contentSid, variables);
-            // Same integration-selection override the live dispatch path applies (NovuClient
-            // .identifyThenTrigger) — without it, a test-send would validate against Novu's
-            // primary SMS integration instead of the dedicated WhatsApp one it's meant to test.
-            overrides = novuClient.applyWhatsappIntegrationOverride(overrides, upperChannel);
-            String workflow = StringUtils.hasText(workflowId) ? workflowId : WORKFLOW_SMS;
-            novuResponse = novuClient.trigger(workflow, subscriberId, phoneArg, payload,
-                    transactionId, overrides, null);
-        } else {
-            String workflow = StringUtils.hasText(workflowId) ? workflowId
-                    : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
-            // The email-capable overload: to.email must reach Novu or the email
-            // step has no address (the synthetic nb-test-* subscriber carries no
-            // stored email) and the "successful" trigger silently delivers nothing.
-            novuResponse = novuClient.trigger(workflow, subscriberId, phone, email,
-                    payload, transactionId);
-        }
-
-        int novuStatus = novuResponse.getStatusCode() != null ? novuResponse.getStatusCode() : 0;
-        boolean ok = novuStatus >= 200 && novuStatus < 300;
-        writeTestLog(upperChannel, recipient, transactionId, novuStatus, ok);
+        int novuStatus = result.getStatusCode() != null ? result.getStatusCode() : 0;
+        boolean ok = result.isAccepted();
+        writeTestLog(tenantId, upperChannel, recipient, transactionId, novuStatus, ok, result);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", ok);
         out.put("novuStatus", novuStatus);
         out.put("transactionId", transactionId);
+        if (!ok) {
+            out.put("errorCode", result.getProviderCode());
+            out.put("errorMessage", result.getProviderMessage());
+        }
         return ResponseEntity.ok(out);
     }
 
-    // ---- helpers ---------------------------------------------------------
-
-    /** SMS and WHATSAPP → Novu {@code sms}; EMAIL → {@code email}. */
+    /** SMS and WHATSAPP to Novu {@code sms}; EMAIL to {@code email}; anything else is NB_INVALID_CHANNEL. */
     private static String toNovuChannel(String channel) {
         if (!StringUtils.hasText(channel)) {
             throw new CustomException("NB_INVALID_CHANNEL", "channel is required");
         }
-        switch (channel.toUpperCase()) {
-            case "SMS":
-            case "WHATSAPP":
-                return NOVU_CHANNEL_SMS;
-            case "EMAIL":
-                return NOVU_CHANNEL_EMAIL;
-            default:
-                throw new CustomException("NB_INVALID_CHANNEL", "Unsupported channel: " + channel);
+        String novuChannel = Values.novuChannel(channel);
+        if (novuChannel == null) {
+            throw new CustomException("NB_INVALID_CHANNEL", "Unsupported channel: " + channel);
         }
+        return novuChannel;
     }
 
-    /** Novu create returns {@code {data:{...}}} (or bare object); unwrap defensively. */
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> extractCreatedIntegration(Map<String, Object> body) {
-        if (body == null) {
-            return new LinkedHashMap<>();
-        }
-        Object data = body.get("data");
-        if (data instanceof Map) {
-            return (Map<String, Object>) data;
-        }
-        return body;
+    private static ResponseEntity<ProviderCreateResponse> projected(Map<String, Object> integration) {
+        return new ResponseEntity<>(
+                ProviderCreateResponse.builder().data(IntegrationProjection.projectListItem(integration)).build(),
+                HttpStatus.OK);
     }
 
-    /**
-     * The exact {@code {providers:{twilio:{...}}}} override envelope
-     * {@link org.egov.novubridge.service.provider.TwilioProviderStrategy} produces
-     * for a content template (contentSid + contentVariables). No credentials/sender
-     * are set — those live in the Novu integration.
-     */
-    private Map<String, Object> buildWhatsappOverrides(String contentSid, List<Object> variables) {
-        ResolvedProvider provider = ResolvedProvider.builder()
-                .providerName("twilio")
-                .channel("whatsapp")
-                .build();
-        ResolvedTemplate template = ResolvedTemplate.builder()
-                .contentSid(contentSid)
-                .build();
-
-        NovuProviderStrategy strategy = strategyFactory.getStrategy(provider);
-        Map<String, Object> providerConfig = strategy.buildProviderConfig(
-                provider, template, toContentVariables(variables));
-
-        Map<String, Object> providers = new HashMap<>();
-        providers.put(provider.getProviderName().toLowerCase(), providerConfig);
-        Map<String, Object> overrides = new HashMap<>();
-        overrides.put("providers", providers);
-        return overrides;
-    }
-
-    /** Positional variables → Twilio 1-based contentVariables map ({@code {"1":..,"2":..}}). */
-    private static Map<String, String> toContentVariables(List<Object> variables) {
+    /** Positional variables as Twilio's 1-based {@code {"1":..,"2":..}}. */
+    private static Map<String, Object> toContentVariables(List<Object> variables) {
         if (variables == null || variables.isEmpty()) {
             return null;
         }
-        Map<String, String> cv = new LinkedHashMap<>();
+        Map<String, Object> cv = new LinkedHashMap<>();
         for (int i = 0; i < variables.size(); i++) {
             Object v = variables.get(i);
             cv.put(String.valueOf(i + 1), v == null ? "" : v.toString());
@@ -398,61 +644,32 @@ public class ProviderController {
         return cv;
     }
 
-    private void writeTestLog(String channel, String recipient, String transactionId,
-                              int novuStatus, boolean ok) {
+    private void writeTestLog(String tenantId, String channel, String recipient, String transactionId,
+                              int novuStatus, boolean ok, DeliveryResult result) {
         long now = System.currentTimeMillis();
         Map<String, Object> providerResponse = new HashMap<>();
         providerResponse.put("test", true);
         providerResponse.put("novuStatus", novuStatus);
-        DispatchLogEntry entry = DispatchLogEntry.builder()
+        if (result.getRawResponse() != null) providerResponse.put("provider", result.getRawResponse());
+        dispatchLogRepository.upsert(DispatchLogEntry.builder()
                 .id(UUID.randomUUID())
                 .eventId(UUID.randomUUID().toString())
                 .transactionId(transactionId)
                 .module("notifications")
                 .eventName("TEST")
-                .tenantId("TEST")
+                .tenantId(tenantId)
+                .isTest(true)
+                .providerRef(result.getProviderRef())
                 .channel(StringUtils.hasText(channel) ? channel : "UNKNOWN")
                 .recipientValue(recipient != null ? PiiMask.mask(recipient) : "unknown")
                 .templateKey("TEST")
                 .status(ok ? "SENT" : "FAILED")
+                .lastErrorCode(ok ? null : result.getProviderCode())
+                .lastErrorMessage(ok ? null : result.getProviderMessage())
                 .attemptCount(1)
                 .providerResponse(providerResponse)
                 .createdTime(now)
                 .lastModifiedTime(now)
-                .build();
-        dispatchLogRepository.upsert(entry);
-    }
-
-    /** First 16 hex chars of SHA-256(seed) — deterministic, no clock/random. */
-    private static String stableId(String seed) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(seed.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 8 && i < digest.length; i++) {
-                sb.append(String.format("%02x", digest[i]));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return Integer.toHexString(seed.hashCode());
-        }
-    }
-
-    private static String digitsOnly(String value) {
-        return value == null ? "" : value.replaceAll("\\D", "");
-    }
-
-    private static String str(Object value) {
-        return value == null ? null : value.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> asMap(Object value) {
-        return value instanceof Map ? (Map<String, Object>) value : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<Object> asList(Object value) {
-        return value instanceof List ? (List<Object>) value : null;
+                .build());
     }
 }
