@@ -3552,6 +3552,72 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_MY_COMPLAINTS_CLEAR_SEARCH",
+        "message": "Clear search",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_CONCERN",
+        "message": "Concern",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_FILED_ON",
+        "message": "Filed on",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_NUMBER",
+        "message": "Complaint No.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COL_STATUS",
+        "message": "Status",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COUNT",
+        "message": "{count} complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_COUNT_ONE",
+        "message": "1 complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_NO_MATCH_BODY",
+        "message": "Try a complaint number, or a word from the description.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_NO_MATCH_TITLE",
+        "message": "No complaints match your search",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_RANGE",
+        "message": "{from}–{to} of {total}",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_MY_COMPLAINTS_SEARCH",
+        "message": "Search by complaint no. or text",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_CATEGORY",
         "message": "Complaint Category",
         "module": "rainmaker-pgr",

@@ -9172,7 +9172,8 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
  * ========================================================================== */
 .cms-file,
 .cms-receipt,
-.cms-details {
+.cms-details,
+.cms-complaints {
   /* The theme's own button tokens, as the shared Button reads them, so the
    * accents here follow each tenant the way its buttons do. */
   --cms-accent: var(--color-button-secondary-text, var(--color-primary-2, #2563EB));
@@ -10436,5 +10437,318 @@ html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container
   }
   .cms-details-actions > button {
     width: 100%;
+  }
+}
+
+/* ==========================================================================
+ * Citizen My Complaints as an inbox (#2223)
+ *
+ * The employee inbox's shape for a citizen's own complaints: a table on a
+ * desktop (Complaint No., Concern, Status, Filed on), a list on a phone, both
+ * in the theme's table and status colours, with a search above and a pager
+ * below. Each row opens the complaint.
+ * ========================================================================== */
+.cms-complaints-head {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 1rem 1.5rem 0.5rem;
+}
+.cms-complaints-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+.cms-complaints-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.cms-complaints-count {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cms-muted);
+}
+.cms-complaints-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1.5rem 1.5rem;
+}
+.cms-complaints-search {
+  position: relative;
+  max-width: 420px;
+  margin-bottom: 16px;
+}
+/* Room for the icon. A global rule pads every search input 12px with
+ * !important and three :not()s of weight, so this matches it and comes later. */
+.cms-complaints .cms-complaints-search input.cms-complaints-search-field[type="search"] {
+  padding-left: 36px !important;
+}
+.cms-complaints-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--cms-muted);
+  pointer-events: none;
+}
+.cms-complaints-card {
+  background: #FFFFFF;
+  border: 1px solid var(--color-table-border, var(--cms-line));
+  border-radius: 12px;
+  overflow: hidden;
+  /* The table or the list follows the card's own width, not the viewport's:
+   * the rail takes width from it independently. */
+  container: cms-complaints / inline-size;
+}
+
+/* Desktop: the table. Fixed layout, so a long description is cut rather than
+ * widening the Concern column past the card. */
+.cms-complaints-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.cms-complaints-col-number { width: 236px; }
+.cms-complaints-col-status { width: 210px; }
+.cms-complaints-col-date { width: 120px; }
+.cms-complaints-col-go { width: 44px; }
+.cms-complaints-table th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-table-border, var(--cms-line));
+  background: var(--color-table-header-bg, #F3F4F6);
+  color: var(--color-table-header-text, var(--cms-ink-2));
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.cms-complaints-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-table-border, var(--cms-line));
+  color: var(--color-table-row-text, var(--cms-ink));
+  font-size: 14px;
+  vertical-align: middle;
+}
+.cms-complaints-table tbody tr {
+  cursor: pointer;
+}
+.cms-complaints-table tbody tr:hover td {
+  background: var(--color-table-hover, #F9FAFB);
+}
+.cms-complaints-number {
+  color: var(--cms-accent);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+.cms-complaints-number:focus-visible {
+  outline: 2px solid var(--cms-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.cms-complaints-concern {
+  display: block;
+  font-weight: 600;
+  color: var(--cms-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-complaints-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--cms-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-complaints-date {
+  color: var(--cms-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cms-complaints-go {
+  color: #9CA3AF;
+  text-align: right;
+}
+.cms-complaints-go svg,
+svg.cms-complaints-go {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+/* Status, in the theme's status colours, toned by where the complaint is. */
+.cms-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cms-status-pill::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cms-status-pill.is-open {
+  background: var(--color-status-warning-bg, #FFF4D7);
+  color: var(--color-status-warning-text, #7A4E00);
+}
+.cms-status-pill.is-closed {
+  background: var(--color-status-success-bg, #EAF6ED);
+  color: var(--color-status-success-text, #2E7D32);
+}
+.cms-status-pill.is-rejected {
+  background: var(--color-status-error-bg, #FDECEC);
+  color: var(--color-status-error-text, #C62828);
+}
+
+/* A narrow card (a phone, a tablet beside the rail): the list. The table's
+ * fixed columns need about 610px, so below 48rem Concern would be a sliver;
+ * each complaint becomes one row with status and date, then its concern, two
+ * lines of description and its number. */
+.cms-complaints-list {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-complaints-list li + li {
+  border-top: 1px solid var(--color-table-border, var(--cms-line));
+}
+.cms-complaints-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.cms-complaints-item:active {
+  background: var(--color-table-hover, #F9FAFB);
+}
+.cms-complaints-item:focus-visible {
+  outline: 2px solid var(--cms-accent);
+  outline-offset: -2px;
+}
+.cms-complaints-item-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cms-complaints-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cms-complaints-item .cms-complaints-concern {
+  font-size: 15px;
+  line-height: 1.3;
+  white-space: normal;
+}
+.cms-complaints-item .cms-complaints-desc {
+  margin-top: 0;
+  line-height: 1.4;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cms-complaints-item .cms-complaints-number {
+  font-size: 12.5px;
+  text-decoration: none;
+}
+.cms-complaints-item .cms-complaints-date {
+  font-size: 12.5px;
+}
+
+.cms-complaints-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-table-border, var(--cms-line));
+  font-size: 13px;
+  color: var(--cms-muted);
+}
+.cms-complaints-table + .cms-complaints-list + .cms-complaints-pager {
+  /* The last table row draws its own rule above the pager. */
+  border-top: 0;
+}
+.cms-complaints-pager-buttons {
+  display: inline-flex;
+  gap: 6px;
+}
+.cms-complaints-pager button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-table-border, var(--cms-line));
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: var(--cms-ink-2);
+  cursor: pointer;
+}
+.cms-complaints-pager button:disabled {
+  color: #C5C5C5;
+  cursor: default;
+}
+.cms-complaints-pager button svg {
+  width: 16px;
+  height: 16px;
+}
+
+@container cms-complaints (max-width: 47.99rem) {
+  .cms-complaints-table {
+    display: none;
+  }
+  .cms-complaints-list {
+    display: block;
+  }
+  /* The list ends without a rule, so the pager draws its own. */
+  .cms-complaints-table + .cms-complaints-list + .cms-complaints-pager {
+    border-top: 1px solid var(--color-table-border, var(--cms-line));
+  }
+}
+@media (max-width: 47.99rem) {
+  .cms-complaints-head {
+    padding: 1rem 1rem 0.5rem;
+  }
+  .cms-complaints-body {
+    padding: 0.5rem 1rem 1.5rem;
+  }
+  .cms-complaints-search {
+    max-width: none;
   }
 }
