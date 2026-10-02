@@ -26,18 +26,26 @@ password.
 
 | Method | Route | Result |
 |---|---|---|
-| `GET` | `/identity/v1/auth-methods?intent=signin\|signup` | Client journey policy intersected with live Keycloak capabilities |
-| `GET` | `/identity/v1/authorize?method=...&intent=...&returnTo=...` | Starts Authorization Code + PKCE with state and nonce |
+| `GET` | `/identity/v1/auth-methods?surface=...&intent=signin\|signup` | The surface client's journey policy intersected with live Keycloak capabilities |
+| `GET` | `/identity/v1/authorize?surface=...&tenantSlug=...&method=...&intent=...&returnTo=...` | Starts Authorization Code + PKCE with state and nonce |
 | `POST` | `/identity/v1/authentication/magic-link-requests` | Saves a short-lived identity profile draft and sends the non-enumerating signup verification link |
 | `GET` | `/identity/v1/callback` | Validates the callback and creates an opaque cookie session |
 | `GET` | `/identity/v1/auth-results/:id` | Consumes a one-time, browser-safe callback result |
 | `POST` | `/identity/v1/password/setup-requests` | Sends a non-enumerating password setup/recovery email |
 | `GET` | `/identity/v1/password/setup-complete/:state` | One-time Keycloak action completion redirect |
-| `GET` | `/identity/v1/session` | Authentication state, opaque-session expiry, and selected tenant; never tokens |
+| `GET` | `/identity/v1/session?surface=...` | Authentication state, opaque-session expiry, and selected (or bound) tenant; never tokens |
+| `GET` | `/identity/v1/tenant-contexts/:urlSlug` | Resolves a public application slug to safe tenant metadata; grants no access |
+| `GET` | `/identity/v1/tenant-contexts/:urlSlug/branding?locale=...` | Public, cacheable login branding for the Keycloak digit-ui themes |
 | `GET` | `/identity/v1/tenants` | Tenants in both Keycloak membership and DIGIT grants |
-| `POST` | `/identity/v1/contexts/_select` | Records the tenant and returns the normal DIGIT login response |
+| `POST` | `/identity/v1/contexts/_select` | Records the tenant and returns the normal DIGIT login response (`surface` in the body for employee sessions) |
+| `POST` | `/identity/v1/contexts/citizen/_select` | Ensures the citizen's registration at the bound tenant and returns a DIGIT `CITIZEN` login response |
 | `POST` | `/identity/v1/organization-members/_invite` | Grants an employee access to the selected Organization and provisions their tenant-local DIGIT account |
-| `POST` | `/identity/v1/logout` | Revokes the DIGIT token and Keycloak session, clears the cookie |
+| `POST` | `/identity/v1/logout` | Revokes the DIGIT token and Keycloak session, clears the cookie (`{"surface": ...}` for employee/citizen) |
+
+Every route that reads a session takes a `surface`: `configurator` (the
+default whenever `surface` is absent, so every existing caller is unchanged),
+`employee` or `citizen`. See
+[digit-ui employee and citizen sign-in](#digit-ui-employee-and-citizen-sign-in-2167).
 
 ### Existing-user sign-in sequence
 
@@ -65,6 +73,15 @@ Browser          Identity BFF              Keycloak             egov-user
 ```
 
 Frontend calls:
+
+For tenant-scoped applications, resolve `/{urlSlug}/...` first through
+`GET /identity/v1/tenant-contexts/:urlSlug`. Keep `urlSlug` as routing state;
+use the returned `tenantId` for DIGIT requests. This public lookup is not an
+authorization decision. Employee authorization occurs when `_select` verifies
+the signed-in subject's live Organization membership and active DIGIT account.
+For a subtenant it additionally verifies membership in the exact
+tenant-bearing Organization Group; root Organization membership alone grants
+no subtenant access.
 
 1. Navigate the browser, rather than making an AJAX request, to:
 
@@ -253,6 +270,269 @@ DIGIT account. `401` means no identity session, `403` means the caller has no
 live admin authority, `409` means no Organization is selected or an identity
 conflicts, and `503` means DIGIT is temporarily unavailable.
 
+## digit-ui employee and citizen sign-in (#2167)
+
+digit-ui's employee and citizen applications sign in through Keycloak on
+screens that match the legacy digit-ui login pages. Each surface has its own
+confidential Keycloak client and theme (employee also has its own browser
+flow; citizen uses the realm's); the configurator client
+(`digit-identity-bff`, theme `configurator-blue`) is unchanged.
+
+| Surface | Keycloak client | Scope (`IDENTITY_*_SCOPE`) | Methods | Session cookie |
+|---|---|---|---|---|
+| `configurator` (default) | `KEYCLOAK_BFF_CLIENT_ID` (+ magic-link client) | `IDENTITY_SCOPE` | client policy | `digit_identity_session` |
+| `employee` | `KEYCLOAK_EMPLOYEE_CLIENT_ID` (`digit-ui-employee`) | `openid profile email` | `password` | `digit_identity_session_employee` |
+| `citizen` | `KEYCLOAK_CITIZEN_CLIENT_ID` (`digit-ui-citizen`) | `openid profile phone` | open ([#2189](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2189)); none by default | `digit_identity_session_citizen` |
+
+A surface whose client secret (`KEYCLOAK_EMPLOYEE_CLIENT_SECRET`,
+`KEYCLOAK_CITIZEN_CLIENT_SECRET`) is empty is unconfigured: its method
+discovery and `/authorize` answer `503`, and it never falls back to another
+client. The BFF keeps one client table (`src/modules/authentication/oidc.ts`);
+the login attempt and session record which client created them, so code
+exchange, refresh and logout always use that client. Access tokens must carry
+the `digit-identity-bff` audience (`KEYCLOAK_BFF_AUDIENCE`) and `azp` equal to
+the surface client.
+
+### The tenant comes only from the route
+
+```http
+GET /identity/v1/authorize?surface=employee&tenantSlug=bomet-county&returnTo=/bomet-county/digit-ui/employee/pgr/inbox
+```
+
+- `tenantSlug` is required for `employee`/`citizen` and rejected for the
+  configurator. It is resolved server-side with the same
+  `resolvePublicTenantRoute` as `GET /tenant-contexts/:urlSlug` (unknown or
+  inactive: `404`; Keycloak/DIGIT outage: `503`) and the result is bound to the
+  one-time login attempt together with the surface.
+- `returnTo` must be relative and, after normalization, start with
+  `/{urlSlug}/digit-ui/{surface}/`; it defaults to that prefix. Absolute URLs
+  are refused for these surfaces.
+- The client is chosen from `surface` alone, never from `returnTo`.
+- The Keycloak request adds `digit_tenant=<urlSlug>` (display only: the theme
+  uses it for branding; authority stays with the bound attempt) and
+  `prompt=login` (no cross-client SSO; LoA/ACR is a follow-up). An optional,
+  validated `ui_locales` is forwarded.
+- `method` defaults to the surface's first advertised sign-in method.
+
+The callback verifies the login cookie of the attempt's own surface (a cookie
+of another surface does not bind the callback), creates a session bound to
+that surface and tenant, sets that surface's cookie and redirects to
+`returnTo`. It skips Organization tenant discovery outside the configurator.
+A session is only ever returned for the surface that created it.
+
+`GET /identity/v1/session?surface=employee|citizen` additionally returns
+`surface` and `tenant: {urlSlug, tenantId, name}`; citizen sessions also return
+`user.phoneNumber` and `user.phoneNumberVerified`. The configurator response
+shape is unchanged.
+
+### Method discovery per surface
+
+`GET /identity/v1/auth-methods?surface=...` reads the attributes of that
+surface's own client: `digit.auth.signin.methods`,
+`digit.auth.signup.methods` (empty or absent for employee/citizen, because
+kcadm cannot write an empty attribute) and, when present,
+`digit.auth.surface`, which must equal the surface. An absent
+`digit.auth.signin.methods` (the citizen default until #2189 is decided)
+answers `503`. Magic links remain configurator-only.
+
+### Employee context
+
+```http
+POST /identity/v1/contexts/_select
+Content-Type: application/json
+
+{ "surface": "employee", "tenantId": "ke.bomet" }
+```
+
+An employee session may select only its bound tenant (`403` for any other,
+whatever the person's other memberships). The live Organization-membership
+check, role reconciliation and managed `EMPLOYEE` account are exactly the
+configurator's: the same Keycloak user gets the same `kcbff-` account.
+
+### Citizen context
+
+```http
+POST /identity/v1/contexts/citizen/_select
+Content-Type: application/json
+
+{}
+```
+
+The tenant comes from the session only; the body selects nothing. The BFF
+requires the citizen client as `azp` and `phone_number_verified === true`
+(the Keycloak mapper must emit a JSON boolean); without a verified phone it
+fails closed with `403`. How a citizen without one gets a DIGIT account is
+open (#2189). Then:
+
+1. splits the verified E.164 `phone_number` into DIGIT `countryCode` +
+   national `mobileNumber` using the tenant's `MobileNumberValidation` rule
+   (route tenant, falling back to root); a number from another country or one
+   the regex rejects gets `403`, a tenant without a rule `503`;
+2. ensures the **CitizenRegistration** of `(issuer, sub)` at the tenant
+   (#2071). It is not Organization membership and never creates one;
+3. ensures the BFF-managed DIGIT `CITIZEN` account at the bound tenant's
+   **citizen tenant** (see below), created once and never re-roled
+   (`DIGIT_CITIZEN_ROLES`, default `CITIZEN`, scoped to that citizen tenant);
+4. mints (or reuses) a DIGIT token through the `CitizenTokenMinter` and
+   returns `{access_token, token_type, expires_in, scope, UserRequest, tenant}`
+   only when `UserRequest.type === "CITIZEN"` and `UserRequest.tenantId` is
+   the bound tenant's citizen tenant (otherwise `502`). `tenant` is
+   `{urlSlug, tenantId}` of the bound **route** tenant.
+
+**Tenant model.** egov-user keeps every `CITIZEN` at the first dotted segment
+of the tenant it is given (`UserUtils.getStateLevelTenantForCitizen`): CITIZEN
+search, login lookup, username uniqueness and the stored row all use it, and
+the token's `UserRequest.tenantId` is that root. The BFF follows the same rule
+(`digitCitizenTenantId`): `/bomet-county/...` (`ke.bomet`),
+`/bomet-ulb-one/...` (`ke.bomet.ulb1`) and `/kisumu/...` (`ke.kisumu`) all use
+the one `ke` citizen account of that principal. The citizen tenant is derived
+from the bound tenant id, NOT from the Organization's `rootTenantId`, which can
+itself be dotted (an Organization mapped to `ke.bomet`). The account is created
+at the citizen tenant explicitly, so egov-user validates the mobile number and
+encrypts the record with that tenant rather than the city's. The
+CitizenRegistration stays tenant-local (per route tenant) and records the
+shared account's uuid. digit-ui accepts a citizen token only when
+`UserRequest.tenantId` is its route tenant's first segment and the echoed
+`tenant` is its route; it stores the route tenant as the citizen tenant
+(`Citizen.tenant-id`, `Citizen.tenantId`, `CITIZEN.COMMON.HOME.CITY`) and
+keeps `UserRequest` unchanged, like the legacy OTP login, so business
+requests such as complaint creation target the URL tenant.
+
+Citizen accounts use their own namespace and never adopt a legacy DIGIT
+citizen whose username is a mobile number:
+
+- username `kcbffc-<sha256("citizen"\nissuer\nsubject\ncitizenTenant)[:40]>`;
+- `identificationMark` `keycloak-bff:citizen:v1:<sha256(issuer\nsubject)>:<citizenTenant>`.
+
+`citizenTenant` is the citizen tenant above, so there is one DIGIT account per
+(principal, root) and one cached token shared by that principal's sessions on
+every route under the root (logout releases only this session's claim).
+
+They are deliberately left out of `digit.managedTenants` and the Redis
+managed-account index, so Organization reconciliation never deactivates a
+citizen for having no membership. The same Keycloak user can be both an
+employee (Organization membership, `kcbff-` account) and a citizen
+(registration, `kcbffc-` account); neither relationship implies the other.
+
+**CitizenRegistration persistence.** Each tenant-local projection is one value
+of the multi-valued Keycloak user attribute `digit.citizenRegistrations`:
+
+```text
+v1|<rootTenantId>|<tenantId>|<ACTIVE|DISABLED>|<digitUserUuid>
+```
+
+This follows the existing `digit.managedTenants` pattern: durable across Redis
+loss, removed with the Keycloak user, no new datastore. The realm's
+`unmanagedAttributePolicy` must be `ADMIN_EDIT` (set by the #2167 installer)
+or Keycloak drops the attribute. An operator disables a citizen at a tenant by
+changing that value's status to `DISABLED` (and logging the citizen out so the
+cached token is revoked); an existing DISABLED value is never reactivated by
+sign-in. For a root route `tenantId == rootTenantId`. A subtenant route keeps
+the same root and adds its own projection; every projection under one
+citizen tenant carries the same `digitUserUuid`, and disabling one route
+tenant's projection does not affect the others.
+
+### Citizen token minting
+
+egov-user validates a `CITIZEN` password grant's password as an egov-otp
+one-time code (`citizen.login.password.otp.enabled=true`, the upstream
+default), so the employee password-rotation mint cannot work for citizens.
+Minting is behind the `CitizenTokenMinter` interface
+(`src/modules/managed-accounts/citizen-token-minter.ts`). The default
+implementation:
+
+1. `POST DIGIT_OTP_CREATE_URL` (egov-otp `/otp/v1/_create`, **internal URL
+   only**; its response contains the code) with
+   `{otp: {identity, tenantId}}`, where `identity` is the national mobile
+   number from the session's verified `phone_number` claim
+   (`DIGIT_CITIZEN_OTP_IDENTITY=mobileNumber`, default), because egov-user's
+   `UserService.validateOtp` checks the code against `user.getMobileNumber()`
+   and `user.getTenantId()`. Search responses can mask the stored number, so
+   it is not read from them. `userName` is available as an override;
+   `tenantId` is the account's citizen tenant, which is where egov-user
+   looks the user up and validates the code;
+2. `POST /user/oauth/token` password grant with `username=<kcbffc-...>`,
+   `password=<that OTP>`, `tenantId=<citizen tenant>`, `userType=CITIZEN`.
+
+It never sends egov-user's `isInternal` parameter, and the OTP is never logged,
+cached or returned. The token is cached and revoked exactly like employee
+tokens (per-session holders; `logout` with `surface: "citizen"` releases this
+session's claim).
+
+> **Unverified against a live egov-user.** The tests prove the BFF side
+> against a mock that encodes these assumptions. A live spike must confirm
+> (a) the OTP grant end to end (the code reading says identity = mobile
+> number, tenant = the stored user's root tenant), (b) that the root tenant
+> has a `MobileNumberValidation` rule egov-user accepts for the citizen's
+> number (it validates at the root; the BFF splits with the route rule),
+> (c) that `_createnovalidate` accepts a `CITIZEN` with a non-mobile `kcbffc-`
+> username, and (d) that egov-otp is reachable only internally. The fake
+> egov-user in `mocks/fake-digit-user.ts` now applies egov-user's CITIZEN
+> root coercion to search, login, uniqueness and storage. Until then leave `DIGIT_OTP_CREATE_URL` empty
+> outside test environments: citizen `_select` then answers `503`.
+
+### Public login branding
+
+```http
+GET /identity/v1/tenant-contexts/bomet-county/branding?locale=en_IN
+```
+
+```json
+{
+  "tenant": { "urlSlug": "bomet-county", "tenantId": "ke.bomet", "name": "Bomet County" },
+  "stateInfo": { "code": "...", "name": "...", "logoUrl": "...", "logoUrlWhite": "...",
+                 "bannerUrl": "...", "languages": [{ "label": "ENGLISH", "value": "en_IN" }],
+                 "defaultLocale": "en_IN" },
+  "themeConfig": { "...": "raw common-masters.ThemeConfig[0] or null" },
+  "loginConfig": { "...": "raw <DIGIT_UI_CONFIG_MODULE_NAME>.LoginConfig[0] or null" },
+  "privacyPolicy": [{ "...": "raw <DIGIT_UI_CONFIG_MODULE_NAME>.PrivacyPolicy records or null" }],
+  "footer": { "digitFooter": "/digit-ui/brand/digit-footer.png",
+              "digitFooterBw": "/digit-ui/brand/digit-footer-bw.png",
+              "digitHomeUrl": "https://www.digit.org/" },
+  "messages": { "CORE_COMMON_LOGIN": "Login", "...": "..." }
+}
+```
+
+- Masters come from MDMS v1 (`DIGIT_MDMS_SEARCH_URL`) at the route tenant,
+  falling back per master to the root tenant (DIGIT MDMS has no read-time
+  inheritance). The citizen context reads `MobileNumberValidation` the same
+  way (digit-ui: the active `default` rule, else the first active rule).
+- `messages` come from `DIGIT_LOCALIZATION_SEARCH_URL` for modules
+  `rainmaker-common`, `digit-ui`, `digit-tenants`, `rainmaker-{tenantId}`
+  (and `rainmaker-{rootTenantId}`), at the root tenant with the route tenant's
+  own rows overriding. They are filtered to `LOGIN_MESSAGE_KEYS` in
+  `src/modules/branding/tenant-branding.ts` (the single list to extend), the
+  tenant-name keys `TENANT_TENANTS_*` and UPPER_SNAKE keys referenced by the
+  raw LoginConfig/PrivacyPolicy records.
+- `locale` must look like `en_IN` (default `IDENTITY_BRANDING_DEFAULT_LOCALE`);
+  `defaultLocale` is that value when StateInfo lists it, else StateInfo's first
+  language.
+- Footer values come from `DIGIT_FOOTER_URL`, `DIGIT_FOOTER_BW_URL` and
+  `DIGIT_HOME_URL` (defaults match the Ansible `globalConfigs.js` defaults;
+  `""` means no footer).
+- Responses are cached in process per (tenant, locale) and sent with
+  `Cache-Control: public, max-age=IDENTITY_BRANDING_CACHE_SECONDS` (300). A
+  localization outage degrades to `messages: {}` without caching; an MDMS or
+  tenant-directory outage is `503`.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `KEYCLOAK_EMPLOYEE_CLIENT_ID` / `_SECRET` | `digit-ui-employee` / empty | Employee client; empty secret = surface disabled |
+| `KEYCLOAK_CITIZEN_CLIENT_ID` / `_SECRET` | `digit-ui-citizen` / empty | Citizen client; empty secret = surface disabled |
+| `IDENTITY_EMPLOYEE_SCOPE` | `openid profile email` | Employee authorization scope |
+| `IDENTITY_CITIZEN_SCOPE` | `openid profile phone` | Citizen authorization scope |
+| `IDENTITY_EMPLOYEE_COOKIE_NAME` / `IDENTITY_CITIZEN_COOKIE_NAME` | `${IDENTITY_COOKIE_NAME}_employee` / `_citizen` | Per-surface session cookies (`<name>_login` for attempts) |
+| `DIGIT_OTP_CREATE_URL` | empty | Internal egov-otp `/otp/v1/_create` for the default citizen minter |
+| `DIGIT_CITIZEN_OTP_IDENTITY` | `mobileNumber` | `mobileNumber` (verified session phone, what egov-user validates) or `userName` |
+| `DIGIT_CITIZEN_ROLES` | `CITIZEN` | Roles of newly created citizen accounts |
+| `DIGIT_LOCALIZATION_SEARCH_URL` | `${DIGIT_GATEWAY_HOST}/localization/messages/v1/_search` | Branding messages |
+| `DIGIT_UI_CONFIG_MODULE_NAME` | `commonMDMSConfig` | MDMS module of LoginConfig/PrivacyPolicy (digit-ui `UICONFIG_MODULENAME`) |
+| `IDENTITY_BRANDING_CACHE_SECONDS` | `300` | Branding cache and `max-age` |
+| `IDENTITY_BRANDING_DEFAULT_LOCALE` | `en_IN` | Default branding locale |
+| `DIGIT_FOOTER_URL` / `DIGIT_FOOTER_BW_URL` / `DIGIT_HOME_URL` | Ansible defaults | Footer in branding |
+
 ## Organization → tenant mapping
 
 A Keycloak Organization maps to one DIGIT tenant through its
@@ -262,6 +542,30 @@ tenant exists in DIGIT MDMS `tenant.tenants`. A tenant is offered only when:
 1. live Keycloak state says the user is a member of that Organization;
 2. the Organization is enabled and mapped, and the tenant exists in DIGIT; and
 3. the managed DIGIT account is active and holds roles for that tenant.
+
+An explicit subtenant is a group inside that Organization with these durable
+attributes:
+
+```text
+digit.organizationId     Keycloak Organization UUID
+digit.tenantId           immutable DIGIT tenant id
+digit.rootTenantId       Organization's DIGIT root tenant id
+digit.parentTenantId     explicit immediate parent
+digit.urlSlug            globally reserved public route slug
+digit.displayName        safe public name
+digit.fallbackTenantIds  ordered explicit fallback ids (multi-valued)
+```
+
+This path requires Keycloak 26.7 or newer because it uses Organization Group
+membership and client-role mapping APIs. The tracked custom Keycloak image is
+currently based on 26.7.3.
+
+The BFF resolves the slug only through the Organization-scoped group API and
+checks that the group's duplicated Organization id matches that scope. Group
+paths, names, URL segments and dotted DIGIT codes never imply hierarchy. A subject must be both
+an Organization member and a member of this exact group. Only allowlisted
+client roles attached to the tenant-bearing group are projected to the
+subtenant's managed DIGIT account; they do not bleed into the root tenant.
 
 Callback and tenant discovery are read-only. Account creation happens only in
 the provisioning control plane. Role and membership projection comes from live
@@ -359,6 +663,7 @@ calls.
 Provisioning routes require `IDENTITY_CONTROL_PLANE_TOKEN` and are idempotent:
 
 - `POST /internal/identity/v1/organizations/_ensure` — `{tenantId, alias, name}`; `409` until the DIGIT tenant exists.
+- `POST /internal/identity/v1/tenant-groups/_ensure` — `{organizationId, tenantId, parentTenantId, urlSlug, name, fallbackTenantIds?}`; creates or updates the explicit Organization-group structural record after the tenant, parent and fallbacks exist in DIGIT and map inside the same Organization.
 - `POST /internal/identity/v1/memberships/_ensure` — `{organizationId, userId, mobileNumber?}` → `{tenantId, digitUserUuid, created}` for that tenant's account. Adds Keycloak membership, then creates or updates the managed account. `digitUserUuid` input is rejected: legacy employees are not linked.
 - `POST /internal/identity/v1/role-assignments/_ensure` — sets an Organization group's allowlisted client roles and projects them to DIGIT.
 - `POST /internal/identity/v1/reconciliation/_run`
