@@ -1825,6 +1825,15 @@
           the deploy rather than shrinking it.
       when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
 
+    # Citizen sign-in methods, resolved once: the configure-keycloak task and
+    # the compose profiles below must agree. Development boxes (no real OTP
+    # stack, so egov-user's fixed OTP is on) offer phone_otp by default (#2189).
+    - name: "Resolve citizen sign-in methods"
+      ansible.builtin.set_fact:
+        identity_citizen_signin_methods_effective: >-
+          {{ identity_citizen_signin_methods
+             | default([] if (enable_otp_services | default(false)) else ['phone_otp']) }}
+
     - name: "Compute compose profiles for this tenant"
       vars:
         _obs: "{{ observability_level | default('traces') }}"
@@ -1849,6 +1858,10 @@
               + (['chatbot']       if enable_chatbot       | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
+              # egov-otp alone: the BFF mints citizen DIGIT tokens through it
+              # whenever phone_otp is offered, even without the SMS stack.
+              + (['citizen-otp']   if (enable_keycloak | default(false))
+                                      and 'phone_otp' in identity_citizen_signin_methods_effective else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
               + _obs_profiles
             ) | join(',')
@@ -2718,6 +2731,13 @@
           keycloak_admin_client_secret: >-
             {{ _identity_stored.keycloak_admin_client_secret | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # digit-ui sign-in surfaces (#2167): one confidential client each.
+          keycloak_employee_client_secret: >-
+            {{ _identity_stored.keycloak_employee_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          keycloak_citizen_client_secret: >-
+            {{ _identity_stored.keycloak_citizen_client_secret | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
           identity_control_plane_token: >-
             {{ _identity_stored.identity_control_plane_token | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
@@ -2726,6 +2746,10 @@
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
           pgr_onboarding_worker_token: >-
             {{ _identity_stored.pgr_onboarding_worker_token | default('', true)
+               or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+          # Keys the citizen OTP code and phone hashes in Redis (#2189).
+          identity_citizen_otp_secret: >-
+            {{ _identity_stored.identity_citizen_otp_secret | default('', true)
                or lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
       when: enable_keycloak | default(false)
       no_log: true
@@ -2748,7 +2772,7 @@
       when:
         - enable_keycloak | default(false)
         # Exactly "the merge would change something", i.e. at least one of the
-        # six was absent or empty and has just been generated.
+        # identity secrets was absent or empty and has just been generated.
         - (bao_secrets_identity.json.data.data | combine(identity_secrets))
           != bao_secrets_identity.json.data.data
       no_log: true
@@ -2767,9 +2791,12 @@
           KEYCLOAK_BFF_CLIENT_SECRET={{ identity_secrets.keycloak_bff_client_secret }}
           KEYCLOAK_MAGIC_LINK_CLIENT_SECRET={{ identity_secrets.keycloak_magic_link_client_secret }}
           KEYCLOAK_ADMIN_CLIENT_SECRET={{ identity_secrets.keycloak_admin_client_secret }}
+          KEYCLOAK_EMPLOYEE_CLIENT_SECRET={{ identity_secrets.keycloak_employee_client_secret }}
+          KEYCLOAK_CITIZEN_CLIENT_SECRET={{ identity_secrets.keycloak_citizen_client_secret }}
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
           PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
+          IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}
           IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
           IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
@@ -5343,6 +5370,36 @@
       loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
       when: state_root != 'pg'
 
+    # digit-ui citizen phone-OTP messages (#2189/#2205), in rainmaker-common at
+    # the state root, where digit-ui reads them. Inserted directly (pg included:
+    # its dump rows only reach NEW volumes, and pg has no seeded ADMIN for the
+    # API), never overwriting an operator's edit, then the redis `messages`
+    # cache is dropped so egov-localization rebuilds it. `{{seconds}}` and
+    # `{{attempts}}` are i18next placeholders; lookup() output is unsafe, so
+    # Ansible leaves them alone.
+    - name: "digit-ui identity strings — seed citizen OTP messages"
+      ansible.builtin.command: docker exec -i docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -qAt
+      args:
+        stdin: |
+          WITH ins AS (
+            INSERT INTO message (id, locale, code, message, tenantid, module, createdby, createddate)
+            VALUES
+          {% for m in identity_i18n_bundle %}
+              (gen_random_uuid()::text, '{{ m.locale }}', '{{ m.code }}', $msg${{ m.message }}$msg$, '{{ state_root }}', '{{ m.module }}', 1, now()){{ ',' if not loop.last else '' }}
+          {% endfor %}
+            ON CONFLICT (tenantid, locale, module, code) DO NOTHING
+            RETURNING 1)
+          SELECT count(*) FROM ins;
+      vars:
+        identity_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/digit-ui-localization/identity-otp.json') | from_json }}"
+      register: identity_i18n_seed
+      changed_when: identity_i18n_seed.stdout | trim != '0'
+      when: enable_keycloak | default(false)
+
+    - name: "digit-ui identity strings — drop the localization cache after seeding"
+      ansible.builtin.command: docker exec digit-redis redis-cli DEL messages
+      when: identity_i18n_seed is changed
+
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
     #   1. enable_novu is true (the notifications profile is active)
@@ -5561,6 +5618,14 @@
         KEYCLOAK_MAGIC_LINK_ENABLED: "{{ identity_magic_link_enabled | default(false) | lower }}"
         KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: "{{ identity_secrets.keycloak_magic_link_client_secret }}"
         KEYCLOAK_ADMIN_CLIENT_SECRET: "{{ identity_secrets.keycloak_admin_client_secret }}"
+        # digit-ui employee / citizen clients, flows and themes (#2167).
+        KEYCLOAK_EMPLOYEE_CLIENT_SECRET: "{{ identity_secrets.keycloak_employee_client_secret }}"
+        KEYCLOAK_CITIZEN_CLIENT_SECRET: "{{ identity_secrets.keycloak_citizen_client_secret }}"
+        KEYCLOAK_EMPLOYEE_LOGIN_THEME: "{{ identity_employee_login_theme | default('digit-employee') }}"
+        KEYCLOAK_EMPLOYEE_SIGNIN_METHODS: "{{ identity_employee_signin_methods | default(['password']) | join(',') }}"
+        # Resolved in "Resolve citizen sign-in methods" (phone_otp on development
+        # boxes, codes in the BFF log; off elsewhere until a real SMS sender).
+        KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods_effective | join(',') }}"
         IDENTITY_REDIRECT_URI: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/identity/v1/callback' }}"
         IDENTITY_POST_LOGIN_REDIRECT: "{{ identity_post_login_redirect | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain + '/configurator/login', true) }}"
         IDENTITY_ALLOWED_ORIGINS: "{{ identity_allowed_origins | default(('https://' if (tls_enabled | default(true)) else 'http://') + domain, true) }}"

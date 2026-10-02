@@ -987,7 +987,7 @@ services:
       # it. Bare `docker compose up` (local dev, no real SMS) defaults to true
       # for convenience. (Vinoth review.)
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
       EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
       EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
     healthcheck:
@@ -1634,7 +1634,8 @@ services:
     cap_drop: [ALL]
     image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
-    profiles: [otp]
+    # citizen-otp: started alone for the identity BFF's citizen phone OTP.
+    profiles: [otp, citizen-otp]
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -3197,6 +3198,24 @@ services:
       KEYCLOAK_BFF_CLIENT_SECRET: ${KEYCLOAK_BFF_CLIENT_SECRET:-dev-only-change-me}
       KEYCLOAK_MAGIC_LINK_CLIENT_ID: digit-identity-bff-magic-link
       KEYCLOAK_MAGIC_LINK_CLIENT_SECRET: ${KEYCLOAK_MAGIC_LINK_CLIENT_SECRET:-}
+      # digit-ui sign-in surfaces (#2167).
+      KEYCLOAK_EMPLOYEE_CLIENT_ID: digit-ui-employee
+      KEYCLOAK_EMPLOYEE_CLIENT_SECRET: ${KEYCLOAK_EMPLOYEE_CLIENT_SECRET:-}
+      KEYCLOAK_CITIZEN_CLIENT_ID: digit-ui-citizen
+      KEYCLOAK_CITIZEN_CLIENT_SECRET: ${KEYCLOAK_CITIZEN_CLIENT_SECRET:-}
+      # Development fixed citizen OTP: the same switch and value egov-user reads,
+      # so the BFF accepts exactly the code egov-user accepts (#2189). Off unless
+      # .env turns it on (the playbook does, only for development boxes).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      # Citizen phone OTP (#2189): without both, phone_otp is never offered.
+      IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}
+      IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}
+      # Tenant-route backfill for existing roots (#2206); off unless .env sets it.
+      IDENTITY_TENANT_ROUTE_BACKFILL: ${IDENTITY_TENANT_ROUTE_BACKFILL:-false}
+      IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS: ${IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS:-}
+      IDENTITY_EMPLOYEE_SCOPE: openid profile email
+      IDENTITY_CITIZEN_SCOPE: openid profile phone
       KEYCLOAK_ADMIN_URL: http://keycloak:8180
       KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ORGANIZATION_REALM:-digit}
       KEYCLOAK_ADMIN_CLIENT_ID: digit-identity-admin
@@ -3245,6 +3264,21 @@ services:
       DIGIT_MDMS_SCHEMA_CREATE_URL: http://kong:8000/mdms-v2/schema/v1/_create
       DIGIT_FOUNDATION_SOURCE_TENANT: ${IDENTITY_FOUNDATION_SOURCE_TENANT:-pg}
       DIGIT_ENC_GENERATE_KEY_URL: http://egov-enc-service:1234/egov-enc-service/crypto/v1/_generatekey
+      # Public login branding for the digit-employee Keycloak
+      # theme (#2167). The BFF's default
+      # (gateway:8080) does not exist in this stack, and a failed lookup only
+      # degrades to untranslated screens, so it must be set explicitly.
+      DIGIT_LOCALIZATION_SEARCH_URL: http://kong:8000/localization/messages/v1/_search
+      # Citizen DIGIT tokens (#2167): internal egov-otp create, never via Kong
+      # (the response carries the OTP). egov-otp runs under the `otp` profile;
+      # without it citizen context selection answers 503.
+      DIGIT_OTP_CREATE_URL: ${IDENTITY_DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
+      # Login-page branding, rendered by Ansible from the values that feed
+      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
+      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
+      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
+      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
+      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
     ports:
       - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:

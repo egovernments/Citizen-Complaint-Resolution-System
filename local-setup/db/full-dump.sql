@@ -4411,6 +4411,13 @@ COPY public.mdms_v2_schema (installed_rank, version, description, type, script, 
 --
 
 COPY public.message (id, locale, code, message, tenantid, module, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
+86156ece-14bf-5837-8e8b-4b6b4400ff16	en_IN	CORE_IDENTITY_OTP_INVALID_MOBILE	This mobile number cannot be used here.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
+62baf22d-d02f-5e51-86d1-64e38c128261	en_IN	CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE	We can't send a code right now. Please try again later.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
+f72cf5be-2e6b-5040-86ca-8f686ae5d853	en_IN	CORE_IDENTITY_OTP_RESEND_TOO_SOON	Please wait {{seconds}} seconds before requesting another code.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
+8db08f8e-bc35-538d-a22f-595baf2c64a0	en_IN	CORE_IDENTITY_OTP_RATE_LIMITED	Too many codes requested. Try again in {{seconds}} seconds.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
+0de6595e-61cd-5b6f-b2dc-925f509d4603	en_IN	CORE_IDENTITY_OTP_LOCKED	Too many wrong codes for this number. Try again in {{seconds}} seconds.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
+54a0d767-d588-5a6f-9ce7-699e2932fad3	en_IN	CORE_IDENTITY_OTP_INVALID	That code is not correct. {{attempts}} attempts left.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
+39c4d27b-2319-5e88-a8ff-046bca7fbc8d	en_IN	CORE_IDENTITY_OTP_EXPIRED	This code has expired. Request a new one.	pg	rainmaker-common	1	2026-09-30 00:00:00	\N	\N
 d9cba529-7b2a-4ee1-a975-7690eb7fecd2	en_IN	PG_CITYA	City A	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
 fe36e3bb-058b-478e-9592-90da5f88a7b3	en_IN	PG_CITYA_ADMIN_CITY	City A	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
 28e8adca-feef-4cd0-9142-6dd0c3129243	en_IN	PG_CITYA_B1	Block 1	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N

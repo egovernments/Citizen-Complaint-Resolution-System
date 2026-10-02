@@ -468,7 +468,7 @@ services:
     cap_drop: [ALL]
     image: egovio/egov-otp-db:v2.9.2-4a60f20
     container_name: egov-otp-migration
-    profiles: ["otp"]
+    profiles: ["otp", "citizen-otp"]
     depends_on:
       postgres-db: { condition: service_healthy }
       db-history-normalize: { condition: service_completed_successfully }
