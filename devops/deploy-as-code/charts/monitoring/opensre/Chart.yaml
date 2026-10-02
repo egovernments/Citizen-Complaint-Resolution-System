@@ -1,0 +1,13 @@
+apiVersion: v2
+name: opensre
+description: >-
+  Diagnose-only AI SRE agent for the DIGIT stack. Watches Gatus, and when checks
+  fail runs one read-only OpenSRE investigation over Grafana (Prometheus + Loki),
+  Kafka consumer lag and the Kubernetes API, then writes the diagnosis to its
+  pod log. It changes nothing and sends no alerts. The compose tier ships the
+  same agent through local-setup/docker-compose.opensre.yml.
+type: application
+version: 0.1.0
+# The OpenSRE release the image is built from; keep in step with values.image.tag
+# and local-setup/opensre/Dockerfile.
+appVersion: 0.1.2026.9.21

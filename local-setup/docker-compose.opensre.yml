@@ -1,0 +1,77 @@
+# OpenSRE — a diagnose-only AI SRE agent for the compose tier.
+#
+# What it does: every OPENSRE_SWEEP_INTERVAL_MINUTES it asks Gatus what is
+# failing and, when something is, runs one read-only OpenSRE investigation and
+# writes the diagnosis to opensre/logs/ on the box (and to stdout, so it is in
+# Loki too). It sends no alerts and changes nothing. See
+# docs/operations/monitoring/opensre.md.
+#
+# Layered ALWAYS by the Ansible deploy (see playbook-deploy.yml "Compute compose
+# -f flags"), like the monitoring and matomo overlays. The service carries
+# `profiles: [opensre]`, so it starts only when the tenant sets
+# `enable_opensre: true` in host_vars.
+#
+# Reads, never writes: Grafana through a Viewer-role service-account token the
+# deploy mints (Prometheus + Loki via the datasource proxy), Tempo's HTTP API,
+# Redpanda consumer-group offsets, and Gatus's status API. No Docker socket, no
+# database credentials, no published port.
+#
+# No depends_on: grafana, tempo and gatus are profile-gated or optional, and a
+# depends_on on a service excluded by profile makes compose reject the whole
+# project (#1687). The sweep loop tolerates them being down and logs it.
+services:
+  opensre:
+    profiles: [opensre]
+    # Built on the box from the pinned upstream release; see opensre/Dockerfile
+    # for why it is not pulled. The tag names the OpenSRE version inside it.
+    build:
+      context: ./opensre
+    image: ccrs-opensre:0.1.2026.9.21
+    # Always go through the build (a cached no-op when nothing changed), so an
+    # edit to run-sweeps.sh or guardrails.yml is picked up by the next deploy
+    # without a manual `docker compose build`.
+    pull_policy: build
+    container_name: digit-opensre
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    environment:
+      # Runtime pause switch. The lasting on/off is enable_opensre in host_vars,
+      # which decides whether this container exists at all; this lets an
+      # operator pause sweeps by editing .env and recreating the container.
+      OPENSRE_ENABLED: ${OPENSRE_ENABLED:-true}
+      OPENSRE_SWEEP_INTERVAL_MINUTES: ${OPENSRE_SWEEP_INTERVAL_MINUTES:-15}
+      OPENSRE_DEDUPE_HOURS: ${OPENSRE_DEDUPE_HOURS:-6}
+      OPENSRE_GATUS_URL: http://gatus:8080
+
+      LLM_PROVIDER: anthropic
+      ANTHROPIC_API_KEY: ${OPENSRE_ANTHROPIC_API_KEY:-}
+      ANTHROPIC_REASONING_MODEL: ${OPENSRE_MODEL:-claude-opus-5}
+      ANTHROPIC_TOOLCALL_MODEL: ${OPENSRE_MODEL:-claude-opus-5}
+
+      # Grafana answers /api at the root even with serve_from_sub_path on.
+      GRAFANA_INSTANCE_URL: http://grafana:3000
+      GRAFANA_READ_TOKEN: ${OPENSRE_GRAFANA_TOKEN:-}
+      # Empty below observability_level `traces`, where Tempo does not run.
+      TEMPO_URL: ${OPENSRE_TEMPO_URL:-}
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+
+      # No product analytics, no Sentry, no local prompt/response log. The
+      # sweep's own log is the record.
+      OPENSRE_NO_TELEMETRY: "1"
+      OPENSRE_SENTRY_DISABLED: "1"
+      OPENSRE_PROMPT_LOG_DISABLED: "1"
+    volumes:
+      - ./opensre/logs:/var/log/opensre
+      # Copied here by the deploy from docs/releases/2.12/operations/known-issues.md and
+      # attached to each investigation as its runbook.
+      - ./opensre/known-issues.md:/opt/ccrs/known-issues.md:ro
+    # The agent is a short-lived Python process per investigation plus a shell
+    # loop; 1G is headroom for large Loki/Prometheus responses.
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    networks:
+      - egov-network

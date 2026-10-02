@@ -94,6 +94,17 @@ matomo_admin_user: admin
 # and the site URL to this deployment's own origin. Override in host_vars if
 # the reports should carry different labels.
 
+# Diagnose-only AI SRE agent (OpenSRE; docker-compose.opensre.yml). Off by
+# default. When on, it checks Gatus every opensre_sweep_interval_minutes and,
+# only when checks are failing, runs one read-only investigation and writes the
+# diagnosis to <digit_dir>/opensre/logs/ — no alerts, no changes. Needs a
+# project-owned Anthropic API key in OpenBao (opensre_anthropic_api_key);
+# without one the container idles. See docs/operations/monitoring/opensre.md.
+enable_opensre: false
+opensre_model: claude-opus-5
+opensre_sweep_interval_minutes: 15
+opensre_dedupe_hours: 6
+
 # ──────────────────────────────────────────────────────────────────────
 # How much observability to deploy (#1657)
 # ──────────────────────────────────────────────────────────────────────

@@ -222,5 +222,6 @@ quietly.
 
 - `alerting-runbook.md` — what each alert means, what to do when it fires, and how to turn alerting on
 - `dashboard-metrics.md` — what the dashboard instrumentation measures, client and server side
+- `opensre.md` — the optional diagnose-only AI agent that investigates failing checks and logs its diagnosis
 - `local-setup/README.md` — what the Ansible playbook deploys
 - `local-setup/ansible/README.md` — deploy stages, including the health gates

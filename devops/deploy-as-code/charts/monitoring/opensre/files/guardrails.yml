@@ -1,0 +1,71 @@
+# Guardrails for OpenSRE on CCRS (docker-compose.opensre.yml).
+#
+# OpenSRE scans every message against these rules immediately before each LLM
+# API call and replaces matches with [REDACTED:<rule name>], so whatever a tool
+# fetched — a Loki line, a Grafana panel, a Kafka error — reaches the model
+# provider with these masked. Patterns are case-insensitive regexes. YAML
+# single quotes keep backslashes literal; a quote inside one is written ''.
+#
+# Why these exist:
+#   - Kong's auth-enrichment call puts the live session token in a query string
+#     (/user/_details?access_token=...), and egov-user-proxy's nginx access log
+#     carries it into Loki. Unmasked, every investigation that reads that log
+#     would export working credentials.
+#   - DIGIT request and response bodies carry citizen mobile numbers, usernames
+#     (usually the mobile number) and email addresses.
+#
+# Not covered, because no pattern can match them: names and free-text complaint
+# descriptions. The sweep prompt keeps the agent on infrastructure, but a log
+# line can still contain them.
+#
+# Test a change inside the running container before relying on it:
+#   docker exec digit-opensre opensre guardrails test 'GET /user/_details?access_token=abc'
+rules:
+  - name: jwt
+    description: JSON Web Tokens
+    action: redact
+    patterns:
+      - 'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}'
+
+  - name: session_token
+    description: access/refresh/auth tokens in query strings, headers and JSON
+    action: redact
+    patterns:
+      - '(?:access|refresh|auth|id)[_-]?token["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
+
+  - name: authorization_header
+    description: Bearer and Basic credentials
+    action: redact
+    patterns:
+      - 'authorization["'']?\s*[:=]\s*["'']?(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+'
+
+  - name: secret_fields
+    description: password, secret and API-key fields
+    action: redact
+    patterns:
+      - '(?:password|passwd|secret|api[_-]?key|apikey|client_secret)["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
+
+  - name: provider_keys
+    description: Anthropic and other sk- style API keys
+    action: redact
+    patterns:
+      - 'sk-(?:ant-)?[A-Za-z0-9_-]{20,}'
+
+  - name: citizen_contact_fields
+    description: DIGIT fields that hold a citizen's phone, username or email
+    action: redact
+    patterns:
+      - '(?:mobile(?:_?number|no)?|phone(?:_?number)?|recipient(?:_value)?|username|emailid)["'']?\s*[=:]\s*["'']?[^&"''\s,}]+'
+
+  - name: email
+    description: email addresses
+    action: redact
+    patterns:
+      - '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+
+  - name: phone_number
+    description: Kenyan, Mozambican and Indian numbers with country code, and Kenyan local format
+    action: redact
+    patterns:
+      - '\+?(?:254|258|91)[ -]?\d{9}\b'
+      - '\b0[17]\d{8}\b'

@@ -1349,6 +1349,36 @@
         src: ../docker-compose.matomo.yml
         dest: "{{ digit_dir }}/docker-compose.matomo.yml"
 
+    # OpenSRE overlay + build context (diagnose-only SRE agent). Copied and
+    # layered ALWAYS, like the two overlays above: the service carries
+    # `profiles: [opensre]`, so nothing starts until `enable_opensre: true`.
+    # known-issues.md goes into the build dir because the agent attaches it to
+    # every investigation as its runbook; logs/ is the agent's output, owned by
+    # the container user (uid 10001) so it can write there.
+    - name: Copy OpenSRE overlay
+      copy:
+        src: ../docker-compose.opensre.yml
+        dest: "{{ digit_dir }}/docker-compose.opensre.yml"
+
+    - name: Copy OpenSRE build context
+      copy:
+        src: ../opensre/
+        dest: "{{ digit_dir }}/opensre/"
+
+    - name: Copy the known-issues runbook OpenSRE attaches to investigations
+      copy:
+        src: ../../docs/releases/2.12/operations/known-issues.md
+        dest: "{{ digit_dir }}/opensre/known-issues.md"
+        mode: "0644"
+
+    - name: Create the OpenSRE log directory (owned by the container user)
+      file:
+        path: "{{ digit_dir }}/opensre/logs"
+        state: directory
+        owner: "{{ omit if ansible_system == 'Darwin' else '10001' }}"
+        group: "{{ omit if ansible_system == 'Darwin' else '10001' }}"
+        mode: "0750"
+
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -1850,6 +1880,7 @@
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
               + (['matomo']        if enable_matomo        | default(false) else [])
+              + (['opensre']       if enable_opensre       | default(false) else [])
               + _obs_profiles
             ) | join(',')
           }}
@@ -1864,7 +1895,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + opensre + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -1873,6 +1904,7 @@
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.monitoring.yml' +
             ' -f docker-compose.matomo.yml' +
+            ' -f docker-compose.opensre.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -2443,10 +2475,28 @@
           NOVU_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
           NOVU_BRIDGE_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
           NOVU_MONGO_PASSWORD={{ bao_secrets.json.data.data.novu_mongo_password | default('', true) }}
+          {# OpenSRE (enable_opensre). The API key is operator-supplied; the
+             Grafana token is minted by this deploy the first time Grafana is
+             healthy (see "OpenSRE — mint a read-only Grafana token"). Either
+             missing just makes the agent idle or see less — never a failure. #}
+          OPENSRE_ANTHROPIC_API_KEY={{ bao_secrets.json.data.data.opensre_anthropic_api_key | default('', true) }}
+          OPENSRE_GRAFANA_TOKEN={{ bao_secrets.json.data.data.opensre_grafana_token | default('', true) }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
       no_log: true
+
+    - name: "OpenSRE — warn when enabled without an Anthropic API key"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: enable_opensre is true but `opensre_anthropic_api_key` is not
+          in OpenBao, so the agent will start and idle without investigating.
+          Store a project-owned key with
+          `bao kv patch {{ secrets_path }} opensre_anthropic_api_key=<key>`
+          and redeploy.
+      when:
+        - enable_opensre | default(false)
+        - (bao_secrets.json.data.data.opensre_anthropic_api_key | default('', true)) | length == 0
 
     # No earlier task writes a placeholder GF_ADMIN_PASSWORD= line any more —
     # this IS the first writer now that Secrets prep runs before any compose-up
@@ -3629,6 +3679,9 @@
           # `enable_matomo: false` and come back when it is turned on again.
           # Removing the data is a deliberate, separate `docker volume rm`.
           matomo: [matomo, matomo-db, matomo-archiver]
+          # OpenSRE: one gated service. Its output lives in the opensre/logs
+          # bind mount, so the diagnoses survive `enable_opensre: false`.
+          opensre: [opensre]
         # Derived from compose_profiles, not _obs_profiles: the latter is a
         # task-scoped `vars:` entry on the set_fact above, so it does not exist
         # by the time this task runs. compose_profiles IS a fact and already
@@ -5867,6 +5920,123 @@
                             bao kv get -field=grafana_admin_password '
                            ~ secrets_path ~
                            ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
+
+    # ==================== OpenSRE Grafana read token ====================
+    #
+    # OpenSRE reads Prometheus and Loki through Grafana's datasource proxy, so it
+    # needs a Grafana API token. Minted here once as a Viewer-role service
+    # account — it can query datasources, not change dashboards, alerting or
+    # users — then kept in OpenBao like every other tenant secret and reused on
+    # every later deploy. To rotate: delete the `opensre` service account in
+    # Grafana, `bao kv patch <secrets_path> opensre_grafana_token=`, redeploy.
+    #
+    # Non-fatal by design (block/rescue): the agent is optional, and a box whose
+    # Grafana or OpenBao is unhappy must still finish its deploy. Without the
+    # token the agent keeps running on Tempo, Kafka lag and Gatus alone.
+    - name: "OpenSRE — mint a read-only Grafana token (first deploy only)"
+      when:
+        - enable_opensre | default(false)
+        - grafana_health.rc == 0
+      block:
+        - name: "OpenSRE — read tenant secrets (current version for the CAS write)"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+            headers:
+              X-Vault-Token: "{{ bao_root_token }}"
+            status_code: [200]
+          register: bao_secrets_opensre
+          no_log: true
+
+        - name: "OpenSRE — note whether a token is already stored"
+          ansible.builtin.set_fact:
+            _opensre_needs_token: >-
+              {{ (bao_secrets_opensre.json.data.data.opensre_grafana_token | default('', true)) | length == 0 }}
+
+        - name: "OpenSRE — look up the opensre service account"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:13000/api/serviceaccounts/search?query=opensre"
+            user: "{{ grafana_admin_user | default('admin') }}"
+            password: "{{ grafana_admin_pw }}"
+            force_basic_auth: true
+            status_code: [200]
+          register: _opensre_sa_search
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        - name: "OpenSRE — create the service account (Viewer role)"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:13000/api/serviceaccounts"
+            method: POST
+            user: "{{ grafana_admin_user | default('admin') }}"
+            password: "{{ grafana_admin_pw }}"
+            force_basic_auth: true
+            body_format: json
+            body: { name: opensre, role: Viewer, isDisabled: false }
+            status_code: [201]
+          register: _opensre_sa_created
+          when:
+            - _opensre_needs_token | bool
+            - (_opensre_sa_search.json.serviceAccounts | selectattr('name', 'equalto', 'opensre') | list | length) == 0
+          no_log: true
+
+        - name: "OpenSRE — issue a token for the service account"
+          ansible.builtin.uri:
+            url: >-
+              http://127.0.0.1:13000/api/serviceaccounts/{{
+                _opensre_sa_created.json.id if (_opensre_sa_created is not skipped)
+                else (_opensre_sa_search.json.serviceAccounts | selectattr('name', 'equalto', 'opensre') | first).id
+              }}/tokens
+            method: POST
+            user: "{{ grafana_admin_user | default('admin') }}"
+            password: "{{ grafana_admin_pw }}"
+            force_basic_auth: true
+            body_format: json
+            body: { name: "opensre-{{ now(utc=true).strftime('%Y%m%d%H%M%S') }}" }
+            status_code: [200]
+          register: _opensre_sa_token
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        # Same CAS + merge discipline as the Grafana admin password write above:
+        # cas = the version just read, and `data` is merged, never replaced.
+        - name: "OpenSRE — store the token in OpenBao"
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+            method: POST
+            headers:
+              X-Vault-Token: "{{ bao_root_token }}"
+            body_format: json
+            body: >-
+              {{ {'options': {'cas': bao_secrets_opensre.json.data.metadata.version | int},
+                  'data': bao_secrets_opensre.json.data.data
+                          | combine({'opensre_grafana_token': _opensre_sa_token.json.key})} }}
+            status_code: [200]
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        # The TENANT SECRETS block rendered this line empty earlier in the run;
+        # the next deploy renders it from OpenBao, which now has the value.
+        - name: "OpenSRE — write the token into .env"
+          ansible.builtin.lineinfile:
+            path: "{{ digit_dir }}/.env"
+            regexp: '^OPENSRE_GRAFANA_TOKEN='
+            line: "OPENSRE_GRAFANA_TOKEN={{ _opensre_sa_token.json.key }}"
+          when: _opensre_needs_token | bool
+          no_log: true
+
+        - name: "OpenSRE — recreate the agent so it picks up the token"
+          ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d opensre
+          args:
+            chdir: "{{ digit_dir }}"
+          when: _opensre_needs_token | bool
+      rescue:
+        - name: "OpenSRE — token not minted (non-fatal)"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: could not mint the OpenSRE Grafana token (failed task:
+              {{ ansible_failed_task.name | default('?') }}). The agent runs
+              without Prometheus/Loki access until the next deploy succeeds at
+              this step. The deploy continues.
 
     # ==================== Matomo headless install (#1254) ====================
     #
