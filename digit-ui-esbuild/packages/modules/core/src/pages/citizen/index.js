@@ -16,6 +16,8 @@ import LocationSelection from "./Home/LocationSelection";
 import UserProfile from "./Home/UserProfile";
 import HowItWorks from "./HowItWorks/howItWorks";
 import Login from "./Login";
+import IdentityBffCitizenLogin from "./Login/IdentityBffCitizenLogin";
+import { isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
 import Search from "./SearchApp";
 import StaticDynamicCard from "./StaticDynamicComponent/StaticDynamicCard";
 import ImageComponent from "../../components/ImageComponent";
@@ -96,7 +98,8 @@ const Home = ({
     [
       {
         name: "actions-test",
-        filter: `[?(@.url == '${Digit.Utils.getMultiRootTenant() ? window.globalPath : window.contextPath}-card')]`,
+        // MDMS keys actions by app id (`digit-ui-card`), not the tenant route base.
+        filter: `[?(@.url == '${Digit.Utils.getMultiRootTenant() ? window.globalPath : Digit.Utils.mdmsAppId()}-card')]`,
       },
     ],
     {
@@ -198,7 +201,7 @@ const Home = ({
           </Route>
 
           <Route exact path={`${path}/select-location`}>
-            <LocationSelection />
+            {window.__digitTenantContext ? <Redirect to={path} /> : <LocationSelection />}
           </Route>
           <Route path={`${path}/error`}>
             <ErrorComponent
@@ -218,12 +221,19 @@ const Home = ({
             />
           </Route>
 
+          {/* Canonical tenant routes sign citizens in through the Identity
+              BFF (Keycloak; citizen methods are open, #2189); registration
+              is the same flow. */}
           <Route path={`${path}/login`}>
-            <Login stateCode={stateCode} />
+            {isIdentityBffAuth() ? <IdentityBffCitizenLogin t={t} /> : <Login stateCode={stateCode} />}
           </Route>
 
           <Route path={`${path}/register`}>
-            <Login stateCode={stateCode} isUserRegistered={false} />
+            {isIdentityBffAuth() ? (
+              <IdentityBffCitizenLogin t={t} />
+            ) : (
+              <Login stateCode={stateCode} isUserRegistered={false} />
+            )}
           </Route>
 
           {/* /user/profile must require an active citizen session. The

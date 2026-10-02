@@ -20,18 +20,12 @@ const UnifiedLogin = ({ stateCode }) => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [tenantId, setTenantId] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const contextPath = window?.contextPath || "digit-ui";
   const adapter = getAuthAdapter();
   const providers = adapter ? adapter.getSupportedProviders() : [];
-
-  const tenants =
-    Digit.SessionStorage.get("initData")?.tenants ||
-    window?.globalConfigs?.getConfig("TENANTS") ||
-    [];
 
   useEffect(() => {
     if (adapter && adapter.isAuthenticated()) {
@@ -50,11 +44,10 @@ const UnifiedLogin = ({ stateCode }) => {
     setLoading(true);
 
     try {
-      const loginTenant = tenantId || stateCode;
       const result = await adapter.login({
         email,
         password,
-        tenantId: loginTenant,
+        tenantId: window.__digitTenantContext?.tenantId || stateCode,
       });
 
       const user = result?.user || (adapter && adapter.getUser());
@@ -146,29 +139,6 @@ const UnifiedLogin = ({ stateCode }) => {
         </p>
 
         <form onSubmit={handleSubmit}>
-          {tenants.length > 1 && (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={labelStyle}>
-                City <span style={{ color: "#D4351C" }}>*</span>
-              </label>
-              <select
-                id="kc-tenant-select"
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-                style={{ ...fieldStyle, cursor: "pointer" }}
-              >
-                <option value="">Select city</option>
-                {tenants
-                  .filter((t) => t.code !== stateCode)
-                  .map((t) => (
-                    <option key={t.code} value={t.code}>
-                      {t.name || t.code}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
-
           <div style={{ marginBottom: "1rem" }}>
             <label style={labelStyle}>
               Username / Email <span style={{ color: "#D4351C" }}>*</span>
