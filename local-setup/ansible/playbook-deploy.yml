@@ -73,6 +73,67 @@
       delegate_to: localhost
       become: false
 
+    # ==================== One-tag deploys (#1729) ====================
+    # Turn `image_tag` (usually `./deploy.sh <tenant> --image-tag=<tag>`) into
+    # the ref each catalog image would get from it. Resolved HERE, first, because
+    # digit_ui_bundle_image (group_vars) reads ccrs_tagged_images and the
+    # digit-ui pre_tasks below already branch on it. `always` so a tagged run
+    # (--tags=nginx) still has it defined. Pins and local builds are applied
+    # later, next to the MCP/otp-publisher resolution, before .env is written.
+    - name: "Image tag — normalise image_tag / image_tag_services"
+      ansible.builtin.set_fact:
+        ccrs_image_tag: "{{ image_tag | default('', true) | string | trim }}"
+        ccrs_image_tag_services: >-
+          {{ ((image_tag_services.split(',') if image_tag_services is string else image_tag_services)
+              | default([], true)) | map('trim') | reject('equalto', '') | list }}
+      tags: [always]
+
+    # Same character rule build-images.yml enforces before it pushes a tag, so
+    # anything CI can publish is accepted and nothing else reaches a shell.
+    # The tag must also arrive as a STRING: YAML has already parsed an unquoted
+    # `image_tag: 2.10` into the float 2.1 (and `1e5` into 100000.0) before any
+    # filter sees it, so `| string` above would deploy the wrong tag (Vinoth
+    # review on #2166).
+    - name: "Image tag — reject a malformed tag or an unknown image name"
+      ansible.builtin.assert:
+        that:
+          - image_tag is not defined or image_tag is none or image_tag is string
+          - ccrs_image_tag | length == 0 or ccrs_image_tag is match('^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$')
+          - ccrs_image_tag_services | difference(ccrs_image_catalog | map(attribute='image')) | length == 0
+          - ccrs_image_tag | length > 0 or ccrs_image_tag_services | length == 0
+        fail_msg: |
+          image_tag='{{ ccrs_image_tag }}' image_tag_services={{ ccrs_image_tag_services }}
+          - image_tag must be a Docker tag (letters, digits, . _ -; max 128), e.g. develop-1a2b3c4d.
+          - image_tag must be a string: quote a numeric-looking tag in host_vars
+            (image_tag: "2.10", not image_tag: 2.10, which YAML reads as the number 2.1).
+          - image_tag_services must name images from ccrs_image_catalog (group_vars/digit.yml):
+              {{ ccrs_image_catalog | map(attribute='image') | join(', ') }}
+            unknown: {{ ccrs_image_tag_services | difference(ccrs_image_catalog | map(attribute='image')) | join(', ') or '-' }}
+          - image_tag_services without image_tag does nothing — pass both.
+        quiet: true
+      tags: [always]
+
+    # A service and its `-db` migration image always move together, whichever of
+    # the two is named: `--image-tag-services=pgr-services-db` on its own would
+    # otherwise run the new build's forward-only migrations under the old
+    # service (Vinoth review on #2166). The pipelines push the pair under one
+    # tag, so widening the scope to the pair never asks for an image that
+    # isn't there.
+    - name: "Image tag — map the tag onto the images it covers"
+      ansible.builtin.set_fact:
+        ccrs_tagged_images: >-
+          {% set scope = ccrs_image_tag_services
+               + (ccrs_image_catalog | selectattr('image', 'in', ccrs_image_tag_services)
+                  | selectattr('follows', 'defined') | map(attribute='follows') | list) -%}
+          {% set out = {} -%}
+          {% for e in ccrs_image_catalog -%}
+          {% set covered = ccrs_image_tag | length > 0 and (ccrs_image_tag_services | length == 0
+               or e.image in scope or (e.follows | default('')) in scope) -%}
+          {% set _ = out.update({e.image: (image_tag_namespace ~ '/' ~ e.image ~ ':' ~ ccrs_image_tag) if covered else ''}) -%}
+          {% endfor -%}
+          {{ out }}
+      tags: [always]
+
     # Refuses a deploy that would move Postgres off the volume holding its data
     # (#2082, #2085). Its own file so tests/pg-storage-guard-test.yml can drive
     # the real tasks; see that file's header for the rule.
@@ -1542,12 +1603,14 @@
     # it empty so MCP_IMAGE renders empty in .env and Compose's own
     # `${MCP_IMAGE:-default}` fallback — the single source of truth for the
     # pulled tag — takes over. An operator can still override `mcp_image:`
-    # explicitly in host_vars.
+    # explicitly in host_vars. `image_tag` (#1729) sits between the two: it
+    # moves the pulled image but never overrides build_mcp or a pin.
     - name: "Resolve MCP image tag"
       ansible.builtin.set_fact:
         mcp_image: >-
           {{ mcp_image
-             | default('digit-mcp:local' if (build_mcp | default(false)) else '') }}
+             | default('digit-mcp:local' if (build_mcp | default(false))
+                       else ccrs_tagged_images['digit-mcp']) }}
 
     # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
     # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
@@ -1575,7 +1638,250 @@
         otp_publisher_image: >-
           {{ otp_publisher_image
              | default('otp-publisher:local' if (build_otp_publisher | default(false))
-                       else 'egovio/otp-publisher:2.12-81fc6be') }}
+                       else (ccrs_tagged_images['otp-publisher'] or 'egovio/otp-publisher:2.12-81fc6be')) }}
+
+    # ==================== Compose profiles ====================
+    # Computed here, before the image-tag check below, which uses them to skip
+    # images behind a profile this tenant does not run.
+    # COMPOSE_PROFILES drives which optional service groups are included.
+    # Today: `search` covers elasticsearch + egov-indexer + inbox-v2.
+    # Default off; tenants opt in via `enable_search_stack: true`.
+    # Observability levels are CUMULATIVE (#1657): each includes the ones
+    # above it. Default `traces` yields all three profiles, i.e. exactly the
+    # stack every tenant runs today — this knob only ever removes.
+    - name: "Validate observability_level"
+      ansible.builtin.fail:
+        msg: >-
+          observability_level must be one of metrics|logs|traces, got
+          '{{ observability_level }}'. Levels are cumulative; `traces` is the
+          full stack and the default. A gatus-only level is not offered yet —
+          16 services depend_on otel-collector, so omitting it risks failing
+          the deploy rather than shrinking it.
+      when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
+
+    - name: "Compute compose profiles for this tenant"
+      vars:
+        _obs: "{{ observability_level | default('traces') }}"
+        # collector lives in `metrics`, not `traces`: JVM metrics reach
+        # Prometheus via otel-collector:8889, so dropping it costs metrics too.
+        _obs_profiles: >-
+          {{
+            ([]
+              + (['obs-metrics'] if _obs in ['metrics', 'logs', 'traces'] else [])
+              + (['obs-logs']    if _obs in ['logs', 'traces']            else [])
+              + (['obs-traces']  if _obs == 'traces'                      else [])
+            )
+          }}
+      ansible.builtin.set_fact:
+        compose_profiles: >-
+          {{
+            ([]
+              + (['search']        if enable_search_stack  | default(false) else [])
+              + (['mcp']           if enable_mcp           | default(false) else [])
+              + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
+              + (['notifications'] if enable_novu          | default(false) else [])
+              + (['chatbot']       if enable_chatbot       | default(false) else [])
+              + (['keycloak']      if enable_keycloak      | default(false) else [])
+              + (['otp']           if enable_otp_services  | default(false) else [])
+              + (['matomo']        if enable_matomo        | default(false) else [])
+              + _obs_profiles
+            ) | join(',')
+          }}
+
+    - name: "Show active compose profiles"
+      ansible.builtin.debug:
+        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
+
+    # ==================== One-tag deploys (#1729): resolve + verify ====================
+    # A per-tenant overlay (docker-compose.<tenant>.yml, layered last with -f)
+    # that sets a literal `image:` on a catalog service beats .env, so neither a
+    # pin nor the tag reaches that container — while the plan and .env would
+    # claim otherwise (Vinoth review on #2166). Find those services by reading
+    # the base compose files for which service reads which catalog env var,
+    # then the overlay for literal images on the same services. Both files are
+    # read on the controller, where the overlay is copied from.
+    - name: "Image tag — find catalog images the tenant overlay hard-codes"
+      ansible.builtin.set_fact:
+        ccrs_overlay_images: >-
+          {% set envs = ccrs_image_catalog | map(attribute='env') | list -%}
+          {% set svc_env = {} -%}
+          {% for f in ['docker-compose.egov-digit.yaml', 'docker-compose.migrations.yml'] -%}
+          {% for name, svc in ((lookup('ansible.builtin.file', playbook_dir ~ '/../' ~ f) | from_yaml).services | default({})).items() -%}
+          {% set m = (svc.image | default('') | string) | regex_search('^\$\{(\w+):-', '\\1') -%}
+          {% if m and m[0] in envs %}{% set _ = svc_env.update({name: m[0]}) %}{% endif -%}
+          {% endfor -%}
+          {% endfor -%}
+          {% set out = {} -%}
+          {% if per_tenant_overlay.stat.exists | default(false) -%}
+          {% set overlay = lookup('ansible.builtin.file', per_tenant_overlay.stat.path) | from_yaml -%}
+          {% for name, svc in ((overlay or {}).services | default({}) or {}).items() -%}
+          {% set img = (svc or {}).image | default('') | string -%}
+          {% if img and not img.startswith('${') and name in svc_env -%}
+          {% set _ = out.update({svc_env[name]: {'service': name, 'image': img}}) -%}
+          {% endif -%}
+          {% endfor -%}
+          {% endif -%}
+          {{ out }}
+
+    # Final ref of every catalog image, most specific first:
+    #   pin      the host_vars pin (for MCP/otp-publisher, the resolution above,
+    #            which already folded in build_* and the tag). A pin equal to the
+    #            tagged ref counts as `tag`.
+    #   held     a `-db` image the tag covers whose SERVICE is pinned off the tag
+    #            stays on its compose-file default, as on master. Moving it to the
+    #            tag would run the newer build's forward-only migrations under the
+    #            older pinned service; deriving a ref from the service's pin was
+    #            tried and broke locally built pins such as `:abac-local`, whose
+    #            -db twin exists in no registry (Vinoth review on #2166). Warned.
+    #   tag      <image_tag_namespace>/<image>:<image_tag>
+    #   default  EMPTY, so the compose-file default applies.
+    # `overlay` records a literal image the tenant overlay forces (see above).
+    # `active` mirrors the compose profile the service sits behind (catalog
+    # `profiles`), so the registry check skips images this tenant never pulls.
+    # digit.env.j2 writes the refs via ccrs_image_env.
+    - name: "Image tag — resolve every CCRS image for this deploy"
+      ansible.builtin.set_fact:
+        ccrs_image_resolved: >-
+          {% set active_profiles = compose_profiles.split(',') | reject('equalto', '') | list -%}
+          {% set out = {} -%}
+          {% for e in ccrs_image_catalog -%}
+          {% set pin = lookup('vars', e.var, default='') | default('', true) -%}
+          {% set tagged = ccrs_tagged_images[e.image] -%}
+          {% set parent = (ccrs_image_catalog | selectattr('image', 'equalto', e.follows) | first) if e.follows is defined else {} -%}
+          {% set parent_pin = (lookup('vars', parent.var, default='') | default('', true)) if parent else '' -%}
+          {% if pin and pin != tagged -%}
+          {% set r = {'ref': pin, 'why': 'local' if pin.endswith(':local') else 'pin'} -%}
+          {% elif tagged and parent_pin and parent_pin != ccrs_tagged_images[e.follows] -%}
+          {% set r = {'ref': '', 'why': 'held', 'parent_var': parent.var} -%}
+          {% elif tagged -%}
+          {% set r = {'ref': tagged, 'why': 'tag'} -%}
+          {% else -%}
+          {% set r = {'ref': '', 'why': 'default'} -%}
+          {% endif -%}
+          {% set profiles = e.profiles | default([]) -%}
+          {% set _ = r.update({'env': e.env, 'var': e.var, 'profiles': profiles,
+                'overlay': ccrs_overlay_images[e.env].image if e.env in ccrs_overlay_images else '',
+                'active': profiles | length == 0 or profiles | intersect(active_profiles) | length > 0}) -%}
+          {% set _ = out.update({e.image: r}) -%}
+          {% endfor -%}
+          {{ out }}
+
+    - name: "Image tag — the compose env var for each image"
+      ansible.builtin.set_fact:
+        ccrs_image_env: "{{ ccrs_image_resolved.values() | list | items2dict(key_name='env', value_name='ref') }}"
+
+    # Print the plan. An image the tag covers but a pin, a local build, a pinned
+    # service or the tenant overlay keeps off it is flagged, never silently
+    # kept: a leftover pin is exactly the per-service edit this flow replaces,
+    # and it would otherwise ship an old image under a deploy everyone believes
+    # is on the new tag.
+    - name: "Image tag — what this deploy runs"
+      ansible.builtin.debug:
+        msg: "{{ ccrs_image_plan }}"
+      vars:
+        ccrs_image_plan: >-
+          {% set scope = ccrs_image_catalog | selectattr('follows', 'undefined')
+               | selectattr('image', 'in', ccrs_tagged_images | dict2items | selectattr('value') | map(attribute='key') | list)
+               | map(attribute='image') | list -%}
+          {% set lines = ['image_tag: ' ~ (ccrs_image_tag or '(none: compose-file defaults)')
+                ~ ((' (only ' ~ scope | join(', ') ~ ', each with its -db image)') if ccrs_image_tag_services else '')] -%}
+          {% set reasons = {'pin': 'pinned by `{var}` in host_vars', 'local': 'built on this host',
+                'held': 'kept on its compose-file default because its service is pinned by `{parent}`'} -%}
+          {% for i, r in ccrs_image_resolved.items() -%}
+          {% if r.overlay -%}
+          {% set shown = r.overlay -%}
+          {% set note = '   <-- set by docker-compose.' ~ inventory_hostname ~ '.yml; image_tag, pins and .env do not apply' -%}
+          {% else -%}
+          {% set shown = r.ref or '(compose-file default)' -%}
+          {% set note = ('   <-- NOT ' ~ ccrs_image_tag ~ ': ' ~ reasons[r.why] | replace('{var}', r.var)
+                | replace('{parent}', r.parent_var | default('')))
+                if (ccrs_tagged_images[i] and r.why in reasons) else '' -%}
+          {% endif -%}
+          {% set off = '' if r.active else '   (not deployed: profile ' ~ r.profiles | join('/') ~ ' is off)' -%}
+          {% set _ = lines.append(i ~ ' = ' ~ shown ~ note ~ off) -%}
+          {% endfor -%}
+          {% set tagged = ccrs_tagged_images['digit-ui-esbuild'] -%}
+          {% set bundle_note = '' if (not tagged or digit_ui_bundle_image == tagged)
+                else ('   <-- NOT ' ~ ccrs_image_tag ~ ': '
+                      ~ ('pinned by `digit_ui_bundle_image` in host_vars' if digit_ui_bundle_image else 'built on this host')) -%}
+          {% set _ = lines.append('digit_ui_bundle_image = ' ~ (digit_ui_bundle_image or '(none: on-host build)')
+                ~ (bundle_note if digit_ui_mode == 'static' else ' (unused: digit_ui_mode=' ~ digit_ui_mode ~ ')')) -%}
+          {{ lines }}
+
+    - name: "Image tag — warn about images the tag could not move"
+      ansible.builtin.debug:
+        msg: "{{ ['WARNING: image_tag ' ~ ccrs_image_tag ~ ' does not reach these images:'] + ccrs_tag_gaps }}"
+      vars:
+        ccrs_tag_gaps: >-
+          {% set out = [] -%}
+          {% for i, r in ccrs_image_resolved.items() -%}
+          {% if r.why == 'held' -%}
+          {% set _ = out.append(i ~ ' stays on its compose-file default: its service is pinned by `' ~ r.parent_var
+                ~ '`. Pin `' ~ r.var ~ '` to the -db image matching that pin if the service needs newer migrations.') -%}
+          {% endif -%}
+          {% if r.overlay and ccrs_tagged_images[i] -%}
+          {% set _ = out.append(i ~ ' runs ' ~ r.overlay ~ ', set in docker-compose.' ~ inventory_hostname
+                ~ '.yml. Change the overlay to `image: ${' ~ r.env ~ '}` (or drop the line) to let the tag apply.') -%}
+          {% endif -%}
+          {% endfor -%}
+          {{ out }}
+      when: ccrs_tag_gaps | length > 0
+
+    # `compose pull --ignore-pull-failures` below skips an image that does not
+    # exist, so a typo'd or not-yet-built tag used to surface as an `up -d`
+    # abort halfway through the deploy. Check every ref the tag produced
+    # BEFORE .env is rewritten, so a bad tag
+    # leaves the running containers and their .env untouched (host prep above —
+    # packages, daemon.json, config sync — has run by then; only force_clean
+    # touches the stack earlier). The pipelines push per image and one failed
+    # image does not fail the run, so a tag can exist for some images and not
+    # others — list every missing one. Images behind a profile this tenant does
+    # not run are skipped: they are never pulled, so a missing one must not
+    # block the deploy (Vinoth review on #2166). Read-only, so it also runs
+    # under --check: a dry run with a bad tag must fail like the real run.
+    # How it asks (HEAD, not GET, so it costs no Docker Hub pull quota) and what
+    # counts as missing vs. unverifiable: files/check-image-tags.sh.
+    - name: "Image tag — verify every tagged image exists in the registry"
+      ansible.builtin.script:
+        cmd: "{{ playbook_dir }}/files/check-image-tags.sh {{ ccrs_image_tag_refs | map('quote') | join(' ') }}"
+        executable: /bin/bash
+      vars:
+        ccrs_image_tag_refs: >-
+          {{ ((ccrs_image_resolved.values() | selectattr('active') | selectattr('why', 'equalto', 'tag')
+               | rejectattr('overlay') | map(attribute='ref') | list)
+              + ([digit_ui_bundle_image]
+                 if (digit_ui_mode == 'static' and digit_ui_bundle_image == ccrs_tagged_images['digit-ui-esbuild']
+                     and digit_ui_bundle_image) else []))
+             | unique | list }}
+      register: ccrs_image_tag_check
+      changed_when: false
+      check_mode: false
+      when:
+        - ccrs_image_tag | length > 0
+        - image_tag_verify | bool
+        - ccrs_image_tag_refs | length > 0
+
+    - name: "Image tag — refuse a tag the registry does not have"
+      ansible.builtin.fail:
+        msg: |
+          image_tag '{{ ccrs_image_tag }}' is not published for every image it covers:
+          {{ ccrs_image_tag_check.stdout }}
+          The deploy stopped before rewriting .env or pulling/recreating anything, so the
+          running containers keep the images they have. Either:
+            - pass the tag a pipeline actually pushed (the run summary lists every image:tag), or
+            - limit it to the images that have it: --image-tag-services=<image>[,<image>...]
+              (a single-service build from build.yml / spa-build.yml only pushes that service), or
+            - pin the odd one out in host_vars (e.g. pgr_services_image: egovio/pgr-services:<tag>).
+      when: ccrs_image_tag_check.stdout_lines | default([]) | select('match', '^MISSING') | list | length > 0
+
+    # Could not tell (rate limit, private repo, network): not proof the tag is
+    # wrong, so carry on and let `compose pull` / `up -d` have the final word.
+    - name: "Image tag — say which images could not be checked"
+      ansible.builtin.debug:
+        msg: "{{ ['WARNING: could not confirm these exist; the pull below will:'] + unverified }}"
+      vars:
+        unverified: "{{ ccrs_image_tag_check.stdout_lines | default([]) | select('match', '^UNVERIFIED') | list }}"
+      when: unverified | length > 0
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -1587,6 +1893,38 @@
       register: prev_env
       failed_when: false
       no_log: true   # holds the entire previous .env (POSTGRES/MINIO/KC/GF secrets); -v would print it (Vinoth review)
+
+    # A tag passed with --image-tag lives only in that run. The next plain
+    # `./deploy.sh <tenant>` falls back to the compose defaults — by design
+    # (#1729), but it is a silent downgrade if nobody meant it. digit.env.j2
+    # records the tag AND its --image-tag-services scope in .env, so compare
+    # both and say so loudly. The hint must carry the scope: a dispatch build's
+    # tag exists for one service only, so re-running it unscoped would fail the
+    # registry check or move every image to it (Vinoth review on #2166).
+    # Warn, not fail: the bomet nightly redeploy and every routine re-run
+    # legitimately go back to the defaults. Keep a tenant on a tag with
+    # `image_tag:` in host_vars.
+    - name: "Image tag — warn when this deploy moves the images off the previous tag"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: the last deploy ran image_tag '{{ ccrs_prev_image_tag }}'{{
+          (' (only ' ~ ccrs_prev_services ~ ')') if ccrs_prev_services else '' }}; this one runs
+          {{ ("'" ~ ccrs_image_tag ~ "'" ~ ((' (only ' ~ ccrs_image_tag_services | join(',') ~ ')') if ccrs_image_tag_services else ''))
+             if ccrs_image_tag else 'the compose-file defaults' }}.
+          Images are about to move. If that is not intended, re-run with
+          --image-tag={{ ccrs_prev_image_tag }}{{ (' --image-tag-services=' ~ ccrs_prev_services) if ccrs_prev_services else '' }}
+          (or set image_tag / image_tag_services in host_vars).
+      vars:
+        ccrs_prev_match: >-
+          {{ (prev_env.content | default('') | b64decode)
+             | regex_search('(?m)^# image_tag: (\S+)(?: \(only ([^)]*)\))?', '\1', '\2') }}
+        ccrs_prev_image_tag: "{{ (ccrs_prev_match or ['(none)'])[0] }}"
+        ccrs_prev_services: "{{ ((ccrs_prev_match or ['', ''])[1]) | default('', true) }}"
+      when:
+        - prev_env.content is defined
+        - ccrs_prev_image_tag != '(none)'
+        - ccrs_prev_image_tag != (ccrs_image_tag or '(none)')
+          or ccrs_prev_services != (ccrs_image_tag_services | join(','))
 
     - name: Write per-tenant compose .env
       template:
@@ -1809,55 +2147,8 @@
       tags: ['mcp-publish', 'never']  # opt-in only; not part of default deploy
 
     # ==================== Pull & Start ====================
-    # COMPOSE_PROFILES drives which optional service groups are included.
-    # Today: `search` covers elasticsearch + egov-indexer + inbox-v2.
-    # Default off; tenants opt in via `enable_search_stack: true`.
-    # Observability levels are CUMULATIVE (#1657): each includes the ones
-    # above it. Default `traces` yields all three profiles, i.e. exactly the
-    # stack every tenant runs today — this knob only ever removes.
-    - name: "Validate observability_level"
-      ansible.builtin.fail:
-        msg: >-
-          observability_level must be one of metrics|logs|traces, got
-          '{{ observability_level }}'. Levels are cumulative; `traces` is the
-          full stack and the default. A gatus-only level is not offered yet —
-          16 services depend_on otel-collector, so omitting it risks failing
-          the deploy rather than shrinking it.
-      when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
-
-    - name: "Compute compose profiles for this tenant"
-      vars:
-        _obs: "{{ observability_level | default('traces') }}"
-        # collector lives in `metrics`, not `traces`: JVM metrics reach
-        # Prometheus via otel-collector:8889, so dropping it costs metrics too.
-        _obs_profiles: >-
-          {{
-            ([]
-              + (['obs-metrics'] if _obs in ['metrics', 'logs', 'traces'] else [])
-              + (['obs-logs']    if _obs in ['logs', 'traces']            else [])
-              + (['obs-traces']  if _obs == 'traces'                      else [])
-            )
-          }}
-      ansible.builtin.set_fact:
-        compose_profiles: >-
-          {{
-            ([]
-              + (['search']        if enable_search_stack  | default(false) else [])
-              + (['mcp']           if enable_mcp           | default(false) else [])
-              + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
-              + (['notifications'] if enable_novu          | default(false) else [])
-              + (['chatbot']       if enable_chatbot       | default(false) else [])
-              + (['keycloak']      if enable_keycloak      | default(false) else [])
-              + (['otp']           if enable_otp_services  | default(false) else [])
-              + (['matomo']        if enable_matomo        | default(false) else [])
-              + _obs_profiles
-            ) | join(',')
-          }}
-
-    - name: "Show active compose profiles"
-      ansible.builtin.debug:
-        msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
-
+    # (Compose profiles are computed earlier, above the image-tag check, which
+    # needs them to skip images this tenant never pulls.)
     # Tenants opt into the DB fast-path with `db_fast_path: true` in their
     # host_vars. When on, layer the overlay onto every compose invocation
     # below (pull, up, recreate). Default off — never touches live tenants.
