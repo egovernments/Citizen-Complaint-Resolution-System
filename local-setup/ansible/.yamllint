@@ -37,3 +37,10 @@ rules:
 
   # Ansible templates and multi-doc files start with --- but not all do.
   document-start: disable
+
+# tests/fixtures/compose/* deliberately reproduce the real compose files'
+# formatting, 4-space sequence indent included — that shape is what the guard's
+# path regex is tested against. Reformatting them to satisfy the linter would
+# make the fixtures stop resembling what they stand in for.
+ignore: |
+  tests/fixtures/

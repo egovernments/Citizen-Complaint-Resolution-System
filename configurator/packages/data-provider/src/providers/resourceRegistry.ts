@@ -63,7 +63,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // keep reading `serviceCode`/`department`/`slaHours` unchanged. idField is
   // the leaf row's `code` (== the serviceCode stored verbatim on a complaint).
   'complaint-hierarchy': {
-    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
+    type: 'mdms', label: 'Complaint Categories', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
     idField: 'code', nameField: 'name', descriptionField: 'levelCode',
     dedicated: true, leafServiceDefAdapter: true,
   },
@@ -103,7 +103,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'access-role', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
     // `schema` here is a masters-visibility policy key only (see
-    // docs/design/masters-configurator-access-policy-design.md §3.2) — this
+    // docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.2) — this
     // resource still fetches via the accesscontrol role API (`type:
     // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
     // every fetch branch in dataProvider.ts before `config.schema` is ever

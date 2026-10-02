@@ -1,27 +1,13 @@
-import { Hamburger, TopBar as TopBarComponent } from "@egovernments/digit-ui-react-components";
 import { Dropdown } from "@egovernments/digit-ui-components";
 import { EmployeeWorkingContext } from "./EmployeeWorkingContext";
 import React, { Fragment } from "react";
-import { useHistory, useLocation } from "react-router-dom";
-import ChangeCity from "../ChangeCity";
+import ChangeCity, { showTenantIndicator } from "../ChangeCity";
 import ChangeLanguage from "../ChangeLanguage";
 import { Header as TopBarComponentMain } from "@egovernments/digit-ui-components";
 import ImageComponent from "../ImageComponent";
 import { resolveProfilePhoto } from "../utils";
 
-const DEFAULT_EGOV_LOGO = "https://egov-dev-assets.s3.ap-south-1.amazonaws.com/egov-logo-2025.png";
-/**
- * The shipped lockup is the dark-on-light one: an orange "e" and a navy "GOV".
- * On a tenant that paints its header navy the "GOV" is navy on navy and simply
- * disappears, so a dark header needs the reverse lockup instead. Same geometry
- * as the default — 800x800, the wordmark 800x200 letterboxed on transparency —
- * so it drops into the square slot without touching any layout.
- *
- * `applyTheme` publishes the header's tone from the same luminance it uses to
- * pick readable foregrounds, so this cannot disagree with the rest of the
- * chrome about whether the header is dark.
- */
-const DEFAULT_EGOV_LOGO_ON_DARK = "/digit-ui/brand/egov-logo-white.png";
+import { DEFAULT_EGOV_LOGO, DEFAULT_EGOV_LOGO_ON_DARK } from "./brandLogos";
 
 /**
  * Observed rather than read once: the theme record arrives over the network, so
@@ -64,6 +50,38 @@ const TopBar = ({
   const headerTone = useHeaderTone();
   const [profilePic, setProfilePic] = React.useState(null);
 
+  /**
+   * The header has two image slots: `img` (the tenant mark) and `ulb`, which
+   * on a tenant with no ULB grade falls back to the state mark. Plenty of
+   * deployments point both at the same asset — Bomet serves one crest for
+   * both — and below the header's own mobile breakpoint the shared component
+   * puts them side by side inside `.digit-header-img-ulb-wrapper-mobileview`,
+   * so the same crest rendered twice at two different sizes with a divider
+   * between them (#2038 review).
+   *
+   * The `ulb` slot is the one that survives: it is the only one that renders
+   * above that breakpoint, since `.digit-header-img` is present but zero width
+   * on desktop. Dropping `ulb` takes the crest off the desktop header
+   * entirely, and blanking the `img` prop is worse still — the shared header
+   * then falls back to its own default mSeva mark.
+   *
+   * So both props stay and the duplicate is hidden in CSS, which needs this
+   * flag: only here can the two URLs be compared. A tenant whose state and
+   * city marks genuinely differ keeps both images and the rule between them.
+   */
+  const ulbLogo = logoUrlWhite || stateInfo?.logoUrlWhite;
+  const ulbLogoDuplicatesHeaderImg = Boolean(ulbLogo) && ulbLogo === logoUrl;
+  // The desktop bar shows the tenant crest at its left and hides the logo slot
+  // (the eGov lockup lives in the rail's foot). The crest used to render only
+  // for a signed-in user of a city without a ULB grade; signed out, or with a
+  // grade, the slot held text alone and the bar had no crest. It renders in
+  // every case now, ahead of whatever label the case carries.
+  const crestSrc = ulbLogo || logoUrl;
+  // Signed out, the crest's caption is the state's MYCITY label, shown only
+  // when a tenant has seeded it: unseeded, it printed the raw key.
+  const mycityKey = `MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`;
+  const mycityLabel = t(mycityKey) !== mycityKey ? `${t(mycityKey)} ${t("MYCITY_STATECODE_LABEL")}` : null;
+
   React.useEffect(async () => {
     const tenant = Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getStateId() : Digit.ULBService.getCurrentTenantId();
     const uuid = userDetails?.info?.uuid;
@@ -85,70 +103,15 @@ const TopBar = ({
     // until a hard reload.
   }, [userDetails?.info?.uuid, Digit.UserService.getUser()?.info?.photo]);
 
-  const CitizenHomePageTenantId = Digit.ULBService.getCitizenCurrentTenant(true);
-
-  let history = useHistory();
-  const { pathname } = useLocation();
-
-  const conditionsToDisableNotificationCountTrigger = () => {
-    if (Digit.UserService?.getUser()?.info?.type === "EMPLOYEE") return false;
-    if (Digit.UserService?.getUser()?.info?.type === "CITIZEN") {
-      if (!CitizenHomePageTenantId) return false;
-      else return true;
-    }
-    return false;
-  };
-
-  const { data: { unreadCount: unreadNotificationCount } = {}, isSuccess: notificationCountLoaded } = Digit.Hooks.useNotificationCount({
-    tenantId: CitizenHomePageTenantId,
-    config: {
-      enabled: conditionsToDisableNotificationCountTrigger(),
-    },
-  });
-
-  const updateSidebar = () => {
-    if (!Digit.clikOusideFired) {
-      toggleSidebar(true);
-    } else {
-      Digit.clikOusideFired = false;
-    }
-  };
-
-  function onNotificationIconClick() {
-    history.push(`/${window?.contextPath}/citizen/engagement/notifications`);
-  }
-
-  const urlsToDisableNotificationIcon = (pathname) =>
-    !!Digit.UserService?.getUser()?.access_token
-      ? false
-      : [`/${window?.contextPath}/citizen/select-language`, `/${window?.contextPath}/citizen/select-location`].includes(pathname);
-
-  if (CITIZEN) {
-    return (
-      <div>
-        <TopBarComponent
-          img={stateInfo?.logoUrlWhite}
-          isMobile={true}
-          toggleSidebar={updateSidebar}
-          logoUrl={stateInfo?.logoUrlWhite}
-          onLogout={handleLogout}
-          userDetails={userDetails}
-          notificationCount={unreadNotificationCount < 99 ? unreadNotificationCount : 99}
-          notificationCountLoaded={notificationCountLoaded}
-          cityOfCitizenShownBesideLogo={t(CitizenHomePageTenantId)}
-          onNotificationIconClick={onNotificationIconClick}
-          hideNotificationIconOnSomeUrlsWhenNotLoggedIn={urlsToDisableNotificationIcon(pathname)}
-          changeLanguage={!mobileView ? <ChangeLanguage dropdown={true} /> : null}
-        />
-      </div>
-    );
-  }
+  // Citizens get this same bar (#2038 review): the legacy citizen header had
+  // its own height, gutters, carets and a notifications bell that opened a
+  // blank page, since this deployment does not enable the engagement module.
   const loggedin = userDetails?.access_token ? true : false;
 
   //checking for custom topbar components
   const CustomEmployeeTopBar = Digit.ComponentRegistryService?.getComponent("CustomEmployeeTopBar");
 
-  if (CustomEmployeeTopBar) {
+  if (CustomEmployeeTopBar && !CITIZEN) {
     return (
       <CustomEmployeeTopBar
         {...{
@@ -196,7 +159,7 @@ const TopBar = ({
               tenantId={workingContextTenantId}
             />
           ),
-          <ChangeCity dropdown={true} t={t} />,
+          showTenantIndicator() && <ChangeCity dropdown={true} t={t} />,
           showLanguageChange && <ChangeLanguage dropdown={true} />,
           userDetails?.access_token && (
             <Dropdown
@@ -226,10 +189,16 @@ const TopBar = ({
             />
           ),
         ].filter(Boolean)}
+        // The phone bar has room for one control beside the marks: the
+        // language pill, as in the design. The drawer no longer lists Language.
+        mobileActionFields={showLanguageChange ? [<ChangeLanguage compact={true} />] : undefined}
+        menuAnalyticsEvent="shell.menu.open"
         onHamburgerClick={() => {
           toggleSidebar();
         }}
-        className="digit-employee-header"
+        className={`digit-employee-header${CITIZEN ? " digit-citizen-header" : ""}${
+          ulbLogoDuplicatesHeaderImg ? " digit-employee-header--single-mark" : ""
+        }${crestSrc ? "" : " digit-employee-header--no-crest"}`}
         img={logoUrl}
         logoWidth={"64px"}
         logoHeight={"48px"}
@@ -244,20 +213,19 @@ const TopBar = ({
         style={{}}
         theme="light"
         ulb={
-          loggedin ? (
-            cityDetails?.city?.ulbGrade ? (
-              <>
-                {t(cityDetails?.i18nKey).toUpperCase()}{" "}
-                {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
-              </>
-            ) : (
-              <ImageComponent className="state" src={logoUrlWhite || stateInfo?.logoUrlWhite} alt="State Logo" />
-            )
-          ) : (
-            <>
-              {t(`MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`)} {t(`MYCITY_STATECODE_LABEL`)}
-            </>
-          )
+          <>
+            {crestSrc ? <ImageComponent className="state" src={crestSrc} alt="State Logo" /> : null}
+            {loggedin ? (
+              cityDetails?.city?.ulbGrade ? (
+                <span className="digit-topbar-ulb-label">
+                  {t(cityDetails?.i18nKey).toUpperCase()}{" "}
+                  {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
+                </span>
+              ) : null
+            ) : mycityLabel ? (
+              <span className="digit-topbar-ulb-label">{mycityLabel}</span>
+            ) : null}
+          </>
         }
       />
       {showWorkingContext && (

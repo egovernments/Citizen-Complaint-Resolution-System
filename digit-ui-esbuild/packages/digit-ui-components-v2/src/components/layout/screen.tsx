@@ -76,7 +76,20 @@ export interface ScreenHeaderProps {
 export function ScreenHeader({ title, description, className }: ScreenHeaderProps) {
   return (
     <header className={cn("space-y-1.5", className)}>
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[28px]">{title}</h1>
+      {/* The heading every other citizen page uses (All Services, My
+          Complaints, a complaint, Edit Profile): 24px bold in the heading
+          colour. This one was 28px semibold in body text colour. */}
+      <h1
+        style={{
+          fontSize: "1.5rem",
+          fontWeight: 700,
+          margin: 0,
+          lineHeight: 1.25,
+          color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+        }}
+      >
+        {title}
+      </h1>
       {description ? (
         <p className="text-sm text-muted-foreground">{description}</p>
       ) : null}

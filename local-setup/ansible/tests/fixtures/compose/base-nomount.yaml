@@ -1,0 +1,6 @@
+services:
+  postgres-db:
+    image: egovio/postgres:16
+    # deliberately NO postgres_data entry: the guard must treat "no mount
+    # resolved in any layer" as inconclusive, not as "not PGDATA"
+    environment: {POSTGRES_USER: egov}

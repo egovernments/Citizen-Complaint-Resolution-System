@@ -17,29 +17,23 @@ const Header = ({
   logo,
   ulb,
   actionFields,
+  // Opt-in controls for the phone bar, which otherwise has only the menu
+  // button and the marks: `actionFields` never render below 768px. Right-
+  // aligned, in order. Absent, the phone bar is unchanged.
+  mobileActionFields,
+  // Opt-in: the analytics event the phone bar's menu button records.
+  menuAnalyticsEvent,
 }) => {
-  const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
-  const onResize = () => {
-    if (window.innerWidth <= 768) {
-      if (!isMobileView) {
-        setIsMobileView(true);
-      }
-    } else {
-      if (isMobileView) {
-        setIsMobileView(false);
-      }
-    }
-  };
+  // Phone below 768px, the width the rails mount from (`MediaQuery
+  // minWidth={768}`, `min-width: 48rem`); at exactly 768 both shells used to
+  // render. One listener for the component's life: the effect used to run on
+  // every render and its cleanup added another listener instead of removing.
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   useEffect(() => {
-    window.addEventListener("resize", () => {
-      onResize();
-    });
-    return () => {
-      window.addEventListener("resize", () => {
-        onResize();
-      });
-    };
-  });
+    const onResize = () => setIsMobileView(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const getImageUrl = (imageKey) => {
     return IMAGES[imageKey] ;
@@ -56,12 +50,33 @@ const Header = ({
         style={style}
       >
         <HamburgerButton
+          analyticsEvent={menuAnalyticsEvent}
           className={`digit-topbar-hamburger ${theme || ""} ${
             onHamburgerClick ? "clickable" : ""
           }`}
           handleClick={onHamburgerClick}
           color={theme === "dark" ? darkThemeColor : lightThemeColor}
         />
+        {/* The desktop bar renders `logo` (the eGov wordmark) ahead of the
+            tenant crest; this branch dropped it, so phones showed the crest
+            alone and the brand mark was missing from the whole mobile app
+            (#2038 mobile review). Same order as desktop, scaled down for the
+            narrow bar. Guarded on `logo`, so the citizen header, which never
+            passes one, is unchanged. */}
+        {logo && (
+          <div
+            className={`digit-topbar-logo mobileview ${onLogoClick ? "clickable" : ""}`}
+            onClick={() => onLogoClick?.()}
+          >
+            <img
+              className="digit-header-logo-img"
+              alt="Logo"
+              src={logo}
+              width={props?.logoWidthMobile || "48px"}
+              height={props?.logoHeightMobile || "36px"}
+            />
+          </div>
+        )}
         <div className="digit-header-img-ulb-wrapper-mobileview">
           <img
             className={`digit-header-img ${onImageClick ? "clickable" : ""}`}
@@ -76,6 +91,15 @@ const Header = ({
             {ulb}
           </div>
         </div>
+        {mobileActionFields && mobileActionFields.length > 0 && (
+          <div className="digit-header-mobile-actions">
+            {mobileActionFields.map((field, index) => (
+              <div className="individual-mobile-action-field" key={index}>
+                {field}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -151,6 +175,8 @@ Header.propTypes = {
   onImageClick: PropTypes.func,
   onLogoClick: PropTypes.func,
   onHamburgerClick: PropTypes.func,
+  mobileActionFields: PropTypes.array,
+  menuAnalyticsEvent: PropTypes.string,
   props: PropTypes.object,
   logo: PropTypes.string,
 };

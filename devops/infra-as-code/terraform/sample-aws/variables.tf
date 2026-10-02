@@ -69,19 +69,30 @@ variable "instance_types" {
   default     = []
 }
 
+# Node counts below are sized by MEMORY, not CPU. Every java-spring service sets
+# request == limit on memory and sets no CPU request at all (see
+# devops/deploy-as-code/charts/common/values.yaml), so the scheduler bin-packs
+# purely on summed memory requests -- runtime CPU headroom does not enter into
+# whether a pod can be placed. The shipped stack reserves ~16.6Gi across the
+# java-spring releases alone, plus elasticsearch/elasticsearch-data/kibana/
+# kafka-connect and the Kafka and Novu backbones on top. Against an m5a.xlarge
+# (16Gi, ~14.5Gi allocatable after the EKS reserve) 3 nodes does not schedule
+# the whole namespace -- the 2Gi elasticsearch-data and kibana pods have to land
+# on a single node each, so fragmentation bites before the aggregate fills. The
+# v2.12 load-test cluster ran 4 nodes for this reason.
 variable "min_worker_nodes" {
   description = "eGov recommended below worker node counts as default for min nodes"
-  default = "1" #REPLACE IF NEEDED
+  default = "4" #REPLACE IF NEEDED
 }
 
 variable "desired_worker_nodes" {
   description = "eGov recommended below worker node counts as default for desired nodes"
-  default = "3" #REPLACE IF NEEDED
+  default = "4" #REPLACE IF NEEDED
 }
 
 variable "max_worker_nodes" {
   description = "eGov recommended below worker node counts as default for max nodes"
-  default = "5" #REPLACE IF NEEDED
+  default = "6" #REPLACE IF NEEDED
 }
 
 variable "db_name" {

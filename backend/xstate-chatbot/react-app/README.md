@@ -41,3 +41,13 @@ Please modify the following environment variables in [env-variables.js](../nodej
  
 1. Disable kafka consumer by marking kafkaConsumerEnabled to be false
 2. In case of hostnames of services, the react-app picks it from the proxy configured in [package.json](./package.json). So configure a common hostname there and replace egovServicesHost - 'https://dev.digit.org/' (and any other hostname that is being used to make an api call) in the env-variables.js with just '/'.
+
+## Browser build
+
+`nodejs/src/machine/seva.js` pulls in the whole service layer, including the Postgres
+repo and the Kafka consumer, neither of which can run in a browser. `config-overrides.js`
+stubs them out (`pg` gets a shim that throws if it is ever actually queried, `kafka-node`
+is dropped) and supplies the node core fallbacks that webpack 5 no longer adds on its own.
+
+Both `npm start` and `npm run build` go through `react-app-rewired`, so both pick that
+config up. Running `react-scripts` directly skips it and the build will fail.

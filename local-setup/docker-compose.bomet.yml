@@ -30,5 +30,9 @@ services:
   pgr-services:
     environment:
       PGR_NOTIFICATION_CONFIG_DRIVEN: "true"
+      # Bomet carries the canonical state-level EscalationConfig and workflow
+      # self-loop. Keep the shared default disabled; this tenant is explicitly
+      # preflighted and opted in through its overlay.
+      PGR_ESCALATION_ENABLED: "true"
+      PGR_ESCALATION_INTERVAL_MS: "300000"
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: complaints.domain.events
-

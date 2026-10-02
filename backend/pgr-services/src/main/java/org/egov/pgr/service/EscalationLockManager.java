@@ -17,17 +17,18 @@ import java.util.function.Supplier;
 /**
  * Cross-replica serialization for one complaint's ESCALATE operation.
  *
- * <p>The advisory lock is session-scoped and therefore survives the local database
- * transactions used by the update pipeline. PostgreSQL releases it automatically if
- * this process or connection dies. A small private pool prevents lock holders from
- * consuming every connection in the application's ordinary request pool.</p>
+ * <p>The advisory lock is transaction-scoped on a dedicated connection. Keeping that
+ * connection inside an explicit transaction is required when the datasource points at
+ * PgBouncer in transaction-pooling mode: separate auto-commit statements are otherwise
+ * free to use different PostgreSQL sessions, leaking session-scoped locks. The business
+ * update still uses its normal datasource/transaction; this private transaction exists
+ * only to pin and release the cross-replica lock.</p>
  */
 @Component
 @Slf4j
 public class EscalationLockManager {
 
-    private static final String TRY_LOCK = "SELECT pg_try_advisory_lock(hashtextextended(?, 0))";
-    private static final String UNLOCK = "SELECT pg_advisory_unlock(hashtextextended(?, 0))";
+    private static final String TRY_LOCK = "SELECT pg_try_advisory_xact_lock(hashtextextended(?, 0))";
 
     private final HikariDataSource lockDataSource;
 
@@ -59,15 +60,34 @@ public class EscalationLockManager {
         String lockKey = normalizedTenant.length() + ":" + normalizedTenant
                 + normalizedComplaintId.length() + ":" + normalizedComplaintId;
         try (Connection connection = lockDataSource.getConnection()) {
+            // Pins one PostgreSQL backend for the lifetime of the advisory lock even
+            // when the JDBC URL fronts PgBouncer in transaction-pooling mode.
+            connection.setAutoCommit(false);
             if (!executeBoolean(connection, TRY_LOCK, lockKey)) {
+                connection.rollback();
                 throw new CustomException("ESCALATION_IN_PROGRESS",
                         "Another escalation for complaint " + complaintId + " is still being persisted");
             }
 
             try {
-                return operation.get();
-            } finally {
-                release(connection, lockKey, complaintId);
+                T result = operation.get();
+                try {
+                    connection.commit();
+                } catch (SQLException e) {
+                    // The lock transaction contains no business writes. Once the
+                    // escalation operation has returned, reporting a lock failure
+                    // would invite a retry and could consume the next hierarchy rung.
+                    // Evicting/closing the connection ends this transaction and
+                    // releases the transaction-scoped advisory lock.
+                    lockDataSource.evictConnection(connection);
+                    log.error("Could not commit the escalation lock transaction for complaint {}; "
+                                    + "the escalation already completed, so the connection was evicted",
+                            complaintId, e);
+                }
+                return result;
+            } catch (RuntimeException | Error e) {
+                rollback(connection, complaintId);
+                throw e;
             }
         } catch (CustomException e) {
             throw e;
@@ -78,16 +98,14 @@ public class EscalationLockManager {
         }
     }
 
-    private void release(Connection connection, String lockKey, String serviceRequestId) {
+    private void rollback(Connection connection, String serviceRequestId) {
         try {
-            if (!executeBoolean(connection, UNLOCK, lockKey)) {
-                log.error("PostgreSQL reported no escalation lock to release for complaint {}", serviceRequestId);
-                lockDataSource.evictConnection(connection);
-            }
+            connection.rollback();
         } catch (SQLException e) {
-            // Never return a possibly lock-owning connection to the pool.
+            // Closing an evicted connection also ends the transaction and releases the
+            // xact lock. Never return a connection with an uncertain transaction state.
             lockDataSource.evictConnection(connection);
-            log.error("Could not release the escalation lock for complaint {}; evicted its connection",
+            log.error("Could not roll back the escalation lock transaction for complaint {}; evicted its connection",
                     serviceRequestId, e);
         }
     }

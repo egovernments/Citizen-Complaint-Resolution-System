@@ -157,7 +157,7 @@ Configurator manage surface (`/configurator/manage/*`) plus admin-scoped
 regression checks:
 `departments`, `designations`, `complaint-types`, `complaints`,
 `employees`, `users`, `tenants`, `boundary-hierarchies`, `localization`,
-`theme-editor`, `theme-applied`, `target-tenant-onboarding`,
+`theme-editor`, `theme-applied`,
 `pgr-dashboard`, `hardcoding`, `recently-shipped-fixes`,
 `configurator-mdms-fixes-2026-04-29`.
 

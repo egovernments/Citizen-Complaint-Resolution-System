@@ -1,12 +1,16 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
-import Layout from './components/layout/Layout';
+import OnboardingLayout from './onboarding/OnboardingLayout';
+import ComplaintsStep from './onboarding/ComplaintsStep';
+import BrandingStep from './onboarding/BrandingStep';
+import GeographyStep from './onboarding/geography/GeographyStep';
+import DepartmentsStep from './onboarding/departments/DepartmentsStep';
+import EmployeesStep from './onboarding/employees/EmployeesStep';
+import { ONBOARDING_STEPS } from './onboarding/steps';
+import { finishesOnboarding, isOnboardingComplete, resumePath } from './onboarding/progress';
 import LoginPage from './pages/LoginPage';
-import Phase1Page from './pages/Phase1Page';
-import Phase2Page from './pages/Phase2Page';
-import Phase3Page from './pages/Phase3Page';
-import Phase4Page from './pages/Phase4Page';
-import CompletePage from './pages/CompletePage';
+import SignupPage from './pages/SignupPage';
+import RootLanding from './pages/RootLanding';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
@@ -40,25 +44,17 @@ import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEd
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider, DigitApiClient } from '@/providers/bridge';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
-// UndoToast removed — see CCRS#417. The previous Undo button only popped
-// the local UI stack; egov-mdms-service exposes no `_delete`/`_disable`
-// endpoint, so there is no real way to roll back a created tenant +
-// branding + localization rows from this UI today. The button promised
-// rollback it couldn't deliver, so we hide it until the backend grows
-// proper compensators (or until product defines a different semantic for
-// "Undo" — e.g. soft-deactivate via `_update isActive=false` for schemas
-// without unique-key collisions).
-// import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
-import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
+import { identifyUser, trackEvent } from './lib/telemetry';
+import { clearLocalSession, SESSION_EXPIRED_KEY } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
-import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
+import { LEGACY_PGR_DASHBOARD_ENABLED, ONBOARDING_GATE_ENABLED } from '@/config/featureFlags';
 
 // App context for global state
 type AppMode = 'onboarding' | 'management';
@@ -121,7 +117,7 @@ function ManagementAdmin() {
 
 // Split from ManagementAdmin so useMastersCapability() (which reads the
 // context MastersCapabilityProvider establishes above) resolves correctly —
-// see docs/design/masters-configurator-access-policy-design.md §3.3. Masters
+// see docs/reference/architecture/access-control/masters-configurator-access-policy-design.md §3.3. Masters
 // the current role can't see are filtered out via `{cond && <Resource .../>}`
 // (React.Children.toArray drops the resulting `false`), keeping every
 // <Resource> a direct child of <CoreAdminUI> as react-admin requires.
@@ -201,12 +197,12 @@ function ManagementAdminResources() {
   );
 }
 
-// Storage key for persisting auth state
-const AUTH_STORAGE_KEY = 'crs-auth-state';
+// Storage key for persisting auth state. Defined with the teardown that
+// clears it so the two cannot drift apart.
+import { AUTH_STORAGE_KEY } from './lib/session';
 
 // One-shot flag (sessionStorage) set when a request is rejected for an expired
 // session, read by LoginPage to explain why the operator was sent back.
-export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 // Helper to restore apiClient from localStorage
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
@@ -309,11 +305,7 @@ function App() {
   useEffect(() => {
     const expire = () => {
       try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
-      clearUser();
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      apiClient.logout();
-      digitClient.clearAuth();
-      resetProviders();
+      clearLocalSession();
       setState(s => ({ ...s, isAuthenticated: false, user: null }));
     };
     apiClient.setSessionExpiredHandler(expire);
@@ -416,14 +408,9 @@ function App() {
 
   const logout = () => {
     trackEvent('logout', { tenant: state.tenant });
-    clearUser();
-
-    // Clear localStorage
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    // Clear apiClient and digitClient
-    apiClient.logout();
-    digitClient.clearAuth();
-    resetProviders();
+    // Storage, both API clients and the cached providers. Shared with the
+    // signup flow so there is one definition of what a DIGIT sign-out clears.
+    clearLocalSession();
     setState(s => ({ ...s, isAuthenticated: false, user: null, mode: 'onboarding', currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
   };
 
@@ -431,12 +418,11 @@ function App() {
     setState(s => ({
       ...s,
       completedPhases: [...new Set([...s.completedPhases, phase])],
-      currentPhase: Math.min(phase + 1, 5),
+      currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length),
     }));
-    trackEvent('phase_complete', { phase, tenant: state.tenant });
-
-    // Track onboarding completion (final phase is Phase 4 — Employees)
-    if (phase === 4) {
+    const step = ONBOARDING_STEPS.find((candidate) => candidate.number === phase);
+    trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
+    if (finishesOnboarding(phase, state.completedPhases)) {
       trackEvent('onboarding_complete', { tenant: state.tenant });
     }
   };
@@ -515,6 +501,10 @@ function App() {
     toggleHelp,
   };
 
+  const onboardingDone = isOnboardingComplete(state.completedPhases);
+  const inOnboarding = ONBOARDING_GATE_ENABLED ? !onboardingDone : state.mode === 'onboarding';
+  const onboardingResume = resumePath(state.completedPhases);
+
   return (
     <AppContext.Provider value={contextValue}>
       <ThemeProvider>
@@ -523,37 +513,51 @@ function App() {
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
+              nobody has an account yet, so it sits outside the auth gate. */}
+          <Route path="/signup" element={<SignupPage />} />
 
-          {/* Onboarding Mode Routes */}
+          {/* Onboarding. With the gate on, an account stays here until every
+              step is done; with it off, the mode switch decides as before. */}
           <Route path="/" element={
             state.isAuthenticated
-              ? state.mode === 'onboarding' ? <MastersCapabilityProvider><Layout /></MastersCapabilityProvider> : <Navigate to="/manage" />
-              : <Navigate to="/login" />
+              ? inOnboarding ? <MastersCapabilityProvider><OnboardingLayout /></MastersCapabilityProvider> : <Navigate to="/manage" />
+              : <RootLanding />
           }>
-            <Route index element={<Navigate to="/phase/1" />} />
-            <Route path="phase/1" element={<Phase1Page />} />
-            <Route path="phase/2" element={<Phase2Page />} />
-            <Route path="phase/3" element={<Phase3Page />} />
-            <Route path="phase/4" element={<Phase4Page />} />
-            <Route path="complete" element={<CompletePage />} />
+            <Route index element={<Navigate to={onboardingResume} replace />} />
+            <Route path="onboarding/branding" element={<BrandingStep />} />
+            <Route path="onboarding/geography" element={<GeographyStep />} />
+            <Route path="onboarding/departments" element={<DepartmentsStep />} />
+            <Route path="onboarding/employees" element={<EmployeesStep />} />
+            <Route path="onboarding/complaints" element={<ComplaintsStep />} />
+            <Route path="onboarding/*" element={<Navigate to={onboardingResume} replace />} />
+            {/* The old numbered phases, for bookmarks and the pages that still link to them */}
+            <Route path="phase/:number" element={<LegacyPhaseRedirect />} />
+            <Route path="complete" element={<Navigate to="/onboarding/complaints" replace />} />
           </Route>
 
           {/* Management Mode Routes — react-admin powered */}
           <Route path="/manage/*" element={
-            state.isAuthenticated && state.mode === 'management'
+            state.isAuthenticated && !inOnboarding
               ? <ManagementAdmin />
-              : state.isAuthenticated ? <Navigate to="/phase/1" /> : <Navigate to="/login" />
+              : state.isAuthenticated ? <Navigate to={onboardingResume} /> : <Navigate to="/login" />
           } />
         </Routes>
 
         {/* Global modals and toasts */}
         {state.showHelp && <HelpModal onClose={toggleHelp} />}
-        {/* <UndoToast items={state.undoStack} onUndo={undo} onDismiss={dismissUndo} /> */}
         <Toaster />
       </BrowserRouter>
       </ThemeProvider>
     </AppContext.Provider>
   );
+}
+
+/** /phase/N, the old numbered route, to the step that replaced it. */
+function LegacyPhaseRedirect() {
+  const { number } = useParams();
+  const step = ONBOARDING_STEPS.find((candidate) => String(candidate.number) === number) ?? ONBOARDING_STEPS[0];
+  return <Navigate to={step.path} replace />;
 }
 
 export default App;

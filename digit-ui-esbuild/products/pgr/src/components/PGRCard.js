@@ -1,10 +1,7 @@
 import { EmployeeModuleCard, SVG } from "@egovernments/digit-ui-react-components";
 import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-
-const ROLES = {
-  PGR: ["GRO", "PGR_LME", "CSR"],
-};
+import { getPGREmployeeLinks } from "../utils/employeeLinks";
 
 const PGRCard = () => {
 
@@ -19,29 +16,12 @@ const PGRCard = () => {
   // }, []);
 
   const { t } = useTranslation();
-  const userInfo = Digit.UserService.getUser();
-  const userRoles = userInfo?.info?.roles?.map((roleData) => roleData?.code);
-  const generateLink = (labelKey, pathSuffix, roles = ROLES.PGR) => {
-    return {
-      label: t(labelKey),
-      link: `/${window?.contextPath}/employee/pgr/${pathSuffix}`,
-      roles: roles,
-    };
-  };
-
-  if (!Digit.Utils.didEmployeeHasAtleastOneRole(Object.values(ROLES).flatMap((e) => e))) {
+  // Shared with the sidebar's Complaints section, so both offer the same rows
+  // to the same roles. Empty means the user holds none of the PGR roles.
+  const links = getPGREmployeeLinks(t).map(({ label, link, roles }) => ({ label, link, roles }));
+  if (links.length === 0) {
     return null;
   }
-
-  let links = [
-    generateLink("ACTION_TEST_CREATE_COMPLAINT", "create-complaint", ["CSR"]),
-    generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox-v2"),
-  ];
-  const hasRequiredRoles = (link) => { 
-    if (!link?.roles?.length) return true;
-    return Digit.Utils.didEmployeeHasAtleastOneRole(link.roles);
-  };
-  links = links.filter(hasRequiredRoles);
 
   const propsForModuleCard = {
     // "UpdateExpense" is a line-art document-and-pencil built for an expense

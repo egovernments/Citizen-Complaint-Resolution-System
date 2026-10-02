@@ -23,6 +23,10 @@
         "REOPENSLA": {
           "type": "number",
           "description": "Milliseconds a resolved or rejected complaint stays reopenable. Shipped default 259200000 (72 hours)."
+        },
+        "VOICE_INPUT": {
+          "type": "boolean",
+          "description": "Whether File a Complaint offers voice input (the mic on the description). Unset or true offers it wherever the browser supports speech recognition; false hides it."
         }
       },
       "x-ref-schema": [],
@@ -81,7 +85,7 @@
           "description": "Preferred cumulative thresholds as percentages of the leaf complaint type's ComplaintHierarchy.slaHours. Values must be strictly increasing; the application enforces that rule.",
           "items": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "minimum": 1,
             "maximum": 200
           },
           "minItems": 1,
@@ -114,7 +118,7 @@
                     "type": "array",
                     "items": {
                       "type": "integer",
-                      "exclusiveMinimum": 0,
+                      "minimum": 1,
                       "maximum": 200
                     },
                     "minItems": 1,

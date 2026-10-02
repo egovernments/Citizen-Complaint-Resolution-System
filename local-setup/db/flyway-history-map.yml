@@ -119,10 +119,25 @@ novu-bridge:
   data_tables: [nb_dispatch_log]
   baseline_fresh: true
 
+xstate-chatbot:
+  canonical: xstate_chatbot_schema
+  aliases: []
+  data_tables: [eg_chat_state_v2]
+  baseline_fresh: true       # [chatbot]-gated (#1992); eg_chat_state_v2 is absent from the
+                             # dump and V20260505000000__chat.sql creates it from empty
+
 digit-config-service:
   canonical: digit_config_service_schema
   aliases: []
   data_tables: [eg_config_data]
+  baseline_fresh: true
+
+digit-user-preferences-service:
+  canonical: digit_user_preferences_service_schema
+  aliases: []                # no history at all before the Java rewrite: the Go
+                             # implementation created its table with GORM
+                             # AutoMigrate and never wrote a Flyway history
+  data_tables: [user_preference]
   baseline_fresh: true
 
 audit-service:

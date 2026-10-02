@@ -1,0 +1,6 @@
+# comment mentioning postgres_data at /var/lib/docker-postgresql/data must NOT match
+services:
+  postgres-db:
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro

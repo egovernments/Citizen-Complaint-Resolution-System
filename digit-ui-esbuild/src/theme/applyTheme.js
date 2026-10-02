@@ -47,8 +47,15 @@ const SEMANTIC_EXPANSION = {
     "--color-digitv2-header-sidenav",
   ],
   "surface-page": ["--color-grey-light"],
+  // `text-secondary` also seeds `--color-text-muted` so a record that names
+  // only a secondary tone still gets a caption colour rather than the vendored
+  // default. `text-muted` is listed immediately after so a record that does
+  // name one wins: object key order is iteration order, so the later entry
+  // overwrites. Without this a tenant could not separate body, secondary and
+  // caption text at all.
   "text-primary": ["--color-text-primary"],
   "text-secondary": ["--color-text-secondary", "--color-text-muted"],
+  "text-muted": ["--color-text-muted"],
   "text-disabled": [
     "--color-grey-disabled",
     "--color-digitv2-text-color-disabled",
@@ -101,9 +108,16 @@ const V3_EXPANSION = {
   "primary-2-bg": ["--color-primary-2-bg"],
 
   // ── Text ─────────────────────────────────────────────────────────────────
+  // `text-secondary` also seeds `--color-text-muted` so a record that names
+  // only a secondary tone still gets a caption colour rather than the vendored
+  // default. `text-muted` is listed immediately after so a record that does
+  // name one wins: object key order is iteration order, so the later entry
+  // overwrites. Without this a tenant could not separate body, secondary and
+  // caption text at all.
   "text-heading": ["--color-text-heading"],
   "text-primary": ["--color-text-primary"],
   "text-secondary": ["--color-text-secondary", "--color-text-muted"],
+  "text-muted": ["--color-text-muted"],
   "text-disabled": [
     "--color-text-disabled",
     "--color-grey-disabled",

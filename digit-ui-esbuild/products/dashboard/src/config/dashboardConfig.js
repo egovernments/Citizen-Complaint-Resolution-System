@@ -23,12 +23,24 @@ export function getTenantId() {
   );
 }
 
+/**
+ * Only what the deployment has explicitly configured. Absent keys are returned
+ * as undefined rather than filled with DEFAULT_BRAND_THEME, so the caller can
+ * leave those variables unset and let the stylesheet resolve them from the
+ * tenant's own theme (see `.dashboard-root` in styles/input.css).
+ *
+ * Deliberately NOT reading the tenant's `--color-*` values here. They are
+ * published by applyTheme from an MDMS record that arrives over the network,
+ * so any JS that samples them races the fetch and silently captures the DIGIT
+ * defaults instead. A `var()` chain in CSS has no such race: it resolves
+ * whenever the value lands.
+ */
 export function getBrandTheme() {
   const get = window.globalConfigs?.getConfig?.bind(window.globalConfigs);
   return {
-    teal: get?.("DASHBOARD_BRAND_PRIMARY") || DEFAULT_BRAND_THEME.teal,
-    dark: get?.("DASHBOARD_BRAND_DARK") || DEFAULT_BRAND_THEME.dark,
-    slate: get?.("DASHBOARD_BRAND_SLATE") || DEFAULT_BRAND_THEME.slate,
+    teal: get?.("DASHBOARD_BRAND_PRIMARY") || undefined,
+    dark: get?.("DASHBOARD_BRAND_DARK") || undefined,
+    slate: get?.("DASHBOARD_BRAND_SLATE") || undefined,
   };
 }
 

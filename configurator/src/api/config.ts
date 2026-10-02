@@ -78,6 +78,7 @@ export const ENDPOINTS = {
   // Filestore
   FILESTORE_UPLOAD: '/filestore/v1/files',
   FILESTORE_URL: '/filestore/v1/files/url',
+  FILESTORE_FILE: '/filestore/v1/files/id',
 };
 
 // MDMS Schema codes

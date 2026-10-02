@@ -3,9 +3,33 @@ const express = require("express"),
   config = require("../../env-variables"),
   sessionManager = require("../../session/session-manager"),
   channelProvider = require("../"),
+  twilioSignature = require("../twilio-signature"),
+  mobileValidation = require("../../machine/service/mobile-validation-service"),
+  configCheck = require("../../config-check"),
   remindersService = require("../../machine/service/reminders-service");
 
+/**
+ * Authenticate an inbound provider webhook.
+ *
+ * Only Twilio has a signature scheme wired up here. Other providers fall through as
+ * authenticated so their existing behaviour is unchanged -- adding their equivalent
+ * (ValueFirst/Kaleyra have their own schemes) is a per-provider task.
+ */
+function authenticateWebhook(req, res) {
+  if (config.whatsAppProvider !== "Twilio") return true;
+
+  const result = twilioSignature.validateRequest(req);
+  if (result.valid) return true;
+
+  // Log the reason, return a bare 403. Telling the caller which half of the check failed
+  // just helps them iterate towards a valid forgery.
+  console.error("Rejected inbound webhook: " + result.reason);
+  res.status(403).json({ status: "forbidden" });
+  return false;
+}
+
 router.post("/message", async (req, res) => {
+  if (!authenticateWebhook(req, res)) return;
   try {
     console.log("Request URL: " + req.originalUrl);
     console.log('Request Body Object: ' + JSON.stringify(req.body));
@@ -13,11 +37,15 @@ router.post("/message", async (req, res) => {
     // Check if this is an image upload in sandbox mode
     let tenantIdForUpload = null;
     if (config.enableSandboxMode && req.body && req.body.NumMedia && parseInt(req.body.NumMedia) > 0) {
-      // This is an image upload - try to get tenant from tracker
-      // Extract mobile number from the From field (format: whatsapp:+917061170992)
+      // This is an image upload - resolve the tenant the sender is already working in.
+      // The session tracker is keyed by national number, so normalise rather than
+      // stripping a literal '+91' (which silently mis-keyed every non-India sender).
       let fromNumber = req.body.From;
-      if (fromNumber && fromNumber.includes(':')) {
-        let mobileNumber = fromNumber.split(':')[1].replace('+91', '');
+      if (fromNumber) {
+        const mobileConfig = await mobileValidation.getConfig(config.rootTenantId);
+        const mobileNumber =
+          mobileValidation.toNational(fromNumber, mobileConfig) ||
+          mobileValidation.digitsOnly(fromNumber);
         tenantIdForUpload = sessionManager.getTenantForMobileNumber(mobileNumber);
         console.log(`Image upload detected for ${mobileNumber}, using tenant: ${tenantIdForUpload || 'default'}`);
       }
@@ -33,6 +61,7 @@ router.post("/message", async (req, res) => {
 
 // Handle WhatsApp delivery status webhooks (both GET and POST)
 router.all("/status", async (req, res) => {
+  if (!authenticateWebhook(req, res)) return;
   try {
     const isDeliveryStatusWebhook = req.method === 'GET' || 
       req.query.MESSAGE_STATUS || 
@@ -72,11 +101,33 @@ router.all("/status", async (req, res) => {
   }
 });
 
+// Fans a message out to EVERY active session, so it is an abuse amplifier if left open.
+// Requires a shared secret; with REMINDER_AUTH_TOKEN unset the route is disabled outright
+// rather than left reachable.
 router.post("/reminder", async (req, res) => {
+  const expected = config.reminderAuthToken;
+  if (!expected) {
+    console.error("Rejected /reminder: REMINDER_AUTH_TOKEN is not set, route is disabled");
+    return res.status(404).json({ status: "not found" });
+  }
+  const presented = req.headers["x-reminder-token"];
+  if (presented !== expected) {
+    console.error("Rejected /reminder: bad or missing X-Reminder-Token");
+    return res.status(403).json({ status: "forbidden" });
+  }
   await remindersService.triggerReminders();
   res.end();
 });
 
-router.get("/health", (req, res) => res.sendStatus(200));
+// 503 on a configuration that cannot actually serve citizens. This is what the container
+// healthcheck and the Gatus check poll, so a deployment missing its Twilio sender shows up
+// red there instead of looking healthy while silently dropping every reply (see
+// src/config-check.js).
+router.get("/health", (req, res) => {
+  const problems = configCheck.problems();
+  if (!problems.length) return res.sendStatus(200);
+  console.error("Health check failing on configuration: " + problems.join(" | "));
+  return res.status(503).json({ status: "misconfigured", problems: problems });
+});
 
 module.exports = router;

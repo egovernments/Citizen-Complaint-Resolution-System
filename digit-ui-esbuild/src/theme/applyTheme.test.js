@@ -12,6 +12,10 @@ function stubDocument() {
       style: {
         setProperty(name, value) { props[name] = value; },
       },
+      // applyTheme publishes the header tone on the root's dataset, and
+      // deletes the key when there is no header colour to judge. Without a
+      // real object here every record that omits header-bg threw.
+      dataset: {},
     },
     head,
     createElement(tag) {
@@ -647,5 +651,58 @@ test("button states: nothing to derive from → nothing invented", () => {
     assert.equal(props["--color-button-primary-text"], undefined);
     assert.equal(props["--color-button-primary-bg-default"], undefined);
     assert.equal(props["--color-button-primary-bg-pressed"], undefined);
+  } finally { restore(); }
+});
+
+test("text ramp: secondary seeds muted when the record names no muted tone", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "3",
+      colors: { "primary-1": "#0B1F3A", "text-primary": "#1D2433", "text-secondary": "#6B7280" },
+    });
+    assert.equal(props["--color-text-primary"], "#1D2433");
+    assert.equal(props["--color-text-secondary"], "#6B7280");
+    assert.equal(props["--color-text-muted"], "#6B7280");
+  } finally { restore(); }
+});
+
+test("text ramp: an explicit text-muted wins over the secondary seed", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#0B1F3A",
+        "text-primary": "#1D2433",
+        "text-secondary": "#4B5563",
+        "text-muted": "#9CA3AF",
+      },
+    });
+    assert.equal(props["--color-text-secondary"], "#4B5563");
+    assert.equal(props["--color-text-muted"], "#9CA3AF");
+  } finally { restore(); }
+});
+
+test("text ramp: a flat v3 key wins over the nested v1 block of the same record", () => {
+  // The bomet-county record carries both shapes. Pass 1 flattens
+  // `colors.text.*`, Pass 3 then applies the flat v3 keys, so the flat key is
+  // what a v3 record is actually read from. Editing only the nested block
+  // changes nothing, which is worth pinning down.
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#0B1F3A",
+        "text-secondary": "#6B7280",
+        text: { secondary: "#1D2433", muted: "#1D2433" },
+      },
+    });
+    assert.equal(props["--color-text-secondary"], "#6B7280");
+    assert.equal(props["--color-text-muted"], "#6B7280");
   } finally { restore(); }
 });

@@ -62,6 +62,9 @@ var globalConfigs = (function () {
   // the SPA falls back to its baked-in default.
   var mapTenant = {{ (city_tenant | default(ui_state_tenant_id | default(''))) | to_json }};
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
+  // null leaves the rule to the UI (shown only where there is more than one
+  // tenant to switch to); true or false decides it for the deployment.
+  var showTenantSwitcher = {{ show_tenant_switcher | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
@@ -108,6 +111,7 @@ var globalConfigs = (function () {
 
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
+    if (key === "SHOW_TENANT_SWITCHER") return showTenantSwitcher;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
     if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;

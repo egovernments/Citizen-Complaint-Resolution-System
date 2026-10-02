@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import { formPayloadToCreateComplaint } from "../../../utils";
 import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
+import { translateOr } from "../../../utils/selectPlaceholder";
 
 const CreateComplaintForm = ({
   createComplaintConfig,      // Form configuration for Create Complaint screen
@@ -240,6 +241,16 @@ const CreateComplaintForm = ({
               ...field,
               disable: disabledFields[field.populators.name],
             }];
+          }
+          if (fname === "description") {
+            // "Describe your complaint", as the citizen's filing flow asks it.
+            // Translated here with a fallback: a tenant that hasn't seeded the
+            // key would otherwise show it raw.
+            return [{ ...field, label: translateOr(t, "CS_FILE_DESCRIBE", "Describe your complaint") }];
+          }
+          if (fname === "GeoLocationsPoint") {
+            // Not every tenant seeds it, and a missing key renders raw.
+            return [{ ...field, label: translateOr(t, "CS_COMPLAINT_DETAILS_PIN_LOCATION", "Pin Location") }];
           }
           if (fname === "postalCode") {
             // Show the SAME dynamic, length-aware message the citizen flows

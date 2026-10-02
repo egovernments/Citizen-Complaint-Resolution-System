@@ -11,6 +11,7 @@ const pgr =  {
   onEntry: assign((context, event) => {
     context.slots.pgr = {}
     context.pgr = {slots: {}};
+    delete context.localityNames;
   }),
   states: {
     menu: {
@@ -419,6 +420,9 @@ const pgr =  {
                       context.slots.pgr.city = context.pgr.detectedLocation.city;
                       if(context.pgr.detectedLocation.locality) {
                         context.slots.pgr.locality = context.pgr.detectedLocation.locality;
+                        context.slots.pgr.localityIsBoundaryCode = !!context.pgr.detectedLocation.localityIsBoundaryCode;
+                        let bundle = context.pgr.detectedLocation.matchedLocalityMessageBundle;
+                        if (bundle) context.slots.pgr.localityName = dialog.get_message(bundle, context.user.locale);
                       }
 
                       context.message = {
@@ -628,6 +632,8 @@ const pgr =  {
                         context.slots.pgr["predictedLocality"] = predictedLocality;
                         context.slots.pgr["isLocalityDataMatch"] = isLocalityDataMatch;
                         context.slots.pgr["locality"] = predictedLocalityCode;
+                        // nlp-engine returns bare codes; filing adds ADMIN_ (see persistComplaint).
+                        context.slots.pgr.localityIsBoundaryCode = false;
                       })
                     }, 
                     onError: {
@@ -716,7 +722,7 @@ const pgr =  {
                 question: {
                   invoke: {
                     id: 'pgrFetchCities',
-                    src: (context, event) => pgrService.fetchCitiesAndWebpageLink(context.extraInfo.tenantId,context.extraInfo.whatsAppBusinessNumber),
+                    src: (context, event) => pgrService.fetchCitiesAndWebpageLink(context.extraInfo.tenantId,context.extraInfo.whatsAppBusinessNumber,context.user),
                     onDone: {
                       actions: assign((context, event) => {
                         let { cities, messageBundle } = event.data;
@@ -771,6 +777,13 @@ const pgr =  {
                         let preamble = dialog.get_message(messages.fileComplaint.locality.question.preamble, context.user.locale);
                         let {prompt, grammer} = dialog.constructListPromptAndGrammer(localities, messageBundle, context.user.locale);
                         context.grammer = grammer;
+                        // Names of the offered codes, so filing needs no second localisation
+                        // fetch. Its presence also marks the list as boundary codes, which a
+                        // list saved by an older version is not (see persistComplaint).
+                        context.localityNames = {};
+                        for (let code of localities) {
+                          context.localityNames[code] = dialog.get_message(messageBundle[code], context.user.locale);
+                        }
                         dialog.sendMessage(context, `${preamble}${prompt}`);
                       })
                     },
@@ -790,7 +803,17 @@ const pgr =  {
                     {
                       target: '#persistComplaint',
                       cond: (context) => context.intention != dialog.INTENTION_UNKOWN,
-                      actions: assign((context, event) => context.slots.pgr["locality"] = context.intention)
+                      actions: assign((context, event) => {
+                        context.slots.pgr["locality"] = context.intention;
+                        // A boundary code only if this very code is in the names this version
+                        // built for the list. A list built by an older version (rollback, or a
+                        // replica on another version) offers stripped codes that are not in it.
+                        let names = context.localityNames || {};
+                        context.slots.pgr.localityIsBoundaryCode = Object.prototype.hasOwnProperty.call(names, context.intention);
+                        if (names[context.intention]) context.slots.pgr.localityName = names[context.intention];
+                        // Used once; not kept in the saved state for the rest of the session.
+                        delete context.localityNames;
+                      })
                     },
                     {
                       target: 'error',

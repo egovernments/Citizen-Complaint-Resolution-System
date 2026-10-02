@@ -1,6 +1,7 @@
 import type { ToolGroup, ToolMetadata } from '../types/index.js';
 import { ALL_GROUPS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
+import { isReadOnlyEffective } from './registry.js';
 import { sessionStore } from '../services/session-store.js';
 
 function getSuggestedSteps(purpose: string): string[] {
@@ -79,8 +80,13 @@ export function registerSessionTools(registry: ToolRegistry): void {
       const telemetry = args.telemetry !== false; // default true
       const clientName = (args.client_name as string) || undefined;
 
-      // 1. Record user context in session
-      sessionStore.setUserContext(userName, purpose, telemetry, clientName);
+      // 1. Record user context in session. Skipped on a read-only instance:
+      // `init` is a core write tool kept for the group-enable + hints flow, but
+      // its only write (a session-row UPDATE) must not run for an anonymous
+      // public caller. Enabling groups and returning hints below need no write.
+      if (!isReadOnlyEffective()) {
+        sessionStore.setUserContext(userName, purpose, telemetry, clientName);
+      }
 
       // 2. Map intent to tool groups
       const intentMap: Record<string, ToolGroup[]> = {
@@ -182,6 +188,18 @@ export function registerSessionTools(registry: ToolRegistry): void {
       required: ['summary'],
     },
     handler: async (args) => {
+      // Refused on a read-only instance: this is a core write tool kept for
+      // listing/enabling, but its dispatch does an unbounded, caller-controlled
+      // INSERT (the `messages` array) into the shared session DB — the same
+      // write surface the read-only mode blocks at /api/sessions. An anonymous
+      // public caller must not be able to persist arbitrary rows.
+      if (isReadOnlyEffective()) {
+        return JSON.stringify({
+          success: false,
+          error: 'session_checkpoint is disabled on a read-only MCP instance.',
+        }, null, 2);
+      }
+
       const summary = args.summary as string;
       if (!summary || summary.trim().length === 0) {
         return JSON.stringify({ success: false, error: 'Summary is required' }, null, 2);

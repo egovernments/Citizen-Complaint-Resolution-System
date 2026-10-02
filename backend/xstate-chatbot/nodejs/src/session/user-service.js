@@ -1,4 +1,5 @@
 const config = require('../env-variables');
+const mobileValidation = require('../machine/service/mobile-validation-service');
 const fetch = require('node-fetch');
 require('url-search-params-polyfill');
 
@@ -104,7 +105,7 @@ class UserService {
   async loginUser(mobileNumber, tenantId) {
 
     // Sanitize mobile number for login too
-    const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber) || mobileNumber;
+    const cleanMobileNumber = (await this.sanitizeMobileNumber(mobileNumber, tenantId)) || mobileNumber;
 
     let data = new URLSearchParams();
     data.append('grant_type', 'password');
@@ -147,9 +148,13 @@ class UserService {
 
   async createUser(mobileNumber, tenantId) {
     // Validate mobile number format (should be 10 digits)
-    const cleanMobileNumber = this.sanitizeMobileNumber(mobileNumber);
+    const cleanMobileNumber = await this.sanitizeMobileNumber(mobileNumber, tenantId);
     if (!cleanMobileNumber) {
-      throw new Error(`Invalid mobile number format: ${mobileNumber}. Expected 10 digits.`);
+      const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
+      throw new Error(
+        `Invalid mobile number format: ${mobileNumber}. Tenant ${tenantId} expects ` +
+        `${mobileConfig.mobileNumberRegex} (country code ${mobileConfig.countryCode}).`
+      );
     }
 
     let requestBody = {
@@ -198,23 +203,21 @@ class UserService {
     }
   }
 
-  // Helper method to sanitize mobile number
-  sanitizeMobileNumber(mobileNumber) {
+  /**
+   * Reduce any inbound number form to the national number egov-user expects.
+   *
+   * Previously this accepted only 10 digits, or 12 beginning `91` -- an India-only rule
+   * that rejected every other country outright (a Kenyan +254712345678 returned null and
+   * the citizen saw "Invalid mobile number format"). It also rejected tenants whose rule
+   * is narrower than "any 10 digits", such as pg.citya's 9-digit numbers starting 7 or 9.
+   *
+   * The rule now comes from the tenant's common-masters.MobileNumberValidation row. With
+   * no row present the fallback is +91 / 10 digits, so India behaves exactly as before.
+   */
+  async sanitizeMobileNumber(mobileNumber, tenantId) {
     if (!mobileNumber) return null;
-
-    // Remove any non-digit characters
-    const digitsOnly = mobileNumber.replace(/\D/g, '');
-
-    // Handle different formats:
-    // 918750975975 (12 digits with country code) -> 8750975975 (10 digits)
-    // 8750975975 (10 digits) -> 8750975975 (keep as is)
-    if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
-      return digitsOnly.substring(2); // Remove '91' country code
-    } else if (digitsOnly.length === 10) {
-      return digitsOnly;
-    } else {
-      return null; // Invalid format
-    }
+    const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
+    return mobileValidation.toNational(mobileNumber, mobileConfig);
   }
 }
 

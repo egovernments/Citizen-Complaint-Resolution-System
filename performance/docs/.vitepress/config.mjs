@@ -30,6 +30,13 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Transition Planning',
+        items: [
+          { text: 'Africa: VM → K8s', link: '/ansible-k8s-transition-africa' },
+          { text: 'India: VM → K8s', link: '/ansible-k8s-transition-india' },
+        ]
+      },
+      {
         text: 'Developer Guide',
         items: [
           { text: 'Architecture', link: '/architecture' },

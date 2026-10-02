@@ -75,6 +75,56 @@ export const DEFAULT_CHART_LAYOUT = {
   "cl-chart-complaints-by-age": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
 };
 
+/**
+ * Re-flows the saved 12-column layout into a narrower column count.
+ *
+ * Pure, and kept with the rest of the grid geometry so it can be pinned under
+ * `node --test` without a React harness — the same reason layoutStore exists.
+ *
+ * Positions are re-flowed in reading order rather than scaled down from the
+ * saved x/y. Scaling has to round, and rounding two widgets onto the same cell
+ * is an overlap; re-flowing cannot collide by construction.
+ *
+ * `h` is preserved throughout. The operator chose those heights, and a widget
+ * given a larger share of the width can only need less height, never more.
+ *
+ * This derives a presentation from the saved layout and is never persisted:
+ * there is one storage slot per tenant+user with no breakpoint dimension (see
+ * utils/layoutStore.js), so writing it back would replace a desktop
+ * arrangement with a phone's.
+ *
+ * @param layout       saved react-grid-layout items
+ * @param cols         column count at this breakpoint
+ * @param isFullWidth  item => true when it should span the full width. At
+ *                     cols=1 everything does, which is the phone case.
+ */
+export function reflowLayout(layout, cols, isFullWidth = () => true) {
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  return [...layout]
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+    .map((item) => {
+      const w = Math.min(isFullWidth(item) ? cols : 1, cols);
+      // Wrap before placing, so a widget never starts mid-row and overflow the
+      // right edge.
+      if (x + w > cols) {
+        x = 0;
+        y += rowHeight;
+        rowHeight = 0;
+      }
+      const placed = { ...item, x, y, w, minW: 1, maxW: cols };
+      x += w;
+      rowHeight = Math.max(rowHeight, item.h);
+      if (x >= cols) {
+        x = 0;
+        y += rowHeight;
+        rowHeight = 0;
+      }
+      return placed;
+    });
+}
+
 function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }

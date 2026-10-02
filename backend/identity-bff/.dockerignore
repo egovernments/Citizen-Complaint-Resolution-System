@@ -1,0 +1,11 @@
+node_modules
+dist
+**/node_modules
+**/dist
+**/dist_*
+.env*
+coverage
+tests
+mocks
+docs
+deploy

@@ -35,6 +35,71 @@ describe('default-data-handler tenant template', () => {
 describe('ansible playbook-deploy.yml', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');
 
+  // #2088, Dhruv review finding 5. The identity tier's six secrets used to be
+  // sha256(keycloak_admin_password ~ ':<label>') with `default('')`, so on a
+  // box with no admin password set they all collapsed to constants computable
+  // from this public repo, and any one of them leaked allowed an offline
+  // brute-force of the admin password.
+  describe('identity secrets are independent of the Keycloak admin password', () => {
+    const IDENTITY_SECRETS = [
+      'keycloak_bff_client_secret',
+      'keycloak_magic_link_client_secret',
+      'keycloak_admin_client_secret',
+      'identity_control_plane_token',
+      'identity_session_introspection_token',
+      'pgr_onboarding_worker_token',
+    ];
+
+    test('none of them is derived from another secret', () => {
+      expect(playbook).not.toMatch(/keycloak_admin_password[^\n]*~ ':identity-/);
+      expect(playbook).not.toMatch(/~ ':identity-[a-z-]+'\) \| hash\('sha256'\)/);
+    });
+
+    test('each is generated when absent and persisted to OpenBao', () => {
+      for (const key of IDENTITY_SECRETS) {
+        // generate-if-absent, short-circuiting `or` so a stored value is kept
+        expect(playbook).toContain(`_identity_stored.${key} | default('', true)`);
+        // and the generated value is what reaches .env
+        expect(playbook).toContain(`{{ identity_secrets.${key} }}`);
+      }
+      // one cas-guarded, merging write, so no other key of the tenant secret
+      // is dropped and a racing write is rejected rather than clobbered
+      expect(playbook).toContain(
+        "'cas': bao_secrets_identity.json.data.metadata.version | int"
+      );
+      expect(playbook).toContain(
+        'bao_secrets_identity.json.data.data | combine(identity_secrets)'
+      );
+    });
+
+    test('an empty Keycloak admin password fails the deploy closed', () => {
+      // Empty here is not neutral: compose falls back to the literal `admin`.
+      expect(playbook).toContain(
+        "(bao_secrets_identity.json.data.data.keycloak_admin_password | default('', true)) | length > 0"
+      );
+      // ...and .env takes the asserted value, not a `| default('')` of it
+      expect(playbook).toContain(
+        'KC_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.keycloak_admin_password }}'
+      );
+    });
+  });
+
+  // #2088, Dhruv review finding 6. The `/kc` route, the per-tenant realm and
+  // its `digit-ui` client are gone, so `auth_provider: keycloak` is a 404 at
+  // login until the frontend cutover onto /identity/v1 lands.
+  test('refuses to deploy a frontend still pointed at the removed Keycloak login', () => {
+    const start = playbook.indexOf('_keycloak_login_surfaces:');
+    expect(start).toBeGreaterThan(-1);
+    const task = playbook.slice(start, start + 2000);
+    // all three resolution keys are covered, including the two per-surface
+    // overrides that do not simply inherit auth_provider
+    for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider']) {
+      expect(task).toContain(`'${key}':`);
+    }
+    expect(task).toContain("selectattr('value', 'eq', 'keycloak')");
+    expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
+  });
+
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
   // must reach the MCP tenant_bootstrap on BOTH passes (root + city);
   // `default(omit)` keeps it absent — the only valid off state.
@@ -121,9 +186,82 @@ describe('host_vars _example.yml', () => {
     expect(example).toContain('/dashboard path is outside this bootstrap contract');
   });
 });
+describe('host_vars templates — db_fast_path ack (#2082)', () => {
+  const HOST_VARS = 'local-setup/ansible/inventory/host_vars';
+  // Tracked templates only. Operator host_vars (<tenant>.yml) are gitignored
+  // and SHOULD carry ack: true once that box has been checked — asserting on
+  // them would fail on the deploying engineer's own machine.
+  const templates = fs
+    .readdirSync(path.join(REPO_ROOT, HOST_VARS))
+    .filter((f) => f.endsWith('.yml.example') || f === '_example.yml');
 
+  test.each(templates)('%s never ships a pre-set data-wipe ack', (file) => {
+    const body = read(path.join(HOST_VARS, file));
+    if (!/^db_fast_path:\s*true/m.test(body)) return; // flag off: ack is moot
+    expect(body).toMatch(/^db_fast_path_ack_data_wipe:\s*false\s*$/m);
+    expect(body).not.toMatch(/^db_fast_path_ack_data_wipe:\s*true/m);
+  });
+
+  test('preflight still fails _example.yml for exactly that reason', () => {
+    // preflight exits non-zero here by design, so execFileSync always throws and
+    // the output arrives on the error. Record whether it exited 0 rather than
+    // throwing from inside the try, which would land in this same catch and be
+    // reported as a confusing assertion failure instead of the real message.
+    let out = '';
+    let exitedZero = false;
+    try {
+      out = execFileSync('python3',
+        ['local-setup/scripts/preflight.py', `${HOST_VARS}/_example.yml`],
+        { cwd: REPO_ROOT, encoding: 'utf8' });
+      exitedZero = true;
+    } catch (e: any) {
+      out = e.stdout ?? '';
+    }
+    expect(exitedZero).toBe(false); // _example.yml must NOT pass preflight
+    const fails = out.split('\n').filter((l) => l.startsWith('[FAIL]'));
+    expect(fails).toHaveLength(1);
+    expect(fails[0]).toContain('fastpath-data-wipe-ack');
+  });
+});
+
+// issue #2111. ansible.cfg sets `executable = /bin/bash` so `set -o pipefail`
+// works on Debian/Ubuntu targets, where /bin/sh is dash. Ansible ALSO derives
+// the shell PLUGIN name from that basename, and ships none called "bash" — so
+// every ansible.posix.synchronize task fails with "Could not find the shell
+// plugin required (bash)". playbook-deploy.yml has 12 of them and the first is
+// ~100 tasks in, so a deploy dies with the host already part-configured.
+//
+// Asserted here rather than in an Ansible playbook because the failure needs a
+// real SSH connection to reproduce: over a local connection the plugin is never
+// loaded, so an offline playbook passes with or without the fix (verified).
+describe('ansible.cfg — executable has a matching shell plugin (#2111)', () => {
+  const CFG = 'local-setup/ansible/ansible.cfg';
+  const BUILTIN = ['sh', 'csh', 'fish', 'powershell', 'cmd'];
+
+  test('every configured executable resolves to a shell plugin', () => {
+    const cfg = read(CFG);
+    const m = cfg.match(/^\s*executable\s*=\s*(\S+)/m);
+    if (!m) return; // no override, Ansible's default `sh` applies
+    const name = path.basename(m[1]);
+    if (BUILTIN.includes(name)) return;
+
+    // Not built in, so the repo must ship one — NEXT TO THE PLAYBOOK.
+    //
+    // Asserted against the playbook directory, not a config key: `shell_plugins`
+    // is not an Ansible setting (no such entry in `ansible-config list`, and
+    // shell_loader.config is the hardcoded literal ['shell_plugins'] resolved
+    // against the process CWD). ansible-playbook calls
+    // add_all_plugin_dirs(playbook_dir), so <playbook_dir>/shell_plugins is what
+    // is actually searched. Keying this test on a cfg line would let someone
+    // move the directory, update that line, and keep a green build while every
+    // synchronize task broke again.
+    const pluginDir = path.join(path.dirname(path.join(REPO_ROOT, CFG)), 'shell_plugins');
+    expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
+  });
+});
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
+  const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
 
   test('digit-mcp falls back to the image this repo publishes', () => {
     // egovio/digit-mcp is what build/build-config.yml builds from
@@ -140,6 +278,13 @@ describe('docker-compose.egov-digit.yaml', () => {
     // would therefore publish an anonymous ADMIN surface.
     expect(compose).not.toMatch(/MCP_AUTH_MODE:\s*\$\{MCP_AUTH_MODE:-ambient\}/);
     expect(compose).not.toMatch(/MCP_AUTH_MODE:\s*ambient/);
+  });
+
+  test('Kong preserves host nginx client addresses for BFF rate limiting', () => {
+    expect(compose).toContain('KONG_TRUSTED_IPS: ${KONG_TRUSTED_IPS:-');
+    expect(compose).toContain('KONG_REAL_IP_HEADER: X-Forwarded-For');
+    expect(compose).toContain('KONG_REAL_IP_RECURSIVE: "on"');
+    expect(composeEnv).toContain('KONG_TRUSTED_IPS={{ kong_trusted_ips | default(');
   });
 });
 

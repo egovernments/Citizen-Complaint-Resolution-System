@@ -11,24 +11,25 @@ follow it start to finish.
 
 There are **three independent ways** to run this stack. Pick one:
 
-| Path | Best for | What you need |
-|------|----------|---------------|
-| **[Option A: Docker Compose](#option-a-docker-compose)** | Quick setup, no extra tools | Docker only |
-| **[Option B: Tilt](#option-b-tilt)** | Dashboard, grouped services, dev buttons | Docker + Tilt |
-| **[Option C: Ansible](#option-c-ansible--the-whole-stack-one-command)** | A real deployment — web server, secret store, monitoring, onboarding wizard. This machine or a server. | Ansible (a script installs it) |
+| Option | When to use | Min. RAM | Min. CPU | Tools |
+|--------|-------------|----------|----------|-------|
+| **[A — Docker Compose](#option-a-docker-compose)** | Exploring the API, reproducing a bug, running smoke tests — no code changes needed | 8 GB allocated to Docker (~3.8 GB used at rest) | Any | Docker |
+| **[B — Tilt](#option-b-tilt)** | Actively changing PGR Java or UI code; want live logs, hot reload, and a service health dashboard | 8 GB allocated to Docker | Any (Maven + Yarn required for hot reload) | Docker + Tilt |
+| **[C — Ansible](#option-c-ansible--the-whole-stack-one-command)** | Testing a full deployment, onboarding a city, or running on a server — includes nginx, TLS, secret store, monitoring, and the onboarding wizard | 16 GB (local slim profile) / 32 GB (full stack or server) | 4 vCPU (local) / 16 vCPU (server) | Ansible (a script installs it) |
 
 Options A and B are development stacks: containers on your machine, everything on
 `localhost:18xxx` ports, no web server. **Option C is a deployment** — one command builds
 the whole thing, on this machine or on a server, and serves it on the normal web ports.
 It is also the only option with the browser onboarding wizard.
 
-**Not sure?** Want to poke at the API or change some code — Option A. Setting the system
-up for someone to actually use — Option C.
+**Not sure?** Exploring or debugging → Option A. Changing code → Option B. Deploying for real → Option C.
+
+> **Planning a production deployment?** For single-server vs Kubernetes guidance, capacity by city size, and complaint volume thresholds, see [`docs/setup/deployment/decision-guide-africa.md`](../docs/setup/deployment/decision-guide-africa.md) or [`docs/setup/deployment/decision-guide-india.md`](../docs/setup/deployment/decision-guide-india.md).
 
 > **On Windows?** The full Ansible stack also runs locally via WSL2 — see
-> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) (validated end-to-end on a
+> [docs/setup/quickstart-windows.md](../docs/setup/quickstart-windows.md) (validated end-to-end on a
 > 16 GB machine; the playbook self-heals the WSL-specific quirks). The macOS
-> equivalent is [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+> equivalent is [docs/setup/quickstart-mac.md](../docs/setup/quickstart-mac.md).
 
 ---
 
@@ -295,8 +296,8 @@ to it using a key (not a password), and the machine you run the command from
 needs the tools in Step 2.
 
 > **On Windows?** Use WSL2 and follow
-> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) — validated end to end on a
-> 16 GB machine. On a Mac, [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+> [docs/setup/quickstart-windows.md](../docs/setup/quickstart-windows.md) — validated end to end on a
+> 16 GB machine. On a Mac, [docs/setup/quickstart-mac.md](../docs/setup/quickstart-mac.md).
 
 ### Step 1 — Get the code
 
@@ -476,7 +477,7 @@ want soon:
   collection turns on and off without a redeploy. Pair it with
   `nginx_features.matomo`. There is a turn-key installer,
   `scripts/enable-matomo.sh`, and a full walkthrough in
-  [`docs/matomo-deployment.md`](../docs/matomo-deployment.md).
+  [`docs/setup/deployment/matomo.md`](../docs/setup/deployment/matomo.md).
 - `run_ci_tests` — runs the Postman and Playwright suites at the end of every
   deploy. Adds 5–10 minutes.
 
@@ -644,14 +645,14 @@ reading, rotating and unsealing.
 | Login fails for `ADMIN` on your root tenant | that root was never created — see the tenant note in Step 3 | check the deploy output for the line naming the fallback to `pg` |
 
 Deeper diagnosis, including reading logs and metrics, is in the
-[operations handbook](../docs/2.12/operations/README.md).
+[operations handbook](../docs/releases/2.12/operations/README.md).
 
 ### Next: onboard a tenant
 
 The stack is running but has no city data in it yet — no wards, no
 departments, no complaint types, no staff. That comes next, in the browser:
 
-**→ [Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md)**
+**→ [Onboarding & Add-ons guide](../docs/setup/onboarding/README.md)**
 
 ---
 
@@ -659,30 +660,30 @@ departments, no complaint types, no staff. That comes next, in the browser:
 
 Ports, memory budgets, what each service does, direct API and database access,
 the Postman collections, and general troubleshooting have moved to
-**[docs/STACK-REFERENCE.md](docs/STACK-REFERENCE.md)**, so this page stays a
+**[docs/STACK-REFERENCE.md](../docs/reference/services/stack-reference.md)**, so this page stays a
 walkthrough.
 
 | Looking for | Go to |
 |---|---|
-| Every service, port and memory limit | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#whats-included) |
-| Calling the API by hand | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#api-access) |
-| Connecting to the database | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#database-access) |
-| Running the Postman collections | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#running-postman-api-tests) |
-| Loading master data from a script | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#loading-master-data-from-a-script) |
-| Troubleshooting a Compose or Tilt stack | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#troubleshooting) |
-| Repository layout | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#project-structure) |
+| Every service, port and memory limit | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#whats-included) |
+| Calling the API by hand | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#api-access) |
+| Connecting to the database | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#database-access) |
+| Running the Postman collections | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#running-postman-api-tests) |
+| Loading master data from a script | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#loading-master-data-from-a-script) |
+| Troubleshooting a Compose or Tilt stack | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#troubleshooting) |
+| Repository layout | [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md#project-structure) |
 | Everything the Ansible playbook does | [ansible/README.md](ansible/README.md) |
-| Running the stack in production | [operations handbook](../docs/2.12/operations/README.md) |
+| Running the stack in production | [operations handbook](../docs/releases/2.12/operations/README.md) |
 
 ### Other guides in `docs/`
 
 | Guide | What it covers |
 |---|---|
-| [ONBOARDING-AND-ADDONS.md](docs/ONBOARDING-AND-ADDONS.md) | Create a city and load its data; turn on notifications, the dashboard and the other add-ons |
-| [STACK-REFERENCE.md](docs/STACK-REFERENCE.md) | Ports, memory, API and database access, Postman, troubleshooting |
-| [LOCALHOST-FULL-AND-SLIM.md](docs/LOCALHOST-FULL-AND-SLIM.md) | Two ready-made presets for deploying Option C to this machine |
-| [LOCAL-SETUP-GUIDE.md](docs/LOCAL-SETUP-GUIDE.md) | Running the Compose stack on a machine with about 4 GB of RAM |
-| [HYBRID-SETUP.md](docs/HYBRID-SETUP.md) | Some services local, the rest on a shared server |
-| [REMOTE-DEV-SETUP.md](docs/REMOTE-DEV-SETUP.md) | Developing against a remote stack |
-| [HOT-DEPLOY-GUIDE.md](docs/HOT-DEPLOY-GUIDE.md) | Pushing a code change into a running stack without a full redeploy |
-| [SERVICE-STARTUP-SEQUENCE.md](docs/SERVICE-STARTUP-SEQUENCE.md) | The order services come up in, and what waits on what |
+| [ONBOARDING-AND-ADDONS.md](../docs/setup/onboarding/README.md) | Create a city and load its data; turn on notifications, the dashboard and the other add-ons |
+| [STACK-REFERENCE.md](../docs/reference/services/stack-reference.md) | Ports, memory, API and database access, Postman, troubleshooting |
+| [LOCALHOST-FULL-AND-SLIM.md](../docs/setup/local/localhost-full-and-slim.md) | Two ready-made presets for deploying Option C to this machine |
+| [LOCAL-SETUP-GUIDE.md](../docs/setup/local/README.md) | Running the Compose stack on a machine with about 4 GB of RAM |
+| [HYBRID-SETUP.md](../docs/setup/local/hybrid.md) | Some services local, the rest on a shared server |
+| [REMOTE-DEV-SETUP.md](../docs/setup/local/remote-dev.md) | Developing against a remote stack |
+| [HOT-DEPLOY-GUIDE.md](../docs/setup/local/hot-deploy.md) | Pushing a code change into a running stack without a full redeploy |
+| [SERVICE-STARTUP-SEQUENCE.md](../docs/reference/services/startup-sequence.md) | The order services come up in, and what waits on what |

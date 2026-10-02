@@ -37,6 +37,17 @@ public class EmployeeWorkingContext {
     @Builder.Default
     private List<Jurisdiction> jurisdictions = Collections.emptyList();
 
+    /**
+     * Whether this employee's current HRMS assignment names a reportingTo officer.
+     *
+     * <p>Escalation moves a complaint to the assignee's reportingTo, so an employee at the
+     * top of their chain cannot escalate: the service answers ESCALATION_TOP_OF_HIERARCHY.
+     * The employee UI has no other way to know that before the click, so it offered a
+     * button that could only fail (#2129). It is a boolean, not the officer's identity:
+     * the target stays server-resolved and no HRMS PII is added to this projection.</p>
+     */
+    private boolean hasReportingTo;
+
     @Data
     @Builder
     @NoArgsConstructor

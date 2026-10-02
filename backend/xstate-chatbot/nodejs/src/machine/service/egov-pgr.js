@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const config = require("../../env-variables");
+const mobileValidation = require('./mobile-validation-service');
 const getCityAndLocality = require("./util/google-maps-util");
 const localisationService = require("../util/localisation-service");
 const urlencode = require("urlencode");
@@ -11,6 +12,27 @@ var FormData = require("form-data");
 var geturl = require("url");
 var path = require("path");
 require("url-search-params-polyfill");
+
+/** The pre-boundary-service locality form: ADMIN_ added once, never twice. */
+function withAdminPrefix(code) {
+  if (!code) return code;
+  return String(code).startsWith("ADMIN_") ? code : "ADMIN_" + code;
+}
+
+/**
+ * A readable locality label generated from its code ("ADMIN_SUN04" -> "Sun 04"), used when
+ * there is no localised or boundary name. The hierarchy prefix is dropped from the label
+ * only; the code itself keeps it.
+ */
+function labelFromCode(code) {
+  return String(code)
+    .replace(/^ADMIN_/, "")
+    .replace(/([A-Z]+)(\d+)/, "$1 $2") // space between letters and numbers
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
 
 let pgrCreateRequestBody =
   '{"RequestInfo":{"authToken":"","userInfo":{}},"service":{"tenantId":"","serviceCode":"","description":"","accountId":"","source":"whatsapp","address":{"landmark":"","city":"","geoLocation":{"latitude": null, "longitude": null},"locality":{"code":""}}},"workflow":{"action":"APPLY","verificationDocuments":[]}}';
@@ -363,6 +385,8 @@ class PGRService {
           return {
             city: matchedCity,
             locality: matchedLocality,
+            // Taken from fetchLocalities, so it is a boundary code; see persistComplaint.
+            localityIsBoundaryCode: true,
             matchedCityMessageBundle: matchedCityMessageBundle,
             matchedLocalityMessageBundle: matchedLocalityMessageBundle,
           };
@@ -377,8 +401,8 @@ class PGRService {
     return undefined; // No matching city found
   }
 
-  async fetchCitiesAndWebpageLink(tenantId, whatsAppBusinessNumber) {
-    let { cities, messageBundle } = await this.fetchCities(tenantId);
+  async fetchCitiesAndWebpageLink(tenantId, whatsAppBusinessNumber, user) {
+    let { cities, messageBundle } = await this.fetchCities(tenantId, user);
     let link = await this.getCityExternalWebpageLink(
       tenantId,
       whatsAppBusinessNumber
@@ -386,19 +410,67 @@ class PGRService {
     return { cities, messageBundle, link };
   }
 
-  async fetchCities(tenantId) {
-    let cities = await this.fetchMdmsData(
-      tenantId,
-      "tenant",
-      "citymodule",
-      "$.[?(@.module=='PGR.WHATSAPP')].tenants.*.code"
-    );
+  /**
+   * The city pick-list a citizen chooses from, and the tenant the complaint is filed against.
+   *
+   * Derived from `tenant.tenants`, NOT seeded statically. The previous implementation read
+   * only `tenant.citymodule` filtered on `module == 'PGR.WHATSAPP'`, which conflated two
+   * different questions: "which tenants have the WhatsApp module" and "which cities can a
+   * citizen file in". Seeding that row with the module's own tenant produced a one-entry
+   * pick-list containing the STATE tenant, with no localisation, so selecting it filed the
+   * complaint at state level while boundaries and employees live at the city tenant -- the
+   * complaint landed in nobody's inbox. An absent row was no better: an empty list is a dead
+   * end the citizen cannot get past.
+   *
+   * `tenant.tenants` is the master city onboarding actually populates, so the list stays
+   * correct without a seed step. `citymodule` is still honoured when present, as an operator
+   * override for restricting WhatsApp to a subset of cities.
+   */
+  async fetchCities(tenantId, user) {
+    let cities = await this.fetchWhatsAppCityOverride(tenantId, user);
+    if (!cities.length) cities = await this.fetchCityTenants(tenantId, user);
+
     let messageBundle = {};
     for (let city of cities) {
-      let message = localisationService.getMessageBundleForCode(city);
-      messageBundle[city] = message;
+      messageBundle[city] = localisationService.getMessageBundleForCode(city);
     }
     return { cities, messageBundle };
+  }
+
+  /** Optional `tenant.citymodule` PGR.WHATSAPP restriction. Empty when unset. */
+  async fetchWhatsAppCityOverride(tenantId, user) {
+    try {
+      const codes = await this.fetchMdmsData(
+        tenantId,
+        "tenant",
+        "citymodule",
+        "$.[?(@.module=='PGR.WHATSAPP')].tenants.*.code",
+        user
+      );
+      // A row listing only the state root is the mis-seeded shape described above; treat it
+      // as "no override" rather than filing every complaint at state level.
+      const stateRoot = String(tenantId || "").split(".")[0];
+      return (codes || []).filter((c) => c && c !== stateRoot);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /** City tenants from `tenant.tenants` -- everything below the state root. */
+  async fetchCityTenants(tenantId, user) {
+    const stateRoot = String(tenantId || "").split(".")[0];
+    try {
+      const rows = await this.fetchMdmsData(tenantId, "tenant", "tenants", "$.*", user);
+      const codes = (rows || [])
+        .map((r) => (typeof r === "string" ? r : r && r.code))
+        .filter((c) => c && c !== stateRoot);
+      if (codes.length) return codes;
+      // Single-tenant deployment: the state root IS the only place to file.
+      return stateRoot ? [stateRoot] : [];
+    } catch (error) {
+      console.error(`Unable to derive city tenants for ${tenantId}: ${error.message}`);
+      return stateRoot ? [stateRoot] : [];
+    }
   }
 
   async getCityExternalWebpageLink(tenantId, whatsAppBusinessNumber) {
@@ -406,9 +478,17 @@ class PGRService {
       config.egovServices.externalHost +
       config.egovServices.cityExternalWebpagePath +
       "?tenantId=" +
-      tenantId +
-      "&phone=+91" +
-      whatsAppBusinessNumber;
+      tenantId;
+    // The business number belongs to the TWILIO ACCOUNT, not to the citizen's tenant, so it
+    // is deliberately NOT normalised against the tenant's mobile rule: a Kenyan tenant on
+    // the Twilio US sandbox sender produced phone=%2B25414155238886, a dead wa.me target.
+    // It arrives in E.164 already, so its own digits are used as-is.
+    //
+    // Blank omits the parameter entirely, which is what host_vars promises. Previously
+    // toE164('') returned null and encodeURIComponent(null) rendered the literal
+    // "phone=null" into the URL.
+    const phoneDigits = mobileValidation.digitsOnly(whatsAppBusinessNumber);
+    if (phoneDigits) url += "&phone=" + encodeURIComponent("+" + phoneDigits);
     let shorturl = await this.getShortenedURL(url);
     return shorturl;
   }
@@ -427,9 +507,17 @@ class PGRService {
       config.egovServices.externalHost +
       config.egovServices.localityExternalWebpagePath +
       "?tenantId=" +
-      tenantId +
-      "&phone=+91" +
-      whatsAppBusinessNumber;
+      tenantId;
+    // The business number belongs to the TWILIO ACCOUNT, not to the citizen's tenant, so it
+    // is deliberately NOT normalised against the tenant's mobile rule: a Kenyan tenant on
+    // the Twilio US sandbox sender produced phone=%2B25414155238886, a dead wa.me target.
+    // It arrives in E.164 already, so its own digits are used as-is.
+    //
+    // Blank omits the parameter entirely, which is what host_vars promises. Previously
+    // toE164('') returned null and encodeURIComponent(null) rendered the literal
+    // "phone=null" into the URL.
+    const phoneDigits = mobileValidation.digitsOnly(whatsAppBusinessNumber);
+    if (phoneDigits) url += "&phone=" + encodeURIComponent("+" + phoneDigits);
     let shorturl = await this.getShortenedURL(url);
     return shorturl;
   }
@@ -454,7 +542,7 @@ class PGRService {
         if (mdmsData['CMS-BOUNDARY'] && mdmsData['CMS-BOUNDARY']['HierarchySchema']) {
           const hierarchySchemas = mdmsData['CMS-BOUNDARY']['HierarchySchema'];
           // Find ADMIN hierarchy
-          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === 'ADMIN');
+          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === config.boundaryHierarchyType);
           if (adminHierarchy && adminHierarchy.lowestHierarchy) {
             lowestBoundaryType = adminHierarchy.lowestHierarchy;
           }
@@ -465,7 +553,10 @@ class PGRService {
       // Step 1: Fetch boundary data from boundary service with specific boundary type
 
       // Use boundary type parameter to fetch only the lowest level boundaries
-      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=ADMIN&boundaryType=${lowestBoundaryType}&includeChildren=true`;
+      // hierarchyType is named per deployment (it is not always ADMIN), so it is
+      // configurable; the default preserves the previous behaviour.
+      const hierarchyType = config.boundaryHierarchyType;
+      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=${encodeURIComponent(hierarchyType)}&boundaryType=${lowestBoundaryType}&includeChildren=true`;
 
       const boundaryRequest = {
         RequestInfo: {
@@ -568,31 +659,18 @@ class PGRService {
       const messageBundle = {};
 
       for (const code of localityCodes) {
-        // Remove ADMIN_ prefix for PGR usage
-        const localityCodeForPGR = code.replace(/^ADMIN_/, '');
-        localities.push(localityCodeForPGR);
+        // The boundary code is exactly what PGR validates the locality against, so it is
+        // carried through untouched. Previously a leading ADMIN_ was stripped here and
+        // re-added in persistComplaint, which only round-tripped for ADMIN_-prefixed codes:
+        // W1_ADMIN_WARD went out as ADMIN_W1_ADMIN_WARD and PGR rejected the complaint.
+        localities.push(code);
 
-        // Use localized name if available, otherwise generate a readable name from the code
-        let displayName = localizedMessages[code];
+        // Localised name, else the boundary's own name, else one generated from the code.
+        const localityObj = localityMap.get(code);
+        const displayName =
+          localizedMessages[code] || (localityObj && localityObj.name) || labelFromCode(code);
 
-        if (!displayName) {
-          // Try to extract a readable name from the locality object if available
-          const localityObj = localityMap.get(code);
-          if (localityObj && localityObj.name) {
-            displayName = localityObj.name;
-          } else {
-            // Generate a readable name from the code (e.g., "ADMIN_SUN04" -> "Sun 04")
-            const cleanCode = localityCodeForPGR;
-            displayName = cleanCode
-              .replace(/([A-Z]+)(\d+)/, '$1 $2')  // Add space between letters and numbers
-              .replace(/_/g, ' ')  // Replace underscores with spaces
-              .split(' ')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-              .join(' ');
-          }
-        }
-
-        messageBundle[localityCodeForPGR] = {
+        messageBundle[code] = {
           en_IN: displayName,
           hi_IN: displayName,  // Will use same unless we fetch hi_IN locale too
           pa_IN: displayName   // Will use same unless we fetch pa_IN locale too
@@ -620,32 +698,33 @@ class PGRService {
         );
 
         if (boundaryData && boundaryData.length > 0) {
-          let localities = [];
-          for (let i = 0; i < boundaryData.length; i++) {
-            localities.push(boundaryData[i].code);
-          }
-
-          let localitiesLocalisationCodes = [];
-          for (let locality of localities) {
-            let localisationCode =
-              tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
-            localitiesLocalisationCodes.push(localisationCode);
-          }
+          // This legacy master stores bare codes (SUN04), while PGR validates the ADMIN_
+          // form that persistComplaint used to add for every source. One pass builds the
+          // PGR code and the localisation key from the same bare code, so a code that
+          // already carries ADMIN_ is never prefixed twice in either.
+          const tenantKey = tenantId.replace(".", "_").toUpperCase();
+          const entries = boundaryData.map((boundary) => {
+            const bare = String(boundary.code).replace(/^ADMIN_/, "");
+            return { pgrCode: "ADMIN_" + bare, localisationCode: tenantKey + "_ADMIN_" + bare };
+          });
 
           let localisedMessages =
             await localisationService.getMessagesForCodesAndTenantId(
-              localitiesLocalisationCodes,
+              entries.map((e) => e.localisationCode),
               tenantId
             );
 
           let messageBundle = {};
-          for (let locality of localities) {
-            let localisationCode =
-              tenantId.replace(".", "_").toUpperCase() + "_ADMIN_" + locality;
-            messageBundle[locality] = localisedMessages[localisationCode];
+          for (const { pgrCode, localisationCode } of entries) {
+            const localised = localisedMessages && localisedMessages[localisationCode];
+            // A missing translation used to leave the entry undefined, and the pick-list
+            // threw a TypeError on it.
+            messageBundle[pgrCode] =
+              localised && localised.en_IN ? localised : { en_IN: labelFromCode(pgrCode) };
           }
+          const pgrLocalities = entries.map((e) => e.pgrCode);
 
-          return { localities, messageBundle };
+          return { localities: pgrLocalities, messageBundle };
         }
       } catch (mdmsError) {
       }
@@ -879,14 +958,21 @@ class PGRService {
     let authToken = user.authToken;
     let userId = user.userId;
     let complaintType = slots.complaint;
-    let locality = slots.locality;
     let city = slots.city;
+    // Codes picked from a list built by this version are boundary codes, sent as-is.
+    // Anything else keeps the rule that applied before (ADMIN_ added): sessions saved
+    // before the deploy hold codes with the prefix stripped, and the NLP fuzzy search
+    // returns bare codes. No lookup is made at filing time.
+    // TEMPORARY for the saved-session case: redundant once sessions from before this
+    // change have expired (AVG_SESSION_TIME); the NLP case stays until nlp-engine
+    // returns boundary codes.
+    let locality = slots.localityIsBoundaryCode ? slots.locality : withAdminPrefix(slots.locality);
     let userInfo = user.userInfo;
 
     requestBody["RequestInfo"]["authToken"] = authToken;
     requestBody["service"]["tenantId"] = city;
     requestBody["service"]["address"]["city"] = city;
-    requestBody["service"]["address"]["locality"]["code"] = "ADMIN_" + locality;
+    requestBody["service"]["address"]["locality"]["code"] = locality;
 
     // Add localized locality name if available
     if (slots.localityName) {
@@ -913,9 +999,8 @@ class PGRService {
         if (response.ok) {
           const data = await response.json();
           if (data.messages) {
-            // Look for ADMIN_<locality> code
-            const localityCode = `ADMIN_${locality}`;
-            const message = data.messages.find(m => m.code === localityCode);
+            // digit-tenants keys locality names by the boundary code itself
+            const message = data.messages.find(m => m.code === locality);
             if (message) {
               requestBody["service"]["address"]["locality"]["name"] = message.message;
             }

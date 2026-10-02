@@ -1,6 +1,13 @@
 import React, { useContext, useEffect, useState,useMemo,useRef,useLayoutEffect } from "react";
 import { useForm,useWatch} from "react-hook-form";
 import { useTranslation } from "react-i18next";
+
+// The value for `key`, or `fallback` when no locale seeds it (i18next hands
+// the key back unchanged in that case).
+const translateOr = (t, key, fallback) => {
+  const value = t(key);
+  return value && value !== key ? value : fallback;
+};
 import { InboxContext } from "../hoc/InboxSearchComposerContext";
 import RenderFormFields from "../molecules/RenderFormFields";
 import HeaderComponent from "../atoms/HeaderComponent";
@@ -244,9 +251,12 @@ const SearchComponent = ({ uiConfig, header = "", screenType = "search", fullCon
     >
       {uiConfig?.type === "filter" ? (
         <FilterCard
-          title={t(uiConfig?.label) || t("Filter")}
+          // `t("Filter")` looked up a key literally named "Filter", which no
+          // locale seeds, so the heading stayed English everywhere.
+          title={t(uiConfig?.label) || translateOr(t, "CS_COMMON_FILTER", "Filter")}
           primaryActionLabel={t(uiConfig?.primaryLabel) || ""}
           secondaryActionLabel={t(uiConfig?.secondaryLabel) || ""}
+          secondaryActionVariation={uiConfig?.secondaryLabelVariation}
           onPrimaryPressed={handleSubmit(onSubmit)}
           onSecondaryPressed={clearSearch}
           layoutType={"vertical"}
@@ -308,7 +318,7 @@ const SearchComponent = ({ uiConfig, header = "", screenType = "search", fullCon
                   )}
                   {uiConfig?.secondaryLabel && (
                     <Button
-                      variation="teritiary"
+                      variation={uiConfig?.secondaryLabelVariation || "teritiary"}
                       label={t(uiConfig?.secondaryLabel)}
                       type="button"
                       size={"medium"}

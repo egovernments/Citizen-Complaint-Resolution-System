@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, Upload, Check, ChevronRight, Loader2, AlertTriangle, X } from 'lucide-react';
+import { Plus, Download, Upload, Check, ChevronRight, Loader2, AlertTriangle, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
@@ -80,7 +80,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
 
   const handleDefine = () => {
     if (!hierarchyType.trim()) return fail('Hierarchy type is required');
-    if (validLevels().length < 2) return fail('At least 2 levels are required (the last is the sub-type / serviceCode)');
+    if (validLevels().length < 2) return fail('At least 2 levels are required (the last is the subcategory / serviceCode)');
     setError(null);
     setStep('template');
   };
@@ -101,7 +101,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
         return;
       }
       if (result.leaves.length === 0) {
-        fail('No complaint sub-types found in the sheet. Fill at least one row.');
+        fail('No complaint subcategories found in the sheet. Fill at least one row.');
         return;
       }
       setUploadedFile(file);
@@ -213,8 +213,8 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
         <div>
           <SubHeader>Step 3.2: Define Complaint Hierarchy</SubHeader>
           <p className="text-xs sm:text-sm text-muted-foreground mb-4">
-            Add as many levels as you need — the count is the depth. The last level is the complaint sub-type
-            (its values become serviceCodes). Replaces the old flat complaint-type sheet.
+            Add as many levels as you need — the count is the depth. The last level is the complaint subcategory
+            (its values become serviceCodes). Replaces the old flat complaint-category sheet.
           </p>
           <div className="space-y-6">
             <LabelFieldPair>
@@ -241,7 +241,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
                       className="flex-1 border-input-border focus:border-primary"
                     />
                     {idx === 0 && <span className="text-xs text-primary hidden sm:inline">[Root]</span>}
-                    {idx === levels.length - 1 && <span className="text-xs text-primary hidden sm:inline">[Leaf · sub-type]</span>}
+                    {idx === levels.length - 1 && <span className="text-xs text-primary hidden sm:inline">[Leaf · subcategory]</span>}
                     {levels.length > 2 && (
                       <Button variant="ghost" size="sm" onClick={() => setLevels(levels.filter((_, i) => i !== idx))} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
                         <X className="w-4 h-4" />
@@ -275,7 +275,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             </div>
             <p className="text-xs sm:text-sm mb-2 text-muted-foreground">
               One column per level + Department Name*, Resolution Time (Hours)*, Search Words*. One row per
-              sub-type — repeat the ancestor columns to group sub-types under the same path.
+              subcategory — repeat the ancestor columns to group subcategories under the same path.
             </p>
             <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" onClick={handleDownloadTemplate}>
               <Download className="w-4 h-4 mr-2" /> Download Template
@@ -298,7 +298,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
               </>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setStep('define')} className="text-muted-foreground hover:text-primary">← Back to levels</Button>
+          <Button variant="ghost" size="sm" onClick={() => setStep('define')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back to levels</Button>
         </div>
       )}
 
@@ -314,7 +314,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           )}
           <Tabs defaultValue="leaves">
             <TabsList className="bg-muted">
-              <TabsTrigger value="leaves" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Sub-types ({leaves.length})</TabsTrigger>
+              <TabsTrigger value="leaves" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Subcategories ({leaves.length})</TabsTrigger>
               <TabsTrigger value="nodes" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Hierarchy nodes ({interiorNodes.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="leaves" className="mt-4 overflow-x-auto">
@@ -363,13 +363,13 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           <p className="text-xs sm:text-sm text-muted-foreground my-4">
             Will create 1 hierarchy definition and <span className="text-primary">{nodes.length}</span> hierarchy rows
             (<span className="text-primary">{interiorNodes.length}</span> nodes +{' '}
-            <span className="text-primary">{leaves.length}</span> complaint sub-types)
+            <span className="text-primary">{leaves.length}</span> complaint subcategories)
             {stateTenant !== targetTenant ? ` (on ${targetTenant} and ${stateTenant})` : ''}.
           </p>
           <div className="flex justify-between">
-            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="text-muted-foreground hover:text-primary">← Back</Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="gap-1.5 text-primary hover:text-primary"><ArrowLeft className="w-4 h-4" />Back</Button>
             <SubmitBar
-              label={loading ? 'Creating…' : `Create ${leaves.length} Sub-types`}
+              label={loading ? 'Creating…' : `Create ${leaves.length} Subcategories`}
               onSubmit={handleIngest}
               disabled={loading || leaves.length === 0}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}

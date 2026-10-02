@@ -81,6 +81,13 @@
     # every later deploy with an unverifiable apt repo. pipefail catches the
     # curl failure; the temp+install makes the dest all-or-nothing. No creates:
     # so a previously-left empty keyring is always re-created.
+    #
+    # --batch --yes is REQUIRED, not cosmetic: mktemp CREATES the temp file, and
+    # `gpg --dearmor -o` refuses to overwrite an existing one. Without the flags
+    # gpg asks "File ... exists. Overwrite? (y/N)" -- which hangs the play behind
+    # ansible-captured stdin when a tty exists, and dies with
+    # "gpg: cannot open '/dev/tty'" (rc=2) when one does not. Either way the
+    # deploy fails here on every host that does not already have node >= 20.
     # (Keep this shell body comment-free: an apostrophe or backtick in a
     # shell: block trips ansible arg-splitting at runtime.)
     - name: "{{ node_ensure_label }} — install NodeSource GPG key to /etc/apt/keyrings"
@@ -88,7 +95,7 @@
         set -euo pipefail
         install -m 0755 -d /etc/apt/keyrings
         tmp=$(mktemp)
-        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o "$tmp"
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --batch --yes --dearmor -o "$tmp"
         test -s "$tmp"
         install -m 0644 "$tmp" /etc/apt/keyrings/nodesource.gpg
         rm -f "$tmp"

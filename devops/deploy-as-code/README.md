@@ -48,7 +48,7 @@ That is what `.github/workflows/digit_install.yml` runs (manually triggered).
 
 A standard deploy therefore installs **no** Prometheus, Grafana, Loki or Alertmanager — while several charts still ship `ServiceMonitor` and `PrometheusRule` resources that only do something when the operator is running.
 
-**See [`docs/observability/enabling-monitoring.md`](../../docs/observability/enabling-monitoring.md)** for what each component gives you, what it costs, how to enable it, and what to fix first.
+**See [`docs/operations/monitoring/enabling-monitoring.md`](../../docs/operations/monitoring/enabling-monitoring.md)** for what each component gives you, what it costs, how to enable it, and what to fix first.
 
 ## Two things to know before changing anything here
 
