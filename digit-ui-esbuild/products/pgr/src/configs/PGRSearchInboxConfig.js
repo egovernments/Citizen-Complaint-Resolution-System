@@ -193,6 +193,8 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                     primaryLabel: 'ES_COMMON_APPLY',
                     formClassName: "filter",
                     secondaryLabel: 'ES_CLEAR_ALL',
+                    // Outlined, like Clear on the search card above.
+                    secondaryLabelVariation: 'secondary',
                     minReqFields: 0,
                     defaultValues: {
                         locality: null,
@@ -239,24 +241,22 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                                       },
                                   },
                               ]),
+                        // Complaint Category, then Complaint Subcategory. The
+                        // component labels both; the inbox injects the
+                        // tenant's complaint types as its options.
                         {
-
-                            label: "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+                            label: "",
                             isMandatory: false,
                             key: "serviceCode",
-                            type: "dropdown",
+                            type: "component",
+                            component: "PGRComplaintCategoryFilter",
                             disable: false,
                             preProcess: {
                                 updateDependent: ["populators.options"]
                             },
                             populators: {
                                 name: "serviceCode",
-                                optionsKey: "i18nKey",
-                                defaultText: '',
-                                selectedText: "COMMON_SELECTED",
-                                allowMultiSelect: false,
                                 options: [],
-                                isDropdownWithChip: false
                             }
                         },
                         {
