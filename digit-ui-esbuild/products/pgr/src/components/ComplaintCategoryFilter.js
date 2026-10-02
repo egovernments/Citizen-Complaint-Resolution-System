@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Controller } from "react-hook-form";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
 import { complaintLabel } from "../utils/complaintLabel";
-import { complaintCategories } from "../utils/complaintCategories";
+import { complaintCategories, subcategoryFits } from "../utils/complaintCategories";
 import { selectPlaceholder, translateOr } from "../utils/selectPlaceholder";
 
 /**
@@ -45,7 +45,10 @@ const ComplaintCategoryFilter = ({ t, config, control, props }) => {
                 onValueChange={(code) => {
                   const picked = categories.find((option) => option.code === code) || null;
                   setCategory(picked);
-                  if (subcategory?.menuPath && picked && subcategory.menuPath !== picked.code) props.onChange(null);
+                  // Checked against the category's own list: a subcategory
+                  // with no parent has no menuPath to compare, and would
+                  // otherwise stay and win the search over the category.
+                  if (!subcategoryFits(subcategory, picked)) props.onChange(null);
                 }}
                 options={categories.map((option) => ({ value: option.code, label: option.label }))}
                 searchable
