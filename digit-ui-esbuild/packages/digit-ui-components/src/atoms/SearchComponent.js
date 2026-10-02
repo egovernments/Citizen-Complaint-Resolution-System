@@ -256,6 +256,7 @@ const SearchComponent = ({ uiConfig, header = "", screenType = "search", fullCon
           title={t(uiConfig?.label) || translateOr(t, "CS_COMMON_FILTER", "Filter")}
           primaryActionLabel={t(uiConfig?.primaryLabel) || ""}
           secondaryActionLabel={t(uiConfig?.secondaryLabel) || ""}
+          secondaryActionVariation={uiConfig?.secondaryLabelVariation}
           onPrimaryPressed={handleSubmit(onSubmit)}
           onSecondaryPressed={clearSearch}
           layoutType={"vertical"}

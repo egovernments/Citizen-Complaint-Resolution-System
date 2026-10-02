@@ -432,6 +432,9 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
                 data={optionsByLevel[key] || []}
                 waitingForParent={waiting}
                 parentLabelOf={parentLabelOf}
+                // Marked required on a form that needs the address; a filter
+                // (the inbox's, `isMandatory: false`) leaves every level optional.
+                required={config?.isMandatory !== false}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
                 selected={selectedAtLevel}
                 // Read-only when (a) the caller asked for it, AND
@@ -459,7 +462,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
  * carry through onChange unchanged so the parent's cascade logic /
  * SelectedBoundary payload stays byte-identical to the legacy.
  */
-const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled, parentLabelOf, waitingForParent }) => {
+const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled, parentLabelOf, waitingForParent, required }) => {
   const { t } = useTranslation();
   const id = `boundary-${(fieldKey || label || "field").toString().toLowerCase().replace(/\s+/g, "-")}`;
   // Defensive dedup by code. The jurisdiction prune (filterTree above)
@@ -489,7 +492,7 @@ const BoundaryDropdown = ({ label, data, onChange, selected, fieldKey, disabled,
     return disambiguateLabels(options, parentLabelOf || (() => null));
   }, [data, t, parentLabelOf]);
   return (
-    <V2Field label={t(label)} required htmlFor={id}>
+    <V2Field label={t(label)} required={required} htmlFor={id}>
       <V2Select
         id={id}
         value={selected?.code}

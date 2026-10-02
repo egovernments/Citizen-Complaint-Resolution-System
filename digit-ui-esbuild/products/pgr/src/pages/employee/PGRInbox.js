@@ -184,7 +184,7 @@ const PGRSearchInbox = () => {
           ...configs.sections.search,
           uiConfig: {
             ...uiConfig,
-            secondaryLabel: translateOr(t, "CS_COMMON_CLEAR", "CLEAR"),
+            secondaryLabel: translateOr(t, "CS_COMMON_CLEAR", "Clear"),
             headerLabel: translateOr(t, uiConfig.headerLabel || "ES_COMMON_SEARCH_BY", "Search By"),
           },
         },
