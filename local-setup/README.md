@@ -407,7 +407,6 @@ the file is already correct for a first deployment.
 | `tenant_id` | Your **city** tenant, where complaints actually live. Must start with `<state_root>.` | `kenya.nairobi` |
 | `boot_tenant` | Default tenant for the citizen app. Same as `tenant_id` is right. | `kenya.nairobi` |
 | `ui_state_tenant_id` | The tenant the app lands on after login. Point at the **city**. | `kenya.nairobi` |
-| `login_tenant_allowlist` | Which tenants appear in the login screen's City dropdown. List both. | `[kenya, kenya.nairobi]` |
 | `map_center` | Where the complaint map opens. **Required — the deploy fails without it.** | `{lat: -1.2864, lng: 36.8172}` |
 | `pgr_boundary_highest_level`<br>`pgr_boundary_lowest_level`<br>`boundary_type` | What your administrative areas are called, largest first. These are labels on the complaint form, so use the words your staff use. | `County`, `Ward`, `Ward` |
 | `core_mobile_configs` | Your country's phone-number rule. Get this wrong and every citizen signup is rejected. | `+254` / `^0?[17][0-9]{8}$` |
@@ -588,7 +587,7 @@ repository — change them before anyone else can reach the machine.**
 | Where | Username | Password | Which tenant |
 |---|---|---|---|
 | Onboarding wizard (`/configurator/`) | `ADMIN` | `eGov@123` | your **root** — the field is pre-filled from `state_tenant_id` |
-| Employee app (`/digit-ui/employee`) | `ADMIN` | `eGov@123` | pick from the City dropdown; only tenants in `login_tenant_allowlist` appear |
+| Employee app (`/<tenant-slug>/digit-ui/employee`) | Keycloak account | configured in Keycloak | the tenant is fixed by the URL; the account must belong to that tenant Organization |
 | Employees you onboard later | their **employee code** | `eGov@123` | their city tenant |
 | Citizen app | a mobile number | OTP `123456` | — |
 | Grafana (`/grafana/`) | `admin` | generated — see below | — |
@@ -641,7 +640,7 @@ reading, rotating and unsealing.
 | `preflight failed: enable_mcp: true requires docker_registry` | The tenant-creation service needs a registry name even when it is built locally | keep the `docker_registry` line from the template |
 | Ansible fails on an apt/dnf or nginx task with a permissions error | `deploy.sh` never prompts for `sudo` | re-run as `./deploy.sh mycity -K` |
 | A container keeps restarting | usually memory | `docker stats --no-stream`, then either free memory or turn off `enable_search_stack` / lower `observability_level` |
-| The login screen has no City dropdown entry for your tenant | `login_tenant_allowlist` | add the tenant and redeploy |
+| A tenant URL says your account has no access | Keycloak Organization membership | add the employee to that tenant Organization with the required roles |
 | Login fails for `ADMIN` on your root tenant | that root was never created — see the tenant note in Step 3 | check the deploy output for the line naming the fallback to `pg` |
 
 Deeper diagnosis, including reading logs and metrics, is in the

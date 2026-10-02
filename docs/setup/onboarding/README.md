@@ -495,8 +495,6 @@ deployed with. In the deployment's config:
 ui_state_tenant_id: <root>.<city>          # the apps land on the new city
 boot_tenant: <root>.<city>
 hierarchy_type: <the Phase 2 hierarchy name>
-login_tenant_allowlist: [<root>, <root>.<city>]   # every tenant that must
-                                                  # appear in the City dropdown
 ```
 
 Leave `state_root`, `state_tenant_id` and `tenant_id` alone — those are the boot
@@ -956,19 +954,12 @@ the settings a first deployment needs.
 
 A successful onboarding should leave you able to:
 
-1. Open the employee login page and see the new tenant in the **City** dropdown
-   (the dropdown is gated by `login_tenant_allowlist` in `host_vars` — if the
-   new tenant is missing there, add it and re-run the deploy before concluding
-   onboarding failed).
-2. Log in as the administrator against the new tenant — `ADMIN` / `eGov@123`
-   unless the deploy set `bootstrap_user` / `bootstrap_password` to something
-   else. *(Guaranteed on the wizard and DataLoader paths, which create that
-   user. The headless XLSX path does not create a city administrator by
-   itself — log in with an onboarded employee's `employeeCode` instead, or as
-   the administrator against the root.)*
-3. See the tenant in the HRMS / PGR / Workbench module switchers after login.
-4. See departments, designations, and complaint types populated for the tenant.
-5. See boundaries populate the location dropdowns in the complaint form.
+1. Open `/<tenant-slug>/digit-ui/employee` and confirm the page identifies the
+   tenant from the URL without showing a tenant selector.
+2. Log in through Keycloak with an account that belongs to the tenant
+   Organization and carries the required roles.
+3. See departments, designations, and complaint types populated for the tenant.
+4. See boundaries populate the location dropdowns in the complaint form.
 
 Quick API check that the tenant record landed:
 

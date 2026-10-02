@@ -111,10 +111,6 @@ map_center:
   lat: 30.7333
   lng: 76.7794
 
-# Restrict which tenants may log in. Values: list of tenant ids, or `[]` (here)
-# to allow all. Most production deployments list exactly one city.
-login_tenant_allowlist: []
-
 # Employee-UI modules to hide. Values: list of module codes — commonly `["IM"]`
 # to hide inbox-v2 when enable_search_stack is false. Empty: hide nothing.
 employee_module_denylist: []
@@ -307,12 +303,12 @@ novu_bridge_channel: "sms"
 # until auth_provider is flipped. Values: true | false.
 enable_keycloak: false
 
-# Which auth path the SPA uses. Values: `keycloak` for OIDC PKCE, `""` (here)
-# for OTP login. Do not flip until the realm is imported and a test login works.
+# Only digit-ui-v2 (/citizen) reads this (VITE_AUTH_PROVIDER); digit-ui-esbuild
+# signs in by route (#2072). Keep `""`: the deploy refuses `keycloak`, whose
+# legacy login path was removed by #2088.
 auth_provider: ""
 
-# OIDC public client id inside the per-tenant realm. The shipped realm template
-# defines `digit-ui`; change only if you forked the template.
+# OIDC public client id digit-ui-v2 bakes in. Inert while auth_provider is "".
 keycloak_client_id: "digit-ui"
 
 # Google federated login. Empty skips Google IdP wiring entirely.
