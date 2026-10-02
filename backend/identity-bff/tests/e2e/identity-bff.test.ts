@@ -1,14 +1,43 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { getRedis } from "../../src/infrastructure/redis.js";
-import { managedAccountsKey } from "../../src/modules/managed-accounts/managed-account-service.js";
+import {
+  citizenIdentity,
+  linkedIdentity,
+  managedAccountsKey,
+  managedUserLogin,
+} from "../../src/modules/managed-accounts/managed-account-service.js";
+import {
+  citizenTokenMinter,
+  setCitizenTokenMinter,
+} from "../../src/modules/managed-accounts/citizen-token-minter.js";
 import {
   createIdentitySession,
   saveSelectedIdentityContext,
 } from "../../src/modules/sessions/session-store.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
+import {
+  LogOtpSender,
+  OtpDeliveryError,
+  otpSender,
+  setOtpSender,
+  warnAboutInsecureOtpModes,
+  type OtpMessage,
+} from "../../src/modules/citizen-otp/otp-sender.js";
+import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
+import { syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
+import { desiredRolesForSubjectTenant } from "../../src/modules/reconciliation/reconciliation-service.js";
+import {
+  isOrganizationGroupMember,
+  readOrganizationGroupReconciliation,
+  clearTenantMappingCache,
+  keycloakPhoneIsAdminControlled,
+  readTenantMappingForTenant,
+  resetPhoneTrustCache,
+  updateCitizenRegistrationValues,
+} from "../../src/modules/organizations/organization-service.js";
 import {
   getIdentityAppPort as getAppPort,
   startIdentityTestApp as startTestApp,
@@ -16,7 +45,7 @@ import {
 } from "./identity-test-app.js";
 
 const digit = createFakeDigitUser({
-  tenants: ["ke", "ke.bomet", "ke.kisumu", "ke.nakuru", "ke.nyeri"],
+  tenants: ["ke", "ke.bomet", "ke.bomet.ulb1", "ke.kisumu", "ke.nakuru", "ke.nyeri"],
 });
 let nakuruOrganizationId = "";
 
@@ -49,6 +78,18 @@ beforeAll(async () => {
   (config as any).keycloakBffAudience = "digit-identity-bff";
   (config as any).keycloakMagicLinkClientId = "digit-identity-bff-magic-link";
   (config as any).keycloakMagicLinkClientSecret = "test-magic-secret";
+  Object.assign(config as any, {
+    keycloakEmployeeClientId: "digit-ui-employee",
+    keycloakEmployeeClientSecret: "test-employee-secret",
+    keycloakCitizenClientId: "digit-ui-citizen",
+    keycloakCitizenClientSecret: "test-citizen-secret",
+    identityEmployeeScope: "openid profile email",
+    identityCitizenScope: "openid profile phone",
+    digitOtpCreateUrl: `${digitBase}/otp/v1/_create`,
+    digitLocalizationSearchUrl: `${digitBase}/localization/messages/v1/_search`,
+    digitUiConfigModuleName: "commonMDMSConfig",
+    identityBrandingCacheSeconds: 300,
+  });
   (config as any).identityRedirectUri =
     "http://localhost:18200/identity/v1/callback";
   (config as any).identityPostLoginRedirect = "/after-login";
@@ -84,7 +125,10 @@ beforeAll(async () => {
     ["org-kisumu-id", "kisumu", "ke.kisumu", "Kisumu County"],
   ]) {
     await kcAdmin("/organizations", {
-      id, alias, name, enabled: true, attributes: { "digit.rootTenantId": [tenantId] },
+      id, alias, name, enabled: true, attributes: {
+        "digit.rootTenantId": [tenantId],
+        ...(alias === "bomet" && { "digit.urlSlug": ["bomet-county"] }),
+      },
     });
     await fetch(
       `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/organizations/${id}/members`,
@@ -99,6 +143,121 @@ afterAll(async () => {
 });
 
 describe("identity BFF", () => {
+  it("resolves a public URL slug without granting tenant access", async () => {
+    const resolved = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/bomet-county`,
+    );
+    expect(resolved.status).toBe(200);
+    expect(await resolved.json()).toEqual({
+      tenant: {
+        urlSlug: "bomet-county",
+        tenantId: "ke.bomet",
+        rootTenantId: "ke.bomet",
+        parentTenantId: null,
+        fallbackTenantIds: [],
+        name: "Bomet County",
+      },
+    });
+
+    expect((await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/missing-county`,
+    )).status).toBe(404);
+    expect((await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/a-123`,
+    )).status).toBe(404);
+  });
+
+  it("resolves and selects an explicitly mapped Organization-group subtenant", async () => {
+    const ensured = await fetch(
+      `http://localhost:${getAppPort()}/internal/identity/v1/tenant-groups/_ensure`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-control-plane",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          organizationId: "org-bomet-id",
+          tenantId: "ke.bomet.ulb1",
+          parentTenantId: "ke.bomet",
+          fallbackTenantIds: ["ke.bomet"],
+          urlSlug: "bomet-ulb-one",
+          name: "Bomet ULB One",
+        }),
+      },
+    );
+    expect(ensured.status).toBe(200);
+    const groupId = (await ensured.json()).tenant.groupId as string;
+
+    expect((await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}` +
+      `/organizations/org-bomet-id/groups/${groupId}/members/identity-user-1`,
+      { method: "PUT" },
+    )).status).toBe(204);
+    expect((await kcAdmin(
+      `/organizations/org-bomet-id/groups/${groupId}/role-mappings/clients/digit-ui-uuid`,
+      [{ id: "gro-id", name: "GRO" }],
+    )).status).toBe(204);
+    const subtenantMapping = await readTenantMappingForTenant("ke.bomet.ulb1");
+    expect(subtenantMapping?.mappingType).toBe("organization-group");
+    expect(await isOrganizationGroupMember("org-bomet-id", groupId, "identity-user-1"))
+      .toBe(true);
+    if (subtenantMapping?.mappingType === "organization-group") {
+      expect((await readOrganizationGroupReconciliation(
+        subtenantMapping, "digit-ui", "identity-user-1",
+      ))?.memberRoles.get("identity-user-1")).toEqual(["GRO"]);
+    }
+    expect(await desiredRolesForSubjectTenant("identity-user-1", "ke.bomet.ulb1"))
+      .toEqual(["GRO"]);
+    const provisioned = await syncSubjectTenant(
+      "identity-user-1", "ke.bomet.ulb1", "0712345678", "+254",
+    );
+    expect(provisioned).toMatchObject({
+      account: { tenantId: "ke.bomet.ulb1" }, created: true,
+    });
+    expect(await desiredRolesForSubjectTenant("identity-user-1", "ke.bomet"))
+      .not.toContain("GRO");
+
+    const resolved = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/bomet-ulb-one`,
+    );
+    expect(resolved.status).toBe(200);
+    expect(await resolved.json()).toEqual({
+      tenant: {
+        urlSlug: "bomet-ulb-one",
+        tenantId: "ke.bomet.ulb1",
+        rootTenantId: "ke.bomet",
+        parentTenantId: "ke.bomet",
+        fallbackTenantIds: ["ke.bomet"],
+        name: "Bomet ULB One",
+      },
+    });
+
+    const { sessionId } = await createIdentitySession({
+      accessToken: "subtenant-server-token", accessExpiresIn: 3600,
+    }, { sub: "identity-user-1", email: "person@example.com", name: "Demo Person" },
+    "digit-identity-bff");
+    const selected = await fetch(
+      `http://localhost:${getAppPort()}/identity/v1/contexts/_select`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: `${config.identityCookieName}=${sessionId}`,
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tenantId: "ke.bomet.ulb1" }),
+      },
+    );
+    expect(selected.status).toBe(200);
+    expect((await selected.json()).UserRequest).toMatchObject({
+      tenantId: "ke.bomet.ulb1",
+      roles: expect.arrayContaining([
+        expect.objectContaining({ code: "GRO", tenantId: "ke.bomet.ulb1" }),
+      ]),
+    });
+  });
+
   it("provisions Organizations and BFF-managed DIGIT accounts through the control plane", async () => {
     const base = `http://localhost:${getAppPort()}/internal/identity/v1`;
     const unauthorized = await fetch(`${base}/organizations/_ensure`, {
@@ -176,12 +335,12 @@ describe("identity BFF", () => {
       "ke.nakuru:EMPLOYEE", "ke.nakuru:GRO",
     ]);
     expect(nyeriAccount.roles.map((role) => `${role.tenantId}:${role.code}`)).toEqual(["ke.nyeri:EMPLOYEE"]);
-    expect(digit.accounts.size).toBe(3);
+    expect(digit.accounts.size).toBe(4);
 
     const reconciliation = await post("/reconciliation/_run", {});
     expect(reconciliation.status).toBe(200);
     expect(await reconciliation.json()).toMatchObject({
-      acquired: true, organizations: 4, unchanged: 2, unprovisioned: 2, failures: [],
+      acquired: true, organizations: 5, unchanged: 3, unprovisioned: 2, failures: [],
     });
   });
 
@@ -776,6 +935,12 @@ describe("identity BFF", () => {
           roles: ["EMPLOYEE", "GRO"],
         },
         {
+          tenantId: "ke.bomet.ulb1",
+          name: "Bomet ULB One",
+          organizationAlias: "bomet",
+          roles: ["EMPLOYEE", "GRO"],
+        },
+        {
           tenantId: "ke.kisumu",
           name: "Kisumu County",
           organizationAlias: "kisumu",
@@ -861,7 +1026,7 @@ describe("identity BFF", () => {
       { headers: { Cookie: cookie } },
     );
     expect((await staleClaims.json()).tenants.map((tenant: { tenantId: string }) => tenant.tenantId))
-      .toEqual(["ke.bomet"]);
+      .toEqual(["ke.bomet", "ke.bomet.ulb1"]);
     expect(managedAccount.roles.some((role) => role.tenantId === "ke.kisumu")).toBe(false);
     managedAccount.roles = grantedRoles;
 
@@ -888,7 +1053,7 @@ describe("identity BFF", () => {
       { headers: { Cookie: cookie } },
     );
     expect((await lateMembership.json()).tenants.map((tenant: { tenantId: string }) => tenant.tenantId).sort())
-      .toEqual(["ke.bomet", "ke.kisumu", "ke.nakuru"]);
+      .toEqual(["ke.bomet", "ke.bomet.ulb1", "ke.kisumu", "ke.nakuru"]);
 
     // Membership is rechecked live in Keycloak, not only from session claims.
     await fetch(
@@ -1117,6 +1282,1351 @@ describe("identity BFF", () => {
       identityUserCreated: false,
       digitAccountCreated: false,
       activationEmailSent: true,
+    });
+  });
+});
+
+describe("digit-ui employee and citizen surfaces (#2167)", () => {
+  const app = () => `http://localhost:${getAppPort()}`;
+  const cookieFrom = (response: Response, name: string) => response.headers.getSetCookie()
+    .find((value) => value.startsWith(`${name}=`))?.split(";", 1)[0];
+
+  async function startSignIn(query: string): Promise<{
+    url: URL;
+    state: string;
+    nonce: string;
+    loginCookie: string;
+  }> {
+    const authorize = await fetch(`${app()}/identity/v1/authorize?${query}`, { redirect: "manual" });
+    expect(authorize.status).toBe(302);
+    const url = new URL(authorize.headers.get("location")!);
+    return {
+      url,
+      state: url.searchParams.get("state")!,
+      nonce: url.searchParams.get("nonce")!,
+      loginCookie: authorize.headers.get("set-cookie")!.split(";", 1)[0],
+    };
+  }
+
+  async function signIn(
+    surface: "employee" | "citizen",
+    profile = "",
+    returnTo = `/bomet-county/digit-ui/${surface}/`,
+    tenantSlug = "bomet-county",
+  ): Promise<string> {
+    const { state, nonce, loginCookie } = await startSignIn(
+      `surface=${surface}&tenantSlug=${tenantSlug}&returnTo=${encodeURIComponent(returnTo)}`,
+    );
+    const callback = await fetch(
+      `${app()}/identity/v1/callback?code=valid-code${profile ? `-${profile}` : ""}:${encodeURIComponent(nonce)}&state=${encodeURIComponent(state)}`,
+      { redirect: "manual", headers: { Cookie: loginCookie } },
+    );
+    expect(callback.status).toBe(303);
+    expect(callback.headers.get("location")).toBe(returnTo);
+    return cookieFrom(callback, `digit_identity_session_${surface}`)!;
+  }
+
+  const citizenSelect = (cookie: string, body: unknown = {}, origin = "http://localhost:3000") =>
+    fetch(`${app()}/identity/v1/contexts/citizen/_select`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  beforeAll(async () => {
+    resetIdentityMethodCatalog();
+    for (const [id, phone, name] of [
+      ["citizen-user-1", "+254712345678", "Wanjiku"],
+      ["citizen-user-2", "+254722000111", "Second"],
+    ]) {
+      await kcAdmin("/users", {
+        id, username: phone, firstName: name, enabled: true,
+        attributes: { phoneNumber: [phone], phoneNumberVerified: ["true"] },
+      });
+    }
+    const record = (tenantId: string, schemaCode: string, data: unknown, uid = schemaCode) => ({
+      tenantId, schemaCode, uniqueIdentifier: uid, data, isActive: true,
+    });
+    digit.mdms.set(digit.mdmsKey("ke.bomet", "common-masters.StateInfo"), [record(
+      "ke.bomet", "common-masters.StateInfo", {
+        code: "ke.bomet", name: "Bomet", logoUrl: "https://cdn.example/logo.png",
+        logoUrlWhite: "https://cdn.example/logo-white.png", bannerUrl: "https://cdn.example/banner.jpg",
+        languages: [{ label: "ENGLISH", value: "en_IN" }, { label: "KISWAHILI", value: "sw_KE" }],
+        localizationModules: [{ label: "rainmaker-common", value: "rainmaker-common" }],
+      },
+    )]);
+    digit.mdms.set(digit.mdmsKey("ke.bomet", "common-masters.ThemeConfig"), [record(
+      "ke.bomet", "common-masters.ThemeConfig", { code: "default", version: 3, colors: { primary: "#c84c0e" } },
+    )]);
+    digit.mdms.set(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"), [
+      record("ke.bomet", "common-masters.MobileNumberValidation", {
+        validationName: "inactive", countryCode: "+1", mobileNumberRegex: "^.*$", default: true,
+      }, "mnv-inactive"),
+      record("ke.bomet", "common-masters.MobileNumberValidation", {
+        validationName: "kenya", countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$",
+        errorMessage: "MOBILE_VALIDATION_KE", default: true,
+      }, "mnv-kenya"),
+    ]);
+    digit.mdms.get(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"))![0].isActive = false;
+    digit.mdms.set(digit.mdmsKey("ke.bomet", "commonMDMSConfig.LoginConfig"), [record(
+      "ke.bomet", "commonMDMSConfig.LoginConfig", {
+        bannerImages: [{ id: 1, image: "https://cdn.example/b1.png", title: "BOMET_BANNER_TITLE" }],
+        texts: { header: "CORE_COMMON_LOGIN" },
+      },
+    )]);
+    digit.mdms.set(digit.mdmsKey("ke.bomet", "commonMDMSConfig.PrivacyPolicy"), [record(
+      "ke.bomet", "commonMDMSConfig.PrivacyPolicy", {
+        module: "HCM", header: "ES_PRIVACY_POLICY_HEADER", contents: [{ header: "ES_PRIVACY_SECTION_1" }],
+      },
+    )]);
+    for (const [tenantId, module, code, message] of [
+      ["ke.bomet", "rainmaker-common", "CORE_COMMON_LOGIN", "Login"],
+      ["ke.bomet", "rainmaker-common", "CS_LOGIN_OTP", "Enter OTP"],
+      ["ke.bomet", "rainmaker-common", "ES_PRIVACY_POLICY_HEADER", "Privacy"],
+      ["ke.bomet", "rainmaker-common", "UNRELATED_SCREEN_KEY", "Not a login key"],
+      ["ke.bomet", "digit-ui", "MOBILE_VALIDATION_KE", "Enter 9 digits"],
+      ["ke.bomet", "digit-tenants", "TENANT_TENANTS_KE_BOMET", "Bomet County Government"],
+      ["ke.bomet", "rainmaker-ke.bomet", "CS_LOGIN_TEXT", "Bomet citizens"],
+      ["ke.bomet", "other-module", "CORE_LOGIN_USERNAME", "Must not be read"],
+      ["ke.bomet.ulb1", "rainmaker-ke.bomet.ulb1", "CORE_COMMON_LOGIN", "Ingia"],
+      ["ke.bomet", "rainmaker-ke.bomet", "BOMET_BANNER_TITLE", "Report it"],
+      ["ke.bomet", "rainmaker-common", "ES_PRIVACY_POLICY", "Privacy Policy"],
+    ]) {
+      digit.localization.push({ tenantId, locale: "en_IN", module, code, message });
+    }
+    digit.localization.push({
+      tenantId: "ke.bomet", locale: "fr_FR", module: "rainmaker-common",
+      code: "CORE_COMMON_LOGIN", message: "Connexion",
+    });
+  });
+
+  it("serves public, cached tenant login branding", async () => {
+    const response = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(await response.json()).toEqual({
+      tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", name: "Bomet County" },
+      stateInfo: {
+        code: "ke.bomet", name: "Bomet",
+        logoUrl: "https://cdn.example/logo.png", logoUrlWhite: "https://cdn.example/logo-white.png",
+        bannerUrl: "https://cdn.example/banner.jpg",
+        languages: [{ label: "ENGLISH", value: "en_IN" }, { label: "KISWAHILI", value: "sw_KE" }],
+        defaultLocale: "en_IN",
+      },
+      themeConfig: { code: "default", version: 3, colors: { primary: "#c84c0e" } },
+      loginConfig: {
+        bannerImages: [{ id: 1, image: "https://cdn.example/b1.png", title: "BOMET_BANNER_TITLE" }],
+        texts: { header: "CORE_COMMON_LOGIN" },
+      },
+      privacyPolicy: [{
+        module: "HCM", header: "ES_PRIVACY_POLICY_HEADER", contents: [{ header: "ES_PRIVACY_SECTION_1" }],
+      }],
+      footer: {
+        digitFooter: "/digit-ui/brand/digit-footer.png",
+        digitFooterBw: "/digit-ui/brand/digit-footer-bw.png",
+        digitHomeUrl: "https://www.digit.org/",
+      },
+      messages: {
+        BOMET_BANNER_TITLE: "Report it",
+        CORE_COMMON_LOGIN: "Login",
+        ES_PRIVACY_POLICY: "Privacy Policy",
+        ES_PRIVACY_POLICY_HEADER: "Privacy",
+        TENANT_TENANTS_KE_BOMET: "Bomet County Government",
+      },
+    });
+
+    const searches = digit.stats.localizationSearches;
+    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`)).status).toBe(200);
+    expect(digit.stats.localizationSearches).toBe(searches);
+
+    // A subtenant's own localization rows override the root's.
+    const subtenant = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-ulb-one/branding`);
+    expect(subtenant.status).toBe(200);
+    const subtenantBody = await subtenant.json();
+    expect(subtenantBody.tenant).toEqual({
+      urlSlug: "bomet-ulb-one", tenantId: "ke.bomet.ulb1", name: "Bomet ULB One",
+    });
+    expect(subtenantBody.messages.CORE_COMMON_LOGIN).toBe("Ingia");
+
+    // The theme sends Keycloak locales; `fr` and `fr_FR` are the same DIGIT locale.
+    for (const locale of ["fr_FR", "fr"]) {
+      const french = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=${locale}`);
+      expect(french.status).toBe(200);
+      expect((await french.json()).messages).toEqual({ CORE_COMMON_LOGIN: "Connexion" });
+    }
+
+    expect((await fetch(`${app()}/identity/v1/tenant-contexts/missing-county/branding`)).status).toBe(404);
+    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=..%2Fx`)).status)
+      .toBe(400);
+  });
+
+  it("discovers each surface's methods from its own Keycloak client", async () => {
+    const methods = async (query: string) => {
+      const response = await fetch(`${app()}/identity/v1/auth-methods?${query}`);
+      expect(response.status).toBe(200);
+      return (await response.json()).methods;
+    };
+    expect(await methods("surface=employee")).toEqual([
+      { id: "password", label: "Username and password", type: "password", intents: ["signin"] },
+    ]);
+    expect(await methods("surface=employee&intent=signup")).toEqual([]);
+    expect(await methods("surface=citizen")).toEqual([
+      { id: "password", label: "Username and password", type: "password", intents: ["signin"] },
+    ]);
+    expect(await methods("surface=citizen&intent=signup")).toEqual([]);
+    expect((await methods("")).map((method: { id: string }) => method.id))
+      .toEqual(["password", "google", "github", "magic_link"]);
+    expect((await fetch(`${app()}/identity/v1/auth-methods?surface=admin`)).status).toBe(400);
+  });
+
+  it("binds employee/citizen authorization to the route tenant", async () => {
+    const authorize = (query: string) =>
+      fetch(`${app()}/identity/v1/authorize?${query}`, { redirect: "manual" });
+    expect((await authorize("surface=employee")).status).toBe(400);
+    expect((await authorize("surface=admin&tenantSlug=bomet-county")).status).toBe(400);
+    expect((await authorize("tenantSlug=bomet-county&method=password")).status).toBe(400);
+    expect((await authorize("surface=employee&tenantSlug=missing-county")).status).toBe(404);
+    expect((await authorize("surface=employee&tenantSlug=bomet-county&method=google")).status).toBe(400);
+    expect((await authorize("surface=citizen&tenantSlug=bomet-county&method=google")).status).toBe(400);
+    for (const returnTo of [
+      "/bomet-county/digit-ui/citizen/",
+      "/other-county/digit-ui/employee/",
+      "/bomet-county/digit-ui/employee",
+      "/bomet-county/digit-ui/employee/../citizen/home",
+      "/bomet-county/digit-ui/employee/%2e%2e/citizen/home",
+      "//attacker.example/bomet-county/digit-ui/employee/",
+      "http://localhost:3000/bomet-county/digit-ui/employee/",
+    ]) {
+      expect((await authorize(
+        `surface=employee&tenantSlug=bomet-county&returnTo=${encodeURIComponent(returnTo)}`,
+      )).status, returnTo).toBe(400);
+    }
+
+    const employee = await startSignIn(
+      "surface=employee&tenantSlug=bomet-county&ui_locales=sw_KE" +
+      `&returnTo=${encodeURIComponent("/bomet-county/digit-ui/employee/pgr/inbox?x=1")}`,
+    );
+    expect(employee.url.searchParams.get("client_id")).toBe("digit-ui-employee");
+    expect(employee.url.searchParams.get("scope")).toBe("openid profile email");
+    expect(employee.url.searchParams.get("digit_tenant")).toBe("bomet-county");
+    expect(employee.url.searchParams.get("prompt")).toBe("login");
+    expect(employee.url.searchParams.get("ui_locales")).toBe("sw_KE");
+    expect(employee.url.searchParams.has("kc_idp_hint")).toBe(false);
+    expect(employee.loginCookie).toMatch(/^digit_identity_session_employee_login=/);
+
+    const citizen = await startSignIn("surface=citizen&tenantSlug=Bomet-County");
+    expect(citizen.url.searchParams.get("client_id")).toBe("digit-ui-citizen");
+    expect(citizen.url.searchParams.get("scope")).toBe("openid profile phone");
+    expect(citizen.url.searchParams.get("digit_tenant")).toBe("bomet-county");
+    expect(citizen.loginCookie).toMatch(/^digit_identity_session_citizen_login=/);
+
+    // The configurator request is unchanged: no tenant, no prompt, org scope.
+    const configurator = await startSignIn("method=password");
+    expect(configurator.url.searchParams.get("client_id")).toBe("digit-identity-bff");
+    expect(configurator.url.searchParams.has("digit_tenant")).toBe(false);
+    expect(configurator.url.searchParams.has("prompt")).toBe(false);
+    expect(configurator.loginCookie).toMatch(/^digit_identity_session_login=/);
+
+    // A callback carrying another surface's login cookie is not bound. The
+    // failure returns to the attempt's own tenant route, not the configurator.
+    const crossed = await fetch(
+      `${app()}/identity/v1/callback?code=valid-code:${encodeURIComponent(employee.nonce)}&state=${encodeURIComponent(employee.state)}`,
+      { redirect: "manual", headers: { Cookie: `digit_identity_session_login=${employee.state}` } },
+    );
+    expect(crossed.status).toBe(303);
+    const crossedTo = new URL(crossed.headers.get("location")!, "http://x");
+    expect(crossedTo.pathname.startsWith("/bomet-county/digit-ui/employee/")).toBe(true);
+    expect(crossedTo.searchParams.get("authResult")).toBeTruthy();
+    expect(cookieFrom(crossed, "digit_identity_session_employee")).toBeUndefined();
+  });
+
+  it("signs an employee in to the bound tenant only", async () => {
+    const cookie = await signIn("employee", "", "/bomet-county/digit-ui/employee/pgr/inbox?x=1");
+    // Another surface cannot read the session, even with the same id.
+    const sessionId = cookie.split("=")[1];
+    expect((await fetch(`${app()}/identity/v1/session`, {
+      headers: { Cookie: `digit_identity_session=${sessionId}` },
+    })).status).toBe(401);
+    expect((await fetch(`${app()}/identity/v1/session?surface=citizen`, {
+      headers: { Cookie: `digit_identity_session_citizen=${sessionId}` },
+    })).status).toBe(401);
+
+    // The mock access token expires at once: this read refreshes through the
+    // employee client and must keep the binding.
+    const session = await fetch(`${app()}/identity/v1/session?surface=employee`, {
+      headers: { Cookie: cookie },
+    });
+    expect(session.status).toBe(200);
+    expect(await session.json()).toMatchObject({
+      authenticated: true,
+      user: { id: "identity-user-1" },
+      context: null,
+      surface: "employee",
+      tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", name: "Bomet County" },
+    });
+
+    const select = (tenantId: string, extra: Record<string, unknown> = { surface: "employee" }) =>
+      fetch(`${app()}/identity/v1/contexts/_select`, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, ...extra }),
+      });
+    // identity-user-1 is a GRO member of Nakuru too, but this session is Bomet's.
+    expect((await select("ke.nakuru")).status).toBe(403);
+    expect((await select("ke.bomet", {})).status).toBe(401);
+    expect((await select("ke.bomet", { surface: "citizen" })).status).toBe(400);
+    const selected = await select("ke.bomet");
+    expect(selected.status).toBe(200);
+    const body = await selected.json();
+    expect(body.UserRequest).toMatchObject({ type: "EMPLOYEE", tenantId: "ke.bomet" });
+    expect(body.UserRequest.userName).toMatch(/^kcbff-/);
+
+    const logout = await fetch(`${app()}/identity/v1/logout`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee" }),
+    });
+    expect(logout.status).toBe(204);
+    expect(logout.headers.get("set-cookie")).toMatch(/^digit_identity_session_employee=;.*Max-Age=0/);
+    expect((await fetch(`${app()}/identity/v1/session?surface=employee`, {
+      headers: { Cookie: cookie },
+    })).status).toBe(401);
+  });
+
+  it("creates a CitizenRegistration and a DIGIT CITIZEN token for the bound tenant", async () => {
+    const accountsBefore = digit.accounts.size;
+    const cookie = await signIn("citizen");
+    const session = await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+    expect(await session.json()).toMatchObject({
+      user: { id: "citizen-user-1", phoneNumber: "+254712345678", phoneNumberVerified: true },
+      surface: "citizen",
+      tenant: { tenantId: "ke.bomet" },
+    });
+
+    expect((await citizenSelect(cookie, {}, "https://attacker.example")).status).toBe(403);
+    expect((await citizenSelect(cookie, { surface: "employee" })).status).toBe(400);
+    const employeeCookie = await signIn("employee");
+    expect((await citizenSelect(employeeCookie.replace("_employee=", "_citizen="))).status).toBe(401);
+
+    const otpsBefore = digit.stats.otpCreates;
+    // The OTP identity is the verified session phone, like egov-user's
+    // validateOtp (mobileNumber at the account tenant), even when search
+    // responses mask the stored number.
+    digit.setMaskSearchMobileNumbers(true);
+    const selected = await citizenSelect(cookie, { tenantId: "ke.kisumu" }).finally(() =>
+      digit.setMaskSearchMobileNumbers(false));
+    expect(selected.status).toBe(200);
+    // Bomet's Organization maps `ke.bomet`, but egov-user keeps citizens at
+    // the state root `ke`: the account, OTP and token all live there.
+    expect(digit.otps.has("712345678|ke")).toBe(true);
+    expect([...digit.otps.keys()].some((key) => key.startsWith("kcbffc-"))).toBe(false);
+    const body = await selected.json();
+    expect(Object.keys(body).sort())
+      .toEqual(["UserRequest", "access_token", "expires_in", "scope", "tenant", "token_type"]);
+    expect(body).toMatchObject({
+      token_type: "bearer",
+      scope: "read",
+      UserRequest: {
+        type: "CITIZEN", tenantId: "ke", name: "Wanjiku Citizen",
+        mobileNumber: "712345678", countryCode: "+254",
+      },
+      tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet" },
+    });
+    expect(body.UserRequest.userName).toMatch(/^kcbffc-[0-9a-f]{40}$/);
+    expect(JSON.stringify(body)).not.toContain("must-not-leak");
+    const account = digit.accounts.get(body.UserRequest.uuid)!;
+    expect(account.tenantId).toBe("ke");
+    expect(account.roles).toEqual([{ code: "CITIZEN", name: "CITIZEN", tenantId: "ke" }]);
+    expect(account.identificationMark).toMatch(/^keycloak-bff:citizen:v1:/);
+    expect(digit.accounts.size).toBe(accountsBefore + 1);
+    expect(digit.tokens.get(body.access_token)?.uuid).toBe(account.uuid);
+    expect(digit.stats.otpCreates).toBe(otpsBefore + 1);
+    expect(digit.stats.internalLogins).toBe(0);
+
+    const user = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/citizen-user-1`,
+    )).json();
+    expect(user.attributes["digit.citizenRegistrations"]).toEqual([
+      `v1|ke.bomet|ke.bomet|ACTIVE|${account.uuid}`,
+    ]);
+    // A citizen is never an Organization member and never enters the
+    // employee-account inventory that reconciliation deactivates from.
+    expect(user.attributes["digit.managedTenants"]).toBeUndefined();
+    expect((await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/organizations/org-bomet-id/members/citizen-user-1`,
+    )).status).toBe(404);
+    expect(Object.keys(await getRedis().hgetall(managedAccountsKey()))
+      .some((field) => field.startsWith("citizen-user-1|"))).toBe(false);
+
+    // Renewal reuses the live token without minting another OTP.
+    const renewed = await citizenSelect(cookie);
+    expect((await renewed.json()).access_token).toBe(body.access_token);
+    expect(digit.stats.otpCreates).toBe(otpsBefore + 1);
+
+    // Logout revokes the DIGIT token this session was the last holder of.
+    const logout = await fetch(`${app()}/identity/v1/logout`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "citizen" }),
+    });
+    expect(logout.status).toBe(204);
+    expect(digit.tokens.has(body.access_token)).toBe(false);
+
+    // Signing in again resolves the same registration and account.
+    const again = await citizenSelect(await signIn("citizen"));
+    expect(again.status).toBe(200);
+    expect((await again.json()).UserRequest.uuid).toBe(account.uuid);
+    expect(digit.accounts.size).toBe(accountsBefore + 1);
+  });
+
+  it("refuses citizens without a verified, tenant-valid phone or with a disabled registration", async () => {
+    expect((await citizenSelect(await signIn("citizen", "unverified"))).status).toBe(403);
+    expect((await citizenSelect(await signIn("citizen", "foreign"))).status).toBe(403);
+
+    const other = await signIn("citizen", "other");
+    expect((await citizenSelect(other)).status).toBe(200);
+    const user = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/citizen-user-2`,
+    )).json();
+    const [value] = user.attributes["digit.citizenRegistrations"] as string[];
+    await kcUpdate("/users/citizen-user-2", {
+      attributes: { ...user.attributes, "digit.citizenRegistrations": [value.replace("|ACTIVE|", "|DISABLED|")] },
+    });
+    // Drop the cached token so the request reaches the registration check.
+    await fetch(`${app()}/identity/v1/logout`, {
+      method: "POST",
+      headers: { Cookie: other, "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "citizen" }),
+    });
+    expect((await citizenSelect(await signIn("citizen", "other"))).status).toBe(403);
+  });
+
+  it("writes citizen registrations without replaying the stale user representation", async () => {
+    const created = await kcAdmin("/users", {
+      id: "citizen-put-1", username: "+254700000001", email: "c1@example.test",
+      firstName: "Achieng", enabled: true,
+      attributes: { phoneNumber: ["+254700000001"], "digit.managedTenants": ["ke.bomet"] },
+    });
+    expect(created.status).toBe(201);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      await updateCitizenRegistrationValues("citizen-put-1", (values) => [...values, "v1|ke|ke|ACTIVE|u-1"]);
+      const put = fetchSpy.mock.calls.find(([, init]) => init?.method === "PUT");
+      const body = JSON.parse(String(put?.[1]?.body));
+      // No `enabled` (or other stale top-level state): a concurrent admin
+      // disable must survive. Profile fields ride along because Keycloak 26
+      // clears them when a PUT carries `attributes` without them.
+      expect(Object.keys(body).sort()).toEqual(["attributes", "email", "firstName"]);
+      expect(body.attributes).toEqual({
+        phoneNumber: ["+254700000001"],
+        "digit.managedTenants": ["ke.bomet"],
+        "digit.citizenRegistrations": ["v1|ke|ke|ACTIVE|u-1"],
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("reuses one root CITIZEN account across the root, subtenant and sibling-city routes", async () => {
+    // Kisumu is another Organization under the same `ke` root.
+    digit.mdms.set(digit.mdmsKey("ke.kisumu", "common-masters.MobileNumberValidation"), [{
+      tenantId: "ke.kisumu", schemaCode: "common-masters.MobileNumberValidation", uniqueIdentifier: "mnv",
+      data: { countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$", default: true }, isActive: true,
+    }]);
+    const accountsBefore = digit.accounts.size;
+    const select = async (slug: string) => {
+      const cookie = await signIn("citizen", "", `/${slug}/digit-ui/citizen/`, slug);
+      const response = await citizenSelect(cookie);
+      expect(response.status, slug).toBe(200);
+      return { cookie, body: await response.json() };
+    };
+    const root = await select("bomet-county");
+    const subtenant = await select("bomet-ulb-one");
+    const sibling = await select("kisumu");
+
+    expect(root.body.tenant).toEqual({ urlSlug: "bomet-county", tenantId: "ke.bomet" });
+    expect(subtenant.body.tenant).toEqual({ urlSlug: "bomet-ulb-one", tenantId: "ke.bomet.ulb1" });
+    expect(sibling.body.tenant).toEqual({ urlSlug: "kisumu", tenantId: "ke.kisumu" });
+    for (const { body } of [root, subtenant, sibling]) {
+      expect(body.UserRequest).toMatchObject({ type: "CITIZEN", tenantId: "ke" });
+      expect(body.UserRequest.uuid).toBe(root.body.UserRequest.uuid);
+      expect(body.UserRequest.userName).toBe(root.body.UserRequest.userName);
+    }
+    // One DIGIT account per (subject, root); no orphan rows at city tenants.
+    expect(digit.accounts.size).toBe(accountsBefore);
+    expect([...digit.accounts.values()].filter((account) =>
+      account.type === "CITIZEN" && account.tenantId !== "ke")).toEqual([]);
+
+    const uuid = root.body.UserRequest.uuid;
+    const user = await (await fetch(
+      `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/citizen-user-1`,
+    )).json();
+    // Registrations stay keyed on the route tenant, all pointing at the root account.
+    expect(user.attributes["digit.citizenRegistrations"]).toEqual([
+      `v1|ke.bomet|ke.bomet.ulb1|ACTIVE|${uuid}`,
+      `v1|ke.bomet|ke.bomet|ACTIVE|${uuid}`,
+      `v1|ke.kisumu|ke.kisumu|ACTIVE|${uuid}`,
+    ]);
+
+    // Logging out of one city keeps the shared token alive for the others.
+    const logout = await fetch(`${app()}/identity/v1/logout`, {
+      method: "POST",
+      headers: { Cookie: subtenant.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "citizen" }),
+    });
+    expect(logout.status).toBe(204);
+    expect(digit.tokens.has(root.body.access_token)).toBe(true);
+    expect((await citizenSelect(sibling.cookie)).status).toBe(200);
+  });
+
+  it("refuses a citizen token issued for a tenant other than the bound root", async () => {
+    const original = citizenTokenMinter();
+    const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet.ulb1");
+    expect(identity.tenantId).toBe("ke");
+    const tokenCache = `${config.cachePrefix}:digit-user-token:${identity.key}`;
+    for (const tenantId of ["ke.bomet", "zz", "ke.kisumu"]) {
+      await getRedis().del(tokenCache);
+      setCitizenTokenMinter({
+        async mint(account) {
+          return {
+            accessToken: `forged-${tenantId}`,
+            expiresAt: Date.now() + 600_000,
+            user: { uuid: account.uuid, type: "CITIZEN", tenantId },
+          };
+        },
+      });
+      try {
+        const response = await citizenSelect(await signIn("citizen"));
+        expect(response.status, tenantId).toBe(502);
+        expect(JSON.stringify(await response.json())).not.toContain("forged-");
+      } finally {
+        setCitizenTokenMinter(original);
+      }
+    }
+    await getRedis().del(tokenCache);
+  });
+
+  it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
+    const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
+    for (const [key, account] of digit.accounts) {
+      if (account.userName === identity.username) digit.accounts.delete(key);
+    }
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    const creates = digit.stats.creates;
+    const rolesKey = digit.mdmsKey("ke", "ACCESSCONTROL-ROLES.roles");
+    const roles = JSON.stringify(digit.mdms.get(rolesKey) ?? null);
+    digit.setUndefinedRoles(["CITIZEN"]);
+    try {
+      const response = await citizenSelect(await signIn("citizen"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "This tenant is not ready for sign-in yet",
+        code: "TENANT_ROLES_MISSING",
+      });
+      expect(digit.stats.creates).toBe(creates);
+      expect(JSON.stringify(digit.mdms.get(rolesKey) ?? null)).toBe(roles);
+    } finally {
+      digit.setUndefinedRoles([]);
+    }
+  });
+
+  it("keeps serving every other tenant when two mappings collide on a slug", async () => {
+    await kcAdmin("/organizations", {
+      id: "org-dupe-a", alias: "dupe-slug", name: "Dupe A", enabled: true,
+      attributes: { "digit.rootTenantId": ["ke.nyeri"] },
+    });
+    await kcAdmin("/organizations", {
+      id: "org-dupe-b", alias: "dupe-b", name: "Dupe B", enabled: true,
+      attributes: { "digit.rootTenantId": ["ke.nakuru"], "digit.urlSlug": ["dupe-slug"] },
+    });
+    clearTenantMappingCache();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county`)).status).toBe(200);
+      expect((await fetch(`${app()}/identity/v1/tenant-contexts/dupe-slug`)).status).toBe(404);
+      expect(warn.mock.calls.some(([line]) => String(line).includes("colliding mapping"))).toBe(true);
+    } finally {
+      warn.mockRestore();
+      await kcUpdate("/organizations/org-dupe-a", { enabled: false });
+      await kcUpdate("/organizations/org-dupe-b", { enabled: false });
+      clearTenantMappingCache();
+    }
+  });
+
+  it("stops employee sign-in as soon as the Organization is unmapped or disabled, cache or not", async () => {
+    const cookie = await signIn("employee");
+    const select = () => fetch(`${app()}/identity/v1/contexts/_select`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", tenantId: "ke.bomet" }),
+    });
+    expect((await select()).status).toBe(200);
+    const mapped = { "digit.rootTenantId": ["ke.bomet"], "digit.urlSlug": ["bomet-county"] };
+    // No cache clear in either case: the directory still holds the mapping.
+    await kcUpdate("/organizations/org-bomet-id", { attributes: { "digit.urlSlug": ["bomet-county"] } });
+    try {
+      expect((await select()).status).toBe(403);
+    } finally {
+      await kcUpdate("/organizations/org-bomet-id", { attributes: mapped });
+    }
+    expect((await select()).status).toBe(200);
+    await kcUpdate("/organizations/org-bomet-id", { enabled: false });
+    try {
+      expect((await select()).status).toBe(403);
+    } finally {
+      await kcUpdate("/organizations/org-bomet-id", { enabled: true });
+      clearTenantMappingCache();
+    }
+  });
+
+  it("lets a citizen who verified a new number keep signing in", async () => {
+    expect((await citizenSelect(await signIn("citizen"))).status).toBe(200);
+    const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    const moved = await citizenSelect(await signIn("citizen", "newphone"));
+    expect(moved.status).toBe(200);
+    const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
+    expect(account.mobileNumber).toBe("712345679");
+  });
+
+  describe("citizen phone OTP sign-in (#2189)", () => {
+    const sent: OtpMessage[] = [];
+    let failDelivery = false;
+    const originalSender = otpSender();
+    const otpConfig = {
+      identityCitizenOtpSecret: "test-otp-secret",
+      identityCitizenOtpTtlSeconds: 300,
+      identityCitizenOtpMaxAttempts: 5,
+      identityCitizenOtpResendSeconds: 0,
+      identityCitizenOtpSendWindowSeconds: 3600,
+      identityCitizenOtpPhoneSendLimit: 50,
+      identityCitizenOtpIpSendLimit: 500,
+    };
+    const saved = Object.fromEntries(Object.keys(otpConfig).map((key) => [key, (config as any)[key]]));
+    let ipCounter = 0;
+    const post = (path: string, body: unknown, ip = `198.51.100.${++ipCounter % 250}`) =>
+      fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST",
+        headers: { Origin: "http://localhost:3000", "Content-Type": "application/json", "X-Forwarded-For": ip },
+        body: JSON.stringify(body),
+      });
+    const send = (mobileNumber: string, ip?: string) =>
+      post("_send", { tenantSlug: "bomet-county", mobileNumber }, ip);
+    const verify = (challengeId: string, code: string, tenantSlug = "bomet-county") =>
+      post("_verify", { tenantSlug, challengeId, code });
+    const lastCode = () => sent[sent.length - 1].code;
+    const wrong = (code: string) => String((Number(code) + 1) % 1_000_000).padStart(6, "0");
+
+    beforeAll(async () => {
+      Object.assign(config as any, otpConfig);
+      setOtpSender({
+        configured: true,
+        async send(message) {
+          if (failDelivery) throw new OtpDeliveryError("provider down");
+          sent.push(message);
+        },
+      });
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: {
+          "login_theme": "digit-citizen",
+          "digit.auth.surface": "citizen",
+          "digit.auth.signin.methods": "phone_otp,password",
+        },
+      });
+      resetIdentityMethodCatalog();
+    });
+
+    afterAll(async () => {
+      Object.assign(config as any, saved);
+      setOtpSender(originalSender);
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: {
+          "login_theme": "digit-citizen",
+          "digit.auth.surface": "citizen",
+          "digit.auth.signin.methods": "password",
+        },
+      });
+      resetIdentityMethodCatalog();
+    });
+
+    it("offers phone_otp to citizens only when a code can be hashed and delivered", async () => {
+      const methods = async (surface: string) => (await (await fetch(
+        `${app()}/identity/v1/auth-methods?intent=signin&surface=${surface}`,
+      )).json()).methods.map((method: { id: string }) => method.id);
+      expect(await methods("citizen")).toEqual(["phone_otp", "password"]);
+
+      (config as any).identityCitizenOtpSecret = "";
+      resetIdentityMethodCatalog();
+      expect(await methods("citizen")).toEqual(["password"]);
+      const disabled = await send("799000100");
+      expect(disabled.status).toBe(400);
+      expect((await disabled.json()).code).toBe("PHONE_OTP_DISABLED");
+      (config as any).identityCitizenOtpSecret = otpConfig.identityCitizenOtpSecret;
+      resetIdentityMethodCatalog();
+
+      // Keycloak's /authorize cannot run phone OTP, and is not its default.
+      const explicit = await fetch(
+        `${app()}/identity/v1/authorize?surface=citizen&tenantSlug=bomet-county&method=phone_otp`,
+        { redirect: "manual" },
+      );
+      expect(explicit.status).toBe(400);
+      const implicit = await fetch(
+        `${app()}/identity/v1/authorize?surface=citizen&tenantSlug=bomet-county`,
+        { redirect: "manual" },
+      );
+      expect(implicit.status).toBe(302);
+    });
+
+    it("checks the tenant route and the tenant's mobile rule before sending", async () => {
+      const count = sent.length;
+      const unknown = await post("_send", { tenantSlug: "no-such-county", mobileNumber: "799000101" });
+      expect([unknown.status, (await unknown.json()).code]).toEqual([404, "TENANT_ROUTE_NOT_FOUND"]);
+      const noSlug = await post("_send", { mobileNumber: "799000101" });
+      expect([noSlug.status, (await noSlug.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      const malformed = await post("_verify", { tenantSlug: "bomet-county", challengeId: "x", code: "12" });
+      expect([malformed.status, (await malformed.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      const invalid = await send("12345");
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).code).toBe("INVALID_MOBILE_NUMBER");
+      const foreignOrigin = await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+        method: "POST",
+        headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber: "799000101" }),
+      });
+      expect([foreignOrigin.status, (await foreignOrigin.json()).code]).toEqual([403, "UNTRUSTED_ORIGIN"]);
+      expect(sent.length).toBe(count);
+    });
+
+    it("signs in the verified phone owner with a token-free session that _select accepts", async () => {
+      const response = await send("712345678");
+      expect(response.status).toBe(202);
+      const { challengeId, expiresIn } = await response.json();
+      expect(expiresIn).toBe(300);
+      const message = sent[sent.length - 1];
+      expect(message).toMatchObject({ challengeId, tenantId: "ke.bomet", phoneNumber: "+254712345678" });
+      expect(message.code).toMatch(/^\d{6}$/);
+
+      // The code is stored only as a keyed hash; keys never carry the phone.
+      const stored = await getRedis().hgetall(`${config.cachePrefix}:identity:citizen-otp:challenge:${challengeId}`);
+      expect(stored.hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(Object.values(stored)).not.toContain(message.code);
+      for (const key of await getRedis().keys(`${config.cachePrefix}:identity:citizen-otp:*`)) {
+        expect(key).not.toContain("254712345678");
+      }
+
+      // Bound to its tenant route: another route can neither use nor burn it.
+      expect((await verify(challengeId, message.code, "no-such-county")).status).toBe(404);
+      const kisumu = { "digit.rootTenantId": ["ke.kisumu"] };
+      await kcUpdate("/organizations/org-kisumu-id", { attributes: { ...kisumu, "digit.urlSlug": ["kisumu-county"] } });
+      clearTenantMappingCache();
+      try {
+        const elsewhere = await verify(challengeId, message.code, "kisumu-county");
+        expect(elsewhere.status).toBe(400);
+        expect((await elsewhere.json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        await kcUpdate("/organizations/org-kisumu-id", { attributes: kisumu });
+        clearTenantMappingCache();
+      }
+      const bad = await verify(challengeId, wrong(message.code));
+      expect(bad.status).toBe(400);
+      expect(await bad.json()).toMatchObject({ code: "OTP_INVALID", attemptsRemaining: 4 });
+
+      const ok = await verify(challengeId, message.code);
+      expect(ok.status).toBe(200);
+      expect(await ok.json()).toEqual({
+        authenticated: true, tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet" },
+      });
+      const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+      expect(cookie).toBeTruthy();
+      expect((await (await verify(challengeId, message.code)).json()).code).toBe("OTP_EXPIRED");
+
+      const session = await (await fetch(`${app()}/identity/v1/session?surface=citizen`, {
+        headers: { Cookie: cookie },
+      })).json();
+      // citizen-user-1 already owns +254712345678, verified: reused, not duplicated.
+      expect(session.user).toMatchObject({ id: "citizen-user-1", phoneNumber: "+254712345678", phoneNumberVerified: true });
+
+      const selected = await citizenSelect(cookie);
+      expect(selected.status).toBe(200);
+      expect((await selected.json()).tenant).toEqual({ urlSlug: "bomet-county", tenantId: "ke.bomet" });
+
+      const logout = await fetch(`${app()}/identity/v1/logout`, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ surface: "citizen" }),
+      });
+      expect(logout.status).toBe(204);
+      expect((await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).status)
+        .toBe(401);
+    });
+
+    it("creates one Keycloak user for a new number and never takes over an unverified one", async () => {
+      await kcAdmin("/users", {
+        id: "unverified-squatter", username: "squatter", enabled: true,
+        attributes: { phoneNumber: ["+254799000222"], phoneNumberVerified: ["false"] },
+      });
+      const signInWith = async (mobileNumber: string) => {
+        const { challengeId } = await (await send(mobileNumber)).json();
+        const ok = await verify(challengeId, lastCode());
+        expect(ok.status).toBe(200);
+        const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+        return (await (await fetch(`${app()}/identity/v1/session?surface=citizen`, {
+          headers: { Cookie: cookie },
+        })).json()).user.id as string;
+      };
+      const first = await signInWith("799000222");
+      expect(first).not.toBe("unverified-squatter");
+      expect(await signInWith("799000222")).toBe(first);
+      const users = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?q=phoneNumber:%2B254799000222`,
+        { headers: { Authorization: "Bearer mock-kc-admin-token" } },
+      )).json() as Array<{ id: string; attributes: Record<string, string[]> }>;
+      expect(users.map((user) => user.id).sort()).toEqual([first, "unverified-squatter"].sort());
+      expect(users.find((user) => user.id === first)!.attributes).toMatchObject({
+        phoneNumber: ["+254799000222"], phoneNumberVerified: ["true"],
+      });
+    });
+
+    it("limits resends per phone and per IP", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60 });
+      try {
+        expect((await send("799000301")).status).toBe(202);
+        const tooSoon = await send("799000301");
+        expect(tooSoon.status).toBe(429);
+        expect(await tooSoon.json()).toMatchObject({ code: "OTP_RESEND_TOO_SOON" });
+        expect(Number(tooSoon.headers.get("retry-after"))).toBeGreaterThan(0);
+      } finally {
+        (config as any).identityCitizenOtpResendSeconds = 0;
+      }
+
+      (config as any).identityCitizenOtpPhoneSendLimit = 2;
+      try {
+        expect((await send("799000302")).status).toBe(202);
+        expect((await send("799000302")).status).toBe(202);
+        expect(await (await send("799000302")).json()).toMatchObject({ code: "OTP_RATE_LIMITED" });
+      } finally {
+        (config as any).identityCitizenOtpPhoneSendLimit = otpConfig.identityCitizenOtpPhoneSendLimit;
+      }
+
+      (config as any).identityCitizenOtpIpSendLimit = 2;
+      try {
+        expect((await send("799000303", "203.0.113.90")).status).toBe(202);
+        expect((await send("799000304", "203.0.113.90")).status).toBe(202);
+        const limited = await send("799000305", "203.0.113.90");
+        expect(limited.status).toBe(429);
+        expect(await limited.json()).toMatchObject({ code: "OTP_RATE_LIMITED" });
+      } finally {
+        (config as any).identityCitizenOtpIpSendLimit = otpConfig.identityCitizenOtpIpSendLimit;
+      }
+    });
+
+    it("expires a challenge after too many wrong codes, but never locks the number's owner out", async () => {
+      (config as any).identityCitizenOtpMaxAttempts = 2;
+      try {
+        const { challengeId } = await (await send("799000401")).json();
+        const code = lastCode();
+        expect(await (await verify(challengeId, wrong(code))).json()).toMatchObject({ attemptsRemaining: 1 });
+        expect(await (await verify(challengeId, wrong(code))).json()).toMatchObject({ code: "OTP_EXPIRED", attemptsRemaining: 0 });
+        expect((await (await verify(challengeId, code)).json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        (config as any).identityCitizenOtpMaxAttempts = otpConfig.identityCitizenOtpMaxAttempts;
+      }
+      // Someone else burns many wrong guesses on the owner's number...
+      for (let round = 0; round < 3; round += 1) {
+        const { challengeId } = await (await send("799000402")).json();
+        for (let guess = 0; guess < 5; guess += 1) await verify(challengeId, wrong(lastCode()));
+      }
+      // ...and the owner still gets and uses a fresh code.
+      const { challengeId } = await (await send("799000402")).json();
+      expect((await verify(challengeId, lastCode())).status).toBe(200);
+    });
+
+    it("answers OTP_CHANNEL_UNAVAILABLE when a code cannot be sent", async () => {
+      failDelivery = true;
+      try {
+        const response = await send("799000501");
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ code: "OTP_CHANNEL_UNAVAILABLE" });
+      } finally {
+        failDelivery = false;
+      }
+      const fake = otpSender();
+      setOtpSender(new LogOtpSender());
+      resetIdentityMethodCatalog();
+      try {
+        // No channel and no fixed code: phone_otp is not offered at all.
+        const methods = await (await fetch(`${app()}/identity/v1/auth-methods?intent=signin&surface=citizen`)).json();
+        expect(methods.methods.map((method: { id: string }) => method.id)).not.toContain("phone_otp");
+        const response = await send("799000502");
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({ code: "PHONE_OTP_DISABLED" });
+      } finally {
+        setOtpSender(fake);
+        resetIdentityMethodCatalog();
+      }
+    });
+
+    it("gives a failed send's cooldown and quota back", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60, identityCitizenOtpPhoneSendLimit: 1 });
+      try {
+        failDelivery = true;
+        expect((await send("799000503")).status).toBe(503);
+        failDelivery = false;
+        // Neither the 60 s cooldown nor the one-per-window send was spent.
+        expect((await send("799000503")).status).toBe(202);
+      } finally {
+        failDelivery = false;
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0, identityCitizenOtpPhoneSendLimit: otpConfig.identityCitizenOtpPhoneSendLimit,
+        });
+      }
+    });
+
+    it("keeps a correct code usable when Keycloak fails while signing in", async () => {
+      const { challengeId } = await (await send("799000504")).json();
+      const code = lastCode();
+      await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "GET", path: "/users", status: 503, count: 1 }),
+      });
+      const failed = await verify(challengeId, code);
+      expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+      expect((await verify(challengeId, code)).status).toBe(200);
+      expect((await (await verify(challengeId, code)).json()).code).toBe("OTP_EXPIRED");
+    });
+
+    it("finds the verified owner past any number of unverified holders", async () => {
+      for (let index = 0; index < 7; index += 1) {
+        await kcAdmin("/users", {
+          id: `unverified-holder-${index}`, username: `holder-${index}`, enabled: true,
+          attributes: { phoneNumber: ["+254799000505"], phoneNumberVerified: ["false"] },
+        });
+      }
+      await kcAdmin("/users", {
+        id: "verified-owner-505", username: "owner-505", enabled: true,
+        attributes: { phoneNumber: ["+254799000505"], phoneNumberVerified: ["true"] },
+      });
+      const { challengeId } = await (await send("799000505")).json();
+      const ok = await verify(challengeId, lastCode());
+      const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+      const session = await (await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).json();
+      expect(session.user.id).toBe("verified-owner-505");
+    });
+
+    it("refuses to create a user whose phone Keycloak did not store, and leaves none behind", async () => {
+      const drop = (value: boolean) => fetch(`${config.keycloakAdminUrl}/__test/drop-unmanaged-attributes`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ drop: value }),
+      });
+      await drop(true);
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const { challengeId } = await (await send("799000506")).json();
+        const failed = await verify(challengeId, lastCode());
+        expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        expect(error.mock.calls.some(([line]) => String(line).includes("unmanagedAttributePolicy"))).toBe(true);
+      } finally {
+        error.mockRestore();
+        await drop(false);
+      }
+      // Nothing half-made blocks the number: once the realm keeps attributes, it signs in.
+      const { challengeId } = await (await send("799000506")).json();
+      expect((await verify(challengeId, lastCode())).status).toBe(200);
+    });
+
+    it("ends a phone OTP session once its Keycloak user is disabled", async () => {
+      const { challengeId } = await (await send("799000507")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const session = () => fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+      const { user } = await (await session()).json();
+      await kcUpdate(`/users/${user.id}`, { enabled: false });
+      // Pretend the last identity check was over a minute ago.
+      const key = `${config.cachePrefix}:identity:session:${cookie.split("=")[1]}`;
+      const stored = JSON.parse((await getRedis().get(key))!);
+      await getRedis().set(key, JSON.stringify({ ...stored, identityCheckedAt: 0 }), "KEEPTTL");
+      expect((await session()).status).toBe(401);
+    });
+
+    it("ignores a fixed code that is not six digits", async () => {
+      const fake = otpSender();
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      Object.assign(config as any, { citizenLoginPasswordOtpFixedEnabled: true, citizenLoginPasswordOtpFixedValue: "1234" });
+      setOtpSender(new LogOtpSender());
+      resetIdentityMethodCatalog();
+      try {
+        warnAboutInsecureOtpModes();
+        expect(errorLog.mock.calls.some(([line]) => String(line).includes("IGNORED"))).toBe(true);
+        expect((await (await send("799000508")).json()).code).toBe("PHONE_OTP_DISABLED");
+      } finally {
+        Object.assign(config as any, { citizenLoginPasswordOtpFixedEnabled: false, citizenLoginPasswordOtpFixedValue: "123456" });
+        setOtpSender(fake);
+        resetIdentityMethodCatalog();
+        errorLog.mockRestore();
+      }
+    });
+
+    it("accepts the legacy fixed code only when it is enabled", async () => {
+      const disabled = await (await send("799000601")).json();
+      const refused = await verify(disabled.challengeId, "123456" === lastCode() ? "654321" : "123456");
+      expect((await refused.json()).code).toBe("OTP_INVALID");
+
+      const fake = otpSender();
+      Object.assign(config as any, {
+        citizenLoginPasswordOtpFixedEnabled: true, citizenLoginPasswordOtpFixedValue: "123456",
+      });
+      setOtpSender(new LogOtpSender());
+      try {
+        // No channel: the challenge still issues, and the fixed code proves it once.
+        const { challengeId } = await (await send("799000602")).json();
+        const ok = await verify(challengeId, "123456");
+        expect(ok.status).toBe(200);
+        expect((await (await verify(challengeId, "123456")).json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        (config as any).citizenLoginPasswordOtpFixedEnabled = false;
+        setOtpSender(fake);
+      }
+    });
+
+    it("writes codes to the log only when the log sender is chosen, and warns at startup", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const sender = new LogOtpSender();
+        expect(sender.configured).toBe(false);
+        await expect(sender.send({
+          challengeId: "c1", tenantId: "ke.bomet", phoneNumber: "+254712345678", code: "246810", expiresInSeconds: 300,
+        })).rejects.toBeInstanceOf(OtpDeliveryError);
+        (config as any).identityCitizenOtpSender = "log";
+        (config as any).citizenLoginPasswordOtpFixedEnabled = true;
+        expect(sender.configured).toBe(true);
+        await sender.send({
+          challengeId: "c1", tenantId: "ke.bomet", phoneNumber: "+254712345678", code: "246810", expiresInSeconds: 300,
+        });
+        expect(warn.mock.calls.some(([line]) => String(line).includes("246810"))).toBe(true);
+        warn.mockClear();
+        warnAboutInsecureOtpModes();
+        const warnings = warn.mock.calls.map(([line]) => String(line)).join("\n");
+        expect(warnings).toContain("IDENTITY_CITIZEN_OTP_SENDER=log");
+        expect(warnings).toContain("CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED");
+      } finally {
+        (config as any).identityCitizenOtpSender = "";
+        (config as any).citizenLoginPasswordOtpFixedEnabled = false;
+        warn.mockRestore();
+      }
+    });
+
+    it("audits every send, verify and session without raw phone numbers", async () => {
+      const entries = await getRedis().xrange(auditStreamKey(), "-", "+");
+      const records = entries.map(([, fields]) => {
+        const record: Record<string, string> = {};
+        for (let index = 0; index < fields.length; index += 2) record[fields[index]] = fields[index + 1];
+        return record;
+      });
+      const kinds = new Set(records.map((record) => `${record.event}:${record.outcome}`));
+      for (const kind of ["OTP_SEND:SUCCESS", "OTP_SEND:REFUSED", "OTP_SEND:FAILED",
+        "OTP_VERIFY:SUCCESS", "OTP_VERIFY:REFUSED", "SESSION_CREATE:SUCCESS"]) {
+        expect(kinds.has(kind), kind).toBe(true);
+      }
+      const session = records.find((record) => record.event === "SESSION_CREATE")!;
+      expect(session.subject).toBeTruthy();
+      expect(session.sessionRef).toMatch(/^[0-9a-f]{32}$/);
+      expect(JSON.stringify(records)).not.toMatch(/2547\d{8}|7990\d{5}|198\.51\.100/);
+    });
+  });
+
+  describe("existing tenants, employees and citizens (#2167)", () => {
+    const cp = (path: string, body?: unknown) =>
+      fetch(`${app()}/internal/identity/v1/${path}`, {
+        method: body === undefined ? "GET" : "POST",
+        headers: { Authorization: "Bearer test-control-plane", "Content-Type": "application/json" },
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      });
+    const employeeSelect = (cookie: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", tenantId: "ke.bomet" }),
+    });
+    const legacy = (input: { userName: string; tenantId: string; type: "EMPLOYEE" | "CITIZEN"; mobileNumber: string; roles: string[] }) =>
+      digit.addAccount({
+        userName: input.userName, name: "Legacy Person", mobileNumber: input.mobileNumber, emailId: null,
+        tenantId: input.tenantId, type: input.type, active: true, identificationMark: null,
+        roles: input.roles.map((code) => ({ code, tenantId: input.tenantId })), password: "Legacy@123",
+      });
+    const profileUrl = () => `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/profile`;
+    const setProfile = async (profile: unknown) => {
+      await fetch(profileUrl(), {
+        method: "PUT",
+        headers: { Authorization: "Bearer mock-kc-admin-token", "Content-Type": "application/json" },
+        body: JSON.stringify(profile),
+      });
+      resetPhoneTrustCache();
+    };
+    const auditRecords = async () => (await getRedis().xrange(auditStreamKey(), "-", "+")).map(([, fields]) => {
+      const record: Record<string, string> = {};
+      for (let index = 0; index < fields.length; index += 2) record[fields[index]] = fields[index + 1];
+      return record;
+    });
+    const originalSender = otpSender();
+    const sent: OtpMessage[] = [];
+
+    beforeAll(async () => {
+      await kcAdmin("/users", {
+        id: "identity-user-unlinked", username: "legacy.employee", email: "legacy.employee@example.com", enabled: true,
+      });
+      for (const [id, phone] of [
+        ["citizen-user-3", "+254799000881"], ["citizen-user-4", "+254799000882"], ["citizen-user-5", "+254799000883"],
+      ]) {
+        await kcAdmin("/users", {
+          id, username: phone, enabled: true,
+          attributes: { phoneNumber: [phone], phoneNumberVerified: ["true"] },
+        });
+      }
+      Object.assign(config as any, { identityCitizenOtpSecret: "test-otp-secret", identityCitizenOtpResendSeconds: 0 });
+      setOtpSender({ configured: true, async send(message) { sent.push(message); } });
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: {
+          "login_theme": "digit-citizen", "digit.auth.surface": "citizen",
+          "digit.auth.signin.methods": "phone_otp,password",
+        },
+      });
+      resetIdentityMethodCatalog();
+    });
+
+    afterAll(async () => {
+      Object.assign(config as any, { identityCitizenOtpSecret: "" });
+      setOtpSender(originalSender);
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: { "login_theme": "digit-citizen", "digit.auth.surface": "citizen", "digit.auth.signin.methods": "password" },
+      });
+      resetIdentityMethodCatalog();
+      await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+    });
+
+    it("links an existing employee only by admin action, keeping its uuid and roles, and re-checks it on every _select", async () => {
+      const account = legacy({ userName: "EMP-LEGACY-1", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000101", roles: ["EMPLOYEE", "GRO", "PGR_LME"] });
+      const cookie = await signIn("employee", "unlinked");
+      // A signed-in employee with no membership and no link: nothing matches by name.
+      const before = await employeeSelect(cookie);
+      expect(before.status).toBe(403);
+      expect((await before.json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
+
+      const linked = await cp("account-links/_link", {
+        actor: "qa-admin",
+        links: [{ email: "legacy.employee@example.com", tenantId: "ke.bomet", digitUserName: "EMP-LEGACY-1" }],
+      });
+      expect((await linked.json()).results).toEqual([expect.objectContaining({
+        status: "LINKED", subject: "identity-user-unlinked", digitUserUuid: account.uuid,
+      })]);
+
+      const passwordUpdates = digit.stats.passwordUpdates;
+      const selected = await employeeSelect(cookie);
+      expect(selected.status).toBe(200);
+      const token = await selected.json();
+      expect(token.UserRequest).toMatchObject({ uuid: account.uuid, userName: "EMP-LEGACY-1" });
+      // Same account, same roles; only the password moved to a BFF-held value.
+      expect(digit.accounts.get(account.uuid)!.roles.map((role) => role.code).sort()).toEqual(["EMPLOYEE", "GRO", "PGR_LME"]);
+      expect(digit.stats.passwordUpdates).toBe(passwordUpdates + 1);
+      expect(digit.accounts.get(account.uuid)!.identificationMark).toBeNull();
+
+      // Cached token or not, a deactivated account ends access at the next _select.
+      digit.accounts.get(account.uuid)!.active = false;
+      const inactive = await employeeSelect(cookie);
+      expect(inactive.status).toBe(403);
+      expect((await inactive.json()).code).toBe("DIGIT_ACCOUNT_INACTIVE");
+      expect(digit.tokens.has(token.access_token)).toBe(false);
+      digit.accounts.get(account.uuid)!.active = true;
+
+      const again = await cp("account-links/_link", {
+        links: [{ subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid }],
+      });
+      expect((await again.json()).results[0].status).toBe("ALREADY_LINKED");
+
+      const unlinked = await cp("account-links/_unlink", {
+        subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid, actor: "qa-admin",
+      });
+      expect(await unlinked.json()).toEqual({ removed: true });
+      expect((await (await employeeSelect(cookie)).json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
+      expect(digit.accounts.get(account.uuid)!.active).toBe(true);
+    });
+
+    it("refuses links that are unproven or already owned, item by item", async () => {
+      const owned = legacy({ userName: "EMP-LEGACY-2", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000102", roles: ["EMPLOYEE"] });
+      await kcAdmin("/users", { id: "second-admin-user", username: "second", email: "second@example.com", enabled: true });
+      const managed = [...digit.accounts.values()].find((account) => account.userName.startsWith("kcbff-"))!;
+      const response = await cp("account-links/_link", {
+        links: [
+          { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: owned.uuid },
+          { subject: "second-admin-user", tenantId: "ke.bomet", digitUserUuid: owned.uuid },
+          { subject: "second-admin-user", tenantId: managed.tenantId, digitUserUuid: managed.uuid },
+          { subject: "no-such-user", tenantId: "ke.bomet", digitUserUuid: owned.uuid },
+          { subject: "second-admin-user", tenantId: "ke.bomet", digitUserName: "NOBODY" },
+          { subject: "second-admin-user", tenantId: "zz", digitUserUuid: owned.uuid },
+        ],
+      });
+      expect((await response.json()).results.map((result: { status: string; code?: string }) => result.code || result.status))
+        .toEqual(["LINKED", "DIGIT_ACCOUNT_LINKED_ELSEWHERE", "DIGIT_ACCOUNT_MANAGED", "IDENTITY_NOT_FOUND",
+          "DIGIT_ACCOUNT_NOT_FOUND", "TENANT_NOT_FOUND"]);
+      const empty = await cp("account-links/_link", { links: [] });
+      expect([empty.status, (await empty.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      await cp("account-links/_unlink", { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: owned.uuid });
+    });
+
+    it("links an existing citizen after a BFF phone OTP, and fails closed on an ambiguous number", async () => {
+      const existing = legacy({ userName: "799000771", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000771", roles: ["CITIZEN"] });
+      const signInByOtp = async (mobileNumber: string) => {
+        const sentBefore = sent.length;
+        const { challengeId } = await (await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber }),
+        })).json();
+        expect(sent.length).toBe(sentBefore + 1);
+        const verified = await fetch(`${app()}/identity/v1/citizen/otp/_verify`, {
+          method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: "bomet-county", challengeId, code: sent[sent.length - 1].code }),
+        });
+        return cookieFrom(verified, "digit_identity_session_citizen")!;
+      };
+      const creates = digit.stats.creates;
+      const selected = await citizenSelect(await signInByOtp("799000771"));
+      expect(selected.status).toBe(200);
+      expect((await selected.json()).UserRequest).toMatchObject({ uuid: existing.uuid, type: "CITIZEN" });
+      expect(digit.stats.creates).toBe(creates);
+
+      legacy({ userName: "799000772", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000772", roles: ["CITIZEN"] });
+      legacy({ userName: "citizen-dup-772", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000772", roles: ["CITIZEN"] });
+      const ambiguous = await citizenSelect(await signInByOtp("799000772"));
+      expect(ambiguous.status).toBe(409);
+      expect((await ambiguous.json()).code).toBe("CITIZEN_ACCOUNT_AMBIGUOUS");
+      expect(digit.stats.creates).toBe(creates);
+    });
+
+    it("trusts a Keycloak-verified phone only when users cannot edit it", async () => {
+      const userEditable = { name: "phoneNumber", permissions: { view: ["admin", "user"], edit: ["admin", "user"] } };
+      const adminOnly = (name: string) => ({ name, permissions: { view: ["admin", "user"], edit: ["admin"] } });
+      for (const [profile, trusted] of [
+        [{ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] }, true],
+        [{ unmanagedAttributePolicy: "ADMIN_VIEW", attributes: [] }, true],
+        [{ attributes: [] }, true],
+        [{ unmanagedAttributePolicy: "ENABLED", attributes: [] }, false],
+        [{ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [userEditable] }, false],
+        [{ unmanagedAttributePolicy: "ENABLED", attributes: [adminOnly("phoneNumber"), adminOnly("phoneNumberVerified")] }, true],
+      ] as const) {
+        await setProfile(profile);
+        expect(await keycloakPhoneIsAdminControlled(), JSON.stringify(profile)).toBe(trusted);
+      }
+
+      const a = legacy({ userName: "799000881", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000881", roles: ["CITIZEN"] });
+      const b = legacy({ userName: "799000882", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000882", roles: ["CITIZEN"] });
+      // Users can edit their phone: the claim proves nothing, so no link.
+      await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+      const untrusted = await citizenSelect(await signIn("citizen", "legacya"));
+      expect(untrusted.status).toBe(200);
+      expect((await untrusted.json()).UserRequest.uuid).not.toBe(a.uuid);
+      // Admin-only phone: the verified claim links the existing account.
+      await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+      const trusted = await citizenSelect(await signIn("citizen", "legacyb"));
+      expect(trusted.status).toBe(200);
+      expect((await trusted.json()).UserRequest.uuid).toBe(b.uuid);
+    });
+
+    it("answers 503 when the phone-trust check fails, and links on the retry instead of splitting the citizen", async () => {
+      const c = legacy({ userName: "799000883", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000883", roles: ["CITIZEN"] });
+      await setProfile({ unmanagedAttributePolicy: "ADMIN_EDIT", attributes: [] });
+      await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "GET", path: "/users/profile", status: 503, count: 1 }),
+      });
+      resetPhoneTrustCache();
+      const creates = digit.stats.creates;
+      const failed = await citizenSelect(await signIn("citizen", "legacyc"));
+      expect(failed.status).toBe(503);
+      expect(digit.stats.creates).toBe(creates);
+      const retried = await citizenSelect(await signIn("citizen", "legacyc"));
+      expect((await retried.json()).UserRequest.uuid).toBe(c.uuid);
+    });
+
+    it("never writes masked or partial data over a linked employee's record", async () => {
+      const account = legacy({ userName: "EMP-LEGACY-3", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000103", roles: ["EMPLOYEE", "GRO"] });
+      Object.assign(digit.accounts.get(account.uuid)!, { pan: "ABCDE1234F", gender: "FEMALE", emailId: "emp3@example.com" });
+      await kcAdmin("/users", { id: "linked-employee-3", username: "emp3", email: "emp3.kc@example.com", enabled: true });
+      await cp("account-links/_link", { links: [{ subject: "linked-employee-3", tenantId: "ke.bomet", digitUserUuid: account.uuid }] });
+      const identity = linkedIdentity(config.keycloakIssuer, "linked-employee-3", {
+        userType: "EMPLOYEE", tenantId: "ke.bomet", digitUuid: account.uuid,
+      });
+      const login = () => managedUserLogin(identity, "session-emp3");
+      const updates = digit.stats.updates;
+      digit.setMaskSearchMobileNumbers(true);
+      try {
+        await expect(login()).rejects.toMatchObject({ status: 503, code: "DIGIT_PII_MASKED" });
+        expect(digit.stats.updates).toBe(updates);
+        expect(digit.accounts.get(account.uuid)!.mobileNumber).toBe("700000103");
+      } finally {
+        digit.setMaskSearchMobileNumbers(false);
+      }
+      await login();
+      // The whole record went back: nothing egov-user would clear was lost.
+      expect(digit.accounts.get(account.uuid)).toMatchObject({
+        mobileNumber: "700000103", pan: "ABCDE1234F", gender: "FEMALE", emailId: "emp3@example.com",
+        roles: [{ code: "EMPLOYEE", tenantId: "ke.bomet" }, { code: "GRO", tenantId: "ke.bomet" }],
+      });
+    });
+
+    it("lets an admin undo a citizen link, and a blocked link does not re-form", async () => {
+      const b = [...digit.accounts.values()].find((account) => account.userName === "799000882")!;
+      expect((await (await cp("account-links?subject=citizen-user-4")).json()).links)
+        .toEqual([{ userType: "CITIZEN", tenantId: "ke", digitUuid: b.uuid }]);
+      const undo = await cp("account-links/_unlink", {
+        subject: "citizen-user-4", userType: "CITIZEN", tenantId: "ke", digitUserUuid: b.uuid, block: true, actor: "qa-admin",
+      });
+      expect(await undo.json()).toEqual({ removed: true });
+      const blocked = await citizenSelect(await signIn("citizen", "legacyb"));
+      expect(blocked.status).toBe(409);
+      expect((await blocked.json()).code).toBe("CITIZEN_ACCOUNT_LINK_BLOCKED");
+      // An explicit admin link overrides the block.
+      const relinked = await cp("account-links/_link", {
+        links: [{ subject: "citizen-user-4", userType: "CITIZEN", tenantId: "ke", digitUserUuid: b.uuid }],
+      });
+      expect((await relinked.json()).results[0].status).toBe("LINKED");
+      expect((await (await citizenSelect(await signIn("citizen", "legacyb"))).json()).UserRequest.uuid).toBe(b.uuid);
+    });
+
+    it("audits every link, refusal and unlink with its method and actor", async () => {
+      const records = (await auditRecords()).filter((record) => record.event.startsWith("ACCOUNT_LINK_"));
+      const seen = new Set(records.map((record) => `${record.event}:${record.method || "-"}`));
+      for (const kind of ["ACCOUNT_LINK_CREATE:ADMIN", "ACCOUNT_LINK_CREATE:VERIFIED_PHONE",
+        "ACCOUNT_LINK_REFUSED:ADMIN", "ACCOUNT_LINK_REFUSED:VERIFIED_PHONE", "ACCOUNT_LINK_REVOKE:-"]) {
+        expect(seen.has(kind), kind).toBe(true);
+      }
+      expect(records.some((record) => record.actor === "control-plane:qa-admin")).toBe(true);
+      expect(records.every((record) => record.subject && record.digitUserUuid !== undefined || record.reason)).toBe(true);
+    });
+
+    it("backfills root tenant routes with the tenant id as slug, and never renames one", async () => {
+      Object.assign(config as any, { identityTenantRouteBackfillRoots: ["ke", "ke.bomet", "zz"] });
+      const dry = await (await cp("tenant-routes/_backfill", { dryRun: true })).json();
+      expect(dry).toEqual({
+        created: ["ke"],
+        skipped: [{ tenantId: "ke.bomet", reason: "NOT_ROOT" }, { tenantId: "zz", reason: "NOT_ACTIVE" }],
+        conflicts: [],
+      });
+      expect((await fetch(`${app()}/identity/v1/tenant-contexts/ke`)).status).toBe(404);
+
+      const run = await (await cp("tenant-routes/_backfill", { actor: "deploy" })).json();
+      expect(run.created).toEqual(["ke"]);
+      const route = await (await fetch(`${app()}/identity/v1/tenant-contexts/ke`)).json();
+      expect(route.tenant).toMatchObject({ urlSlug: "ke", tenantId: "ke" });
+
+      // An operator renames the slug; later runs leave it alone.
+      const organization = (await readTenantMappingForTenant("ke"))!;
+      await kcUpdate(`/organizations/${organization.organizationId}`, {
+        attributes: { "digit.rootTenantId": ["ke"], "digit.urlSlug": ["kenya"] },
+      });
+      clearTenantMappingCache();
+      const rerun = await (await cp("tenant-routes/_backfill", {})).json();
+      expect(rerun).toMatchObject({ created: [], conflicts: [] });
+      expect(rerun.skipped).toContainEqual({ tenantId: "ke", reason: "ALREADY_MAPPED" });
+      clearTenantMappingCache();
+      expect((await readTenantMappingForTenant("ke"))!.urlSlug).toBe("kenya");
+      expect((await auditRecords()).some((record) => record.event === "TENANT_ROUTE_BACKFILL" && record.actor === "control-plane:deploy"))
+        .toBe(true);
     });
   });
 });

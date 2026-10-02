@@ -20,7 +20,7 @@ interface MockUser {
 interface RealmState {
   name: string;
   roles: Array<{ id: string; name: string; description?: string }>;
-  groups: Map<string, { id: string; name: string; path: string }>;
+  groups: Map<string, { id: string; name: string; path: string; attributes?: Record<string, string[]> }>;
   userGroups: Map<string, string[]>; // userId -> groupId[]
   userRoles: Map<string, Array<{ id: string; name: string }>>; // userId -> roles[]
   users: MockUser[];
@@ -30,7 +30,12 @@ interface RealmState {
     alias: string;
     enabled: boolean;
     attributes: Record<string, string[]>;
-    groups: Map<string, { id: string; name: string }>;
+    groups: Map<string, {
+      id: string;
+      name: string;
+      attributes?: Record<string, string[]>;
+      subGroups?: Array<{ id: string; name: string; attributes?: Record<string, string[]> }>;
+    }>;
     members: Set<string>;
     groupMembers: Map<string, Set<string>>;
     groupClientRoles: Map<string, Array<{ id: string; name: string }>>;
@@ -44,6 +49,8 @@ interface RealmState {
     roles: Array<{ id: string; name: string }>;
   }>;
 }
+
+type ClientState = RealmState["clients"] extends Map<string, infer Client> ? Client : never;
 
 let realms: Map<string, RealmState>;
 let lastAdminGrantType: string | undefined;
@@ -72,6 +79,9 @@ export function resetAdminRequestLog(): void {
 
 export function resetState() {
   initState();
+  faults = [];
+  dropUnmanagedAttributes = false;
+  userProfiles.clear();
 }
 
 function getRealm(name: string): RealmState | undefined {
@@ -89,7 +99,7 @@ function getOrCreateRealm(name: string): RealmState {
       userRoles: new Map(),
       users: [],
       organizations: new Map(),
-      clients: new Map([
+      clients: new Map<string, ClientState>([
         ["digit-identity-bff", {
           id: "digit-identity-bff-uuid",
           clientId: "digit-identity-bff",
@@ -119,12 +129,50 @@ function getOrCreateRealm(name: string): RealmState {
           standardFlowEnabled: true,
           roles: [],
         }],
+        // #2167 digit-ui clients. kcadm cannot set an empty attribute, so the
+        // employee client has no signup attribute at all and the citizen
+        // client carries an explicitly empty one (set through the JSON body).
+        ["digit-ui-employee", {
+          id: "digit-ui-employee-uuid",
+          clientId: "digit-ui-employee",
+          enabled: true,
+          standardFlowEnabled: true,
+          attributes: {
+            "login_theme": "digit-employee",
+            "digit.auth.surface": "employee",
+            "digit.auth.signin.methods": "password",
+          },
+          roles: [],
+        }],
+        ["digit-ui-citizen", {
+          id: "digit-ui-citizen-uuid",
+          clientId: "digit-ui-citizen",
+          enabled: true,
+          standardFlowEnabled: true,
+          attributes: {
+            "login_theme": "digit-citizen",
+            "digit.auth.surface": "citizen",
+            "digit.auth.signin.methods": "password",
+            "digit.auth.signup.methods": "",
+          },
+          roles: [],
+        }],
       ]),
     };
     realms.set(name, realm);
   }
   return realm;
 }
+
+let faults: Array<{ method: string; path: string; status?: number; remaining: number }> = [];
+let dropUnmanagedAttributes = false;
+const DEFAULT_USER_PROFILE = {
+  unmanagedAttributePolicy: "ADMIN_EDIT",
+  attributes: ["username", "email", "firstName", "lastName"].map((name) => ({
+    name, permissions: { view: ["admin", "user"], edit: ["admin", "user"] },
+  })),
+};
+const userProfiles = new Map<string, unknown>();
 
 export function createKcAdminMock() {
   initState();
@@ -135,6 +183,24 @@ export function createKcAdminMock() {
   app.use((req, _res, next) => {
     if (!req.path.startsWith("/__test")) adminRequests.push(`${req.method} ${req.path}`);
     next();
+  });
+  // Test hooks: fail the next N admin requests matching a method and path
+  // fragment, or drop unmanaged user attributes like a realm without
+  // unmanagedAttributePolicy would.
+  app.put("/__test/faults", express.json(), (req, res) => {
+    faults.push({ ...req.body, remaining: req.body.count ?? 1 });
+    res.status(204).end();
+  });
+  app.put("/__test/drop-unmanaged-attributes", express.json(), (req, res) => {
+    dropUnmanagedAttributes = req.body?.drop === true;
+    res.status(204).end();
+  });
+  app.use((req, res, next) => {
+    const fault = faults.find((candidate) => candidate.remaining > 0 &&
+      candidate.method === req.method && req.path.includes(candidate.path));
+    if (!fault) return next();
+    fault.remaining -= 1;
+    return res.status(fault.status || 503).json({ error: "injected fault" });
   });
   app.get("/__test/admin-log", (_req, res) => res.json(adminRequestLog()));
   app.delete("/__test/admin-log", (_req, res) => {
@@ -281,7 +347,16 @@ export function createKcAdminMock() {
     if (!realm) {
       return res.status(404).json({ error: "Realm not found" });
     }
-    res.json(Array.from(realm.groups.values()));
+    const q = String(req.query.q || "");
+    const [attribute, ...valueParts] = q.split(":");
+    const value = valueParts.join(":");
+    // Keycloak Organization groups are isolated from realm groups and are
+    // discoverable only below /organizations/{id}/groups.
+    const groups = Array.from(realm.groups.values())
+      .filter((group) => !q || group.attributes?.[attribute]?.includes(value));
+    const first = Number(req.query.first || 0);
+    const max = Number(req.query.max || groups.length || 100);
+    res.json(groups.slice(first, first + max));
   });
 
   // GET /admin/realms/:realm/users — search users (supports ?email=...&exact=true)
@@ -291,6 +366,21 @@ export function createKcAdminMock() {
     if (emailFilter) {
       const matches = realm.users.filter((u) => u.email === emailFilter);
       return res.json(matches);
+    }
+    const usernameFilter = req.query.username as string | undefined;
+    if (usernameFilter) return res.json(realm.users.filter((u) => u.username === usernameFilter));
+    // Keycloak's `q=key:value` custom-attribute search (exact value match).
+    const attributeQuery = req.query.q as string | undefined;
+    if (attributeQuery) {
+      const pairs = attributeQuery.split(" ").filter(Boolean).map((pair) => {
+        const separator = pair.indexOf(":");
+        return [pair.slice(0, separator), pair.slice(separator + 1)] as const;
+      });
+      const first = Number(req.query.first || 0);
+      const max = Number(req.query.max || 100);
+      return res.json(realm.users
+        .filter((u) => pairs.every(([key, value]) => u.attributes?.[key]?.includes(value)))
+        .slice(first, first + max));
     }
     const first = Number(req.query.first || 0);
     const max = Number(req.query.max || realm.users.length);
@@ -307,8 +397,9 @@ export function createKcAdminMock() {
       federatedIdentities,
     } = req.body;
     // Check for duplicate by email or username
+    // Citizens may have no email; only a present email can collide.
     const exists = realm.users.some(
-      (u) => u.email === email || u.username === username,
+      (u) => (email !== undefined && u.email === email) || u.username === username,
     );
     if (exists) {
       return res.status(409).json({ errorMessage: "User exists with same username" });
@@ -326,8 +417,26 @@ export function createKcAdminMock() {
       credentials: Array.isArray(credentials) ? credentials : [],
       federatedIdentities: Array.isArray(federatedIdentities) ? federatedIdentities : [],
     };
+    if (dropUnmanagedAttributes) user.attributes = undefined;
     realm.users.push(user);
     res.status(201).set("Location", `/admin/realms/${req.params.realm}/users/${user.id}`).end();
+  });
+
+  app.delete("/admin/realms/:realm/users/:userId", (req, res) => {
+    const realm = getOrCreateRealm(req.params.realm);
+    const index = realm.users.findIndex((user) => user.id === req.params.userId);
+    if (index < 0) return res.status(404).json({ error: "User not found" });
+    realm.users.splice(index, 1);
+    res.status(204).end();
+  });
+
+  // Declarative user profile: which attributes users may edit themselves.
+  app.get("/admin/realms/:realm/users/profile", (req, res) => {
+    res.json(userProfiles.get(req.params.realm) || DEFAULT_USER_PROFILE);
+  });
+  app.put("/admin/realms/:realm/users/profile", (req, res) => {
+    userProfiles.set(req.params.realm, req.body);
+    res.json(req.body);
   });
 
   app.get("/admin/realms/:realm/users/:userId", (req, res) => {
@@ -560,10 +669,37 @@ export function createKcAdminMock() {
     const organization = realm.organizations.get(req.params.organizationId);
     if (!organization) return res.status(404).json({ error: "not found" });
     const search = String(req.query.search || "");
-    res.json(Array.from(organization.groups.values()).filter(
-      (group) => !search || group.name === search,
-    ));
+    const q = String(req.query.q || "");
+    const [attribute, ...valueParts] = q.split(":");
+    const value = valueParts.join(":");
+    const first = Number(req.query.first || 0);
+    const max = Number(req.query.max || 100);
+    const groups = Array.from(organization.groups.values()).filter(
+      (group) => (!search || group.name === search) &&
+        (!q || group.attributes?.[attribute]?.includes(value)),
+    );
+    res.json(groups.slice(first, first + max));
   });
+
+  app.get(
+    "/admin/realms/:realm/organizations/:organizationId/groups/:groupId",
+    (req, res) => {
+      const realm = getOrCreateRealm(req.params.realm);
+      const group = realm.organizations.get(req.params.organizationId)?.groups.get(req.params.groupId);
+      return group ? res.json(group) : res.status(404).json({ error: "not found" });
+    },
+  );
+
+  app.put(
+    "/admin/realms/:realm/organizations/:organizationId/groups/:groupId",
+    (req, res) => {
+      const realm = getOrCreateRealm(req.params.realm);
+      const group = realm.organizations.get(req.params.organizationId)?.groups.get(req.params.groupId);
+      if (!group) return res.status(404).json({ error: "not found" });
+      Object.assign(group, req.body, { id: group.id });
+      return res.status(204).end();
+    },
+  );
 
   app.post("/admin/realms/:realm/organizations/:organizationId/groups", (req, res) => {
     const realm = getOrCreateRealm(req.params.realm);
@@ -574,7 +710,12 @@ export function createKcAdminMock() {
     );
     if (existing) return res.status(409).end();
     const id = crypto.randomUUID();
-    organization.groups.set(id, { id, name: req.body.name });
+    organization.groups.set(id, {
+      id,
+      name: req.body.name,
+      attributes: req.body.attributes || {},
+      subGroups: req.body.subGroups || [],
+    });
     res.status(201).set(
       "Location",
       `/admin/realms/${req.params.realm}/organizations/${req.params.organizationId}/groups/${id}`,
@@ -607,6 +748,19 @@ export function createKcAdminMock() {
       const max = Number(req.query.max || 100);
       const members = [...(organization.groupMembers.get(req.params.groupId) || new Set())];
       res.json(members.slice(first, first + max).map((id) => ({ id })));
+    },
+  );
+
+  app.get(
+    "/admin/realms/:realm/organizations/:organizationId/members/:userId/groups",
+    (req, res) => {
+      const realm = getOrCreateRealm(req.params.realm);
+      const organization = realm.organizations.get(req.params.organizationId);
+      if (!organization?.members.has(req.params.userId)) {
+        return res.status(404).json({ error: "not a member" });
+      }
+      res.json(Array.from(organization.groups.values()).filter((group) =>
+        organization.groupMembers.get(group.id)?.has(req.params.userId)));
     },
   );
 

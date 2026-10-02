@@ -5,6 +5,7 @@ export interface KeycloakClaims {
   preferred_username?: string;
   email_verified?: boolean;
   phone_number?: string;
+  phone_number_verified?: boolean;
   realm_access?: {
     roles: string[];
   };
@@ -36,7 +37,7 @@ export interface IdentityTokenSet {
 export interface IdentityAuthMethod {
   id: string;
   label: string;
-  type: "password" | "oauth" | "magic_link";
+  type: "password" | "oauth" | "magic_link" | "phone_otp";
   idpHint?: string;
   intents: IdentityAuthIntent[];
 }
