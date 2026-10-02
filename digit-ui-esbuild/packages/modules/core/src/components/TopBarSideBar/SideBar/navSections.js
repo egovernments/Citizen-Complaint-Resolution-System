@@ -102,3 +102,16 @@ export const withTenantSegment = (url, contextPath, tenantId) => {
   }
   return url;
 };
+
+/**
+ * Whether the tenant has published its public dashboard from the Configurator:
+ * `publicDashboardEnabled` on `dss.DashboardConfig`, picked the way
+ * pgr-services and the Configurator pick it (the record whose id is "default",
+ * else the first). Only an explicit true counts, as it does in pgr-services,
+ * which refuses the page's data otherwise.
+ */
+export const publicDashboardEnabled = (records) => {
+  const list = Array.isArray(records) ? records.filter(Boolean) : [];
+  const record = list.find((entry) => String(entry?.id ?? "").trim() === "default") || list[0];
+  return record?.publicDashboardEnabled === true;
+};
