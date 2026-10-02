@@ -31,3 +31,14 @@ export function serviceCodesForFilter(subcategory, category) {
   if (Array.isArray(category?.serviceCodes) && category.serviceCodes.length > 0) return [...category.serviceCodes];
   return [];
 }
+
+/**
+ * Whether a picked subcategory still belongs under a picked category: one of
+ * the category's own subcategories. A subcategory with no parent belongs under
+ * none, so picking any category drops it. With no category picked, any
+ * subcategory stands.
+ */
+export function subcategoryFits(subcategory, category) {
+  if (!subcategory?.serviceCode || !category) return true;
+  return Array.isArray(category.serviceCodes) && category.serviceCodes.includes(subcategory.serviceCode);
+}
