@@ -39,7 +39,19 @@ twilio_whatsapp_from: "whatsapp:+14155238886"    # your sender; this is the Sand
 chatbot_root_tenant: "ke"                        # state tenant complaints are filed under
 chatbot_whatsapp_business_number: "14155238886"  # same sender, digits only
 chatbot_boundary_hierarchy_type: "ADMIN"         # your boundary hierarchy name
+
+# Required: the chatbot refuses to start without them. Defaults match the pg demo
+# tenant (India) and the bootstrap admin; set your own, e.g. for Mozambique:
+chatbot_default_country_code: "+258"             # fallback when MDMS has no number rule
+chatbot_default_mobile_regex: "^8[0-9]{8}$"      # fallback valid-number rule
+chatbot_mobile_number_length: 9                  # digit count shown in the invalid-number reply
+chatbot_service_account_username: "CHATBOT"      # employee the bot files as; default bootstrap_user
+chatbot_service_account_password: "..."          # default bootstrap_password
 ```
+
+The bot creates citizens and files complaints as `chatbot_service_account_username`, so
+citizens never need a password. Its default, the bootstrap admin, has full admin roles: in
+production use a dedicated account limited to creating citizens and filing complaints.
 
 ## 3. Deploy
 
@@ -64,6 +76,11 @@ CHATBOT_ROOT_TENANT=ke
 CHATBOT_WHATSAPP_BUSINESS_NUMBER=14155238886
 CHATBOT_WEBHOOK_BASE_URL=https://<domain>
 CHATBOT_EXTERNAL_HOST=https://<domain>/
+CHATBOT_DEFAULT_COUNTRY_CODE=+258
+CHATBOT_DEFAULT_MOBILE_REGEX=^8[0-9]{8}$
+CHATBOT_MOBILE_NUMBER_LENGTH=9
+CHATBOT_SERVICE_ACCOUNT_USERNAME=CHATBOT
+CHATBOT_SERVICE_ACCOUNT_PASSWORD=...
 ```
 
 ```bash
@@ -103,6 +120,7 @@ follow it to file a complaint, then find it in the employee inbox.
 
 | Symptom | Fix |
 |---|---|
+| Chatbot exits with `Refusing to start: … required setting(s) are unset` | The image is running without this stack's Compose/Ansible defaults: set the listed variables (step 2) |
 | No request reaches the server | Webhook not saved, message sent to a different number, or (Sandbox) phone not joined |
 | Chatbot logs `Rejected inbound webhook` | Auth Token wrong, or the Twilio URL differs from `https://<domain>` |
 | *Invalid mobile number format* | Add the country's row to `common-masters.MobileNumberValidation` for the state tenant |

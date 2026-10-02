@@ -105,6 +105,7 @@ class MobileValidationService {
 
     const response = await fetch(url, {
       method: "POST",
+      timeout: config.timeouts.request,
       body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
     });
@@ -220,10 +221,13 @@ class MobileValidationService {
 
   /** toNational against a single rule. */
   nationalFor(raw, mobileConfig) {
-    const digits = this.digitsOnly(raw);
+    const cc = this.countryDigits(mobileConfig);
+    // `00` is the international dialling prefix most of the world uses in place of `+`.
+    // Only stripped when this rule's own code follows, so a trunk-0 number is untouched.
+    let digits = this.digitsOnly(raw);
+    if (cc && digits.startsWith('00' + cc)) digits = digits.slice(2);
     if (!digits) return null;
 
-    const cc = this.countryDigits(mobileConfig);
     const withoutCc =
       cc && digits.startsWith(cc) && digits.length > cc.length ? digits.slice(cc.length) : null;
 

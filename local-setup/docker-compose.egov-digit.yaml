@@ -1972,6 +1972,15 @@ services:
       # nlp-engine (NOT deployed in this stack) and a Google Maps key.
       GEO_SEARCH: ${CHATBOT_GEO_SEARCH:-false}
       BOUNDARY_HIERARCHY_TYPE: ${CHATBOT_BOUNDARY_HIERARCHY_TYPE:-ADMIN}
+      # The employee account the bot creates citizens and files complaints as. Defaults to
+      # the bootstrap admin; use a dedicated, narrowly scoped account in production.
+      USER_SERVICE_ACCOUNT_USERNAME: ${CHATBOT_SERVICE_ACCOUNT_USERNAME:-${BOOTSTRAP_USER:-ADMIN}}
+      USER_SERVICE_ACCOUNT_PASSWORD: ${CHATBOT_SERVICE_ACCOUNT_PASSWORD:-${BOOTSTRAP_PASSWORD:-eGov@123}}
+      # Number rule used when the tenant has no MDMS MobileNumberValidation row or MDMS is
+      # unreachable. Required at boot; defaults match the pg demo tenant (India).
+      DEFAULT_COUNTRY_CODE: ${CHATBOT_DEFAULT_COUNTRY_CODE:-+91}
+      DEFAULT_MOBILE_REGEX: ${CHATBOT_DEFAULT_MOBILE_REGEX:-^[6-9][0-9]{9}$$}
+      MOBILE_NUMBER_LENGTH: ${CHATBOT_MOBILE_NUMBER_LENGTH:-10}
       # Twilio inbound webhook authentication. The endpoint is public by necessity;
       # the signature is the only thing distinguishing a real citizen from anyone who
       # guessed the URL. TWILIO_WEBHOOK_BASE_URL pins the origin so a forged
@@ -1979,7 +1988,7 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_FROM:-}
-      TWILIO_VALIDATE_SIGNATURE: ${CHATBOT_VALIDATE_SIGNATURE:-true}
+      TWILIO_VERIFY_WEBHOOK_SIGNATURE: ${CHATBOT_VALIDATE_SIGNATURE:-true}
       TWILIO_WEBHOOK_BASE_URL: ${CHATBOT_WEBHOOK_BASE_URL:-}
       # Shared secret for POST /reminder (fans out to every active session). Unset
       # disables the route rather than leaving it open.
