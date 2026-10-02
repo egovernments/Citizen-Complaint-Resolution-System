@@ -3,7 +3,7 @@ import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import { ensureMagicLinkSignupIdentity } from "../organizations/organization-service.js";
 import { createLoginAttempt } from "../sessions/session-store.js";
@@ -29,16 +29,8 @@ function normalizedName(value: unknown): string | null {
   return name.length > 0 && name.length <= 100 ? name : null;
 }
 
-async function withinLimit(bucket: string): Promise<boolean> {
-  const count = await getRedis().eval(
-    `local current = redis.call('INCR', KEYS[1])
-     if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
-     return current`,
-    1,
-    bucket,
-    config.identityMagicLinkRequestWindowSeconds,
-  );
-  return Number(count) <= config.identityMagicLinkRequestLimit;
+function withinLimit(bucket: string): Promise<boolean> {
+  return withinRateLimit(bucket, config.identityMagicLinkRequestLimit, config.identityMagicLinkRequestWindowSeconds);
 }
 
 function privateEmailKey(email: string): string {

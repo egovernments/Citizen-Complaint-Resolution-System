@@ -1,12 +1,16 @@
 import { config } from "../../infrastructure/config.js";
 import type { KeycloakClaims } from "../authentication/types.js";
-import { isOrganizationMember } from "../organizations/organization-service.js";
+import {
+  isOrganizationGroupMember,
+  isOrganizationMember,
+  liveTenantMapping,
+  readTenantMappingForTenant,
+} from "../organizations/organization-service.js";
 import {
   findManagedAccount,
   ManagedAccountError,
   managedIdentity,
 } from "../managed-accounts/managed-account-service.js";
-import { readOrganizationMappingForTenant } from "../organizations/organization-service.js";
 import {
   isActiveDigitTenant,
   liveMembershipsForSubject,
@@ -52,9 +56,15 @@ export async function resolveTenantOption(
   subject: string,
   tenantId: string,
 ): Promise<TenantOption | null> {
-  const mapping = await readOrganizationMappingForTenant(tenantId);
+  const cached = await readTenantMappingForTenant(tenantId);
+  // The directory is cached; the Organization (or group) that authorizes
+  // this sign-in is re-read live, so disabling it takes effect at once.
+  const mapping = cached ? await liveTenantMapping(cached) : null;
   if (!mapping || !await isActiveDigitTenant(mapping.tenantId)) return null;
-  if (!await isOrganizationMember(mapping.organizationId, subject)) return null;
+  const member = mapping.mappingType === "organization-group"
+    ? await isOrganizationGroupMember(mapping.organizationId, mapping.groupId, subject)
+    : await isOrganizationMember(mapping.organizationId, subject);
+  if (!member) return null;
   const identity = managedIdentity(config.keycloakIssuer, subject, mapping.tenantId);
   const account = await findManagedAccount(identity).catch((error) => {
     if (error instanceof ManagedAccountError) return null;

@@ -3,8 +3,9 @@ import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import {
   listManagedIdentityAccounts,
-  listOrganizationMappings,
-  readOrganizationMappingForTenant,
+  listTenantMappings,
+  readTenantMappingForTenant,
+  readOrganizationGroupReconciliation,
   readOrganizationReconciliation,
 } from "../organizations/organization-service.js";
 import { isActiveDigitTenant } from "../access-context/tenant-directory.js";
@@ -41,9 +42,11 @@ export async function desiredRolesBySubject(): Promise<{
 }> {
   const bySubject = new Map<string, DesiredRoles>();
   let organizations = 0;
-  for (const mapping of await listOrganizationMappings()) {
+  for (const mapping of await listTenantMappings()) {
     if (!await isActiveDigitTenant(mapping.tenantId)) continue;
-    const state = await readOrganizationReconciliation(mapping.organizationId, config.digitRoleClientId);
+    const state = mapping.mappingType === "organization-group"
+      ? await readOrganizationGroupReconciliation(mapping, config.digitRoleClientId)
+      : await readOrganizationReconciliation(mapping.organizationId, config.digitRoleClientId);
     if (!state?.enabled) continue;
     organizations += 1;
     for (const [subject, roles] of state.memberRoles) {
@@ -70,11 +73,13 @@ export async function desiredRolesForSubjectTenant(
   tenantId: string,
 ): Promise<string[] | null> {
   if (!await isActiveDigitTenant(tenantId)) return null;
-  const mapping = await readOrganizationMappingForTenant(tenantId);
+  const mapping = await readTenantMappingForTenant(tenantId);
   if (!mapping) return null;
-  const state = await readOrganizationReconciliation(
-    mapping.organizationId, config.digitRoleClientId, subject,
-  );
+  const state = mapping.mappingType === "organization-group"
+    ? await readOrganizationGroupReconciliation(mapping, config.digitRoleClientId, subject)
+    : await readOrganizationReconciliation(
+      mapping.organizationId, config.digitRoleClientId, subject,
+    );
   if (!state?.enabled) return null;
   const roles = state.memberRoles.get(subject);
   return roles === undefined ? null : allowlisted(roles);

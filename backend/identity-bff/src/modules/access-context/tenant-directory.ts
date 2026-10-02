@@ -1,9 +1,12 @@
 import { config } from "../../infrastructure/config.js";
 import {
+  clearTenantMappingCache,
+  isOrganizationGroupMember,
   isOrganizationMember,
-  listOrganizationMappings,
+  listTenantMappings,
   readOrganizationMapping,
   type OrganizationMapping,
+  type TenantMapping,
 } from "../organizations/organization-service.js";
 import { DigitUnavailableError, type DigitAccount } from "../managed-accounts/digit-user-client.js";
 import type { KeycloakClaims } from "../authentication/types.js";
@@ -16,10 +19,10 @@ export interface TenantOption {
   roles: string[];
 }
 
-export interface OrganizationMembership extends OrganizationMapping {
+export type OrganizationMembership = TenantMapping & {
   /** Allowlisted client roles Keycloak granted through Organization groups. */
   roles: string[];
-}
+};
 
 const MAPPING_TTL_MS = 60_000;
 const TENANT_TTL_MS = 300_000;
@@ -98,11 +101,13 @@ export async function membershipsFromClaims(claims: KeycloakClaims): Promise<Org
 
 /** Live memberships for flows, such as onboarding, that mutate Organizations mid-session. */
 export async function liveMembershipsForSubject(subject: string): Promise<OrganizationMembership[]> {
-  const memberships = await Promise.all((await listOrganizationMappings()).map(async (mapping) =>
-    await isActiveDigitTenant(mapping.tenantId) &&
-    await isOrganizationMember(mapping.organizationId, subject)
-      ? { ...mapping, roles: [] as string[] }
-      : null));
+  const memberships = await Promise.all((await listTenantMappings()).map(async (mapping) => {
+    if (!await isActiveDigitTenant(mapping.tenantId)) return null;
+    const member = mapping.mappingType === "organization-group"
+      ? await isOrganizationGroupMember(mapping.organizationId, mapping.groupId, subject)
+      : await isOrganizationMember(mapping.organizationId, subject);
+    return member ? { ...mapping, roles: [] as string[] } : null;
+  }));
   return memberships
     .filter((membership): membership is OrganizationMembership => membership !== null)
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -127,6 +132,7 @@ export function tenantOption(
 }
 
 export function clearTenantCaches(): void {
+  clearTenantMappingCache();
   mappings.clear();
   tenants.clear();
 }

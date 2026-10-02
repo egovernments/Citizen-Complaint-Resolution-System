@@ -1,6 +1,10 @@
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
 const digitMdmsCreateUrl = process.env.DIGIT_MDMS_CREATE_URL || "";
+const identityCookieName =
+  process.env.IDENTITY_COOKIE_NAME || "digit_identity_session";
+const digitGatewayHost =
+  (process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "");
 
 function csv(value: string): string[] {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
@@ -56,6 +60,17 @@ export const config = {
     process.env.KEYCLOAK_MAGIC_LINK_CLIENT_ID || "digit-identity-bff-magic-link",
   keycloakMagicLinkClientSecret:
     process.env.KEYCLOAK_MAGIC_LINK_CLIENT_SECRET || "",
+  // digit-ui employee and citizen sign-in (#2167). Each surface has its own
+  // confidential client, flow and theme; an empty secret leaves the surface
+  // unconfigured (503) rather than silently falling back to another client.
+  keycloakEmployeeClientId:
+    process.env.KEYCLOAK_EMPLOYEE_CLIENT_ID || "digit-ui-employee",
+  keycloakEmployeeClientSecret:
+    process.env.KEYCLOAK_EMPLOYEE_CLIENT_SECRET || "",
+  keycloakCitizenClientId:
+    process.env.KEYCLOAK_CITIZEN_CLIENT_ID || "digit-ui-citizen",
+  keycloakCitizenClientSecret:
+    process.env.KEYCLOAK_CITIZEN_CLIENT_SECRET || "",
 
   // Identity BFF
   identityRedirectUri:
@@ -70,8 +85,15 @@ export const config = {
   ),
   identityScope:
     process.env.IDENTITY_SCOPE || "openid profile email organization:*",
-  identityCookieName:
-    process.env.IDENTITY_COOKIE_NAME || "digit_identity_session",
+  identityEmployeeScope:
+    process.env.IDENTITY_EMPLOYEE_SCOPE || "openid profile email",
+  identityCitizenScope:
+    process.env.IDENTITY_CITIZEN_SCOPE || "openid profile phone",
+  identityCookieName,
+  identityEmployeeCookieName:
+    process.env.IDENTITY_EMPLOYEE_COOKIE_NAME || `${identityCookieName}_employee`,
+  identityCitizenCookieName:
+    process.env.IDENTITY_CITIZEN_COOKIE_NAME || `${identityCookieName}_citizen`,
   identityCookieSecure: process.env.IDENTITY_COOKIE_SECURE !== "false",
   identityCookieSameSite: cookieSameSite(
     process.env.IDENTITY_COOKIE_SAME_SITE || "Lax",
@@ -86,6 +108,26 @@ export const config = {
     process.env.IDENTITY_MAGIC_LINK_REQUEST_LIMIT || "3",
   ),
   identityTrustProxyHops: parseInt(process.env.IDENTITY_TRUST_PROXY_HOPS || "0"),
+  // Citizen phone OTP sign-in (#2189). The secret keys the code and phone
+  // hashes. `phone_otp` is offered only with the secret AND a way to prove a
+  // number: a configured sender, or a valid fixed code (development).
+  identityCitizenOtpSecret: process.env.IDENTITY_CITIZEN_OTP_SECRET || "",
+  identityCitizenOtpTtlSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_TTL_SECONDS || "300"),
+  identityCitizenOtpMaxAttempts: parseInt(process.env.IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS || "5"),
+  identityCitizenOtpResendSeconds: parseInt(process.env.IDENTITY_CITIZEN_OTP_RESEND_SECONDS || "30"),
+  identityCitizenOtpSendWindowSeconds: parseInt(
+    process.env.IDENTITY_CITIZEN_OTP_SEND_WINDOW_SECONDS || "3600",
+  ),
+  identityCitizenOtpPhoneSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_PHONE_SEND_LIMIT || "5"),
+  identityCitizenOtpIpSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT || "20"),
+  // Interim OTP channel: "log" writes codes to the BFF log (development only).
+  // Anything else = no channel, so a send answers OTP_CHANNEL_UNAVAILABLE.
+  identityCitizenOtpSender: process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  // Same switch and value egov-user reads (citizen.login.password.otp.fixed.*):
+  // when on, the fixed code is accepted for any challenge. Development only.
+  citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
+  citizenLoginPasswordOtpFixedValue: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE || "123456",
+  identityAuditStreamMaxLength: parseInt(process.env.IDENTITY_AUDIT_STREAM_MAXLEN || "100000"),
   identityAuthResultTtlSeconds: parseInt(
     process.env.IDENTITY_AUTH_RESULT_TTL_SECONDS || "300",
   ),
@@ -116,6 +158,32 @@ export const config = {
   // for those accounts' lifecycle, never for business calls.
   digitUserServiceUrl: process.env.DIGIT_USER_SERVICE_URL || "",
   digitMdmsSearchUrl: process.env.DIGIT_MDMS_SEARCH_URL || "",
+  digitLocalizationSearchUrl:
+    process.env.DIGIT_LOCALIZATION_SEARCH_URL ||
+    `${digitGatewayHost}/localization/messages/v1/_search`,
+  // Internal egov-otp create endpoint used only by the default
+  // CitizenTokenMinter. Never route this through a public gateway: its
+  // response contains the OTP value. Empty = citizen tokens unavailable.
+  digitOtpCreateUrl: process.env.DIGIT_OTP_CREATE_URL || "",
+  // Which identity egov-user passes to egov-otp when a CITIZEN password grant
+  // is validated as an OTP: the mobile number (UserService.validateOtp), from
+  // the verified session phone. See docs/identity-bff.md#citizen-token-minting.
+  digitCitizenOtpIdentity:
+    process.env.DIGIT_CITIZEN_OTP_IDENTITY === "userName" ? "userName" as const : "mobileNumber" as const,
+  digitCitizenRoles: csv(process.env.DIGIT_CITIZEN_ROLES || "CITIZEN"),
+  // Public login branding (#2167): read-only MDMS + localization projection.
+  identityBrandingCacheSeconds: parseInt(
+    process.env.IDENTITY_BRANDING_CACHE_SECONDS || "300",
+  ),
+  identityBrandingDefaultLocale:
+    process.env.IDENTITY_BRANDING_DEFAULT_LOCALE || "en_IN",
+  digitUiConfigModuleName:
+    process.env.DIGIT_UI_CONFIG_MODULE_NAME || "commonMDMSConfig",
+  digitFooterUrl:
+    process.env.DIGIT_FOOTER_URL ?? "/digit-ui/brand/digit-footer.png",
+  digitFooterBwUrl:
+    process.env.DIGIT_FOOTER_BW_URL ?? "/digit-ui/brand/digit-footer-bw.png",
+  digitHomeUrl: process.env.DIGIT_HOME_URL || "https://www.digit.org/",
   // egov-user reached directly (internal network) for token revocation only:
   // Kong's RBAC evaluates the principal's home tenant, which a BFF-managed
   // account may hold no roles in. Defaults to DIGIT_USER_SERVICE_URL.
@@ -134,13 +202,13 @@ export const config = {
   digitMdmsV2SearchUrl:
     process.env.DIGIT_MDMS_V2_SEARCH_URL ||
     digitMdmsCreateUrl.replace(/\/_create\/?$/, "/_search") ||
-    `${(process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "")}/mdms-v2/v2/_search`,
+    `${digitGatewayHost}/mdms-v2/v2/_search`,
   digitMdmsSchemaSearchUrl:
     process.env.DIGIT_MDMS_SCHEMA_SEARCH_URL ||
-    `${(process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "")}/mdms-v2/schema/v1/_search`,
+    `${digitGatewayHost}/mdms-v2/schema/v1/_search`,
   digitMdmsSchemaCreateUrl:
     process.env.DIGIT_MDMS_SCHEMA_CREATE_URL ||
-    `${(process.env.DIGIT_GATEWAY_HOST || "http://gateway:8080").replace(/\/$/, "")}/mdms-v2/schema/v1/_create`,
+    `${digitGatewayHost}/mdms-v2/schema/v1/_create`,
   digitFoundationSourceTenant:
     process.env.DIGIT_FOUNDATION_SOURCE_TENANT ||
     process.env.DIGIT_BOOTSTRAP_SOURCE_TENANT ||

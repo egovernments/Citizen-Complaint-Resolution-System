@@ -5,9 +5,12 @@ import {
   ensureOrganization,
   ensureOrganizationMembership,
   ensureOrganizationRoleAssignment,
+  ensureOrganizationTenantGroup,
   IdentityAdminError,
   organizationIdentifierAvailable,
   readOrganizationMapping,
+  readTenantMappingForTenant,
+  type TenantMapping,
 } from "../organizations/organization-service.js";
 import { currentSession } from "../sessions/current-session.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
@@ -88,6 +91,81 @@ export function registerControlPlaneRoutes(app: express.Application): void {
       const organization = await ensureOrganization({ tenantId, alias, name, adoptExisting: true });
       clearTenantCaches();
       return res.json({ organization });
+    } catch (error) {
+      return handleAdminError(error, res);
+    }
+  }));
+
+  app.post("/internal/identity/v1/tenant-groups/_ensure", asyncRoute(async (req, res) => {
+    try {
+      const organizationId = requiredString(req.body?.organizationId, "organizationId");
+      const tenantId = requiredString(req.body?.tenantId, "tenantId");
+      const parentTenantId = requiredString(req.body?.parentTenantId, "parentTenantId");
+      const urlSlug = requiredString(req.body?.urlSlug, "urlSlug").toLowerCase();
+      const name = requiredString(req.body?.name, "name");
+      if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(urlSlug) ||
+          (urlSlug.match(/[a-z]/g) || []).length < 2) {
+        throw new IdentityAdminError("urlSlug is invalid", 400);
+      }
+      if (req.body?.fallbackTenantIds !== undefined &&
+          (!Array.isArray(req.body.fallbackTenantIds) ||
+           !req.body.fallbackTenantIds.every((value: unknown) =>
+             typeof value === "string" && value.trim()))) {
+        throw new IdentityAdminError("fallbackTenantIds must be a string array", 400);
+      }
+      const fallbackTenantIds = [...new Set<string>(
+        (req.body?.fallbackTenantIds || []).map((value: string) => value.trim()),
+      )];
+      if (fallbackTenantIds.includes(tenantId)) {
+        throw new IdentityAdminError("A tenant cannot fall back to itself", 400);
+      }
+      clearTenantCaches();
+      const requested = [tenantId, parentTenantId, ...fallbackTenantIds];
+      for (const candidate of requested) {
+        if (!await isActiveDigitTenant(candidate)) {
+          throw new IdentityAdminError(`DIGIT tenant does not exist: ${candidate}`, 409);
+        }
+      }
+      const organization = await readOrganizationMapping(organizationId);
+      const parent = await readTenantMappingForTenant(parentTenantId);
+      if (!organization || !parent ||
+          parent.organizationId !== organizationId ||
+          parent.rootTenantId !== organization.tenantId) {
+        throw new IdentityAdminError("parentTenantId is not mapped inside the Organization", 409);
+      }
+      const ancestors = new Set([tenantId]);
+      let ancestor: TenantMapping | null = parent;
+      while (ancestor) {
+        if (ancestors.has(ancestor.tenantId)) {
+          throw new IdentityAdminError("Subtenant parent mapping would create a cycle", 409);
+        }
+        ancestors.add(ancestor.tenantId);
+        if (!ancestor.parentTenantId) break;
+        ancestor = await readTenantMappingForTenant(ancestor.parentTenantId);
+        if (!ancestor || ancestor.organizationId !== organizationId) {
+          throw new IdentityAdminError("Subtenant parent chain is incomplete", 409);
+        }
+      }
+      for (const fallbackTenantId of fallbackTenantIds) {
+        const fallback = await readTenantMappingForTenant(fallbackTenantId);
+        if (!fallback || fallback.organizationId !== organizationId ||
+            fallback.rootTenantId !== organization.tenantId) {
+          throw new IdentityAdminError(
+            `Fallback tenant is not mapped inside the Organization: ${fallbackTenantId}`,
+            409,
+          );
+        }
+      }
+      const mapping = await ensureOrganizationTenantGroup({
+        organizationId,
+        tenantId,
+        parentTenantId,
+        urlSlug,
+        name,
+        fallbackTenantIds,
+      });
+      clearTenantCaches();
+      return res.json({ tenant: mapping });
     } catch (error) {
       return handleAdminError(error, res);
     }

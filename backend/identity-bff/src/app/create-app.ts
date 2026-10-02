@@ -2,12 +2,14 @@ import express from "express";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
 import { registerAccessContextRoutes } from "../modules/access-context/routes.js";
+import { registerBrandingRoutes } from "../modules/branding/routes.js";
 import { registerAuthenticationRoutes } from "../modules/authentication/routes.js";
 import { registerMagicLinkRoutes } from "../modules/authentication/magic-link-signup.js";
 import { registerPasswordSetupRoutes } from "../modules/authentication/password-setup.js";
 import { registerOperationalRoutes } from "../modules/operations/routes.js";
 import { registerOrganizationRoutes } from "../modules/organizations/routes.js";
 import { registerSessionRoutes } from "../modules/sessions/routes.js";
+import { registerCitizenOtpRoutes } from "../modules/citizen-otp/routes.js";
 
 /**
  * The standalone identity boundary. Keep this application free of DIGIT
@@ -42,8 +44,10 @@ export function createIdentityApp(): express.Application {
   registerAuthenticationRoutes(app);
   registerMagicLinkRoutes(app);
   registerPasswordSetupRoutes(app);
+  registerCitizenOtpRoutes(app);
   registerSessionRoutes(app);
   registerAccessContextRoutes(app);
+  registerBrandingRoutes(app);
   registerOrganizationRoutes(app);
   registerControlPlaneRoutes(app);
   return app;
