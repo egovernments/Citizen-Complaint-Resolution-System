@@ -1,7 +1,8 @@
-// Helpers for Phase 2's one-click OSM path: turn the admin-level groups
-// extracted from an Overpass dump (via osmtogeojson) into the Boundary[]
-// payload boundary-service expects. Pure functions — the Overpass fetch and
-// all UI state stay in Phase2Page.
+// Helpers for Phase 2's one-click fetch path: turn the admin-level groups
+// built from a turbopass /boundary/fetch response (GeoJSON features grouped
+// by admin_level, from whichever source served them) into the Boundary[]
+// payload boundary-service expects. Pure functions — the fetch and all UI
+// state stay in Phase2Page.
 //
 // Two deliberate exclusion rules (surfaced to the operator as a "skipped"
 // report instead of silently mangling the tree):
@@ -15,13 +16,16 @@ import { coerceForBoundaryService } from './boundaryGeoJson';
 import type { Boundary } from '@/api/types';
 
 export interface OsmAdminLevel {
-  /** OSM admin_level (numeric; higher = more specific) */
+  /** Admin level as the source numbers it (higher = more specific) */
   level: number;
-  /** GeoJSON features from osmtogeojson for this admin_level */
+  /** GeoJSON features the turbopass fetch returned at this admin_level */
   features: any[];
   examples: string[];
   /** Operator-provided hierarchy level name, e.g. "District" */
   mappedName: string;
+  /** The level's local name from the boundary source ("Ward"), used to
+   *  pre-fill mappedName; absent when the source doesn't know it. */
+  suggestedName?: string;
   /**
    * Whether this level is included in the hierarchy. The operator picks a
    * CONTIGUOUS subset of the discovered levels (trim the top/bottom, never a
@@ -320,4 +324,48 @@ export function buildOsmBoundaries(
   }
 
   return { boundaries, skipped };
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- turbopass GeoJSON is untyped */
+function levelKey(props: any): number | null {
+  if (Number.isInteger(props?.depth)) return props.depth;
+  // Servers that predate `depth` (and raw Geoapify) only carry the source's own number.
+  const n = Number.parseInt(props?.admin_level ?? props?.datasource?.raw?.admin_level, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+/**
+ * Groups a turbopass /boundary/fetch response into the levels Phase 2 shows.
+ * Only polygons count. Levels are numbered 1, 2, 3, … from the fetched place
+ * down, whatever numbering the source uses, and a level whose features share
+ * one local name (`level_name`, e.g. "Ward") gets it as its suggested name.
+ */
+export function groupFetchedLevels(features: any[] | null | undefined): OsmAdminLevel[] {
+  const groups = new Map<number, any[]>();
+  for (const feature of features ?? []) {
+    const type = feature?.geometry?.type;
+    if (type !== 'Polygon' && type !== 'MultiPolygon') continue;
+    const key = levelKey(feature.properties);
+    if (key === null) continue;
+    const list = groups.get(key);
+    if (list) list.push(feature);
+    else groups.set(key, [feature]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, levelFeatures], i) => {
+      const names = [...new Set(levelFeatures.map((f) => f.properties?.name).filter(Boolean))];
+      const levelNames = [...new Set(levelFeatures.map((f) => f.properties?.level_name).filter(Boolean))];
+      const suggestedName = levelNames.length === 1 ? String(levelNames[0]) : undefined;
+      return {
+        level: i + 1,
+        features: levelFeatures,
+        examples: names.slice(0, 3),
+        mappedName: suggestedName ?? '',
+        suggestedName,
+        // Default all selected (a contiguous, valid starting point); the
+        // operator trims the range and names what they keep.
+        selected: true,
+      };
+    });
 }

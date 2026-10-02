@@ -286,12 +286,12 @@ tree has a name — the **hierarchy**.
 
 You choose one of two sources:
 
-| | **Fetch from OpenStreetMap** | **Upload from Excel** |
+| | **Fetch boundaries** | **Upload from Excel** |
 |---|---|---|
 | Effort | search for your city, click | fill in a spreadsheet |
 | You get | real map polygons, so map pins resolve to the right ward | names and codes; polygons only if you also supply a GeoJSON file |
-| Control | whatever OSM has | exactly your official list |
-| Good for | a quick start, or a city OSM covers well | official boundaries that must match a government list |
+| Control | the official government sets (OCHA COD-AB / geoBoundaries) when the boundary server has them, otherwise OpenStreetMap | exactly your official list |
+| Good for | a quick start, with official levels down to wards or villages in many countries | boundaries that must match your own list exactly |
 
 Both then ask for the **hierarchy**: either create a new one — give it a name
 (`ADMIN` unless you have a reason) and list your levels top to bottom — or
@@ -938,8 +938,7 @@ reachable.
 | **Novu notification stack** | `enable_novu` (+ `build_novu_dashboard`) | Notification infra only (no config) | `enable-notifications.sh` above is the full turn-key path |
 | **Organization-aware identity** | `enable_keycloak` + `nginx_features.keycloak` | Keycloak 26.7.3 at `/auth/` + Identity BFF at `/identity/v1`; password, magic link, Google/GitHub; Organization tenant choice | See `docs/setup/deployment/identity-bff.md`; do not enable the retired `/kc` adapter |
 | **Citizen UI v2** | `enable_digit_ui_v2` + `nginx_features.digit_ui_v2` | Vite + React 19 citizen SPA at `/citizen/` | Both flags, or the bundle sits on disk unreachable |
-| **Turbopass (OSM autocomplete)** | `enable_turbopass` | Self-hosted location search from a prepared OSM extract | Prepare the data dir on the controller first |
-| **Overpass (OSM queries)** | `enable_overpass` | Self-hosted Overpass API | Prepare the country extract first — see `overpass/README.md` |
+| **Turbopass (boundary search)** | `enable_turbopass` (+ `turbopass_overture_data_dir`) | Phase 2 boundary search + fetch from the offline Overture DB; optional Geoapify | Build the Overture DB first — see `turbopass/README.md` |
 | **Real OTP (production SMS)** | `enable_otp_services` | Real OTP delivery instead of the console mock | ALSO remove the Kong mock plugin + set a real `SMS_PROVIDER_CLASS` — see `kong/kong.yml` notes |
 | **Integration-test dashboards** | `enable_integration_tests` + `nginx_features.integration_tests` (+ `_runner` pair for in-dashboard runs) | Published Playwright dashboards at `/tests/` | Runner is CPU/RAM heavy — shares the box with the live stack |
 | **Brand assets** | `nginx_features.brand_assets` | Local logo/banner mirror at `/brand/` | |

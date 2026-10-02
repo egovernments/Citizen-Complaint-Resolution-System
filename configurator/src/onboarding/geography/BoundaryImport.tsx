@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../../App';
 import {
   MapPin,
@@ -32,9 +32,30 @@ import { reportStepError, trackStepAction } from '../telemetry';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
-import { buildOsmBoundaries, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { buildOsmBoundaries, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import {
+  deadEndMessage,
+  formatSuggestionLabel,
+  pickPromptMessage,
+  pickSuggestion,
+  attributionLine,
+  availableSources,
+  chooseTurbopassSource,
+  fetchSourceFor,
+  isOfflineSource,
+  sourceLabel,
+  sourceOptionLabel,
+  tagWithSource,
+  tooFewLevelsMessage,
+  turbopassErrorMessage,
+  turbopassSearchUrl,
+} from '@/utils/turbopassSuggestions';
+import { summarizeBoundaryQuality } from '@/utils/boundaryQuality';
+import { validateGoogleMapsKey, type GoogleKeyCheck } from '@/utils/googleMaps';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
+import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
-import osmtogeojson from 'osmtogeojson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
 type Step =
@@ -88,12 +109,26 @@ function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; erro
 // proxies it to the search-api container); override via VITE_TURBOPASS_URL.
 const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
 
-// Overpass endpoint for the boundary-polygon fetch. Defaults to the public
-// instance (zero-config, but rate-limited / 504-prone under load). A deploy
-// that self-hosts Overpass sets VITE_OVERPASS_URL (e.g. same-origin
-// '/overpass/api/interpreter', proxied by nginx to the on-box container behind
-// the enable_overpass gate) at configurator build time.
-const OVERPASS_URL: string = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+// Boundary data source served by turbopass. Unset (the default), Phase 2 asks
+// the search-api's /health and uses 'official' — per country, the OCHA COD-AB
+// or geoBoundaries set that nests deepest (#1994) — when its DB has them, else
+// 'overture'. Both are offline: no API key, no per-call cost. Set
+// VITE_TURBOPASS_SOURCE at build time to pin one: official | overture | cod |
+// geoboundaries | geoapify (hosted; needs GEOAPIFY_API_KEY on the search-api).
+const CONFIGURED_TURBOPASS_SOURCE: string | undefined = import.meta.env.VITE_TURBOPASS_SOURCE;
+
+// How the overture search matches the typed name: 'exact' | 'prefix' |
+// 'substring' (default — the same candidates as before, now ranked exact →
+// prefix → substring, broadest level first) | 'fuzzy' (also tolerates a typo
+// or two). The geoapify source ignores it.
+const TURBOPASS_MATCH: string = import.meta.env.VITE_TURBOPASS_MATCH || 'substring';
+
+/** The `message` of a Nest error body, when it has one. */
+async function serverMessage(res: Response): Promise<string | undefined> {
+  const body = await res.json().catch(() => null);
+  const m = body?.message;
+  return typeof m === 'string' ? m : Array.isArray(m) ? m.join('; ') : undefined;
+}
 
 // Hierarchy type the OSM onboarding path writes. Deployment-agnostic: reads the
 // configured HIERARCHY_TYPE from the served globalConfigs (ansible renders it
@@ -272,10 +307,76 @@ export default function BoundaryImport({
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   // Full turbopass suggestion the operator picked (null once they edit the
-  // text again) — its countryCode scopes the Overpass query to one country.
+  // text again) — its place_id drives the turbopass /boundary/fetch call.
   const [pickedSuggestion, setPickedSuggestion] = useState<any | null>(null);
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
+  // The place whose boundaries were fetched — named on the level screen.
+  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; label: string } | null>(null);
+  // Credit line for the fetched data — the official sets' licences require it.
+  const [fetchedAttribution, setFetchedAttribution] = useState<string | null>(null);
+  const [turbopassSource, setTurbopassSource] = useState(() =>
+    chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
+  );
+  // Sources the boundary service can answer, from its /health: null while
+  // asking, [] when it isn't deployed or holds no data.
+  const [sourceChoices, setSourceChoices] = useState<string[] | null>(null);
+
+  // Switching source drops everything the old one returned: a suggestion's
+  // place_id only exists in the source that found it.
+  const changeSource = useCallback((next: string) => {
+    setTurbopassSource(next);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setPickedSuggestion(null);
+    setError(null);
+  }, []);
+
+  // What this server holds decides the dropdown and, unless the build pins a
+  // source, the default one.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${TURBOPASS_BASE}/health`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (cancelled) return;
+        setSourceChoices(availableSources(body?.sources));
+        if (!(CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) {
+          changeSource(chooseTurbopassSource(undefined, body?.sources));
+        }
+      })
+      .catch(() => {
+        // Not JSON (the SPA answering for a missing /turbopass/) or unreachable.
+        if (!cancelled) setSourceChoices([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [changeSource]);
+
+  // Google Maps (optional, #1994): kept in this tenant's MapConfig, so every
+  // map that honours MapConfig switches together.
+  const mapProvider = useMapProviderConfig(boundaryTenant);
+  const [googleKeyDraft, setGoogleKeyDraft] = useState('');
+  const [googleKeyStatus, setGoogleKeyStatus] = useState<{ kind: 'ok' | 'warn' | 'error'; text: string } | null>(null);
+  const [savingGoogleKey, setSavingGoogleKey] = useState(false);
+
+  // Recomputed only when the fetched place or the level SELECTION changes —
+  // not on every keystroke in a level-name field (the quality check runs the
+  // same point-in-polygon build the create step does).
+  const levelSelectionKey = `${fetchedPlace?.id ?? ''}|${adminLevels
+    .map((l) => `${l.level}:${l.selected ? 1 : 0}`)
+    .join(',')}`;
+  const boundaryQuality = useMemo(
+    () => summarizeBoundaryQuality(adminLevels),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the selection; level names don't change it
+    [levelSelectionKey],
+  );
+  const selectedFeatures = useMemo(
+    () => ({ type: 'FeatureCollection' as const, features: adminLevels.filter((l) => l.selected).flatMap((l) => l.features) }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraw the preview only when the selection changes
+    [levelSelectionKey],
+  );
 
   // Created boundaries tracking (both paths)
   const [createdCounts, setCreatedCounts] = useState<Record<string, number>>({});
@@ -315,34 +416,26 @@ export default function BoundaryImport({
     // Only fetch if showSuggestions is true (meaning user is actively typing, not just selected an item)
     if (!showSuggestions) return;
 
+    let stale = false;
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await fetch(`${TURBOPASS_BASE}/search?q=${encodeURIComponent(searchTerm)}&limit=5`);
-        if (!res.ok) throw new Error(`Turbopass search returned ${res.status}`);
+        // Only places with areas inside them: anything else can't form a hierarchy.
+        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, searchTerm, turbopassSource, TURBOPASS_MATCH, true));
+        if (!res.ok) throw new Error(`Turbopass boundary search returned ${res.status}`);
         const data = await res.json();
-        // The API ignores `limit` — slice client-side regardless.
-        setSuggestions((data.results || []).slice(0, 5));
+        // An answer for a term or source the operator has since changed is dropped.
+        if (!stale) setSuggestions(tagWithSource(data.features, turbopassSource).slice(0, 5));
       } catch (e) {
-        console.debug('Turbopass suggestions unavailable', e);
-        setSuggestions([]);
+        console.debug('Turbopass boundary suggestions unavailable', e);
+        if (!stale) setSuggestions([]);
       }
     }, 500);
 
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, showSuggestions]);
-
-  const formatSuggestion = (item: any) => {
-    const parts = [];
-    if (item.name) parts.push(item.name);
-    if (item.stateName && item.stateName !== item.name) parts.push(item.stateName);
-    if (item.countryName && item.countryName !== item.stateName && item.countryName !== item.name) parts.push(item.countryName);
-
-    const type = item.placeType || 'location';
-    return {
-      text: parts.join('/'),
-      type: `[${type}]`
+    return () => {
+      stale = true;
+      clearTimeout(timeoutId);
     };
-  };
+  }, [searchTerm, showSuggestions, turbopassSource]);
 
   // ============================================
   // Excel path handlers (develop's original flow)
@@ -593,143 +686,149 @@ export default function BoundaryImport({
   // ============================================
 
   const handleSearch = async () => {
-    if (!searchTerm.trim()) {
+    const term = searchTerm.trim();
+    if (!term) {
       setError("Please enter a location name to search.");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      // Escape quotes/backslashes so a name like `Saint "X"` can't break out
-      // of the Overpass QL string literal.
-      const escaped = searchTerm.trim().replace(/[\\"]/g, '\\$&');
-      const countryCode = typeof pickedSuggestion?.countryCode === 'string'
-        ? pickedSuggestion.countryCode.trim().toUpperCase().replace(/[\\"]/g, '\\$&')
-        : '';
-
-      // OSM stores a place's primary `name` in the LOCAL language, but the
-      // typeahead (Turbopass) usually surfaces a translated/anglicized name —
-      // e.g. it suggests "Maputo Province" while the OSM relation's name is
-      // "Maputo" (the English label lives only in name:en). A strict
-      // ["name"="Maputo Province"] match then resolves nothing, so the search
-      // dead-ends with "No administrative boundaries found" (issue #757).
-      // Match the picked name against the common name variants so either the
-      // native or the translated form resolves the relation.
-      const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
-      const relByName = NAME_KEYS
-        .map(k => `  rel(area.country)["boundary"="administrative"]["${k}"="${escaped}"];`)
-        .join('\n');
-      const areaByName = NAME_KEYS
-        .map(k => `  area["${k}"="${escaped}"]["boundary"="administrative"];`)
-        .join('\n');
-
-      // When the operator picked a typeahead suggestion with a country code,
-      // scope the lookup to that country and resolve the named relation
-      // itself (included in the output so the root level isn't lost).
-      // Otherwise fall back to the worldwide name match, constrained to
-      // administrative areas.
-      const query = countryCode
-        ? `[out:json][timeout:90];
-area["ISO3166-1"="${countryCode}"][admin_level=2]->.country;
-(
-${relByName}
-)->.target;
-.target map_to_area ->.searchArea;
-(
-  rel(area.searchArea)["boundary"="administrative"];
-  .target;
-);
-out body;
->;
-out skel qt;`
-        : `[out:json][timeout:90];
-(
-${areaByName}
-)->.searchArea;
-(
-  rel(area.searchArea)["boundary"="administrative"];
-);
-out body;
->;
-out skel qt;`;
-
-      const res = await fetch(OVERPASS_URL, {
-        method: 'POST',
-        body: query
-      });
-      if (!res.ok) throw new Error("Overpass API failed");
-      const data = await res.json();
-
-      const geojson = osmtogeojson(data);
-
-      let targetAdminLevel = 0;
-      const sTerm = searchTerm.toLowerCase().trim();
-      geojson.features.forEach((feature: any) => {
-        const props = feature.properties || {};
-        // Match the search term against the same name variants the query
-        // resolves on (name/name:en/int_name/alt_name) — otherwise a place
-        // picked by its translated name (e.g. "Maputo Province" vs the OSM
-        // name "Maputo") never matches here and the root level isn't found.
-        const featNames = NAME_KEYS
-          .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
-          .filter(Boolean);
-        if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
-          const lvl = parseInt(props.admin_level, 10);
-          // If we found a match, we prefer the HIGHEST admin_level number (most specific)
-          // Wait, if it's the search target, it should be the ROOT.
-          // e.g. "Maputo" matches Level 4 (Cidade de maputo).
-          // If "Maputo" also matches a Level 8 "Maputo Bairro", we might accidentally set targetAdminLevel to 8,
-          // filtering out Level 4! That's bad.
-          // We want the LOWEST admin_level number that matches, so we don't accidentally filter out the actual city!
-          if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl < targetAdminLevel)) {
-            targetAdminLevel = lvl;
-          }
+      let suggestion = pickedSuggestion;
+      if (!suggestion) {
+        // The operator hit Search without choosing a suggestion. Resolve the
+        // typed term only when exactly one result carries exactly that name;
+        // otherwise show the ranked, disambiguated candidates and let the
+        // operator choose, rather than taking whatever came back first (#1016:
+        // "Delhi" used to resolve to "Delhi Govt Flats").
+        const res = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, true));
+        if (!res.ok) {
+          setError(turbopassErrorMessage({
+            kind: 'search', source: turbopassSource, status: res.status, serverMessage: await serverMessage(res),
+          }));
+          return;
         }
-      });
-
-      const levelsMap = new Map<number, any[]>();
-      geojson.features.forEach((feature: any) => {
-        // osmtogeojson also emits member WAYS carrying boundary tags as
-        // standalone LineString features — only real areas count, otherwise
-        // level counts inflate, the skip report floods, and unit-square
-        // phantom roots appear.
-        const geomType = feature.geometry?.type;
-        if (geomType !== 'Polygon' && geomType !== 'MultiPolygon') return;
-        if (feature.properties?.boundary === 'administrative' && feature.properties?.admin_level) {
-          const lvl = parseInt(feature.properties.admin_level, 10);
-          if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl >= targetAdminLevel)) {
-            if (!levelsMap.has(lvl)) levelsMap.set(lvl, []);
-            levelsMap.get(lvl)!.push(feature);
-          }
+        const data = await res.json();
+        const result = pickSuggestion(tagWithSource(data.features, turbopassSource), term);
+        if (result.reason === 'no-results' && isOfflineSource(turbopassSource)) {
+          // Nothing with areas inside it matched. If the name exists only as a
+          // place with nothing inside it, say so — and where it lies.
+          const all = await fetch(turbopassSearchUrl(TURBOPASS_BASE, term, turbopassSource, TURBOPASS_MATCH, false))
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+          const leaf = all?.features?.[0];
+          setError(leaf ? deadEndMessage(leaf) : pickPromptMessage(result, term));
+          return;
         }
-      });
+        if (!result.pick) {
+          setSuggestions(result.candidates.slice(0, 5));
+          setShowSuggestions(result.candidates.length > 0);
+          setError(pickPromptMessage(result, term));
+          return;
+        }
+        suggestion = result.pick;
+        setPickedSuggestion(suggestion);
+      }
 
-      const extractedLevels: OsmAdminLevel[] = Array.from(levelsMap.entries()).map(([level, features]) => {
-        const uniqueNames = Array.from(new Set(features.map(f => f.properties.name).filter(Boolean)));
-        return {
-          level,
-          features,
-          examples: uniqueNames.slice(0, 3),
-          mappedName: '',
-          // Default all selected (a contiguous, valid starting point); the
-          // operator trims the range and names what they keep.
-          selected: true,
-        };
-      }).sort((a, b) => a.level - b.level);
-
-      if (extractedLevels.length === 0) {
-        setError("No administrative boundaries found. Please try a different location.");
-        setLoading(false);
+      const placeId = suggestion?.properties?.place_id;
+      const placeName = suggestion?.properties?.name || term;
+      if (!placeId) {
+        setError('Pick a place from the suggestions.');
+        return;
+      }
+      // Overture says up front when nothing lies inside the place (#1016 point 3).
+      if (suggestion.properties.descendant_count === 0) {
+        setError(deadEndMessage(suggestion));
         return;
       }
 
+      // Fetch from the source that found the place, whatever the dropdown says now.
+      const source = fetchSourceFor(suggestion, turbopassSource);
+      const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=${encodeURIComponent(source)}`);
+      if (!res.ok) {
+        setError(turbopassErrorMessage({
+          kind: 'fetch', source, status: res.status, serverMessage: await serverMessage(res), place: placeName,
+        }));
+        return;
+      }
+      const geojson = await res.json();
+
+      // The fetch returns the picked place and what lies inside it — never
+      // anything above it — so every polygon with an admin level belongs. The
+      // old target-level detection name-matched the search term against the
+      // features and could latch onto the wrong one (#1016 point 1).
+      const extractedLevels = groupFetchedLevels(geojson.features);
+
+      if (extractedLevels.length === 0) {
+        setError(`No administrative boundaries came back for "${placeName}". Try a different place.`);
+        return;
+      }
+      // A hierarchy needs two levels. Stop here with the reason rather than
+      // open a level screen that can't be completed (#1016 point 3) — this is
+      // the check that covers Geoapify, which can't say so up front.
+      if (extractedLevels.length < 2) {
+        setError(tooFewLevelsMessage(suggestion, (geojson.features ?? []).length));
+        return;
+      }
+
+      setFetchedPlace({ id: placeId, label: suggestion.properties.formatted || placeName });
+      setFetchedAttribution(attributionLine(geojson.features));
       setAdminLevels(extractedLevels);
       setStep('map-levels');
     } catch (e) {
       console.error(e);
-      setError("Failed to fetch data from OSM. Please try again.");
+      setError(turbopassErrorMessage({ kind: 'network', source: turbopassSource }));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Google Maps key (optional, #1994): check it with Google first, then store
+  // it in this tenant's MapConfig so every map that reads MapConfig switches.
+  const saveGoogleMapsKey = async () => {
+    const key = googleKeyDraft.trim();
+    setSavingGoogleKey(true);
+    setGoogleKeyStatus(null);
+    try {
+      let check: GoogleKeyCheck;
+      try {
+        check = await validateGoogleMapsKey(key);
+      } catch (e) {
+        setGoogleKeyStatus({ kind: 'error', text: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      await mdmsService.upsertMapConfig(boundaryTenant, { mapProvider: 'google', googleMapsApiKey: key });
+      await mapProvider.reload();
+      setGoogleKeyDraft('');
+      setGoogleKeyStatus(check === 'ok'
+        ? { kind: 'ok', text: `Saved. Maps for ${boundaryTenant} now draw on Google Maps.` }
+        : {
+            kind: 'warn',
+            text: `Saved, but Google didn't confirm the key in time, so it isn't verified. If Google rejects it later, ` +
+              `maps for ${boundaryTenant} fall back to OpenStreetMap tiles and say why.`,
+          });
+    } catch (e) {
+      setGoogleKeyStatus({
+        kind: 'error',
+        text: `Google accepted the key, but saving it to Map Config failed: ${e instanceof Error ? e.message : String(e)}. ` +
+          'A deployment whose MapConfig schema predates the mapProvider field rejects it — see docs/features/maps/README.md.',
+      });
+    } finally {
+      setSavingGoogleKey(false);
+    }
+  };
+
+  const switchToOpenStreetMap = async () => {
+    setSavingGoogleKey(true);
+    setGoogleKeyStatus(null);
+    try {
+      await mdmsService.upsertMapConfig(boundaryTenant, { mapProvider: 'leaflet' });
+      await mapProvider.reload();
+      setGoogleKeyStatus({ kind: 'ok', text: `Maps for ${boundaryTenant} are back on OpenStreetMap tiles.` });
+    } catch (e) {
+      setGoogleKeyStatus({ kind: 'error', text: `Couldn't update Map Config: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setSavingGoogleKey(false);
     }
   };
 
@@ -1293,10 +1392,26 @@ out skel qt;`;
         <DigitCard>
           <div className="border border-border rounded-xl p-8 bg-card text-center space-y-4">
             <Search className="h-12 w-12 mx-auto text-primary opacity-80" />
-            <h2 className="text-xl font-semibold">Fetch Boundaries from OSM</h2>
+            <h2 className="text-xl font-semibold">Fetch boundaries</h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Enter the name of your city or region to automatically fetch administrative boundaries and their map polygons from OpenStreetMap.
+              Enter the name of your city or region to fetch its administrative boundaries and their map polygons.
             </p>
+
+            {sourceChoices && sourceChoices.length > 0 && (
+              <div className="max-w-sm mx-auto text-left space-y-1">
+                <label htmlFor="boundary-source" className="text-sm font-medium">Boundary source</label>
+                <Select value={turbopassSource} onValueChange={changeSource} disabled={loading}>
+                  <SelectTrigger id="boundary-source" data-testid="boundary-source">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(sourceChoices.includes(turbopassSource) ? sourceChoices : [turbopassSource, ...sourceChoices]).map((s) => (
+                      <SelectItem key={s} value={s}>{sourceOptionLabel(s)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="relative max-w-sm mx-auto pt-4">
               <div className="flex space-x-2">
@@ -1320,13 +1435,15 @@ out skel qt;`;
                 <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground border rounded-md shadow-md overflow-hidden">
                   <ul className="py-1">
                     {suggestions.map((item, i) => {
-                      const { text, type } = formatSuggestion(item);
+                      const { text, type } = formatSuggestionLabel(item);
                       return (
                         <li
                           key={i}
                           className="px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground text-left text-sm flex items-center justify-between"
                           onClick={() => {
-                            setSearchTerm(item.name || text.split('/')[0]);
+                            // The place's own name, not the long label —
+                            // handleSearch compares it for an exact name match.
+                            setSearchTerm(item.properties?.name || item.name || text);
                             setPickedSuggestion(item);
                             setShowSuggestions(false);
                           }}
@@ -1339,6 +1456,42 @@ out skel qt;`;
                   </ul>
                 </div>
               )}
+            </div>
+
+            <div className="max-w-sm mx-auto pt-6 text-left">
+              <details className="rounded-lg border border-border px-4 py-3" open={mapProvider.provider === 'google' || !!googleKeyStatus}>
+                <summary className="cursor-pointer text-sm font-medium">
+                  Map provider: {mapProvider.provider === 'google' ? 'Google Maps' : 'OpenStreetMap tiles'} (optional)
+                </summary>
+                <div className="space-y-3 pt-3 text-sm">
+                  <p className="text-muted-foreground">
+                    Boundaries come from {sourceLabel(turbopassSource)} either way — a Google Maps key only changes the
+                    map they are drawn on, here and on the boundary pages. It is saved in this tenant's Map Config and sent
+                    to every browser that shows a map, so restrict it to this site in Google Cloud Console.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={mapProvider.googleMapsApiKey ? 'Replace the saved key' : 'Google Maps JavaScript API key'}
+                      value={googleKeyDraft}
+                      onChange={(e) => setGoogleKeyDraft(e.target.value)}
+                      disabled={savingGoogleKey}
+                    />
+                    <Button variant="outline" onClick={saveGoogleMapsKey} disabled={!googleKeyDraft.trim() || savingGoogleKey}>
+                      {savingGoogleKey ? <Loader2 className="animate-spin h-4 w-4" /> : 'Save'}
+                    </Button>
+                  </div>
+                  {mapProvider.provider === 'google' && (
+                    <Button variant="link" size="sm" className="px-0 h-auto" onClick={switchToOpenStreetMap} disabled={savingGoogleKey}>
+                      Switch back to OpenStreetMap tiles
+                    </Button>
+                  )}
+                  {googleKeyStatus && (
+                    <p className={googleKeyStatus.kind === 'ok' ? 'text-green-700' : googleKeyStatus.kind === 'warn' ? 'text-amber-700' : 'text-destructive'}>{googleKeyStatus.text}</p>
+                  )}
+                </div>
+              </details>
             </div>
           </div>
 
@@ -1359,10 +1512,41 @@ out skel qt;`;
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Header>Map Admin Levels</Header>
             <SubHeader>
-              We found {adminLevels.length} levels of administrative boundaries for {searchTerm}.
+              We found {adminLevels.length} levels of administrative boundaries for {fetchedPlace?.label || searchTerm}.
               Tick the levels to include and name each — the selection must be a
               contiguous range (you can drop the outer levels, but not skip one in the middle).
             </SubHeader>
+            {fetchedAttribution && (
+              <p className="text-xs text-muted-foreground" data-testid="boundary-attribution">{fetchedAttribution}</p>
+            )}
+
+            {boundaryQuality && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm space-y-2">
+                <div className="font-medium">
+                  Data check for the selected levels: {boundaryQuality.totalAreas.toLocaleString()} areas,{' '}
+                  {boundaryQuality.kept.toLocaleString()} will be created
+                  {boundaryQuality.skipped > 0 ? `, ${boundaryQuality.skipped.toLocaleString()} skipped` : ''}
+                </div>
+                <ul className="space-y-1 text-muted-foreground">
+                  {boundaryQuality.levels.map((q) => (
+                    <li key={q.level}>
+                      Level {q.level}: {q.kept.toLocaleString()} of {q.total.toLocaleString()} areas
+                      {q.parentsTotal != null && ` · present in ${q.parentsCovered} of ${q.parentsTotal} areas of the level above`}
+                      {q.noParent > 0 && ` · ${q.noParent} lie in no area of the level above (skipped)`}
+                      {q.unnamed > 0 && ` · ${q.unnamed} unnamed (skipped)`}
+                    </li>
+                  ))}
+                </ul>
+                {boundaryQuality.levels.some((q) => q.parentsTotal != null && (q.parentsCovered ?? 0) < q.parentsTotal) && (
+                  <p className="text-xs text-muted-foreground">
+                    An area with nothing inside it at the next level is where the map data stops: it becomes a leaf of
+                    your hierarchy.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <BoundaryMap data={selectedFeatures} height="320px" google={mapProvider.google} />
 
             <div className="space-y-4 pt-4">
               {adminLevels.map((lvl, index) => (
@@ -1385,7 +1569,7 @@ out skel qt;`;
                       />
                       <span>
                         <h3 className="font-medium text-lg flex items-center">
-                          OSM Admin Level {lvl.level}
+                          Level {lvl.level}
                           <Badge variant="outline" className="ml-2 bg-background">
                             {lvl.features.length} regions
                           </Badge>
@@ -1410,6 +1594,11 @@ out skel qt;`;
                         }}
                         disabled={loading}
                       />
+                      {lvl.suggestedName && lvl.mappedName === lvl.suggestedName && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Suggested: what {fetchedPlace?.label?.split(', ').pop() || 'this country'} calls this level. Edit it if your tenant uses another name.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
