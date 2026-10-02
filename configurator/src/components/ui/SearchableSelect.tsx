@@ -140,11 +140,15 @@ export function SearchableSelect({
         }
         break;
       case 'Escape':
+      case 'Tab':
         setOpen(false);
         setQuery('');
         break;
       default:
-        setOpen(true);
+        // Only open on printable characters or deletion keys (not modifier keys like Shift, Ctrl, Alt)
+        if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
+          setOpen(true);
+        }
         break;
     }
   };
@@ -180,6 +184,12 @@ export function SearchableSelect({
             setQuery('');
             setOpen(true);
             updatePlacement();
+          }}
+          onBlur={(e) => {
+            if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+              setOpen(false);
+              setQuery('');
+            }
           }}
           onKeyDown={handleKey}
           className="pr-14"
