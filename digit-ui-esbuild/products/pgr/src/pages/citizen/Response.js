@@ -154,7 +154,7 @@ const Response = () => {
   const rows =
     filed && summary
       ? [
-          [tr("CS_FILE_CATEGORY_LABEL", "Category"), summary.category || "—"],
+          [tr("CS_FILE_CATEGORY_LABEL", "Complaint Category"), summary.category || "—"],
           [tr("CS_FILE_STEP_LOCATION", "Location"), summary.location || "—"],
           [tr("CS_FILE_FILED_ON", "Filed on"), summary.filedAt ? filedOn(summary.filedAt, tr) : "—"],
           [
