@@ -100,7 +100,6 @@
           - image_tag is not defined or image_tag is none or image_tag is string
           - ccrs_image_tag | length == 0 or ccrs_image_tag is match('^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$')
           - ccrs_image_tag_services | difference(ccrs_image_catalog | map(attribute='image')) | length == 0
-          - ccrs_image_tag | length > 0 or ccrs_image_tag_services | length == 0
         fail_msg: |
           image_tag='{{ ccrs_image_tag }}' image_tag_services={{ ccrs_image_tag_services }}
           - image_tag must be a Docker tag (letters, digits, . _ -; max 128), e.g. develop-1a2b3c4d.
@@ -109,8 +108,15 @@
           - image_tag_services must name images from ccrs_image_catalog (group_vars/digit.yml):
               {{ ccrs_image_catalog | map(attribute='image') | join(', ') }}
             unknown: {{ ccrs_image_tag_services | difference(ccrs_image_catalog | map(attribute='image')) | join(', ') or '-' }}
-          - image_tag_services without image_tag does nothing — pass both.
         quiet: true
+      tags: [always]
+
+    # A scope kept in host_vars for per-run `--image-tag` deploys must not break
+    # the untagged ones (cron, plain `./deploy.sh <t>`): it is a no-op there.
+    - name: "Image tag — note a scope that has no tag to apply"
+      ansible.builtin.debug:
+        msg: "image_tag_services={{ ccrs_image_tag_services }} has no effect: no image_tag for this deploy, so every image stays on its pin or compose-file default."
+      when: ccrs_image_tag | length == 0 and ccrs_image_tag_services | length > 0
       tags: [always]
 
     # A service and its `-db` migration image always move together, whichever of
@@ -1603,14 +1609,11 @@
     # it empty so MCP_IMAGE renders empty in .env and Compose's own
     # `${MCP_IMAGE:-default}` fallback — the single source of truth for the
     # pulled tag — takes over. An operator can still override `mcp_image:`
-    # explicitly in host_vars. `image_tag` (#1729) sits between the two: it
-    # moves the pulled image but never overrides build_mcp or a pin.
+    # explicitly in host_vars. `image_tag` (#1729) is applied by the catalog
+    # resolver below, which a pin or the :local build outranks.
     - name: "Resolve MCP image tag"
       ansible.builtin.set_fact:
-        mcp_image: >-
-          {{ mcp_image
-             | default('digit-mcp:local' if (build_mcp | default(false))
-                       else ccrs_tagged_images['digit-mcp']) }}
+        mcp_image: "{{ mcp_image | default('digit-mcp:local' if (build_mcp | default(false)) else '') }}"
 
     # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
     # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
@@ -1631,14 +1634,13 @@
     # pull the published image. The old default was the local-only tag in BOTH
     # cases, so a tenant that enabled notifications without opting into the build
     # selected an image that exists in no registry — `pull` skipped it
-    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy.
+    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy. Empty
+    # leaves Compose's `${OTP_PUBLISHER_IMAGE:-…}` published default (or the tag,
+    # via the catalog resolver below) in charge.
     # Override with `otp_publisher_image:` in host_vars.
     - name: "Resolve otp-publisher image tag"
       ansible.builtin.set_fact:
-        otp_publisher_image: >-
-          {{ otp_publisher_image
-             | default('otp-publisher:local' if (build_otp_publisher | default(false))
-                       else (ccrs_tagged_images['otp-publisher'] or 'egovio/otp-publisher:2.12-81fc6be')) }}
+        otp_publisher_image: "{{ otp_publisher_image | default('otp-publisher:local' if (build_otp_publisher | default(false)) else '') }}"
 
     # ==================== Compose profiles ====================
     # Computed here, before the image-tag check below, which uses them to skip
@@ -1697,23 +1699,32 @@
     # that sets a literal `image:` on a catalog service beats .env, so neither a
     # pin nor the tag reaches that container — while the plan and .env would
     # claim otherwise (Vinoth review on #2166). Find those services by reading
-    # the base compose files for which service reads which catalog env var,
-    # then the overlay for literal images on the same services. Both files are
-    # read on the controller, where the overlay is copied from.
+    # every base compose file the deploy layers (same list as compose_files
+    # below) for which service reads which catalog env var, then the overlay for
+    # literal images on the same services. Read on the controller, where the
+    # overlay is copied from, and only when there is an overlay. Compose's
+    # `!reset` / `!override` merge tags are stripped first: the safe YAML loader
+    # cannot construct them, and only `image:` matters here.
+    # Why not `docker compose config`: it needs the rendered .env (many `${X:?}`
+    # variables), and this check must run before .env is rewritten so a refused
+    # tag leaves the running stack untouched.
     - name: "Image tag — find catalog images the tenant overlay hard-codes"
       ansible.builtin.set_fact:
         ccrs_overlay_images: >-
+          {% set out = {} -%}
+          {% if per_tenant_overlay.stat.exists | default(false) -%}
+          {% set strip = '!(?:reset|override)(?![\w-])' -%}
           {% set envs = ccrs_image_catalog | map(attribute='env') | list -%}
           {% set svc_env = {} -%}
-          {% for f in ['docker-compose.egov-digit.yaml', 'docker-compose.migrations.yml'] -%}
-          {% for name, svc in ((lookup('ansible.builtin.file', playbook_dir ~ '/../' ~ f) | from_yaml).services | default({})).items() -%}
-          {% set m = (svc.image | default('') | string) | regex_search('^\$\{(\w+):-', '\\1') -%}
+          {% for f in ['docker-compose.egov-digit.yaml']
+                      + (['docker-compose.fast-path.yml'] if (db_fast_path | default(false)) else [])
+                      + ['docker-compose.migrations.yml', 'docker-compose.monitoring.yml', 'docker-compose.matomo.yml'] -%}
+          {% for name, svc in (((lookup('ansible.builtin.file', playbook_dir ~ '/../' ~ f) | regex_replace(strip, '') | from_yaml) or {}).services | default({}) or {}).items() -%}
+          {% set m = ((svc or {}).image | default('') | string) | regex_search('^\$\{(\w+):-', '\\1') -%}
           {% if m and m[0] in envs %}{% set _ = svc_env.update({name: m[0]}) %}{% endif -%}
           {% endfor -%}
           {% endfor -%}
-          {% set out = {} -%}
-          {% if per_tenant_overlay.stat.exists | default(false) -%}
-          {% set overlay = lookup('ansible.builtin.file', per_tenant_overlay.stat.path) | from_yaml -%}
+          {% set overlay = lookup('ansible.builtin.file', per_tenant_overlay.stat.path) | regex_replace(strip, '') | from_yaml -%}
           {% for name, svc in ((overlay or {}).services | default({}) or {}).items() -%}
           {% set img = (svc or {}).image | default('') | string -%}
           {% if img and not img.startswith('${') and name in svc_env -%}
@@ -1724,15 +1735,18 @@
           {{ out }}
 
     # Final ref of every catalog image, most specific first:
-    #   pin      the host_vars pin (for MCP/otp-publisher, the resolution above,
-    #            which already folded in build_* and the tag). A pin equal to the
-    #            tagged ref counts as `tag`.
-    #   held     a `-db` image the tag covers whose SERVICE is pinned off the tag
-    #            stays on its compose-file default, as on master. Moving it to the
-    #            tag would run the newer build's forward-only migrations under the
-    #            older pinned service; deriving a ref from the service's pin was
-    #            tried and broke locally built pins such as `:abac-local`, whose
-    #            -db twin exists in no registry (Vinoth review on #2166). Warned.
+    #   pin      the host_vars pin, or `:local` for build_mcp / build_otp_publisher
+    #            (resolved above). A pin equal to the tagged ref counts as `tag`.
+    #   held     an image the tag covers whose PAIR (service <-> its `-db`
+    #            migrator, via catalog `follows`) is kept off the tag, by a pin or
+    #            by a literal image in the tenant overlay, stays on its
+    #            compose-file default, as on master. Either way round, moving only
+    #            one side would run a service against a schema from another build:
+    #            a newer -db's forward-only migrations under an older service, or a
+    #            newer service on migrations that never ran. Deriving a ref from
+    #            the pair's pin was tried and broke locally built pins such as
+    #            `:abac-local`, whose twin exists in no registry (Vinoth review on
+    #            #2166 and #2219). Warned.
     #   tag      <image_tag_namespace>/<image>:<image_tag>
     #   default  EMPTY, so the compose-file default applies.
     # `overlay` records a literal image the tenant overlay forces (see above).
@@ -1743,16 +1757,27 @@
       ansible.builtin.set_fact:
         ccrs_image_resolved: >-
           {% set active_profiles = compose_profiles.split(',') | reject('equalto', '') | list -%}
+          {% set off_tag = {} -%}
+          {% for e in ccrs_image_catalog -%}
+          {% set pin = lookup('vars', e.var, default='') | default('', true) -%}
+          {% if e.env in ccrs_overlay_images -%}
+          {% set _ = off_tag.update({e.image: 'docker-compose.' ~ inventory_hostname ~ '.yml'}) -%}
+          {% elif pin and pin != ccrs_tagged_images[e.image] -%}
+          {% set _ = off_tag.update({e.image: '`' ~ e.var ~ '`'}) -%}
+          {% endif -%}
+          {% endfor -%}
           {% set out = {} -%}
           {% for e in ccrs_image_catalog -%}
           {% set pin = lookup('vars', e.var, default='') | default('', true) -%}
           {% set tagged = ccrs_tagged_images[e.image] -%}
-          {% set parent = (ccrs_image_catalog | selectattr('image', 'equalto', e.follows) | first) if e.follows is defined else {} -%}
-          {% set parent_pin = (lookup('vars', parent.var, default='') | default('', true)) if parent else '' -%}
+          {% set pairs = ([e.follows] if e.follows is defined else [])
+                + (ccrs_image_catalog | selectattr('follows', 'defined') | selectattr('follows', 'equalto', e.image)
+                   | map(attribute='image') | list) -%}
+          {% set held_by = pairs | select('in', off_tag) | list -%}
           {% if pin and pin != tagged -%}
           {% set r = {'ref': pin, 'why': 'local' if pin.endswith(':local') else 'pin'} -%}
-          {% elif tagged and parent_pin and parent_pin != ccrs_tagged_images[e.follows] -%}
-          {% set r = {'ref': '', 'why': 'held', 'parent_var': parent.var} -%}
+          {% elif tagged and held_by -%}
+          {% set r = {'ref': '', 'why': 'held', 'pair': held_by[0], 'held_by': off_tag[held_by[0]]} -%}
           {% elif tagged -%}
           {% set r = {'ref': tagged, 'why': 'tag'} -%}
           {% else -%}
@@ -1786,7 +1811,7 @@
           {% set lines = ['image_tag: ' ~ (ccrs_image_tag or '(none: compose-file defaults)')
                 ~ ((' (only ' ~ scope | join(', ') ~ ', each with its -db image)') if ccrs_image_tag_services else '')] -%}
           {% set reasons = {'pin': 'pinned by `{var}` in host_vars', 'local': 'built on this host',
-                'held': 'kept on its compose-file default because its service is pinned by `{parent}`'} -%}
+                'held': 'kept on its compose-file default because its pair {pair} is kept off the tag by {held_by}'} -%}
           {% for i, r in ccrs_image_resolved.items() -%}
           {% if r.overlay -%}
           {% set shown = r.overlay -%}
@@ -1794,7 +1819,7 @@
           {% else -%}
           {% set shown = r.ref or '(compose-file default)' -%}
           {% set note = ('   <-- NOT ' ~ ccrs_image_tag ~ ': ' ~ reasons[r.why] | replace('{var}', r.var)
-                | replace('{parent}', r.parent_var | default('')))
+                | replace('{pair}', r.pair | default('')) | replace('{held_by}', r.held_by | default('')))
                 if (ccrs_tagged_images[i] and r.why in reasons) else '' -%}
           {% endif -%}
           {% set off = '' if r.active else '   (not deployed: profile ' ~ r.profiles | join('/') ~ ' is off)' -%}
@@ -1816,8 +1841,9 @@
           {% set out = [] -%}
           {% for i, r in ccrs_image_resolved.items() -%}
           {% if r.why == 'held' -%}
-          {% set _ = out.append(i ~ ' stays on its compose-file default: its service is pinned by `' ~ r.parent_var
-                ~ '`. Pin `' ~ r.var ~ '` to the -db image matching that pin if the service needs newer migrations.') -%}
+          {% set _ = out.append(i ~ ' stays on its compose-file default: its pair ' ~ r.pair ~ ' is kept off the tag by '
+                ~ r.held_by ~ '. Pin `' ~ r.var ~ '` to the image matching ' ~ r.pair
+                ~ ' (or move ' ~ r.pair ~ ' to the tag) so service and migrations come from one build.') -%}
           {% endif -%}
           {% if r.overlay and ccrs_tagged_images[i] -%}
           {% set _ = out.append(i ~ ' runs ' ~ r.overlay ~ ', set in docker-compose.' ~ inventory_hostname
@@ -1843,7 +1869,7 @@
     # counts as missing vs. unverifiable: files/check-image-tags.sh.
     - name: "Image tag — verify every tagged image exists in the registry"
       ansible.builtin.script:
-        cmd: "{{ playbook_dir }}/files/check-image-tags.sh {{ ccrs_image_tag_refs | map('quote') | join(' ') }}"
+        cmd: "{{ (playbook_dir ~ '/files/check-image-tags.sh') | quote }} {{ ccrs_image_tag_refs | map('quote') | join(' ') }}"
         executable: /bin/bash
       vars:
         ccrs_image_tag_refs: >-
@@ -3786,7 +3812,7 @@
         fail_msg: >-
           digit-mcp-readonly is running but /v1/version reports readOnly=false on
           {{ inventory_hostname }} — the configured MCP image
-          ({{ mcp_image | default('the egovio/digit-mcp default tag') }}) predates
+          ({{ mcp_image or ccrs_image_resolved['digit-mcp'].ref or 'the egovio/digit-mcp compose default' }}) predates
           MCP_READ_ONLY and is serving the FULL write toolset on the public /mcp +
           /v1 routes. Build from source (build_mcp: true) or set mcp_image /
           MCP_IMAGE to a tag that carries the flag, then redeploy.
