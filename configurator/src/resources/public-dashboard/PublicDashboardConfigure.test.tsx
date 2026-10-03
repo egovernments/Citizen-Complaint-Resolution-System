@@ -25,6 +25,16 @@ vi.mock('@/api/services/mdms', () => ({
   },
 }));
 
+// Provide a small, deterministic timezone list so tests don't depend on the
+// host Node runtime's complete IANA dataset.
+vi.mock('@/lib/timezones', () => ({
+  listTimeZones: () => [
+    'Africa/Maputo',
+    'Africa/Nairobi',
+    'Asia/Kolkata',
+  ],
+}));
+
 import PublicDashboardConfigure from './PublicDashboardConfigure';
 
 /** MDMS record wrapper the screen reads `.data` off. */
@@ -165,28 +175,43 @@ describe('PublicDashboardConfigure', () => {
 
   it('loads the saved time zone, defaulting to Africa/Nairobi when unset', async () => {
     render(<PublicDashboardConfigure />);
-    const select = await screen.findByLabelText('Dashboard time zone');
-    expect(select).toHaveValue('Africa/Nairobi');
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+    expect(input).toHaveValue('Africa/Nairobi');
   });
 
   it('shows a tenant-configured time zone instead of the default', async () => {
     getConfig.mockResolvedValue({ data: { id: 'default', timeZone: 'Asia/Kolkata' } });
     render(<PublicDashboardConfigure />);
-    const select = await screen.findByLabelText('Dashboard time zone');
-    expect(select).toHaveValue('Asia/Kolkata');
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+    expect(input).toHaveValue('Asia/Kolkata');
   });
 
   it('still shows a saved value the runtime tz database does not recognize (not blank)', async () => {
     getConfig.mockResolvedValue({ data: { id: 'default', timeZone: 'Bogus/Zone' } });
     render(<PublicDashboardConfigure />);
-    const select = await screen.findByLabelText('Dashboard time zone');
-    expect(select).toHaveValue('Bogus/Zone');
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+    expect(input).toHaveValue('Bogus/Zone');
+  });
+
+  it('filters options as the user types', async () => {
+    render(<PublicDashboardConfigure />);
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'Kolkata' } });
+
+    expect(await screen.findByRole('option', { name: 'Asia/Kolkata' })).toBeInTheDocument();
+    // Other zones that don't match should not be visible.
+    expect(screen.queryByRole('option', { name: 'Africa/Nairobi' })).toBeNull();
   });
 
   it('persists and refreshes on time zone change', async () => {
     render(<PublicDashboardConfigure />);
-    const select = await screen.findByLabelText('Dashboard time zone');
-    fireEvent.change(select, { target: { value: 'Africa/Maputo' } });
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+
+    // Open the dropdown and click the target option.
+    fireEvent.focus(input);
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'Africa/Maputo' }));
 
     await waitFor(() => {
       expect(upsertConfig).toHaveBeenCalledWith('ke', { timeZone: 'Africa/Maputo' });
@@ -200,12 +225,14 @@ describe('PublicDashboardConfigure', () => {
     getConfig.mockResolvedValue({ data: { id: 'default', timeZone: 'Asia/Kolkata' } });
     upsertConfig.mockRejectedValue(new Error('mdms-v2 unreachable'));
     render(<PublicDashboardConfigure />);
-    const select = await screen.findByLabelText('Dashboard time zone');
-    await waitFor(() => expect(select).toHaveValue('Asia/Kolkata'));
+    const input = await screen.findByRole('combobox', { name: 'Dashboard time zone' });
+    await waitFor(() => expect(input).toHaveValue('Asia/Kolkata'));
 
-    fireEvent.change(select, { target: { value: 'Africa/Maputo' } });
+    // Open the dropdown and click a different option.
+    fireEvent.focus(input);
+    fireEvent.mouseDown(await screen.findByRole('option', { name: 'Africa/Maputo' }));
 
     expect(await screen.findByText('mdms-v2 unreachable')).toBeInTheDocument();
-    expect(select).toHaveValue('Asia/Kolkata');
+    expect(input).toHaveValue('Asia/Kolkata');
   });
 });
