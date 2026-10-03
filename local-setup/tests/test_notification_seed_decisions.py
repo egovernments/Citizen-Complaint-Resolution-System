@@ -476,5 +476,55 @@ class SeederLogin(unittest.TestCase):
         self.assertNotIn("NOTIF-LOGIN-REFUSED", out)
 
 
+try:
+    import jinja2
+    import yaml
+except ImportError:  # pragma: no cover
+    jinja2 = yaml = None
+
+
+@unittest.skipIf(jinja2 is None, "needs jinja2 + PyYAML (ansible's own dependencies)")
+class ProviderOwnerNotes(unittest.TestCase):
+    """Vinoth 4154544385: the note each ACTION line carries about who may create a provider
+    (4141822040) was pasted into both ACTION tasks; it is one set_fact now, a dict root → note,
+    rendered here the way ansible renders it."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        with open(os.path.join(REPO, "local-setup", "ansible", "playbook-deploy.yml"), encoding="utf-8") as fh:
+            tasks = [t for p in yaml.safe_load(fh) for t in p.get("tasks", []) or []]
+        task = next(t for t in tasks if t.get("name") == "notif-seed — who may create a provider, per state root")
+        cls.template = task["ansible.builtin.set_fact"]["notif_provider_owner_notes"]
+        cls.literal = staticmethod(ast.literal_eval)
+
+    def notes(self, roots, state_root=" ke ", extra=""):
+        out = jinja2.Template(self.template).render(
+            notif_seed_tenant=state_root, notif_seed_roots=roots, novu_bridge_provider_admin_tenants=extra)
+        return self.literal(out)  # ansible turns the rendered dict back into one the same way
+
+    def test_every_root_gets_a_note(self):
+        self.assertEqual(set(self.notes(["ke", "pg", "mz"])), {"ke", "pg", "mz"})
+
+    def test_state_root_owns_the_providers(self):
+        note = self.notes(["ke", "pg"])["ke"]
+        self.assertIn("Logged in at ke is right for plan/apply", note)
+        self.assertIn("It also owns the providers, so --create-provider works in the same run.", note)
+        self.assertNotIn("403", note)
+
+    def test_another_root_is_told_who_may_create_one_and_how(self):
+        note = self.notes(["ke", "pg"])["pg"]
+        self.assertIn("is refused there (403 NB_TENANT_NOT_ALLOWED): only an admin of ke may create one.", note)
+        self.assertIn("Create it as an admin of ke ", note)
+        self.assertIn("`--provider SMS=<identifier>` logged in at pg", note)
+        self.assertIn("or list pg in novu_bridge_provider_admin_tenants and redeploy.", note)
+        self.assertNotIn("It also owns", note)
+
+    def test_extra_admin_tenants_own_too_and_are_named(self):
+        notes = self.notes(["ke", "pg", "mz"], extra=" mz, ,ke")
+        self.assertIn("It also owns the providers", notes["mz"])
+        self.assertIn("only an admin of ke or mz may create one.", notes["pg"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -393,7 +393,8 @@ There is no setting that chooses old or new — the data does. Check with any of
   the handoff, and removes them before the main `up -d`; otherwise (a first enable, or no handoff
   yet) it waits up to 10 minutes after the main `up -d`. Without a handoff they are **kept**, with
   `WARNING: the retired OTP senders were kept`: until then an OTP can arrive twice, never not at
-  all. `enable-notifications.sh` does the same (step 1 and step 2). By hand: start the new bridge,
+  all. Redpanda that cannot be asked (`rpk` fails) six times in a row, about a minute, ends either
+  wait early with the same outcome: the old senders stay. `enable-notifications.sh` does the same (step 1 and step 2). By hand: start the new bridge,
   wait until `rpk group describe novu-bridge` lists every partition of `egov.core.notification.sms`
   with a member or a committed offset, then
   `docker rm -f egov-notification-sms otp-publisher novu-bridge-endpoint`. On Helm `egov-notification-sms` is `installed: false` in
@@ -408,9 +409,12 @@ There is no setting that chooses old or new — the data does. Check with any of
   `expiryTime` has passed is dropped with an INFO log (no phone, no text) — no ledger row, no
   DLQ message.
 - The tenant an OTP is checked against is `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT` when the
-  message carries none: Compose rewrites it to `state_root` (and recreates `novu-bridge` whenever it did,
-  with or without a Novu key — a direct-gateway box needs none), Helm reads `state-level-tenant-id`
-  from the `egov-config` ConfigMap. **SMS must be switched on, with a provider, at that tenant**
+  message carries none: Compose rewrites it to `state_root` right after it copies the compose
+  file, before the bridge-first recreate or any other container starts, so `novu-bridge` never
+  runs with `pg` on a box whose state root is not `pg` (it would file every tenant-less OTP
+  under `pg` and drop it as `SKIPPED / NB_NO_PROVIDER`, with the old sender already gone). The
+  deploy fails at the end if the running bridge has anything other than `state_root`. Helm reads
+  `state-level-tenant-id` from the `egov-config` ConfigMap. **SMS must be switched on, with a provider, at that tenant**
   or every OTP is `SKIPPED / NB_NO_PROVIDER` and phone login stops.
 
 ## 5. Bridge settings now come from host_vars

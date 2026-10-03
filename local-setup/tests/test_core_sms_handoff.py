@@ -44,6 +44,12 @@ ENABLE = os.path.join(REPO, "local-setup", "scripts", "enable-notifications.sh")
 T_BRIDGE_FIRST = "notification stack — recreate novu-bridge before pgr-services (upgrade order)"
 T_EARLY = "notification stack — remove the retired OTP senders now (a recreated bridge took over the OTP topic)"
 T_LATE = "notification stack — remove the retired OTP senders once novu-bridge took over the OTP topic"
+T_COPY = "Copy registry-prefixed Docker Compose file"
+T_TENANT_EARLY = "Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose before any container starts"
+T_TENANT_LATE = "post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose"
+T_MAIN_UP = "Start DIGIT stack (Linux/Debian)"
+T_TENANT_CHECK = "novu-bootstrap — fail: novu-bridge does not run with state_root as its OTP / provider-owning tenant"
+COMPOSE = os.path.join(REPO, "local-setup", "docker-compose.egov-digit.yaml")
 
 TOPIC = "egov.core.notification.sms"
 TOPIC_1P = textwrap.dedent("""\
@@ -137,10 +143,12 @@ if args[0] == "exec":
     if args[1] != "digit-redpanda" or st.get("rpk_down"):
         out("Error: No such container\n", 1)
     rpk = args[3:]  # exec digit-redpanda rpk <...>
-    if rpk[:2] == ["topic", "describe"]:
-        out(seq("rpk_topic"))
-    if rpk[:2] == ["group", "describe"]:
-        out(seq("rpk_group"))
+    for verb, key in ((["topic", "describe"], "rpk_topic"), (["group", "describe"], "rpk_group")):
+        if rpk[:2] == verb:
+            v = seq(key)
+            if v == "DOWN":  # one failed rpk call (broker restarting, unreachable)
+                out("unable to request metadata: dial tcp: connection refused\n", 1)
+            out(v)
     if rpk[:2] == ["topic", "create"]:
         out("TOPIC  STATUS\n%s  OK\n" % rpk[2])
     sys.exit(3)
@@ -344,6 +352,26 @@ class EarlyRemoval(Harness):
         self.assertIn("(UNKNOWN)", r.stdout)
         self.assertIn("egov-notification-sms", self.containers())
 
+    # Vinoth 4154544393: UNKNOWN was retried for the whole 5-minute budget.
+    def test_redpanda_that_cannot_be_asked_gives_up_after_six_tries_not_thirty(self):
+        self.state(containers=dict(self.senders(), **{"novu-bridge": self.NEW}), rpk_down=True)
+        r = self.run_task(T_EARLY)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("6 times in a row, so gave up waiting", r.stdout)
+        with open(self.log) as fh:
+            self.assertEqual(fh.read().count("rpk topic describe"), 6)
+        self.assertEqual(set(self.containers()), {"novu-bridge", "egov-notification-sms", "otp-publisher"})
+
+    def test_a_redpanda_blip_does_not_count_against_the_handoff(self):
+        # five failed calls, one answer, five more: never six in a row, so it keeps waiting
+        down = ["DOWN"] * 5
+        self.state(containers=dict(self.senders(), **{"novu-bridge": self.NEW}),
+                   rpk_topic=down + [TOPIC_1P] + down + [TOPIC_1P],
+                   rpk_group=[GROUP_NOTHING, GROUP_ASSIGNED])
+        r = self.run_task(T_EARLY)
+        self.assertIn("HANDOFF ASSIGNED", r.stdout, r.stdout)
+        self.assertEqual(set(self.containers()), {"novu-bridge"})
+
     def test_a_bridge_with_core_sms_off_never_takes_over(self):
         bridge = dict(self.NEW, env={"NOVU_BRIDGE_CORE_SMS_ENABLED": "false"})
         self.state(containers=dict(self.senders(), **{"novu-bridge": bridge}), rpk_group=GROUP_ASSIGNED)
@@ -403,6 +431,16 @@ class LateRemoval(Harness):
         with open(self.log) as fh:
             self.assertEqual(fh.read().count("group describe"), 60)  # 10 minutes of 10 s polls
 
+    def test_redpanda_that_cannot_be_asked_keeps_them_after_a_minute_not_ten(self):
+        self.state(containers=dict(self.senders(), **{"novu-bridge": self.NEW}), rpk_down=True)
+        r = self.run_task(T_LATE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("KEPT: egov-notification-sms otp-publisher", r.stdout)
+        self.assertIn("(UNKNOWN: ", r.stdout)
+        with open(self.log) as fh:
+            self.assertEqual(fh.read().count("rpk topic describe"), 6)
+        self.assertIn("egov-notification-sms", self.containers())
+
     def test_the_late_task_runs_after_a_deferral_and_when_the_early_one_was_skipped(self):
         _, t = task_shell(T_LATE, self.digit_dir)
         cond = " ".join(str(c) for c in t["when"])
@@ -457,6 +495,37 @@ class EnableNotificationsScript(Harness):
         r = self.run_fn("_bridge_is_current && echo CURRENT || echo STALE")
         self.assertIn("CURRENT", r.stdout)
 
+    def test_step1_and_the_playbook_give_the_same_verdict(self):
+        # Vinoth 4154544380: one check (core_sms_bridge_current), both callers
+        cases = {
+            "old container left in place": ({"novu-bridge": self.OLD}, False),
+            "old image, new config": ({"novu-bridge": dict(self.OLD, hash="h-new")}, False),
+            "new image, old config": ({"novu-bridge": dict(self.NEW, hash="h-old")}, False),
+            "current and running": ({"novu-bridge": self.NEW}, True),
+            "current, not running": ({"novu-bridge": dict(self.NEW, running=False)}, True),
+        }
+        for label, (containers, current) in cases.items():
+            with self.subTest(label):
+                self.state(containers=containers)
+                r = self.run_fn("_bridge_is_current && echo CURRENT || echo STALE; echo \"why=$CSH_BRIDGE_WHY\"")
+                self.assertIn("CURRENT" if current else "STALE", r.stdout)
+                self.assertIn("why=want image egovio/novu-bridge:new (sha256:new) config h-new; have ", r.stdout)
+                self.state(containers=containers)  # the playbook recreates; the fake leaves it as is
+                p = self.run_task(T_BRIDGE_FIRST)
+                self.assertEqual(p.returncode == 0, current, p.stdout + p.stderr)
+                with open(self.log) as fh:
+                    self.assertIn("compose config --format json novu-bridge", fh.read())
+        with open(self.log) as fh:
+            log = fh.read()
+        # enable-notifications.sh ran it from DIGIT_HOME through the same compose files
+        self.assertNotIn("config --images", log)
+
+    def test_step1_without_the_helper_does_not_take_the_bridge_for_current(self):
+        self.state(containers={"novu-bridge": self.NEW})
+        r = self.run_fn("_bridge_is_current && echo CURRENT || echo STALE", ccrs="/nonexistent")
+        self.assertIn("STALE", r.stdout)
+        self.assertIn("core-sms-handoff.sh not found", r.stdout + r.stderr)
+
     def test_step1_waits_five_minutes_and_leaves_the_rest_to_step2(self):
         self.state(containers=dict(self.senders(), **{"novu-bridge": self.NEW}), rpk_group=GROUP_NOTHING)
         r = self.run_fn("_remove_retired_after_handoff 30")
@@ -464,6 +533,58 @@ class EnableNotificationsScript(Harness):
         with open(self.log) as fh:
             self.assertEqual(fh.read().count("group describe"), 30)
         self.assertIn("egov-notification-sms", self.containers())
+
+
+@unittest.skipIf(jinja2 is None, "needs jinja2 + PyYAML (ansible's own dependencies)")
+class OtpTenantBeforeTheBridgeStarts(unittest.TestCase):
+    """Vinoth 4154544371: the compose file is copied with NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg.
+    Rewritten only post-bootstrap, the upgrade's bridge-first recreate started novu-bridge with
+    pg, the handoff then removed egov-notification-sms, and a non-pg box dropped every
+    tenant-less OTP (SKIPPED / NB_NO_PROVIDER) until the late recreate."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(PLAYBOOK, encoding="utf-8") as fh:
+            cls.tasks = [t for p in yaml.safe_load(fh) for t in p.get("tasks", []) or []]
+        cls.names = [t.get("name") for t in cls.tasks]
+
+    def task(self, name):
+        self.assertIn(name, self.names)
+        return self.tasks[self.names.index(name)]
+
+    def apply(self, name, text, state_root):
+        """What ansible.builtin.replace does with the task: re.MULTILINE, Python backrefs."""
+        import re
+        t = self.task(name)
+        mod = t.get("ansible.builtin.replace") or t.get("replace")
+        self.assertEqual(mod["path"], "{{ digit_dir }}/docker-compose.egov-digit.yaml")
+        self.assertEqual(t.get("when"), "state_root != 'pg'")
+        repl = jinja2.Template(mod["replace"]).render(state_root=state_root)
+        return re.subn(mod["regexp"], repl, text, flags=re.MULTILINE)
+
+    def test_the_rewrite_runs_after_the_copy_and_before_anything_starts_the_bridge(self):
+        i = self.names.index
+        copy, early = i(T_COPY), i(T_TENANT_EARLY)
+        self.assertLess(copy, early)
+        self.assertLess(early, i(T_BRIDGE_FIRST))
+        self.assertLess(early, i(T_MAIN_UP))
+        self.assertLess(i(T_MAIN_UP), i(T_TENANT_LATE))
+        self.assertLess(i(T_TENANT_LATE), i(T_TENANT_CHECK))
+        self.assertNotIn("tags", self.task(T_TENANT_EARLY))
+        for t in self.tasks[copy + 1:early]:  # nothing in between starts a container
+            self.assertNotRegex(json.dumps(t), r"compose[^\n]*\bup\b")
+
+    def test_the_copied_file_runs_the_bridge_with_state_root_and_the_backstop_is_a_no_op(self):
+        with open(COMPOSE, encoding="utf-8") as fh:
+            shipped = fh.read()
+        staged, n = self.apply(T_TENANT_EARLY, shipped, "ke")
+        self.assertEqual(n, 1)
+        bridge = yaml.safe_load(staged)["services"]["novu-bridge"]["environment"]
+        self.assertEqual(bridge["NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT"], "ke")
+        again, n = self.apply(T_TENANT_LATE, staged, "ke")
+        self.assertEqual((again, n), (staged, 0))  # post-bootstrap: nothing left to change
+        # and the check at the end still reads the running container against state_root
+        self.assertIn("!= state_root", " ".join(str(c) for c in self.task(T_TENANT_CHECK)["when"]))
 
 
 if __name__ == "__main__":

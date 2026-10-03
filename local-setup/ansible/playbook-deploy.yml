@@ -1372,6 +1372,24 @@
         src: ../docker-compose.egov-digit.yaml
         dest: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
 
+    # The tenant a login OTP without one is checked against and filed under (and the state
+    # that owns the providers). Rewritten pg → state_root HERE, right after the copy above
+    # and before anything creates a container from the file (Vinoth re-review 4154544371).
+    # The copy resets it to `pg` on every run; when this rewrite waited for post-bootstrap,
+    # the upgrade's bridge-first recreate started novu-bridge with `pg`, the handoff then
+    # removed egov-notification-sms, and every tenant-less OTP of the main `up -d` and
+    # bootstrap was checked against pg and dropped (SKIPPED / NB_NO_PROVIDER) on a box
+    # whose state root is not pg. Unlike STATE_LEVEL_TENANT_ID it is read per message, not
+    # at boot, so it needs no seeded data to start. The post-bootstrap task of the same
+    # name finds nothing left to change; "novu-bootstrap — fail: novu-bridge does not run
+    # with state_root" checks the running container.
+    - name: "Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose before any container starts"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'
+        replace: '\1NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: {{ state_root }}'
+      when: state_root != 'pg'
+
     - name: Copy idempotent Identity Keycloak configurator
       copy:
         src: ../../backend/identity-bff/deploy/digit-compose/configure-keycloak.sh
@@ -2988,25 +3006,25 @@
             "cause (image pull, novu-bridge-migration: \`docker logs novu-bridge-migration\`) and re-run." >&2
           exit 1
         fi
-        # `config --images <svc>` also lists the images of its dependencies: read the one image.
-        want_image="$(dc config --format json novu-bridge \
-          | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["novu-bridge"]["image"])')"
-        want_image_id="$(docker image inspect -f '{% raw %}{{.Id}}{% endraw %}' "$want_image" 2>/dev/null || true)"
-        want_hash="$(dc config --hash novu-bridge | awk '$1 == "novu-bridge" {print $2}')"
-        have="$(docker inspect -f '{% raw %}{{.Image}}|{{index .Config.Labels "com.docker.compose.config-hash"}}|{{.State.Running}}{% endraw %}' novu-bridge 2>/dev/null || true)"
-        echo "novu-bridge: want image $want_image (${want_image_id:-not present}) config ${want_hash:-?}; have ${have:-no container}"
-        if [ -z "$want_image_id" ] || [ -z "$want_hash" ] || [ "${have%|*}" != "$want_image_id|$want_hash" ]; then
-          echo "BRIDGE-NOT-CURRENT: compose reported success, but the novu-bridge container is not the one" \
-            "it configures now (image ${want_image}, config hash ${want_hash:-?}). Is another compose" \
-            "project's novu-bridge on this box? The deploy stops before pgr-services is recreated." >&2
-          exit 1
-        fi
-        if [ "${have##*|}" = "true" ]; then
-          echo "BRIDGE-RUNNING novu-bridge is the current image and config, and running"
-        else
-          echo "BRIDGE-NOT-RUNNING novu-bridge is the current image and config but not running —" \
-            "the retired OTP senders stay; see the novu-bridge health checks below"
-        fi
+        # Image id + config hash against what compose configures now: core-sms-handoff.sh, the one
+        # copy enable-notifications.sh uses too.
+        # shellcheck source=/dev/null
+        source "{{ digit_dir }}/core-sms-handoff.sh"
+        CSH_COMPOSE="COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }}"
+        core_sms_bridge_current || true
+        echo "novu-bridge: $CSH_BRIDGE_WHY"
+        case "$CSH_BRIDGE" in
+          RUNNING)
+            echo "BRIDGE-RUNNING novu-bridge is the current image and config, and running" ;;
+          NOT-RUNNING)
+            echo "BRIDGE-NOT-RUNNING novu-bridge is the current image and config but not running —" \
+              "the retired OTP senders stay; see the novu-bridge health checks below" ;;
+          *)
+            echo "BRIDGE-NOT-CURRENT: compose reported success, but the novu-bridge container is not the one" \
+              "it configures now ($CSH_BRIDGE_WHY). Is another compose project's novu-bridge on this" \
+              "box? The deploy stops before pgr-services is recreated." >&2
+            exit 1 ;;
+        esac
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
@@ -5233,14 +5251,16 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
-    # novu-bridge is not in the recreate list below: "novu-bootstrap — recreate
-    # novu-bridge" runs later in this play with --force-recreate, and it recreates the
-    # bridge whenever THIS rewrite changed the file — whether or not a Novu key exists.
-    # The compose file is copied fresh (with `pg`) on every run, so on a state_root other
-    # than pg this reports changed every time, and the main `up -d` has just started the
-    # bridge with `pg`. Without that recreate a box with no Novu key (direct SMSCountry
-    # sends without one) kept `pg`: every login OTP checked against pg's channel policy
-    # and filed under pg.
+    # Normally a no-op: "Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose
+    # before any container starts" rewrote this line right after the compose file was
+    # copied, so the bridge-first recreate and the main `up -d` already started novu-bridge
+    # with state_root (Vinoth re-review 4154544371: rewriting only here left the bridge on
+    # `pg` from the bridge-first recreate until after bootstrap, with the old OTP sender
+    # already gone). Kept, idempotent, as a backstop: should the line still read `pg` here,
+    # this reports changed and "novu-bootstrap — recreate novu-bridge" below recreates the
+    # bridge with --force-recreate, with or without a Novu key (a direct-gateway box needs
+    # none). Either way "novu-bootstrap — fail: novu-bridge does not run with state_root"
+    # checks the running container.
     - name: "post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose"
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
@@ -5931,11 +5951,12 @@
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length > 0
 
-    # Two things only reach the bridge through this recreate: the Novu key written into
-    # .env just above, and the NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT pg → state_root rewrite
-    # in the compose file ("post-bootstrap" above). The second must not wait for the
-    # first: with no Novu key the bridge still sends direct-gateway SMS (OTPs included),
-    # and would keep checking and filing every one of them under `pg`.
+    # The Novu key written into .env just above only reaches the bridge through this
+    # recreate. So does a NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT pg → state_root rewrite made
+    # as late as "post-bootstrap" (a backstop — the rewrite normally happens before any
+    # container starts, and then that task changes nothing). That one must not wait for a
+    # key: with no Novu key the bridge still sends direct-gateway SMS (OTPs included), and
+    # would keep checking and filing every one of them under `pg`.
     - name: "novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY and the state-root OTP tenant"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
@@ -5976,10 +5997,10 @@
           ~ (bridge_core_tenant.stderr | default('') | trim) ~ ')') if (bridge_core_tenant.rc | default(1)) != 0 else '' }},
           not state_root '{{ state_root }}'. That tenant decides which state's admins may manage
           providers (everyone else gets 403 NB_TENANT_NOT_ALLOWED) and where a login OTP without a
-          tenant is checked and filed. The "post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT"
-          rewrite did not reach the container: check that {{ digit_dir }}/docker-compose.egov-digit.yaml
-          still has the literal line `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg` that task rewrites,
-          then re-run the deploy.
+          tenant is checked and filed. The "Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in
+          compose before any container starts" rewrite did not reach the container: check that
+          local-setup/docker-compose.egov-digit.yaml still has the literal line
+          `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg` that task rewrites, then re-run the deploy.
 
 
     - name: "novu-bootstrap — provider setup hint (Novu key auto-minted; no provider yet)"
@@ -7399,6 +7420,33 @@
           {%- endif %}
           {{ fin.stdout_lines | default([]) | select('search', '^ +NOTIFICATIONS[.]Routing ') | first | default('') | trim | regex_replace(' +', ' ') }}
 
+    # What each root's ACTION line says about creating a provider — one copy for both ACTION
+    # tasks below (Vinoth re-review 4154544385). Vinoth re-review 4141822040: novu-bridge lets
+    # an admin of THIS root preview its events (_resolve, _dry-run without send), but creating
+    # a provider stays with the states that own the deployment's providers: state_root
+    # (novu-bridge reads it from NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT) plus
+    # novu_bridge_provider_admin_tenants. A dict, root → note.
+    - name: "notif-seed — who may create a provider, per state root"
+      when: seed_notifications | default(enable_novu | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.set_fact:
+        notif_provider_owner_notes: >-
+          {%- set owners = ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))
+                           | map('trim') | reject('equalto', '') | unique | list -%}
+          {%- set notes = {} -%}
+          {%- for root in notif_seed_roots -%}
+          {%- set _ = notes.update({root: 'Logged in at ' ~ root ~ ' is right for plan/apply and their before/after preview.'
+                ~ (' It also owns the providers, so --create-provider works in the same run.'
+                   if root in owners else
+                   (' Creating a provider (--create-provider / --create-smscountry-provider) is refused there'
+                    ~ ' (403 NB_TENANT_NOT_ALLOWED): only an admin of ' ~ (owners | join(' or '))
+                    ~ ' may create one. Create it as an admin of ' ~ (notif_seed_tenant | trim)
+                    ~ ' (Configurator → Notifications → Providers logged in there),'
+                    ~ ' then pin it here with `--provider SMS=<identifier>` logged in at ' ~ root
+                    ~ ' — or list ' ~ root ~ ' in novu_bridge_provider_admin_tenants and redeploy.'))}) -%}
+          {%- endfor -%}
+          {{ notes }}
+
     # The deploy does NOT migrate a root that still has its 2.12 configuration: it keeps
     # being served from the legacy masters, unchanged. Say so where it is seen, with the
     # command that shows what a migration would change.
@@ -7409,24 +7457,6 @@
         - "' state=legacy ' in ((notif_seed_final_by_root[item] | default({})).stdout | default(''))"
       tags: ['notifications', 'notification-seed']
       loop: "{{ notif_seed_roots }}"
-      vars:
-        # Vinoth re-review 4141822040: novu-bridge lets an admin of THIS root preview its events
-        # (_resolve, _dry-run without send), but creating a provider stays with the states that
-        # own the deployment's providers: state_root (novu-bridge reads it from
-        # NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT) plus novu_bridge_provider_admin_tenants.
-        notif_provider_owners: >-
-          {{ ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))
-             | map('trim') | reject('equalto', '') | unique | list }}
-        notif_provider_owner_note: >-
-          {{ 'Logged in at ' ~ item ~ ' is right for plan/apply and their before/after preview.'
-             ~ (' It also owns the providers, so --create-provider works in the same run.'
-                if item in notif_provider_owners else
-                (' Creating a provider (--create-provider / --create-smscountry-provider) is refused there'
-                 ~ ' (403 NB_TENANT_NOT_ALLOWED): only an admin of ' ~ (notif_provider_owners | join(' or '))
-                 ~ ' may create one. Create it as an admin of ' ~ (notif_seed_tenant | trim)
-                 ~ ' (Configurator → Notifications → Providers logged in there),'
-                 ~ ' then pin it here with `--provider SMS=<identifier>` logged in at ' ~ item
-                 ~ ' — or list ' ~ item ~ ' in novu_bridge_provider_admin_tenants and redeploy.')) }}
       ansible.builtin.debug:
         msg: >-
           {{ item }} still runs on its 2.12 notification configuration
@@ -7434,7 +7464,7 @@
           Configurator shows it read-only until it is migrated. Review, then migrate (one-way):
           `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
           DIGIT_LOGIN_TENANT={{ item }} python3 migrate-notifications.py plan --tenant {{ item }}`,
-          then the same with `apply ... --yes`. {{ notif_provider_owner_note }}
+          then the same with `apply ... --yes`. {{ notif_provider_owner_notes[item] }}
           See docs/releases/2.20/notifications/migration.md.
 
     # No configuration in either namespace, and not provably a fresh install (complaints
@@ -7449,24 +7479,6 @@
         - "' state=none ' in ((notif_seed_final_by_root[item] | default({})).stdout | default(''))"
       tags: ['notifications', 'notification-seed']
       loop: "{{ notif_seed_roots }}"
-      vars:
-        # Vinoth re-review 4141822040: novu-bridge lets an admin of THIS root preview its events
-        # (_resolve, _dry-run without send), but creating a provider stays with the states that
-        # own the deployment's providers: state_root (novu-bridge reads it from
-        # NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT) plus novu_bridge_provider_admin_tenants.
-        notif_provider_owners: >-
-          {{ ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))
-             | map('trim') | reject('equalto', '') | unique | list }}
-        notif_provider_owner_note: >-
-          {{ 'Logged in at ' ~ item ~ ' is right for plan/apply and their before/after preview.'
-             ~ (' It also owns the providers, so --create-provider works in the same run.'
-                if item in notif_provider_owners else
-                (' Creating a provider (--create-provider / --create-smscountry-provider) is refused there'
-                 ~ ' (403 NB_TENANT_NOT_ALLOWED): only an admin of ' ~ (notif_provider_owners | join(' or '))
-                 ~ ' may create one. Create it as an admin of ' ~ (notif_seed_tenant | trim)
-                 ~ ' (Configurator → Notifications → Providers logged in there),'
-                 ~ ' then pin it here with `--provider SMS=<identifier>` logged in at ' ~ item
-                 ~ ' — or list ' ~ item ~ ' in novu_bridge_provider_admin_tenants and redeploy.')) }}
       ansible.builtin.debug:
         msg: >-
           {{ item }} has no notification configuration in either namespace, and it is not
@@ -7480,7 +7492,7 @@
           affected). Review, then install (one-way):
           `cd {{ digit_dir }}/notification-seed && DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }}
           DIGIT_LOGIN_TENANT={{ item }} python3 migrate-notifications.py plan --tenant {{ item }} --adopt-defaults`,
-          then the same with `apply ... --adopt-defaults --yes`. {{ notif_provider_owner_note }}
+          then the same with `apply ... --adopt-defaults --yes`. {{ notif_provider_owner_notes[item] }}
           Demo complaints only (a restored dump): add {{ item }} to `notifications_adopt_defaults`
           in host_vars (e.g. `notifications_adopt_defaults: [{{ item }}]`) and re-run
           `--tags notifications` instead. See docs/releases/2.20/notifications/migration.md.

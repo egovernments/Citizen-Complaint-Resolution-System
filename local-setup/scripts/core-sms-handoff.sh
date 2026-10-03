@@ -28,10 +28,54 @@
 # Overridable (defaults are the compose names):
 #   DOCKER              how to run docker ("docker"; enable-notifications.sh: "sudo docker")
 #   BRIDGE_CONTAINER    novu-bridge          REDPANDA_CONTAINER  digit-redpanda
+#   BRIDGE_SERVICE      novu-bridge          (the compose service, for core_sms_bridge_current)
 #   CORE_SMS_GROUP      novu-bridge          (spring.kafka.consumer.group-id)
 #   CORE_SMS_TOPIC      the bridge container's NOVU_BRIDGE_CORE_SMS_TOPIC, else egov.core.notification.sms
+#   CSH_COMPOSE         the compose command with its files, evaluated, so it may carry an env
+#                       prefix ("COMPOSE_PROFILES=x docker compose -f a.yaml"); default "docker compose"
+#   CSH_COMPOSE_DIR     where to run it (the files are relative to it); default the current directory
+#   CSH_UNKNOWN_TRIES   consecutive UNKNOWN answers after which core_sms_wait_handoff gives up (6)
 
 _csh_docker() { ${DOCKER:-docker} "$@"; }
+
+_csh_compose() {
+  (
+    if [ -n "${CSH_COMPOSE_DIR:-}" ]; then cd "$CSH_COMPOSE_DIR" || exit 1; fi
+    eval "${CSH_COMPOSE:-docker compose} \"\$@\""
+  )
+}
+
+# core_sms_bridge_current — is the novu-bridge container the one compose configures NOW? Both
+# callers ask this right after `up -d novu-bridge` on an upgrade, where "a novu-bridge container
+# is running" proves nothing: the OLD one is still running if the recreate did not happen
+# (Vinoth re-review 4141822018). One copy for the playbook and enable-notifications.sh
+# (4154544380). Compares the running container's image id and compose config-hash label with
+# the image compose resolves for the service and its config hash now. Sets CSH_BRIDGE to:
+#   RUNNING      the current image and config, and running
+#   NOT-RUNNING  the current image and config, not running (e.g. a crash loop)
+#   NOT-CURRENT  anything else: an old container left in place, none at all, or compose could
+#                not say which image / hash it wants (never taken for the current one)
+# and CSH_BRIDGE_WHY to the comparison, for the operator. Returns 0 for RUNNING and NOT-RUNNING.
+core_sms_bridge_current() {
+  local svc want_image want_id="" want_hash have
+  svc="${BRIDGE_SERVICE:-novu-bridge}"
+  # `config --images <svc>` also lists the images of its dependencies: read the one image.
+  want_image="$(_csh_compose config --format json "$svc" 2>/dev/null \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"][sys.argv[1]]["image"])' "$svc" 2>/dev/null || true)"
+  if [ -n "$want_image" ]; then
+    want_id="$(_csh_docker image inspect -f '{{.Id}}' "$want_image" 2>/dev/null || true)"
+  fi
+  want_hash="$(_csh_compose config --hash "$svc" 2>/dev/null | awk -v s="$svc" '$1 == s {print $2}')"
+  have="$(_csh_docker inspect -f '{{.Image}}|{{index .Config.Labels "com.docker.compose.config-hash"}}|{{.State.Running}}' \
+    "${BRIDGE_CONTAINER:-novu-bridge}" 2>/dev/null || true)"
+  CSH_BRIDGE_WHY="want image ${want_image:-?} (${want_id:-not present}) config ${want_hash:-?}; have ${have:-no container}"
+  if [ -z "$want_id" ] || [ -z "$want_hash" ] || [ "${have%|*}" != "$want_id|$want_hash" ]; then
+    CSH_BRIDGE=NOT-CURRENT
+    return 1
+  fi
+  if [ "${have##*|}" = "true" ]; then CSH_BRIDGE=RUNNING; else CSH_BRIDGE=NOT-RUNNING; fi
+  return 0
+}
 
 # _csh_bridge_env VAR — VAR's value in the running bridge container's env ("" when unset).
 _csh_bridge_env() {
@@ -140,15 +184,26 @@ core_sms_handoff_state() {
 }
 
 # core_sms_wait_handoff TRIES INTERVAL — poll until COMMITTED or ASSIGNED (0), or give up (1).
-# DISABLED gives up at once. CSH_STATE / CSH_WHY hold the last answer.
+# DISABLED gives up at once; so do CSH_UNKNOWN_TRIES (6) UNKNOWN answers in a row (Vinoth
+# re-review 4154544393): Redpanda that cannot be asked for a minute is not coming back within
+# the 5/10-minute budget, and sleeping it out only delays the deploy — giving up keeps the old
+# senders, the same outcome as running out of tries. A different answer in between starts the
+# count again (a broker restart). CSH_STATE / CSH_WHY hold the last answer.
 core_sms_wait_handoff() {
-  local tries="$1" interval="$2" i
+  local tries="$1" interval="$2" unknown_max="${CSH_UNKNOWN_TRIES:-6}" unknown=0 i
   CSH_STATE=""; CSH_WHY=""
   for i in $(seq 1 "$tries"); do
     CSH_CREATE_TOPIC=1 core_sms_handoff_state
     case "$CSH_STATE" in
       COMMITTED|ASSIGNED) return 0 ;;
       DISABLED) return 1 ;;
+      UNKNOWN)
+        unknown=$((unknown + 1))
+        if [ "$unknown" -ge "$unknown_max" ]; then
+          CSH_WHY="$CSH_WHY — $unknown times in a row, so gave up waiting"
+          return 1
+        fi ;;
+      *) unknown=0 ;;
     esac
     if [ "$i" -lt "$tries" ]; then sleep "$interval"; fi
   done

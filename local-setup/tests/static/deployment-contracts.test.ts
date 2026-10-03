@@ -808,11 +808,25 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
 
     const first = task('notification stack — recreate novu-bridge before pgr-services');
     expect(first).toMatch(/if ! dc up -d novu-bridge 2>&1 \| tee -a \{\{ compose_progress_file \}\}; then\n[\s\S]*?exit 1\n/);
-    expect(first).toContain('dc config --hash novu-bridge');
+    // Vinoth 4154544380: "is the running bridge current" lives in core-sms-handoff.sh only
+    // (run for real against both callers in test_core_sms_handoff.py)
+    expect(first).toContain('source "{{ digit_dir }}/core-sms-handoff.sh"');
+    expect(first).toContain('CSH_COMPOSE="COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }}"');
+    expect(first.indexOf('core_sms_bridge_current')).toBeGreaterThan(first.indexOf('if ! dc up -d novu-bridge'));
+    expect(first.indexOf('core_sms_bridge_current')).toBeLessThan(first.indexOf('echo "BRIDGE-RUNNING'));
+    expect(first).toMatch(/\n\s+RUNNING\)\n\s+echo "BRIDGE-RUNNING /);
+    expect(first).toMatch(/\*\)\n\s+echo "BRIDGE-NOT-CURRENT[\s\S]*?exit 1 ;;/);
+    const helper = read('local-setup/scripts/core-sms-handoff.sh');
+    const enableSh = read('local-setup/scripts/enable-notifications.sh');
+    const code = (src: string) => src.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     // `config --images <svc>` lists the dependencies' images too: the one service's image is read
-    expect(first).toContain('dc config --format json novu-bridge');
-    expect(first).not.toContain('dc config --images');
-    expect(first.indexOf('[ "${have%|*}" != "$want_image_id|$want_hash" ]')).toBeLessThan(first.indexOf('echo "BRIDGE-RUNNING'));
+    expect(helper).toContain('_csh_compose config --format json "$svc"');
+    expect(helper).toContain('_csh_compose config --hash "$svc"');
+    expect(helper).toContain('[ "${have%|*}" != "$want_id|$want_hash" ]');
+    expect(code(helper)).not.toContain('config --images');
+    for (const src of [playbook, enableSh]) {
+      expect(code(src)).not.toMatch(/config --hash|config --format json novu-bridge|com\.docker\.compose\.config-hash/);
+    }
 
     const earlyTask = task('notification stack — remove the retired OTP senders now');
     expect(earlyTask).toContain('enable_novu | default(false)');
@@ -852,7 +866,51 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
     expect(step2.indexOf('compose up -d novu-mongo')).toBeLessThan(step2.indexOf('_remove_retired_after_handoff 60'));
     const wait = body('_remove_retired_after_handoff');
     expect(wait.indexOf('if ! core_sms_wait_handoff "$tries" 10; then')).toBeLessThan(wait.indexOf('_remove_retired_notification_containers'));
-    expect(body('_core_sms_handoff_lib')).toContain('core-sms-handoff.sh');
+    const lib = body('_core_sms_handoff_lib');
+    expect(lib).toContain('core-sms-handoff.sh');
+    expect(lib).toContain('CSH_COMPOSE="$DC"');
+    expect(lib).toContain('CSH_COMPOSE_DIR="$DIGIT_HOME"');
+    // Vinoth 4154544380: the shared check, not a second copy of it
+    const current = body('_bridge_is_current');
+    expect(current.indexOf('_core_sms_handoff_lib')).toBeLessThan(current.indexOf('core_sms_bridge_current'));
+    expect(current).not.toContain('docker');
+  });
+
+  // Vinoth 4154544371: the compose file is copied with `NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg`.
+  // Rewritten only post-bootstrap, the upgrade's bridge-first recreate started novu-bridge with
+  // pg, the handoff removed egov-notification-sms, and every tenant-less OTP until the late
+  // recreate was checked against pg and dropped (SKIPPED / NB_NO_PROVIDER) on a non-pg box.
+  test('the OTP default tenant is state_root before anything starts novu-bridge from the copied compose file', () => {
+    const at = (name: string) => {
+      const i = playbook.indexOf(`- name: ${name}`);
+      expect(i).toBeGreaterThan(-1);
+      return i;
+    };
+    const copy = at('Copy registry-prefixed Docker Compose file');
+    const early = at('"Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose before any container starts"');
+    const bridgeFirst = at('"notification stack — recreate novu-bridge before pgr-services');
+    const mainStart = at('Start DIGIT stack (Linux/Debian)');
+    const macStart = at('"Start DIGIT stack (macOS/Rosetta');
+    const late = at('"post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose"');
+    expect(early).toBeGreaterThan(copy);
+    expect(early).toBeLessThan(bridgeFirst);
+    expect(early).toBeLessThan(mainStart);
+    expect(early).toBeLessThan(macStart);
+    expect(late).toBeGreaterThan(mainStart);
+    // nothing between the copy and the rewrite starts a container
+    expect(playbook.slice(copy, early)).not.toMatch(/docker compose[^\n]*\bup\b/);
+    // the same rewrite as the post-bootstrap backstop, which then finds nothing to change
+    const rewrite = (t: string) => t.slice(t.indexOf('path:'), t.indexOf('replace: ') + 200).split('\n').slice(0, 3).join('\n');
+    const earlyTask = task('Set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose before any container starts');
+    const lateTask = task('post-bootstrap — set NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT (state-root) in compose');
+    expect(rewrite(earlyTask)).toBe(rewrite(lateTask));
+    expect(earlyTask).toContain("regexp: '^(\\s+)NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: pg$'");
+    expect(earlyTask).toContain("replace: '\\1NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT: {{ state_root }}'");
+    expect(earlyTask).toContain("when: state_root != 'pg'");
+    expect(earlyTask).not.toMatch(/\n {6}tags:/); // not skippable on a tagged run that starts the bridge
+    // and the running container is still checked against state_root at the end
+    expect(task('novu-bootstrap — fail: novu-bridge does not run with state_root')).toContain(
+      "(bridge_core_tenant.stdout | default('') | trim) != state_root");
   });
 
   // 4079418208: the pg → state_root rewrite of NOVU_BRIDGE_CORE_SMS_DEFAULT_TENANT only
@@ -957,12 +1015,29 @@ describe('notification deploy tasks (Kanav review of #2097, round 2)', () => {
 
     // Vinoth 4141822040: a root's admin may plan/apply (and preview) its own root, but only an
     // owning-state admin may create a provider — every ACTION line says so for ITS root.
-    for (const t of [none, legacy]) {
-      expect(t).toContain('{{ notif_provider_owner_note }}');
-      expect(t).toContain("{{ ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))");
-      expect(t).toContain('403 NB_TENANT_NOT_ALLOWED');
-      expect(t).toContain("--provider SMS=<identifier>");
+    // Vinoth 4154544385: one copy of the note, set before both ACTION loops.
+    const notes = task('notif-seed — who may create a provider, per state root');
+    expect(notes).toContain('ansible.builtin.set_fact:');
+    expect(notes).toContain('notif_provider_owner_notes: >-');
+    expect(notes).toContain("{%- set owners = ([notif_seed_tenant | trim] + ((novu_bridge_provider_admin_tenants | default('')) | string).split(','))");
+    expect(notes).toContain('{%- for root in notif_seed_roots -%}');
+    expect(notes).toContain('403 NB_TENANT_NOT_ALLOWED');
+    expect(notes).toContain("--provider SMS=<identifier>");
+    expect(notes).toContain('seed_notifications | default(enable_novu | default(false))');
+    expect(notes).toContain("tags: ['notifications', 'notification-seed']");
+    const notesAt = playbook.indexOf('- name: "notif-seed — who may create a provider, per state root"');
+    for (const [name, t] of [
+      ['notif-seed — ACTION: this tenant has no notification configuration', none],
+      ["notif-seed — ACTION: this tenant's notification configuration is not migrated", legacy],
+    ]) {
+      expect(t).toContain('{{ notif_provider_owner_notes[item] }}');
+      expect(t).not.toMatch(/\n {6}vars:/);
+      expect(t).not.toContain('novu_bridge_provider_admin_tenants | default');
+      expect(playbook.indexOf(`- name: "${name}`)).toBeGreaterThan(notesAt);
     }
+    expect(playbook.match(/notif_provider_owner_notes: >-/g)).toHaveLength(1);
+    expect(playbook.match(/split\('\,'\)\)\n\s+\| map\('trim'\) \| reject\('equalto', ''\) \| unique \| list/g)).toHaveLength(1);
+    expect(playbook).not.toMatch(/notif_provider_owners?:|notif_provider_owner_note\b/);
     expect(task('notif-seed — WARNING: could not log in at a complaint root')).toContain('item != (notif_seed_tenant | trim)');
   });
 

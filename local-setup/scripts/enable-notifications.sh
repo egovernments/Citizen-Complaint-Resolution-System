@@ -302,6 +302,8 @@ _core_sms_handoff_lib() {
       # shellcheck source=core-sms-handoff.sh
       source "$f"
       DOCKER="sudo docker"
+      CSH_COMPOSE="$DC"
+      CSH_COMPOSE_DIR="$DIGIT_HOME"
       return 0
     fi
   done
@@ -329,17 +331,14 @@ _remove_retired_after_handoff() {
 }
 
 # _bridge_is_current — the novu-bridge container is the one compose configures NOW (its image
-# and config hash), not an old one left in place.
+# and config hash), not an old one left in place. Running or not: step 2 checks that. The check
+# itself is core_sms_bridge_current in core-sms-handoff.sh, the copy the playbook runs too.
 _bridge_is_current() {
-  local cid want_image want_id want_hash have
-  cid=$(container_of novu-bridge); [[ -n "$cid" ]] || return 1
-  # `config --images <svc>` also lists the service's dependencies: read the one image.
-  want_image="$(cd "$DIGIT_HOME" && eval "${DC} config --format json novu-bridge" 2>/dev/null \
-    | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["novu-bridge"]["image"])' 2>/dev/null || true)"
-  want_id="$(sudo docker image inspect -f '{{.Id}}' "$want_image" 2>/dev/null || true)"
-  want_hash="$(cd "$DIGIT_HOME" && eval "${DC} config --hash novu-bridge" 2>/dev/null | awk '$1 == "novu-bridge" {print $2}')"
-  have="$(sudo docker inspect -f '{{.Image}}|{{index .Config.Labels "com.docker.compose.config-hash"}}' "$cid" 2>/dev/null || true)"
-  [[ -n "$want_id" && -n "$want_hash" && "$have" == "$want_id|$want_hash" ]]
+  if ! _core_sms_handoff_lib; then
+    err "core-sms-handoff.sh not found next to this script or under \$CCRS_HOME/local-setup/scripts — cannot tell whether novu-bridge is the container compose configures now"
+    return 1
+  fi
+  core_sms_bridge_current
 }
 
 # _tenant_complaints <tenant> — how many PGR complaints have ever been filed at <tenant> and
@@ -509,7 +508,7 @@ do_step1() {
     # senders untouched.
     compose up -d novu-bridge-migration novu-bridge
     if [[ "$DRY_RUN" != true ]] && ! _bridge_is_current; then
-      err "novu-bridge is not the container compose configures now (image/config hash) after the recreate."
+      err "novu-bridge is not the container compose configures now (image/config hash) after the recreate: ${CSH_BRIDGE_WHY:-see above}."
       err "Stopping before pgr-services; the retired OTP senders were left running. Check \`${DC} ps novu-bridge\`."
       return 1
     fi
