@@ -5,6 +5,13 @@ const emailTenantService = require("./service/email-tenant-service");
 const config = require("../env-variables");
 const dialog = require("./util/dialog.js");
 
+/** The profile-confirmation prompt, shared by its question and its retry. */
+function profileConfirmationQuestion(context) {
+  return dialog
+    .get_message(messages.onboarding.onBoardingUserProfileConfirmation.question, context.user.locale)
+    .replace("{{name}}", context.user.name);
+}
+
 const sevaMachine = Machine({
   id: "mseva",
   initial: "start",
@@ -334,13 +341,7 @@ const sevaMachine = Machine({
                   );
                   dialog.sendMessage(context, nameInformationMessage, false);
                   await new Promise((resolve) => setTimeout(resolve, 1000));
-                  let message = dialog.get_message(
-                    messages.onboarding.onBoardingUserProfileConfirmation
-                      .question,
-                    context.user.locale
-                  );
-                  message = message.replace("{{name}}", context.user.name);
-                  dialog.sendMessage(context, message);
+                  dialog.sendMessage(context, profileConfirmationQuestion(context));
                 })();
               }),
               on: {
@@ -366,7 +367,39 @@ const sevaMachine = Machine({
                   target: "#changeName",
                   cond: (context) => context.intention == "No",
                 },
+                {
+                  target: "error",
+                },
               ],
+            },
+            // Re-asks only the question. Going back to `question` would resend the
+            // nameInformation preamble, with its delays, on every invalid reply. The name is
+            // not kept in the saved state, so when it is unknown by now (a sandbox session
+            // resumed from its tracker) the citizen is asked for it instead of being shown
+            // "undefined".
+            error: {
+              always: [
+                {
+                  target: "#changeName",
+                  cond: (context) => !context.user.name,
+                },
+                {
+                  target: "reprompt",
+                },
+              ],
+            },
+            reprompt: {
+              onEntry: assign((context, event) => {
+                let retry = dialog.get_message(
+                  dialog.global_messages.error.retry,
+                  context.user.locale
+                );
+                dialog.sendMessage(context, retry, false);
+                dialog.sendMessage(context, profileConfirmationQuestion(context));
+              }),
+              on: {
+                USER_MESSAGE: "process",
+              },
             },
           },
         },

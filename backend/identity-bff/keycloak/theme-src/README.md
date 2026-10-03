@@ -33,11 +33,14 @@ stock Keycloak appearance.
 ## Where the design comes from
 
 - **Palette** — generated, not retyped. `npm run tokens` evaluates
-  `configurator/src/themes/index.ts` and writes the `cms-blue` preset to
-  `src/login/styles/tokens.generated.css`. The generated file is committed so
-  the theme builds without reaching outside `backend/identity-bff`; palette
-  updates are an explicit theme-maintenance operation, not a cross-project CI
-  dependency.
+  `configurator/src/themes/index.ts` and writes every preset to
+  `src/login/styles/tokens.generated.css`: `cms-blue` on `:root`, the rest
+  under `:root[data-theme="…"]`. It also writes `src/login/themeChoice.generated.ts`,
+  the key the Configurator saves a theme pick under. The login page runs on
+  the Configurator's origin, so it reads that pick before the first paint and
+  wears the same preset as the Configurator's sign-in screen. The generated
+  files are committed so the theme builds without reaching outside
+  `backend/identity-bff`; `npm test` regenerates them and fails on drift.
 - **Layout and primitives** — `src/login/Template.tsx` is a port of the
   Configurator's `AuthShell`, and `src/login/styles/theme.css` restates only the
   utility values the auth screens use, each annotated with the Tailwind class it

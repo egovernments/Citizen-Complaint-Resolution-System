@@ -1,0 +1,144 @@
+name: Deploy naipepea
+run-name: Deploy naipepea (${{ inputs.release_tag || 'build + deploy develop head' }}) by @${{ github.actor }}
+
+# One-click deploy to the naipepea dev box (#2179).
+#
+#   release_tag empty → build every CI image for the current develop head, then
+#                       deploy that exact commit with its images (develop-<sha8>).
+#   release_tag set   → deploy that published release tag with its images.
+#
+# The deploy itself runs on the box: this workflow SSHes in with a key that is a
+# forced command for /usr/local/bin/naipepea-deploy-trigger, which can only start
+# the box's own redeploy script (nairobi-redeploy.sh, the same path the cron runs)
+# or report a run's status. The redeploy smoke-tests, rolls back on failure, and
+# launches the integration suite (https://naipepea.digit.org/tests/).
+#
+# Needs (repo admin): Environment `naipepea` (who may deploy) with
+#   secret   NAIPEPEA_DEPLOY_KEY     the private key whose public half is the forced command
+#   variable NAIPEPEA_SSH_HOST       host or IP of the box
+#   variable NAIPEPEA_KNOWN_HOSTS    its pinned host key line(s) (ssh-keyscan)
+#
+# Lives on master because workflow_dispatch only runs workflows on the default
+# branch; it deploys develop regardless.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Deploy this published release tag instead (leave empty to build and deploy the develop head)
+        required: false
+        default: ''
+
+concurrency:
+  group: naipepea-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve what to deploy
+    runs-on: ubuntu-latest
+    outputs:
+      kind: ${{ steps.r.outputs.kind }}
+      ref: ${{ steps.r.outputs.ref }}
+      tag: ${{ steps.r.outputs.tag }}
+    steps:
+      - id: r
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TAG" ]; then
+            sha=$(git ls-remote "https://github.com/$REPO.git" refs/heads/develop | cut -f1)
+            [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "::error::could not resolve develop"; exit 1; }
+            { echo "kind=develop"; echo "ref=$sha"; echo "tag=develop-${sha:0:8}"; } >> "$GITHUB_OUTPUT"
+            echo "Deploying develop @ $sha with images develop-${sha:0:8}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            [[ $RELEASE_TAG =~ ^v?[0-9][0-9A-Za-z._-]{0,40}$ ]] || { echo "::error::malformed release tag"; exit 1; }
+            git ls-remote --exit-code "https://github.com/$REPO.git" "refs/tags/$RELEASE_TAG" >/dev/null \
+              || { echo "::error::no such tag: $RELEASE_TAG"; exit 1; }
+            { echo "kind=release"; echo "ref=$RELEASE_TAG"; echo "tag=$RELEASE_TAG"; } >> "$GITHUB_OUTPUT"
+            echo "Deploying release $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build:
+    name: Build develop images
+    needs: resolve
+    if: needs.resolve.outputs.kind == 'develop'
+    uses: ./.github/workflows/build-images.yml
+    with:
+      ref: ${{ needs.resolve.outputs.ref }}
+      staging_prefix: deploy-naipepea
+    secrets: inherit
+
+  deploy:
+    name: Deploy to naipepea
+    needs: [resolve, build]
+    # A partly failed build (an image this deploy does not run) must not block the
+    # deploy; the box's deploy.sh checks every image it pulls exists before it
+    # touches the stack, and fails there if one does not.
+    if: ${{ !cancelled() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: naipepea
+    timeout-minutes: 60
+    env:
+      HOST: ${{ vars.NAIPEPEA_SSH_HOST }}
+      KIND: ${{ needs.resolve.outputs.kind }}
+      REF: ${{ needs.resolve.outputs.ref }}
+    steps:
+      - name: Load the deploy key
+        env:
+          KEY: ${{ secrets.NAIPEPEA_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ vars.NAIPEPEA_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [ -n "$KEY" ] && [ -n "$KNOWN_HOSTS" ] && [ -n "$HOST" ] \
+            || { echo "::error::the naipepea Environment needs NAIPEPEA_DEPLOY_KEY, NAIPEPEA_KNOWN_HOSTS and NAIPEPEA_SSH_HOST"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/naipepea && chmod 600 ~/.ssh/naipepea
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Start the deploy
+        id: start
+        run: |
+          set -uo pipefail
+          ssh_box() { ssh -i ~/.ssh/naipepea -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "root@$HOST" "$@"; }
+          # A scheduled deploy may be running: wait for it (up to ~30 min) rather than fail.
+          for attempt in $(seq 1 30); do
+            out=$(ssh_box deploy "$KIND" "$REF" 2>&1); rc=$?
+            echo "$out"
+            if [ $rc -eq 0 ]; then
+              id=$(sed -n 's/^STARTED \([0-9-]*-gh\).*/\1/p' <<<"$out")
+              [ -n "$id" ] || { echo "::error::no run id in the trigger's reply"; exit 1; }
+              echo "id=$id" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            [ $rc -eq 75 ] || { echo "::error::the box refused the deploy (rc $rc)"; exit 1; }
+            echo "another deploy is running on the box; retrying in 60s ($attempt/30)"; sleep 60
+          done
+          echo "::error::the box stayed busy for 30 minutes"; exit 1
+
+      - name: Wait for the result
+        env:
+          ID: ${{ steps.start.outputs.id }}
+        run: |
+          set -uo pipefail
+          ssh_box() { ssh -i ~/.ssh/naipepea -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "root@$HOST" "$@"; }
+          for _ in $(seq 1 100); do
+            st=$(ssh_box status "$ID" 2>&1) || true
+            first=$(head -1 <<<"$st")
+            echo "[$(date -u +%H:%M:%S)] $first"
+            case "$first" in
+              "RESULT PASS")
+                { echo '### naipepea deploy passed'; echo '```'; echo "$st"; echo '```';
+                  echo 'Integration tests: https://naipepea.digit.org/tests/'; } >> "$GITHUB_STEP_SUMMARY"
+                echo "$st"; exit 0 ;;
+              "RESULT "*)
+                { echo '### naipepea deploy FAILED'; echo '```'; echo "$st"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+                echo "$st"; echo "::error::deploy $ID did not pass (full log on the box: /var/log/nairobi-deploy/dispatch-$ID.log)"; exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "::error::no result after 50 minutes"; exit 1

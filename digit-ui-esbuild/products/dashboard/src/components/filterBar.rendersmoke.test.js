@@ -91,7 +91,7 @@ test("filter bar renders no native <select> — ward and type are PopoverMenu ch
   assert.match(html, /aria-label="Ward filter"[^>]*aria-haspopup="menu"|aria-haspopup="menu"[^>]*aria-label="Ward filter"/);
   assert.match(
     html,
-    /aria-label="Complaint type filter"[^>]*aria-haspopup="menu"|aria-haspopup="menu"[^>]*aria-label="Complaint type filter"/
+    /aria-label="Complaint category filter"[^>]*aria-haspopup="menu"|aria-haspopup="menu"[^>]*aria-label="Complaint category filter"/
   );
 });
 

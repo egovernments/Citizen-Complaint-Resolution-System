@@ -404,6 +404,11 @@ export function Select<TValue extends string = string>({
                 aria-label={searchPlaceholder ?? "Search"}
                 style={{
                   flex: 1,
+                  // A flex item won't shrink below its content width by default,
+                  // and an input's is its built-in ~20-character size. In a
+                  // narrow list (the inbox filter column) the box overflowed it
+                  // and scrolled the card sideways while it had focus.
+                  minWidth: 0,
                   border: "none",
                   outline: "none",
                   background: "transparent",

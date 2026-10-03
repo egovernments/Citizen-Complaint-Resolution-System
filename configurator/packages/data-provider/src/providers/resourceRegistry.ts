@@ -98,7 +98,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // keep reading `serviceCode`/`department`/`slaHours` unchanged. idField is
   // the leaf row's `code` (== the serviceCode stored verbatim on a complaint).
   'complaint-hierarchy': {
-    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
+    type: 'mdms', label: 'Complaint Categories', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
     idField: 'code', nameField: 'name', descriptionField: 'levelCode',
     dedicated: true, leafServiceDefAdapter: true,
   },

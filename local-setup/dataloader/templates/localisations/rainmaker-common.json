@@ -211,13 +211,13 @@
     },
     {
         "code": "ACTION_TEST_COMPLAINTS_TYPE",
-        "message": "Complaint Types",
+        "message": "Complaint Categories",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "ACTION_TEST_COMPLAINT_TYPES",
-        "message": "Complaint Types",
+        "message": "Complaint Categories",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -583,7 +583,7 @@
     },
     {
         "code": "CATEGORIES_OF_COMPLAINT_TYPES_CAN_BE_SUBMITTED_ON_GRIEVANCE_PORTAL",
-        "message": "categories of complaint types can be submitted on grievance portal. ",
+        "message": "categories of complaints can be submitted on grievance portal. ",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
