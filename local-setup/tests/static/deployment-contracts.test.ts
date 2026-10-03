@@ -32,30 +32,69 @@ describe('default-data-handler tenant template', () => {
   });
 });
 
+// #2179. Under pipefail, a consumer that stops reading early SIGPIPEs the writer and
+// the pipeline reports 141 even though the consumer got what it needed. The Kong CORS
+// check aborted ~half of naipepea's deploys this way. Scans every ansible YAML file
+// (playbooks and included task files), not just playbook-deploy.yml.
+describe('ansible: pipefail tasks never pipe into a consumer that stops reading early', () => {
+  const ANSIBLE_DIR = path.join(REPO_ROOT, 'local-setup/ansible');
+  const yamlFiles = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) return yamlFiles(p);
+      return /\.ya?ml$/.test(e.name) ? [p] : [];
+    });
+  // A single `|` (never `||`) into: grep with -q or -m among its flags (or --quiet /
+  // --silent / --max-count), head, a sed script that quits, or an awk whose script exits.
+  const EARLY_EXIT =
+    /(?<!\|)\|(?!\|)\s*(?:grep\b[^|\n]*?(?:\s-[A-Za-z]*[qm][A-Za-z0-9]*\b|\s--(?:quiet|silent|max-count)\b)|head\b|sed\b[^|\n]*?(?:\bq\b|;q|q['"])|awk\b[^|\n]*?\bexit\b)/;
+  const offenders = (text: string) =>
+    text
+      .split(/\n(?=\s*- name: )/)
+      .filter((t) => /set -[a-z]*o pipefail/.test(t) && EARLY_EXIT.test(t))
+      .map((t) => t.trim().split('\n')[0]);
+
+  test('no ansible YAML file has one', () => {
+    const files = yamlFiles(ANSIBLE_DIR);
+    expect(files.some((f) => f.endsWith(`${path.sep}tasks${path.sep}pg-storage-guard.yml`))).toBe(true);
+    const found = files.flatMap((f) =>
+      offenders(fs.readFileSync(f, 'utf8')).map((name) => `${path.relative(REPO_ROOT, f)}: ${name}`)
+    );
+    expect(found).toEqual([]);
+  });
+
+  test('the detector catches every early-exit form and ignores || and pipefail-free tasks', () => {
+    const task = (body: string, pipefail = true) =>
+      `- name: t\n  shell: |\n${pipefail ? '    set -o pipefail\n' : ''}    ${body}\n`;
+    for (const bad of [
+      'docker ps | grep -q x',
+      "x | grep -qE '^x$'",
+      'x | grep -Fxq y',
+      'x | grep -m1 y',
+      'x | grep --quiet y',
+      'find . | head -1',
+      'x | head -n1',
+      "x | sed -n '1p;q'",
+      "x | awk -F: '{exit}'",
+      'x | awk "{exit}"',
+    ]) {
+      expect([bad, offenders(task(bad))]).toEqual([bad, ['- name: t']]);
+    }
+    for (const ok of [
+      'test -f x || grep -q pat file',
+      'x | grep -E y',
+      "x | awk '/m/{f=1} f{f=0}'",
+      'x | sort | uniq',
+      'grep -q pat file',
+    ]) {
+      expect([ok, offenders(task(ok))]).toEqual([ok, []]);
+    }
+    expect(offenders(task('x | grep -q y', false))).toEqual([]);
+  });
+});
+
 describe('ansible playbook-deploy.yml', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');
-
-  // #2179. Under pipefail, a consumer that stops reading early (`grep -q`, awk `exit`)
-  // SIGPIPEs the writer, and the pipeline reports 141 even though the consumer got
-  // what it needed. The Kong CORS check aborted ~half of naipepea's deploys this way.
-  describe('pipefail tasks never pipe into a consumer that stops reading early', () => {
-    const tasks = playbook.split(/\n(?=\s*- name: )/);
-    const pipefailTasks = tasks.filter((t) => /set -[a-z]*o pipefail/.test(t));
-
-    test('no pipefail task pipes into grep -q / grep -qx / an awk that exits', () => {
-      const offenders = pipefailTasks
-        .filter((t) => /\|\s*grep -qx?\b/.test(t) || /\|\s*awk '[^']*\bexit\b/.test(t))
-        .map((t) => t.trim().split('\n')[0]);
-      expect(offenders).toEqual([]);
-    });
-
-    test('the Kong CORS check reads kong.yml first, then filters it without a pipe', () => {
-      const task = tasks.find((t) => t.includes('Kong — verify the CORS wildcard is gone'));
-      expect(task).toBeDefined();
-      expect(task).toContain('cfg=$(docker exec kong-gateway cat /kong/kong.yml)');
-      expect(task).toContain('<<<"$cfg"');
-    });
-  });
 
   // #2088, Dhruv review finding 5. The identity tier's six secrets used to be
   // sha256(keycloak_admin_password ~ ':<label>') with `default('')`, so on a
