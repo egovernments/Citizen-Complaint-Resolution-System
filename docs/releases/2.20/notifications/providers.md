@@ -34,7 +34,7 @@ Novu's own answer is one provider class per gateway (v2.3.0 ships 38 SMS provide
 | File | What it is |
 |---|---|
 | `smscountry.js`, `jasmin.js`, `ozeki.js` | One gateway each: a provider class extending Novu's own `BaseProvider`, plus the handler that builds it from the integration's credentials |
-| `register.js` | The preload. It wraps the worker's `SmsFactory.getHandler`, so an integration whose `providerId` is one of these gets DIGIT's handler and every other one goes to Novu's own lookup unchanged |
+| `register.js` | The preload. It wraps the worker's `SmsFactory.getHandler`, so an integration whose `providerId` is one of these gets DIGIT's handler and every other one goes to Novu's own lookup unchanged. It is also the redaction boundary: every error a send throws leaves it as a plain, redacted `Error` (see [Gateway notes](#gateway-notes)) |
 | `novu.js` | Resolves Novu's internals (`BaseProvider`, `BaseSmsHandler`, `SmsFactory`, axios) from inside the image |
 | `test/`, `run-tests.sh` | Tests, run inside the stock worker image they patch |
 
@@ -79,7 +79,9 @@ Bumping the image without step 2 leaves the worker refusing to boot, which is th
 
 ## Gateway notes
 
-Each provider fails the Novu step whenever the gateway did not accept the message. The step still fails when the gateway answered HTTP 200, so Novu's activity feed shows the gateway's reason. That reason is redacted first: the integration's username and password are masked (as sent, and URL-, form- or HTML-encoded, and as the Basic-auth token), as is the value of any `password=`-style pair, before the text is cut to 200 characters. A gateway error page that echoes the request therefore never shows the panel credentials to someone with Novu dashboard access.
+Each provider fails the Novu step whenever the gateway did not accept the message, whatever the HTTP status: every reply, 200 or not, goes through the provider's own parser, so Novu's activity feed shows the gateway's reason. That reason is redacted first: the integration's username and password are masked (as sent, and URL-, form- or HTML-encoded, and as the Basic-auth token), as is the value of any `password=`-style pair, before the text is cut to 200 characters. A gateway error page that echoes the request therefore never shows the panel credentials to someone with Novu dashboard access.
+
+Errors that never reach a parser are redacted too. Novu stores whatever a send throws: `JSON.stringify(error)` as the message's error text, and `error.response.data` in the execution detail. A raw axios error from a transport failure (connection refused, reset, DNS, timeout) would serialise its request config, posted form and `Authorization` header included. So `register.js` wraps every DIGIT provider's `sendMessage` and turns **any** rejection into a plain `Error` that carries only a redacted message (at most 500 characters), with no `config`, `request`, `response`, `code` or `cause` for Novu to serialise. The message masks the username, password and every other credential value except `from`, `baseUrl`, `senderName`, `host` and `port`. A transport failure therefore reads, for example, `jasmin request failed: connect ECONNREFUSED 10.0.0.5:1401`. `test/error-boundary.test.js` sends through Novu's own `SendMessageSms` step against refused, reset and HTTP 500 echoing sockets, and checks that neither stored field contains a credential.
 
 | Provider | Request | Accepted when… | Notes |
 |---|---|---|---|
@@ -150,7 +152,7 @@ Copy the shape of `jasmin.js` (form-encoded, plain-text reply) or `ozeki.js` (JS
 4. Add `test/<id>.test.js` and run `./run-tests.sh`.
 5. Copy the runtime file to `devops/deploy-as-code/charts/backbone-services/novu/files/novu-worker-providers/`. The static contract test fails until the chart copy matches.
 
-The provider must decide success from **what the gateway says**, not the HTTP status, and must throw when the gateway did not accept the message. Cover every reply shape the gateway really produces (success, error string, HTML error page, empty body, rejection-as-200). Check that each test fails when its behaviour is removed.
+The provider must decide success from **what the gateway says**, not the HTTP status (pass `validateStatus: () => true` so a non-2xx reply reaches the parser), and must throw when the gateway did not accept the message. Mask the credentials in any gateway text it quotes (`redactedSnippet` from `./novu`). `register.js` redacts every error again at the boundary and strips the axios objects, so a transport failure needs no handling in the provider. Cover every reply shape the gateway really produces (success, error string, HTML error page, empty body, rejection-as-200). Check that each test fails when its behaviour is removed.
 
 ### 2. The catalog entry, in novu-bridge
 

@@ -148,16 +148,6 @@ public class ChannelPolicyClient {
         return new ProviderUsage(selecting, unpinned);
     }
 
-    /** The states whose rows select this integration: {@link #providerUsage} without the unpinned part. */
-    public List<String> tenantsUsingProvider(Collection<String> stateTenants, String identifier, String id) {
-        return providerUsage(stateTenants, identifier, id, List.of()).selecting();
-    }
-
-    /** The enabled channels with this DIGIT code that select no provider: {@link #providerUsage}'s second half. */
-    public List<String> unpinnedChannels(Collection<String> stateTenants, String code) {
-        return providerUsage(stateTenants, null, null, List.of(code)).unpinned(code);
-    }
-
     /**
      * The integrations the bridge names by env var rather than by channel row, keyed by DIGIT
      * channel: {@code novu.bridge.integration.id.whatsapp} is what every WhatsApp trigger without a

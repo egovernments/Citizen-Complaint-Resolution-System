@@ -62,6 +62,10 @@ class SmsCountryProvider extends BaseProvider {
       },
       // The reply is plain text; without this axios would try to parse it as JSON.
       responseType: 'text',
+      // Every status goes through parseJobId, which masks the credentials: a rejected
+      // non-2xx would carry the raw page (an ASP.NET error page echoes User/passwd) as
+      // error.response.data, which Novu stores verbatim in its execution details.
+      validateStatus: () => true,
     });
 
     return { id: parseJobId(data, [this.config.user, this.config.password]), date: new Date().toISOString() };

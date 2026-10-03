@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -141,16 +142,25 @@ class ChannelPolicyClientTest {
         assertNull(client.provider("ke", "SMS"));
     }
 
+    // The delete guard's single entry point, asked one question at a time.
+    private List<String> selecting(Collection<String> states, String identifier, String id) {
+        return client.providerUsage(states, identifier, id, List.of()).selecting();
+    }
+
+    private List<String> unpinned(Collection<String> states, String code) {
+        return client.providerUsage(states, null, null, List.of(code)).unpinned(code);
+    }
+
     @Test
     void providerInUseIsDetectedAcrossEveryChannelOfTheTenant() {
         stubRows(row("SMS", true, null, null, "smscountry-abcdef01"),
                 row("EMAIL", true, null, null, "smtp-deadbeef"));
-        assertEquals(List.of("ke"), client.tenantsUsingProvider(List.of("ke"), "smscountry-abcdef01", null));
-        assertEquals(List.of("ke"), client.tenantsUsingProvider(List.of("ke"), "smtp-deadbeef", null));
-        assertEquals(List.of(), client.tenantsUsingProvider(List.of("ke"), "ozeki-nobody-uses-this", null));
-        assertEquals(List.of(), client.tenantsUsingProvider(List.of("ke"), null, null));
+        assertEquals(List.of("ke"), selecting(List.of("ke"), "smscountry-abcdef01", null));
+        assertEquals(List.of("ke"), selecting(List.of("ke"), "smtp-deadbeef", null));
+        assertEquals(List.of(), selecting(List.of("ke"), "ozeki-nobody-uses-this", null));
+        assertEquals(List.of(), selecting(List.of("ke"), null, null));
         // A row may name the integration by its Novu _id instead of its identifier.
-        assertEquals(List.of("ke"), client.tenantsUsingProvider(List.of("ke"), "ozeki-other", "smtp-deadbeef"));
+        assertEquals(List.of("ke"), selecting(List.of("ke"), "ozeki-other", "smtp-deadbeef"));
     }
 
     @Test
@@ -159,15 +169,15 @@ class ChannelPolicyClientTest {
         assertTrue(client.knownStateTenants().isEmpty(), "nothing dispatched yet");
         client.provider("ke.bomet", "SMS");   // warm the cache as a live dispatch would
         assertEquals(java.util.Set.of("ke"), client.knownStateTenants());
-        assertEquals(List.of("ke"), client.tenantsUsingProvider(client.knownStateTenants(), "ozeki-0011aabb", null));
+        assertEquals(List.of("ke"), selecting(client.knownStateTenants(), "ozeki-0011aabb", null));
 
         // The cache still holds the row, but an outage must refuse, not answer from it or say "unused".
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new ResourceAccessException("down"));
         assertThrows(RuntimeException.class,
-                () -> client.tenantsUsingProvider(List.of("ke"), "ozeki-0011aabb", null));
+                () -> selecting(List.of("ke"), "ozeki-0011aabb", null));
         assertThrows(RuntimeException.class,
-                () -> client.tenantsUsingProvider(List.of("mz"), "ozeki-0011aabb", null));
+                () -> selecting(List.of("mz"), "ozeki-0011aabb", null));
     }
 
     // ---- channels that send through Novu's default integration (no pin) ----------
@@ -177,37 +187,37 @@ class ChannelPolicyClientTest {
         stubRows(row("SMS", true, "novu", null), row("WHATSAPP", true, null, null),
                 row("EMAIL", true, null, null, "smtp-deadbeef"));
         // SMS and WHATSAPP share Novu's sms channel, but neither one's integration serves the other.
-        assertEquals(List.of("ke:SMS"), client.unpinnedChannels(List.of("ke"), "SMS"));
-        assertEquals(List.of("ke:WHATSAPP"), client.unpinnedChannels(List.of("ke"), "whatsapp"));
-        assertEquals(List.of(), client.unpinnedChannels(List.of("ke"), "EMAIL"), "EMAIL is pinned");
+        assertEquals(List.of("ke:SMS"), unpinned(List.of("ke"), "SMS"));
+        assertEquals(List.of("ke:WHATSAPP"), unpinned(List.of("ke"), "whatsapp"));
+        assertEquals(List.of(), unpinned(List.of("ke"), "EMAIL"), "EMAIL is pinned");
     }
 
     @Test
     void disabledPinnedAndDirectSmsCountryChannelsDoNot() {
         stubRows(row("SMS", true, "smscountry", "KE-GOV"), row("WHATSAPP", false, null, null));
-        assertEquals(List.of(), client.unpinnedChannels(List.of("ke"), "SMS"));
-        assertEquals(List.of(), client.unpinnedChannels(List.of("ke"), "WHATSAPP"));
+        assertEquals(List.of(), unpinned(List.of("ke"), "SMS"));
+        assertEquals(List.of(), unpinned(List.of("ke"), "WHATSAPP"));
     }
 
     @Test
     void aStateWithNoRowsRunsOnTheEnvAllowlist_andPolicyOffMeansEveryTenant() {
         stubRows();
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        assertEquals(List.of("mz:SMS"), client.unpinnedChannels(List.of("mz"), "SMS"));
-        assertEquals(List.of(), client.unpinnedChannels(List.of("mz"), "WHATSAPP"));
+        assertEquals(List.of("mz:SMS"), unpinned(List.of("mz"), "SMS"));
+        assertEquals(List.of(), unpinned(List.of("mz"), "WHATSAPP"));
         config.setSmsProvider("smscountry");   // env direct route: the SMS leg never reaches Novu
-        assertEquals(List.of(), client.unpinnedChannels(List.of("mz"), "SMS"));
+        assertEquals(List.of(), unpinned(List.of("mz"), "SMS"));
 
         config.setSmsProvider("");
         config.setChannelPolicyEnabled(false);
-        assertEquals(List.of("all tenants:EMAIL"), client.unpinnedChannels(List.of(), "EMAIL"));
+        assertEquals(List.of("all tenants:EMAIL"), unpinned(List.of(), "EMAIL"));
     }
 
     @Test
     void theDefaultCheckFailsClosedToo() {
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new ResourceAccessException("down"));
-        assertThrows(RuntimeException.class, () -> client.unpinnedChannels(List.of("ke"), "SMS"));
+        assertThrows(RuntimeException.class, () -> unpinned(List.of("ke"), "SMS"));
     }
 
     // Review (10): the delete guard asked "who pins it" and "who rides the default" with a fetch each.

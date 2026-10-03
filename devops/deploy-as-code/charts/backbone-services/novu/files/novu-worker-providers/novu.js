@@ -24,7 +24,8 @@ function workerVersion() {
 // Shared by the providers below, kept here so the mounted file set stays fixed.
 //
 // A provider's error message is stored in Novu's execution details and shown in its
-// activity feed, so gateway text that goes into one is redacted first: gateways echo
+// activity feed, so gateway text that goes into one is redacted first (by the parsers,
+// and again for every error at register.js's boundary): gateways echo
 // the request back (SMSCountry's ASP.NET error page carries the posted form, User and
 // passwd included). Each credential value is masked as sent and as a page may echo
 // it (URL-, form- and HTML-encoded, and the Basic-auth token of user:password), and
@@ -67,9 +68,9 @@ function abbreviate(value, max = 200) {
   return value.length <= max ? value : `${value.slice(0, max)}…`;
 }
 
-/** Gateway text as it may appear in an error: credentials masked, then at most 200 characters. */
-function redactedSnippet(text, secrets) {
-  return abbreviate(redact(text, secrets));
+/** Gateway text as it may appear in an error: credentials masked, then at most `max` characters. */
+function redactedSnippet(text, secrets, max = 200) {
+  return abbreviate(redact(text, secrets), max);
 }
 
 module.exports = {

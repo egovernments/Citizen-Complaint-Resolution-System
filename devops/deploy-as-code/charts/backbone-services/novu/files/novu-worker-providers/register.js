@@ -71,6 +71,7 @@ function register() {
       return null;
     }
     handler.buildProvider(integration.credentials || {});
+    sealErrors(handler.getProvider(), integration.providerId, integration.credentials || {}, novu.redactedSnippet);
     return handler;
   }
   getHandler.digitProviders = [...handlers.keys()];
@@ -79,7 +80,54 @@ function register() {
   return getHandler.digitProviders;
 }
 
-const WORKER_MAIN = /[\\/]apps[\\/]worker[\\/]dist[\\/]main\.js$/;
+// The redaction boundary. Whatever a send rejects with ends up in Novu's storage:
+// sendErrorStatus writes JSON.stringify(error) to the message's errorText (the activity
+// feed) whenever the error has own enumerable keys, and the PROVIDER_ERROR execution
+// detail writes error.response.data. An AxiosError serialises its config, so a
+// transport failure (refused, reset, DNS, timeout) would store the posted form and the
+// Basic header verbatim. So every rejection, whatever its source (axios, a reply
+// parser, a bug), is replaced here by a plain Error that carries only a redacted
+// message: no config, request, response, code or cause for Novu to serialise, which
+// also makes Novu store that message as the errorText. The reply parsers still read
+// failure-as-200 replies and mask what they quote; this is the one place that
+// guarantees nothing else gets through.
+
+// Integration credential keys that are not secret. Every other string value is masked.
+const PUBLIC_CREDENTIALS = new Set(['from', 'baseUrl', 'senderName', 'host', 'port']);
+
+function credentialSecrets(credentials) {
+  const { user, password, ...rest } = credentials;
+  const others = Object.entries(rest)
+    .filter(([key, value]) => !PUBLIC_CREDENTIALS.has(key) && typeof value === 'string')
+    .map(([, value]) => value);
+  // user and password first: redact() also masks their Basic-auth token.
+  return [user, password, ...others];
+}
+
+function describe(error) {
+  const message = typeof error?.message === 'string' ? error.message : '';
+  const code = typeof error?.code === 'string' ? error.code : '';
+  if (message && code && !message.includes(code)) {
+    return `${message} (${code})`;
+  }
+  return message || code || (typeof error?.name === 'string' && error.name) || String(error);
+}
+
+function sealErrors(provider, providerId, credentials, redactedSnippet) {
+  const secrets = credentialSecrets(credentials);
+  const sendMessage = provider.sendMessage;
+  provider.sendMessage = async function sealedSendMessage(...args) {
+    try {
+      return await sendMessage.apply(this, args);
+    } catch (error) {
+      // Our parsers already name the provider; a transport or library error does not.
+      const text = error?.isAxiosError ? `${providerId} request failed: ${describe(error)}` : describe(error);
+      throw new Error(redactedSnippet(text, secrets, 500));
+    }
+  };
+}
+
+const WORKER_MAIN =/[\\/]apps[\\/]worker[\\/]dist[\\/]main\.js$/;
 const DOTENV_HELPER = /[\\/]dotenvcreate\.m?js$/;
 
 /**
