@@ -25,8 +25,8 @@ vi.mock('@/api/services/mdms', () => ({
   },
 }));
 
-// jsdom does not implement Intl.supportedValuesOf, so listTimeZones() returns [].
-// Provide a small deterministic list that covers the zones the tests need.
+// Provide a small, deterministic timezone list so tests don't depend on the
+// host Node runtime's complete IANA dataset.
 vi.mock('@/lib/timezones', () => ({
   listTimeZones: () => [
     'Africa/Maputo',

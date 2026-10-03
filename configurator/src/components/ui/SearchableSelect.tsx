@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -28,10 +28,12 @@ export interface SearchableSelectProps {
  * Follows the accessibility and visual pattern of the design system:
  * - Smart auto-positioning: opens upwards if near the bottom of the viewport
  * - Auto-scrolls to the currently selected option upon opening
+ * - Resets scroll position to top when typing to keep top search results in view
+ * - Auto-scrolls the active highlighted item into view on ArrowUp/ArrowDown navigation
  * - Visual checkmark and highlight for current selection
  * - Capped height (`max-h-60`) with smooth scrolling and high z-index (`z-50`)
- * - Clear button when searching, toggle button on chevron click
- * - Full keyboard navigation (ArrowDown/Up, Enter, Escape)
+ * - Clear button when searching, toggle button on chevron click, reopens on click
+ * - Full keyboard navigation (ArrowDown/Up, Enter, Escape, Tab to close)
  */
 export function SearchableSelect({
   value,
@@ -42,6 +44,7 @@ export function SearchableSelect({
   placeholder = 'Search…',
   className,
 }: SearchableSelectProps) {
+  const listboxId = useId();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -50,7 +53,6 @@ export function SearchableSelect({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listboxRef = useRef<HTMLUListElement | null>(null);
-  const listboxId = useRef(`searchable-select-${Math.random().toString(36).slice(2)}`).current;
 
   /** Options that match the current query (case-insensitive substring). */
   const filtered = useMemo(() => {
@@ -77,30 +79,28 @@ export function SearchableSelect({
     }
   }, []);
 
-  // Update placement and auto-scroll to selected option when opened
-  useEffect(() => {
-    if (!open) return;
+  // Scroll a specific option index into view
+  const scrollToOption = useCallback(
+    (idx: number) => {
+      requestAnimationFrame(() => {
+        const optElem = document.getElementById(`${listboxId}-opt-${idx}`);
+        if (typeof optElem?.scrollIntoView === 'function') {
+          optElem.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    },
+    [listboxId],
+  );
+
+  // Helper to open dropdown and initialize highlight/scroll to the currently selected value
+  const openDropdown = useCallback(() => {
+    const selectedIdx = filtered.indexOf(value);
+    const initialIdx = selectedIdx >= 0 ? selectedIdx : 0;
+    setActiveIdx(initialIdx);
+    setOpen(true);
     updatePlacement();
-
-    if (!query && value && listboxRef.current) {
-      const idx = filtered.indexOf(value);
-      if (idx >= 0) {
-        setActiveIdx(idx);
-        // Defer scroll to next tick after listbox mounts
-        requestAnimationFrame(() => {
-          const selectedElem = listboxRef.current?.querySelector<HTMLElement>(`#${listboxId}-opt-${idx}`);
-          if (typeof selectedElem?.scrollIntoView === 'function') {
-            selectedElem.scrollIntoView({ block: 'nearest' });
-          }
-        });
-      }
-    }
-  }, [open, updatePlacement, query, value, filtered, listboxId]);
-
-  // Reset highlight to top whenever the search query changes
-  useEffect(() => {
-    setActiveIdx(0);
-  }, [query]);
+    scrollToOption(initialIdx);
+  }, [filtered, value, updatePlacement, scrollToOption]);
 
   // Close on outside click
   useEffect(() => {
@@ -123,15 +123,21 @@ export function SearchableSelect({
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
     switch (e.key) {
-      case 'ArrowDown':
+      case 'ArrowDown': {
         e.preventDefault();
         setOpen(true);
-        setActiveIdx((i) => Math.min(filtered.length - 1, i + 1));
+        const nextIdx = Math.min(filtered.length - 1, activeIdx + 1);
+        setActiveIdx(nextIdx);
+        scrollToOption(nextIdx);
         break;
-      case 'ArrowUp':
+      }
+      case 'ArrowUp': {
         e.preventDefault();
-        setActiveIdx((i) => Math.max(0, i - 1));
+        const nextIdx = Math.max(0, activeIdx - 1);
+        setActiveIdx(nextIdx);
+        scrollToOption(nextIdx);
         break;
+      }
       case 'Enter':
         if (open && filtered.length > 0) {
           e.preventDefault();
@@ -176,14 +182,22 @@ export function SearchableSelect({
           disabled={disabled}
           value={inputValue}
           onChange={(e) => {
-            setQuery(e.target.value);
+            const nextQuery = e.target.value;
+            setQuery(nextQuery);
             setOpen(true);
             setActiveIdx(0);
+            if (listboxRef.current) {
+              listboxRef.current.scrollTop = 0;
+            }
           }}
           onFocus={() => {
             setQuery('');
-            setOpen(true);
-            updatePlacement();
+            openDropdown();
+          }}
+          onClick={() => {
+            if (!open) {
+              openDropdown();
+            }
           }}
           onBlur={(e) => {
             if (!containerRef.current?.contains(e.relatedTarget as Node)) {
@@ -202,6 +216,10 @@ export function SearchableSelect({
               onClick={(e) => {
                 e.stopPropagation();
                 setQuery('');
+                setActiveIdx(0);
+                if (listboxRef.current) {
+                  listboxRef.current.scrollTop = 0;
+                }
                 inputRef.current?.focus();
               }}
               aria-label="Clear search query"
@@ -221,8 +239,7 @@ export function SearchableSelect({
                   setOpen(false);
                   setQuery('');
                 } else {
-                  setQuery('');
-                  setOpen(true);
+                  openDropdown();
                   inputRef.current?.focus();
                 }
               }
