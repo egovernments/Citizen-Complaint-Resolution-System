@@ -1,23 +1,28 @@
 import { test as setup, expect } from '@playwright/test';
 import path from 'node:path';
-import { loginConfigurator } from '../utils/configurator-auth';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { CONFIGURATOR_BASE, detectConfiguratorLogin, loginConfigurator } from '../utils/configurator-auth';
 
 const AUTH_FILE = path.resolve('auth.json');
 
-// Optional overrides (deploy/*.env); unset falls back to tests/utils/env.ts.
-const ADMIN_USER = process.env.ADMIN_USER;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const TENANT_CODE = process.env.TENANT_CODE;
+// Admin session for the configurator, saved to auth.json for the admin specs.
+// Form builds walk the real sign-in form, so a login regression fails here. Hosted
+// sign-in builds (#2107: Keycloak through identity-bff, no credential fields on the
+// configurator, and a deployment's Keycloak users need not map to the tenant under
+// test) get the session seeded with an API-minted DIGIT token instead, the shape
+// identity-bff writes after sign-in; admin/login.spec.ts covers that login page.
+setup('authenticate', async ({ page, baseURL }) => {
+  // One host for everything: the specs open relative /configurator/... on the
+  // project's baseURL, so the token (env BASE_URL) and the seeded session
+  // (CONFIGURATOR_BASE) must target that same host, or the specs run without one.
+  const origin = (u: string) => new URL(u).origin;
+  expect(origin(BASE_URL), `env BASE_URL (${BASE_URL}) must be Playwright's baseURL host (${baseURL}); set BASE_URL`).toBe(
+    origin(baseURL!),
+  );
+  expect(origin(CONFIGURATOR_BASE), `CONFIGURATOR_BASE_URL (${CONFIGURATOR_BASE}) must be on ${baseURL}`).toBe(
+    origin(baseURL!),
+  );
 
-// Admin session for the configurator, minted through the API rather than the
-// login UI. The configurator's login is now hosted sign-in (#2107): Keycloak
-// through identity-bff, with no credential fields of its own, so there is no
-// form to walk, and a deployment's Keycloak users need not map to the tenant
-// under test. The app restores its session from localStorage['crs-auth-state'],
-// which is what identity-bff writes after sign-in too, so seeding it with an
-// API-minted DIGIT token reaches the same /manage surface. The login pages
-// themselves are covered by admin/login.spec.ts.
-setup('authenticate', async ({ page }) => {
   // Not every target under test deploys the configurator (e.g. a local-setup
   // stack that only runs digit-ui-esbuild for PGR). `chromium`'s project
   // dependency on this fixture is purely for sequencing — employee/citizen
@@ -26,22 +31,52 @@ setup('authenticate', async ({ page }) => {
   // admin/configurator specs actually need it. Skip (not fail) when the
   // route 404s so a missing configurator doesn't block every other persona's
   // specs (previously required a manual `--no-deps` workaround).
-  const response = await page.goto('/configurator/login');
-  if (!response || !response.ok()) {
+  const response = await page.request.get('/configurator/login');
+  if (!response.ok()) {
     setup.skip(
       true,
-      `configurator not reachable on this target (GET /configurator/login -> ${response ? response.status() : 'no response'}) — admin/configurator specs will skip for lack of auth.json, but employee/citizen specs authenticate independently and are unaffected`,
+      `configurator not reachable on this target (GET /configurator/login -> ${response.status()}) — admin/configurator specs will skip for lack of auth.json, but employee/citizen specs authenticate independently and are unaffected`,
     );
     return;
   }
 
-  await loginConfigurator(page, { username: ADMIN_USER, password: ADMIN_PASSWORD, tenant: TENANT_CODE });
+  if ((await detectConfiguratorLogin(page)) === 'form') {
+    await page.locator('#username').fill(ADMIN_USER);
+    await page.locator('#password').fill(ADMIN_PASS);
+    const tenantInput = page.locator('#tenantCode');
+    await tenantInput.click();
+    await tenantInput.fill(ROOT_TENANT);
+    // Management mode lands on /manage rather than onboarding's /phase/1. The
+    // button has no role=button attribute of its own; match it by visible text.
+    await page.getByRole('button', { name: /^Management$/ }).click();
+    await Promise.all([
+      page.waitForURL(/\/configurator\/manage/, { timeout: 30_000 }),
+      page.getByRole('button', { name: /Sign In/i }).click(),
+    ]);
+  } else {
+    await loginConfigurator(page);
+  }
 
-  // The app accepted the seeded session: it stayed on /manage instead of
-  // bouncing to /login (a rejected token clears the session and redirects).
+  // Logged in, positively: the management layout rendered...
   await expect(page).toHaveURL(/\/configurator\/manage/, { timeout: 30_000 });
-  const hasAuthState = await page.evaluate(() => !!localStorage.getItem('crs-auth-state'));
-  expect(hasAuthState).toBe(true);
+  await expect(page.locator('main#main-content')).toBeVisible({ timeout: 30_000 });
+  // ...the session survived the app's first data requests (a 401 there signs it out)...
+  await page.waitForLoadState('networkidle');
+  await expect(page).toHaveURL(/\/configurator\/manage/);
+  // ...and DIGIT accepts the stored token (401 for a dead one). Its value is never printed.
+  const session = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('crs-auth-state') || '{}') as {
+        authToken?: string;
+        tenant?: string;
+        user?: { uuid?: string };
+      },
+  );
+  expect(session.authToken, 'crs-auth-state must hold a token').toBeTruthy();
+  const self = await page.request.post(`${BASE_URL}/user/_search`, {
+    data: { RequestInfo: { authToken: session.authToken }, uuid: [session.user?.uuid], tenantId: session.tenant },
+  });
+  expect(self.status(), 'DIGIT must accept the session token (POST /user/_search for the signed-in user)').toBe(200);
 
   await page.context().storageState({ path: AUTH_FILE });
 });

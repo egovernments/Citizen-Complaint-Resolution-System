@@ -52,9 +52,12 @@ export default defineConfig({
       testMatch: /tests\/fixtures\/profile\.setup\.ts$/,
     },
     {
-      // Runs first — performs UI login and writes storageState to auth.json.
+      // Admin configurator session -> auth.json: walks the login form on form builds,
+      // seeds the session from an API token on hosted sign-in builds (#2107). Reads
+      // tenant + credentials through env.ts, so it needs the discovered profile.
       name: 'setup',
       testMatch: /tests\/fixtures\/auth\.setup\.ts$/,
+      dependencies: ['profile-setup'],
     },
     {
       // Runs after `setup`. Drives the PGR API end-to-end to seed two
@@ -99,7 +102,7 @@ export default defineConfig({
       // On maputo that surfaces as `ROPC token request failed (400)`; on bomet
       // it would pass for the worst possible reason — the fallback literal `ke`
       // happens to BE bomet's real tenant, so the bug is invisible there.
-      // `setup` needs no such edge: it does not import env.ts.
+      // `setup` has the same edge for the same reason.
       name: 'api-setup',
       testMatch: /tests\/fixtures\/api\.setup\.ts$/,
       dependencies: ['profile-setup'],

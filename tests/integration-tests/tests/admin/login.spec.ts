@@ -46,7 +46,6 @@ Browser autofill writes into .value, so a regression would trip this assertion e
     },
     tag: ['@area:auth', '@area:configurator-manage', '@ccrs:412', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     test.skip((await detectConfiguratorLogin(page)) === 'hosted', NO_FORM);
-    await page.goto('/configurator/login');
 
     const username = page.locator('input#username');
     const password = page.locator('input#password');
@@ -84,7 +83,6 @@ Pairs with the empty-defaults test above — together they enforce both the Reac
     },
     tag: ['@area:auth', '@area:configurator-manage', '@ccrs:412', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     test.skip((await detectConfiguratorLogin(page)) === 'hosted', NO_FORM);
-    await page.goto('/configurator/login');
 
     // Form-level `autocomplete="off"` suppresses the browser's
     // save-password prompt on the login surface.

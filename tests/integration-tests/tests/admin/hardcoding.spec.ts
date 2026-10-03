@@ -94,7 +94,6 @@ Pairs with the other three hardcoding tests in this file — together they cover
         (await detectConfiguratorLogin(page)) === 'hosted',
         'this configurator uses hosted sign-in (#2107): there is no tenant field on its login page; the workspace is chosen after sign-in',
       );
-      await page.goto('/configurator/login');
 
       const tenantInput = page.locator('#tenantCode');
       await expect(tenantInput).toBeVisible();
