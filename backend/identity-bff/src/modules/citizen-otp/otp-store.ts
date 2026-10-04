@@ -61,16 +61,24 @@ export async function reserveSend(phoneNumber: string, ip: string): Promise<Send
   const phoneRef = privateRef("phone", phoneNumber);
   const ipRef = privateRef("ip", ip);
   const window = config.identityCitizenOtpSendWindowSeconds;
+  const cooldown = config.identityCitizenOtpResendSeconds > 0;
+  const inCooldown = async () => {
+    const ttl = await getRedis().ttl(cooldownKey(phoneRef));
+    return { allowed: false as const, reason: "COOLDOWN" as const, retryAfter: Math.max(1, ttl) };
+  };
+  // The cooldown is checked first, so pressing "resend" too early costs
+  // nothing from the IP budget that others behind the same address share.
+  if (cooldown && await getRedis().exists(cooldownKey(phoneRef))) return inCooldown();
   const ipSends = await countInWindow(ipSendsKey(ipRef), window);
   if (ipSends.count > config.identityCitizenOtpIpSendLimit) {
     return { allowed: false, reason: "IP_LIMIT", retryAfter: Math.max(1, ipSends.ttl) };
   }
-  const cooldown = config.identityCitizenOtpResendSeconds > 0;
   if (cooldown && !await getRedis().set(
     cooldownKey(phoneRef), "1", "EX", config.identityCitizenOtpResendSeconds, "NX",
   )) {
-    const ttl = await getRedis().ttl(cooldownKey(phoneRef));
-    return { allowed: false, reason: "COOLDOWN", retryAfter: Math.max(1, ttl) };
+    // Lost a race with another send for the same number.
+    await uncount(ipSendsKey(ipRef));
+    return inCooldown();
   }
   const phoneSends = await countInWindow(phoneSendsKey(phoneRef), window);
   if (phoneSends.count > config.identityCitizenOtpPhoneSendLimit) {
@@ -94,7 +102,7 @@ export async function createChallenge(
   const id = randomBytes(24).toString("base64url");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const key = challengeKey(id);
-  await getRedis().multi()
+  const results = await getRedis().multi()
     .hset(key, {
       hash: codeHash(id, code),
       attempts: "0",
@@ -103,6 +111,13 @@ export async function createChallenge(
     })
     .expire(key, config.identityCitizenOtpTtlSeconds)
     .exec();
+  // ioredis reports a failed command inside the result, not as a throw. A
+  // challenge that was not stored, or would never expire, must not be sent.
+  const failed = !results || results.some(([error]) => error) || results[1]?.[1] !== 1;
+  if (failed) {
+    await getRedis().del(key).catch(() => undefined);
+    throw new Error("The OTP challenge could not be stored");
+  }
   return { challenge: { id, phoneNumber, tenant }, code };
 }
 
@@ -123,7 +138,7 @@ export async function readChallenge(id: string): Promise<OtpChallenge | null> {
 /**
  * Compare and count in one step. A right code CLAIMS the challenge instead of
  * deleting it: the claim makes it unusable for anyone else while sign-in
- * completes, and the route then either consumes it (`consumeChallenge`) or,
+ * completes, and the route then either consumes it (`deleteChallenge`) or,
  * when Keycloak was briefly unavailable, releases it (`releaseChallenge`) so
  * the same code still works.
  */
@@ -161,10 +176,6 @@ export async function claimCode(
   if (status === "OK") return { status: "OK", fixedCode: fixed };
   if (status !== "WRONG") return { status: "MISSING" };
   return { status: "WRONG", attemptsRemaining: Math.max(0, Number(remaining)) };
-}
-
-export async function consumeChallenge(id: string): Promise<void> {
-  await getRedis().del(challengeKey(id));
 }
 
 export async function releaseChallenge(id: string): Promise<void> {
