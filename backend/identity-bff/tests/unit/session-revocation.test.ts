@@ -55,7 +55,7 @@ describe("session revocation fencing", () => {
     const stale = (await getIdentitySession(sessionId))!;
     await deleteIdentitySession(sessionId);
     await expect(saveIdentitySession(sessionId, tokens, claims)).rejects.toBeInstanceOf(SessionRevokedError);
-    await expect(touchIdentitySession(sessionId, stale)).rejects.toBeInstanceOf(SessionRevokedError);
+    expect(await touchIdentitySession(sessionId, stale)).toBe(false);
     expect(await saveSelectedIdentityContext(sessionId, { organizationId: "o", organizationAlias: "a", tenantId: "t", name: "Tenant" })).toBe(false);
     expect(await getRedis().exists(sessionKey(sessionId))).toBe(0);
     expect(await getRedis().smembers(personSessionsKey(claims.sub))).toEqual([]);

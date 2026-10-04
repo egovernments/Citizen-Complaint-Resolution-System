@@ -2488,7 +2488,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const key = `${config.cachePrefix}:identity:session:${sessionId}`;
       const stored = JSON.parse((await getRedis().get(key))!);
       await getRedis().del(key);
-      await expect(touchIdentitySession(sessionId, stored)).rejects.toMatchObject({ code: "SESSION_REVOKED" });
+      expect(await touchIdentitySession(sessionId, stored)).toBe(false);
       expect(await getRedis().exists(key)).toBe(0);
     });
 
