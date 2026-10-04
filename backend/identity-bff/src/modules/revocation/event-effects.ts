@@ -14,8 +14,9 @@ export interface IdentifierEffects {
 const identifierEffects: IdentifierEffects = {
   propagateVerifiedIdentifiers,
   async requestReconcileNow(reason) {
-    const path = "../sync/reconcile.js";
-    await (await import(path)).requestReconcileNow(reason);
+    // Imported lazily only to break the sync ↔ revocation module cycle; the
+    // literal path keeps it type-checked.
+    await (await import("../sync/reconcile.js")).requestReconcileNow(reason);
   },
 };
 function representation(event: KeycloakEvent): Record<string, any> {
