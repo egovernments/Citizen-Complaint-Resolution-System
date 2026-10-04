@@ -9171,17 +9171,6 @@
     },
     {
       "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
-      "uniqueIdentifier": "MDMS_ADMIN.2559",
-      "data": {
-        "rolecode": "MDMS_ADMIN",
-        "actionid": 2559,
-        "actioncode": "",
-        "tenantId": "{tenantid}",
-        "id": 1751
-      }
-    },
-    {
-      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
       "uniqueIdentifier": "HRMS_ADMIN.2559",
       "data": {
         "rolecode": "HRMS_ADMIN",
@@ -9189,28 +9178,6 @@
         "actioncode": "",
         "tenantId": "{tenantid}",
         "id": 1752
-      }
-    },
-    {
-      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
-      "uniqueIdentifier": "MDMS_ADMIN.2561",
-      "data": {
-        "rolecode": "MDMS_ADMIN",
-        "actionid": 2561,
-        "actioncode": "",
-        "tenantId": "{tenantid}",
-        "id": 1753
-      }
-    },
-    {
-      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
-      "uniqueIdentifier": "HRMS_ADMIN.2561",
-      "data": {
-        "rolecode": "HRMS_ADMIN",
-        "actionid": 2561,
-        "actioncode": "",
-        "tenantId": "{tenantid}",
-        "id": 1754
       }
     },
     {
