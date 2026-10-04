@@ -56,7 +56,7 @@ Until item 14 removes it, staff resolution is **binding, else the managed `kcbff
 
 - Every JSON error body is **`{code, error, ...details}`** (D25/B5). `code` is stable and comes from §4; `error` is English display text, and clients must not parse it. Details are named fields such as `attemptsRemaining`.
 - A code is always sent with the **same HTTP status** (§4).
-- `429` and `IDENTITY_BUSY` responses carry `Retry-After` (seconds).
+- `429`, `IDENTITY_BUSY` and `BINDING_BUSY` responses carry `Retry-After` (seconds).
 - Sign-in failures during a browser redirect are not HTTP errors. The BFF answers `303` to `returnTo` with `?authResult=<id>`, and the page reads the result once from `GET /identity/v1/auth-results/:id` (§3.2.4).
 - Clients show text from their own localisation keyed by `code`, never from `error` (items 2 and 6).
 
@@ -112,11 +112,11 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/readyz` | none | changing | 15 |
 | GET | `/identity/v1/auth-methods` | none | changing | 1, 2 |
 | GET | `/identity/v1/authorize` | none (session for `action`) | changing | 1, 4 |
-| GET | `/identity/v1/callback` | login-attempt | changing | 4, 6, 15 |
-| GET | `/identity/v1/auth-results/:id` | none | changing | 6 |
-| POST | `/identity/v1/authentication/magic-link-requests` | none | changing | 6 |
-| POST | `/identity/v1/password/setup-requests` | none (optional session) | changing | 5, 6 |
-| GET | `/identity/v1/password/setup-complete/:state` | login-attempt | changing | 5 |
+| GET | `/identity/v1/callback` | login-attempt | changing | 4, 15 |
+| GET | `/identity/v1/auth-results/:id` | none | live | — |
+| POST | `/identity/v1/authentication/magic-link-requests` | none | live | — |
+| POST | `/identity/v1/password/setup-requests` | none (optional session) | live | — |
+| GET | `/identity/v1/password/setup-complete/:state` | login-attempt | live | — |
 | GET | `/identity/v1/tenant-contexts/:urlSlug` | none | changing | 11, 15 |
 | GET | `/identity/v1/tenant-contexts/:urlSlug/branding` | none | deleted-later | 14 |
 | POST | `/identity/v1/citizen/otp/_send` | none (session for step-up and change) | changing | 3, 13 |
@@ -124,8 +124,8 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/identity/v1/session` | session | changing | 4, 9, 10, 15 |
 | POST | `/identity/v1/logout` | session | changing | 4, 10 |
 | GET | `/identity/v1/tenants` | session | changing | 8, 15 |
-| POST | `/identity/v1/contexts/_select` | session | changing | 6, 7, 8, 10, 12 |
-| POST | `/identity/v1/contexts/citizen/_select` | session | changing | 6, 10, 12, 13 |
+| POST | `/identity/v1/contexts/_select` | session | changing | 7, 8, 10, 12 |
+| POST | `/identity/v1/contexts/citizen/_select` | session | changing | 10, 12, 13 |
 | POST | `/identity/v1/organization-members/_invite` | session | deleted-later | 14 |
 | POST | `/identity/v1/workspace-members/_link` | session | planned | 8, 9 |
 | GET | `/identity/v1/workspace-members` | session | planned | 9 |
@@ -241,7 +241,7 @@ One-time read (GETDEL).
 
 #### 3.2.5 `POST /identity/v1/authentication/magic-link-requests`
 
-Unchanged. Body `{email, firstName, lastName, returnTo?}`. Always `202 {message}`; existing, new, rate-limited and failed requests are indistinguishable. Errors: `INVALID_REQUEST` 400, `UNTRUSTED_ORIGIN` 403, `SIGNUP_UNAVAILABLE` 503.
+Unchanged. Body `{email, firstName, lastName, returnTo?}`. Always `202 {message}`; existing, new, rate-limited and failed requests are indistinguishable. Errors: `INVALID_REQUEST`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `SIGNIN_METHODS_UNAVAILABLE` (the method catalogue can't be read), `SIGNUP_UNAVAILABLE` (magic link not enabled) (503).
 
 #### 3.2.6 `POST /identity/v1/password/setup-requests` (item 5)
 
@@ -490,7 +490,10 @@ Forwards the configurator session cookie.
 ```
 200 {active: true, identity: {issuer, subject, email, emailVerified, name, preferredUsername}}
 401 {code: "SESSION_REQUIRED", error}
+503 {code: "IDENTITY_UNAVAILABLE", error}   // the fresh Keycloak read failed; never reported as SESSION_REQUIRED
 ```
+
+It takes no person lease, so it never answers `IDENTITY_BUSY`.
 
 - `emailVerified` is new. PGR copies the founder's email into HRMS only when it is `true`.
 - "Before `IDENTITY_READY` only" is a **PGR-side** rule: the BFF has no saga state to enforce it.
@@ -514,7 +517,7 @@ Forwards the configurator session cookie.
 ```
 
 - There is no separate root-tenant field (D25/A6): the root tenant always equals `tenantId`.
-- **Locks:** operation → tenant → slug.
+- **Locks:** operation → tenant → slug. Every onboarding mutation (`_ensure`, `_lifecycle`, `memberships/_ensure`, `bindings/_ensure`) answers 503 `IDENTITY_BUSY` with `Retry-After` when one of its locks can't be taken in time.
 - The DIGIT tenant must exist, else `TENANT_FOUNDATION_MISSING`.
 - Outcomes (§9): same attempt and same hash → the existing Organization; same `restartNo` with a different hash → `OPERATION_CONFLICT`; a lower `restartNo` → `ATTEMPT_STALE`; the slug or tenant held by another operation → `SLUG_TAKEN` / `TENANT_TAKEN`.
 
@@ -548,6 +551,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 - The founder binding, `active` at once.
 - The browser actor rules are skipped, but uuid uniqueness still applies.
 - **No DIGIT write.** The founder's credential is set at their first `_select` (D25/B8).
+- A `removed` binding for the same key is never revived by the workload: it answers `BINDING_CONFLICT` (browser `_link` uses `BINDING_REMOVED` and `reinvite`).
 - The same key with a different uuid → `BINDING_CONFLICT`. A uuid bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`.
 - **Locks:** operation → person → uuid.
 
@@ -595,7 +599,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `SESSION_REQUIRED` | 401 | no | No valid session cookie for this surface |
 | `SESSION_EXPIRED` | 401 | no | The session ended during the request |
 | `SESSION_REVOKED` | 401 | no | The session was signed out (logout-all, credential change, revocation) |
-| `IDENTITY_BUSY` | 503 | yes | The person lease is held, or was lost mid-request; Retry-After is set |
+| `IDENTITY_BUSY` | 503 | yes | A lease (person, operation, tenant or slug) is held or was lost mid-request; Retry-After is set |
 | `TENANT_CONTEXT_UNAVAILABLE` | 403 | no | The tenant is not selectable for this session |
 | `EMPLOYEE_ACCOUNT_NOT_LINKED` | 403 | after-change | No active binding or no Organization membership at the tenant (D10) |
 | `PENDING_INVITATION` | 403 | after-change | The binding at this tenant is pending; accept the invitation first |
@@ -628,7 +632,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `SELF_REMOVAL_FORBIDDEN` | 409 | no | An admin tried to remove their own binding |
 | `BINDING_REMOVED` | 409 | after-change | The binding is removed; send reinvite:true to invite again |
 | `BINDING_CONFLICT` | 409 | no | This person already has a different DIGIT account at the tenant |
-| `BINDING_BUSY` | 503 | yes | The DIGIT-account (uuid) lock wait timed out |
+| `BINDING_BUSY` | 503 | yes | The DIGIT-account (uuid) lock wait timed out; Retry-After is set |
 | `INVITATION_STALE` | 409 | no | The invitation was removed, replaced, expired or never existed |
 | `IDENTITY_EMAIL_CHANGED` | 409 | after-change | A Keycloak user matches by username but its email has changed |
 | `WORKSPACE_TENANT_REQUIRED` | 400 | no | The tenant is not a workspace (Organization) tenant (D16) |
@@ -787,7 +791,7 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | `{p}:identity:revgen:{sub}` | integer | none. A few bytes per person who ever had logout-all | S |
 | `{p}:identity:context:{sid}` | the selected context, + `digitUuid` | the session's remaining TTL; `XX`-guarded | S |
 | `{p}:identity:auth-result:{id}` | result JSON | 300 s | S |
-| `{p}:identity:password-setup:{id}` | setup attempt JSON, + `surface` | 2700 s | S |
+| `{p}:identity:password-setup:{id}` | setup attempt JSON (`returnTo` already holds the surface's path) | 2700 s | S |
 | `{p}:identity:magic-link-signup-limit:{ip\|email}:{ref}` | counter | 1800 s | S |
 | `{p}:identity:password-setup-limit:{ip\|account}:{ref}` | counter | 900 s | S |
 
@@ -916,6 +920,10 @@ Reference implementation and tests: `src/modules/control-plane/operation-hash.ts
 - A publisher replays `POST organizations/_lifecycle {operationId, restartNo: lifecycle_restart_no, state: lifecycle_decision}` with back-off until it gets a 2xx, or a 409 that confirms the outcome can't change (`ATTEMPT_STALE`). It then sets `lifecycle_published_at`.
 - `FAILED` is published only for **terminal abandonment**, never for a retryable failure.
 - A resubmit (which raises `restart_no`) waits until any earlier decision is published, then clears the `lifecycle_*` columns.
+- **Failure before any Organization exists.** PGR durably records "organization ensure started" before it first sends `organizations/_ensure` for an operation.
+  - If no `_ensure` was ever started for the operation, across all restarts, a `FAILED` decision needs no publication: PGR marks it settled with reason `NO_IDENTITY_SIDE_EFFECTS` (otherwise `_lifecycle` would answer `OPERATION_NOT_FOUND` forever and block the resubmit).
+  - Once an `_ensure` may have been sent, publication is never skipped: PGR repeats the uncertain `_ensure`, then publishes `FAILED`.
+  - The same-founder and stale-attempt rules still apply.
 - The BFF treats a repeated call for the recorded transition as success, so replays are safe.
 - Visibility: only `ACTIVE` (or lifecycle-less) Organizations are routed, discovered or selectable.
 
@@ -967,6 +975,12 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the full findings and samples are in `d
 Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.
 
 ## 12. Operations
+
+**External dependency: PGR workspace readiness (#2103).** The BFF does not expose or relay workspace readiness or any other onboarding state.
+- The configurator calls PGR directly: `POST /pgr-services/v2/onboarding/workspaces/_search`, `POST /pgr-services/v2/onboarding/workspaces/_update {tenantId, step, state, version}` and `POST /pgr-services/v2/onboarding/workspaces/_rename`.
+- These calls are authorized with the founder's normal DIGIT token and Kong role-actions for `ACCOUNT_ADMIN` at that tenant, not with BFF cookie introspection.
+- `GET /identity/v1/tenants` carries no readiness fields.
+- A tenant without a workspace row counts as ready (legacy).
 
 **Deployment.** The canonical CCRS deployment is `local-setup/docker-compose.egov-digit.yaml`. Setting `enable_keycloak: true` starts the BFF, Keycloak 26.7.3 and its own Postgres. Ansible runs `configure-keycloak.sh` with task-scoped secrets once Keycloak is healthy. Realm SMTP is mandatory, because password setup, invitation activation and email proof all depend on it. Kong publishes `/identity/v1` and `/auth`; `/internal/identity/v1` is never published. Production uses a dedicated DIGIT employee holding only `ACCOUNT_ADMIN` for the BFF's DIGIT admin calls.
 

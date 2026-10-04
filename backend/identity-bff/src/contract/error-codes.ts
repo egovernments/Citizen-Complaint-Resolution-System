@@ -70,7 +70,7 @@ export const ERROR_CODES = {
   SESSION_REQUIRED: { status: 401, retry: "no", meaning: "No valid session cookie for this surface" },
   SESSION_EXPIRED: { status: 401, retry: "no", meaning: "The session ended during the request" },
   SESSION_REVOKED: { status: 401, retry: "no", meaning: "The session was signed out (logout-all, credential change, revocation)" },
-  IDENTITY_BUSY: { status: 503, retry: "yes", meaning: "The person lease is held, or was lost mid-request; Retry-After is set" },
+  IDENTITY_BUSY: { status: 503, retry: "yes", meaning: "A lease (person, operation, tenant or slug) is held or was lost mid-request; Retry-After is set" },
 
   // Staff context selection.
   TENANT_CONTEXT_UNAVAILABLE: { status: 403, retry: "no", meaning: "The tenant is not selectable for this session" },
@@ -109,7 +109,7 @@ export const ERROR_CODES = {
   SELF_REMOVAL_FORBIDDEN: { status: 409, retry: "no", meaning: "An admin tried to remove their own binding" },
   BINDING_REMOVED: { status: 409, retry: "after-change", meaning: "The binding is removed; send reinvite:true to invite again" },
   BINDING_CONFLICT: { status: 409, retry: "no", meaning: "This person already has a different DIGIT account at the tenant" },
-  BINDING_BUSY: { status: 503, retry: "yes", meaning: "The DIGIT-account (uuid) lock wait timed out" },
+  BINDING_BUSY: { status: 503, retry: "yes", meaning: "The DIGIT-account (uuid) lock wait timed out; Retry-After is set" },
   INVITATION_STALE: { status: 409, retry: "no", meaning: "The invitation was removed, replaced, expired or never existed" },
   IDENTITY_EMAIL_CHANGED: { status: 409, retry: "after-change", meaning: "A Keycloak user matches by username but its email has changed" },
   WORKSPACE_TENANT_REQUIRED: { status: 400, retry: "no", meaning: "The tenant is not a workspace (Organization) tenant (D16)" },
