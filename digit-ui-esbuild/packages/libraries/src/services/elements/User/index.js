@@ -2,7 +2,9 @@ import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
-import { isKeycloakAuth } from "../../auth/authSurface";
+import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/authSurface";
+import { identityBffLogout, identityBffLogoutRedirect } from "../../auth/identityBffLogin";
+import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
 export const UserService = {
   authenticate: async (details) => {
@@ -63,6 +65,31 @@ export const UserService = {
     return Digit.SessionStorage.get("User");
   },
   logout: async () => {
+    if (isIdentityBffAuth()) {
+      // Sign out of the BFF session for this surface only, then land on the
+      // same tenant's login page for that surface.
+      const surface = tenantContext()?.surface || getAuthSurface();
+      const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
+      try {
+        // Revoke the DIGIT access token the BFF minted, as the legacy logout
+        // does; ending the BFF session alone leaves it valid until expiry.
+        await UserService.logoutUser();
+      } catch (e) {
+        console.warn("DIGIT token revocation failed on logout", e);
+      }
+      try {
+        await identityBffLogout({ surface, fetchImpl: window.fetch.bind(window) });
+      } catch (e) {
+        console.warn("Identity BFF logout failed", e);
+      } finally {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+        window.location.replace(
+          `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
+        );
+      }
+      return;
+    }
     if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       return adapter.logout();

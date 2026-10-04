@@ -1,4 +1,4 @@
-import { DEFAULT_MOBILE_PREFIX } from "@egovernments/digit-ui-libraries";
+import { DEFAULT_MOBILE_PREFIX, isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
 import {
   SVG,
   Dropdown,
@@ -1617,8 +1617,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         </V2Card>
 
         {/* Password change card — only mounted when the deployment is
-            not using OTP-based login, matching the legacy gate. */}
-        {!Digit.Utils.getOTPBasedLogin() ? (
+            not using OTP-based login, matching the legacy gate. Not on
+            tenant routes either: the Identity BFF sets the DIGIT password
+            itself and rotates it on every sign-in (profile work: #2208). */}
+        {!Digit.Utils.getOTPBasedLogin() && !isIdentityBffAuth() ? (
           <V2Card
             style={{
               padding: "24px",

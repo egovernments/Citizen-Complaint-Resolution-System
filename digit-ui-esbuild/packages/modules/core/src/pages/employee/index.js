@@ -98,13 +98,19 @@ const EmployeeApp = ({
                 </Route>
               )}
               <Route exact path={`${path}/user/login/otp`}>
-                <Otp isLogin={true} />
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <Otp isLogin={true} />}
               </Route>
               <Route path={`${path}/user/forgot-password`}>
-                <ForgotPassword stateCode={stateCode}/>
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <ForgotPassword stateCode={stateCode}/>}
               </Route>
               <Route path={`${path}/user/change-password`}>
-                <ChangePassword />
+                {window.__digitTenantContext
+                  ? <Redirect to={`${path}/user/login`} />
+                  : <ChangePassword />}
               </Route>
               <PrivateRoute path={`${path}/user/profile`} component={()=><UserProfile stateCode={stateCode} userType={"employee"} cityDetails={cityDetails} />}/>
               <Route path={`${path}/user/error`}>
