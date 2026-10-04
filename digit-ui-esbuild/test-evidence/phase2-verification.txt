@@ -1,0 +1,45 @@
+digit-ui phase 2 verification
+Date: 2026-10-04
+Source commit: 7d703071f3f14f1c0a2bccfb5fa5e706a207cd4f
+Implementation commit: 463d7f212 (followed by whitespace-only cleanup)
+Owner baseline: 171e5fe1a; optional surface selector agreement recorded in
+bridge message msg_6e9098f2b8ea432aae00a57077fa81ea and contract commit 812d5c559.
+
+Executed from digit-ui-esbuild:
+1. node --test --test-concurrency=1 tests/*.test.js src/theme/*.test.js products/dashboard/src/services/authSessionOwnership.test.js
+   Exit 0. 251 passed, 0 failed, 0 skipped. Full output: phase2-suite.txt.
+2. npm run build
+   Exit 0. Both frontend bundles generated. Full output: phase2-build.txt.
+   20 warnings from untouched files (duplicate keys and direct eval).
+   Generated vendor CSS was restored; build output is not committed.
+3. npm run check-aliases
+   Exit 0. 16 aliases checked, 0 broken. Full output: phase2-aliases.txt.
+4. git diff 171e5fe1a --check
+   Exit 0.
+
+The modified runtime files are JavaScript. There is no root frontend tsc
+configuration or typecheck script; esbuild compiled the complete application.
+The existing v2 TypeScript component package was not changed.
+
+Exercised behavior:
+- Staff account actions use advertised allowlist, correct tenant return path,
+  second-factor credential IDs, provider discovery/link/unlink and stable codes.
+- Session list and current/others/all logout; failed logout retains local state
+  and presents a retryable dialog error. No native token revocation on BFF routes.
+- Pending invitation requires explicit consent; exact version and route tenant
+  are submitted with surface=employee. Stale rejection and successful re-select.
+- Citizen stepup/change_phone API contracts; phone verification before local
+  profile/token update, preserving uuid and updating citizen token aliases.
+- Employee/citizen identifiers read-only on profile, account entry available,
+  no BFF request on profile mount. Phone-only account hides credential actions.
+- Expired dashboard BFF tokens re-select via cookie, retry the business request,
+  retain storage on identity outage, and cannot resurrect logout or switch people.
+- Existing network/5xx tenant-route cache fallback and protected-route tests.
+
+Limits:
+These are frontend tests with HTTP fixtures and component primitive doubles,
+not real Keycloak/Redis/egov-user/egov-otp integration or real SMS evidence.
+BFF providers and the fleet-owned real-dependency completion gate remain separate.
+No deployment, live-host access, upstream write, or D26 legacy-screen deletion.
+Legacy native logout/password screens remain gated to non-BFF routes pending D26.
+The obsolete direct Keycloak adapter and external keycloak-js script were removed.

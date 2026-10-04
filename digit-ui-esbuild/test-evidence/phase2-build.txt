@@ -1,0 +1,345 @@
+
+> digit-ui-esbuild@1.0.0 prebuild
+> node scripts/vendor-digit-ui-css.js
+
+fetching https://unpkg.com/@egovernments/digit-ui-css@1.8.37/dist/index.css
+  --color-primary-main: 162
+  --color-primary-light: 2
+  --color-primary-dark: 2
+  --color-primary-accent: 10
+  --color-secondary: 4
+  --color-text-primary: 113
+  --color-text-secondary: 54
+  --color-text-heading: 6
+  --color-text-muted: 1
+  --color-link-normal: 8
+  --color-link-hover: 2
+  --color-border: 42
+  --color-input-border: 35
+  --color-error: 22
+  --color-success: 17
+  --color-grey-dark: 7
+  --color-grey-disabled: 1
+  --color-grey-mid: 37
+  --color-grey-light: 17
+  --color-grey-bg: 3
+  --color-digitv2-text-color-disabled: 13
+  --color-digitv2-header-sidenav: 16
+  --color-digitv2-primary-bg: 2
+  --color-digitv2-alert-error-bg: 1
+  --color-digitv2-alert-success-bg: 1
+  --color-digitv2-alert-info: 1
+  --color-digitv2-alert-info-bg: 2
+  --color-digitv2-chart-1: 1
+  --color-digitv2-chart-2: 1
+  --color-digitv2-chart-3: 1
+  --color-digitv2-chart-4: 3
+  --color-digitv2-chart-5: 1
+  _rgbaRewrites: 297
+wrote /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-digitui/digit-ui-esbuild/public/vendor/digit-ui-css.css (885 total replacements across digit-ui-css)
+fetching https://unpkg.com/@egovernments/digit-ui-components-css@0.2.0-beta.14/dist/index.css
+  --color-primary-main: 134
+  --color-primary-dark: 1
+  --color-primary-accent: 2
+  --color-primary-selected-bg: 13
+  --color-text-primary: 33
+  --color-text-secondary: 34
+  --color-text-heading: 88
+  --color-text-muted: 54
+  --color-link-normal: 3
+  --color-border: 90
+  --color-input-border: 10
+  --color-error: 7
+  --color-error-dark: 34
+  --color-success: 10
+  --color-info-dark: 6
+  --color-warning-dark: 7
+  --color-grey-dark: 8
+  --color-grey-disabled: 71
+  --color-grey-mid: 82
+  --color-grey-lighter: 9
+  --color-grey-light: 51
+  --color-digitv2-text-color-disabled: 4
+  --color-digitv2-header-sidenav: 36
+  --color-digitv2-alert-info: 1
+  --color-digitv2-alert-info-bg: 1
+  --color-digitv2-chart-1: 1
+  --color-digitv2-chart-2: 1
+  --color-digitv2-chart-3: 1
+  --color-digitv2-chart-4: 1
+  --color-digitv2-chart-5: 1
+  _rgbaRewrites: 57
+wrote /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-digitui/digit-ui-esbuild/public/vendor/digit-ui-components-css.css (851 total replacements across digit-ui-components-css)
+fetching https://unpkg.com/@egovernments/digit-ui-health-css@0.2.113/dist/index.css
+  --color-primary-main: 108
+  --color-primary-accent: 7
+  --color-primary-selected-bg: 3
+  --color-text-primary: 9
+  --color-text-secondary: 25
+  --color-text-heading: 31
+  --color-text-muted: 7
+  --color-border: 64
+  --color-error: 6
+  --color-error-dark: 3
+  --color-grey-disabled: 5
+  --color-grey-mid: 6
+  --color-grey-lighter: 17
+  --color-grey-light: 34
+  --color-digitv2-text-color-disabled: 20
+  --color-digitv2-header-sidenav: 39
+  --color-digitv2-primary-bg: 2
+  --color-digitv2-alert-info: 3
+  _rgbaRewrites: 1
+wrote /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-digitui/digit-ui-esbuild/public/vendor/digit-ui-health-css.css (390 total replacements across digit-ui-health-css)
+done — 2126 total replacements across 3 sources
+
+> digit-ui-esbuild@1.0.0 build
+> node esbuild.build.js
+
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+Rebuilding...
+
+Done in 287ms.
+▲ [WARNING] Duplicate key "marginBottom" in object literal [duplicate-object-key]
+
+    packages/digit-ui-components/src/hoc/UploadAndDownloadDocumentHandler.js:309:119:
+      309 │ ...m", marginBottom: "1rem", width: "100%", marginBottom:"0.5px" }}>
+          ╵                                             ~~~~~~~~~~~~
+
+  The original key "marginBottom" is here:
+
+    packages/digit-ui-components/src/hoc/UploadAndDownloadDocumentHandler.js:309:82:
+      309 │ ...: "center", gap: "1rem", marginBottom: "1rem", width: "100%", ...
+          ╵                             ~~~~~~~~~~~~
+
+▲ [WARNING] Using direct eval with a bundler is not recommended and may cause problems [direct-eval]
+
+    packages/digit-ui-components/src/hoc/InboxSearchComposer.js:208:71:
+      208 │ ...isFetching,refetch,error } = eval(`Digit.Hooks.${configs.custo...
+          ╵                                 ~~~~
+
+  You can read more about direct eval and bundling here: https://esbuild.github.io/link/direct-eval
+
+▲ [WARNING] Duplicate key "downloadBill" in object literal [duplicate-object-key]
+
+    packages/libraries/src/utils/index.js:530:2:
+      530 │   downloadBill,
+          ╵   ~~~~~~~~~~~~
+
+  The original key "downloadBill" is here:
+
+    packages/libraries/src/utils/index.js:528:2:
+      528 │   downloadBill,
+          ╵   ~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "roles" in object literal [duplicate-object-key]
+
+    packages/libraries/src/services/elements/WorkFlow.js:155:78:
+      155 │ ...tions, roles: state?.action, roles: state?.actions?.reduce((ac...
+          ╵                                 ~~~~~
+
+  The original key "roles" is here:
+
+    packages/libraries/src/services/elements/WorkFlow.js:155:56:
+      155 │ ..., nextActions: _nextActions, roles: state?.action, roles: stat...
+          ╵                                 ~~~~~
+
+▲ [WARNING] Duplicate key "roles" in object literal [duplicate-object-key]
+
+    packages/libraries/src/services/elements/WorkFlow.js:248:78:
+      248 │ ...tions, roles: state?.action, roles: state?.actions?.reduce((ac...
+          ╵                                 ~~~~~
+
+  The original key "roles" is here:
+
+    packages/libraries/src/services/elements/WorkFlow.js:248:56:
+      248 │ ..., nextActions: _nextActions, roles: state?.action, roles: stat...
+          ╵                                 ~~~~~
+
+▲ [WARNING] Duplicate key "width" in object literal [duplicate-object-key]
+
+    packages/react-components/src/atoms/UploadFile.js:20:8:
+      20 │         width: "80%"
+         ╵         ~~~~~
+
+  The original key "width" is here:
+
+    packages/react-components/src/atoms/UploadFile.js:17:8:
+      17 │         width: "100%",
+         ╵         ~~~~~
+
+▲ [WARNING] Duplicate key "margin" in object literal [duplicate-object-key]
+
+    packages/react-components/src/atoms/UploadFile.js:91:8:
+      91 │         margin: "5px"
+         ╵         ~~~~~~
+
+  The original key "margin" is here:
+
+    packages/react-components/src/atoms/UploadFile.js:89:8:
+      89 │         margin: 0,
+         ╵         ~~~~~~
+
+▲ [WARNING] Duplicate key "service" in object literal [duplicate-object-key]
+
+    packages/libraries/src/hooks/pgr/useComplaintDetails.js:103:4:
+      103 │     service: service,
+          ╵     ~~~~~~~
+
+  The original key "service" is here:
+
+    packages/libraries/src/hooks/pgr/useComplaintDetails.js:95:4:
+      95 │     service,
+         ╵     ~~~~~~~
+
+▲ [WARNING] Using direct eval with a bundler is not recommended and may cause problems [direct-eval]
+
+    packages/react-components/src/hoc/InboxSearchComposer.js:119:72:
+      119 │ ...Fetching, refetch, error } = eval(`Digit.Hooks.${configs.custo...
+          ╵                                 ~~~~
+
+  You can read more about direct eval and bundling here: https://esbuild.github.io/link/direct-eval
+
+▲ [WARNING] Using direct eval with a bundler is not recommended and may cause problems [direct-eval]
+
+    packages/react-components/src/hoc/InboxSearchComposer.js:121:72:
+      121 │ ...Fetching, refetch, error } = eval(`Digit.Hooks.inbox.${configs...
+          ╵                                 ~~~~
+
+  You can read more about direct eval and bundling here: https://esbuild.github.io/link/direct-eval
+
+▲ [WARNING] Using direct eval with a bundler is not recommended and may cause problems [direct-eval]
+
+    packages/react-components/src/hoc/InboxSearchComposerV2.js:148:71:
+      148 │ ...isFetching,refetch,error } = eval(`Digit.Hooks.${configs.custo...
+          ╵                                 ~~~~
+
+  You can read more about direct eval and bundling here: https://esbuild.github.io/link/direct-eval
+
+▲ [WARNING] Duplicate key "getCustomActionLabel" in object literal [duplicate-object-key]
+
+    products/pgr/src/configs/UICustomizations.js:2299:4:
+      2299 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+  The original key "getCustomActionLabel" is here:
+
+    products/pgr/src/configs/UICustomizations.js:2290:4:
+      2290 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "getCustomActionLabel" in object literal [duplicate-object-key]
+
+    products/pgr/src/configs/UICustomizations.js:2372:4:
+      2372 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+  The original key "getCustomActionLabel" is here:
+
+    products/pgr/src/configs/UICustomizations.js:2363:4:
+      2363 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "getCustomActionLabel" in object literal [duplicate-object-key]
+
+    products/pgr/src/configs/UICustomizations.js:2446:4:
+      2446 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+  The original key "getCustomActionLabel" is here:
+
+    products/pgr/src/configs/UICustomizations.js:2437:4:
+      2437 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "getCustomActionLabel" in object literal [duplicate-object-key]
+
+    products/pgr/src/configs/UICustomizations.js:2519:4:
+      2519 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+  The original key "getCustomActionLabel" is here:
+
+    products/pgr/src/configs/UICustomizations.js:2510:4:
+      2510 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "getCustomActionLabel" in object literal [duplicate-object-key]
+
+    products/pgr/src/configs/UICustomizations.js:2592:4:
+      2592 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+  The original key "getCustomActionLabel" is here:
+
+    products/pgr/src/configs/UICustomizations.js:2583:4:
+      2583 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "getCustomActionLabel" in object literal [duplicate-object-key]
+
+    products/pgr/src/configs/UICustomizations.js:2664:4:
+      2664 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+  The original key "getCustomActionLabel" is here:
+
+    products/pgr/src/configs/UICustomizations.js:2655:4:
+      2655 │     getCustomActionLabel: (obj, row) => {
+           ╵     ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate key "key" in object literal [duplicate-object-key]
+
+    packages/modules/core/src/pages/employee/Login-v2/config-v2.js:25:9:
+      25 │          key: "check",
+         ╵          ~~~
+
+  The original key "key" is here:
+
+    packages/modules/core/src/pages/employee/Login-v2/config-v2.js:24:8:
+      24 │         key: "PrivacyComponent",
+         ╵         ~~~
+
+▲ [WARNING] Duplicate key "key" in object literal [duplicate-object-key]
+
+    packages/modules/core/src/pages/employee/Login-v2/config-v2.js:55:9:
+      55 │          key: "check",
+         ╵          ~~~
+
+  The original key "key" is here:
+
+    packages/modules/core/src/pages/employee/Login-v2/config-v2.js:54:8:
+      54 │         key: "PrivacyComponent",
+         ╵         ~~~
+
+▲ [WARNING] Duplicate key "key" in object literal [duplicate-object-key]
+
+    packages/modules/core/src/pages/employee/SignUp-v2/config.js:42:9:
+      42 │          key: "check",
+         ╵          ~~~
+
+  The original key "key" is here:
+
+    packages/modules/core/src/pages/employee/SignUp-v2/config.js:41:8:
+      41 │         key: "PrivacyComponent",
+         ╵         ~~~
+
+20 warnings
+
+  build/index.js                    8.1mb ⚠️
+  build/public-dashboard.js         1.3mb ⚠️
+  build/index.css                 106.5kb
+  build/public-dashboard.css       85.5kb
+  build/marker-icon-2V3QKKVC.png    1.4kb
+  build/layers-2x-TBM42ERR.png      1.2kb
+  build/layers-55W3Q4RM.png         696b 
+
+⚡ Done in 920ms
+
+Build complete! Output in build/

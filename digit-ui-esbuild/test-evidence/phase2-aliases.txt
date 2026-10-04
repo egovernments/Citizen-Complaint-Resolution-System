@@ -1,0 +1,22 @@
+
+> digit-ui-esbuild@1.0.0 check-aliases
+> node scripts/check-aliases.js
+
+  OK: packages/modules/core/src/Module.js
+  OK: products/pgr/src/Module.js
+  OK: packages/modules/hrms/src/Module.js
+  OK: packages/modules/utilities/src/Module.js
+  OK: packages/modules/workbench/src/Module.js
+  OK: packages/modules/common/src/Module.js
+  OK: packages/libraries/src/index.js
+  OK: packages/react-components/src/index.js
+  OK: packages/digit-ui-components/src/index.js
+  OK: packages/digit-ui-components-v2/src/index.ts
+  OK: packages/svg-components/src/index.js
+  OK: node_modules/react
+  OK: node_modules/react-dom
+  OK: node_modules/react-router-dom
+  OK: node_modules/react-redux
+  OK: node_modules/react-query
+
+16 aliases checked, 0 broken
