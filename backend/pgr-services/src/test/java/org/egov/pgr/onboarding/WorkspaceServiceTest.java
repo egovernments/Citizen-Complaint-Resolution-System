@@ -18,6 +18,7 @@ public class WorkspaceServiceTest {
         repository=mock(WorkspaceRepository.class);gateway=mock(WorkspaceGateway.class);
         service=new WorkspaceService(repository,gateway,new OnboardingIdentifierService());
         when(gateway.requireAdmin(eq("test"),any())).thenReturn("admin");
+        when(repository.nameAvailable(anyString(),anyString())).thenReturn(true);
         row=new LinkedHashMap<>(Map.of("tenantId","test","version",1L,"status","NOT_STARTED","legacy",false,
                 "steps",WorkspaceRepository.initialSteps("NOT_STARTED",1L,"admin")));
     }
@@ -55,6 +56,7 @@ public class WorkspaceServiceTest {
         Map<?,?> result=(Map<?,?>)service.rename(Map.of("tenantId","test","name","  NEW   NAME ","version",1)).get("Rename");
         assertEquals("DONE",result.get("status"));assertEquals(2L,result.get("version"));assertFalse(result.containsKey("normalizedName"));
         verify(repository,never()).reserveName(any(),any());
+        verify(gateway,never()).requireNameAvailable(any());
     }
     @Test public void newRenameCapturesAllLanguagesAndHoldsBothNames(){
         when(repository.find("test",true)).thenReturn(Optional.of(row));
@@ -74,6 +76,25 @@ public class WorkspaceServiceTest {
         publisher.publishPending();verify(repository).retryRename(rename,"LOCALIZATION_DOWN");verify(repository,never()).finishRename(any());
         publisher.publishPending();verify(repository).finishRename(rename);verify(gateway).bustCache();
         verify(gateway,never()).renameMdms(any(),any());verify(gateway,never()).renameLocale("test","New Name","en_IN");
+    }
+    @Test public void unchangedAuthoritativeNameSkipsExternalSelfCollision() {
+        when(repository.find("test",true)).thenReturn(Optional.of(row));
+        when(gateway.tenant("test")).thenReturn(new ObjectMapper().valueToTree(Map.of("data",Map.of("name","Old Name"))));
+        when(gateway.languages("test")).thenReturn(List.of("en_IN"));
+        when(repository.beginRename(any(),any(),any(),any(),anyLong(),anyList(),any())).thenReturn(Map.of("id","rename","status","PENDING","version",2L));
+        service.rename(Map.of("tenantId","test","name"," OLD   NAME ","version",1));
+        verify(gateway,never()).requireNameAvailable(any());
+    }
+    @Test public void localConflictPrecedesBffAndOccupiedLegacyNameCannotReserve() {
+        when(repository.find("test",true)).thenReturn(Optional.of(row));
+        when(gateway.tenant("test")).thenReturn(new ObjectMapper().valueToTree(Map.of("data",Map.of("name","Old Name"))));
+        when(repository.nameAvailable("test","new name")).thenReturn(false);
+        assertEquals("WORKSPACE_NAME_TAKEN",assertThrows(ResponseStatusException.class,()->service.rename(Map.of("tenantId","test","name","New Name","version",1))).getReason());
+        verify(gateway,never()).requireNameAvailable(any());
+        when(repository.nameAvailable("test","new name")).thenReturn(true);
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"WORKSPACE_NAME_TAKEN")).when(gateway).requireNameAvailable("new name");
+        assertEquals("WORKSPACE_NAME_TAKEN",assertThrows(ResponseStatusException.class,()->service.rename(Map.of("tenantId","test","name","New Name","version",1))).getReason());
+        verify(repository,never()).reserveName(any(),any());verify(repository,never()).update(any(),anyLong(),any());
     }
     private Map<String,Object> request(String step,String state,long version){return Map.of("tenantId","test","step",step,"state",state,"version",version);}
 }

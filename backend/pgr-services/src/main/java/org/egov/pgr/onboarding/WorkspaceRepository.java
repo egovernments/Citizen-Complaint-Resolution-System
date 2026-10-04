@@ -28,7 +28,7 @@ public class WorkspaceRepository {
                 (rs,n) -> {
                     Map<String,Object> row = new LinkedHashMap<>(); row.put("tenantId",rs.getString("tenant_id")); row.put("status",rs.getString("status"));
                     row.put("steps",read(rs.getString("steps"))); row.put("version",rs.getLong("version")); row.put("seedVersion",rs.getString("seed_version"));
-                    row.put("updatedAt",rs.getObject("updated_at")); row.put("updatedBy",rs.getString("updated_by")); row.put("legacy",false); return row;
+                    row.put("updatedAt",rs.getObject("updated_at")); row.put("updatedBy",rs.getString("updated_by")); row.put("legacy",rs.getString("seed_version")==null); return row;
                 }, tenant).stream().findFirst();
     }
     public void materializeLegacy(String tenant) {
@@ -58,6 +58,9 @@ public class WorkspaceRepository {
                     if(rs.getString("last_error_code")!=null)row.put("lastErrorCode",rs.getString("last_error_code")); return row;
                 },requestVersion==null ? new Object[]{tenant} : new Object[]{tenant,requestVersion}).stream().findFirst();
     }
+    public boolean nameAvailable(String tenant,String name) {
+        return jdbc.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace_name WHERE normalized_name=? AND tenant_id<>?",Integer.class,name,tenant)==0;
+    }
     public void reserveName(String tenant,String name) {
         if(jdbc.update("INSERT INTO eg_pgr_onboarding_workspace_name(normalized_name,tenant_id) VALUES (?,?) ON CONFLICT(normalized_name) DO UPDATE SET tenant_id=EXCLUDED.tenant_id WHERE eg_pgr_onboarding_workspace_name.tenant_id=EXCLUDED.tenant_id",name,tenant)!=1)
             conflict("WORKSPACE_NAME_TAKEN");
@@ -76,11 +79,13 @@ public class WorkspaceRepository {
                 json(progress),System.currentTimeMillis(),UUID.fromString(rename.get("id").toString()));
     }
     public void finishRename(Map<String,Object> rename) {
+        // Claim completion before any side effect. The caller's transaction retains this row lock.
+        if (jdbc.update("UPDATE eg_pgr_onboarding_workspace_rename SET status='DONE',updated_at=?,last_error_code=NULL WHERE id=? AND status='PENDING'",
+                System.currentTimeMillis(),UUID.fromString(rename.get("id").toString())) != 1) return;
         String tenant=rename.get("tenantId").toString(), name=rename.get("normalizedName").toString();
         jdbc.update("DELETE FROM eg_pgr_onboarding_workspace_name WHERE tenant_id=? AND normalized_name=? AND normalized_name<>?",tenant,rename.get("oldNormalizedName"),name);
         jdbc.update("UPDATE eg_pgr_onboarding_identifier SET status='RELEASED' WHERE identifier_type='ORGANIZATION_NAME' AND normalized_value<>? AND signup_id IN (SELECT id FROM eg_pgr_onboarding_signup WHERE requested_tenant_id=?)",name,tenant);
         jdbc.update("UPDATE eg_pgr_onboarding_signup SET account_name=?,updated_at=? WHERE requested_tenant_id=? AND status='ACTIVE'",rename.get("name"),System.currentTimeMillis(),tenant);
-        jdbc.update("UPDATE eg_pgr_onboarding_workspace_rename SET status='DONE',updated_at=?,last_error_code=NULL WHERE id=? AND status='PENDING'",System.currentTimeMillis(),UUID.fromString(rename.get("id").toString()));
         event(tenant,"RENAME_DONE",((Number)rename.get("version")).longValue(),Map.of("renameId",rename.get("id")),rename.get("updatedBy").toString());
     }
     public void retryRename(Map<String,Object> rename,String code) {
