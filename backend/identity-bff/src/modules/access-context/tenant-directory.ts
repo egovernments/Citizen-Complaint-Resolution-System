@@ -27,7 +27,7 @@ export type OrganizationMembership = TenantMapping & {
 const MAPPING_TTL_MS = 60_000;
 const TENANT_TTL_MS = 300_000;
 const mappings = new Map<string, { value: OrganizationMapping | null; expiresAt: number }>();
-const tenants = new Map<string, { value: Set<string>; expiresAt: number }>();
+const tenants = new Map<string, { value: Set<string>; names: Map<string, string>; expiresAt: number }>();
 
 async function cachedMapping(organizationId: string): Promise<OrganizationMapping | null> {
   const hit = mappings.get(organizationId);
@@ -39,9 +39,17 @@ async function cachedMapping(organizationId: string): Promise<OrganizationMappin
 
 /** Tenant codes present in DIGIT MDMS `tenant.tenants` for the tenant's root. */
 export async function isActiveDigitTenant(tenantId: string): Promise<boolean> {
-  const root = tenantId.split(".")[0];
+  return (await rootTenants(tenantId.split(".")[0])).value.has(tenantId);
+}
+
+/** The MDMS display name of an active DIGIT tenant, or null. */
+export async function digitTenantName(tenantId: string): Promise<string | null> {
+  return (await rootTenants(tenantId.split(".")[0])).names.get(tenantId) ?? null;
+}
+
+async function rootTenants(root: string): Promise<{ value: Set<string>; names: Map<string, string> }> {
   const hit = tenants.get(root);
-  if (hit && hit.expiresAt > Date.now()) return hit.value.has(tenantId);
+  if (hit && hit.expiresAt > Date.now()) return hit;
   if (!config.digitMdmsSearchUrl) {
     throw new DigitUnavailableError("DIGIT MDMS search is not configured");
   }
@@ -64,12 +72,15 @@ export async function isActiveDigitTenant(tenantId: string): Promise<boolean> {
   }
   if (!response.ok) throw new DigitUnavailableError(`DIGIT tenant lookup returned ${response.status}`);
   const body = await response.json() as {
-    MdmsRes?: { tenant?: { tenants?: Array<{ code?: string }> } };
+    MdmsRes?: { tenant?: { tenants?: Array<{ code?: string; name?: string }> } };
   };
-  const value = new Set((body.MdmsRes?.tenant?.tenants || []).flatMap((tenant) =>
-    tenant.code ? [tenant.code] : []));
-  tenants.set(root, { value, expiresAt: Date.now() + TENANT_TTL_MS });
-  return value.has(tenantId);
+  const list = body.MdmsRes?.tenant?.tenants || [];
+  const value = new Set(list.flatMap((tenant) => tenant.code ? [tenant.code] : []));
+  const names = new Map(list.flatMap((tenant) =>
+    tenant.code && typeof tenant.name === "string" && tenant.name.trim() ? [[tenant.code, tenant.name.trim()] as const] : []));
+  const entry = { value, names, expiresAt: Date.now() + TENANT_TTL_MS };
+  tenants.set(root, entry);
+  return entry;
 }
 
 function allowlisted(roles: unknown): string[] {

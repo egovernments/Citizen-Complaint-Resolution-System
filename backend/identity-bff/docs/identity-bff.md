@@ -603,6 +603,106 @@ GET /identity/v1/tenant-contexts/bomet-county/branding?locale=en_IN
 | `IDENTITY_BRANDING_DEFAULT_LOCALE` | `en_IN` | Default branding locale |
 | `DIGIT_FOOTER_URL` / `DIGIT_FOOTER_BW_URL` / `DIGIT_HOME_URL` | Ansible defaults | Footer in branding |
 
+## Existing tenants, employees and citizens (#2167)
+
+Tenants, employees and citizens that existed before Keycloak are reached
+without creating anything new in DIGIT.
+
+### Tenant routes: root backfill
+- `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the backfill at startup. The
+  control-plane `POST /internal/identity/v1/tenant-routes/_backfill
+  {dryRun?, actor?}` runs it on demand. Both return `{created, skipped,
+  conflicts}` and write a `TENANT_ROUTE_BACKFILL` audit record.
+- Only **root** tenants (ids without a dot) listed in
+  `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` are considered. That list defaults to
+  the root of `DIGIT_ADMIN_TENANT_ID`. Subtenants are ignored.
+- An active root that no Organization or Organization group maps gets an
+  Organization whose alias and `digit.urlSlug` are the tenant id, unchanged:
+  on Bomet, `ke` → `/ke/digit-ui/...`.
+- A mapped tenant is left exactly as it is, with or without a slug. **Nothing is
+  renamed or overwritten.** A slug or alias that another mapping already uses is
+  reported as a conflict and skipped.
+
+### Employee links (admin only)
+An existing DIGIT employee is linked to a Keycloak user only by an
+administrator. A matching username never links anyone. The
+legacy-account guard still refuses every `kcbff-` username collision.
+
+- **Link:** `POST /internal/identity/v1/account-links/_link {actor?, links: [...]}`
+  takes 1 to 500 items, so it serves both a single link and a bulk import.
+  - Each item is `{subject | email, tenantId, digitUserUuid | digitUserName, userType?}`.
+  - Items are independent. Each returns `LINKED`, `ALREADY_LINKED`, or
+    `REFUSED` with a code: `DIGIT_ACCOUNT_NOT_FOUND`, `DIGIT_ACCOUNT_MANAGED`,
+    `DIGIT_ACCOUNT_LINKED_ELSEWHERE`, `SUBJECT_ALREADY_LINKED`,
+    `IDENTITY_NOT_FOUND`, `TENANT_NOT_FOUND` or `INVALID_REQUEST`.
+- **Storage:** the link lives on the Keycloak user as `digit.accountLinks`
+  (`EMPLOYEE|<tenantId>|<digitUuid>`), which only admins can edit. A DIGIT
+  account links to at most one user.
+- **Employee `_select`:**
+  - A link at the bound tenant signs in to that account **as it is**: same
+    uuid, roles and history, with no role projection and no reconciliation.
+    The link authorizes the tenant without an Organization membership.
+  - Every `_select` re-checks that the account is still active, cached token
+    or not. Deactivating the employee in HRMS or egov-user ends access with 403
+    `DIGIT_ACCOUNT_INACTIVE`.
+  - With no link and no membership, `_select` answers 403
+    `EMPLOYEE_ACCOUNT_NOT_LINKED`.
+- **Passwords:** Keycloak's password is the only one that matters. The BFF
+  rotates the linked account's DIGIT password at sign-in, as it does for every
+  account it signs in. Legacy passwords are ignored, and an admin resets one
+  through DIGIT on demand.
+- **Writes to a linked account:** egov-user's update clears fields that are
+  absent from the request. The BFF therefore writes a linked account back
+  whole, exactly as searched, with only the password (or a citizen's new
+  verified mobile number) changed.
+  - If the search returned masked personal data (`******1234`), nothing is
+    written. Sign-in answers 503 `DIGIT_PII_MASKED`, and the log says the BFF's
+    DIGIT admin needs unmasked read access.
+
+### Citizen links (verified phone)
+- Before creating a `kcbff-` citizen account, `contexts/citizen/_select`
+  checks, in order:
+  1. the subject's existing link;
+  2. its existing managed account;
+  3. exactly **one** active, non-managed `CITIZEN` with the same mobile number
+     at egov-user's citizen tenant, which is then linked with method
+     `VERIFIED_PHONE`.
+- **Ambiguous numbers:** two or more matches, or an account linked to someone
+  else, fail closed with 409 `CITIZEN_ACCOUNT_AMBIGUOUS`. An admin links the
+  right one.
+- **Trusted phones only:** the number must come from a BFF phone OTP, or from a
+  Keycloak phone that users cannot edit. The BFF checks the realm user profile:
+  `phoneNumber` and `phoneNumberVerified` must not grant `user` edit, and when
+  undeclared, `unmanagedAttributePolicy` must not be `ENABLED`. Any other
+  number never links; the citizen gets a managed account, as before.
+- **Failed check:** if the user-profile check itself fails, `_select` answers
+  503 and creates nothing. Treating the number as untrusted would create a
+  managed account and split the citizen from their existing one for good.
+- **Tokens:** they come from the egov-otp grant, so the account's password and
+  profile are never changed.
+
+### Audit and undo
+- **Audit:** every link, refusal and unlink writes `ACCOUNT_LINK_CREATE`,
+  `ACCOUNT_LINK_REFUSED` or `ACCOUNT_LINK_REVOKE` to the audit stream, with the
+  method (`ADMIN` or `VERIFIED_PHONE`), actor, subject, tenant and DIGIT uuid.
+- **List:** `GET /internal/identity/v1/account-links?subject=` returns a user's
+  links and blocks.
+- **Unlink:** `POST /internal/identity/v1/account-links/_unlink {subject,
+  userType?, tenantId, digitUserUuid, block?, actor?}`.
+  - It removes the link and revokes the account's cached DIGIT tokens. The
+    DIGIT account itself is untouched.
+  - `block: true` (`digit.accountLinkBlocks`) stops a phone link from
+    re-forming: the citizen gets 409 `CITIZEN_ACCOUNT_LINK_BLOCKED`.
+  - Only an explicit admin link lifts a block.
+
+### Proposal only (not built): cities as groups under their root
+If city subtenants ever need their own routes, a city whose root already has
+an Organization would get a tenant **group** under that Organization, carrying
+its own `digit.urlSlug`, instead of a separate Organization. That keeps one
+county's staff in one membership. This is not implemented: the platform is
+moving away from the city-subtenant model, and the backfill ignores
+subtenants.
+
 ## Organization → tenant mapping
 
 A Keycloak Organization maps to one DIGIT tenant through its

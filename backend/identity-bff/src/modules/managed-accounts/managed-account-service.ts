@@ -53,6 +53,12 @@ export interface ManagedIdentity {
   username: string;
   marker: string;
   userType: ManagedUserType;
+  /**
+   * Set for an EXISTING DIGIT account linked to the subject (#2167) rather
+   * than one this BFF created: the account's own uuid. Its username, roles
+   * and profile are the account's own and are never rewritten.
+   */
+  linkedUuid?: string;
 }
 
 export interface ManagedProfile {
@@ -66,9 +72,100 @@ export interface ManagedProfile {
 export type DesiredRoles = Map<string, string[]>;
 
 export class ManagedAccountError extends Error {
-  constructor(message: string, readonly status = 409) {
+  constructor(message: string, readonly status = 409, readonly code?: string) {
     super(message);
   }
+}
+
+/**
+ * The identity behind an existing DIGIT account linked to `subject`. Its
+ * token cache, lease and holders are keyed by the link, never by a
+ * `kcbff-` identity, so a linked and a managed account cannot share a token.
+ */
+export function linkedIdentity(
+  issuer: string,
+  subject: string,
+  link: { userType: ManagedUserType; tenantId: string; digitUuid: string },
+): ManagedIdentity {
+  const key = createHash("sha256")
+    .update(`link\n${issuer}\n${subject}\n${link.userType}\n${link.tenantId}\n${link.digitUuid}`)
+    .digest("hex");
+  return {
+    issuer, subject, tenantId: link.tenantId, key,
+    username: "", marker: "", userType: link.userType, linkedUuid: link.digitUuid,
+  };
+}
+
+/** Whether a DIGIT account was created by this BFF (never linkable). */
+export function isBffManagedAccount(account: DigitAccount): boolean {
+  return account.userName.startsWith("kcbff") ||
+    (account.identificationMark || "").startsWith("keycloak-bff:");
+}
+
+/** The linked account, only while it is still active with its type and tenant. */
+async function findLinkedAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
+  const accounts = await searchAccounts(adminToken, {
+    uuid: [identity.linkedUuid!], tenantId: identity.tenantId, userType: identity.userType, active: true,
+  });
+  return accounts.find((account) => account.uuid === identity.linkedUuid && account.active &&
+    account.type === identity.userType && account.tenantId === identity.tenantId) || null;
+}
+
+const linkedIdentitiesKey = (issuer: string, subject: string) =>
+  `${config.cachePrefix}:digit-linked-identities:${createHash("sha256").update(`${issuer}\n${subject}`).digest("hex")}`;
+
+async function recordLinkedIdentity(identity: ManagedIdentity): Promise<void> {
+  const key = linkedIdentitiesKey(identity.issuer, identity.subject);
+  await getRedis().sadd(key, JSON.stringify({
+    userType: identity.userType, tenantId: identity.tenantId, digitUuid: identity.linkedUuid,
+  }));
+  await getRedis().expire(key, config.identitySessionTtlSeconds);
+}
+
+/** Releases this session's claim on the subject's linked-account tokens. */
+async function releaseLinkedLogins(
+  issuer: string,
+  subject: string,
+  sessionId: string,
+  include: (link: { userType: ManagedUserType; tenantId: string }) => boolean,
+): Promise<void> {
+  const ref = sessionTokenRef(sessionId);
+  for (const raw of await getRedis().smembers(linkedIdentitiesKey(issuer, subject))) {
+    let link: { userType: ManagedUserType; tenantId: string; digitUuid: string };
+    try {
+      link = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (!include(link)) continue;
+    const identity = linkedIdentity(issuer, subject, link);
+    await withUserLease(identity, () => releaseCachedLogin(identity, ref));
+  }
+}
+
+/**
+ * Writes `changes` to an account the BFF does NOT own (a linked legacy
+ * account). egov-user's update writes most fields exactly as sent and clears
+ * absent ones, so the record goes back whole, as searched, with only
+ * `changes` applied. A record with masked personal data (`******1234`) is
+ * never written back: that would store the mask on a real person.
+ */
+async function writeLinkedAccount(
+  adminToken: string,
+  account: DigitAccount,
+  changes: Partial<DigitAccountInput>,
+): Promise<void> {
+  if (Object.values(account).some((value) => typeof value === "string" && /\*{2,}/.test(value))) {
+    console.error("egov-user returned masked personal data for a linked account; nothing was written. " +
+      "The BFF's DIGIT admin must be allowed to read unmasked user records.");
+    throw new ManagedAccountError("The linked DIGIT account cannot be updated safely", 503, "DIGIT_PII_MASKED");
+  }
+  await updateAccount(adminToken, { ...(account as DigitAccountInput), ...changes });
+}
+
+/** Unlink: revoke the linked account's cached token for every session. */
+export async function dropLinkedLogin(identity: ManagedIdentity): Promise<void> {
+  await withUserLease(identity, () => dropCachedLogin(identity));
 }
 
 export function managedIdentity(issuer: string, subject: string, tenantId: string): ManagedIdentity {
@@ -398,6 +495,16 @@ export async function managedUserLogin(
   verifiedMobileNumber?: string,
 ): Promise<DigitLogin> {
   const ref = sessionTokenRef(sessionId);
+  if (identity.linkedUuid) {
+    // Every sign-in re-checks a linked account, cached token or not: a
+    // deactivation in HRMS or egov-user must end access at the next _select.
+    const live = await withDigitAdmin((adminToken) => findLinkedAccount(adminToken, identity));
+    if (!live) {
+      await withUserLease(identity, () => dropCachedLogin(identity));
+      throw new ManagedAccountError("The linked DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
+    }
+    await recordLinkedIdentity(identity);
+  }
   const cached = await cachedLogin(identity);
   if (cached) {
     await holdCachedLogin(identity, ref);
@@ -410,7 +517,9 @@ export async function managedUserLogin(
       return again;
     }
     return withDigitAdmin(async (adminToken) => {
-      const account = await findAccount(adminToken, identity);
+      const account = identity.linkedUuid
+        ? await findLinkedAccount(adminToken, identity)
+        : await findAccount(adminToken, identity);
       if (!account || !account.active) {
         throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
       }
@@ -423,15 +532,22 @@ export async function managedUserLogin(
         // egov-user checks the OTP against the STORED mobile number, so a
         // citizen who verified a new number first has it written through.
         if (await getRedis().get(citizenMobileKey(identity)) !== verifiedMobileNumber) {
-          await updateAccount(adminToken, { ...editable(account), mobileNumber: verifiedMobileNumber });
+          if (identity.linkedUuid) {
+            await writeLinkedAccount(adminToken, account, { mobileNumber: verifiedMobileNumber });
+          } else {
+            await updateAccount(adminToken, { ...editable(account), mobileNumber: verifiedMobileNumber });
+          }
           await getRedis().set(citizenMobileKey(identity), verifiedMobileNumber);
         }
         login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
       } else {
         const password = oneTimePassword();
-        await updateAccount(adminToken, { ...editable(account), password });
+        if (identity.linkedUuid) await writeLinkedAccount(adminToken, account, { password });
+        else await updateAccount(adminToken, { ...editable(account), password });
+        // A linked account keeps its own username; its legacy password is
+        // replaced here, as for every account the BFF signs in (#2167).
         login = await passwordLogin({
-          username: identity.username, password, tenantId: account.tenantId, userType: identity.userType,
+          username: account.userName, password, tenantId: account.tenantId, userType: identity.userType,
         });
       }
       await cacheLogin(identity, ref, login);
@@ -455,6 +571,7 @@ export async function revokeManagedUserLogins(
     const identity = managedIdentity(issuer, subject, tenantId);
     await withUserLease(identity, () => releaseCachedLogin(identity, ref));
   }
+  await releaseLinkedLogins(issuer, subject, sessionId, (link) => link.userType !== CITIZEN_USER_TYPE);
 }
 
 /**
@@ -470,6 +587,8 @@ export async function revokeCitizenLogin(
 ): Promise<void> {
   const identity = citizenIdentity(issuer, subject, tenantId);
   await withUserLease(identity, () => releaseCachedLogin(identity, sessionTokenRef(sessionId)));
+  await releaseLinkedLogins(issuer, subject, sessionId, (link) =>
+    link.userType === CITIZEN_USER_TYPE && link.tenantId === identity.tenantId);
 }
 
 /** Tenants where this BFF has provisioned an account for the subject. */

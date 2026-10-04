@@ -6,7 +6,7 @@ import {
   ManagedAccountError,
   type ManagedIdentity,
 } from "../managed-accounts/managed-account-service.js";
-import type { DigitAccount } from "../managed-accounts/digit-user-client.js";
+import { AccountLinkError, resolveCitizenLink } from "../account-links/account-links.js";
 import {
   citizenRegistrationValues,
   updateCitizenRegistrationValues,
@@ -54,7 +54,7 @@ export interface CitizenRegistration {
 }
 
 export class CitizenContextError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
   }
 }
@@ -123,6 +123,10 @@ export function splitE164(
  * search and log in at). Existing accounts are never re-roled
  * (`createOnly`), and a DISABLED registration or deactivated account is
  * refused.
+ *
+ * An EXISTING DIGIT citizen with the same number is linked instead of a new
+ * account being created (#2167), but only when `phoneTrusted`: the number was
+ * proved by a BFF OTP, or users cannot edit it in Keycloak.
  */
 export async function ensureCitizenRegistration(input: {
   subject: string;
@@ -130,31 +134,45 @@ export async function ensureCitizenRegistration(input: {
   name: string;
   countryCode: string;
   mobileNumber: string;
-}): Promise<{ identity: ManagedIdentity; account: DigitAccount; registration: CitizenRegistration }> {
+  phoneTrusted: boolean;
+}): Promise<{ identity: ManagedIdentity; registration: CitizenRegistration }> {
   const { subject, tenant } = input;
   const existing = (await citizenRegistrations(subject)).find((candidate) =>
     candidate.rootTenantId === tenant.rootTenantId && candidate.tenantId === tenant.tenantId);
   if (existing?.status === "DISABLED") {
     throw new CitizenContextError("Citizen access is disabled for this tenant", 403);
   }
-  const identity = citizenIdentity(config.keycloakIssuer, subject, tenant.tenantId);
-  let outcome;
+  let identity: ManagedIdentity;
+  let digitUserUuid: string;
   try {
-    outcome = await ensureManagedAccount(identity, [], {
-      name: input.name,
-      mobileNumber: input.mobileNumber,
-      countryCode: input.countryCode,
-    }, { createOnly: true });
+    const linked = await resolveCitizenLink({
+      subject, routeTenantId: tenant.tenantId, mobileNumber: input.mobileNumber, phoneTrusted: input.phoneTrusted,
+    });
+    if (linked) {
+      identity = linked;
+      digitUserUuid = linked.linkedUuid!;
+    } else {
+      identity = citizenIdentity(config.keycloakIssuer, subject, tenant.tenantId);
+      const outcome = await ensureManagedAccount(identity, [], {
+        name: input.name,
+        mobileNumber: input.mobileNumber,
+        countryCode: input.countryCode,
+      }, { createOnly: true });
+      if (!outcome.account?.active) {
+        throw new CitizenContextError("Citizen access is not available for this tenant", 403);
+      }
+      digitUserUuid = outcome.account.uuid;
+    }
   } catch (error) {
+    if (error instanceof AccountLinkError) {
+      throw new CitizenContextError(error.message, error.status, error.code);
+    }
     if (error instanceof ManagedAccountError) {
       throw new CitizenContextError(error.message, error.status === 409 ? 409 : 403);
     }
     throw error;
   }
-  const account = outcome.account;
-  if (!account?.active) {
-    throw new CitizenContextError("Citizen access is not available for this tenant", 403);
-  }
+  const account = { uuid: digitUserUuid };
   const registration: CitizenRegistration = {
     principalId: { issuer: config.keycloakIssuer, subject },
     rootTenantId: tenant.rootTenantId,
@@ -182,5 +200,5 @@ export async function ensureCitizenRegistration(input: {
       ].sort();
     });
   }
-  return { identity, account, registration };
+  return { identity, registration };
 }

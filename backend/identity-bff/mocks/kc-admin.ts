@@ -81,6 +81,7 @@ export function resetState() {
   initState();
   faults = [];
   dropUnmanagedAttributes = false;
+  userProfiles.clear();
 }
 
 function getRealm(name: string): RealmState | undefined {
@@ -165,6 +166,13 @@ function getOrCreateRealm(name: string): RealmState {
 
 let faults: Array<{ method: string; path: string; status?: number; remaining: number }> = [];
 let dropUnmanagedAttributes = false;
+const DEFAULT_USER_PROFILE = {
+  unmanagedAttributePolicy: "ADMIN_EDIT",
+  attributes: ["username", "email", "firstName", "lastName"].map((name) => ({
+    name, permissions: { view: ["admin", "user"], edit: ["admin", "user"] },
+  })),
+};
+const userProfiles = new Map<string, unknown>();
 
 export function createKcAdminMock() {
   initState();
@@ -420,6 +428,15 @@ export function createKcAdminMock() {
     if (index < 0) return res.status(404).json({ error: "User not found" });
     realm.users.splice(index, 1);
     res.status(204).end();
+  });
+
+  // Declarative user profile: which attributes users may edit themselves.
+  app.get("/admin/realms/:realm/users/profile", (req, res) => {
+    res.json(userProfiles.get(req.params.realm) || DEFAULT_USER_PROFILE);
+  });
+  app.put("/admin/realms/:realm/users/profile", (req, res) => {
+    userProfiles.set(req.params.realm, req.body);
+    res.json(req.body);
   });
 
   app.get("/admin/realms/:realm/users/:userId", (req, res) => {

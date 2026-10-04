@@ -21,10 +21,15 @@ import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js"
 import { syncSubjectTenant } from "../reconciliation/subject-sync.js";
 import { currentSession } from "../sessions/current-session.js";
 import { saveSelectedIdentityContext } from "../sessions/session-store.js";
-import { IdentityAdminError } from "../organizations/organization-service.js";
+import {
+  IdentityAdminError,
+  keycloakPhoneIsAdminControlled,
+  readTenantMappingForTenant,
+} from "../organizations/organization-service.js";
 import type { TenantOption } from "./tenant-directory.js";
 import { resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
+import { AccountLinkError, EMPLOYEE_USER_TYPE, linkedIdentityFor } from "../account-links/account-links.js";
 
 function publicTenant({ organizationId: _organizationId, ...tenant }: TenantOption) {
   return tenant;
@@ -41,11 +46,9 @@ function tokenResponse(login: DigitLogin) {
 }
 
 function digitFailure(error: unknown, response: express.Response, message: string) {
-  if (error instanceof CitizenContextError) {
-    return response.status(error.status).json({ error: error.message });
-  }
-  if (error instanceof ManagedAccountError) {
-    return response.status(error.status).json({ error: error.message });
+  if (error instanceof CitizenContextError || error instanceof ManagedAccountError ||
+      error instanceof AccountLinkError) {
+    return response.status(error.status).json({ error: error.message, ...(error.code && { code: error.code }) });
   }
   if (error instanceof DigitUnavailableError && error.digitCodes.includes("INVALID_ROLE")) {
     // egov-user rejects a role that is not defined at the tenant. Seeding
@@ -129,11 +132,32 @@ export function registerAccessContextRoutes(app: express.Application): void {
 
     try {
       const subject = current.session.claims.sub;
+      // An existing DIGIT employee linked by an admin (#2167) signs in to that
+      // account as it is: its own uuid, roles and history, re-checked active
+      // on every _select. The link itself authorizes the bound tenant.
+      const linked = surface === "employee"
+        ? await linkedIdentityFor(subject, EMPLOYEE_USER_TYPE, tenantId)
+        : null;
+      if (linked) {
+        const login = await managedUserLogin(linked, current.sessionId);
+        const mapping = await readTenantMappingForTenant(tenantId);
+        const saved = await saveSelectedIdentityContext(current.sessionId, {
+          organizationId: mapping?.organizationId || "",
+          organizationAlias: mapping?.alias || "",
+          tenantId,
+          name: current.session.boundTenant?.name || mapping?.name || tenantId,
+        });
+        if (!saved) return response.status(401).json({ error: "Identity session expired" });
+        return response.json(tokenResponse(login));
+      }
       // Only the requested tenant is resolved, and its live Organization
       // membership is what authorizes the switch.
       const selected = await resolveTenantOption(subject, tenantId);
       if (!selected) {
-        return response.status(403).json({ error: "Tenant context is not available" });
+        return response.status(403).json({
+          error: "Tenant context is not available",
+          ...(surface === "employee" && { code: "EMPLOYEE_ACCOUNT_NOT_LINKED" }),
+        });
       }
       const outcome = await syncSubjectTenant(
         subject,
@@ -206,7 +230,15 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (!phone) {
         return response.status(403).json({ error: "This phone number cannot be used for this tenant" });
       }
+      // Only a number the BFF proved, or one users cannot edit in Keycloak,
+      // may link an existing DIGIT citizen (#2167).
+      // A failed check is retryable (503), never "untrusted": treating it as
+      // untrusted would create a new account and split a legacy citizen from
+      // their existing one for good.
+      const phoneTrusted = current.session.authMethod === "phone_otp" ||
+        await keycloakPhoneIsAdminControlled();
       const { identity } = await ensureCitizenRegistration({
+        phoneTrusted,
         subject: claims.sub,
         tenant: boundTenant,
         name: claims.name?.trim() || "Citizen",
