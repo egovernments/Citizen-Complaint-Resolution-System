@@ -2177,6 +2177,32 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(sent.length).toBe(count);
     });
 
+    it("binds phone step-up to the session, person, purpose and bound tenant", async () => {
+      const subject = "phone-stepup-person";
+      await kcAdmin("/users", { id: subject, username: subject, enabled: true });
+      const makeSession = () => createIdentitySession({ accessToken: "access", accessExpiresIn: 600 }, { sub: subject, email: "" }, config.keycloakCitizenClientId, { surface: "citizen", boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+      const first = await makeSession(), second = await makeSession();
+      const proofPost = (path: string, body: unknown, sid?: string) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...(sid && { Cookie: `${config.identityCitizenCookieName}=${sid}` }) }, body: JSON.stringify(body) });
+      expect((await proofPost("_send", { purpose: "stepup", mobileNumber: "799000601" })).status).toBe(401);
+      const invalid = await proofPost("_send", { purpose: "stepup", mobileNumber: "12345" }, first.sessionId);
+      expect((await invalid.json()).code).toBe("INVALID_MOBILE_NUMBER");
+      const sentResponse = await proofPost("_send", { purpose: "stepup", mobileNumber: "799000601", tenantSlug: "ignored-route" }, first.sessionId);
+      expect(sentResponse.status).toBe(202);
+      const { challengeId } = await sentResponse.json();
+      const code = lastCode();
+      expect(sent[sent.length - 1]).toMatchObject({ purpose: "stepup", tenantId: "ke.bomet" });
+      const wrongPurpose = await proofPost("_verify", { purpose: "change_phone", challengeId, code }, first.sessionId);
+      expect((await wrongPurpose.json()).code).toBe("OTP_EXPIRED");
+      const wrongSession = await proofPost("_verify", { purpose: "stepup", challengeId, code }, second.sessionId);
+      expect((await wrongSession.json()).code).toBe("OTP_EXPIRED");
+      const verified = await proofPost("_verify", { purpose: "stepup", challengeId, code }, first.sessionId);
+      expect(verified.status).toBe(200);
+      expect(verified.headers.has("set-cookie")).toBe(false);
+      expect(await verified.json()).toEqual({ phoneNumber: "+254799000601", phoneNumberVerified: true });
+      const current = await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: `${config.identityCitizenCookieName}=${first.sessionId}` } });
+      expect((await current.json()).user).toMatchObject({ id: subject, phoneNumber: "+254799000601", phoneNumberVerified: true });
+    });
+
     it("signs in the verified phone owner with a token-free session that _select accepts", async () => {
       const response = await send("712345678");
       expect(response.status).toBe(202);
