@@ -12,6 +12,28 @@ export class DigitUnavailableError extends Error {
   }
 }
 
+/**
+ * Why egov-user refused a password grant. egov-user answers a refused grant
+ * with HTTP 400 and a fixed OAuth `error_description` (CustomAuthenticationProvider):
+ * "Invalid login credentials", "Account locked" or "Please activate your account".
+ * Only this classification is kept, never the text.
+ */
+export type DigitLoginRejection = "invalid_credentials" | "locked" | "inactive" | "unknown";
+
+export class DigitLoginRejectedError extends DigitUnavailableError {
+  constructor(readonly reason: DigitLoginRejection) {
+    super(`DIGIT login was refused (${reason})`, 400);
+  }
+}
+
+function loginRejection(description: unknown): DigitLoginRejection {
+  if (typeof description !== "string") return "unknown";
+  if (/^account locked/i.test(description)) return "locked";
+  if (/activate your account/i.test(description)) return "inactive";
+  if (/^invalid login credentials/i.test(description)) return "invalid_credentials";
+  return "unknown";
+}
+
 export class DigitUnauthorizedError extends DigitUnavailableError {
   constructor(message: string) {
     super(message, 401);
@@ -70,6 +92,15 @@ async function send(path: string, init: RequestInit, operation: string): Promise
   if (response.status === 401) {
     await response.body?.cancel();
     throw new DigitUnauthorizedError(`DIGIT ${operation} was not authorized`);
+  }
+  if (operation === "login" && response.status === 400) {
+    let description: unknown;
+    try {
+      description = (await response.json() as { error_description?: unknown })?.error_description;
+    } catch {
+      description = undefined;
+    }
+    throw new DigitLoginRejectedError(loginRejection(description));
   }
   if (!response.ok) {
     throw new DigitUnavailableError(

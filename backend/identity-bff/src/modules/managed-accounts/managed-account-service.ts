@@ -520,14 +520,17 @@ export async function managedUserLogin(
       const account = identity.linkedUuid
         ? await findLinkedAccount(adminToken, identity)
         : await findAccount(adminToken, identity);
-      if (!account || !account.active) {
+      if (!account) {
         throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
+      }
+      if (!account.active) {
+        throw new ManagedAccountError("The DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
       }
       let login: DigitLogin;
       if (identity.userType === CITIZEN_USER_TYPE) {
         // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
         if (!verifiedMobileNumber) {
-          throw new ManagedAccountError("A verified phone number is required", 403);
+          throw new ManagedAccountError("A verified phone number is required", 403, "PHONE_NOT_VERIFIED");
         }
         // egov-user checks the OTP against the STORED mobile number, so a
         // citizen who verified a new number first has it written through.
