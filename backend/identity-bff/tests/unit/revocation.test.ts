@@ -6,7 +6,10 @@ import { createIdentitySession, getIdentitySession, requireCurrentSession, saveS
 import { privateRef } from "../../src/modules/citizen-otp/otp-store.js";
 import { cachedToken, drainRevocationJobs, drainTokenRetries, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
 import { key, personTokensKey, readToken, tokenKey, tokenHoldersKey } from "../../src/modules/revocation/inventory.js";
-import { revocationPorts } from "../../src/modules/revocation/ports.js";
+import * as keycloak from "../../src/modules/revocation/keycloak.js";
+import * as credentials from "../../src/modules/accounts/credential-service.js";
+import * as bindings from "../../src/modules/bindings/store.js";
+import * as organizations from "../../src/modules/onboarding/organization-reader.js";
 import * as digit from "../../src/modules/managed-accounts/digit-user-client.js";
 
 const prefix = `revocation-test-${process.pid}`;
@@ -34,9 +37,9 @@ async function clear() {
 beforeEach(async () => {
   vi.restoreAllMocks(); await clear(); subject = `subject-${++sequence}`;
   vi.spyOn(digit, "revokeToken").mockResolvedValue();
-  vi.spyOn(revocationPorts, "user").mockImplementation(async sub => ({ id: sub }));
-  vi.spyOn(revocationPorts, "findLiveStaffToken").mockResolvedValue(null);
-  vi.spyOn(revocationPorts, "endKeycloakSession").mockResolvedValue();
+  vi.spyOn(keycloak, "getRevocationUser").mockImplementation(async sub => ({ id: sub }));
+  vi.spyOn(credentials, "findLiveStaffToken").mockResolvedValue(null);
+  vi.spyOn(keycloak, "endKeycloakSession").mockResolvedValue();
 });
 afterAll(async () => { vi.restoreAllMocks(); await clear(); await closeCache(); });
 
@@ -100,24 +103,24 @@ describe("token inventory and revocation", () => {
     expect(await getRedis().zcard(key("revoke-retry"))).toBe(0);
   });
   it("recovers grant-eligible staff after a crash between mint and record; loss limits hold", async () => {
-    vi.mocked(revocationPorts.user).mockResolvedValue({ id: subject, attributes: { "digit.accounts": [JSON.stringify({ v: 1, entries: [
-      { ...account, kind: "staff", userName: "staff", credential: { keyVersion: 1 } },
-      { ...second, kind: "citizen", userName: "citizen" },
-      { tenantId: "locked", uuid: "locked", kind: "staff", userName: "locked", credential: { keyVersion: 1 } },
+    vi.mocked(keycloak.getRevocationUser).mockResolvedValue({ id: subject, attributes: { "digit.accounts": [JSON.stringify({ v: 1, entries: [
+      { ...account, kind: "staff", boundAt: 1, active: true, roles: [], userName: "staff", credential: { keyVersion: 1 } },
+      { ...second, kind: "citizen", boundAt: 1, active: true, roles: [], userName: "citizen" },
+      { tenantId: "locked", uuid: "locked", kind: "staff", boundAt: 1, active: true, roles: [], userName: "locked", credential: { keyVersion: 1 } },
     ] })] } });
-    vi.mocked(revocationPorts.findLiveStaffToken).mockImplementation(async ref => ref.uuid === account.uuid ? login() : null);
+    vi.mocked(credentials.findLiveStaffToken).mockImplementation(async ref => ref.uuid === account.uuid ? login() : null);
     await revokePerson(subject, "KEYCLOAK_DISABLED");
     expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("digit-token");
-    expect(revocationPorts.findLiveStaffToken).toHaveBeenCalledWith({ ...account, userName: "staff", keyVersion: 1 });
-    expect(revocationPorts.findLiveStaffToken).toHaveBeenCalledTimes(2);
-    vi.mocked(revocationPorts.findLiveStaffToken).mockClear(); await revokePerson(subject, "KEYCLOAK_DELETED");
-    expect(revocationPorts.findLiveStaffToken).not.toHaveBeenCalled();
+    expect(credentials.findLiveStaffToken).toHaveBeenCalledWith({ ...account, userName: "staff", keyVersion: 1 });
+    expect(credentials.findLiveStaffToken).toHaveBeenCalledTimes(2);
+    vi.mocked(credentials.findLiveStaffToken).mockClear(); await revokePerson(subject, "KEYCLOAK_DELETED");
+    expect(credentials.findLiveStaffToken).not.toHaveBeenCalled();
   });
   it("retains subject jobs on dependency failure and resumes them", async () => {
-    await inventory(); vi.mocked(revocationPorts.user).mockRejectedValue(new Error("Keycloak unavailable"));
+    await inventory(); vi.mocked(keycloak.getRevocationUser).mockRejectedValue(new Error("Keycloak unavailable"));
     await expect(revokePerson(subject, "LOGOUT_ALL")).rejects.toThrow("unavailable");
     expect(await getRedis().zcard(key("revoke-jobs"))).toBe(1);
-    vi.mocked(revocationPorts.user).mockResolvedValue({ id: subject }); await drainRevocationJobs();
+    vi.mocked(keycloak.getRevocationUser).mockResolvedValue({ id: subject }); await drainRevocationJobs();
     expect(await getRedis().zcard(key("revoke-jobs"))).toBe(0);
     expect(digit.revokeToken).toHaveBeenCalledWith("digit-token");
   });
@@ -136,7 +139,7 @@ describe("token inventory and revocation", () => {
     expect(digit.revokeToken).not.toHaveBeenCalled();
     await logoutSessions(subject, "all", other);
     expect(digit.revokeToken).toHaveBeenCalledWith("digit-token");
-    expect(revocationPorts.endKeycloakSession).toHaveBeenCalledTimes(2);
+    expect(keycloak.endKeycloakSession).toHaveBeenCalledTimes(2);
   });
   it("phone change ends old-number sessions except the keeper", async () => {
     const keep = await session("keep", "+254700000001"); const old = await session("old", "+254700000001");
@@ -146,11 +149,11 @@ describe("token inventory and revocation", () => {
     expect(await getIdentitySession(fresh)).not.toBeNull();
   });
   it("tenant fanout queues union before sequential person work and is repeatable", async () => {
-    vi.spyOn(revocationPorts, "readOrganizationByTenant").mockResolvedValue({ id: "org", alias: "org", name: "Org", lifecycle: "FAILED", enabled: false });
-    vi.spyOn(revocationPorts, "members").mockResolvedValue([{ id: "member" }]);
-    vi.spyOn(revocationPorts, "bindingsFor").mockResolvedValue([{ subject: "bound", binding: account }]);
+    vi.spyOn(organizations, "readOrganizationByTenant").mockResolvedValue({ id: "org", alias: "org", name: "Org", lifecycle: "FAILED", enabled: false });
+    vi.spyOn(keycloak, "listOrganizationMembers").mockResolvedValue([{ id: "member" }]);
+    vi.spyOn(bindings, "bindingsFor").mockResolvedValue([{ subject: "bound", binding: account }]);
     const observed: string[] = [];
-    vi.mocked(revocationPorts.user).mockImplementation(async sub => {
+    vi.mocked(keycloak.getRevocationUser).mockImplementation(async sub => {
       expect(currentPersonLease()?.subject).toBe(sub);
       if (!observed.length) expect(await getRedis().zcard(key("revoke-jobs"))).toBe(2);
       observed.push(sub); return { id: sub };

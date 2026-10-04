@@ -5,7 +5,11 @@ import { privateRef } from "../citizen-otp/otp-store.js";
 import { deleteIdentitySession, getIdentitySession, getSelectedIdentityContext, listPersonSessions, personSessionsKey, revocationGenerationKey, sessionKey } from "../sessions/session-store.js";
 import type { IdentitySession } from "../sessions/types.js";
 import { accountId, forgetToken, key, parseAccountId, personTokensKey, readToken, revokeInventoriedToken, tokenHoldersKey, type AccountRef, type TokenRecord } from "./inventory.js";
-import { accountsFromUser, revocationPorts, type AccountEntry } from "./ports.js";
+import { getRevocationUser, listRevocationUsers, listOrganizationMembers, endKeycloakSession } from "./keycloak.js";
+import { accountEntries, type AccountEntry } from "../sync/state.js";
+import { bindingsFor } from "../bindings/store.js";
+import { findLiveStaffToken } from "../accounts/credential-service.js";
+import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
 export { cachedToken, recordToken, holdToken, drainTokenRetries } from "./inventory.js";
 
 export type RevocationReason =
@@ -73,7 +77,7 @@ async function revokeOne(lease: PersonLease, account: AccountRef, entry: Account
   }
   if (entry?.kind !== "staff" || !entry.userName) return;
   await lease.assertHeld();
-  const live = await revocationPorts.findLiveStaffToken({ tenantId: account.tenantId, uuid: account.uuid, userName: entry.userName, keyVersion: entry.credential?.keyVersion });
+  const live = await findLiveStaffToken({ tenantId: account.tenantId, uuid: account.uuid, userName: entry.userName, keyVersion: entry.credential?.keyVersion });
   if (!live) return;
   const recovered: TokenRecord = { accessToken: live.accessToken, expiresAt: live.expiresAt,
     subject: lease.subject, mintedAt: Date.now(), kind: "staff" };
@@ -100,15 +104,19 @@ async function perform(job: SubjectJob): Promise<void> {
       await lease.assertHeld();
       await deleteIdentitySession(sessionId);
     }
-    const entries = job.reason === "KEYCLOAK_DELETED" ? [] : accountsFromUser(await revocationPorts.user(job.subject));
-    const accounts = new Map<string, AccountRef>();
-    for (const id of await getRedis().smembers(personTokensKey(job.subject))) accounts.set(id, parseAccountId(id));
-    for (const entry of entries) accounts.set(accountId(entry), entry);
-    if (account) accounts.set(accountId(account), account);
-    for (const ref of accounts.values()) {
-      if (account && accountId(account) !== accountId(ref)) continue;
-      if (scopedTenant && ref.tenantId !== scopedTenant) continue;
-      await revokeOne(lease, ref, entries.find(entry => accountId(entry) === accountId(ref)), job.reason, keepSessionId);
+    const matches = (ref: AccountRef) => (!account || accountId(account) === accountId(ref)) && (!scopedTenant || ref.tenantId === scopedTenant);
+    const inventoried = new Set<string>();
+    for (const id of await getRedis().smembers(personTokensKey(job.subject))) {
+      const ref = parseAccountId(id);
+      if (!matches(ref)) continue;
+      if (await readToken(ref)) inventoried.add(id);
+      await revokeOne(lease, ref, undefined, job.reason, keepSessionId);
+    }
+    // An unavailable Keycloak lookup must not delay tokens already in Redis.
+    const entries = job.reason === "KEYCLOAK_DELETED" ? [] : accountEntries(await getRevocationUser(job.subject) ?? {});
+    for (const entry of entries) {
+      if (!matches(entry) || inventoried.has(accountId(entry))) continue;
+      await revokeOne(lease, entry, entry, job.reason, keepSessionId);
     }
   });
 }
@@ -135,9 +143,9 @@ export async function drainRevocationJobs(limit = 100): Promise<void> {
 /** All jobs are recorded before taking a person lease; repeats repair interrupted fan-out. */
 export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISABLED" | "TENANT_INACTIVE"): Promise<void> {
   if (currentPersonLease()) throw new Error("Tenant fan-out must run outside the person lease");
-  const organization = await revocationPorts.readOrganizationByTenant(tenantId);
-  const members = organization ? await revocationPorts.members(organization.id) : [];
-  const bindings = await revocationPorts.bindingsFor(tenantId);
+  const organization = await readOrganizationByTenant(tenantId);
+  const members = organization ? await listOrganizationMembers(organization.id) : [];
+  const bindings = await bindingsFor(tenantId);
   const subjects = new Set([...members.map(member => member.id), ...bindings.map(binding => binding.subject)]);
   for (const subject of subjects) await enqueueRevocation(subject, reason, { tenantId, eventId: `tenant:${tenantId}` });
   await drainRevocationJobs();
@@ -170,7 +178,7 @@ export async function logoutSessions(subject: string, scope: "current" | "others
     for (const { sessionId, session } of ended) {
       await lease.assertHeld();
       // End at Keycloak first; if it fails the caller can retry the still-indexed session.
-      if (session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await revocationPorts.endKeycloakSession(session.kcSessionId);
+      if (session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await endKeycloakSession(session.kcSessionId);
       await deleteIdentitySession(sessionId);
     }
     if (scope === "all") await bumpGeneration(lease);
@@ -185,7 +193,7 @@ export async function endPhoneSessions(subject: string, oldPhoneRef: string, kee
     for (const { sessionId, session } of sessions) {
       if (sessionId === keepSessionId || session.phoneRef !== oldPhoneRef) continue;
       await lease.assertHeld();
-      if (session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await revocationPorts.endKeycloakSession(session.kcSessionId);
+      if (session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await endKeycloakSession(session.kcSessionId);
       await deleteIdentitySession(sessionId);
       ended.push(sessionId);
     }
@@ -195,7 +203,7 @@ export async function endPhoneSessions(subject: string, oldPhoneRef: string, kee
 
 /** Event already ended Keycloak's session; do not call back to Keycloak again. */
 export async function endKeycloakSessions(kcSessionId: string, clientId?: string, subject?: string): Promise<void> {
-  const subjects = subject ? [subject] : (await revocationPorts.users()).map(user => user.id);
+  const subjects = subject ? [subject] : (await listRevocationUsers()).map(user => user.id);
   for (const sub of subjects) await withPersonLease(sub, async lease => {
     const ended: string[] = [];
     for (const { sessionId, session } of await sessionsRaw(sub)) {
