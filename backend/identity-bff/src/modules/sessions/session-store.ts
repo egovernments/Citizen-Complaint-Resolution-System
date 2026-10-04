@@ -259,6 +259,7 @@ export async function saveIdentitySession(
       surface: binding.surface,
       boundTenant: binding.boundTenant,
     }),
+    ...(binding.authMethod && { authMethod: binding.authMethod, identityCheckedAt: now }),
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     accessExpiresAt: now + tokens.accessExpiresIn * 1000,
@@ -273,6 +274,43 @@ export async function saveIdentitySession(
     "EX",
     ttl,
   );
+}
+
+/**
+ * A citizen session proved by a BFF phone OTP (#2189). It carries the same
+ * claims `contexts/citizen/_select` reads from a Keycloak-issued citizen
+ * session, so that route stays unchanged, but no Keycloak token.
+ */
+export async function createPhoneOtpSession(input: {
+  subject: string;
+  name: string;
+  phoneNumber: string;
+  boundTenant: BoundTenant;
+}): Promise<{ sessionId: string; maxAge: number }> {
+  const sessionId = randomId();
+  const maxAge = config.identitySessionTtlSeconds;
+  await saveIdentitySession(
+    sessionId,
+    { accessToken: "", accessExpiresIn: maxAge },
+    {
+      sub: input.subject,
+      email: "",
+      name: input.name,
+      phone_number: input.phoneNumber,
+      phone_number_verified: true,
+      azp: config.keycloakCitizenClientId,
+    },
+    maxAge,
+    config.keycloakCitizenClientId,
+    undefined,
+    { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
+  );
+  return { sessionId, maxAge };
+}
+
+/** Rewrites a session record without changing its expiry. */
+export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<void> {
+  await getRedis().set(sessionKey(sessionId), JSON.stringify(session), "KEEPTTL");
 }
 
 export async function getIdentitySession(

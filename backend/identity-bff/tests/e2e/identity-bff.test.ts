@@ -16,6 +16,15 @@ import {
   saveSelectedIdentityContext,
 } from "../../src/modules/sessions/session-store.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
+import {
+  LogOtpSender,
+  OtpDeliveryError,
+  otpSender,
+  setOtpSender,
+  warnAboutInsecureOtpModes,
+  type OtpMessage,
+} from "../../src/modules/citizen-otp/otp-sender.js";
+import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
 import { syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
 import { desiredRolesForSubjectTenant } from "../../src/modules/reconciliation/reconciliation-service.js";
 import {
@@ -1874,5 +1883,448 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect(moved.status).toBe(200);
     const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
     expect(account.mobileNumber).toBe("712345679");
+  });
+
+  describe("citizen phone OTP sign-in (#2189)", () => {
+    const sent: OtpMessage[] = [];
+    let failDelivery = false;
+    const originalSender = otpSender();
+    const otpConfig = {
+      identityCitizenOtpSecret: "test-otp-secret",
+      identityCitizenOtpTtlSeconds: 300,
+      identityCitizenOtpMaxAttempts: 5,
+      identityCitizenOtpResendSeconds: 0,
+      identityCitizenOtpSendWindowSeconds: 3600,
+      identityCitizenOtpPhoneSendLimit: 50,
+      identityCitizenOtpIpSendLimit: 500,
+    };
+    const saved = Object.fromEntries(Object.keys(otpConfig).map((key) => [key, (config as any)[key]]));
+    let ipCounter = 0;
+    const post = (path: string, body: unknown, ip = `198.51.100.${++ipCounter % 250}`) =>
+      fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST",
+        headers: { Origin: "http://localhost:3000", "Content-Type": "application/json", "X-Forwarded-For": ip },
+        body: JSON.stringify(body),
+      });
+    const send = (mobileNumber: string, ip?: string) =>
+      post("_send", { tenantSlug: "bomet-county", mobileNumber }, ip);
+    const verify = (challengeId: string, code: string, tenantSlug = "bomet-county") =>
+      post("_verify", { tenantSlug, challengeId, code });
+    const lastCode = () => sent[sent.length - 1].code;
+    const wrong = (code: string) => String((Number(code) + 1) % 1_000_000).padStart(6, "0");
+
+    beforeAll(async () => {
+      Object.assign(config as any, otpConfig);
+      setOtpSender({
+        configured: true,
+        async send(message) {
+          if (failDelivery) throw new OtpDeliveryError("provider down");
+          sent.push(message);
+        },
+      });
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: {
+          "login_theme": "digit-citizen",
+          "digit.auth.surface": "citizen",
+          "digit.auth.signin.methods": "phone_otp,password",
+        },
+      });
+      resetIdentityMethodCatalog();
+    });
+
+    afterAll(async () => {
+      Object.assign(config as any, saved);
+      setOtpSender(originalSender);
+      await kcUpdate("/clients/digit-ui-citizen-uuid", {
+        attributes: {
+          "login_theme": "digit-citizen",
+          "digit.auth.surface": "citizen",
+          "digit.auth.signin.methods": "password",
+        },
+      });
+      resetIdentityMethodCatalog();
+    });
+
+    it("offers phone_otp to citizens only when a code can be hashed and delivered", async () => {
+      const methods = async (surface: string) => (await (await fetch(
+        `${app()}/identity/v1/auth-methods?intent=signin&surface=${surface}`,
+      )).json()).methods.map((method: { id: string }) => method.id);
+      expect(await methods("citizen")).toEqual(["phone_otp", "password"]);
+
+      (config as any).identityCitizenOtpSecret = "";
+      resetIdentityMethodCatalog();
+      expect(await methods("citizen")).toEqual(["password"]);
+      const disabled = await send("799000100");
+      expect(disabled.status).toBe(400);
+      expect((await disabled.json()).code).toBe("PHONE_OTP_DISABLED");
+      (config as any).identityCitizenOtpSecret = otpConfig.identityCitizenOtpSecret;
+      resetIdentityMethodCatalog();
+
+      // Keycloak's /authorize cannot run phone OTP, and is not its default.
+      const explicit = await fetch(
+        `${app()}/identity/v1/authorize?surface=citizen&tenantSlug=bomet-county&method=phone_otp`,
+        { redirect: "manual" },
+      );
+      expect(explicit.status).toBe(400);
+      const implicit = await fetch(
+        `${app()}/identity/v1/authorize?surface=citizen&tenantSlug=bomet-county`,
+        { redirect: "manual" },
+      );
+      expect(implicit.status).toBe(302);
+    });
+
+    it("checks the tenant route and the tenant's mobile rule before sending", async () => {
+      const count = sent.length;
+      const unknown = await post("_send", { tenantSlug: "no-such-county", mobileNumber: "799000101" });
+      expect([unknown.status, (await unknown.json()).code]).toEqual([404, "TENANT_ROUTE_NOT_FOUND"]);
+      const noSlug = await post("_send", { mobileNumber: "799000101" });
+      expect([noSlug.status, (await noSlug.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      const malformed = await post("_verify", { tenantSlug: "bomet-county", challengeId: "x", code: "12" });
+      expect([malformed.status, (await malformed.json()).code]).toEqual([400, "INVALID_REQUEST"]);
+      const invalid = await send("12345");
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).code).toBe("INVALID_MOBILE_NUMBER");
+      const foreignOrigin = await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+        method: "POST",
+        headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber: "799000101" }),
+      });
+      expect([foreignOrigin.status, (await foreignOrigin.json()).code]).toEqual([403, "UNTRUSTED_ORIGIN"]);
+      expect(sent.length).toBe(count);
+    });
+
+    it("signs in the verified phone owner with a token-free session that _select accepts", async () => {
+      const response = await send("712345678");
+      expect(response.status).toBe(202);
+      const { challengeId, expiresIn } = await response.json();
+      expect(expiresIn).toBe(300);
+      const message = sent[sent.length - 1];
+      expect(message).toMatchObject({ challengeId, tenantId: "ke.bomet", phoneNumber: "+254712345678" });
+      expect(message.code).toMatch(/^\d{6}$/);
+
+      // The code is stored only as a keyed hash; keys never carry the phone.
+      const stored = await getRedis().hgetall(`${config.cachePrefix}:identity:citizen-otp:challenge:${challengeId}`);
+      expect(stored.hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(Object.values(stored)).not.toContain(message.code);
+      for (const key of await getRedis().keys(`${config.cachePrefix}:identity:citizen-otp:*`)) {
+        expect(key).not.toContain("254712345678");
+      }
+
+      // Bound to its tenant route: another route can neither use nor burn it.
+      expect((await verify(challengeId, message.code, "no-such-county")).status).toBe(404);
+      const kisumu = { "digit.rootTenantId": ["ke.kisumu"] };
+      await kcUpdate("/organizations/org-kisumu-id", { attributes: { ...kisumu, "digit.urlSlug": ["kisumu-county"] } });
+      clearTenantMappingCache();
+      try {
+        const elsewhere = await verify(challengeId, message.code, "kisumu-county");
+        expect(elsewhere.status).toBe(400);
+        expect((await elsewhere.json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        await kcUpdate("/organizations/org-kisumu-id", { attributes: kisumu });
+        clearTenantMappingCache();
+      }
+      const bad = await verify(challengeId, wrong(message.code));
+      expect(bad.status).toBe(400);
+      expect(await bad.json()).toMatchObject({ code: "OTP_INVALID", attemptsRemaining: 4 });
+
+      const ok = await verify(challengeId, message.code);
+      expect(ok.status).toBe(200);
+      expect(await ok.json()).toEqual({
+        authenticated: true, tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet" },
+      });
+      const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+      expect(cookie).toBeTruthy();
+      expect((await (await verify(challengeId, message.code)).json()).code).toBe("OTP_EXPIRED");
+
+      const session = await (await fetch(`${app()}/identity/v1/session?surface=citizen`, {
+        headers: { Cookie: cookie },
+      })).json();
+      // citizen-user-1 already owns +254712345678, verified: reused, not duplicated.
+      expect(session.user).toMatchObject({ id: "citizen-user-1", phoneNumber: "+254712345678", phoneNumberVerified: true });
+
+      const selected = await citizenSelect(cookie);
+      expect(selected.status).toBe(200);
+      expect((await selected.json()).tenant).toEqual({ urlSlug: "bomet-county", tenantId: "ke.bomet" });
+
+      const logout = await fetch(`${app()}/identity/v1/logout`, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ surface: "citizen" }),
+      });
+      expect(logout.status).toBe(204);
+      expect((await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).status)
+        .toBe(401);
+    });
+
+    it("creates one Keycloak user for a new number and never takes over an unverified one", async () => {
+      await kcAdmin("/users", {
+        id: "unverified-squatter", username: "squatter", enabled: true,
+        attributes: { phoneNumber: ["+254799000222"], phoneNumberVerified: ["false"] },
+      });
+      const signInWith = async (mobileNumber: string) => {
+        const { challengeId } = await (await send(mobileNumber)).json();
+        const ok = await verify(challengeId, lastCode());
+        expect(ok.status).toBe(200);
+        const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+        return (await (await fetch(`${app()}/identity/v1/session?surface=citizen`, {
+          headers: { Cookie: cookie },
+        })).json()).user.id as string;
+      };
+      const first = await signInWith("799000222");
+      expect(first).not.toBe("unverified-squatter");
+      expect(await signInWith("799000222")).toBe(first);
+      const users = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users?q=phoneNumber:%2B254799000222`,
+        { headers: { Authorization: "Bearer mock-kc-admin-token" } },
+      )).json() as Array<{ id: string; attributes: Record<string, string[]> }>;
+      expect(users.map((user) => user.id).sort()).toEqual([first, "unverified-squatter"].sort());
+      expect(users.find((user) => user.id === first)!.attributes).toMatchObject({
+        phoneNumber: ["+254799000222"], phoneNumberVerified: ["true"],
+      });
+    });
+
+    it("limits resends per phone and per IP", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60 });
+      try {
+        expect((await send("799000301")).status).toBe(202);
+        const tooSoon = await send("799000301");
+        expect(tooSoon.status).toBe(429);
+        expect(await tooSoon.json()).toMatchObject({ code: "OTP_RESEND_TOO_SOON" });
+        expect(Number(tooSoon.headers.get("retry-after"))).toBeGreaterThan(0);
+      } finally {
+        (config as any).identityCitizenOtpResendSeconds = 0;
+      }
+
+      (config as any).identityCitizenOtpPhoneSendLimit = 2;
+      try {
+        expect((await send("799000302")).status).toBe(202);
+        expect((await send("799000302")).status).toBe(202);
+        expect(await (await send("799000302")).json()).toMatchObject({ code: "OTP_RATE_LIMITED" });
+      } finally {
+        (config as any).identityCitizenOtpPhoneSendLimit = otpConfig.identityCitizenOtpPhoneSendLimit;
+      }
+
+      (config as any).identityCitizenOtpIpSendLimit = 2;
+      try {
+        expect((await send("799000303", "203.0.113.90")).status).toBe(202);
+        expect((await send("799000304", "203.0.113.90")).status).toBe(202);
+        const limited = await send("799000305", "203.0.113.90");
+        expect(limited.status).toBe(429);
+        expect(await limited.json()).toMatchObject({ code: "OTP_RATE_LIMITED" });
+      } finally {
+        (config as any).identityCitizenOtpIpSendLimit = otpConfig.identityCitizenOtpIpSendLimit;
+      }
+    });
+
+    it("expires a challenge after too many wrong codes, but never locks the number's owner out", async () => {
+      (config as any).identityCitizenOtpMaxAttempts = 2;
+      try {
+        const { challengeId } = await (await send("799000401")).json();
+        const code = lastCode();
+        expect(await (await verify(challengeId, wrong(code))).json()).toMatchObject({ attemptsRemaining: 1 });
+        expect(await (await verify(challengeId, wrong(code))).json()).toMatchObject({ code: "OTP_EXPIRED", attemptsRemaining: 0 });
+        expect((await (await verify(challengeId, code)).json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        (config as any).identityCitizenOtpMaxAttempts = otpConfig.identityCitizenOtpMaxAttempts;
+      }
+      // Someone else burns many wrong guesses on the owner's number...
+      for (let round = 0; round < 3; round += 1) {
+        const { challengeId } = await (await send("799000402")).json();
+        for (let guess = 0; guess < 5; guess += 1) await verify(challengeId, wrong(lastCode()));
+      }
+      // ...and the owner still gets and uses a fresh code.
+      const { challengeId } = await (await send("799000402")).json();
+      expect((await verify(challengeId, lastCode())).status).toBe(200);
+    });
+
+    it("answers OTP_CHANNEL_UNAVAILABLE when a code cannot be sent", async () => {
+      failDelivery = true;
+      try {
+        const response = await send("799000501");
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({ code: "OTP_CHANNEL_UNAVAILABLE" });
+      } finally {
+        failDelivery = false;
+      }
+      const fake = otpSender();
+      setOtpSender(new LogOtpSender());
+      resetIdentityMethodCatalog();
+      try {
+        // No channel and no fixed code: phone_otp is not offered at all.
+        const methods = await (await fetch(`${app()}/identity/v1/auth-methods?intent=signin&surface=citizen`)).json();
+        expect(methods.methods.map((method: { id: string }) => method.id)).not.toContain("phone_otp");
+        const response = await send("799000502");
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({ code: "PHONE_OTP_DISABLED" });
+      } finally {
+        setOtpSender(fake);
+        resetIdentityMethodCatalog();
+      }
+    });
+
+    it("gives a failed send's cooldown and quota back", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60, identityCitizenOtpPhoneSendLimit: 1 });
+      try {
+        failDelivery = true;
+        expect((await send("799000503")).status).toBe(503);
+        failDelivery = false;
+        // Neither the 60 s cooldown nor the one-per-window send was spent.
+        expect((await send("799000503")).status).toBe(202);
+      } finally {
+        failDelivery = false;
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0, identityCitizenOtpPhoneSendLimit: otpConfig.identityCitizenOtpPhoneSendLimit,
+        });
+      }
+    });
+
+    it("keeps a correct code usable when Keycloak fails while signing in", async () => {
+      const { challengeId } = await (await send("799000504")).json();
+      const code = lastCode();
+      await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "GET", path: "/users", status: 503, count: 1 }),
+      });
+      const failed = await verify(challengeId, code);
+      expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+      expect((await verify(challengeId, code)).status).toBe(200);
+      expect((await (await verify(challengeId, code)).json()).code).toBe("OTP_EXPIRED");
+    });
+
+    it("finds the verified owner past any number of unverified holders", async () => {
+      for (let index = 0; index < 7; index += 1) {
+        await kcAdmin("/users", {
+          id: `unverified-holder-${index}`, username: `holder-${index}`, enabled: true,
+          attributes: { phoneNumber: ["+254799000505"], phoneNumberVerified: ["false"] },
+        });
+      }
+      await kcAdmin("/users", {
+        id: "verified-owner-505", username: "owner-505", enabled: true,
+        attributes: { phoneNumber: ["+254799000505"], phoneNumberVerified: ["true"] },
+      });
+      const { challengeId } = await (await send("799000505")).json();
+      const ok = await verify(challengeId, lastCode());
+      const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+      const session = await (await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).json();
+      expect(session.user.id).toBe("verified-owner-505");
+    });
+
+    it("refuses to create a user whose phone Keycloak did not store, and leaves none behind", async () => {
+      const drop = (value: boolean) => fetch(`${config.keycloakAdminUrl}/__test/drop-unmanaged-attributes`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ drop: value }),
+      });
+      await drop(true);
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const { challengeId } = await (await send("799000506")).json();
+        const failed = await verify(challengeId, lastCode());
+        expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        expect(error.mock.calls.some(([line]) => String(line).includes("unmanagedAttributePolicy"))).toBe(true);
+      } finally {
+        error.mockRestore();
+        await drop(false);
+      }
+      // Nothing half-made blocks the number: once the realm keeps attributes, it signs in.
+      const { challengeId } = await (await send("799000506")).json();
+      expect((await verify(challengeId, lastCode())).status).toBe(200);
+    });
+
+    it("ends a phone OTP session once its Keycloak user is disabled", async () => {
+      const { challengeId } = await (await send("799000507")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const session = () => fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+      const { user } = await (await session()).json();
+      await kcUpdate(`/users/${user.id}`, { enabled: false });
+      // Pretend the last identity check was over a minute ago.
+      const key = `${config.cachePrefix}:identity:session:${cookie.split("=")[1]}`;
+      const stored = JSON.parse((await getRedis().get(key))!);
+      await getRedis().set(key, JSON.stringify({ ...stored, identityCheckedAt: 0 }), "KEEPTTL");
+      expect((await session()).status).toBe(401);
+    });
+
+    it("ignores a fixed code that is not six digits", async () => {
+      const fake = otpSender();
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      Object.assign(config as any, { citizenLoginPasswordOtpFixedEnabled: true, citizenLoginPasswordOtpFixedValue: "1234" });
+      setOtpSender(new LogOtpSender());
+      resetIdentityMethodCatalog();
+      try {
+        warnAboutInsecureOtpModes();
+        expect(errorLog.mock.calls.some(([line]) => String(line).includes("IGNORED"))).toBe(true);
+        expect((await (await send("799000508")).json()).code).toBe("PHONE_OTP_DISABLED");
+      } finally {
+        Object.assign(config as any, { citizenLoginPasswordOtpFixedEnabled: false, citizenLoginPasswordOtpFixedValue: "123456" });
+        setOtpSender(fake);
+        resetIdentityMethodCatalog();
+        errorLog.mockRestore();
+      }
+    });
+
+    it("accepts the legacy fixed code only when it is enabled", async () => {
+      const disabled = await (await send("799000601")).json();
+      const refused = await verify(disabled.challengeId, "123456" === lastCode() ? "654321" : "123456");
+      expect((await refused.json()).code).toBe("OTP_INVALID");
+
+      const fake = otpSender();
+      Object.assign(config as any, {
+        citizenLoginPasswordOtpFixedEnabled: true, citizenLoginPasswordOtpFixedValue: "123456",
+      });
+      setOtpSender(new LogOtpSender());
+      try {
+        // No channel: the challenge still issues, and the fixed code proves it once.
+        const { challengeId } = await (await send("799000602")).json();
+        const ok = await verify(challengeId, "123456");
+        expect(ok.status).toBe(200);
+        expect((await (await verify(challengeId, "123456")).json()).code).toBe("OTP_EXPIRED");
+      } finally {
+        (config as any).citizenLoginPasswordOtpFixedEnabled = false;
+        setOtpSender(fake);
+      }
+    });
+
+    it("writes codes to the log only when the log sender is chosen, and warns at startup", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const sender = new LogOtpSender();
+        expect(sender.configured).toBe(false);
+        await expect(sender.send({
+          challengeId: "c1", tenantId: "ke.bomet", phoneNumber: "+254712345678", code: "246810", expiresInSeconds: 300,
+        })).rejects.toBeInstanceOf(OtpDeliveryError);
+        (config as any).identityCitizenOtpSender = "log";
+        (config as any).citizenLoginPasswordOtpFixedEnabled = true;
+        expect(sender.configured).toBe(true);
+        await sender.send({
+          challengeId: "c1", tenantId: "ke.bomet", phoneNumber: "+254712345678", code: "246810", expiresInSeconds: 300,
+        });
+        expect(warn.mock.calls.some(([line]) => String(line).includes("246810"))).toBe(true);
+        warn.mockClear();
+        warnAboutInsecureOtpModes();
+        const warnings = warn.mock.calls.map(([line]) => String(line)).join("\n");
+        expect(warnings).toContain("IDENTITY_CITIZEN_OTP_SENDER=log");
+        expect(warnings).toContain("CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED");
+      } finally {
+        (config as any).identityCitizenOtpSender = "";
+        (config as any).citizenLoginPasswordOtpFixedEnabled = false;
+        warn.mockRestore();
+      }
+    });
+
+    it("audits every send, verify and session without raw phone numbers", async () => {
+      const entries = await getRedis().xrange(auditStreamKey(), "-", "+");
+      const records = entries.map(([, fields]) => {
+        const record: Record<string, string> = {};
+        for (let index = 0; index < fields.length; index += 2) record[fields[index]] = fields[index + 1];
+        return record;
+      });
+      const kinds = new Set(records.map((record) => `${record.event}:${record.outcome}`));
+      for (const kind of ["OTP_SEND:SUCCESS", "OTP_SEND:REFUSED", "OTP_SEND:FAILED",
+        "OTP_VERIFY:SUCCESS", "OTP_VERIFY:REFUSED", "SESSION_CREATE:SUCCESS"]) {
+        expect(kinds.has(kind), kind).toBe(true);
+      }
+      const session = records.find((record) => record.event === "SESSION_CREATE")!;
+      expect(session.subject).toBeTruthy();
+      expect(session.sessionRef).toMatch(/^[0-9a-f]{32}$/);
+      expect(JSON.stringify(records)).not.toMatch(/2547\d{8}|7990\d{5}|198\.51\.100/);
+    });
   });
 });
