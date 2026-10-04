@@ -239,6 +239,23 @@ test('every role-action refers to an already seeded role and action', () => {
   for (const role of seed.founderRoles) assert.ok(roles.has(role), `founder role ${role} must exist`);
 });
 
+test('every nested tenantId in baseline data resolves to the target tenant', () => {
+  const target = 'new-workspace';
+  function inspect(value: unknown, location: string): void {
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => inspect(entry, `${location}[${index}]`));
+    } else if (value && typeof value === 'object') {
+      for (const [key, entry] of Object.entries(value)) {
+        if (key === 'tenantId') assert.equal(entry, target, `${location}.${key}`);
+        inspect(entry, `${location}.${key}`);
+      }
+    }
+  }
+  for (const row of loadPlatformSeed().records) {
+    inspect(substituteTenant(row.data, target), `${row.schemaCode}/${row.uniqueIdentifier}`);
+  }
+});
+
 test('branding gateway create and update authorize only tenant ACCOUNT_ADMIN', () => {
   const seed = loadPlatformSeed();
   assert.ok(seed.founderRoles.includes('ACCOUNT_ADMIN'));
