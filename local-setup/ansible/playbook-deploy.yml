@@ -173,8 +173,7 @@
 
     - name: "digit-ui mode=hmr — stop digit-ui container if running"
       ansible.builtin.shell: |
-        set -o pipefail
-        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+        if [ -n "$(docker ps -q --filter 'name=^/?digit-ui$')" ]; then
           docker stop digit-ui
           echo stopped
         fi
@@ -2912,9 +2911,8 @@
     # Sweep them explicitly when search is OFF.
     - name: "Sweep search-stack containers when profile is OFF"
       ansible.builtin.shell: |
-        set -o pipefail
         for c in digit-elasticsearch egov-indexer digit-inbox; do
-          if docker ps --filter name=^${c}$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q "^${c}$"; then
+          if [ -n "$(docker ps -q --filter "name=^/?${c}\$")" ]; then
             docker stop "$c" >/dev/null
             docker rm "$c" >/dev/null
             echo "swept $c"
@@ -2960,10 +2958,13 @@
     # check cannot detect an inode-orphaning failure: the file on disk looks
     # correct while the gateway serves something else entirely.
     - name: "Kong — verify the CORS wildcard is gone (as the container sees it)"
+      # awk reads to EOF (`f{f=0}`, not `f{exit}`): under pipefail an early exit
+      # ~1 KB into the ~50 KB file SIGPIPEs cat (rc 141) and fails the task although
+      # the origins it printed were correct, aborting the deploy (#2179).
       ansible.builtin.shell: |
         set -euo pipefail
         docker exec kong-gateway cat /kong/kong.yml \
-          | awk '/origins:.*kong-cors-origins-marker/{f=1;next} f&&/^[[:space:]]*-/{print;next} f{exit}'
+          | awk '/origins:.*kong-cors-origins-marker/{f=1;next} f&&/^[[:space:]]*-/{print;next} f{f=0}'
       register: kong_cors_effective
       changed_when: false
 
@@ -3109,8 +3110,7 @@
     # --- static mode ---
     - name: "digit-ui mode=static — stop digit-ui container if running (host nginx serves now)"
       ansible.builtin.shell: |
-        set -o pipefail
-        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+        if [ -n "$(docker ps -q --filter 'name=^/?digit-ui$')" ]; then
           docker stop digit-ui
           echo stopped
         fi
@@ -3206,7 +3206,7 @@
         # most-recent source file, skip the rebuild (~5s saved on
         # repeat deploys).
         if [ -f build/index.html ]; then
-          newest_src=$(find products packages public package.json -type f -newer build/index.html 2>/dev/null | head -1)
+          newest_src=$(find products packages public package.json -type f -newer build/index.html -print -quit 2>/dev/null)
           if [ -z "$newest_src" ]; then
             echo "build/ is up-to-date — skipping rebuild"
             exit 0
@@ -3227,8 +3227,7 @@
     # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
       ansible.builtin.shell: |
-        set -o pipefail
-        if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
+        if [ -n "$(docker ps -q --filter 'name=^/?digit-ui$')" ]; then
           docker stop digit-ui
           echo stopped
         fi
@@ -5928,7 +5927,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          if ! docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-matomo; then
+          if [ -z "$(docker ps -q --filter 'name=^/?digit-matomo$')" ]; then
             echo "SKIP matomo container not running"; exit 0
           fi
           CFG=/var/www/html/config/config.ini.php
@@ -5961,7 +5960,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          if ! docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-matomo; then
+          if [ -z "$(docker ps -q --filter 'name=^/?digit-matomo$')" ]; then
             echo "SKIP matomo container not running"; exit 0
           fi
           CFG=/var/www/html/config/config.ini.php
@@ -6113,7 +6112,7 @@
         cmd: |
           set -o pipefail
           CFG=/var/www/html/config/config.ini.php
-          if ! docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-matomo; then
+          if [ -z "$(docker ps -q --filter 'name=^/?digit-matomo$')" ]; then
             echo "SKIP matomo container not running"; exit 0
           fi
           # NOT `test -f "$CFG"`: the image writes config.ini.php on first boot
