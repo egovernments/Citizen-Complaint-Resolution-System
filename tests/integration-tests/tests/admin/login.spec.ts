@@ -19,6 +19,11 @@
  */
 import { test, expect } from '@playwright/test';
 import { ROOT_TENANT } from '../utils/env';
+import { detectConfiguratorLogin } from '../utils/configurator-auth';
+
+// Hosted sign-in (#2107) has no credential fields on the configurator page, so
+// there is nothing for autofill to pre-fill there.
+const NO_FORM = 'this configurator uses hosted sign-in (#2107): /configurator/login has no credential form to autofill';
 
 // Opt out of the storageState written by auth.setup.ts — we need the
 // unauthenticated login form, not the post-login /manage surface.
@@ -40,7 +45,7 @@ Steps:
 Browser autofill writes into .value, so a regression would trip this assertion even when the React state is clean.`,
     },
     tag: ['@area:auth', '@area:configurator-manage', '@ccrs:412', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto('/configurator/login');
+    test.skip((await detectConfiguratorLogin(page)) === 'hosted', NO_FORM);
 
     const username = page.locator('input#username');
     const password = page.locator('input#password');
@@ -77,7 +82,7 @@ Steps:
 Pairs with the empty-defaults test above — together they enforce both the React-side cleanup AND the browser-side hint.`,
     },
     tag: ['@area:auth', '@area:configurator-manage', '@ccrs:412', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto('/configurator/login');
+    test.skip((await detectConfiguratorLogin(page)) === 'hosted', NO_FORM);
 
     // Form-level `autocomplete="off"` suppresses the browser's
     // save-password prompt on the login surface.
@@ -88,5 +93,35 @@ Pairs with the empty-defaults test above — together they enforce both the Reac
     // auto-filling a previously-saved password into this field.
     const password = page.locator('input#password');
     await expect(password).toHaveAttribute('autocomplete', 'new-password');
+  });
+});
+
+test.describe('configurator login — hosted sign-in (#2107)', () => {
+  test('Log in starts the password sign-in through identity-bff', {
+    annotation: {
+      type: 'description',
+      description: `On a hosted sign-in build the configurator login page offers a single "Log in" that hands off to Keycloak through identity-bff, with no credentials typed on the configurator itself.
+
+Steps:
+1. Drop admin storageState.
+2. Navigate to /configurator/login; skip on the legacy form build.
+3. Assert "Log in" is offered (fails if the page reports hosted sign-in is not enabled).
+4. Click it; assert the browser requests /identity/v1/authorize with method=password and intent=signin.
+
+Stops at the hand-off: completing sign-in needs a Keycloak user mapped to the tenant, which a deployment under test need not have.`,
+    },
+    tag: ['@area:auth', '@area:configurator-manage', '@kind:smoke', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
+    test.skip((await detectConfiguratorLogin(page)) === 'form', 'legacy form build: covered by the #412 tests above');
+
+    const logIn = page.getByRole('button', { name: /^Log in$/ });
+    await expect(logIn, 'hosted sign-in must offer a password method (GET /identity/v1/auth-methods)').toBeVisible();
+
+    const [authorize] = await Promise.all([
+      page.waitForRequest((r) => new URL(r.url()).pathname.endsWith('/identity/v1/authorize'), { timeout: 15_000 }),
+      logIn.click(),
+    ]);
+    const params = new URL(authorize.url()).searchParams;
+    expect(params.get('method')).toBe('password');
+    expect(params.get('intent')).toBe('signin');
   });
 });
