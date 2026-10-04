@@ -82,7 +82,7 @@ export function buildAuthorizeUrl({ surface, tenant, pathname, destination }) {
   return `/identity/v1/authorize?${params.toString()}`;
 }
 
-const requestJson = async (fetchImpl, url, init) => {
+export const requestJson = async (fetchImpl, url, init) => {
   const response = await fetchImpl(url, {
     ...init,
     credentials: "include",

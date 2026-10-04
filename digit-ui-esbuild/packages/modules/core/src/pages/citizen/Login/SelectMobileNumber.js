@@ -36,6 +36,8 @@ const SelectMobileNumber = ({
   canSubmit,
   validationConfig,
   showRegisterLink,
+  // A server answer for this number (Identity BFF OTP send), shown under the field.
+  alert,
 }) => {
   const [error, setError] = useState("");
 
@@ -163,6 +165,11 @@ const SelectMobileNumber = ({
             </p>
           </V2Field>
 
+          {alert ? (
+            <p role="alert" style={{ margin: 0, fontSize: "0.8125rem", color: "var(--color-error, #d4351c)" }}>
+              {alert}
+            </p>
+          ) : null}
           <V2Button
             type="submit"
             disabled={!isMobileValid || !canSubmit}
