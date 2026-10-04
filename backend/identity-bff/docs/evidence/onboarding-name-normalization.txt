@@ -1,0 +1,20 @@
+2026-10-04 Organization name canonical-equivalence follow-up
+
+Changed only Organization-name comparison: final NFC after English lowercase.
+Wire shape and other identifier comparisons unchanged.
+
+Initial focused adapter run: 10 passed.
+One full BFF suite run after fix: 469 passed, 5 skipped, 13 todo;
+36 test files passed, 1 skipped. Exit 0.
+
+Owner requested dotted-I/composed vectors and explicit idempotence during
+that full run. The identical comparator expression was then extracted into
+normalizeOrganizationName and the additional vectors added.
+Final affected-file run: 12 passed. Exit 0.
+Final npx tsc --noEmit: exit 0.
+No repeated full suite, per root test discipline.
+
+Vectors: J+caron, Greek upsilon+diaeresis+acute, dotted I, cafe acute;
+both comparison directions, whitespace, disabled legacy Organization,
+canonical output/idempotence, and no MDMS request for name checks.
+Local logs: artifacts/onboarding/name-normalization-{tests,full-tests,typecheck}.log

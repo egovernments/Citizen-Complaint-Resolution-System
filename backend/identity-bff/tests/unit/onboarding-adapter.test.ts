@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, initCache } from "../../src/infrastructure/redis.js";
 import { currentPersonLease, withPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { createOnboardingDependencies, checkOnboardingIdentifiers, readFounderIdentity, type CoreOnboardingDependencies } from "../../src/modules/onboarding/adapter.js";
+import { createOnboardingDependencies, checkOnboardingIdentifiers, normalizeOrganizationName, readFounderIdentity, type CoreOnboardingDependencies } from "../../src/modules/onboarding/adapter.js";
 import { clearTenantCaches } from "../../src/modules/access-context/tenant-directory.js";
 import { readTenantMappingForUrlSlug } from "../../src/modules/organizations/organization-service.js";
 import type { OnboardingOrganization } from "../../src/modules/onboarding/primitives.js";
@@ -114,5 +114,21 @@ describe("onboarding core adapter with the shared person lease", () => {
       ? new Response(null, { status: 503 }) : original(url, init));
     await expect(checkOnboardingIdentifiers([{ type: "TENANT_ID", value: "tenant" }]))
       .rejects.toMatchObject({ code: "IDENTITY_UNAVAILABLE", status: 503 });
+  });
+  it.each([
+    ["J\u030c Council", "\u01f0 council"],
+    ["\u03a5\u0308\u0301 Council", "\u03b0 council"],
+    ["\u0130 Council", "i\u0307 council"],
+    ["CAFE\u0301 Council", "caf\u00e9 council"],
+  ])("reserves canonically equivalent names after lowercasing %s", async (uppercase, composed) => {
+    const normalized = normalizeOrganizationName(uppercase);
+    expect(normalized).toBe(composed);
+    expect(normalizeOrganizationName(normalized)).toBe(normalized);
+    for (const [stored, requested] of [[uppercase, composed], [composed, uppercase]]) {
+      orgs = [{ id: "legacy", alias: "legacy", name: stored, enabled: false }];
+      const identifier = { type: "ORGANIZATION_NAME", value: `  ${requested.replace(" ", "\t  ")}  ` };
+      expect(await checkOnboardingIdentifiers([identifier])).toEqual([{ ...identifier, available: false }]);
+    }
+    expect(requests.some((request) => request.path === "/search")).toBe(false);
   });
 });

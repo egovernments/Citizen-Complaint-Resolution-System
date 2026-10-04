@@ -23,18 +23,21 @@ export async function readFounderIdentity(subject: string): Promise<FounderIdent
     name: [user.firstName, user.lastName].filter(Boolean).join(" "), preferredUsername: user.username };
 }
 
+export function normalizeOrganizationName(value: string): string {
+  return value.normalize("NFC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("en").normalize("NFC");
+}
+
 /** One raw Organization scan for the whole batch, and one lookup per distinct tenant. */
 export async function checkOnboardingIdentifiers(identifiers: Identifier[]) {
   const organizations = await readOnboardingOrganizations();
   const tenants = new Map<string, boolean>();
   if (identifiers.some((identifier) => identifier.type === "TENANT_ID")) clearTenantCaches();
-  const name = (value: string) => value.normalize("NFC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("en");
   const results: Array<Identifier & { available: boolean }> = [];
   for (const identifier of identifiers) {
     const { type, value } = identifier;
     const normalized = value.trim().toLowerCase();
     let available = !organizations.some((org) => {
-      if (type === "ORGANIZATION_NAME") return name(org.name) === name(value);
+      if (type === "ORGANIZATION_NAME") return normalizeOrganizationName(org.name) === normalizeOrganizationName(value);
       if (type === "ORGANIZATION_ALIAS") return org.alias?.toLowerCase() === normalized;
       if (type === "URL_SLUG") return org.alias?.toLowerCase() === normalized || organizationAttribute(org, "urlSlug")?.toLowerCase() === normalized;
       if (type === "ACCOUNT_CODE") return organizationAttribute(org, "accountCode")?.toUpperCase() === value.toUpperCase();
