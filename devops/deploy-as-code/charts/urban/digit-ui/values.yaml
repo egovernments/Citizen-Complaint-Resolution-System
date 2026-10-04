@@ -54,9 +54,6 @@ globalConfigs:
   mdmsContext: "mdms-v2"
   hrmsContext: "egov-hrms"
   invalidEmployeeRoles: ["SYSTEM"]
-  authProvider: "digit"
-  citizenAuthProvider: "digit"
-  employeeAuthProvider: "digit"
   pgrBoundaryHighestLevel: "District"
   pgrBoundaryLowestLevel: "Ward"
   boundaryType: "Ward"
@@ -65,14 +62,9 @@ globalConfigs:
   mapCenter: {"lat": 20.5937, "lng": 78.9629}
   mapTenant: "pg"
   employeeModuleDenylist: ["IM"]
-  loginTenantAllowlist: []
   coreMobileConfigs: {"countryCode": "+91", "mobileNumberRegex": "^[6-9][0-9]{9}$"}
   corePostalConfigs: {}
   dashboardMetricsEnabled: false
-  keycloakUrl: ""
-  keycloakRealm: ""
-  keycloakClientId: ""
-  tokenExchangeUrl: ""
 
 extraVolumes: |
   - name: digit-ui-config

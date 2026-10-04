@@ -152,16 +152,19 @@ describe('ansible playbook-deploy.yml', () => {
   // its `digit-ui` client are gone, so `auth_provider: keycloak` is a 404 at
   // login until the frontend cutover onto /identity/v1 lands.
   test('refuses to deploy a frontend still pointed at the removed Keycloak login', () => {
-    const start = playbook.indexOf('_keycloak_login_surfaces:');
+    // Only auth_provider still reaches a frontend (digit-ui-v2's VITE_AUTH_PROVIDER).
+    expect(playbook).toContain("when: (auth_provider | default('')) == 'keycloak'");
+  });
+
+  // Review (#2193): dead per-surface keys must not block a deploy.
+  test('ignored login settings only warn', () => {
+    const start = playbook.indexOf('name: "preflight — warn about ignored login settings"');
     expect(start).toBeGreaterThan(-1);
-    const task = playbook.slice(start, start + 2000);
-    // all three resolution keys are covered, including the two per-surface
-    // overrides that do not simply inherit auth_provider
-    for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider']) {
-      expect(task).toContain(`'${key}':`);
+    const task = playbook.slice(start, start + 800);
+    expect(task).toContain('ansible.builtin.debug:');
+    for (const key of ['citizen_auth_provider', 'employee_auth_provider', 'login_tenant_allowlist', 'show_tenant_switcher']) {
+      expect(task).toContain(`'${key}'`);
     }
-    expect(task).toContain("selectattr('value', 'eq', 'keycloak')");
-    expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
   });
 
   // #2167 review: the Keycloak login branding comes from the same Ansible
@@ -543,6 +546,94 @@ describe('tenant-scoped digit-ui routing', () => {
     expect(helmTenantIngress).toContain('.Values.ingress.annotations');
     expect(helmTenantIngress).toContain('.Values.ingress.waf.annotations');
     expect(helmTenantIngress).toContain('.Values.ingress.additionalAnnotations');
+  });
+
+  const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+  const helmGlobalConfig = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/files/globalConfigs.js.tpl'
+  );
+
+  test('tenant selection is no longer deployment global configuration', () => {
+    expect(globalConfig).not.toContain('SHOW_TENANT_SWITCHER');
+    expect(globalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+    expect(helmGlobalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+  });
+
+  // #2072 Step 1: digit-ui-esbuild signs in by route (Identity BFF on tenant
+  // routes, DIGIT auth on legacy ones) and defaults every one of these keys
+  // to `digit` when absent, so no deployment surface may emit them.
+  test('no browser auth-provider or direct-Keycloak keys in globalConfigs', () => {
+    const REMOVED = ['AUTH_PROVIDER', 'KEYCLOAK_URL', 'KEYCLOAK_REALM',
+      'KEYCLOAK_CLIENT_ID', 'TOKEN_EXCHANGE_URL', 'authProvider',
+      'keycloakUrl', 'keycloakRealm', 'keycloakClientId', 'tokenExchangeUrl'];
+    const sources = {
+      'globalConfigs.js.j2': globalConfig,
+      'helm globalConfigs.js.tpl': helmGlobalConfig,
+      'helm values.yaml': read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml'),
+      'digit-ui-esbuild dev stub': read('digit-ui-esbuild/public/globalConfigs.js'),
+      'local-setup nginx stub': read('local-setup/nginx/globalConfigs.js'),
+    };
+    for (const [name, body] of Object.entries(sources)) {
+      for (const key of REMOVED) {
+        // AUTH_PROVIDER also covers CITIZEN_/EMPLOYEE_AUTH_PROVIDER;
+        // authProvider covers citizenAuthProvider/employeeAuthProvider.
+        expect({ name, key, found: body.includes(key) }).toEqual({ name, key, found: false });
+      }
+    }
+    // digit-ui-v2 (/citizen) still bakes auth_provider at build time.
+    expect(read('local-setup/ansible/playbook-deploy.yml'))
+      .toContain('VITE_AUTH_PROVIDER="{{ auth_provider | default(\'\') }}"');
+  });
+});
+
+// #2167 review (Fable M3): Keycloak (KC_PROXY_HEADERS=xforwarded) takes the
+// LEFTMOST X-Forwarded-For entry as the client IP and Kong always appends its
+// peer, so the outermost nginx must SET the header for Keycloak, never append
+// a client-supplied one; otherwise a caller picks the IP Keycloak records
+// (brute-force detection, events).
+describe('Keycloak sees the real client IP', () => {
+  const locationBlock = (conf: string, marker: string) => {
+    const start = conf.indexOf(marker);
+    expect(start).toBeGreaterThan(-1);
+    // End at the block's closing-brace line; Jinja `{{ }}` sit inside it.
+    const end = conf.slice(start).search(/\n\s*\}\s*\n/);
+    return conf.slice(start, start + end);
+  };
+
+  test('host nginx sets X-Forwarded-For for /auth/realms/ before Kong', () => {
+    const block = locationBlock(
+      read('local-setup/ansible/templates/nginx-site.conf.j2'), 'location ^~ /auth/realms/ {');
+    expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block).not.toContain('$proxy_add_x_forwarded_for');
+    // Same header buffers as nginx-identity.conf, or login 502s (review, #2193).
+    expect(block).toContain('proxy_buffer_size 64k;');
+  });
+
+  test('a preserved vhost gets a warning to add the block by hand', () => {
+    expect(read('local-setup/ansible/playbook-deploy.yml'))
+      .toContain('name: "Host nginx — warn: preserved vhost lacks the Keycloak client-IP block"');
+  });
+
+  test('the identity compose nginx sets it for Keycloak too', () => {
+    const block = locationBlock(
+      read('backend/identity-bff/deploy/digit-compose/nginx-identity.conf'), 'location /auth/realms/ {');
+    expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block).not.toContain('$proxy_add_x_forwarded_for');
+  });
+
+  // Setting the header only helps if nothing reaches Kong or Keycloak except
+  // through that nginx. Kong's proxy port widens solely for the macOS thin
+  // deploy, whose nginx is a container on host.docker.internal.
+  test('Kong and Keycloak are published on loopback on Linux', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    expect(compose).toContain('- "${PROXY_BIND_IP:-127.0.0.1}:18000:8000"');
+    expect(compose).not.toMatch(/- "(0\.0\.0\.0:)?18000:8000"/);
+    expect(compose).toContain('- "${BIND_IP:-127.0.0.1}:18180:8180"');
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain('BIND_IP=127.0.0.1');
+    expect(env).toContain("PROXY_BIND_IP={{ '0.0.0.0' if ansible_system == 'Darwin' else '127.0.0.1' }}");
+    expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml'))
+      .toContain('- "127.0.0.1:18180:8180"');
   });
 });
 

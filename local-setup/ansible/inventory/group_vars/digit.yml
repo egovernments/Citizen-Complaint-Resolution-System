@@ -180,17 +180,8 @@ core_mobile_configs: {}
 footer_logo_url: "/digit-ui/brand/digit-footer.png"
 footer_bw_logo_url: "/digit-ui/brand/digit-footer-bw.png"
 
-# Tenant-restriction lists. Empty = no filtering. Tenants override
-# when they want to surface only their own city or hide modules.
-login_tenant_allowlist: []
+# Modules hidden from the employee UI for this deployment.
 employee_module_denylist: []
-
-# Tenant switcher in the employee top bar and the mobile drawer.
-# null  - decided by the UI: shown only where the signed-in user holds roles
-#         in more than one tenant, which is the useful rule (CCRS#2038).
-# true  - always shown, even with a single tenant.
-# false - never shown, even where switching is possible.
-show_tenant_switcher: null
 
 # Client-side dashboard render-lag instrumentation (#1110): the supervisor
 # dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.

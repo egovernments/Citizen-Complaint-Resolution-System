@@ -53,7 +53,6 @@ the box does hold a live database, see
 | `tenant_id` | Your **city** tenant, where complaints actually live. Must start with `<state_root>.` | `kenya.nairobi` |
 | `boot_tenant` | Default tenant for the citizen app. Same as `tenant_id` is right. | `kenya.nairobi` |
 | `ui_state_tenant_id` | The tenant the app lands on after login. Point at the **city**. | `kenya.nairobi` |
-| `login_tenant_allowlist` | Which tenants appear in the login screen's City dropdown. List both. | `[kenya, kenya.nairobi]` |
 | `map_center` | Where the complaint map opens. **Required — the deploy fails without it.** | `{lat: -1.2864, lng: 36.8172}` |
 | `pgr_boundary_highest_level`<br>`pgr_boundary_lowest_level`<br>`boundary_type` | What your administrative areas are called, largest first. These are labels on the complaint form, so use the words your staff use. | `County`, `Ward`, `Ward` |
 | `core_mobile_configs` | Your country's phone-number rule. Get this wrong and every citizen signup is rejected. | `+254` / `^0?[17][0-9]{8}$` |
