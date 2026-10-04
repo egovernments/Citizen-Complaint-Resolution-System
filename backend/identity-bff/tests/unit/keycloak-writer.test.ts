@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { updateKeycloakUser, isMirrorOnlyAdminEvent } from "../../src/modules/sync/keycloak-writer.js";
+import { updateKeycloakUser, isMirrorOnlyAdminEvent, KeycloakConflictError } from "../../src/modules/sync/keycloak-writer.js";
 import { config } from "../../src/infrastructure/config.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), current: vi.fn(), assertHeld: vi.fn() }));
@@ -17,6 +17,25 @@ beforeEach(() => {
 });
 
 describe("Keycloak safe writer", () => {
+  it("allows an explicit email change only as unverified and keeps username/enabled protected", async () => {
+    await updateKeycloakUser("person/1", user => ({ ...user, email: "new@example.test", emailVerified: false,
+      username: "other", enabled: true }), { allowEmailChange: true });
+    const body = JSON.parse(mocks.request.mock.calls[1][1].body);
+    expect(body).toMatchObject({ email: "new@example.test", emailVerified: false, username: "original" });
+    expect(body).not.toHaveProperty("enabled");
+  });
+  it.each([{ email: "", emailVerified: false }, { email: "new@example.test", emailVerified: true }])(
+    "rejects clearing or trusting the email in the opt-in writer", async change => {
+      await expect(updateKeycloakUser("person/1", user => ({ ...user, ...change }), { allowEmailChange: true }))
+        .rejects.toThrow("emailVerified=false");
+      expect(mocks.request).toHaveBeenCalledTimes(1);
+    });
+  it("surfaces an email conflict as a typed error", async () => {
+    mocks.request.mockReset().mockResolvedValueOnce(new Response('{"username":"original"}'))
+      .mockRejectedValueOnce(Object.assign(new Error("conflict"), { status: 409 }));
+    await expect(updateKeycloakUser("person/1", user => ({ ...user, email: "held@example.test", emailVerified: false }),
+      { allowEmailChange: true })).rejects.toBeInstanceOf(KeycloakConflictError);
+  });
   it("suppresses only BFF service-client user mirror reruns, not other admins", async () => {
     const priorSecret = config.keycloakAdminClientSecret;
     try {

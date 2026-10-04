@@ -18,7 +18,9 @@ const account = (uuid: string, name = "Staff Name"): DigitAccount => ({ uuid, na
   roles: [{ code: "EMPLOYEE", tenantId: "tenant" }] });
 const entry = (uuid: string, kind = "staff", tenantId = "tenant") => ({ kind, tenantId, uuid,
   boundAt: 10, active: true, roles: [{ code: "EMPLOYEE", tenantId }] });
-const bindings = (...items: unknown[]) => JSON.stringify({ v: 1, bindings: items });
+const bindings = (...items: object[]) => JSON.stringify({ v: 1, bindings: items.map(item => ({
+  invitationVersion: 1, createdAt: 1, createdBy: { kind: "workload" }, ...item,
+})) });
 const mirrorEntries = () => JSON.parse(user.attributes!["digit.accounts"][0]).entries;
 
 beforeAll(() => {
