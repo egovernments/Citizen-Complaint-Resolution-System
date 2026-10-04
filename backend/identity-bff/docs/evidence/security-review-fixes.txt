@@ -1,0 +1,53 @@
+Security review fixes — 2026-10-05
+
+Base: efec9f181 (identity/completion-base, onboarding worker cutover).
+Implementation: 3da040829bdbed7dbb910cf806d89e517b51ce83.
+
+Changes:
+- Delete organization-members/_invite, its registration, contract entry and service.
+  The replacement e2e test asserts 404 with and without a valid session.
+  Citizen account-link routes remain covered by the full BFF suite.
+- Admin _updateEmail requires target != caller, tenant role containment,
+  and no active binding or Organization membership in another workspace.
+  Reads occur under the target person lease; disabled workspace membership
+  also blocks recovery. Denials return 403 ADMIN_EMAIL_CHANGE_NOT_ALLOWED.
+  Existing workspace inventory and membership readers fail closed.
+- All three local-setup Compose variants default fixed OTP off. Ansible uses
+  identity_dev_fixed_otp (default false) to opt into fixed OTP/log delivery.
+  An explicit real OTP sender remains configurable independently.
+- AccountPage logout exercises real clearLocalSession and localStorage:
+  the persisted token remains until acknowledgement and disappears afterward;
+  signing out other sessions retains it.
+
+Executed checks after rebase:
+- backend/identity-bff: REDIS_PORT=16391 npx vitest run
+  52 passed files, 3 skipped; 669 passed tests, 11 skipped, 2 todo.
+- backend/identity-bff: npx tsc --noEmit — exit 0.
+- local-setup/tests: npx jest --runInBand static/ with Python 3.10/Jinja2/PyYAML
+  on PATH — 6 passed suites, 168 passed tests.
+- configurator: TZ=UTC npx vitest run
+  61 passed files, 1 failed; 577 passed tests, 1 failed.
+  The only failure is the unchanged postal seed/dump mismatch below.
+  Configurator source did not change in the rebase.
+- configurator: npx vitest run src/identity/AccountPage.test.tsx — 5 passed.
+- configurator: npx tsc --noEmit -p tsconfig.app.json — exit 0.
+- git diff --check — clean.
+
+Local setup: npm ci; build configurator/packages/data-provider; install native
+Rollup/esbuild optional packages matching the lockfile when npm omitted them.
+Jinja2 is already supplied by the Ansible CI environment. The test README
+records the Python dependency and optional PYTHON interpreter override.
+UTC avoids an existing local-time/UTC mismatch in validation.employeeDates.
+No live deployment was exercised.
+
+Unchanged configurator failure, proven from base Git objects:
+configurator/src/admin/validation.postalCode.test.ts: base=7cfd01a2eafc510f1ed8c923d3f81c0e18684af0 current=7cfd01a2eafc510f1ed8c923d3f81c0e18684af0 unchanged=True
+local-setup/db/full-dump.sql: base=37152ad13281ccb6fa85c0c7216c3a778a6cd0f2 current=37152ad13281ccb6fa85c0c7216c3a778a6cd0f2 unchanged=True
+utilities/default-data-handler/src/main/resources/mdmsData/common-masters/common-masters.FormValidations.json: base=5fb809d9dc922f52548818b5a6322f3c2da38245 current=5fb809d9dc922f52548818b5a6322f3c2da38245 unchanged=True
+Base DDH postalCode regex: ^[0-9]{5}$
+Base dump postalCode regex: ^[1-9][0-9]{5}$
+
+The failing assertion is configurator/src/admin/validation.postalCode.test.ts:171.
+No changes were made to postal validation, DDH seed data, or full-dump.sql.
+Root must route this separate baseline correction or accept it as a known
+failure when reviewing this security-only PR.
