@@ -6,6 +6,10 @@ import { resetAdminToken } from "../../src/integrations/keycloak/admin-session.j
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { updateKeycloakUser } from "../../src/modules/sync/keycloak-writer.js";
 import { keycloakTestClient } from "../fixtures/keycloak/client.js";
+import { mirrorPerson } from "../../src/modules/sync/mirror.js";
+
+const digit = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("../../src/modules/sync/digit-reader.js", () => ({ readDigitAccount: digit.read }));
 
 describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", () => {
   let client: Awaited<ReturnType<typeof keycloakTestClient>>;
@@ -78,5 +82,21 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", (
     const current = await (await client.request(`/users/${subject}`)).json();
     expect(current.enabled).toBe(false);
     expect(current.firstName).toBe("After");
+  });
+
+  it("never mirrors a masked DIGIT name into the real user profile", async () => {
+    const { subject } = await createUser();
+    const uuid = randomUUID();
+    await withPersonLease(subject, () => updateKeycloakUser(subject, user => ({ ...user,
+      attributes: { ...user.attributes, "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "tenant", uuid,
+        state: "active", invitationVersion: 1, createdAt: 1, boundAt: 1, createdBy: { kind: "workload" } }] })] },
+    })));
+    digit.read.mockResolvedValue({ uuid, tenantId: "tenant", type: "EMPLOYEE", userName: "employee",
+      name: "****", active: true, roles: [{ code: "EMPLOYEE", tenantId: "tenant" }] });
+    await mirrorPerson(subject);
+    const current = await (await client.request(`/users/${subject}`)).json();
+    expect(current.firstName).toBe("Before");
+    expect(current.lastName).toBe("Name");
+    expect(JSON.parse(current.attributes["digit.accounts"][0]).entries[0]).toMatchObject({ uuid, active: true });
   });
 });

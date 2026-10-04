@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { updateKeycloakUser } from "../../src/modules/sync/keycloak-writer.js";
+import { updateKeycloakUser, isMirrorOnlyAdminEvent } from "../../src/modules/sync/keycloak-writer.js";
+import { config } from "../../src/infrastructure/config.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), current: vi.fn(), assertHeld: vi.fn() }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request }));
@@ -16,6 +17,18 @@ beforeEach(() => {
 });
 
 describe("Keycloak safe writer", () => {
+  it("suppresses only BFF service-client user mirror reruns, not other admins", async () => {
+    const priorSecret = config.keycloakAdminClientSecret;
+    try {
+      Object.assign(config, { keycloakAdminClientSecret: "fixture-only" });
+      const event = { resourceType: "USER", operationType: "UPDATE", resourcePath: "users/person",
+        authDetails: { clientId: config.keycloakAdminClientId } };
+      expect(await isMirrorOnlyAdminEvent(event)).toBe(true);
+      expect(await isMirrorOnlyAdminEvent({ ...event, authDetails: { clientId: "admin-console" } })).toBe(false);
+      expect(await isMirrorOnlyAdminEvent({ ...event, operationType: "DELETE" })).toBe(false);
+      expect(await isMirrorOnlyAdminEvent({ ...event, resourcePath: "users/person/credentials" })).toBe(false);
+    } finally { Object.assign(config, { keycloakAdminClientSecret: priorSecret }); }
+  });
   it("preserves fresh identity/profile fields even when the callback mutates them", async () => {
     await updateKeycloakUser("person/1", user => {
       user.email = "unverified@example.test";
