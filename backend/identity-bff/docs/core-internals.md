@@ -95,6 +95,29 @@ export function citizenAccess(subject: string): Promise<{ allowed: boolean; deni
   lease and the uuid lock and write `digit.bindings` + `digit.boundUuids` in one
   PUT through the sync module's Keycloak writer (§4).
 
+```ts
+export type BindingActor =
+  | { kind: "browser"; subject: string; requestId: string }        // _link: actor rules apply
+  | { kind: "workload"; operationId: string; restartNo: number }   // PGR bindings/_ensure: trusted
+  | { kind: "migration" };                                         // item 19
+
+export class BindingConflictError extends Error {}                 // 409 BINDING_CONFLICT
+
+/** Make (subject, tenantId) → uuid active. Takes the person lease (re-entrant) and the uuid lock itself. */
+export function ensureActive(input: {
+  subject: string; tenantId: string; uuid: string; actor: BindingActor;
+}): Promise<{ binding: Binding; created: boolean }>;
+```
+
+`ensureActive` rules:
+- same key, same uuid, already `active` → `{created: false}`, no write;
+- same key, different uuid, or uuid bound to another person → `BindingConflictError`;
+- same key, `removed` → `BindingConflictError` (a removed binding is never
+  resurrected; only an explicit browser re-invite makes it `pending` again);
+- the workload actor skips the browser actor rules and does **not** set the
+  credential: the founder's credential is set at their first `_select` (B8).
+  Browser and migration actors leave credential activation to the caller.
+
 ## 3. The credential module (§6, item 7) — `accounts/credential-service.ts`
 
 ```ts
@@ -158,6 +181,17 @@ export function revokeAccount(subject: string, account: { tenantId: string; uuid
 
 /** Inventory: record a minted token under the lease fence. Called by _select. */
 export function recordToken(lease: PersonLease, account: { tenantId: string; uuid: string }, login: DigitLogin, kind: "staff" | "citizen"): Promise<void>;
+
+/**
+ * An Organization went FAILED/disabled, or its MDMS tenant was deactivated.
+ * Durably enqueue one subject job per member (Keycloak Organization members ∪
+ * bindingsFor(tenantId)) on the revoke-subject-jobs set, then drain them one
+ * person at a time (never two leases at once). Returns once every job is
+ * enqueued; a failed person stays queued for the retry worker. Idempotent:
+ * callers repeat it on every repeat of the transition, even if the stored
+ * state already matches, so an interrupted fan-out is finished.
+ */
+export function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISABLED" | "TENANT_INACTIVE"): Promise<void>;
 
 /** Cached token for this account, validated cheaply against egov-user, or null. */
 export function cachedToken(lease: PersonLease, account: { tenantId: string; uuid: string }): Promise<DigitLogin | null>;
