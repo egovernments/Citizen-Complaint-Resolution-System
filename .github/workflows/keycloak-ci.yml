@@ -30,6 +30,7 @@ jobs:
           bash -n configure-keycloak.sh tests/run-live-check.sh
           shellcheck configure-keycloak.sh tests/run-live-check.sh
           jq -e . realm.json >/dev/null
+          python3 -m unittest discover -s tests -p 'test_*.py'
       # Applies the script twice to a throwaway Keycloak 26.7.3, then signs in
       # through it: events, self-service actions (design §8) and the
       # configuration-only changes of design §9.

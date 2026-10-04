@@ -1,0 +1,66 @@
+{
+  "commit": "d3e2c8a0ce5da63a0d1cc3100af32956e5a3e335",
+  "local": {
+    "theme_unit": {
+      "passed": 57,
+      "log": "theme-unit.log"
+    },
+    "theme_typecheck": {
+      "exit": 0,
+      "log": "theme-typecheck.log"
+    },
+    "bff_typecheck": {
+      "exit": 0,
+      "log": "bff-typecheck.log"
+    },
+    "bff_affected_regression": {
+      "passed": 70,
+      "exit": 0,
+      "log": "bff-regression.log"
+    },
+    "deployment_contracts": {
+      "passed": 111,
+      "exit": 0,
+      "log": "deployment-contracts.log"
+    },
+    "shellcheck": {
+      "exit": 0,
+      "version": "0.10.0",
+      "log": "shellcheck.log"
+    },
+    "browser_helper": {
+      "passed": 2,
+      "exit": 0,
+      "log": "browser-helper.log"
+    }
+  },
+  "ci": {
+    "image_and_smoke": {
+      "status": "passed",
+      "browser_tests": 1,
+      "url": "https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/actions/runs/37213167298/job/111468263768"
+    },
+    "theme": {
+      "status": "passed",
+      "unit_tests": 57,
+      "screenshots": 26,
+      "url": "https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/actions/runs/37213167298/job/111468263615"
+    }
+  },
+  "pending": [
+    "Corrected real Keycloak realm harness CI result",
+    "BFF CI after owner JWKS port fallback"
+  ],
+  "outside_scope": "Full real BFF/Redis/egov-user/egov-otp gate; BFF CI invalid JWKS port routed to surfaces-owner/surf-bff",
+  "diagnostic_live": {
+    "passed": 18,
+    "total": 24,
+    "exit": 1,
+    "elapsed_seconds": 699,
+    "log": "live-check-diagnostic.log",
+    "note": "Before AIA/IdP test-driver fixes and root old-address notification deferral; not completion evidence."
+  },
+  "decisions": {
+    "old_address_notification": "Deferred by identity-root approval apr_2a08b76cd6b041a8b7958fb3d8f67999; new-address verification remains required."
+  }
+}

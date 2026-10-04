@@ -46,11 +46,16 @@ jq -e . "$REALM_CONFIG" >/dev/null || {
   printf 'cannot read the declared realm config %s\n' "$REALM_CONFIG" >&2
   exit 1
 }
-readonly EMPLOYEE_OTP_FLOW=$(jq -r '.employeeFlow.otpSubFlow' "$REALM_CONFIG")
-readonly EMPLOYEE_OTP_REQUIREMENT=$(jq -r '.employeeFlow.otpRequirement' "$REALM_CONFIG")
-readonly ACCOUNT_ACTIONS=$(jq -r '.clientPolicy.accountActions | join(",")' "$REALM_CONFIG")
-readonly PASSWORD_SETUP_PATH=$(jq -r '.clientPolicy.passwordSetupRedirectPath' "$REALM_CONFIG")
-readonly IDP_SYNC_MODE=$(jq -r '.identityProviders.syncMode' "$REALM_CONFIG")
+EMPLOYEE_OTP_FLOW=$(jq -r '.employeeFlow.otpSubFlow' "$REALM_CONFIG")
+readonly EMPLOYEE_OTP_FLOW
+EMPLOYEE_OTP_REQUIREMENT=$(jq -r '.employeeFlow.otpRequirement' "$REALM_CONFIG")
+readonly EMPLOYEE_OTP_REQUIREMENT
+ACCOUNT_ACTIONS=$(jq -r '.clientPolicy.accountActions | join(",")' "$REALM_CONFIG")
+readonly ACCOUNT_ACTIONS
+PASSWORD_SETUP_PATH=$(jq -r '.clientPolicy.passwordSetupRedirectPath' "$REALM_CONFIG")
+readonly PASSWORD_SETUP_PATH
+IDP_SYNC_MODE=$(jq -r '.identityProviders.syncMode' "$REALM_CONFIG")
+readonly IDP_SYNC_MODE
 # How long Keycloak keeps user and admin events. The BFF reads them to revoke
 # DIGIT tokens, so this must outlast the longest outage a box may have.
 readonly EVENTS_EXPIRATION=${KEYCLOAK_EVENTS_EXPIRATION_SECONDS:-$(jq -r '.events.eventsExpiration' "$REALM_CONFIG")}
@@ -83,8 +88,9 @@ readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 # digit-ui lives at /{tenantSlug}/digit-ui/... on the same origin as the BFF.
 readonly DIGIT_UI_BASE_URL=${IDENTITY_DIGIT_UI_BASE_URL:-${IDENTITY_REDIRECT_URI%%/identity/*}/}
 readonly ALLOWED_ORIGINS=${IDENTITY_ALLOWED_ORIGINS:-${IDENTITY_ALLOWED_ORIGIN:-}}
-readonly ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
+ALLOWED_ORIGINS_JSON=$(printf '%s' "$ALLOWED_ORIGINS" | jq -Rc \
   'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
+readonly ALLOWED_ORIGINS_JSON
 
 temporary_admin=false
 if [ -z "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] || [ -z "${KC_BOOTSTRAP_ADMIN_PASSWORD:-}" ]; then

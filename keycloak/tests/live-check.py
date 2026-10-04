@@ -132,7 +132,10 @@ class SignIn:
         return self
 
     def password(self, username, password=PASSWORD):
-        return self.submit(("username", "password"), {"username": username, "password": password})
+        if self.has_form("username", "password"):
+            return self.submit(("username", "password"), {"username": username, "password": password})
+        self.submit(("username",), {"username": username})
+        return self.submit(("password",), {"password": password})
 
     def has_form(self, *fields):
         return any(all(field in found for field in fields) for _, found in self.page.forms())
@@ -348,8 +351,9 @@ def _():
         page = Browser().request(action, fields, stop_at=REDIRECT)
     user = admin("GET", f"/users/{STATE['emp']}")
     assert user["email"] == "emp-new@example.test" and user["emailVerified"], user
-    mail_to("emp@example.test", started)
-    return "new address verified; old address notified"
+    # Identity-root deferred old-address notification on 2026-10-04:
+    # apr_2a08b76cd6b041a8b7958fb3d8f67999. Stock Keycloak only verifies the new address.
+    return "new address verified; old-address notification explicitly deferred"
 
 
 @check("§8 VERIFY_EMAIL for an unverified address")
@@ -357,6 +361,9 @@ def _():
     user_id = create_user("emp-unverified", "unverified@example.test", verified=False)
     started = time.time()
     signin = SignIn(kc_action="VERIFY_EMAIL").password("emp-unverified")
+    # An application-initiated VERIFY_EMAIL first asks the user to send it.
+    action, fields = signin.page.forms()[0]
+    signin.page = signin.browser.request(action, fields, stop_at=REDIRECT)
     link = first_link(mail_to("unverified@example.test", started))
     signin.page = signin.browser.request(link, stop_at=REDIRECT)
     if not signin.done and signin.page.forms():
@@ -388,7 +395,7 @@ def ensure_upstream():
         "config": {"clientId": "digit", "clientSecret": "upstream-secret", "clientAuthMethod": "client_secret_post",
                    "authorizationUrl": f"{outside}/auth", "tokenUrl": f"{inside}/token",
                    "jwksUrl": f"{inside}/certs", "validateSignature": "true", "useJwksUrl": "true",
-                   "issuer": "http://127.0.0.1:8180/realms/upstream", "defaultScope": "openid email profile",
+                   "issuer": f"{KC}/realms/upstream", "defaultScope": "openid email profile",
                    "syncMode": "FORCE"}}, token)
     admin("POST", "/identity-provider/instances/upstream/mappers", {
         "name": "department", "identityProviderAlias": "upstream",
@@ -423,6 +430,9 @@ def _():
 def _():
     ensure_upstream()
     signin = SignIn(kc_action="idp_link:upstream").password("emp-nameless", "Changed-pass-2")
+    action, fields = signin.page.forms()[0]
+    fields["continue"] = "Continue"
+    signin.page = signin.browser.request(action, fields, stop_at=REDIRECT)
     upstream_login(signin).tokens()
     links = admin("GET", f"/users/{STATE['emp']}/federated-identity")
     assert [link["identityProvider"] for link in links] == ["upstream"], links
@@ -434,11 +444,14 @@ def _():
     before = admin("GET", f"/users/{STATE['emp']}")
     admin("PUT", f"/users/{STATE['upstream']}", {"firstName": "Renamed", "lastName": "Elsewhere"},
           realm="upstream")
+    [mapper] = admin("GET", "/identity-provider/instances/upstream/mappers")
+    mapper["config"]["attribute.value"] = "changed-by-provider"
+    admin("PUT", f"/identity-provider/instances/upstream/mappers/{mapper['id']}", mapper)
     upstream_login(SignIn(client=BFF, kc_idp_hint="upstream")).tokens()
     after = admin("GET", f"/users/{STATE['emp']}")
     assert after.get("firstName") == before.get("firstName"), (before.get("firstName"), after.get("firstName"))
     assert after.get("lastName") == before.get("lastName")
-    assert "department" not in (after.get("attributes") or {}), after.get("attributes")
+    assert (after.get("attributes") or {}).get("department") == (before.get("attributes") or {}).get("department")
 
 
 @check("LOGOUT is recorded when a session is signed out")

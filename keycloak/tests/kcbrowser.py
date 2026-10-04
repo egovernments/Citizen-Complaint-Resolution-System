@@ -37,6 +37,10 @@ class Page:
                     continue
                 value = re.search(r'value="([^"]*)"', tag.group(0))
                 kind = re.search(r'type="([^"]*)"', tag.group(0))
+                # A browser sends only the clicked submit control, never both
+                # Continue and Cancel. Callers add the chosen control explicitly.
+                if kind and kind.group(1).lower() in ("submit", "button", "reset"):
+                    continue
                 if kind and kind.group(1).lower() in ("checkbox", "radio") and "checked" not in tag.group(0):
                     continue
                 fields[html.unescape(name.group(1))] = html.unescape(value.group(1)) if value else ""

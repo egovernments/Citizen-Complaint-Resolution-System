@@ -56,7 +56,7 @@ Configuration-only checks rerun the script, so the suite takes several minutes.
 
 The real-Keycloak checks cover event permissions and retention, profile policy,
 IMPORT behavior, TOTP enrollment/enforcement/removal, password changes, verified
-email changes and old-address notification, and IdP linking. A passing result
+email changes and IdP linking. A passing result
 from this suite does **not** prove the BFF callback/session/revocation integration,
 provider-unlink last-method protection, or the full §11 gate with real Redis,
 egov-user and non-fixed egov-otp. Those gates remain with their owning lanes.
@@ -64,3 +64,15 @@ egov-user and non-fixed egov-otp. Those gates remain with their owning lanes.
 Keycloak CI separately builds the custom image, smoke-tests the packaged theme,
 and runs screenshot regression in the pinned Playwright container. A stock-image
 realm test alone does not prove custom theme packaging or magic-link behavior.
+
+## Deferred behavior
+
+Identity-root explicitly deferred notification to the old email address on
+2026-10-04 (bridge approval `apr_2a08b76cd6b041a8b7958fb3d8f67999`). D18 still
+requires verification of the new address, DIGIT write-through only after
+verification, and the admin email-change path. This PR adds no custom Keycloak
+SPI, listener or notification workaround. The stock 26.7.3 runtime and existing
+magic-link provider remain the supported extension boundary.
+
+The new-address verification check remains a required live test. The BFF's
+verified-only write-through and admin route are verified by their owning lanes.
