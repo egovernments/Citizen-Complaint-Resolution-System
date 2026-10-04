@@ -17,8 +17,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Lease contract for the external provisioning worker. PGR records progress and
- * outcome only; it performs no tenant, Keycloak or DIGIT account provisioning.
+ * Transactional lease and outcome boundary for the PGR provisioning runner.
  */
 @Service
 public class OnboardingWorkerService {

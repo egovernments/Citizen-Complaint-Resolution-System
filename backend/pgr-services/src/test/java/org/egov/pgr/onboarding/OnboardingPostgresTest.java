@@ -114,4 +114,53 @@ public class OnboardingPostgresTest {
         }
         assertEquals("renamed-example",repository.findSignup(signup.getId()).orElseThrow().getUrlSlug());
     }
+    @Test public void actualBffBoundFounderRestartCollisionAndCrashBeforeAcknowledgement() throws Exception {
+        String base=System.getProperty("onboarding.test.bff");Assume.assumeNotNull(base);
+        var http=new org.springframework.web.client.RestTemplate();
+        String uniqueTenant="recovery"+signup.getId().toString().replaceAll("[^a-f]","");
+        signup.setRequestedTenantId(uniqueTenant);signup.setUrlSlug(uniqueTenant);signup.setOrganizationAlias(uniqueTenant);signup.setAccountCode(uniqueTenant.toUpperCase());signup.setAccountName(uniqueTenant);
+        jdbc.update("UPDATE eg_pgr_onboarding_signup SET requested_tenant_id=?,url_slug=?,organization_alias=?,account_code=?,account_name=? WHERE id=?",uniqueTenant,uniqueTenant,uniqueTenant,signup.getAccountCode(),uniqueTenant,signup.getId());
+        Map<?,?> person=http.postForObject(base+"/__fixture/person",Map.of("tenantId",signup.getRequestedTenantId()),Map.class);
+        String subject=person.get("subject").toString(),uuid=person.get("uuid").toString();
+        jdbc.update("UPDATE eg_pgr_onboarding_signup SET owner_subject=? WHERE id=?",subject,signup.getId());signup.setOwnerSubject(subject);
+        var service=transactional(new OnboardingService(repository,new OnboardingIdentifierService()));
+        var auth=mock(IdentitySessionClient.class);when(auth.introspect(any())).thenReturn(new OnboardingPrincipal("issuer",subject,"founder@example.test","Founder",true));when(auth.identifierAvailable(any(),any())).thenReturn(true);
+        MockMvc mvc=MockMvcBuilders.standaloneSetup(new OnboardingApiController(auth,new OnboardingIdentifierService(),service)).build();
+        String body=mapper.writeValueAsString(Map.of("Signup",Map.of("id",signup.getId().toString())));
+        var env=new org.springframework.mock.env.MockEnvironment().withProperty("pgr.onboarding.identity-bff.url",base).withProperty("pgr.onboarding.identity-bff.token","pgr-fixture-token");
+        var client=new OnboardingProvisionerClient(http,mapper,env);
+        var realSteps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
+        var worker=transactional(new OnboardingWorkerService(repository,"INPUT_REJECTED,SLUG_TAKEN"));
+        var publisher=transactional(new OnboardingLifecyclePublisher(repository,realSteps));
+        for(int restart=0;restart<=1;restart++) {
+            mvc.perform(post("/v2/onboarding/signups/_submit").header("Cookie","test").header("Idempotency-Key","attempt-"+restart).contentType("application/json").content(body)).andExpect(status().isAccepted());
+            var lease=claim();var op=lease.getOperation();assertEquals(restart,op.getRestartNo());op.setFounderDigitUuid(uuid);
+            var currentSignup=repository.findSignup(signup.getId()).orElseThrow();var progress=new OnboardingProgress(repository,op,lease.getLeaseToken());
+            for(String step:List.of("ORGANIZATION","MEMBERSHIP","BINDING"))realSteps.perform(step,currentSignup,op,progress);
+            worker.fail(op.getId(),lease.getLeaseToken(),false,"INPUT_REJECTED","input","AFTER_BINDING",List.of("BINDING"));publisher.publishPending();
+            assertNotNull(repository.findOperation(op.getId()).orElseThrow().getLifecyclePublishedAt());
+        }
+        mvc.perform(post("/v2/onboarding/signups/_update").header("Cookie","test").contentType("application/json").content(mapper.writeValueAsString(Map.of("Signup",Map.of("id",signup.getId().toString(),"urlSlug",uniqueTenant+"-changed"))))).andExpect(status().isOk());
+        mvc.perform(post("/v2/onboarding/signups/_submit").header("Cookie","test").header("Idempotency-Key","attempt-2").contentType("application/json").content(body)).andExpect(status().isAccepted());
+        var lease=claim();var op=lease.getOperation();assertEquals(2,op.getRestartNo());assertEquals(uuid,op.getFounderDigitUuid());
+        var currentSignup=repository.findSignup(signup.getId()).orElseThrow();
+        http.postForObject(base+"/__fixture/collision",Map.of("count",2),Map.class);
+        OnboardingFailure collision=assertThrows(OnboardingFailure.class,()->realSteps.perform("ORGANIZATION",currentSignup,op,new OnboardingProgress(repository,op,lease.getLeaseToken())));
+        assertEquals("SLUG_TAKEN",collision.getCode());worker.fail(op.getId(),lease.getLeaseToken(),false,collision.getCode(),"collision","ORGANIZATION",List.of());
+        OnboardingRepository crashRepository=spy(repository);
+        doThrow(new IllegalStateException("crash after BFF publication before PGR acknowledgement")).when(crashRepository).acknowledgePublication(any(),anyLong());
+        var crashing=transactional(new OnboardingLifecyclePublisher(crashRepository,realSteps));assertThrows(IllegalStateException.class,crashing::publishPending);
+        assertNull(repository.findOperation(op.getId()).orElseThrow().getLifecyclePublishedAt());
+        OnboardingFailure terminal=assertThrows(OnboardingFailure.class,()->realSteps.ensureOrganization(currentSignup,repository.findOperation(op.getId()).orElseThrow()));assertEquals("LIFECYCLE_CONFLICT",terminal.getCode());
+        publisher.publishPending();assertNotNull(repository.findOperation(op.getId()).orElseThrow().getLifecyclePublishedAt());
+        mvc.perform(post("/v2/onboarding/signups/_submit").header("Cookie","test").header("Idempotency-Key","attempt-3").contentType("application/json").content(body)).andExpect(status().isAccepted());
+        var resumed=claim();var latest=resumed.getOperation();assertEquals(3,latest.getRestartNo());assertEquals(uuid,latest.getFounderDigitUuid());
+        var progress=new OnboardingProgress(repository,latest,resumed.getLeaseToken());
+        for(String step:List.of("ORGANIZATION","MEMBERSHIP","BINDING"))realSteps.perform(step,repository.findSignup(signup.getId()).orElseThrow(),latest,progress);
+        worker.complete(latest.getId(),resumed.getLeaseToken(),List.of("BINDING"));publisher.publishPending();
+        assertEquals("ACTIVE",repository.findSignup(signup.getId()).orElseThrow().getStatus());assertNotNull(repository.findOperation(latest.getId()).orElseThrow().getLifecyclePublishedAt());
+        assertEquals("ATTEMPT_STALE",assertThrows(OnboardingFailure.class,()->client.identity("organizations/_lifecycle",Map.of("operationId",op.getId().toString(),"restartNo",2,"state","FAILED"))).getCode());
+        var state=http.postForObject(base+"/__fixture/state",Map.of("subject",subject),com.fasterxml.jackson.databind.JsonNode.class);
+        assertEquals(1,state.path("bindings").size());assertEquals(uuid,state.path("bindings").path(0).path("uuid").asText());
+    }
 }

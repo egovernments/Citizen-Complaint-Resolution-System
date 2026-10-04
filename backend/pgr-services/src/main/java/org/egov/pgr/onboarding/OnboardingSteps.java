@@ -70,7 +70,7 @@ public class OnboardingSteps {
             data.put("OfficeTimings", Map.of("Mon - Fri", ""));
             data.put("city", Map.of("code", tenant, "name", signup.getAccountName(), "districtName", "",
                     "districtTenantCode", tenant, "ulbGrade", ""));
-            ensureRecord(tenant, "tenant.tenants", tenant, data);
+            ensureRecord(tenant, "tenant.tenants", tenant, data, true);
         });
         progress.record("encryption:" + tenant, () -> client.post("enc", "/egov-enc-service/crypto/v1/_generatekey", Map.of("tenantId", tenant)));
     }
@@ -101,7 +101,7 @@ public class OnboardingSteps {
             data.put("hasLocalisation", true); data.put("defaultUrl", Map.of("citizen", "", "employee", ""));
             data.put("languages", signup.getLanguages().stream().map(l -> Map.of("label", l, "value", locale(l, signup.getCountryCode()))).toList());
             data.put("localizationModules", List.of(Map.of("label", "common", "value", "rainmaker-common")));
-            ensureRecord(tenant, "common-masters.StateInfo", tenant, data);
+            ensureRecord(tenant, "common-masters.StateInfo", tenant, data, true);
         });
         for (String language : signup.getLanguages()) progress.record("localization:" + language, () -> client.post("localization",
                 "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", List.of(Map.of(
@@ -125,7 +125,8 @@ public class OnboardingSteps {
                     Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant))));
         });
         progress.record("boundary-relationship", () -> {
-            JsonNode existing = client.post("boundary", "/boundary-service/boundary-relationships/_search?tenantId=" + tenant + "&hierarchyType=ADMIN&codes=" + tenant, Map.of()).path("TenantBoundary");
+            JsonNode existing = client.post("boundary", "/boundary-service/boundary-relationships/_search",
+                    Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "hierarchyType", "ADMIN"))).path("TenantBoundary");
             if (!existing.isArray() || existing.isEmpty()) client.post("boundary", "/boundary-service/boundary-relationships/_create",
                     Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "code", tenant, "hierarchyType", "ADMIN", "boundaryType", "ROOT")));
         });
@@ -143,7 +144,12 @@ public class OnboardingSteps {
             seed.founderRoles().forEach(r -> roles.add(Map.of("code", r.asText(), "name", r.asText(), "tenantId", tenant)));
             var user = new LinkedHashMap<String, Object>();
             user.put("name", signup.getFounderName()); user.put("userName", code);
-            user.put("mobileNumber", contact.path("mobileNumber").asText());
+            String phone = contact.path("mobileNumber").asText().replaceAll("[\\s()-]", "");
+            String countryCode = contact.path("countryCode").asText().trim();
+            if (!countryCode.isBlank() && phone.startsWith(countryCode)) phone = phone.substring(countryCode.length());
+            if (phone.isBlank()) throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
+            user.put("mobileNumber", phone);
+            if (!countryCode.isBlank()) user.put("countryCode", countryCode);
             user.put("type", "EMPLOYEE"); user.put("active", true); user.put("tenantId", tenant); user.put("roles", roles);
             if (signup.isFounderEmailVerified()) user.put("emailId", signup.getFounderEmail());
             var employee = new LinkedHashMap<String,Object>();
@@ -153,7 +159,17 @@ public class OnboardingSteps {
             employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", "ONBOARDING_FOUNDER",
                     "fromDate", signup.getCreatedAt(), "isCurrentAssignment", true)));
             employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", "ADMIN", "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
-            client.post("hrms", "/egov-hrms/employees/_create", Map.of("Employees", List.of(employee)));
+            try {
+                client.post("hrms", "/egov-hrms/employees/_create", Map.of("Employees", List.of(employee)));
+            } catch (OnboardingFailure failure) {
+                // Search on the next claim after uncertain/duplicate writes; never create
+                // a different founder to work around an asynchronous HRMS projection.
+                if (failure.isRetryable()) throw failure;
+                String error = failure.getCode().toUpperCase(Locale.ROOT);
+                if (error.contains("DUPLICATE") || error.contains("ALREADY_EXIST") || error.equals("PROVISIONING_HTTP_409"))
+                    throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);
+                throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
+            }
             // HRMS/egov-user persist asynchronously. A later claim searches again before create.
             employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code, Map.of()).path("Employees");
         }
@@ -171,7 +187,8 @@ public class OnboardingSteps {
     private void ensureSchema(String tenant, JsonNode schema) {
         String code = schema.path("code").asText();
         JsonNode found = client.post("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
-        if (found.isArray() && !found.isEmpty()) return;
+        if (!found.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
+        if (!found.isEmpty()) return;
         var body = asMap(schema); body.put("tenantId", tenant); body.put("description", code); body.put("isActive", true);
         client.post("mdms", "/egov-mdms-service/schema/v1/_create", Map.of("SchemaDefinition", body));
         found = client.post("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
@@ -185,6 +202,9 @@ public class OnboardingSteps {
         return rows;
     }
     private void ensureRecord(String tenant, String schema, String id, Map<String,Object> data) {
+        ensureRecord(tenant, schema, id, data, false);
+    }
+    private void ensureRecord(String tenant, String schema, String id, Map<String,Object> data, boolean refresh) {
         JsonNode rows = records(tenant, schema, id);
         if (rows.isEmpty()) {
             client.post("mdms", "/egov-mdms-service/v2/_create/" + schema, Map.of("Mdms", Map.of(
@@ -193,6 +213,14 @@ public class OnboardingSteps {
         }
         if (rows.isEmpty()) throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
         if (!rows.get(0).path("isActive").asBoolean(true)) throw new OnboardingFailure("BASELINE_RECORD_INACTIVE", false);
+        if (refresh && !rows.get(0).path("data").equals(mapper.valueToTree(data))) {
+            var record = asMap(rows.get(0));
+            var merged = asMap(rows.get(0).path("data")); merged.putAll(data); record.put("data", merged);
+            client.post("mdms", "/egov-mdms-service/v2/_update/" + schema, Map.of("Mdms", record));
+            JsonNode visible = records(tenant, schema, id).path(0).path("data");
+            for (var field : data.entrySet()) if (!Objects.equals(visible.get(field.getKey()), mapper.valueToTree(field.getValue())))
+                throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
+        }
     }
     private Map<String,Object> substitute(JsonNode node, String tenant) {
         try { return asMap(mapper.readTree(mapper.writeValueAsString(node).replace("{tenantid}", tenant))); }
