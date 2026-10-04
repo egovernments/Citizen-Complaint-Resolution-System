@@ -2,13 +2,17 @@ Item 10, event poller and retry workers (PR B), 2026-10-04
 
 Executed from backend/identity-bff on Redis 16387:
 - npx tsc --noEmit: passed.
-- REDIS_PORT=16387 npx vitest run: 409 passed, 7 opt-in real-Keycloak
+- REDIS_PORT=16387 npx vitest run: 411 passed, 7 opt-in real-Keycloak
   cases skipped, 15 existing todo, 0 failed.
-- revocation.test.ts + keycloak-poller.test.ts: 37/37 passed.
+- revocation.test.ts + keycloak-poller.test.ts: 39/39 passed.
 - REDIS_PORT=16387 node tests/fixtures/keycloak/run.mjs
   tests/e2e/keycloak-poller.real.test.ts: 2/2 passed against stock 26.7.3.
 
 Acceptance mapping (tests/unit/keycloak-poller.test.ts unless noted):
+- first deployment: 'missing checkpoints bootstrap at now without revocation
+  or historical replay, including the next overlap'. Fenced bootstrap logs
+  its start time and retains startedAt as the overlap lower bound.
+- bootstrap fencing: 'lease loss prevents missing-checkpoint bootstrap'.
 - disable/logout/credential during _select: each '* during _select revokes
   the recorded mint after its lease finishes' (3 cases).
 - during refresh: each '* racing session refresh leaves no recreated session'

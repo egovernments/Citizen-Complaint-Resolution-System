@@ -56,8 +56,17 @@ export async function pollKeycloakEvents(options: PollerOptions = {}): Promise<b
     let swept = false;
     for (const stream of ["user", "admin"] as const) {
       const checkpoint = await redis.hgetall(checkpointKey(stream));
+      if (!checkpoint.time) {
+        const saved = await redis.eval(`
+          if redis.call('get', KEYS[1]) ~= ARGV[1] then return 0 end
+          redis.call('hset', KEYS[2], 'time', ARGV[2], 'idsAtTime', '[]', 'startedAt', ARGV[2])
+          return 1`, 2, leaseKey(), checkpointKey(stream), token, now);
+        if (saved !== 1) throw new PollerLeaseLostError();
+        console.info({ event: "KEYCLOAK_EVENT_CHECKPOINT_BOOTSTRAPPED", stream, time: now });
+        continue;
+      }
       const last = Number(checkpoint.time || 0);
-      const gap = !checkpoint.time || now - last > retention;
+      const gap = now - last > retention;
       if (gap && !swept) {
         for (const subject of await knownSubjects()) {
           await assertHeld();
@@ -65,7 +74,8 @@ export async function pollKeycloakEvents(options: PollerOptions = {}): Promise<b
         }
         swept = true;
       }
-      const from = gap ? (Number.isFinite(retention) ? Math.max(0, now - retention) : 0) : Math.max(0, last - OVERLAP_MS);
+      // Keep overlap from replaying pre-bootstrap events on subsequent polls.
+      const from = Math.max(Number(checkpoint.startedAt || 0), gap ? (Number.isFinite(retention) ? Math.max(0, now - retention) : 0) : Math.max(0, last - OVERLAP_MS));
       for (let first = 0; ; first += PAGE_SIZE) {
         await assertHeld();
         const events = await source.page(stream, from, now, first, PAGE_SIZE);

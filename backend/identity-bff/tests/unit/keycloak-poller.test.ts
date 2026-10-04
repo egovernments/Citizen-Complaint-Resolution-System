@@ -48,6 +48,38 @@ beforeEach(async () => {
 afterAll(async () => { vi.restoreAllMocks(); await cleanup(); await closeCache(); });
 
 describe("Keycloak event poller", () => {
+  it("missing checkpoints bootstrap at now without revocation or historical replay, including the next overlap", async () => {
+    await getRedis().del(checkpointKey("user"), checkpointKey("admin"));
+    const sid = await session();
+    await withPersonLease(subject, lease => recordToken(lease, account, { accessToken: "digit", expiresAt: Date.now() + 600000, user: account }, "staff"));
+    events.user = [event("old-reset", { type: "UPDATE_CREDENTIAL", details: { credential_type: "password" } })];
+    events.admin = [adminEvent("disable")];
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    await pollKeycloakEvents({ source, effect, now });
+    expect(source.page).not.toHaveBeenCalled();
+    expect(keycloak.listRevocationUsers).not.toHaveBeenCalled();
+    for (const stream of ["user", "admin"] as const) {
+      expect(await getRedis().hgetall(checkpointKey(stream))).toEqual({ time: String(now), idsAtTime: "[]", startedAt: String(now) });
+      expect(log).toHaveBeenCalledWith({ event: "KEYCLOAK_EVENT_CHECKPOINT_BOOTSTRAPPED", stream, time: now });
+    }
+    events.user.push(event("new-email", { time: now + 1, type: "VERIFY_EMAIL" }));
+    await pollKeycloakEvents({ source, effect, now: now + 1000 });
+    expect(source.page).toHaveBeenCalledWith("user", now, now + 1000, 0, 100);
+    expect(sync.propagateVerifiedIdentifiers).toHaveBeenCalledTimes(1);
+    expect(await getIdentitySession(sid)).not.toBeNull();
+    expect(await readToken(account)).not.toBeNull();
+    expect(digit.revokeToken).not.toHaveBeenCalled();
+  });
+  it("lease loss prevents missing-checkpoint bootstrap", async () => {
+    await getRedis().del(checkpointKey("user"), checkpointKey("admin"));
+    vi.mocked(source.retentionMs).mockImplementation(async () => {
+      await getRedis().set(key("kc-events:lease"), "other");
+      return 86400_000;
+    });
+    await expect(pollKeycloakEvents({ source, effect, now })).rejects.toThrow();
+    expect(await getRedis().exists(checkpointKey("user"), checkpointKey("admin"))).toBe(0);
+    expect(source.page).not.toHaveBeenCalled();
+  });
   it("dedupes (time,id), processes late out-of-order events, and overlaps windows", async () => {
     events.user = [event("b"), event("a", { time: now - 200 }), event("b")];
     const apply = vi.fn(async () => {});
