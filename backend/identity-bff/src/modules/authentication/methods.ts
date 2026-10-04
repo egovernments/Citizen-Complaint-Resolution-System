@@ -44,18 +44,18 @@ function methodIds(value: string | undefined, attribute: string, optional = fals
  * configurator, employee and citizen journeys can offer different methods
  * without sharing a client or a flow.
  */
-async function loadIdentityMethodCatalog(surface: IdentitySurface): Promise<IdentityMethodCatalog> {
+async function loadIdentityMethodCatalog(surface: IdentitySurface, readiness = false): Promise<IdentityMethodCatalog> {
   // The same surface -> client mapping authorize uses; a client without a
   // secret is absent from it.
   const oidc = oidcClientForSurface(surface, "password");
   const empty = { signin: [], signup: [], providers: new Map(), magicLinkEnabled: false };
   if (!oidc) {
-    if (surfaceContextKind(surface) === "citizen") return empty;
+    if (!readiness && surfaceContextKind(surface) === "citizen") return empty;
     throw new IdentityAdminError(`The ${surface} sign-in client is not configured`, 503);
   }
   const client = await identityClient(oidc.clientId);
   if (!client?.enabled || !client.standardFlowEnabled) {
-    if (surfaceContextKind(surface) === "citizen") return empty;
+    if (!readiness && surfaceContextKind(surface) === "citizen") return empty;
     throw new IdentityAdminError(`The Keycloak ${surface} sign-in client is not enabled`, 503);
   }
   const declaredSurface = client.attributes[SURFACE_ATTRIBUTE];
@@ -157,5 +157,5 @@ export async function enabledIdentityMethods(
 
 /** Fresh capability probe: readiness must not be satisfied by an old catalog. */
 export async function checkIdentityMethodCatalog(surface: IdentitySurface): Promise<void> {
-  await loadIdentityMethodCatalog(surface);
+  await loadIdentityMethodCatalog(surface, true);
 }

@@ -18,8 +18,16 @@ export interface ReadinessProbes extends BackgroundReadiness {
   digit(): Promise<unknown>;
   catalog: Record<string, (() => Promise<unknown>) | null>;
 }
+async function bounded<T>(probe: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([Promise.resolve().then(probe), new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("Readiness deadline exceeded")), config.digitTimeoutMs);
+    })]);
+  } finally { if (timer) clearTimeout(timer); }
+}
 async function check(probe: () => Promise<unknown>): Promise<Check> {
-  try { await probe(); return "ok"; } catch { return "down"; }
+  try { await bounded(probe); return "ok"; } catch { return "down"; }
 }
 
 /** All checks run even when an earlier dependency fails. No upstream errors leak. */
@@ -28,8 +36,8 @@ export async function collectReadiness(probes: ReadinessProbes) {
     check(probes.redis), check(probes.jwks), check(probes.keycloakAdmin), check(probes.digit),
     Promise.all(Object.entries(probes.catalog).map(async ([surface, probe]) =>
       [surface, probe ? await check(probe) : "disabled"] as const)).then(Object.fromEntries),
-    probes.poller().catch(() => ({ status: "down" as const, lagSeconds: null })),
-    probes.reconcile().catch(() => ({ status: "down" as const, intervalSeconds: config.identityReconciliationIntervalSeconds, lagSeconds: null })),
+    bounded(probes.poller).catch(() => ({ status: "down" as const, lagSeconds: null })),
+    bounded(probes.reconcile).catch(() => ({ status: "down" as const, intervalSeconds: config.identityReconciliationIntervalSeconds, lagSeconds: null })),
   ]);
   const checks = { redis, jwks, keycloakAdmin, digit, catalog, poller, reconcile };
   const ready = [redis, jwks, keycloakAdmin, digit, ...Object.values(catalog), poller.status, reconcile.status].every(status => status !== "down");
@@ -42,7 +50,9 @@ export function dependencyProbes(background: BackgroundReadiness): ReadinessProb
     redis: () => getRedis().ping(),
     jwks: async () => {
       const response = await fetch(config.keycloakJwksUri, { signal: AbortSignal.timeout(config.digitTimeoutMs) });
-      if (!response.ok || !Array.isArray((await response.json()).keys)) throw new Error("JWKS unavailable");
+      if (!response.ok) throw new Error("JWKS unavailable");
+      const { keys } = await response.json();
+      if (!Array.isArray(keys) || !keys.length) throw new Error("JWKS unavailable");
     },
     keycloakAdmin: async () => {
       const response = await request("/clients?first=0&max=1", { signal: AbortSignal.timeout(config.digitTimeoutMs) });

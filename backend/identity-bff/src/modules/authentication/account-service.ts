@@ -2,7 +2,7 @@ import { withPersonLease } from "../accounts/person-lease.js";
 import { enabledIdentityProviders, identityClient, request } from "../organizations/organization-service.js";
 import { requireCurrentSession } from "../sessions/session-store.js";
 import type { IdentitySession } from "../sessions/types.js";
-import { surfaceConfig, type IdentitySurface } from "./surfaces.js";
+import { surfaceConfig, surfaceContextKind, type IdentitySurface } from "./surfaces.js";
 
 export const ACCOUNT_ACTIONS = ["UPDATE_PASSWORD", "CONFIGURE_TOTP", "delete_credential", "UPDATE_EMAIL", "idp_link"] as const;
 export type AccountAction = typeof ACCOUNT_ACTIONS[number];
@@ -61,7 +61,7 @@ export async function unlinkProvider(subject: string, sessionId: string, surface
     if (!account.providers.some(provider => provider.alias === alias)) throw new AccountActionError("PROVIDER_NOT_LINKED", 404, "This provider is not linked");
     const user = await (await request(`/users/${encodeURIComponent(subject)}`)).json() as { enabled?: boolean; attributes?: Record<string, string[]> };
     if (user.enabled === false) throw new AccountActionError("SESSION_REVOKED", 401, "This session has ended");
-    const phone = user.attributes?.phoneNumberVerified?.includes("true") && user.attributes?.phoneNumber?.some(value => /^\+[1-9]\d{3,14}$/.test(value));
+    const phone = surfaceContextKind(surface) === "citizen" && user.attributes?.phoneNumberVerified?.includes("true") && user.attributes?.phoneNumber?.some(value => /^\+[1-9]\d{3,14}$/.test(value));
     const primaryCount = Number(account.credentials.some(credential => credential.type === "password")) + account.providers.length + Number(Boolean(phone));
     if (primaryCount <= 1) throw new AccountActionError("LAST_SIGNIN_METHOD", 409, "Keep at least one sign-in method");
     await lease.assertHeld();

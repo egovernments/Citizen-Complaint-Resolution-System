@@ -97,6 +97,13 @@ describe("account self-service", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ providers: [] });
   });
+  it("does not count citizen phone proof as a staff sign-in method", async () => {
+    await admin("/users", { id: "staff-phone-only", username: "staff-phone-only", enabled: true, attributes: { phoneNumber: ["+254711222333"], phoneNumberVerified: ["true"] }, federatedIdentities: [{ identityProvider: "google", userId: "g" }] }, "POST");
+    const { sessionId } = await session("staff-phone-only");
+    const response = await fetch(`${base}/identity/v1/account/providers/_unlink`, { method: "POST", headers: { Cookie: cookie(sessionId), "Content-Type": "application/json" }, body: JSON.stringify({ alias: "google" }) });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("LAST_SIGNIN_METHOD");
+  });
   it("serializes concurrent unlinks and does not count TOTP as a primary method", async () => {
     await admin("/users", { id: "unlink-person", username: "unlink-person", enabled: true, credentials: [{ id: "otp", type: "otp" }], federatedIdentities: [{ identityProvider: "google", userId: "g" }, { identityProvider: "github", userId: "h" }] }, "POST");
     const { sessionId } = await session("unlink-person");
