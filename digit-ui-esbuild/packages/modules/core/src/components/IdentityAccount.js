@@ -1,5 +1,5 @@
 import { setCitizenDetail } from "./citizenSession";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Redirect } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button, Card, Field, Input } from "@egovernments/digit-ui-components-v2";
@@ -15,7 +15,27 @@ const ACTIONS = {
 };
 const fetchImpl = (...args) => window.fetch(...args);
 
+// The session cache is per tab, while these legacy aliases are shared between
+// tabs. Both must still belong to the person who opened the phone form.
+const CITIZEN_SESSION_KEYS = ["Citizen.token", "Citizen.user-info", "token", "user-info", "citizen.userRequestObject", "Citizen.tenant-id", "tenant-id"];
+const storedToken = (value) => {
+  try { return JSON.parse(value); } catch (_) { return value; }
+};
+const capturePhoneSession = () => {
+  const user = Digit.UserService.getUser();
+  if (!user?.access_token || !user.info?.uuid || user.info.type !== "CITIZEN") return null;
+  try {
+    const aliases = CITIZEN_SESSION_KEYS.map((key) => [key, localStorage.getItem(key)]);
+    // A different surface may already own the shared aliases on this browser.
+    if (aliases.some(([key, value]) => ["Citizen.token", "token"].includes(key) && value !== null && storedToken(value) !== user.access_token)) return null;
+    return { uuid: user.info.uuid, token: user.access_token, aliases };
+  } catch (_) { return null; }
+};
+
 export const ChangePhone = ({ t, tenant, onChanged }) => {
+  const [initialSession, setInitialSession] = useState(capturePhoneSession);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
   const [mobileNumber, setMobileNumber] = useState("");
   const [code, setCode] = useState("");
   const [challenge, setChallenge] = useState(null);
@@ -23,6 +43,15 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
   const [busy, setBusy] = useState(false);
   const [resendAt, setResendAt] = useState(0);
   const tr = (key, fallback) => t(key, { defaultValue: fallback });
+  const ownsSession = () => {
+    const current = Digit.UserService.getUser();
+    if (!mounted.current || !initialSession || current?.info?.type !== "CITIZEN" ||
+      current.info.uuid !== initialSession.uuid || current.access_token !== initialSession.token) return false;
+    try { return initialSession.aliases.every(([key, value]) => localStorage.getItem(key) === value); }
+    catch (_) { return false; }
+  };
+  const sessionChanged = () => ({ ok: false, messageKey: "CORE_IDENTITY_PHONE_SESSION_CHANGED",
+    message: "Your signed-in account has changed. Reopen account settings before continuing." });
   const run = async (operation) => {
     setBusy(true);
     setMessage("");
@@ -38,11 +67,13 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
     } finally { setBusy(false); }
   };
   const send = () => run(async () => {
+    if (!ownsSession()) return sessionChanged();
     if (Date.now() < resendAt) {
       return { ok: false, messageKey: "CORE_IDENTITY_OTP_RESEND_TOO_SOON", message: "Please wait before requesting another code." };
     }
     const result = await sendCitizenOtp({ mobileNumber, purpose: "change_phone", fetchImpl,
       locale: Digit.StoreData.getCurrentLanguage() });
+    if (!ownsSession()) return sessionChanged();
     if (result.ok) {
       setChallenge(result);
       setCode("");
@@ -51,11 +82,16 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
     return result;
   });
   const verify = () => run(async () => {
+    if (!ownsSession()) return sessionChanged();
     const result = await verifyCitizenOtp({ challengeId: challenge.challengeId, code, purpose: "change_phone", fetchImpl });
+    if (!ownsSession()) return sessionChanged();
     if (result.ok) {
       // Re-select after the identifier change so local profile/token data comes
       // from the BFF, never from an unverified form value.
       const selected = await establishIdentityBffSession({ surface: "citizen", tenant, fetchImpl });
+      if (!ownsSession() || (selected.status === "authenticated" && selected.user.info.uuid !== initialSession.uuid)) {
+        return sessionChanged();
+      }
       if (selected.status !== "authenticated") {
         setChallenge(null);
         setMessage(tr("CORE_IDENTITY_PHONE_CHANGED_SIGNIN", "Phone changed. Sign in again to refresh your account."));
@@ -64,6 +100,7 @@ export const ChangePhone = ({ t, tenant, onChanged }) => {
       Digit.UserService.setUser(selected.user);
       Digit.SessionStorage.set("citizen.userRequestObject", selected.user);
       setCitizenDetail(selected.user.info, selected.user.access_token, tenant.tenantId);
+      setInitialSession(capturePhoneSession());
       setChallenge(null);
       setMobileNumber("");
       setMessage(tr("CORE_IDENTITY_PHONE_CHANGED", "Your phone number has been changed."));

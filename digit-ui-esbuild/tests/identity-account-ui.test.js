@@ -67,8 +67,13 @@ after(() => { fs.unlinkSync(OUT); delete global.window; delete global.Digit; del
 
 function browser(surface, fetchImpl) {
   const stored = {};
+  const authWrites = [];
   let user = { access_token: "old-token", info: { uuid: "same-uuid", name: "Ada", userName: "opaque", emailId: "old@example.test", mobileNumber: "711111111", tenantId: surface === "citizen" ? "ke" : "ke.bomet", type: surface.toUpperCase() } };
-  global.localStorage = { setItem: (key, value) => { stored[key] = value; }, getItem: (key) => stored[key] || null };
+  const prefix = surface === "citizen" ? "Citizen" : "Employee";
+  Object.assign(stored, { [`${prefix}.token`]: user.access_token, token: user.access_token,
+    [`${prefix}.user-info`]: JSON.stringify(user.info), "user-info": JSON.stringify(user.info) });
+  global.localStorage = { setItem: (key, value) => { authWrites.push(key); stored[key] = value; }, getItem: (key) => stored[key] || null,
+    clear: () => { Object.keys(stored).forEach((key) => delete stored[key]); } };
   global.sessionStorage = { getItem: () => null };
   global.window = { __digitTenantContext: tenant, contextPath: tenant.appBasePath, fetch: fetchImpl,
     location: { pathname: `/bomet/digit-ui/${surface}/user/account`, href: `https://app.test/bomet/digit-ui/${surface}/user/account`, search: "", origin: "https://app.test", assign: (url) => { stored.redirect = url; }, replace: (url) => { stored.redirect = url; } },
@@ -77,14 +82,14 @@ function browser(surface, fetchImpl) {
   };
   global.Digit = window.Digit = {
     ULBService: { getStateId: () => "ke", getCurrentTenantId: () => "ke.bomet" },
-    UserService: { setUser: (value) => { user = value; }, getUser: () => user,
+    UserService: { setUser: (value) => { authWrites.push("User"); user = value; }, getUser: () => user,
       userSearch: async () => ({ user: [] }), logout: async (scope) => { stored.logoutScope = scope; } },
-    SessionStorage: { get: (key) => stored[key], set: (key, value) => { stored[key] = value; } },
+    SessionStorage: { get: (key) => stored[key], set: (key, value) => { authWrites.push(key); stored[key] = value; } },
     StoreData: { getCurrentLanguage: () => "en_IN" },
     Utils: { getMultiRootTenant: () => false, getOTPBasedLogin: () => false, browser: { isMobile: () => false }, locale: { getTransformedLocale: (s) => s } },
     Hooks: { useCustomMDMS: () => ({}), useCustomAPIHook: () => ({}), useCustomAPIMutationHook: () => ({}), useGenderMDMS: () => ({}) },
   };
-  return { stored, getUser: () => user };
+  return { stored, authWrites, getUser: () => user, replaceUser: (value) => { user = value; } };
 }
 const text = (node) => node.children.map((child) => typeof child === "string" ? child : text(child)).join("");
 const button = (view, label) => view.root.findAllByType("button").find((node) => text(node).includes(label));
@@ -157,6 +162,88 @@ test("phone change verifies before refreshing the same citizen uuid and token al
   assert.equal(state.getUser().info.mobileNumber, "722222222");
   assert.equal(state.stored["Citizen.token"], "new-token");
   assert.equal(changed, 1);
+  view.unmount();
+});
+
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+};
+
+for (const stage of ["verify", "select"]) {
+  for (const race of ["logout", "account switch", "same-person new session", "other-tab logout", "other-tab account switch"]) {
+    test(`phone change cannot write auth state after ${race} during pending ${stage}`, async () => {
+      const reached = deferred();
+      const release = deferred();
+      const calls = [];
+      const state = browser("citizen", async (url) => {
+        calls.push(url);
+        if (url.endsWith("_send")) return json(202, { challengeId: "new-phone", resendAfter: 0, expiresIn: 300 });
+        if ((stage === "verify" && url.endsWith("_verify")) || (stage === "select" && url.endsWith("_select"))) {
+          reached.resolve();
+          await release.promise;
+        }
+        if (url.endsWith("_verify")) return json(200, { phoneNumberVerified: true, phoneNumber: "+254722222222" });
+        if (url.includes("/session")) return json(200, { authenticated: true, tenant });
+        return json(200, { access_token: "new-token", tenant, UserRequest: { uuid: "same-uuid", type: "CITIZEN", tenantId: "ke", mobileNumber: "722222222" } });
+      });
+      let changed = 0;
+      const view = await render(ui.ChangePhone, { t, tenant, onChanged: () => { changed++; } });
+      await ui.act(async () => view.root.findByProps({ id: "account-phone" }).props.onChange({ target: { value: "722222222" } }));
+      await click(button(view, "Send code"));
+      await ui.act(async () => view.root.findByProps({ id: "account-code" }).props.onChange({ target: { value: "123456" } }));
+      let expectedUser;
+      let expectedAliases;
+      await ui.act(async () => {
+        const pending = button(view, "Verify and change phone").props.onClick();
+        await reached.promise;
+        if (race === "logout") {
+          state.replaceUser(null);
+          localStorage.clear();
+        } else if (race === "account switch" || race === "same-person new session") {
+          state.replaceUser({ access_token: "another-token", info: { ...state.getUser().info,
+            uuid: race === "account switch" ? "another-uuid" : "same-uuid" } });
+        } else if (race === "other-tab logout") {
+          localStorage.clear(); // This tab's sessionStorage cache is deliberately still present.
+        } else {
+          state.stored.token = "employee-token";
+          state.stored["user-info"] = JSON.stringify({ uuid: "employee-uuid", type: "EMPLOYEE" });
+        }
+        expectedUser = state.getUser();
+        expectedAliases = { ...state.stored };
+        release.resolve();
+        await pending;
+      });
+      assert.deepEqual(state.authWrites, [], "no User cache or citizen/shared alias writes");
+      assert.deepEqual(state.stored, expectedAliases);
+      assert.deepEqual(state.getUser(), expectedUser);
+      assert.equal(changed, 0);
+      assert.match(text(view.root.findByProps({ role: "status" })), /signed-in account has changed/);
+      if (stage === "verify") assert.equal(calls.some((url) => url.includes("/session") || url.endsWith("_select")), false);
+      view.unmount();
+    });
+  }
+}
+
+test("phone change cannot adopt a different UUID returned by the citizen cookie", async () => {
+  const state = browser("citizen", async (url) => {
+    if (url.endsWith("_send")) return json(202, { challengeId: "new-phone", resendAfter: 0 });
+    if (url.endsWith("_verify")) return json(200, { phoneNumberVerified: true, phoneNumber: "+254722222222" });
+    if (url.includes("/session")) return json(200, { authenticated: true, tenant });
+    return json(200, { access_token: "foreign-token", tenant, UserRequest: { uuid: "foreign-uuid", type: "CITIZEN", tenantId: "ke" } });
+  });
+  const originalUser = state.getUser();
+  const originalAliases = { ...state.stored };
+  const view = await render(ui.ChangePhone, { t, tenant, onChanged: () => assert.fail("must not report a foreign profile update") });
+  await ui.act(async () => view.root.findByProps({ id: "account-phone" }).props.onChange({ target: { value: "722222222" } }));
+  await click(button(view, "Send code"));
+  await ui.act(async () => view.root.findByProps({ id: "account-code" }).props.onChange({ target: { value: "123456" } }));
+  await click(button(view, "Verify and change phone"));
+  assert.deepEqual(state.authWrites, []);
+  assert.deepEqual(state.getUser(), originalUser);
+  assert.deepEqual(state.stored, originalAliases);
+  assert.match(text(view.root.findByProps({ role: "status" })), /signed-in account has changed/);
   view.unmount();
 });
 
