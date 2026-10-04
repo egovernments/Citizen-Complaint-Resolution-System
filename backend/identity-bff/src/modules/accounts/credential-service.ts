@@ -1,6 +1,6 @@
 import { config } from "../../infrastructure/config.js";
 import { oneTimePassword } from "../managed-accounts/managed-account-service.js";
-import { passwordLogin, revokeToken, type DigitLogin } from "../managed-accounts/digit-user-client.js";
+import { DigitLoginRejectedError, passwordLogin, revokeToken, type DigitLogin } from "../managed-accounts/digit-user-client.js";
 import { derivedStaffPassword } from "./credential.js";
 import { StaffLoginError } from "./credential-errors.js";
 import { credentialPorts } from "./credential-ports.js";
@@ -39,9 +39,16 @@ async function writePassword(account: StaffAccountRef, password: string, lease: 
 
 async function login(account: StaffAccountRef, password: string, lease?: PersonLease): Promise<DigitLogin> {
   await lease?.assertHeld();
-  const minted = await passwordLogin({
-    username: account.userName, tenantId: account.tenantId, userType: "EMPLOYEE", password,
-  });
+  let minted: DigitLogin;
+  try {
+    minted = await passwordLogin({
+      username: account.userName, tenantId: account.tenantId, userType: "EMPLOYEE", password,
+    });
+  } catch (error) {
+    const reason = error instanceof DigitLoginRejectedError ? error.reason : "unknown";
+    throw new StaffLoginError(reason === "invalid_credentials" ? "INVALID_CREDENTIALS"
+      : reason === "locked" ? "ACCOUNT_LOCKED" : reason === "inactive" ? "ACCOUNT_INACTIVE" : "DEPENDENCY");
+  }
   try {
     await lease?.assertHeld();
     return minted;
