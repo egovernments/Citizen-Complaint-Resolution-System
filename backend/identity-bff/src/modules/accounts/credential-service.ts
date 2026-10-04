@@ -69,6 +69,7 @@ async function mirror(account: StaffAccountRef, lease: PersonLease, keyVersion: 
     // Do not log the error body: it can include credentials or profile data.
     console.warn("Staff credential was set but its Keycloak mirror failed");
   }
+  await lease.assertHeld();
 }
 
 /** Caller has authorized an active binding; pending bindings must never call this. */

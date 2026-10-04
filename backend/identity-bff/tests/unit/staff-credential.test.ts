@@ -4,6 +4,8 @@ import { config } from "../../src/infrastructure/config.js";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { resetDigitAdminToken } from "../../src/modules/managed-accounts/digit-admin-session.js";
+import { createIdentitySession, deleteIdentitySession } from "../../src/modules/sessions/session-store.js";
+import { linkedIdentity, managedUserLogin } from "../../src/modules/managed-accounts/managed-account-service.js";
 import { passwordLogin } from "../../src/modules/managed-accounts/digit-user-client.js";
 import { activateStaffCredential, findLiveStaffToken, staffLogin } from "../../src/modules/accounts/credential-service.js";
 import { derivedStaffPassword } from "../../src/modules/accounts/credential.js";
@@ -139,6 +141,39 @@ describe("derived staff credentials", () => {
     for (const storedKey of await getRedis().keys(`${config.cachePrefix}:*`)) {
       expect(await getRedis().get(storedKey)).not.toContain(derivedStaffPassword(key, account.uuid, "pg"));
     }
+  });
+  it("managed login reads the recorded version and supports derived → rotate → derived", async () => {
+    const subject = `credential-subject-${sequence}`;
+    const identity = linkedIdentity("https://test-issuer.invalid", subject, {
+      userType: "EMPLOYEE", tenantId: "pg", digitUuid: account.uuid,
+    });
+    const response = await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: subject, username: subject, enabled: true, attributes: {
+        "digit.accounts": [JSON.stringify({ v: 1, entries: [{ kind: "staff", uuid: account.uuid,
+          tenantId: "pg", credential: { keyVersion: 1 } }] })],
+      } }),
+    });
+    expect(response.ok).toBe(true);
+    const { sessionId } = await createIdentitySession({ accessToken: "test-access", accessExpiresIn: 600 },
+      { sub: subject }, "test-client");
+    account.passwordHash = hash(derivedStaffPassword(key, account.uuid, "pg"));
+    const writes = fake.stats.passwordUpdates;
+    await managedUserLogin(identity, sessionId);
+    expect(fake.stats.passwordUpdates).toBe(writes);
+    expect(mirror).not.toHaveBeenCalled();
+    config.identityStaffCredentialMode = "rotate";
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await managedUserLogin(identity, sessionId);
+    expect(fake.stats.passwordUpdates).toBe(writes + 1);
+    config.identityStaffCredentialMode = "derived";
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await managedUserLogin(identity, sessionId);
+    expect(fake.stats.passwordUpdates).toBe(writes + 2);
+    expect(account.passwordHash).toBe(hash(derivedStaffPassword(key, account.uuid, "pg")));
+    await deleteIdentitySession(sessionId);
+    await expect(managedUserLogin(identity, sessionId)).rejects.toMatchObject({ code: "SESSION_REVOKED" });
+    expect(fake.stats.passwordUpdates).toBe(writes + 2);
   });
   it("revokes a token if the lease is lost immediately after minting", async () => {
     account.passwordHash = hash(derivedStaffPassword(key, account.uuid, "pg"));

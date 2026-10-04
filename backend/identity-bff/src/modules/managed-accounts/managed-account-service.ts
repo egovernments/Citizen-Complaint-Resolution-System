@@ -516,7 +516,7 @@ export async function managedUserLogin(
   if (identity.userType === MANAGED_USER_TYPE && staffCredentialMode() === "derived") {
     const lease = currentPersonLease();
     if (!lease) {
-      return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber));
+      return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber, verifiedCountryCode));
     }
     if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
     await requireCurrentSession(lease, sessionId);
