@@ -14,7 +14,6 @@ export type Branding = {
         bannerUrl?: string;
         languages?: BrandingLanguage[];
         defaultLocale?: string;
-    footer?: Branding["footer"];
     };
     /** Raw `common-masters.ThemeConfig[0]`, applied with the applyTheme port. */
     themeConfig: unknown;

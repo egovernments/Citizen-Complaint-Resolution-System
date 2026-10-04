@@ -2,3 +2,4 @@
 > configurator-blue-login-theme@0.0.0 lint
 > tsc -b --pretty false
 
+Exit code: 0

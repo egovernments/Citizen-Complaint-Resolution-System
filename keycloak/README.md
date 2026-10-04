@@ -68,10 +68,11 @@ realm test alone does not prove custom theme packaging or magic-link behavior.
 ## Deferred behavior
 
 Identity-root explicitly deferred notification to the old email address on
-2026-10-04 (bridge approval `apr_2a08b76cd6b041a8b7958fb3d8f67999`). D18 still
-requires verification of the new address, DIGIT write-through only after
-verification, and the admin email-change path. This PR adds no custom Keycloak
-SPI, listener or notification workaround. The stock 26.7.3 runtime and existing
+2026-10-04 (bridge approval `apr_2a08b76cd6b041a8b7958fb3d8f67999`).
+The frozen contract records this decision in `identity-bff.md` §3.3.11 at
+commit `63e88080f`. D18 still requires verification of the new address, DIGIT
+write-through only after verification, and the admin email-change path. This PR
+adds no custom Keycloak SPI, listener or notification workaround. The stock 26.7.3 runtime and existing
 magic-link provider remain the supported extension boundary.
 
 The new-address verification check remains a required live test. The BFF's
