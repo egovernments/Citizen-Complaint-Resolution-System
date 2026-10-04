@@ -175,8 +175,10 @@ export function staffCredentialMode(): "rotate" | "derived";   // IDENTITY_STAFF
 
   It does its own fresh admin search, never clears an identifier, and does no
   phone parsing. The §6 field map of `03-state-schema.md` omits `dob`, `active`,
-  roles and locks. A masked copied field skips the write; activation maps this
-  to `DIGIT_PII_MASKED`. `DigitValidationError` exposes `DIGIT_ACCOUNT_INVALID`
+  and locks. Roles are copied unchanged from the fresh search because stock
+  egov-user validates at least one role code even on identifier/password updates;
+  callers cannot change them. A masked copied field (including role metadata)
+  skips the write; activation maps this to `DIGIT_PII_MASKED`. `DigitValidationError` exposes `DIGIT_ACCOUNT_INVALID`
   (503). HRMS edits before the search are preserved; edits between search and
   update may still be overwritten because egov-user has no conditional update.
 - `StaffAccountRef.keyVersion` is the version freshly read from `digit.accounts`.
