@@ -106,9 +106,12 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_bff_client_secret',
       'keycloak_magic_link_client_secret',
       'keycloak_admin_client_secret',
+      'keycloak_employee_client_secret',
+      'keycloak_citizen_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
       'pgr_onboarding_worker_token',
+      'identity_citizen_otp_secret',
     ];
 
     test('none of them is derived from another secret', () => {
@@ -159,6 +162,26 @@ describe('ansible playbook-deploy.yml', () => {
     }
     expect(task).toContain("selectattr('value', 'eq', 'keycloak')");
     expect(playbook).toContain('when: _keycloak_login_surfaces | length > 0');
+  });
+
+  // #2167 review: the Keycloak login branding comes from the same Ansible
+  // values as globalConfigs.js, so the two cannot drift.
+  test('login branding shares the globalConfigs sources', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+    const pairs: Array<[string, string, string]> = [
+      ['IDENTITY_DIGIT_FOOTER_URL', 'footer_logo_url', 'DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-'],
+      ['IDENTITY_DIGIT_FOOTER_BW_URL', 'footer_bw_logo_url', 'DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-'],
+      ['IDENTITY_DIGIT_HOME_URL', 'digit_home_url', 'DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-'],
+      ['IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME', 'config_module_name',
+        'DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-'],
+    ];
+    for (const [envName, ansibleVar, composeLine] of pairs) {
+      expect(env).toMatch(new RegExp(`^${envName}='?\\{\\{ \\(?${ansibleVar}\\b`, 'm'));
+      expect(globalConfig).toContain(`{{ ${ansibleVar} | to_json }}`);
+      expect(compose).toContain(composeLine);
+    }
   });
 
   // Optional per-tenant pincode allowlist (host_var pgr_pincode_allowlist)
@@ -490,6 +513,36 @@ describe('docker-compose.egov-digit.yaml', () => {
     expect(compose).toContain('KONG_REAL_IP_HEADER: X-Forwarded-For');
     expect(compose).toContain('KONG_REAL_IP_RECURSIVE: "on"');
     expect(composeEnv).toContain('KONG_TRUSTED_IPS={{ kong_trusted_ips | default(');
+  });
+});
+
+describe('tenant-scoped digit-ui routing', () => {
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const helmTenantIngress = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/templates/tenant-ingress.yaml'
+  );
+
+  test('Compose nginx keeps the public slug and rewrites only the internal UI mount', () => {
+    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block
+    // opener and reject the config (#2127).
+    expect(nginx).toContain('location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {');
+    expect(nginx).toContain('location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {');
+    expect(nginx).toContain(
+      'rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;'
+    );
+  });
+
+  test('Kubernetes ingress exposes the same tenant-prefixed contract', () => {
+    expect(helmTenantIngress).toContain(
+      'path: /([a-z0-9-]{2,63})/digit-ui(/|$)(.*)'
+    );
+    expect(helmTenantIngress).toContain(
+      '"nginx.ingress.kubernetes.io/rewrite-target" "/digit-ui/$3"'
+    );
+    // Keeps the chart's usual annotations, as common.ingress does (review, #2199).
+    expect(helmTenantIngress).toContain('.Values.ingress.annotations');
+    expect(helmTenantIngress).toContain('.Values.ingress.waf.annotations');
+    expect(helmTenantIngress).toContain('.Values.ingress.additionalAnnotations');
   });
 });
 
@@ -1301,5 +1354,155 @@ describe('e2e notifications README code links', () => {
       if (!declared) problems.push(`${label}: ${parts[parts.length - 1]} is not declared in ${rel}`);
     }
     expect(problems).toEqual([]);
+  });
+});
+
+// #2189: the BFF's development fixed citizen OTP must follow egov-user's, or
+// the two accept different codes for the same citizen.
+describe('fixed citizen OTP settings are shared with egov-user', () => {
+  const service = (compose: string, name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = compose.slice(start + 1);
+    const end = rest.slice(1).search(/\n  [a-z0-9-]+:\n/);
+    return end < 0 ? rest : rest.slice(0, end + 1);
+  };
+  // Same variables as egov-user, but the BFF defaults the switch OFF: an unset
+  // .env must never make it accept 123456 for any phone (review, #2199).
+  const vars = [
+    'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}',
+    'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}',
+  ];
+
+  test('egov-user and identity-bff read the same variables', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    expect(service(compose, 'egov-user')).toContain('${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-');
+    expect(service(compose, 'egov-user')).toContain(vars[1]);
+    for (const v of vars) expect(service(compose, 'identity-bff')).toContain(v);
+  });
+
+  test('the identity overlay passes them from the stack .env, off by default', () => {
+    const overlay = read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml');
+    for (const v of vars) expect(service(overlay, 'identity-bff')).toContain(v);
+  });
+});
+
+// #2189 / #2201: citizen phone OTP on development boxes, and the realm setting
+// it needs (without ADMIN_EDIT Keycloak drops new citizens' phone attributes).
+describe('citizen phone OTP deployment', () => {
+  test('configure-keycloak keeps unmanaged user attributes', () => {
+    const script = read('backend/identity-bff/deploy/digit-compose/configure-keycloak.sh');
+    expect(script).toContain(`jq '.unmanagedAttributePolicy = "ADMIN_EDIT"'`);
+    expect(script).toMatch(/\nconfigure_user_profile\n/);
+  });
+
+  test('development boxes offer phone_otp with the log sender', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain(
+      "identity_citizen_signin_methods\n             | default([] if (enable_otp_services | default(false)) else ['phone_otp'])");
+    expect(playbook).toContain(
+      'KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods_effective | join(\',\') }}"');
+    expect(playbook).toContain('IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}');
+    expect(read('local-setup/ansible/templates/digit.env.j2')).toContain(
+      "IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('' if (enable_otp_services | default(false)) else 'log') }}");
+  });
+
+  test('the BFF receives the OTP secret and sender', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    const bff = compose.slice(compose.indexOf('\n  identity-bff:\n'));
+    expect(bff).toContain('IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}');
+    expect(bff).toContain('IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}');
+  });
+});
+
+// #2205: citizen OTP messages are seeded at pg (dump) and at every other state
+// root (playbook upsert) from one bundle, so the two never drift.
+describe('citizen OTP localization seed', () => {
+  const bundle: { code: string; message: string; module: string; locale: string }[] =
+    JSON.parse(read('local-setup/ansible/files/digit-ui-localization/identity-otp.json'));
+
+  test('the bundle covers the CORE_IDENTITY_OTP_* keys in rainmaker-common', () => {
+    expect(bundle.map((m) => m.code).sort()).toEqual([
+      'CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE', 'CORE_IDENTITY_OTP_EXPIRED',
+      'CORE_IDENTITY_OTP_INVALID', 'CORE_IDENTITY_OTP_INVALID_MOBILE',
+      'CORE_IDENTITY_OTP_LOCKED', 'CORE_IDENTITY_OTP_RATE_LIMITED',
+      'CORE_IDENTITY_OTP_RESEND_TOO_SOON',
+    ]);
+    for (const m of bundle) expect([m.module, m.locale]).toEqual(['rainmaker-common', 'en_IN']);
+  });
+
+  test('pg has the same rows in the dump', () => {
+    const dump = read('local-setup/db/full-dump.sql');
+    for (const m of bundle) {
+      expect(dump).toContain(`\ten_IN\t${m.code}\t${m.message}\tpg\trainmaker-common\t`);
+    }
+  });
+
+  // Review (#2199): pg boxes with an existing volume never re-run the dump, so
+  // the playbook seeds every state root, pg included, without overwriting edits.
+  test('the playbook seeds the bundle at every state root, pg included', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    const task = playbook.slice(playbook.indexOf('name: "digit-ui identity strings — seed citizen OTP messages"'));
+    const body = task.slice(0, task.indexOf('\n    - name: "digit-ui identity strings — drop'));
+    expect(body).toContain("/files/digit-ui-localization/identity-otp.json') | from_json");
+    expect(body).toContain('ON CONFLICT (tenantid, locale, module, code) DO NOTHING');
+    expect(body).not.toContain("state_root != 'pg'");
+    expect(task).toContain('redis-cli DEL messages\n      when: identity_i18n_seed is changed');
+  });
+});
+
+// Citizens sign in with phone OTP inside digit-ui, so digit-ui-citizen has no
+// Keycloak login theme until a Keycloak citizen method exists; the client,
+// its surface attribute and redirect URIs stay.
+describe('digit-ui-citizen client', () => {
+  const script = read('backend/identity-bff/deploy/digit-compose/configure-keycloak.sh');
+
+  test('is configured without a login theme', () => {
+    expect(script).toMatch(/configure_digit_ui_client "\$CITIZEN_CLIENT" "\$KEYCLOAK_CITIZEN_CLIENT_SECRET" \\\n\s+citizen '' "\$CITIZEN_SIGNIN_METHODS" ''\n/);
+    expect(script).not.toContain('KEYCLOAK_CITIZEN_LOGIN_THEME');
+    expect(read('local-setup/ansible/playbook-deploy.yml')).not.toContain('KEYCLOAK_CITIZEN_LOGIN_THEME');
+  });
+
+  test('a digit-citizen realm theme set earlier is still cleared', () => {
+    expect(script).toMatch(/OWNED_REALM_THEMES="[^"]*\bdigit-citizen\b/);
+  });
+});
+
+// Review (#2199): the BFF mints citizen DIGIT tokens through egov-otp, so
+// wherever phone_otp is offered egov-otp must run, even with the SMS stack off.
+describe('egov-otp runs wherever phone_otp is offered', () => {
+  test('egov-otp and its migration carry the citizen-otp profile', () => {
+    expect(read('local-setup/docker-compose.egov-digit.yaml')).toContain('profiles: [otp, citizen-otp]');
+    expect(read('local-setup/docker-compose.migrations.yml')).toContain('profiles: ["otp", "citizen-otp"]');
+  });
+
+  test('the playbook enables citizen-otp from the same resolved methods', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toMatch(/\['citizen-otp'\]\s+if \(enable_keycloak \| default\(false\)\)\s+and 'phone_otp' in identity_citizen_signin_methods_effective/);
+    expect(playbook.indexOf('name: "Resolve citizen sign-in methods"'))
+      .toBeLessThan(playbook.indexOf('name: "Compute compose profiles for this tenant"'));
+  });
+});
+
+describe('tenant-route backfill (#2206)', () => {
+  test('is passed to the BFF and off by default', () => {
+    const compose = read('local-setup/docker-compose.egov-digit.yaml');
+    const bff = compose.slice(compose.indexOf('\n  identity-bff:\n'));
+    expect(bff).toContain('IDENTITY_TENANT_ROUTE_BACKFILL: ${IDENTITY_TENANT_ROUTE_BACKFILL:-false}');
+    expect(bff).toContain('IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS: ${IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS:-}');
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain('IDENTITY_TENANT_ROUTE_BACKFILL={{ identity_tenant_route_backfill | default(false) | string | lower }}');
+  });
+});
+
+describe('configure-keycloak.sh error handling', () => {
+  const script = read('backend/identity-bff/deploy/digit-compose/configure-keycloak.sh');
+  test('digit-ui clients are not configured inside a command substitution', () => {
+    expect(script).not.toMatch(/\$\(configure_digit_ui_client/);
+    expect(script).toContain('DIGIT_UI_CLIENT_UUID=$client_uuid_value');
+  });
+  test('the overlay requires an explicit Keycloak image', () => {
+    expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml'))
+      .toContain('image: ${KEYCLOAK_IMAGE:?set KEYCLOAK_IMAGE}');
   });
 });

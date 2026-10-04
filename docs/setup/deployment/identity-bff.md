@@ -12,10 +12,12 @@ The concise component boundary and source-of-truth map is in the
 | DIGIT | Keycloak |
 |---|---|
 | root tenant | Organization with `digit.rootTenantId` |
+| subtenant | tenant-bearing Organization Group with explicit tenant, slug, parent and fallback attributes |
 | application access | client / client role |
 | user identity | user principal |
 | tenant access | Organization membership |
-| tenant-specific role | role on the member's Organization group |
+| root-tenant role | role on a non-tenant-bearing member assignment group |
+| subtenant access and role | membership and role on the exact tenant-bearing Organization Group |
 
 All tenants live in one shared realm (`digit` by default). A tenant is not a
 realm. Keycloak is the source for authentication, Organization membership, and
@@ -73,6 +75,25 @@ bootstrap_secrets:
   identity_digit_admin_password: "<DIGIT ACCOUNT_ADMIN password>"
   identity_smtp_password: "<SMTP password>"
 ```
+
+Which sign-in methods the `digit-ui-citizen` client offers is open
+([#2189](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/2189));
+`identity_citizen_signin_methods` defaults to none. Citizen context selection
+still requires a verified `phone_number` claim and fails closed without one.
+It mints each DIGIT CITIZEN token through egov-otp's internal
+`/otp/v1/_create` (`DIGIT_OTP_CREATE_URL`), which runs only under the Compose
+`otp` profile (`enable_otp_services: true`). Citizen DIGIT accounts live at
+the state root, like every egov-user CITIZEN: a citizen signing in on
+`/<city>/digit-ui/citizen/` gets one BFF-managed `kcbffc-` account at the
+first dotted segment of the city's tenant (for example `ke` for `ke.bomet`),
+shared by every city route under that root, and a token whose
+`UserRequest.tenantId` is that root. digit-ui keeps the URL's
+tenant for complaints and other business requests. The root tenant therefore
+needs a `common-masters.MobileNumberValidation` rule that accepts the
+citizens' numbers, because egov-user validates new citizen accounts there.
+Note that while `local-setup/kong/kong.yml` keeps its `/otp` validation mock,
+egov-user's OTP check for a CITIZEN password grant is answered by that mock,
+not by egov-otp (see "TO ENABLE REAL OTP VALIDATION" there).
 
 The deploy derives separate stable BFF-client and workload secrets from the
 Keycloak admin secret and writes them only to the mode-0600 Compose environment.

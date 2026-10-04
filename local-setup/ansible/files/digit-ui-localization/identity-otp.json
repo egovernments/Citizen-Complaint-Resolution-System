@@ -1,0 +1,44 @@
+[
+  {
+    "code": "CORE_IDENTITY_OTP_INVALID_MOBILE",
+    "message": "This mobile number cannot be used here.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE",
+    "message": "We can't send a code right now. Please try again later.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_IDENTITY_OTP_RESEND_TOO_SOON",
+    "message": "Please wait {{seconds}} seconds before requesting another code.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_IDENTITY_OTP_RATE_LIMITED",
+    "message": "Too many codes requested. Try again in {{seconds}} seconds.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_IDENTITY_OTP_LOCKED",
+    "message": "Too many wrong codes for this number. Try again in {{seconds}} seconds.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_IDENTITY_OTP_INVALID",
+    "message": "That code is not correct. {{attempts}} attempts left.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  },
+  {
+    "code": "CORE_IDENTITY_OTP_EXPIRED",
+    "message": "This code has expired. Request a new one.",
+    "module": "rainmaker-common",
+    "locale": "en_IN"
+  }
+]
