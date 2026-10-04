@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/dist_keycloak
+**/test-results
+**/playwright-report
+**/__pycache__
+evidence
+.env
+*.env

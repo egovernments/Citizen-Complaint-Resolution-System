@@ -11,7 +11,7 @@ import {
 } from "../managed-accounts/managed-account-service.js";
 import type { DigitLogin } from "../managed-accounts/digit-user-client.js";
 import { parseSurface } from "../authentication/surfaces.js";
-import { mobileValidationForRoute } from "../branding/tenant-branding.js";
+import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import {
   CitizenContextError,
   ensureCitizenRegistration,

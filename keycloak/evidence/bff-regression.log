@@ -1,0 +1,11 @@
+
+ RUN  v5.0.1 /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-keycloak/backend/identity-bff
+
+
+ Test Files  2 passed (2)
+      Tests  70 passed (70)
+   Start at  20:40:40
+   Duration  2.82s (tests 79%, transform 9%, import 6%, setup 5%)
+
+
+Exit code: 0

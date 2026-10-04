@@ -74,8 +74,6 @@ export const ROUTES: RouteContract[] = [
     results: ["PASSWORD_SETUP_COMPLETE", "PASSWORD_SETUP_FAILED", "AUTH_ATTEMPT_EXPIRED"] },
   { method: "GET", path: "/identity/v1/tenant-contexts/:urlSlug", auth: "none", state: "changing", items: [11, 15],
     codes: ["TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE"] },
-  { method: "GET", path: "/identity/v1/tenant-contexts/:urlSlug/branding", auth: "none", state: "deleted-later", items: [14],
-    codes: ["TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE"] },
   { method: "POST", path: "/identity/v1/citizen/otp/_send", auth: "none", state: "changing", items: [3, 13],
     codes: ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE", "PHONE_OTP_DISABLED",
       "CITIZEN_SIGNIN_NOT_CONFIGURED", "INVALID_MOBILE_NUMBER", "OTP_RESEND_TOO_SOON", "OTP_RATE_LIMITED",

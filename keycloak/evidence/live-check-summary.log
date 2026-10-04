@@ -1,0 +1,32 @@
+Source commit: 09e4791393cf290102a01f21337ce9c97d864e53
+Command: keycloak/tests/run-live-check.sh
+CI job: https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/actions/runs/37214279799/job/111471519864
+Full log artifact: keycloak-realm-check
+
+2026-10-04T15:52:19.9586780Z PASS  §12 events: user and admin events on, declared types, retention  (retention 604800s, 26 user event types)
+2026-10-04T15:52:20.3362400Z PASS  §12 view-events: the BFF admin service account reads events
+2026-10-04T15:52:20.4226592Z PASS  §12 names read-only for the person, lastName not required
+2026-10-04T15:52:20.6863988Z PASS  §12 identity providers and their mappers use IMPORT
+2026-10-04T15:52:20.7680785Z PASS  §12 employee flow: password, then a conditional one-time code
+2026-10-04T15:52:20.9290340Z PASS  §12 self-service required actions are enabled as declared
+2026-10-04T15:52:21.1831878Z PASS  surface client policy: CSV action allowlist and password-setup redirect
+2026-10-04T15:52:22.0092086Z PASS  a nameless employee signs in with password only, no profile prompt
+2026-10-04T15:52:22.6112167Z PASS  §8 CONFIGURE_TOTP, then the code is demanded at the next employee sign-in
+2026-10-04T15:52:23.1393806Z PASS  §8 delete_credential removes the second factor; the code step goes away
+2026-10-04T15:52:23.6805886Z PASS  §8 UPDATE_PASSWORD: the new password works, the old one no longer does
+2026-10-04T15:52:24.2555078Z PASS  §8 UPDATE_EMAIL: saved only after the new address is verified  (new address verified; old-address notification explicitly deferred)
+2026-10-04T15:52:24.8046978Z PASS  §8 VERIFY_EMAIL for an unverified address
+2026-10-04T15:54:33.7013809Z PASS  §9 new identity provider by configuration: IMPORT and the shared linking flow
+2026-10-04T15:54:34.2223262Z PASS  §8 idp_link links an outside account to a signed-in employee
+2026-10-04T15:54:34.8027905Z PASS  D19 IMPORT: a provider's later name change does not overwrite Keycloak's
+2026-10-04T15:54:34.9505136Z PASS  LOGOUT is recorded when a session is signed out
+2026-10-04T15:54:35.0773643Z PASS  the BFF service account sees every event the revocation poller needs  (LOGIN=10, LOGOUT=1, UPDATE_PASSWORD=1, UPDATE_CREDENTIAL=2, REMOVE_CREDENTIAL=1, UPDATE_EMAIL=1, VERIFY_EMAIL=1, FEDERATED_IDENTITY_LINK=1, CODE_TO_TOKEN=8)
+2026-10-04T15:54:35.1122527Z PASS  frozen §10: password changes use code_id; login/logout use sessionId
+2026-10-04T15:54:35.4375500Z PASS  frozen §10: membership removal identifies the person in resourcePath
+2026-10-04T15:58:49.1818149Z PASS  §9 staff SSO policy: otpRequirement REQUIRED makes every employee set up a code
+2026-10-04T16:03:17.8951195Z PASS  §9 Keycloak-hosted authenticator and new self-service action: recovery codes
+2026-10-04T16:05:25.1061398Z PASS  §9 new browser surface: a client added by configuration survives the script
+2026-10-04T16:05:25.2523568Z PASS  §9 new login-page string through realm localisation
+2026-10-04T16:05:25.4082544Z 24/24 checks passed against Keycloak 26.7.3
+
+Job conclusion: success; Live realm check step: success (exit 0)
