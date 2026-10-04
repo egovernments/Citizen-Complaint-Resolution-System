@@ -21,6 +21,22 @@ Redis key families, error codes) also needs a `contract.proposal` on thread
 | `revocation/*`, `sessions/session-store.ts` (update-only writes, generation) | core-revocation | 10 |
 | `sync/*` (mirror, Keycloak writer, reconcile, email/phone write-through) | core-sync | 12 |
 
+**Exact export paths** (consumers import these; nothing else):
+- `sync/keycloak-writer.ts`: `updateKeycloakUser`; `sync/mirror.ts`: `mirrorPerson`;
+  `sync/reconcile.ts`: `getReconcileReadiness`, `startReconcile`.
+- `accounts/credential-service.ts`: §3; `accounts/digit-writer.ts`: `writeDigitIdentifiers`.
+- `revocation/index.ts`: every §5 function; `revocation/poller.ts`:
+  `getPollerReadiness`, `startKeycloakEventPoller`.
+- `bindings/predicate.ts`, `bindings/store.ts`: §2; `bindings/invitations.ts`:
+  `pendingInvitationsFor(subject)`.
+- Keycloak Admin calls: `request()` exported from
+  `organizations/organization-service.ts` (one-word `export`, made identically
+  by whoever needs it first).
+
+A temporary seam (`bindings/ports.ts`) is allowed while a provider hasn't
+merged, but it is removed before the owner PR: consumers import the real
+modules directly.
+
 A leaf edits another leaf's file only by agreement on the bridge. Each module
 exports exactly the functions below; a consumer whose provider has not merged
 yet codes against the signature and fakes it in its own tests.
