@@ -50,6 +50,6 @@ export async function expectContractError(
   expect(route.codes, `${route.method} ${route.path} may not return ${code}`).toContain(code);
   expect({ status: response.status, code: body.code }).toEqual({ status: ERROR_CODES[code].status, code });
   expectSchema("error-envelope", body);
-  if (response.status === 429 || code === "PERSON_BUSY") expect(response.headers.get("retry-after")).toMatch(/^\d+$/);
+  if (response.status === 429 || code === "IDENTITY_BUSY") expect(response.headers.get("retry-after")).toMatch(/^\d+$/);
   return body;
 }

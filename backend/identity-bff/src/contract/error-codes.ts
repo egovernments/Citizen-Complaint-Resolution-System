@@ -70,7 +70,7 @@ export const ERROR_CODES = {
   SESSION_REQUIRED: { status: 401, retry: "no", meaning: "No valid session cookie for this surface" },
   SESSION_EXPIRED: { status: 401, retry: "no", meaning: "The session ended during the request" },
   SESSION_REVOKED: { status: 401, retry: "no", meaning: "The session was signed out (logout-all, credential change, revocation)" },
-  PERSON_BUSY: { status: 503, retry: "yes", meaning: "The person lease is held, or was lost mid-request; Retry-After is set" },
+  IDENTITY_BUSY: { status: 503, retry: "yes", meaning: "The person lease is held, or was lost mid-request; Retry-After is set" },
 
   // Staff context selection.
   TENANT_CONTEXT_UNAVAILABLE: { status: 403, retry: "no", meaning: "The tenant is not selectable for this session" },

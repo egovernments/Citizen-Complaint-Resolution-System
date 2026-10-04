@@ -56,7 +56,7 @@ Until item 14 removes it, staff resolution is **binding, else the managed `kcbff
 
 - Every JSON error body is **`{code, error, ...details}`** (D25/B5). `code` is stable and comes from §4; `error` is English display text, and clients must not parse it. Details are named fields such as `attemptsRemaining`.
 - A code is always sent with the **same HTTP status** (§4).
-- `429` and `PERSON_BUSY` responses carry `Retry-After` (seconds).
+- `429` and `IDENTITY_BUSY` responses carry `Retry-After` (seconds).
 - Sign-in failures during a browser redirect are not HTTP errors. The BFF answers `303` to `returnTo` with `?authResult=<id>`, and the page reads the result once from `GET /identity/v1/auth-results/:id` (§3.2.4).
 - Clients show text from their own localisation keyed by `code`, never from `error` (items 2 and 6).
 
@@ -90,8 +90,11 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 **operation → tenant → slug → person → phone → uuid**
 
 - Never take an outer lock while holding an inner one.
-- The **person lease** is the only lock around a person's Keycloak read-modify-write, `_select`, revocation, provider `_unlink` and binding transitions. It is **not re-entrant**: code that already holds it passes it down instead of taking it again.
-- Writes made under the person lease are **fenced**: a Lua script checks that the lease token still matches before it writes. A lease lost mid-request answers 503 `PERSON_BUSY`, and a token minted under the lost lease is revoked before the error is returned.
+- The **person lease** is the only lock around a person's Keycloak read-modify-write, `_select`, revocation, provider `_unlink` and binding transitions. Every lane takes it through `src/modules/accounts/person-lease.ts` (`withPersonLease`, `currentPersonLease`), never with its own code.
+  - `SET NX PX 30000`, renewed every 10 s; a caller waits at most 15 s, then gets 503 `IDENTITY_BUSY` with `Retry-After`.
+  - Re-entry for the **same** person within one async chain is allowed. Taking a **different** person's lease while holding one throws.
+  - The uuid lock and the phone lock are taken only **inside** a person lease.
+- Writes made under the person lease are **fenced**: a Lua script checks that the lease token still matches before it writes. A lease lost mid-request answers 503 `IDENTITY_BUSY`, and a token minted under the lost lease is revoked before the error is returned.
 - Key names are in §7.
 
 ## 3. Routes
@@ -304,7 +307,7 @@ change_phone → 200 {phoneNumber, phoneNumberVerified: true}
 - New phone identities get an **opaque** Keycloak username. Existing usernames stay, and lookup always follows the current verified phone (design §8).
 - A **phone change** keeps the citizen account's uuid. It updates Keycloak, then DIGIT. It ends the person's other sessions that carry the old number.
 - A new citizen without a given name gets the national mobile number as their DIGIT name (D17).
-- Errors: `INVALID_REQUEST`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
+- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `OTP_EXPIRED`, `OTP_INVALID` (+ `attemptsRemaining`) (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN`, `IDENTITY_DISABLED` (403); `TENANT_ROUTE_NOT_FOUND` 404; `IDENTITY_CONFLICT`, `PHONE_IN_USE` (409); `TENANT_ROUTE_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 ### 3.3 Browser, signed in
 
@@ -382,7 +385,7 @@ Body `{surface: "configurator" | "employee", tenantId}`. An employee's `tenantId
 7. Mirror DIGIT→Keycloak, and write the verified email Keycloak→DIGIT.
 
 - The BFF never returns a refresh token (D25/B7). Clients call `_select` again on expiry.
-- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `PERSON_BUSY` (503).
+- Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `SESSION_REQUIRED`, `SESSION_EXPIRED`, `SESSION_REVOKED` (401); `UNTRUSTED_ORIGIN`, `TENANT_CONTEXT_UNAVAILABLE`, `EMPLOYEE_ACCOUNT_NOT_LINKED`, `PENDING_INVITATION`, `ACCOUNT_LOCKED`, `DIGIT_ACCOUNT_INACTIVE` (403); `DIGIT_ACCOUNT_NOT_FOUND` 404; `TENANT_ROLES_MISSING`, `DIGIT_PII_MASKED`, `DIGIT_ACCOUNT_INVALID`, `DIGIT_UNAVAILABLE`, `IDENTITY_UNAVAILABLE`, `IDENTITY_BUSY` (503).
 
 #### 3.3.5 `POST /identity/v1/contexts/citizen/_select` (items 6, 10, 12, 13)
 
@@ -419,13 +422,13 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
   6. Mirror, and clear the marker in the final PUT.
 
   Keycloak blocks any session until the password is set.
-- **Existing person:** a `pending` binding with `invitationVersion` and `expiresAt` = now + the tenant's invitation expiry (D22: MDMS, 1 hour to 90 days, default 14 days). No membership until `_accept`. No email; the invitation appears in `/session`.
+- **Existing person:** a `pending` binding with `invitationVersion` and `expiresAt` = now + the tenant's invitation expiry (D22, §5.2). No membership until `_accept`. No email; the invitation appears in `/session`.
 - **Repeats:**
   - The request id is `linkRequestId(caller, tenantId, digitUuid, email)` (`src/modules/bindings/link-request-id.ts`). Only a person whose `digit.linkPending.requestId` equals it resumes the new-user branch. Any other existing person takes the existing-user branch.
   - A repeat returns the current state. It never demotes `active` and never resurrects `removed`.
   - `reinvite: true` on a `pending` or `removed` key issues `invitationVersion + 1` with a fresh expiry, which makes the old version stale. Without it, a `removed` key → `BINDING_REMOVED`.
 - **Locks:** person → uuid.
-- Errors: as listed in `routes.ts`, including `BINDING_BUSY`, `PERSON_BUSY`, `DIGIT_UNAVAILABLE` and `IDENTITY_UNAVAILABLE` (503).
+- Errors: as listed in `routes.ts`, including `BINDING_BUSY`, `IDENTITY_BUSY`, `DIGIT_UNAVAILABLE` and `IDENTITY_UNAVAILABLE` (503).
 
 #### 3.3.7 `GET /identity/v1/workspace-members?tenantId=&first=&max=` (item 9)
 
@@ -592,7 +595,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `SESSION_REQUIRED` | 401 | no | No valid session cookie for this surface |
 | `SESSION_EXPIRED` | 401 | no | The session ended during the request |
 | `SESSION_REVOKED` | 401 | no | The session was signed out (logout-all, credential change, revocation) |
-| `PERSON_BUSY` | 503 | yes | The person lease is held, or was lost mid-request; Retry-After is set |
+| `IDENTITY_BUSY` | 503 | yes | The person lease is held, or was lost mid-request; Retry-After is set |
 | `TENANT_CONTEXT_UNAVAILABLE` | 403 | no | The tenant is not selectable for this session |
 | `EMPLOYEE_ACCOUNT_NOT_LINKED` | 403 | after-change | No active binding or no Organization membership at the tenant (D10) |
 | `PENDING_INVITATION` | 403 | after-change | The binding at this tenant is pending; accept the invitation first |
@@ -695,7 +698,18 @@ All `digit.*` attributes are **admin-only**: declared in the user profile with v
 
 A pending binding past `expiresAt` counts as `removed` everywhere, even before anything rewrites it.
 
-### 5.2 Organization attributes
+### 5.2 Invitation expiry (MDMS, D22)
+
+| | |
+|---|---|
+| Schema code | `identity.invitationPolicy` |
+| Record | one per tenant, unique id `default` |
+| Field | `invitationExpiryHours`: integer, 1 to 2160 (1 hour to 90 days) |
+| Default | 336 (14 days), used when the record is absent or out of range |
+| Written by | PGR seeds it at onboarding; the configurator edits it (whole hours) |
+| Read by | the BFF binding service, at `_link` and re-invite |
+
+### 5.3 Organization attributes
 
 | Attribute | Value | Notes |
 |---|---|---|
@@ -713,7 +727,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 - Organization **names and aliases are unique in the realm**. When a slug change creates a new Organization, the old one is renamed `<name> [failed <first 8 characters of its id>]` before the create.
 - The visibility filter (lifecycle absent or `ACTIVE`, and enabled) runs **before** tenant-collision detection.
 
-### 5.3 Client attributes
+### 5.4 Client attributes
 
 | Attribute | Clients | Value |
 |---|---|---|
@@ -757,9 +771,9 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | `{p}:identity:op-lock:{operationId}` | 60 s, renewed | Every onboarding primitive; validation **and** mutation inside it | S |
 | `{p}:identity:tenant-lock:{tenantId}` | 60 s | `organizations/_ensure` | S |
 | `{p}:identity:slug-lock:{slug}` | 60 s | `organizations/_ensure` | S |
-| `{p}:identity:person-lease:{sub}` | 30 s, renewed; wait ≤ 15 s | Replaces `{p}:identity:user-attributes-lease:{userId}` and `{p}:digit-user-lease:{identityKey}`. Fences inventory and session writes | S |
-| `{p}:identity:phone-lock:{phoneRef}` | 30 s | Phone sign-in resolution, step-up and change | S |
-| `{p}:identity:uuid-lock:{tenantId}:{uuid}` | 30 s; wait ≤ 15 s | Binding create, accept and remove. Replaces `{p}:account-link-lease:{digitUuid}` | S |
+| `{p}:identity:subject-lease:{sub}` | 30 s, renewed every 10 s; wait ≤ 15 s | The person lease (§2.5). Replaces `{p}:identity:user-attributes-lease:{userId}` and `{p}:digit-user-lease:{identityKey}`. Fences inventory and session writes | S |
+| `{p}:identity:phone-lock:{phoneRef}` | 30 s | Phone sign-in resolution, step-up and change; inside the person lease | S |
+| `{p}:identity:uuid-lock:{tenantId}:{uuid}` | 30 s; wait ≤ 15 s | Binding create, accept and remove; inside the person lease. Replaces `{p}:account-link-lease:{digitUuid}` | S |
 | `{p}:identity-reconciliation-lease` | 300 s, renewed | One reconcile run at a time (unchanged) | S |
 | `{p}:identity:kc-events:lease` | 60 s, renewed | One active event poller | S |
 
@@ -784,8 +798,9 @@ The magic-link and password-setup IP limit keys switch from the raw IP to `ipRef
 | Pattern | Value | TTL | Tag |
 |---|---|---|---|
 | `{p}:identity:citizen-otp:challenge:{id}` | HASH `{hash, attempts, phoneNumber, tenant, purpose, subject?, sessionRef?, claimed?}` | `IDENTITY_CITIZEN_OTP_TTL_SECONDS` (300) | S |
-| `{p}:identity:citizen-otp:cooldown:{phoneRef}` | `"1"` | 30 s | S |
-| `{p}:identity:citizen-otp:sends:{phone\|ip}:{ref}` | counter | 3600 s | S |
+| `{p}:identity:citizen-otp:latest:{phoneRef}` | the newest challengeId; `_send` replaces it and deletes the previous challenge, so only the newest code works | the OTP TTL | S |
+| `{p}:identity:citizen-otp:cooldown:{phoneRef}:{ipRef}` | `"1"` (resend cooldown per phone **and** IP, so a stranger can't hold someone's cooldown) | 30 s | S |
+| `{p}:identity:citizen-otp:sends:{phone\|ip}:{ref}` | counter: 5 an hour per phone (caps SMS cost and guesses per number), 20 per IP | 3600 s | S |
 
 ### 7.4 Tokens and revocation
 
