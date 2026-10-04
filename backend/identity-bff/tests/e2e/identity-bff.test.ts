@@ -3,6 +3,8 @@ import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
+import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
+import { clearBrandingCaches } from "../../src/modules/branding/tenant-branding.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
@@ -1905,6 +1907,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
   it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
+    const removedAccounts = [...digit.accounts.entries()].filter(([, account]) => account.userName === identity.username);
     for (const [key, account] of digit.accounts) {
       if (account.userName === identity.username) digit.accounts.delete(key);
     }
@@ -1924,6 +1927,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(JSON.stringify(digit.mdms.get(rolesKey) ?? null)).toBe(roles);
     } finally {
       digit.setUndefinedRoles([]);
+      // Restore this test's deleted records: later tests retain a durable
+      // digit.accounts reference and must exercise the same citizen UUID.
+      for (const [uuid, account] of removedAccounts) digit.accounts.set(uuid, account);
     }
   });
 
@@ -3131,6 +3137,42 @@ describe("binding workspace public routes", () => {
       expect(await getRedis().exists(tokenKey(account), tokenHoldersKey(account))).toBe(0);
       expect(await getRedis().sismember(personTokensKey(subject), accountId(account))).toBe(0);
     } finally { spy.mockRestore(); }
+  });
+
+  it("records a newly signed-in citizen before issuance and propagates its changed verified phone to the same DIGIT account", async () => {
+    digit.mdms.set(digit.mdmsKey("ke", "common-masters.MobileNumberValidation"),
+      structuredClone(digit.mdms.get(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"))!));
+    clearBrandingCaches();
+    const subject = "binding-citizen-phone";
+    await kcAdmin("/users", { id: subject, username: subject, enabled: true,
+      attributes: { phoneNumber: ["+254799123981"], phoneNumberVerified: ["true"] } });
+    const { sessionId } = await createIdentitySession({ accessToken: "server-test-token", accessExpiresIn: 3600 },
+      { sub: subject, azp: config.keycloakCitizenClientId }, config.keycloakCitizenClientId,
+      { surface: "citizen", boundTenant: { tenantId: "ke.bomet", rootTenantId: "ke.bomet", urlSlug: "bomet-county", name: "Bomet County" } });
+    const original = citizenTokenMinter();
+    let checkedBeforeIssuance = false;
+    setCitizenTokenMinter({ async mint(account, ...args) {
+      const user = await kcUser(subject);
+      expect(JSON.parse(user.attributes["digit.accounts"][0]).entries).toContainEqual(expect.objectContaining({
+        kind: "citizen", tenantId: "ke", uuid: account.uuid, active: true,
+      }));
+      checkedBeforeIssuance = true;
+      return original.mint(account, ...args);
+    } });
+    let accountUuid: string;
+    try {
+      const selected = await post("/contexts/citizen/_select", `${config.identityCitizenCookieName}=${sessionId}`, {});
+      expect(selected.status).toBe(200);
+      accountUuid = (await selected.json()).UserRequest.uuid;
+      expect(checkedBeforeIssuance).toBe(true);
+    } finally { setCitizenTokenMinter(original); }
+    const user = await kcUser(subject);
+    expect(user.attributes["digit.citizenRegistrations"]).toHaveLength(1);
+    await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, phoneNumber: ["+254799123982"] } });
+    const count = digit.accounts.size;
+    expect(await propagateIdentifiers(subject)).toMatchObject({ written: 1, skipped: 0 });
+    expect(digit.accounts.get(accountUuid!)!).toMatchObject({ mobileNumber: "799123982", countryCode: "+254" });
+    expect(digit.accounts.size).toBe(count);
   });
 
   it.each(["stale", "expired", "removed"])("returns INVITATION_STALE for a %s invitation and releases removed UUIDs", async (kind) => {
