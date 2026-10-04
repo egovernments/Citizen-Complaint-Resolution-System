@@ -1,0 +1,35 @@
+8c workspace HRMS offset regression — 2026-10-05 IST
+Base: identity/completion-base 69f9af553
+
+Production change: fixed HRMS workspace probe query adds offset=0 and retains limit=1000.
+WorkspaceGateway is the only workspace HRMS call site. Equivalent founder searches in OnboardingSteps were reported to onb-pgr/owner (msg_35109217a0d24d5ea58db927c2c2a6fd); this change does not edit that file.
+
+Before fix (JDK17, expected failure; exit 1):
+mvn -o -q -f backend/pgr-services/pom.xml -Dtest=WorkspaceGatewayTest#workspaceSearchSuppliesPaginationToStrictHrms test
+1 test, 1 failure: Status expected:<200> but was:<503>. HTTP fixture rejects missing offset/limit instead of supplying defaults.
+
+After fix (JDK17, exit 0):
+mvn -o -q -f backend/pgr-services/pom.xml -Dtest=WorkspaceGatewayTest,WorkspaceRouteTest test
+WorkspaceGatewayTest: 6 passed, 0 failures/errors/skips
+  PASS publisherWritesAuthoritativeMdmsEveryLocaleAndAcceptsEmptyCacheBust
+  PASS nameCheckUsesDedicatedBearerAndExactBatchWire
+  PASS occupiedLegacyNameAndUnreadableResultsFailClosed
+  PASS workspaceSearchSuppliesPaginationToStrictHrms
+  PASS paginatedProbeStillExcludesFounderAndInactiveEmployees
+  PASS paginatedHrmsFailureStillReturnsDependencyUnavailable
+WorkspaceRouteTest: 8 passed, 0 failures/errors/skips
+  PASS allRoutesRejectForgedCallerRoleAndCrossTenantAdmin
+  PASS probesExcludePlatformPrerequisitesAndInactiveRows
+  PASS normalDigitTokenReturnsLegacyWithoutProbesAndFreshlyChecksEachRequest
+  PASS absentTokenAndDisabledUserAreUnauthorized
+  PASS unreadableLocalReservationReturns503WithoutRenameWrites
+  PASS unreadableWorkspaceRowReturns503BeforeNameChecksOrRenameWrites
+  PASS unreadableProbeReturns503InsteadOfFalseReadiness
+  PASS unreadableBffNameCheckReturns503WithoutRenameWrites
+
+The successful HTTP route test asserts tenantId=example, offset=0, limit=1000 and Probes.EMPLOYEES=true. Additional cases preserve founder/inactive-user exclusions and 503 for HRMS failure. Existing route authorization/rename checks also pass.
+Affected suites only per assignment; no full-suite run and no deployment. Live gate rerun remains root-owned.
+
+Local log hashes:
+.artifacts/workspace/hrms-offset-before.log SHA256 d6f6f8864793b76f5f31e81d5c0d22b23480108598c572aaaa7a0d999cb3e37e
+.artifacts/workspace/hrms-offset-after.log SHA256 57fc33601311be8324e3ab4a925e185e363eafc59293ac3a4789bf8a794bd98b
