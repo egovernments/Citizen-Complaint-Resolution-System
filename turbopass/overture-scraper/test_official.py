@@ -225,12 +225,59 @@ class Rows(unittest.TestCase):
         self.assertEqual({r[12] for r in rows}, {None})
         self.assertEqual(rows[1][0], 'geoboundaries:TST:A0')  # the shapeID still makes the id
 
+    def test_a_code_reused_across_levels_gets_distinct_ids(self):
+        # COD: a city that is both ADM1 and ADM2 under one P-code.
+        ds = nested_country('cod')
+        ds.levels[2].gdf.loc[0, 'code'] = 'A0'  # same code as the ADM1 above it
+        official.check_levels(ds, 0.9, 0.02)
+        ids = [r[0] for r in official.rows_for(ds, 'TS', 0.0, True)]
+        self.assertEqual(len(ids), len(set(ids)))
+
     def test_repeated_codes_get_distinct_ids(self):
         ds = nested_country()
         ds.levels[2].gdf['code'] = 'same'
         official.check_levels(ds, 0.9, 0.02)
         ids = [r[0] for r in official.rows_for(ds, 'TS', 0.0, False)]
         self.assertEqual(len(ids), len(set(ids)))
+
+
+class VerifyDb(unittest.TestCase):
+    """verify_db.py against a tiny DB: one weak country must not sink the rest."""
+
+    def run_verify(self, chosen_by_country):
+        import sqlite3
+        import subprocess
+        import sys
+        d = tempfile.mkdtemp()
+        db = os.path.join(d, 'b.sqlite')
+        c = sqlite3.connect(db)
+        c.execute('CREATE TABLE boundaries (id VARCHAR PRIMARY KEY, division_id VARCHAR, subtype VARCHAR, class VARCHAR, '
+                  'country VARCHAR, name VARCHAR, admin_level INTEGER, bbox JSON, geometry JSON, parent_id VARCHAR, '
+                  'source VARCHAR, licence VARCHAR, pcode VARCHAR, official INTEGER)')
+        c.execute('CREATE TABLE official_datasets (country VARCHAR, source VARCHAR, chosen INTEGER, usable INTEGER, '
+                  'licence VARCHAR, dataset_date VARCHAR, quality VARCHAR, url VARCHAR, levels JSON, note VARCHAR)')
+        for cc, chosen in chosen_by_country.items():
+            c.execute("INSERT INTO boundaries VALUES (?, ?, 'country', 'land', ?, 'X', 0, NULL, NULL, NULL, 'overture', NULL, NULL, 0)",
+                      (f'ov-{cc}', f'ov-{cc}', cc))
+            c.execute("INSERT INTO boundaries VALUES (?, ?, 'region', 'land', ?, 'R', 1, NULL, NULL, ?, 'overture', NULL, NULL, 0)",
+                      (f'ov-{cc}-r', f'ov-{cc}-r', cc, f'ov-{cc}'))
+            c.execute('INSERT INTO official_datasets VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)',
+                      (cc, 'cod', int(chosen), 'CC BY-IGO', '2026', '', '', '[]', '' if chosen else 'GADM'))
+        c.commit()
+        c.close()
+        env = dict(os.environ, OVERTURE_DB_PATH=db, COUNTRIES=','.join(chosen_by_country))
+        here = os.path.dirname(os.path.abspath(__file__))
+        return subprocess.run([sys.executable, os.path.join(here, 'verify_db.py')], env=env, capture_output=True, text=True)
+
+    def test_a_country_without_an_official_set_is_a_warning(self):
+        r = self.run_verify({'KE': True, 'XX': False})
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn('WARNING: XX: no official set, Overture only', r.stdout)
+
+    def test_no_official_set_anywhere_fails(self):
+        r = self.run_verify({'KE': False, 'XX': False})
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn('no requested country got an official set', r.stdout)
 
 
 if __name__ == '__main__':

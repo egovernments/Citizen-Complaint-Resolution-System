@@ -4,9 +4,10 @@ Overture rows: exits 1 when a requested country has no rows or no
 country-level root, when too few rows got a parent (MIN_PARENT_LINKED, default
 0.9), or when a division still has more than one area.
 
-Official sets (skipped when OFFICIAL_SOURCES=none): exits 1 when a requested
-country ended up with no official set, or when one of its rows below the
-country points at a parent that isn't there. Prints a summary either way.
+Official sets (skipped when OFFICIAL_SOURCES=none): a country with no usable
+official set is a WARNING and stays Overture-only; exits 1 when no requested
+country got one (an outage, not one weak dataset) or when an official row below
+the country points at a parent that isn't there. Prints a summary either way.
 """
 import json
 import os
@@ -26,6 +27,8 @@ print(f"Overture release {meta.get('release', 'unknown')}, built {meta.get('buil
 overture = "(source = 'overture' OR source IS NULL)" if 'source' in columns else '1'
 
 problems = []
+warnings = []
+with_official = 0
 for c in countries:
     total, roots, linked = conn.execute(
         "SELECT COUNT(*), COALESCE(SUM(subtype = 'country'), 0), COALESCE(SUM(parent_id IS NOT NULL), 0) "
@@ -60,9 +63,12 @@ if official_wanted:
             ).fetchall()
             chosen = [r for r in rows if r[1]]
             if not chosen:
+                # One weak country must not throw away every other country's data:
+                # it stays Overture-only, and the run says so.
                 notes = '; '.join(f'{r[0]}: {r[6] or "no level below the country nests"}' for r in rows) or 'nothing loaded'
-                problems.append(f'{c}: no official set ({notes})')
+                warnings.append(f'{c}: no official set, Overture only ({notes})')
                 continue
+            with_official += 1
             src, _, _, licence, date, levels, _ = chosen[0]
             kept = [lv for lv in json.loads(levels or '[]') if lv.get('kept')]
             print(f"  {c}: {src} ({date or 'undated'}; {licence}) — "
@@ -74,8 +80,13 @@ if official_wanted:
             ).fetchone()[0]
             if broken:
                 problems.append(f'{c}: {broken} {src} row(s) point at a missing parent')
+        if not with_official:
+            # Nothing at all: an outage (HDX / geoBoundaries unreachable), not one weak dataset.
+            problems.append('no requested country got an official set')
 conn.close()
 print(f'DB size {os.path.getsize(db_path) / 1e6:.0f} MB')
+for w in warnings:
+    print(f'WARNING: {w}')
 
 if problems:
     print('NOT READY:')

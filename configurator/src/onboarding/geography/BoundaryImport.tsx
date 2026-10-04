@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '../../App';
 import {
   MapPin,
@@ -32,14 +32,14 @@ import { reportStepError, trackStepAction } from '../telemetry';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
-import { buildOsmBoundaries, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { TURBOPASS_BASE } from '@/hooks/useTurbopassSources';
+import { buildOsmBoundaries, computeContainingParents, groupFetchedLevels, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
 import {
   deadEndMessage,
   formatSuggestionLabel,
   pickPromptMessage,
   pickSuggestion,
   attributionLine,
-  availableSources,
   chooseTurbopassSource,
   fetchSourceFor,
   isOfflineSource,
@@ -105,9 +105,6 @@ function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; erro
   return { valid: true, error: null };
 }
 
-// Turbopass suggestions endpoint. Same-origin '/turbopass' by default (nginx
-// proxies it to the search-api container); override via VITE_TURBOPASS_URL.
-const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
 
 // Boundary data source served by turbopass. Unset (the default), Phase 2 asks
 // the search-api's /health and uses 'official' — per country, the OCHA COD-AB
@@ -254,12 +251,16 @@ export type BoundarySource = 'osm' | 'excel';
 export default function BoundaryImport({
   source,
   hasHierarchies,
+  sourceChoices,
   onDone,
   onCancel,
 }: {
   source: BoundarySource;
   /** With none yet, "create a hierarchy" is the only way in, so the choice is skipped. */
   hasHierarchies: boolean;
+  /** Sources turbopass can answer, from Geography's /health read: null while
+   *  asking, [] when it isn't deployed or holds no data. */
+  sourceChoices: string[] | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -312,19 +313,20 @@ export default function BoundaryImport({
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
   // The place whose boundaries were fetched — named on the level screen.
-  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; label: string } | null>(null);
+  const [fetchedPlace, setFetchedPlace] = useState<{ id: string; label: string; country: string | null } | null>(null);
   // Credit line for the fetched data — the official sets' licences require it.
   const [fetchedAttribution, setFetchedAttribution] = useState<string | null>(null);
   const [turbopassSource, setTurbopassSource] = useState(() =>
     chooseTurbopassSource(CONFIGURED_TURBOPASS_SOURCE, null),
   );
-  // Sources the boundary service can answer, from its /health: null while
-  // asking, [] when it isn't deployed or holds no data.
-  const [sourceChoices, setSourceChoices] = useState<string[] | null>(null);
+  const sourceRef = useRef(turbopassSource);
 
   // Switching source drops everything the old one returned: a suggestion's
-  // place_id only exists in the source that found it.
+  // place_id only exists in the source that found it. Choosing the source
+  // already in use changes nothing — a late /health must not wipe a pick.
   const changeSource = useCallback((next: string) => {
+    if (next === sourceRef.current) return;
+    sourceRef.current = next;
     setTurbopassSource(next);
     setSuggestions([]);
     setShowSuggestions(false);
@@ -332,27 +334,12 @@ export default function BoundaryImport({
     setError(null);
   }, []);
 
-  // What this server holds decides the dropdown and, unless the build pins a
-  // source, the default one.
+  // Once Geography's /health read lands, start on the first source the server
+  // can answer, unless the build pins one.
   useEffect(() => {
-    let cancelled = false;
-    fetch(`${TURBOPASS_BASE}/health`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
-        if (cancelled) return;
-        setSourceChoices(availableSources(body?.sources));
-        if (!(CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) {
-          changeSource(chooseTurbopassSource(undefined, body?.sources));
-        }
-      })
-      .catch(() => {
-        // Not JSON (the SPA answering for a missing /turbopass/) or unreachable.
-        if (!cancelled) setSourceChoices([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [changeSource]);
+    if (sourceChoices === null || (CONFIGURED_TURBOPASS_SOURCE ?? '').trim()) return;
+    changeSource(chooseTurbopassSource(undefined, sourceChoices));
+  }, [sourceChoices, changeSource]);
 
   // Google Maps (optional, #1994): kept in this tenant's MapConfig, so every
   // map that honours MapConfig switches together.
@@ -367,8 +354,15 @@ export default function BoundaryImport({
   const levelSelectionKey = `${fetchedPlace?.id ?? ''}|${adminLevels
     .map((l) => `${l.level}:${l.selected ? 1 : 0}`)
     .join(',')}`;
+  // Which area contains which is pure geometry: computed once per fetch, then
+  // every selection toggle and the create step reuse it.
+  const containingParents = useMemo(
+    () => computeContainingParents(adminLevels),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the levels' features change only with a new fetch
+    [fetchedPlace?.id],
+  );
   const boundaryQuality = useMemo(
-    () => summarizeBoundaryQuality(adminLevels),
+    () => summarizeBoundaryQuality(adminLevels, containingParents),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the selection; level names don't change it
     [levelSelectionKey],
   );
@@ -771,7 +765,11 @@ export default function BoundaryImport({
         return;
       }
 
-      setFetchedPlace({ id: placeId, label: suggestion.properties.formatted || placeName });
+      setFetchedPlace({
+        id: placeId,
+        label: suggestion.properties.formatted || placeName,
+        country: suggestion.properties.country_name || null,
+      });
       setFetchedAttribution(attributionLine(geojson.features));
       setAdminLevels(extractedLevels);
       setStep('map-levels');
@@ -789,8 +787,8 @@ export default function BoundaryImport({
     const key = googleKeyDraft.trim();
     setSavingGoogleKey(true);
     setGoogleKeyStatus(null);
+    let check: GoogleKeyCheck | null = null;
     try {
-      let check: GoogleKeyCheck;
       try {
         check = await validateGoogleMapsKey(key);
       } catch (e) {
@@ -810,7 +808,7 @@ export default function BoundaryImport({
     } catch (e) {
       setGoogleKeyStatus({
         kind: 'error',
-        text: `Google accepted the key, but saving it to Map Config failed: ${e instanceof Error ? e.message : String(e)}. ` +
+        text: `${check === 'ok' ? 'Google accepted the key' : "Google didn't confirm the key in time"}, and saving it to Map Config failed: ${e instanceof Error ? e.message : String(e)}. ` +
           'A deployment whose MapConfig schema predates the mapProvider field rejects it — see docs/features/maps/README.md.',
       });
     } finally {
@@ -845,7 +843,7 @@ export default function BoundaryImport({
     setError(null);
 
     const sortedLevels = getSelectedLevels(adminLevels);
-    const { boundaries, skipped } = buildOsmBoundaries(sortedLevels, boundaryTenant, OSM_HIERARCHY_TYPE);
+    const { boundaries, skipped } = buildOsmBoundaries(sortedLevels, boundaryTenant, OSM_HIERARCHY_TYPE, containingParents);
 
     if (boundaries.length === 0) {
       setError("All fetched features were skipped (unnamed, name not romanizable, or no parent found). Nothing to create.");
@@ -1596,7 +1594,7 @@ export default function BoundaryImport({
                       />
                       {lvl.suggestedName && lvl.mappedName === lvl.suggestedName && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Suggested: what {fetchedPlace?.label?.split(', ').pop() || 'this country'} calls this level. Edit it if your tenant uses another name.
+                          Suggested: what {fetchedPlace?.country || 'this country'} calls this level. Edit it if your tenant uses another name.
                         </p>
                       )}
                     </div>

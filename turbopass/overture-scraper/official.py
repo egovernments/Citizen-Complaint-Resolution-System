@@ -381,11 +381,13 @@ def choose(datasets):
 def rows_for(ds, alpha2, tolerance, chosen):
     prefix = f'{ds.source}:{ds.iso3}'
     ids_by_level = {}
+    # One id space for the whole dataset: a code reused at two levels (a city that
+    # is both ADM1 and ADM2 under one P-code) must not collide on boundaries.id.
+    seen = {}
     out = []
     for i, lv in enumerate(ds.levels):
         g = lv.gdf
         codes = [c if isinstance(c, str) and c else f'ADM{lv.n}-{k}' for k, c in enumerate(g['code'].tolist())]
-        seen = {}
         ids = []
         for c in codes:  # a repeated code must not collapse two areas into one row
             seen[c] = seen.get(c, 0) + 1

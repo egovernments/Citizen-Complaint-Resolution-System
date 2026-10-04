@@ -79,7 +79,8 @@ serving the DB it opened until it restarts; restart it to serve the new one.
    kept, dropped and why is in the `official_datasets` table and the log.
 5. `verify_db.py` checks every requested country is present with a root, at least 90% of
    Overture areas have a parent, no division has two areas, and — unless
-   `OFFICIAL_SOURCES=none` — each country has an official set whose rows all reach a parent.
+   `OFFICIAL_SOURCES=none` — official rows all reach a parent. A country without a usable official set
+   is a warning and stays Overture-only; the run fails only if no country got one (an outage).
 
 | Variable | Default | |
 |---|---|---|

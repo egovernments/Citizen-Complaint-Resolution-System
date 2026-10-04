@@ -106,6 +106,7 @@ export default function GeographyStep() {
         <BoundaryImport
           source={source}
           hasHierarchies={!!hierarchies?.length}
+          sourceChoices={boundarySources}
           onCancel={() => setSource(null)}
           onDone={() => {
             setSource(null);

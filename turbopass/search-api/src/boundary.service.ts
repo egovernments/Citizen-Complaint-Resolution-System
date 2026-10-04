@@ -284,6 +284,14 @@ export class BoundaryService {
   }
 
   private takeGeoapify(calls = 1): void {
+    if (!this.geoapifyLimiter.canEverTake(calls)) {
+      // A cap below one request's needs can never be met: say so, instead of
+      // a "retry" that never succeeds.
+      throw new HttpException(
+        `GEOAPIFY_RATE_LIMIT=${this.geoapifyLimiter.limitPerWindow} is below the ${calls} Geoapify calls this request needs. Raise it to at least ${GEOAPIFY_FETCH_CALLS} (or 0 for no cap).`,
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
     const wait = this.geoapifyLimiter.tryTake(calls);
     if (wait > 0) {
       throw new HttpException(
@@ -484,6 +492,9 @@ export class BoundaryService {
                  ${this.optionalColumns(['source', 'licence', 'pcode'])}
           FROM boundaries b
           WHERE b.id IN children
+          -- Deterministic order: clients assign codes for same-named areas
+          -- (X, X_2) in the order areas arrive.
+          ORDER BY b.id
         `);
         const rows = stmt.all(id);
 

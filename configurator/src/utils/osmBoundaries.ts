@@ -246,10 +246,43 @@ function resolveNameAndCode(properties: any): {
  * parents contain the child's representative point (enclaves), the
  * smallest-area parent wins — deterministic, and correct for enclaves.
  */
+/**
+ * Each feature's containing features at the level directly above it, smallest
+ * first. Pure geometry — it doesn't depend on which levels are selected — so it
+ * is computed once per fetch and shared by every data-check rebuild and by the
+ * create step, instead of repeating the point-in-polygon work on each toggle.
+ */
+export type ContainingParents = WeakMap<object, object[]>;
+
+export function computeContainingParents(levels: OsmAdminLevel[]): ContainingParents {
+  const sorted = [...levels].sort((a, b) => a.level - b.level);
+  const out: ContainingParents = new WeakMap();
+  for (let i = 1; i < sorted.length; i++) {
+    const parents = sorted[i - 1].features.map((feature) => ({ feature, area: featureOuterArea(feature) }));
+    for (const feature of sorted[i].features) {
+      if (!feature?.geometry) {
+        out.set(feature, []);
+        continue;
+      }
+      const centroid = getCentroid(feature);
+      out.set(
+        feature,
+        parents
+          .filter((p) => featureContainsPoint(p.feature, centroid))
+          .sort((a, b) => a.area - b.area)
+          .map((p) => p.feature),
+      );
+    }
+  }
+  return out;
+}
+
 export function buildOsmBoundaries(
   sortedLevels: OsmAdminLevel[],
   tenantId: string,
   hierarchyType: string,
+  // From computeContainingParents over the same fetch; without it the parents are found here.
+  containingParents?: ContainingParents,
 ): { boundaries: Boundary[]; skipped: SkippedOsmFeature[] } {
   const boundaries: Boundary[] = [];
   const skipped: SkippedOsmFeature[] = [];
@@ -263,17 +296,20 @@ export function buildOsmBoundaries(
     const bType = lvl.mappedName.trim();
     const included: { feature: any; code: string; area: number }[] = [];
 
-    // Stable code-suffix assignment: Overpass `qt` output order shifts with
-    // OSM edits, so sort by OSM id before assigning BOMET vs BOMET_2.
-    const features = [...lvl.features].sort((a, b) =>
-      String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
-    );
+    // Stable code-suffix assignment: which of two same-named areas becomes
+    // BOMET and which BOMET_2 must not change between fetches, because the codes
+    // are what complaints and localisation point at. turbopass features carry
+    // their stable id in properties.place_id (older OSM-shaped input: id).
+    const stableId = (f: { id?: unknown; properties?: { place_id?: unknown } } | null) =>
+      String(f?.properties?.place_id ?? f?.id ?? '');
+    const features = [...lvl.features].sort((a, b) => stableId(a).localeCompare(stableId(b)));
+    const parentCodeOf = new Map(parentIncluded.map((p) => [p.feature, p.code]));
 
     for (const feature of features) {
       const { displayName, code: baseCode, hasName } = resolveNameAndCode(feature.properties);
       if (!baseCode) {
         skipped.push({
-          name: hasName ? displayName : String(feature.id ?? '(unnamed)'),
+          name: hasName ? displayName : stableId(feature) || '(unnamed)',
           levelName: bType,
           osmLevel: lvl.level,
           reason: hasName ? 'name not romanizable' : 'unnamed',
@@ -284,7 +320,17 @@ export function buildOsmBoundaries(
 
       let parentCode: string | undefined = undefined;
       if (i > 0) {
-        if (feature.geometry) {
+        const containing = containingParents?.get(feature);
+        if (containing) {
+          // Smallest containing parent that was itself created.
+          for (const p of containing) {
+            const c = parentCodeOf.get(p);
+            if (c) {
+              parentCode = c;
+              break;
+            }
+          }
+        } else if (feature.geometry) {
           const centroid = getCentroid(feature);
           // Search ONLY the immediate parent level to maintain a strict
           // tree; among all containing parents, take the smallest area.

@@ -22,4 +22,11 @@ describe('RateLimiter', () => {
     const rl = new RateLimiter(0);
     for (let i = 0; i < 1000; i++) expect(rl.tryTake()).toBe(0);
   });
+
+  it('knows when a request can never fit the cap', () => {
+    const limiter = new RateLimiter(5);
+    expect(limiter.canEverTake(5)).toBe(true);
+    expect(limiter.canEverTake(6)).toBe(false);
+    expect(new RateLimiter(0).canEverTake(1000)).toBe(true); // 0 = no cap
+  });
 });

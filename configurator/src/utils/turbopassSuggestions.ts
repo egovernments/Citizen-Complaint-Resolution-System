@@ -116,17 +116,15 @@ export function isOfflineSource(source: string): boolean {
   return (OFFLINE_SOURCES as readonly string[]).includes(source);
 }
 
-/** The source Phase 2 uses: the build-time VITE_TURBOPASS_SOURCE when set,
- *  else `official` when the server has official sets, else `overture`.
- *  `sources` is /health's map of what the server can answer (null when
- *  /health couldn't be read — then the long-standing default stands). */
-export function chooseTurbopassSource(
-  configured: string | undefined,
-  sources: Record<string, unknown> | null | undefined,
-): string {
+/** The source Phase 2 starts on: the build-time VITE_TURBOPASS_SOURCE when
+ *  set, else the first source the server can answer (`choices`, from
+ *  availableSources: official first). `overture` only while /health hasn't
+ *  answered (null) or lists nothing — never a source /health says is down,
+ *  which would leave every search answering 503. */
+export function chooseTurbopassSource(configured: string | undefined, choices: string[] | null | undefined): string {
   const fixed = (configured ?? '').trim();
   if (fixed) return fixed;
-  return sources?.official === true ? 'official' : 'overture';
+  return choices?.[0] ?? 'overture';
 }
 
 /** Every source the search-api can serve, in the order Phase 2 offers them. */

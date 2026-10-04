@@ -13,7 +13,18 @@ export class RateLimiter {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Reserves `n` calls. Returns 0 when reserved, else seconds until there is room. */
+  /** The configured cap per window (0 = no cap). */
+  get limitPerWindow(): number {
+    return this.limit;
+  }
+
+  /** False when `n` calls exceed the cap itself, so waiting can never help. */
+  canEverTake(n: number): boolean {
+    return this.limit <= 0 || n <= this.limit;
+  }
+
+  /** Reserves `n` calls. Returns 0 when reserved, else seconds until there is room.
+   *  Call canEverTake first: for `n` above the cap there is never room. */
   tryTake(n = 1): number {
     if (this.limit <= 0) return 0; // 0 disables the cap
     const t = this.now();

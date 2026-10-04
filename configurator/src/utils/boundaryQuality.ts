@@ -7,7 +7,7 @@
 // not from the source's parent_id. On Overture, parent_id looks clean (only the
 // country roots lack one) while the real build still drops places whose point
 // falls in no parent polygon; a parent_id count would report all-clear.
-import { buildOsmBoundaries, type OsmAdminLevel } from './osmBoundaries';
+import { buildOsmBoundaries, type ContainingParents, type OsmAdminLevel } from './osmBoundaries';
 
 export interface LevelQuality {
   level: number;
@@ -34,7 +34,10 @@ export interface BoundaryQuality {
 
 /** Summary of the SELECTED levels, or null while they can't form a hierarchy
  *  (fewer than two, or a gap — the same shape rule the level screen enforces). */
-export function summarizeBoundaryQuality(allLevels: OsmAdminLevel[]): BoundaryQuality | null {
+export function summarizeBoundaryQuality(
+  allLevels: OsmAdminLevel[],
+  containingParents?: ContainingParents,
+): BoundaryQuality | null {
   const sorted = [...allLevels].sort((a, b) => a.level - b.level);
   const idx = sorted.flatMap((l, i) => (l.selected ? [i] : []));
   if (idx.length < 2 || idx[idx.length - 1] - idx[0] !== idx.length - 1) return null;
@@ -42,7 +45,7 @@ export function summarizeBoundaryQuality(allLevels: OsmAdminLevel[]): BoundaryQu
   // Placeholder level names: the operator may not have named them yet, and the
   // build only needs them to be distinct.
   const selected = idx.map((i) => ({ ...sorted[i], mappedName: `L${sorted[i].level}` }));
-  const { boundaries, skipped } = buildOsmBoundaries(selected, 'quality', 'QUALITY');
+  const { boundaries, skipped } = buildOsmBoundaries(selected, 'quality', 'QUALITY', containingParents);
 
   const levels: LevelQuality[] = [];
   let aboveCodes: string[] | null = null;

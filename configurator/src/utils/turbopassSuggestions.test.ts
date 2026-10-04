@@ -167,16 +167,22 @@ describe('turbopassErrorMessage', () => {
 
 describe('chooseTurbopassSource', () => {
   it('uses the build-time source when one is set', () => {
-    expect(chooseTurbopassSource('geoapify', { official: true })).toBe('geoapify');
+    expect(chooseTurbopassSource('geoapify', ['official', 'overture'])).toBe('geoapify');
   });
 
-  it('prefers the official sets when the server has them', () => {
-    expect(chooseTurbopassSource(undefined, { overture: true, official: true })).toBe('official');
-    expect(chooseTurbopassSource('', { overture: true, official: false })).toBe('overture');
+  it('starts on the first source the server can answer', () => {
+    expect(chooseTurbopassSource(undefined, ['official', 'cod', 'overture'])).toBe('official');
+    expect(chooseTurbopassSource('', ['overture'])).toBe('overture');
   });
 
-  it('falls back to overture when /health is unreadable', () => {
+  it('never picks a source /health says is down', () => {
+    // enable_turbopass with only a Geoapify key: no offline DB.
+    expect(chooseTurbopassSource(undefined, ['geoapify'])).toBe('geoapify');
+  });
+
+  it('falls back to overture only while /health is unread or lists nothing', () => {
     expect(chooseTurbopassSource(undefined, null)).toBe('overture');
+    expect(chooseTurbopassSource(undefined, [])).toBe('overture');
   });
 });
 

@@ -431,10 +431,18 @@ describe('BoundaryService geoapify quota', () => {
     return { svc: new BoundaryService(http as any, config as any), calls };
   };
 
-  it('refuses a fetch it cannot finish before spending any of the quota', async () => {
-    const { svc, calls } = serviceWith(5); // a fetch can make 6 calls
-    expect(await statusOf(svc.fetchBoundaries('place', 'geoapify'))).toBe(429);
+  it('reports a cap below one fetch as a config error, not a retry', async () => {
+    const { svc, calls } = serviceWith(5); // a fetch needs 6 calls: never possible
+    expect(await statusOf(svc.fetchBoundaries('place', 'geoapify'))).toBe(503);
     expect(calls).toHaveLength(0);
+  });
+
+  it('refuses a fetch once the quota is spent, before spending any of it', async () => {
+    const { svc, calls } = serviceWith(6);
+    await svc.fetchBoundaries('place', 'geoapify');
+    const used = calls.length;
+    expect(await statusOf(svc.fetchBoundaries('place', 'geoapify'))).toBe(429);
+    expect(calls).toHaveLength(used);
   });
 
   it('runs a fetch that fits the quota', async () => {
