@@ -25,7 +25,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   await run("npx", ["vitest", "run", ...(process.argv.slice(2).length
-    ? process.argv.slice(2) : ["tests/e2e/keycloak-writer.real.test.ts"])]);
+    ? process.argv.slice(2) : ["tests/e2e/keycloak-writer.real.test.ts", "tests/e2e/sync-reconcile.real.test.ts"])]);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

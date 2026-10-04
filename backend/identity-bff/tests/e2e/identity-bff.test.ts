@@ -368,7 +368,7 @@ describe("identity BFF", () => {
     const reconciliation = await post("/reconciliation/_run", {});
     expect(reconciliation.status).toBe(200);
     expect(await reconciliation.json()).toMatchObject({
-      acquired: true, organizations: 5, unchanged: 3, unprovisioned: 2, failures: [],
+      acquired: true, mirrored: 0, revoked: 0, propagated: 0, failures: [],
     });
   });
 
@@ -1098,12 +1098,12 @@ describe("identity BFF", () => {
     );
     expect(revoked.status).toBe(403);
 
-    // The Keycloak user attribute is the durable inventory. A full scan can
-    // still deactivate the former tenant account after the Redis index is lost.
+    // Reconcile never deactivates a DIGIT account, including after Redis loss.
+    // HRMS owns active; membership removal is an identity access/revocation gate.
     await getRedis().del(managedAccountsKey());
     const reconciled = await ensure("/reconciliation/_run", {});
     expect(reconciled.status).toBe(200);
-    expect(managedAccount.active).toBe(false);
+    expect(managedAccount.active).toBe(true);
 
     // Re-selecting the same tenant is the renewal operation.
     const renewed = await fetch(
@@ -1939,8 +1939,8 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await fetch(`${app()}/identity/v1/tenant-contexts/dupe-slug`)).status).toBe(404);
       expect(warn.mock.calls.some(([line]) => String(line).includes("colliding mapping"))).toBe(true);
       // Dupe B also claims ke.nakuru, so the Nakuru mapping is dropped too. Its
-      // managed accounts must survive reconciliation: a missing mapping is
-      // "unknown", not "nobody is a member".
+      // managed accounts must stay active: reconcile never writes DIGIT active.
+      // Ambiguous Organization ownership is reported for operator repair.
       const nakuru = [...digit.accounts.values()].filter((account) =>
         account.tenantId === "ke.nakuru" && account.userName.startsWith("kcbff-") && account.active);
       expect(nakuru.length).toBeGreaterThan(0);
@@ -1952,9 +1952,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       });
       expect(reconciled.status).toBe(200);
       const result = await reconciled.json();
-      expect(result.deactivated).toBe(0);
-      expect(result.failures.some((failure: { subject: string; error: string }) =>
-        failure.subject.endsWith("@ke.nakuru") && failure.error.includes("collides"))).toBe(true);
+      expect(result).not.toHaveProperty("deactivated");
+      expect(result.failures.some((failure: { subject: string; code: string }) =>
+        failure.subject === "tenant:ke.nakuru" && failure.code === "IDENTITY_UNAVAILABLE")).toBe(true);
       expect(nakuru.every((account) => digit.accounts.get(account.uuid)!.active)).toBe(true);
     } finally {
       warn.mockRestore();
@@ -2770,6 +2770,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await inactive.json()).code).toBe("DIGIT_ACCOUNT_INACTIVE");
       expect(digit.tokens.has(token.access_token)).toBe(false);
       digit.accounts.get(account.uuid)!.active = true;
+      // HRMS reactivation restores access with the existing link, before any BFF relink.
+      const reactivated = await employeeSelect(cookie);
+      expect(reactivated.status).toBe(200);
+      expect((await reactivated.json()).UserRequest.uuid).toBe(account.uuid);
+      expect(digit.accounts.get(account.uuid)!.active).toBe(true);
 
       const again = await cp("account-links/_link", {
         links: [{ subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid }],

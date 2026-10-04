@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { initCache, closeCache, getRedis } from "../../src/infrastructure/redis.js";
-import { mirrorPerson } from "../../src/modules/sync/mirror.js";
+import { ensureCitizenEntry, mirrorPerson } from "../../src/modules/sync/mirror.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
 import type { DigitAccount } from "../../src/modules/managed-accounts/digit-user-client.js";
 
@@ -139,5 +140,48 @@ describe("DIGIT mirror", () => {
     user.attributes!["digit.accounts"] = ['{"v":2,"entries":[]}'];
     await expect(mirrorPerson(subject)).rejects.toThrow("Unsupported");
     expect(writes).toEqual([]);
+  });
+});
+
+
+describe("resolved citizen entry", () => {
+  it("seeds and mirrors an existing citizen under a re-entrant lease, preserving staff and identity", async () => {
+    await mirrorPerson(subject);
+    const binding = user.attributes!["digit.bindings"];
+    accounts.citizen = { ...account("citizen", "Citizen Name"), type: "CITIZEN",
+      roles: [{ code: "CITIZEN", tenantId: "tenant" }] };
+    await withPersonLease(subject, () => ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "citizen" }));
+    expect(mirrorEntries()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "staff", uuid: "staff" }),
+      expect.objectContaining({ kind: "citizen", uuid: "citizen", tenantId: "tenant", active: true,
+        roles: [{ code: "CITIZEN", tenantId: "tenant" }] }),
+    ]));
+    expect(user.attributes!["digit.bindings"]).toEqual(binding);
+    expect(user).toMatchObject({ username: "identity", email: "verified@example.test", emailVerified: true });
+    writes = [];
+    await ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "citizen" });
+    expect(writes).toHaveLength(0);
+  });
+  it("refuses a different citizen UUID for the same tenant without writing", async () => {
+    user.attributes!["digit.accounts"] = [JSON.stringify({ v: 1, entries: [entry("old", "citizen")] })];
+    await expect(ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "other" }))
+      .rejects.toMatchObject({ status: 409, code: "CITIZEN_ACCOUNT_AMBIGUOUS" });
+    expect(writes).toHaveLength(0);
+  });
+  it("keeps a missing resolved citizen marked inactive and never grants a binding", async () => {
+    user.attributes!["digit.bindings"] = [bindings()];
+    await ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "missing" });
+    expect(mirrorEntries()[0]).toMatchObject({ kind: "citizen", uuid: "missing", active: false, missing: true });
+    expect(JSON.parse(user.attributes!["digit.bindings"][0]).bindings).toEqual([]);
+  });
+  it("preserves the seed for retry if the authoritative mirror read fails", async () => {
+    user.attributes!["digit.bindings"] = [bindings()];
+    mocks.read.mockRejectedValueOnce(new Error("DIGIT unavailable"));
+    await expect(ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "citizen" })).rejects.toThrow("DIGIT unavailable");
+    expect(mirrorEntries()[0]).toMatchObject({ kind: "citizen", uuid: "citizen", active: false });
+    accounts.citizen = { ...account("citizen"), type: "CITIZEN" };
+    await ensureCitizenEntry(subject, { tenantId: "tenant", uuid: "citizen" });
+    expect(mirrorEntries().filter((item: any) => item.kind === "citizen")).toHaveLength(1);
+    expect(mirrorEntries()[0].active).toBe(true);
   });
 });
