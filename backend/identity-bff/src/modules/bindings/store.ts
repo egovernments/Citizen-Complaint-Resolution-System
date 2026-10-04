@@ -88,7 +88,9 @@ async function ownersOf(tenantId: string, uuid: string): Promise<string[]> {
 }
 
 /**
- * Tenant inventory: filter the searchable attribute, then re-read each binding.
+ * Read-only tenant inventory from the fetched Keycloak user snapshots.
+ * Expired indexed invitations are returned with their effective removed state;
+ * readers must not acquire another person's lease merely to expire them.
  * This infrequent administrative read costs O(realm users): Keycloak exact q
  * cannot search a tenant prefix. Pages contain 100 users, processed serially.
  */
@@ -99,8 +101,8 @@ export async function bindingsFor(tenantId: string): Promise<Array<{ subject: st
     const users = await (await request(`/users?briefRepresentation=false&first=${first}&max=100`)).json() as BindingUser[];
     for (const user of users) {
       if (!user.id || !user.attributes?.["digit.boundUuids"]?.some((v) => v.startsWith(`${tenantId}|`))) continue;
-      for (const binding of await readBindings(user.id)) {
-        if (binding.tenantId === tenantId && binding.state !== "removed") result.push({ subject: user.id, binding });
+      for (const binding of bindingsFromUser(user).map((b) => effectiveBinding(b))) {
+        if (binding.tenantId === tenantId) result.push({ subject: user.id, binding });
       }
     }
     if (users.length < 100) return result;
@@ -155,12 +157,17 @@ export async function accept(input: { subject: string; tenantId: string; invitat
       throw new BindingError("INVITATION_STALE", "The invitation is no longer current");
     }
     return withUuidLock(existing.tenantId, existing.uuid, async (lock) => {
-      if (existing.state === "active") return existing;
-      if ((await ownersOf(existing.tenantId, existing.uuid)).some((sub) => sub !== input.subject)) {
+      const record = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId);
+      const current = record && effectiveBinding(record);
+      if (!current || current.uuid !== existing.uuid || current.state === "removed" || current.invitationVersion !== input.invitationVersion) {
+        throw new BindingError("INVITATION_STALE", "The invitation is no longer current");
+      }
+      if (current.state === "active") return current;
+      if ((await ownersOf(current.tenantId, current.uuid)).some((sub) => sub !== input.subject)) {
         throw new BindingError("INVITATION_STALE", "The invitation no longer owns the account");
       }
-      if (effectiveBinding(existing).state !== "pending") throw new BindingError("INVITATION_STALE", "The invitation expired");
-      const { expiresAt: _expiry, ...rest } = existing;
+      if (effectiveBinding(current).state !== "pending") throw new BindingError("INVITATION_STALE", "The invitation expired");
+      const { expiresAt: _expiry, ...rest } = current;
       const binding: Binding = { ...rest, state: "active", acceptedAt: Date.now(), boundAt: Date.now() };
       await lease.assertHeld();
       await lock.assertHeld();

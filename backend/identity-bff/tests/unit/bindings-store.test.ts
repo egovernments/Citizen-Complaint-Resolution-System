@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { config } from "../../src/infrastructure/config.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import type { BindingUser } from "../../src/modules/bindings/types.js";
 const db = vi.hoisted(() => ({ users: new Map<string, BindingUser>(), puts: [] as BindingUser[], beforeOwnersReturn: null as (() => Promise<void>) | null }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({
@@ -100,6 +101,18 @@ describe("binding transitions with real person and uuid locks", () => {
   it("lists bindings only at the requested tenant", async () => {
     await ensureActive(input()); await createPending({ ...input("other", "other", otherUuid), expiresAt: Date.now() + 60_000 });
     expect(await bindingsFor("pg")).toMatchObject([{ subject: "invitee", binding: { tenantId: "pg" } }]);
+  });
+  it("reads expired tenant inventory inside another person's lease without writing", async () => {
+    await pending();
+    const user = db.users.get("invitee")!;
+    const doc = JSON.parse(user.attributes!["digit.bindings"][0]);
+    doc.bindings[0].expiresAt = Date.now() - 1;
+    user.attributes!["digit.bindings"] = [JSON.stringify(doc)];
+    db.puts.length = 0;
+    const inventory = await withPersonLease("admin", () => bindingsFor("pg"));
+    expect(inventory).toMatchObject([{ subject: "invitee", binding: { state: "removed", removedBy: { kind: "expiry" } } }]);
+    expect(db.puts).toHaveLength(0);
+    expect(JSON.parse(user.attributes!["digit.bindings"][0]).bindings[0].state).toBe("pending");
   });
   it("fails closed on corrupt binding state", async () => {
     db.users.get("invitee")!.attributes!["digit.bindings"] = ["not json"];

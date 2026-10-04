@@ -41,7 +41,9 @@ export async function requireAccountAdmin(subject: string, tenantId: string): Pr
 export async function validateBinding(input: { subject: string; tenantId: string; uuid: string; actor: BindingActor }): Promise<void> {
   await requireWorkspace(input.tenantId, input.actor.kind === "workload");
   const target = await readDigitAccount(input.tenantId, input.uuid);
-  if (!target?.active) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No active employee exists at the workspace");
+  if (!target || (!target.active && input.actor.kind !== "migration")) {
+    throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No eligible employee exists at the workspace");
+  }
   if (isBffManagedAccount(target)) throw new BindingError("DIGIT_ACCOUNT_MANAGED", "Managed accounts cannot be bound");
   if (input.actor.kind !== "browser") return;
   if (input.actor.subject === input.subject) throw new BindingError("SELF_BINDING_FORBIDDEN", "You cannot bind your own account");
