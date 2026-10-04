@@ -1,4 +1,7 @@
-import { readTenantMappingForUrlSlug } from "../organizations/organization-service.js";
+import {
+  liveTenantMapping,
+  readTenantMappingForUrlSlug,
+} from "../organizations/organization-service.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 
 const URL_SLUG = /^[a-z0-9-]{2,63}$/;
@@ -42,4 +45,17 @@ export async function resolvePublicTenantRoute(
     fallbackTenantIds: mapping.fallbackTenantIds,
     name: mapping.name,
   };
+}
+
+/**
+ * True while the route a session was bound to is still mapped, read live
+ * from Keycloak: the same Organization (or group) still carries this slug and
+ * tenant id, and the Organization is enabled.
+ */
+export async function isLiveTenantRoute(
+  route: { urlSlug: string; tenantId: string },
+): Promise<boolean> {
+  const mapping = await readTenantMappingForUrlSlug(route.urlSlug);
+  if (!mapping || mapping.tenantId !== route.tenantId) return false;
+  return (await liveTenantMapping(mapping)) !== null;
 }
