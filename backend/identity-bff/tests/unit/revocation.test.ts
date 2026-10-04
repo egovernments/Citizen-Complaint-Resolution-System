@@ -4,7 +4,7 @@ import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.
 import { currentPersonLease, personLeaseKey, withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { createIdentitySession, getIdentitySession, requireCurrentSession, saveSelectedIdentityContext } from "../../src/modules/sessions/session-store.js";
 import { privateRef } from "../../src/modules/citizen-otp/otp-store.js";
-import { cachedToken, drainRevocationJobs, drainTokenRetries, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
+import { cachedToken, drainRevocationJobs, drainTokenRetries, endKeycloakSessions, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
 import { key, personTokensKey, readToken, tokenKey, tokenHoldersKey } from "../../src/modules/revocation/inventory.js";
 import * as keycloak from "../../src/modules/revocation/keycloak.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
@@ -180,6 +180,40 @@ describe("token inventory and revocation", () => {
     await logoutSessions(subject, "all", other);
     expect(digit.revokeToken).toHaveBeenCalledWith("digit-token");
     expect(keycloak.endKeycloakSession).toHaveBeenCalledTimes(2);
+  });
+  it.each([false, true])("logout others keeps the current shared token usable (duplicate inventory: %s)", async duplicate => {
+    const current = await session("current-device"), other = await session("other-device");
+    const alias = { tenantId: "legacy-tenant-alias", uuid: account.uuid };
+    const tokens = new Set(["shared-account-token", "unshared-account-token"]);
+    vi.mocked(digit.revokeToken).mockImplementation(async token => { tokens.delete(token); });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+      const token = new URL(String(input)).searchParams.get("access_token");
+      return tokens.has(token || "") ? new Response(JSON.stringify(login().user)) : new Response("{}", { status: 401 });
+    });
+    await inventory(account, login(account, "shared-account-token"), current);
+    await withPersonLease(subject, lease => holdToken(lease, account, other));
+    // The same egov-user account/token can be inventoried through an older tenant alias.
+    // Even an alias held only by the other device must not revoke the current token.
+    if (duplicate) await inventory(alias, login(alias, "shared-account-token"), other);
+    await inventory(second, login(second, "unshared-account-token"), other);
+    await logoutSessions(subject, "others", current);
+    expect(await getIdentitySession(current)).not.toBeNull();
+    expect(await getIdentitySession(other)).toBeNull();
+    expect(keycloak.endKeycloakSession).toHaveBeenCalledExactlyOnceWith("other-device");
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("unshared-account-token");
+    expect((await withPersonLease(subject, lease => cachedToken(lease, account)))?.accessToken).toBe("shared-account-token");
+    expect(await readToken(second)).toBeNull();
+    if (duplicate) expect(await readToken(alias)).toBeNull();
+    expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([privateRef("session", current)]);
+    // Retried logout must not schedule revocation of the protected token either.
+    await logoutSessions(subject, "others", current);
+    await endKeycloakSessions("other-device", undefined, subject);
+    expect(await getRedis().zcard(key("revoke-retry"))).toBe(0);
+    await drainTokenRetries();
+    expect(tokens.has("shared-account-token")).toBe(true);
+    await logoutSessions(subject, "all", current);
+    expect(tokens.has("shared-account-token")).toBe(false);
+    expect(await getIdentitySession(current)).toBeNull();
   });
   it("phone change ends old-number sessions except the keeper", async () => {
     const keep = await session("keep", "+254700000001"); const old = await session("old", "+254700000001");

@@ -151,9 +151,33 @@ export async function revokeTenantMembers(tenantId: string, reason: "ORGANIZATIO
   await drainRevocationJobs();
 }
 
+interface RetainedSessionTokens {
+  sessionRef: string;
+  accounts: Set<string>;
+  accessTokens: Set<string>;
+}
+
+/** Snapshot before external session termination can trigger Keycloak logout events. */
+async function retainedSessionTokens(lease: PersonLease, sessionId: string): Promise<RetainedSessionTokens | undefined> {
+  const session = await getIdentitySession(sessionId);
+  if (session?.claims.sub !== lease.subject) return undefined;
+  const retained: RetainedSessionTokens = { sessionRef: privateRef("session", sessionId), accounts: new Set(), accessTokens: new Set() };
+  for (const id of await getRedis().smembers(personTokensKey(lease.subject))) {
+    await lease.assertHeld();
+    const account = parseAccountId(id);
+    if (!await getRedis().sismember(tokenHoldersKey(account), retained.sessionRef)) continue;
+    const token = await readToken(account);
+    if (token?.subject !== lease.subject) continue;
+    retained.accounts.add(id);
+    retained.accessTokens.add(token.accessToken);
+  }
+  return retained;
+}
+
 /** Drop only the holders being logged out. Shared DIGIT tokens survive while another live session holds them. */
-async function releaseSessionTokens(lease: PersonLease, ended: string[]): Promise<void> {
+async function releaseSessionTokens(lease: PersonLease, ended: string[], retained?: RetainedSessionTokens): Promise<void> {
   const liveRefs = new Set((await listPersonSessions(lease.subject)).map(item => privateRef("session", item.sessionId)));
+  if (retained) liveRefs.add(retained.sessionRef);
   for (const id of await getRedis().smembers(personTokensKey(lease.subject))) {
     const account = parseAccountId(id);
     await lease.assertHeld();
@@ -161,10 +185,12 @@ async function releaseSessionTokens(lease: PersonLease, ended: string[]): Promis
     const stale = holders.filter(ref => !liveRefs.has(ref));
     const remove = [...new Set([...stale, ...ended.map(sid => privateRef("session", sid))])];
     if (remove.length) await getRedis().srem(tokenHoldersKey(account), ...remove);
-    if (await getRedis().scard(tokenHoldersKey(account))) continue;
+    if (retained?.accounts.has(id) || await getRedis().scard(tokenHoldersKey(account))) continue;
     const token = await readToken(account);
     if (token?.subject === lease.subject) {
-      await revokeInventoriedToken(account, token, "LOGOUT");
+      // A duplicate inventory entry may name the same shared token. Forget
+      // its ended claims without invalidating the retained account or queuing logout.
+      if (!retained?.accessTokens.has(token.accessToken)) await revokeInventoriedToken(account, token, "LOGOUT");
       await forgetToken(lease, account, token.accessToken);
     }
   }
@@ -172,6 +198,7 @@ async function releaseSessionTokens(lease: PersonLease, ended: string[]): Promis
 
 export async function logoutSessions(subject: string, scope: "current" | "others" | "all", currentSessionId: string): Promise<void> {
   await withPersonLease(subject, async lease => {
+    const retained = scope === "others" ? await retainedSessionTokens(lease, currentSessionId) : undefined;
     const sessions = await sessionsRaw(subject);
     const ended = sessions.filter(item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId));
     const retainedKcSessions = new Set(sessions.filter(item => !ended.includes(item)).map(item => item.session.kcSessionId));
@@ -182,7 +209,7 @@ export async function logoutSessions(subject: string, scope: "current" | "others
       await deleteIdentitySession(sessionId);
     }
     if (scope === "all") await bumpGeneration(lease);
-    await releaseSessionTokens(lease, ended.map(item => item.sessionId));
+    await releaseSessionTokens(lease, ended.map(item => item.sessionId), retained);
   });
 }
 export async function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void> {
