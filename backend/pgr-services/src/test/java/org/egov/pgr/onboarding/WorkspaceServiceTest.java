@@ -70,12 +70,12 @@ public class WorkspaceServiceTest {
     @Test public void partialRenameRetriesOnlyUnacknowledgedWrites(){
         Map<String,Object> rename=new LinkedHashMap<>(Map.of("id",UUID.randomUUID().toString(),"tenantId","test","name","New Name","version",2L,
                 "languages",List.of("en_IN","hi_IN"),"progress",new ArrayList<>(List.of("MDMS","LOCALE:en_IN")),"status","PENDING"));
-        when(repository.pendingRenames()).thenReturn(List.of("test"));when(repository.rename("test",null)).thenReturn(Optional.of(rename));
-        doThrow(new OnboardingFailure("LOCALIZATION_DOWN",true)).doNothing().when(gateway).renameLocale("test","New Name","hi_IN");
+        when(repository.find("test",true)).thenReturn(Optional.of(row));when(repository.rename("test",1L)).thenReturn(Optional.of(rename));
+        doThrow(new OnboardingFailure("LOCALIZATION_DOWN",true)).doNothing().when(gateway).renameLocale(eq("test"),eq("New Name"),eq("hi_IN"),any());
         WorkspaceRenamePublisher publisher=new WorkspaceRenamePublisher(repository,gateway);
-        publisher.publishPending();verify(repository).retryRename(rename,"LOCALIZATION_DOWN");verify(repository,never()).finishRename(any());
-        publisher.publishPending();verify(repository).finishRename(rename);verify(gateway).bustCache();
-        verify(gateway,never()).renameMdms(any(),any());verify(gateway,never()).renameLocale("test","New Name","en_IN");
+        assertThrows(ResponseStatusException.class,()->publisher.publish(Map.of("tenantId","test","version",1L)));verify(repository).retryRename(rename,"LOCALIZATION_DOWN");verify(repository,never()).finishRename(any());
+        publisher.publish(Map.of("tenantId","test","version",1L));verify(repository).finishRename(rename);verify(gateway).bustCache(eq("test"),any());
+        verify(gateway,never()).renameMdms(any(),any(),any());verify(gateway,never()).renameLocale(eq("test"),eq("New Name"),eq("en_IN"),any());
     }
     @Test public void unchangedAuthoritativeNameSkipsExternalSelfCollision() {
         when(repository.find("test",true)).thenReturn(Optional.of(row));

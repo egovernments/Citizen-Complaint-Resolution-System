@@ -34,8 +34,8 @@ public class WorkspaceRouteTest {
             exchange.sendResponseHeaders(200,response.length);exchange.getResponseBody().write(response);exchange.close();
         });server.start();
         repository=mock(WorkspaceRepository.class);mdms=mock(OnboardingSteps.class);client=mock(OnboardingProvisionerClient.class);
-        gateway=new WorkspaceGateway(new RestTemplate(),new MockEnvironment().withProperty("egov.user.host","http://127.0.0.1:"+server.getAddress().getPort()),client,mdms,mapper);
-        mvc=MockMvcBuilders.standaloneSetup(new WorkspaceApiController(new WorkspaceService(repository,gateway,new OnboardingIdentifierService()))).build();
+        gateway=new WorkspaceGateway(new RestTemplate(),new MockEnvironment().withProperty("egov.user.host","http://127.0.0.1:"+server.getAddress().getPort()),client,mdms,mapper,mock(WorkspaceWriteClient.class));
+        mvc=MockMvcBuilders.standaloneSetup(new WorkspaceApiController(new WorkspaceService(repository,gateway,new OnboardingIdentifierService()),new WorkspaceRenamePublisher(repository,gateway))).build();
     }
     @After public void stop(){if(server!=null)server.stop(0);}
     private String request(){return "{\"RequestInfo\":{\"authToken\":\"normal-token\",\"userInfo\":{\"roles\":[{\"code\":\"ACCOUNT_ADMIN\",\"tenantId\":\"example\"}]}},\"tenantId\":\"example\",\"version\":0,\"name\":\"New Name\",\"step\":\"BRANDING\",\"state\":\"SKIPPED\"}";}
@@ -62,14 +62,14 @@ public class WorkspaceRouteTest {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"imageId\":null}}]"));
         when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"parent\",\"data\":{\"code\":\"INHERITED\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_ADMIN\"}},{\"isActive\":false,\"data\":{\"code\":\"WATER\"}}]"));
-        when(client.post(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"example\"}]}"));
-        when(client.post(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"FOUNDER_1\"}]}"));
+        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"example\"}]}"));
+        when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"FOUNDER_1\"}]}"));
         assertTrue(gateway.probes("example").values().stream().noneMatch(Boolean.TRUE::equals));
         when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"imageId\":\"logo\"}}]"));
         when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}]"));
         when(mdms.records("example","RAINMAKER-PGR.ComplaintHierarchy",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"example\",\"data\":{\"department\":\"WATER\",\"slaHours\":24}}]"));
-        when(client.post(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"WARD_1\"}]}"));
-        when(client.post(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"EMP_1\",\"user\":{\"active\":true}}]}"));
+        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"WARD_1\"}]}"));
+        when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"EMP_1\",\"user\":{\"active\":true}}]}"));
         assertTrue(gateway.probes("example").values().stream().allMatch(Boolean.TRUE::equals));
     }
     @Test public void unreadableProbeReturns503InsteadOfFalseReadiness() throws Exception {

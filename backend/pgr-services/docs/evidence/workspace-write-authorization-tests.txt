@@ -1,0 +1,58 @@
+Workspace caller authorization and explicit retry evidence — 2026-10-05
+
+Base: identity/completion-base 8152e6c6f
+Consumed owner configuration 6c0c7dbf6 (local e7cdd0fd4), provider API
+ d2f368a25 (local d20466333), owner seed fix 406e7d261 (local ad28a3e5d).
+Canonical seed SHA256: 4480a9374295f902b770aced529d19be637a92282b7ecaab5790d38710996bf1
+No grant expansion or deployment performed.
+
+Backend affected suites (exit 0, 41 tests, 0 failures/errors/skips):
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
+ /opt/homebrew/bin/mvn -o -q -f backend/pgr-services/pom.xml \
+ -Dtest=WorkspaceWriteClientTest,WorkspaceServiceTest,WorkspaceGatewayTest,WorkspaceRouteTest,WorkspacePostgresTest \
+ -Donboarding.test.jdbc=jdbc:postgresql://127.0.0.1:16432/onboarding_test test
+WorkspaceWriteClientTest 5; WorkspaceServiceTest 9; WorkspaceGatewayTest 6;
+WorkspaceRouteTest 8; WorkspacePostgresTest 13.
+
+Authorization evidence:
+- Two real local HTTP origins model Kong and internal services. Only the three
+  fixed Kong write routes receive current caller authToken; userInfo is absent.
+- Nonadmin, expired and revoked responses deny writes; internal-write trap stays
+  at zero and provisioner mock has zero interactions for publication.
+- Every action checks live tenant ACCOUNT_ADMIN, including auth-optional cache.
+- Blank/non-origin gateway configuration fails closed. No internal fallback.
+- Existing route tests retain local _update authorization and forged-user denial.
+
+PostgreSQL evidence (real Spring transaction proxies + MockMvc):
+- HTTP401 after MDMS and first locale leaves committed PENDING, two reservations
+  and acknowledged checkpoints. _search performs no publication writes.
+- A later setup version does not change the original rename request version.
+  Explicit retry with fresh token resumes only remaining locale/cache, returns
+  HTTP202 DONE, and leaves one operation and the current setup version intact.
+- Workspace, rename, audit and reservation rows contain neither authToken nor
+  the old/fresh token values. Publisher has no @Scheduled method.
+- Existing reservation, acceptance race, replay and stale completion tests pass.
+
+Configurator affected suites (exit 0, 21 tests in 2 files):
+cd configurator
+npx vitest run src/identity/WorkspacePage.test.tsx src/identity/workspace.test.ts
+- Server PENDING after reload derives Rename.version - 1, ignoring newer setup.
+- Uncertain sessionStorage body survives reload and an older DONE observation.
+- HTTP401/403 retains original request for explicit fresh-login retry.
+- Polling never automatically calls _rename; API helper reads fresh session token.
+
+Typecheck (exit 0):
+cd configurator/packages/data-provider && ../../node_modules/.bin/tsc --pretty false
+cd configurator && npx tsc -b --pretty false
+Fresh npm ci needed local data-provider declaration build and unpacking the
+lockfile-omitted optional @rollup/rollup-darwin-arm64@4.60.2 native package.
+No tracked package or lockfile changes. git diff --check passed.
+
+Limits: HTTP authorization is exercised with deterministic local gateway/user
+stubs, not a deployed Kong instance. PostgreSQL is real. Combined onboarding suite
+and deployment verification remain with onboarding-owner/root as agreed.
+
+Local raw log SHA256 (logs under .artifacts/workspace, not committed):
+security-backend.log: 5a622ed376f3efae6ea9534c1d56227db149c3fb5b0d0e381e305cac0bd24a62
+security-ui.log: 402f46a1a0b54e96c6004e5f0ba832a396b9cc1a471cb0b6c7b648a109eb7056
+security-ui-typecheck.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
