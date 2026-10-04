@@ -49,6 +49,12 @@ describe('PGR onboarding cutover deployment contract', () => {
     }
   });
 
+  test('only the writable MCP service receives the internal bootstrap MDMS host', () => {
+    expect(setting(service('digit-mcp'), 'EGOV_MDMS_HOST')).toBe('http://egov-mdms-service:8094');
+    expect(service('digit-mcp-readonly')).not.toMatch(/^      EGOV_MDMS_HOST:/m);
+    expect(setting(service('digit-mcp'), 'CRS_API_URL')).toBe('http://kong:8000');
+  });
+
   test('Ansible preserves stored provisioner credentials while rendering them only for PGR', () => {
     const template = read('local-setup/ansible/templates/digit.env.j2');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');

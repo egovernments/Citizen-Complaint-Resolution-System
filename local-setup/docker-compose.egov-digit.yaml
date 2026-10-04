@@ -2414,6 +2414,8 @@ services:
       CRS_ENVIRONMENT: self-hosted
       CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
       CRS_API_URL: http://kong:8000
+      # Platform bootstrap checks admin authorization before using internal MDMS.
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
       CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
       CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}
       CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}

@@ -1,0 +1,20 @@
+2026-10-04 owner integration checkpoint, primitives merged at 55a61d6c0
+
+REDIS_HOST=127.0.0.1 REDIS_PORT=16382 npx vitest run
+Test Files 36 passed | 1 skipped (37)
+Tests 467 passed | 5 skipped | 13 todo (485)
+Exit 0
+
+npx tsc --noEmit
+Exit 0
+
+local-setup/tests: npx jest --runInBand static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts static/mcp-baseline-packaging.test.ts
+Test Suites 3 passed, 3 total
+Tests 108 passed, 108 total
+Exit 0; local Python PATH includes PyYAML for the existing preflight check.
+
+Modified CI/Ansible YAML parsed; bash -n mcp-build.sh passed.
+Git/Docker wrapper tests use local stubs. No image build, push or deployment.
+Initial BFF test attempt lacked a running Redis; dedicated Redis started and
+the full suite above reran successfully. Skipped/todo tests are not verified.
+PGR implementation and coordinated BFF worker removal remain incomplete.

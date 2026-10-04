@@ -60,6 +60,11 @@ Manual `mcp-build.sh` callers pass the canonical resource as argument six
 (argument five is the platform or an empty string). Direct `docker build`
 callers first run the staging script from the monorepo.
 
+Only the writable `digit-mcp` service receives the internal `EGOV_MDMS_HOST`.
+Its bootstrap requires an authenticated platform administrator before direct
+MDMS requests; ordinary MCP tools keep using Kong. The readonly MCP service
+does not receive this internal host.
+
 ## Validation
 
 Run the deployment and seed packaging suites:

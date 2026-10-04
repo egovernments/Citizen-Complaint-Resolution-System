@@ -9,7 +9,8 @@ This records integration requirements, not a completion claim.
   `6831f1eb9` and revocation provider `2743ddf82`. Owner BFF typecheck passed
   after the revocation merge. Owner draft PR is #53 into
   `identity/completion-base`.
-- Deployment wiring `a8229dc7a` and MCP seed build preparation pass 107/107
+- Deployment wiring `a8229dc7a`, MCP seed build preparation `a83ececb3` and
+  the writable-MCP-only MDMS host pass 108/108
   static checks across `deployment-contracts`, `onboarding-deployment-contracts`
   and `mcp-baseline-packaging`. Build-wrapper checks use local Git/Docker
   stubs; no image build, push or deployment has run.
@@ -18,13 +19,18 @@ This records integration requirements, not a completion claim.
   reviewed log reports 316 passed, two skipped and 12 todo. Production route
   registration, actual binding/revocation integration and worker removal were
   still pending at the reviewed head `b1313c147`.
-- Primitives recovery commit `38c904d88` adds durable replacement high-water
-  fencing, raw tenant enumeration and strict stored authority checks. Reviewed
-  its reader diff and passing two-file/48-test log. The approved matching
-  pending FAILED settlement and real revocation integration are follow-ups;
-  the complete child task remains accepted.
+- Primitives `b4a5c60bb` and env documentation `2b86b2987` are merged into
+  owner `55a61d6c0`. Production routes use real core binding/revocation
+  providers; durable replacement authority and approved pending FAILED
+  settlement are implemented. Owner executed the full BFF suite with isolated
+  Redis on 16382: 467 passed, five skipped, 13 todo; typecheck exit 0. Skipped
+  and todo cases are not verified. An initial run preceded Redis startup and
+  failed; the completed rerun used a healthy dedicated Redis instance.
 - Draft fork PR #46 initially commits only the agreed PGR workspace/rename
-  contract at `b0f7b3777`. PGR implementation remains in progress.
+  contract at `b0f7b3777`; implementation is staged at `0f8bc2c77` and remains
+  in progress. Review requires corrections to FAILED publication after ensure
+  collision and atomic shared signup/rename name reservations. Real transport,
+  fresh-founder Kong access and executed worker replacements remain gates.
 - Preserve raw reader commit `6c2e0d98c`: core has consumed the identical
   commit. Further integration uses merges and additive fixes.
 
