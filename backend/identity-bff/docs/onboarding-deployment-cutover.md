@@ -1,7 +1,10 @@
 # PGR onboarding deployment configuration
 
-These changes ship with the PGR provisioning implementation and removal of
-the BFF worker in the same onboarding owner PR. This lane does not deploy.
+These changes stage the PGR provisioning cutover in the onboarding owner PR.
+Root decision `apr_fd351ab1` transfers live fresh-founder authorization to
+the 8c dev box. Source is ready for that integration; BFF worker removal stays
+held until root reports the pass and the owner releases it. This lane does not
+deploy. Status: **pending 8c gate**.
 
 ## Credential ownership
 
@@ -88,5 +91,5 @@ verify fresh-clone and vendored paths, stale-seed replacement and missing-seed
 failure. They do not build or publish an image.
 
 Rerun the suites after integrating surf-keycloak's shared deployment-file
-changes. These checks do not replace the local-stack onboarding acceptance
-test or the root-owned deployment gate.
+changes. These checks do not replace the root-owned 8c live onboarding acceptance
+and deployment gate.

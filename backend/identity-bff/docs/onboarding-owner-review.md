@@ -1,82 +1,64 @@
 # Onboarding integration review
 
 Owner: onboarding-owner. Review checkpoint: 2026-10-04.
-This records integration requirements, not a completion claim.
 
-## Current evidence
+## Integrated source
 
-- Owner branch includes corrected base `75b157446`, binding provider
-  `6831f1eb9` and revocation provider `2743ddf82`. Owner BFF typecheck passed
-  after the revocation merge. Owner draft PR is #53 into
-  `identity/completion-base`.
-- Deployment wiring `a8229dc7a`, MCP seed build preparation `a83ececb3` and
-  the writable-MCP-only MDMS host pass 108/108
-  static checks across `deployment-contracts`, `onboarding-deployment-contracts`
-  and `mcp-baseline-packaging`. Build-wrapper checks use local Git/Docker
-  stubs; no image build, push or deployment has run.
-- Draft fork PR #45 (`identity/onb-primitives` → `identity/lane-d`) stages
-  primitives, the raw Organization reader, and lifecycle visibility. Its
-  reviewed log reports 316 passed, two skipped and 12 todo. Production route
-  registration, actual binding/revocation integration and worker removal were
-  still pending at the reviewed head `b1313c147`.
-- Primitives `b4a5c60bb` and env documentation `2b86b2987` are merged into
-  owner `55a61d6c0`. Production routes use real core binding/revocation
-  providers; durable replacement authority and approved pending FAILED
-  settlement are implemented. Owner executed the full BFF suite with isolated
-  Redis on 16382: 467 passed, five skipped, 13 todo; typecheck exit 0. Skipped
-  and todo cases are not verified. An initial run preceded Redis startup and
-  failed; the completed rerun used a healthy dedicated Redis instance.
-- Draft fork PR #46 initially commits only the agreed PGR workspace/rename
-  contract at `b0f7b3777`; implementation is staged at `0f8bc2c77` and remains
-  in progress. The leaf reports the FAILED publication correction in that
-  commit; owner confirmed signup and rename now reserve the same name table.
-  Executed collision/replay and concurrent reservation evidence remain gates,
-  alongside transport, fresh-founder Kong access and worker replacements.
-- Root's direct-MDMS security amendment is documented in
-  `onboarding-deployment-cutover.md`: MCP defaults to gateway routing, with
-  explicit opt-in and live state-root admin verification for direct writes.
-  Deployment flag-default check passes; MCP implementation and denial tests
-  remain with the leaf.
-- Preserve raw reader commit `6c2e0d98c`: core has consumed the identical
-  commit. Further integration uses merges and additive fixes.
+- BFF primitives PR45 (`b4a5c60bb`) uses production core binding/revocation
+  providers and durable replacement authority, including the approved pending
+  FAILED settlement. PR65 (`548492f35`) makes name normalization idempotent
+  after Unicode lowercase expansion. Shared reader `6c2e0d98c` remains in ancestry.
+- PGR port PR46 (`9ba66e722`) is merged at `91795823f`. The owner reviewed the
+  executed recovery map and final asynchronous projection fix: boundary/MDMS
+  creation is checkpointed only when visible, and duplicate uncertain writes
+  remain retryable. The BFF specialist independently accepted the production
+  BFF fixture and PostgreSQL recovery cases.
+- Workspace/rename PR66 (`52aa93b1c`) is merged at `9743c9523`. Review covered
+  atomic activation/audit, concurrent signup/rename reservations, optimistic
+  versions, legacy open behavior, durable publication, stale completion, live
+  caller authorization and accurate probes. Real Flyway migration tests verify
+  normalization and atomic collision rollback, including released history and
+  cross-table ownership conflicts. The shared route-test conflict retained all
+  PGR cases and the workspace additions.
+- Seed/MCP PR64 (`e34e9872d`) is verified and merged. One canonical resource
+  contains 25 schemas and 979 records, excludes workspace business masters,
+  supplies the agreed invitation policy and grants workspace routes only to
+  ACCOUNT_ADMIN. Actual npm/standalone, Docker and PGR JAR checks match its
+  SHA256 `39f5dcd8c5d6a6f5870083d181c5ffe6763add35fd83893487d40120cee2d231`.
+- MCP defaults to Kong; direct MDMS requires explicit opt-in and a fresh
+  trusted-server caller token check for state-root SUPERUSER or MDMS_ADMIN.
+  Unauthenticated, non-admin and forged claims cannot cause direct writes.
+- Owner deployment changes move provisioner credentials to PGR, share a
+  dedicated onboarding token, preserve stored-secret inputs and stage the
+  canonical seed for CI, Ansible, cloned and vendored MCP builds.
 
-## Acceptance checkpoints
+## Evidence
 
-| Area | Required integration evidence | Owner |
-|---|---|---|
-| Attempt ownership | Executed slug/tenant races, same-attempt payload conflict, stale calls on every mutation after newer failure | onb-primitives |
-| Interrupted changed-slug restart | Crash after old Organization becomes FAILED and before replacement creation; older calls remain fenced; retry recovers | onb-primitives |
-| Attempt authority | Ambiguous or malformed stored attempt metadata fails closed before mutation | onb-primitives |
-| Founder binding | Actual core store rejects changed UUID/removed binding, enforces UUID uniqueness, and defers founder credential until first select | onb-primitives + core |
-| Lifecycle | Actual revocation provider handles repeated FAILED and interrupted fan-out; supersession repair must not revoke a newer ACTIVE replacement | onb-primitives + core |
-| Route integration | Registered production routes enforce dedicated auth and frozen response/error contracts; old fixtures migrated without losing coverage | onb-primitives |
-| PGR recovery | Real resubmit endpoint, step-boundary crashes, persisted lifecycle decision and acknowledgement replay, unchanged founder | onb-pgr |
-| No identity side effects | Durable ensure-started marker across all restarts; only never-started operations settle FAILED as NO_IDENTITY_SIDE_EFFECTS | onb-pgr |
-| Baseline | One versioned artifact for PGR and packaged MCP; no live tenant cloning; internal API bootstrap followed by founder action through Kong | onb-pgr |
-| Workspace and rename | Agreed contract, live tenant admin authorization, probes, legacy open behavior, version races and durable rename replay | onb-pgr |
-| Citizen lookup | Existing BFF citizen found by mobile without duplication; unrelated upsert behavior preserved | onb-pgr |
-| Cutover | PGR switch and BFF worker removal in same owner PR, with executed replacement map and deployment config checks | onboarding-owner + both reports |
+- `backend/identity-bff/docs/evidence/onboarding-owner-integration.txt`: owner integration results.
+- `backend/identity-bff/docs/evidence/onboarding-production-tests.txt` and
+  `backend/identity-bff/docs/evidence/onboarding-name-normalization.txt`: BFF production gates,
+  typecheck and normalization follow-up. Latest leaf full suite: 469 passed,
+  five skipped and 13 todo; final focused normalization: 12 passed.
+- `backend/pgr-services/docs/onboarding-worker-replacements.md` and
+  `backend/pgr-services/docs/evidence/pgr-port-tests.txt`: executed PGR recovery map,
+  actual BFF/Redis/PostgreSQL integration, commands and log hashes.
+- `backend/pgr-services/docs/workspace-validation.md` and its evidence file:
+  source/fixture acceptance and real database/Flyway tests.
+- `digit-mcp/docs/validation/platform-baseline.md`: seed, packaging,
+  security and caller compatibility evidence. Two extra phone-safety assertions
+  fail unchanged on develop, confirmed by root; neither was skipped or modified.
 
-## Shared deployment configuration inventory
+## Remaining cutover gate
 
-The deployment configuration hunks below are owned by onboarding under root
-and surfaces agreement. PGR/BFF runtime changes remain with the leaves.
+Root decision `apr_fd351ab1f3f5428e94af70e95b991021` transfers the real
+fresh-founder department/boundary/branding no-403 check to the root-owned 8c
+dev-box integration from `identity/completion-base`: **pending 8c gate**.
+Local recovery uses production BFF code, real Redis/PostgreSQL and HTTP
+Keycloak/DIGIT fixtures with a mocked session introspector. It does not prove
+live Kong authorization. No lane deployment is authorized.
 
-- `local-setup/ansible/templates/digit.env.j2`: existing BFF provisioner and
-  onboarding-worker settings.
-- `local-setup/ansible/playbook-deploy.yml`: independently generated worker
-  token and provisioner secret rendering. Keep secret values out of evidence.
-- `local-setup/ansible/inventory/host_vars/_example.yml`: old onboarding worker
-  and provisioner examples.
-- BFF deployment env example and runtime startup: onb-primitives removes
-  worker/provisioner configuration only with the PGR replacement.
-- PGR `application.properties`: onb-pgr supplies final internal host,
-  provisioner, runner and dedicated onboarding-token names.
-- Deployment contract tests: verify credential ownership and token wiring
-  against the final templates. No host deployment is part of this lane.
-
-## Review constraints
-
-Do not mark the parent or child tasks implemented from staged test counts.
-Do not remove a worker test before its replacement is executed. The final
-owner PR targets `identity/completion-base` on the fork and remains draft.
+BFF worker removal remains held until root reports that pass and the owner
+releases the prepared removal task. Source integration and fixture evidence
+are available for root integration; parent completion and original BFF/PGR
+acceptance are not claimed. Skipped/todo tests are not verified. PR53 remains
+a draft into `identity/completion-base`; the PGR runner stays off by default.
