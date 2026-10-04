@@ -38,7 +38,7 @@ GET  /identity/v1/tenant-contexts/:urlSlug
 GET  /identity/v1/tenants
 POST /identity/v1/contexts/_select
 POST /identity/v1/contexts/citizen/_select
-POST /identity/v1/organization-members/_invite
+POST /identity/v1/workspace-members/_link
 POST /identity/v1/logout
 ```
 

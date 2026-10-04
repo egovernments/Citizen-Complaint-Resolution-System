@@ -128,7 +128,11 @@ the real-dependency cases; mocked tests do not satisfy those cases.
   this remains mock-dependent evidence, not a live-system result.
 - Root settled D18: core-bindings provides session-authenticated
   `POST /identity/v1/workspace-members/_updateEmail {tenantId,digitUuid,email}`.
-  It requires live tenant ACCOUNT_ADMIN and an ACTIVE target binding; sets
+  It requires live tenant ACCOUNT_ADMIN and an ACTIVE target binding. The target
+  must not be the caller, all target roles at the tenant must be held by the
+  caller, and no active binding or membership may exist in another workspace.
+  Otherwise it returns 403 ADMIN_EMAIL_CHANGE_NOT_ALLOWED; use self-service
+  UPDATE_EMAIL or operator global recovery. When allowed, it sets
   Keycloak email with emailVerified=false under the target lease; sends
   VERIFY_EMAIL; returns 202 `{status:"verification_sent"}`. A conflicting
   Keycloak email returns 409 IDENTITY_EMAIL_CHANGED. DIGIT changes only after

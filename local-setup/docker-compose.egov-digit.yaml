@@ -980,13 +980,9 @@ services:
       OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
-      # The fixed dev OTP (123456) MUST be off wherever real OTP delivery is on,
-      # or every account is one guessable code away from takeover. The Ansible
-      # deploy renders this false whenever enable_otp_services is true (see
-      # digit.env.j2), so following the production OTP runbook actually disables
-      # it. Bare `docker compose up` (local dev, no real SMS) defaults to true
-      # for convenience. (Vinoth review.)
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      # Fixed OTP is development-only and must be explicitly enabled.
+      # Ansible exposes identity_dev_fixed_otp; bare Compose also defaults off.
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
       EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
       EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'

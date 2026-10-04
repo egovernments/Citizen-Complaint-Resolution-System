@@ -13,7 +13,6 @@ import { registerAuthenticationRoutes } from "../modules/authentication/routes.j
 import { registerMagicLinkRoutes } from "../modules/authentication/magic-link-signup.js";
 import { registerPasswordSetupRoutes } from "../modules/authentication/password-setup.js";
 import { registerOperationalRoutes } from "../modules/operations/routes.js";
-import { registerOrganizationRoutes } from "../modules/organizations/routes.js";
 import { registerSessionRoutes } from "../modules/sessions/routes.js";
 import { registerCitizenOtpRoutes } from "../modules/citizen-otp/routes.js";
 
@@ -55,7 +54,6 @@ export function createIdentityApp(): express.Application {
   registerSessionRoutes(app);
   registerWorkspaceMemberRoutes(app);
   registerAccessContextRoutes(app);
-  registerOrganizationRoutes(app);
   registerControlPlaneRoutes(app);
   app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (error instanceof AccountActionError || error instanceof LeaseBusyError || error instanceof LeaseLostError) {

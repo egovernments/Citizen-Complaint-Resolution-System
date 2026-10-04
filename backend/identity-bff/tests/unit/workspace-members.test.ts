@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { initCache, closeCache } from "../../src/infrastructure/redis.js";
 import { config } from "../../src/infrastructure/config.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
-const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false }));
+const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}> }));
 function bindingDoc(user: UserRepresentation) { return JSON.parse(user.attributes?.["digit.bindings"]?.[0] || '{"v":1,"bindings":[]}'); }
 vi.mock("../../src/modules/organizations/organization-service.js", () => {
   const fail = (step: string) => { if (f.crash === step) { f.crash = ""; throw new Error(`crash:${step}`); } };
@@ -40,14 +40,18 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
       }
       return Response.json(f.users.get(id));
     }),
+    isOrganizationMember: vi.fn(async (org: string, subject: string) => f.members.has(`${org}:${subject}`)),
     ensureOrganizationMembership: vi.fn(async ({ organizationId, userId }: { organizationId: string; userId: string }) => { f.members.add(`${organizationId}:${userId}`); fail("membership"); }),
     sendPasswordSetupEmail: vi.fn(async () => { f.emails++; fail("email"); }),
   };
 });
 vi.mock("../../src/modules/workspace-members/authority.js", () => ({
-  validateBinding: vi.fn(async () => {}), requireAccountAdmin: vi.fn(async () => ({})),
+  validateBinding: vi.fn(async () => {}), requireAccountAdmin: vi.fn(async () => ({ roles: f.callerRoles })),
   requireWorkspace: vi.fn(async (tenantId: string) => ({ id: tenantId, alias: tenantId, name: tenantId, lifecycle: "ACTIVE", enabled: true })),
-  readDigitAccount: vi.fn(async (tenantId: string, uuid: string) => ({ tenantId, uuid, active: true, userName: "employee", name: "Employee" })),
+  readDigitAccount: vi.fn(async (tenantId: string, uuid: string) => ({ tenantId, uuid, active: true, userName: "employee", name: "Employee", roles: f.targetRoles })),
+}));
+vi.mock("../../src/modules/onboarding/organization-reader.js", () => ({
+  readOnboardingOrganizations: vi.fn(async () => ["pg", "other"].map((id) => ({ id, alias: id, name: id, enabled: false, attributes: { "digit.rootTenantId": [id] } }))),
 }));
 vi.mock("../../src/modules/bindings/invitations.js", () => ({ invitationExpiryHours: vi.fn(async () => 336) }));
 vi.mock("../../src/modules/accounts/credential-service.js", () => ({
@@ -65,6 +69,8 @@ vi.mock("../../src/modules/sync/mirror.js", () => ({ mirrorPerson: vi.fn(async (
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(async (subject: string) => { f.revoked.push(subject); }) }));
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, linkWorkspaceMember, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
+import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
+import { isOrganizationMember } from "../../src/modules/organizations/organization-service.js";
 import { requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
@@ -72,7 +78,7 @@ const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
 beforeAll(() => { Object.assign(config, { cachePrefix: `members-test-${process.pid}`, identityCredentialKeyCurrent: 1 }); initCache(); });
 afterAll(() => closeCache());
-beforeEach(() => { f.users.clear(); f.members.clear(); f.crash = ""; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; });
+beforeEach(() => { f.users.clear(); f.members.clear(); f.crash = ""; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
 
 describe("resumable workspace membership", () => {
   it.each(["create", "membership", "binding", "activation", "email", "mirror", "clear"])("resumes after a crash at %s without creating another identity", async (step) => {
@@ -123,6 +129,42 @@ describe("resumable workspace membership", () => {
     expect(await updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).toEqual({ status: "verification_sent" });
     expect(f.users.get("new-1")).toMatchObject({ email: "new@example.test", emailVerified: false, username: input.email });
     expect(f.activations).toBe(before);
+  });
+  it.each(["self", "higher role", "same role in another tenant", "other binding", "other membership"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
+    await linkWorkspaceMember(input);
+    if (reason === "higher role") f.targetRoles.push({ code: "SUPERUSER", tenantId: "pg" });
+    if (reason === "same role in another tenant") f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, { code: "EMPLOYEE", tenantId: "other" }];
+    if (reason === "other membership") f.members.add("other:new-1");
+    if (reason === "other binding") {
+      const user = f.users.get("new-1")!;
+      const doc = bindingDoc(user);
+      doc.bindings.push({ ...doc.bindings[0], tenantId: "other" });
+      user.attributes!["digit.bindings"] = [JSON.stringify(doc)];
+    }
+    const before = structuredClone(f.users.get("new-1"));
+    const emails = f.emails;
+    await expect(updateWorkspaceMemberEmail(reason === "self" ? "new-1" : "admin", "pg", uuid, "attacker@example.test"))
+      .rejects.toMatchObject({ code: "ADMIN_EMAIL_CHANGE_NOT_ALLOWED", status: 403 });
+    expect(f.users.get("new-1")).toEqual(before);
+    expect(f.emails).toBe(emails);
+  });
+  it.each(["inventory", "membership"])("fails closed if the other-workspace %s check is unavailable", async (reason) => {
+    await linkWorkspaceMember(input);
+    const before = structuredClone(f.users.get("new-1"));
+    const emails = f.emails;
+    const dependency = reason === "inventory" ? vi.mocked(readOnboardingOrganizations) : vi.mocked(isOrganizationMember);
+    dependency.mockRejectedValueOnce(new Error("dependency unavailable"));
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "attacker@example.test")).rejects.toThrow("dependency unavailable");
+    expect(f.users.get("new-1")).toEqual(before);
+    expect(f.emails).toBe(emails);
+  });
+  it.each(["pending", "removed"])("allows recovery with only a %s binding and no membership elsewhere", async (state) => {
+    await linkWorkspaceMember(input);
+    const user = f.users.get("new-1")!;
+    const doc = bindingDoc(user);
+    doc.bindings.push({ ...doc.bindings[0], tenantId: "other", state, expiresAt: Date.now() + 3600_000 });
+    user.attributes!["digit.bindings"] = [JSON.stringify(doc)];
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
   });
   it("maps a concurrent Keycloak email conflict to IDENTITY_EMAIL_CHANGED", async () => {
     await linkWorkspaceMember(input); f.conflict = true;
