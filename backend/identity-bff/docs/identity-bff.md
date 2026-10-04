@@ -725,6 +725,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 | `digit.lifecycle` | `PROVISIONING` \| `ACTIVE` \| `FAILED` | **Absent = `ACTIVE`** |
 | `digit.lifecycleRestartNo` | integer, as a string | The `restartNo` the lifecycle was set at, so a repeated `_lifecycle` call is recognized |
 | `digit.supersededBy` | Organization id | On a `FAILED` Organization replaced after a slug change |
+| `digit.replacementPending` | single JSON value `{restartNo,operationHash,tenantId,slug,name}` | Durable changed-slug attempt, written before changing the old Organization and cleared after supersession finishes (§9.3) |
 | `digit.accountCode`, `digit.fallbackTenantIds` | as today | Read-only legacy; not written by new code |
 
 - The Organization `name` mirrors MDMS `tenant.tenants.name` (D21). The BFF updates it on rename (reconcile).
@@ -913,6 +914,29 @@ Reference implementation and tests: `src/modules/control-plane/operation-hash.ts
 
 - `memberships/_ensure` and `bindings/_ensure` run in any lifecycle state for the current `restartNo`.
 - A terminal restart keeps the same founder (D25/B9). `bindings/_ensure` with the same key and a different uuid is `BINDING_CONFLICT`. PGR searches HRMS for the founder before `_create`, so a retry reuses the uuid.
+
+#### Changed-slug crash recovery
+
+Before renaming or marking the previous Organization `FAILED`, `_ensure` writes
+`digit.replacementPending` on it with the normalized target payload, canonical
+hash and higher restart number. The marker is durable in Keycloak, independent
+of Redis lock loss. Its restart number is part of the operation's high-water
+mark: every lower-attempt mutation returns `ATTEMPT_STALE`. Repeating the pending
+attempt with a different hash returns `OPERATION_CONFLICT`.
+
+The pending tenant and slug remain reserved against other operations. `_ensure`
+replays the old Organization's failure and tenant-member revocation before
+creating the replacement. Other primitives for the pending attempt return
+`OPERATION_NOT_FOUND` until its replacement Organization exists. Once created,
+the higher-attempt Organization is authoritative even if the old marker has not
+yet been cleared. A retry finishes `digit.supersededBy` and removes the marker;
+it does not revoke a replacement that has since become `ACTIVE`.
+
+Pending restart numbers must exceed their source Organization's restart number,
+and the stored normalized fields must match the pending canonical hash. Multiple
+pending markers, duplicate actual restart numbers, corrupt metadata or a marker
+that disagrees with its created replacement fail closed with
+`IDENTITY_UNAVAILABLE` before any mutation.
 
 ### 9.4 Lifecycle publication (PGR side, for lane D)
 
