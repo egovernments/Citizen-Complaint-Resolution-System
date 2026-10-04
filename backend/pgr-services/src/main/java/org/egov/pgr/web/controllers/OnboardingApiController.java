@@ -98,7 +98,10 @@ public class OnboardingApiController {
         if (replay.isPresent()) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(single("Operation", replay.get()));
         }
-        for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
+        // A terminal restart already owns its tenant. Advisory checks cannot distinguish
+        // that ownership; PGR reservations and _ensure enforce collisions atomically.
+        for (OnboardingIdentifierService.Identifier identifier : service.hasPriorAttempt(signup.getId())
+                ? Collections.<OnboardingIdentifierService.Identifier>emptyList() : identifiers.forSignup(signup)) {
             if (!identitySessionClient.identifierAvailable(identifier.type(), identifier.value())) {
                 throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN",
                         identifier.type() + " is already in use");

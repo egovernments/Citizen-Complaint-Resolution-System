@@ -1,7 +1,7 @@
 {
   "name": "@chakshu-gautam/digit-mcp",
   "version": "1.0.0",
-  "description": "DIGIT platform MCP server + CLI — 60 tools for tenant management, PGR, HRMS, and more",
+  "description": "DIGIT platform MCP server + CLI \u2014 60 tools for tenant management, PGR, HRMS, and more",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -43,7 +43,10 @@
     "test:security": "tsx test-security.ts",
     "test:security:http": "tsx test-security-http.ts",
     "engram": "tsx engram-agent.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prebuild": "node scripts/stage-platform-baseline.mjs",
+    "test:platform-baseline": "tsx --test test-platform-baseline.ts",
+    "test:platform-packaging": "node --test scripts/platform-baseline-packaging.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "latest",
