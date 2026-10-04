@@ -19,6 +19,12 @@ import {
   saveSelectedIdentityContext,
   touchIdentitySession,
 } from "../../src/modules/sessions/session-store.js";
+
+async function clearTokenInventory(identity: { subject: string; tenantId: string }): Promise<void> {
+  const ids = await getRedis().smembers(`${config.cachePrefix}:identity:person-tokens:${identity.subject}`);
+  const keys = ids.filter(id => id.startsWith(`${identity.tenantId}:`)).map(id => `${config.cachePrefix}:identity:token:${id}`);
+  if (keys.length) await getRedis().del(...keys);
+}
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
   LogOtpSender,
@@ -1876,9 +1882,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     const original = citizenTokenMinter();
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet.ulb1");
     expect(identity.tenantId).toBe("ke");
-    const tokenCache = `${config.cachePrefix}:digit-user-token:${identity.key}`;
+    const tokenCache = () => clearTokenInventory(identity);
     for (const tenantId of ["ke.bomet", "zz", "ke.kisumu"]) {
-      await getRedis().del(tokenCache);
+      await tokenCache();
       setCitizenTokenMinter({
         async mint(account) {
           return {
@@ -1896,7 +1902,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         setCitizenTokenMinter(original);
       }
     }
-    await getRedis().del(tokenCache);
+    await tokenCache();
   });
 
   it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
@@ -1904,7 +1910,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     for (const [key, account] of digit.accounts) {
       if (account.userName === identity.username) digit.accounts.delete(key);
     }
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await clearTokenInventory(identity);
     const creates = digit.stats.creates;
     const rolesKey = digit.mdmsKey("ke", "ACCESSCONTROL-ROLES.roles");
     const roles = JSON.stringify(digit.mdms.get(rolesKey) ?? null);
@@ -2047,7 +2053,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
   it("lets a citizen who verified a new number keep signing in", async () => {
     expect((await citizenSelect(await signIn("citizen"))).status).toBe(200);
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await clearTokenInventory(identity);
     const moved = await citizenSelect(await signIn("citizen", "newphone"));
     expect(moved.status).toBe(200);
     const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
@@ -2058,7 +2064,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     // with what DIGIT stores, not with what the BFF last wrote, so the next
     // mint writes the verified number back instead of failing the OTP grant.
     digit.accounts.get(account.uuid)!.mobileNumber = "712345670";
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await clearTokenInventory(identity);
     expect((await citizenSelect(await signIn("citizen", "newphone"))).status).toBe(200);
     expect(digit.accounts.get(account.uuid)!.mobileNumber).toBe("712345679");
   });
@@ -2889,7 +2895,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const identity = linkedIdentity(config.keycloakIssuer, "linked-employee-3", {
         userType: "EMPLOYEE", tenantId: "ke.bomet", digitUuid: account.uuid,
       });
-      const login = () => managedUserLogin(identity, "session-emp3");
+      const { sessionId } = await createIdentitySession(
+        { accessToken: "test-access", accessExpiresIn: 600 },
+        { sub: "linked-employee-3", email: "emp3.kc@example.com" }, config.keycloakBffClientId,
+      );
+      const login = () => managedUserLogin(identity, sessionId);
       const updates = digit.stats.updates;
       digit.setMaskSearchMobileNumbers(true);
       try {
