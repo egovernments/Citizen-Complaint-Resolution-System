@@ -53,6 +53,9 @@ describe('PGR onboarding cutover deployment contract', () => {
     expect(setting(service('digit-mcp'), 'EGOV_MDMS_HOST')).toBe('http://egov-mdms-service:8094');
     expect(service('digit-mcp-readonly')).not.toMatch(/^      EGOV_MDMS_HOST:/m);
     expect(setting(service('digit-mcp'), 'CRS_API_URL')).toBe('http://kong:8000');
+    for (const name of ['digit-mcp', 'digit-mcp-readonly']) {
+      expect(service(name)).not.toMatch(/^      MCP_PLATFORM_BOOTSTRAP_DIRECT:/m);
+    }
   });
 
   test('Ansible preserves stored provisioner credentials while rendering them only for PGR', () => {
