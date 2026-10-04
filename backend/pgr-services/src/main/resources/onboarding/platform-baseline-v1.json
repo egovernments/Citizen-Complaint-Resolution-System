@@ -1594,6 +1594,15 @@
       }
     },
     {
+      "schemaCode": "ACCESSCONTROL-ROLES.roles",
+      "uniqueIdentifier": "PGR_SUPERVISOR",
+      "data": {
+        "code": "PGR_SUPERVISOR",
+        "name": "PGR Supervisor",
+        "description": "Supervisor dashboard access role for PGR analytics"
+      }
+    },
+    {
       "schemaCode": "ACCESSCONTROL-ACTIONS-TEST.actions-test",
       "uniqueIdentifier": "2634",
       "data": {
@@ -15835,6 +15844,56 @@
         "actioncode": "",
         "tenantId": "{tenantid}",
         "id": 901005
+      }
+    },
+    {
+      "schemaCode": "ACCESSCONTROL-ACTIONS-TEST.actions-test",
+      "uniqueIdentifier": "901006",
+      "data": {
+        "id": 901006,
+        "url": "/mdms-v2/v2/_create/common-masters.ThemeConfig",
+        "name": "platform-901006",
+        "displayName": "/mdms-v2/v2/_create/common-masters.ThemeConfig",
+        "orderNumber": 0,
+        "enabled": true,
+        "serviceCode": "PLATFORM",
+        "path": ""
+      }
+    },
+    {
+      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
+      "uniqueIdentifier": "ACCOUNT_ADMIN.901006",
+      "data": {
+        "rolecode": "ACCOUNT_ADMIN",
+        "actionid": 901006,
+        "actioncode": "",
+        "tenantId": "{tenantid}",
+        "id": 901006
+      }
+    },
+    {
+      "schemaCode": "ACCESSCONTROL-ACTIONS-TEST.actions-test",
+      "uniqueIdentifier": "901007",
+      "data": {
+        "id": 901007,
+        "url": "/mdms-v2/v2/_update/common-masters.ThemeConfig",
+        "name": "platform-901007",
+        "displayName": "/mdms-v2/v2/_update/common-masters.ThemeConfig",
+        "orderNumber": 0,
+        "enabled": true,
+        "serviceCode": "PLATFORM",
+        "path": ""
+      }
+    },
+    {
+      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
+      "uniqueIdentifier": "ACCOUNT_ADMIN.901007",
+      "data": {
+        "rolecode": "ACCOUNT_ADMIN",
+        "actionid": 901007,
+        "actioncode": "",
+        "tenantId": "{tenantid}",
+        "id": 901007
       }
     }
   ],
