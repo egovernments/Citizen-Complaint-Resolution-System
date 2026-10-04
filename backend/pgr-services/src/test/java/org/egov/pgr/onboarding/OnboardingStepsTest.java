@@ -133,4 +133,19 @@ public class OnboardingStepsTest {
         prerequisites();assertTrue(made[0]);assertTrue(made[1]);assertTrue(made[2]);
         assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
+    @Test public void kenyaFallbackUsesCanonicalRuleAndConfiguredOtherCountryRemainsSupported() {
+        rows.clear();signup.setCountryCode("KE");prerequisites();
+        assertEquals("^[17][0-9]{8}$",rows.get("newtown|common-masters.MobileNumberValidation|+254").path("data").path("mobileNumberRegex").asText());
+        assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
+        signup.setCountryCode("ET");op.getRecordProgress().remove("mobile");
+        rows.put("et|common-masters.MobileNumberValidation|+251",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+251","mobileNumberRegex","^[0-9]{9}$","default",true))));
+        steps.perform("PLATFORM_BASELINE",signup,op,progress);assertTrue(rows.containsKey("newtown|common-masters.MobileNumberValidation|+251"));
+    }
+    @Test public void countryTransportFailureNeverUsesCanonicalFallback() {
+        when(client.post(eq("mdms"),contains("/v2/_search"),argThat(body->body.toString().contains("tenantId=in"))))
+                .thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
+        assertEquals("PROVISIONING_UNAVAILABLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+        assertFalse(rows.containsKey("newtown|common-masters.MobileNumberValidation|+91"));assertEquals("STARTED",op.getRecordProgress().get("mobile"));
+    }
+
 }

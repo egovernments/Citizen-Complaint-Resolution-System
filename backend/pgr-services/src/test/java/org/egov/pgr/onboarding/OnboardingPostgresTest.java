@@ -29,7 +29,7 @@ public class OnboardingPostgresTest {
     private ObjectMapper mapper=new ObjectMapper();
     private String schema;
     private OnboardingSignup signup;
-    @Before public void setup(){
+    @Before public void setup() throws Exception {
         String url=System.getProperty("onboarding.test.jdbc");Assume.assumeNotNull(url);
         schema="onb_test_"+UUID.randomUUID().toString().replace("-","");
         var admin=new DriverManagerDataSource(url,"postgres","onboarding-test-only");new JdbcTemplate(admin).execute("CREATE SCHEMA "+schema);
@@ -39,6 +39,12 @@ public class OnboardingPostgresTest {
         for(String name:List.of("V20260914000000__create_onboarding_tables.sql","V20260914120000__add_onboarding_operation_lease.sql",
                 "V20260918000000__onboarding_create_idempotency_per_subject.sql","V20261004000000__onboarding_restart_and_publication.sql","V20261004010000__onboarding_workspace.sql","V20261005000000__onboarding_automatic_retry.sql"))migrations.addScript(new ClassPathResource("db/migration/main/"+name));
         migrations.execute(source);
+        // Dollar-quoted migration must run as one statement on the same transaction connection.
+        String normalization;
+        try(var input=new ClassPathResource("db/migration/main/V20261004020000__workspace_name_normalization.sql").getInputStream()) {
+            normalization=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        new TransactionTemplate(new DataSourceTransactionManager(source)).execute(tx->{jdbc.execute(normalization);return null;});
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).ownerIssuer("issuer").ownerSubject("founder").status("DRAFT").accountName("Example")
                 .accountCode("EXAMPLE").urlSlug("example").organizationAlias("example").requestedTenantId("example").countryCode("IN")
                 .languages(List.of("en","hi")).timeZone("Asia/Kolkata").financialYearPolicy("APRIL").acceptedTermsVersion("1")
@@ -257,7 +263,57 @@ public class OnboardingPostgresTest {
             mvc.perform(post("/v2/onboarding/operations/_retry").header("Cookie","identity=fixture").contentType("application/json").content(mapper.writeValueAsString(Map.of("Operation",Map.of("id",operation.getId().toString()))))).andExpect(status().isAccepted());
             var same=repository.findOperation(operation.getId()).orElseThrow();assertEquals("stable-founder",same.getFounderDigitUuid());assertEquals(0,same.getRestartNo());
             var refreshed=repository.findSignup(signup.getId()).orElseThrow();assertFalse(refreshed.isFounderEmailVerified());assertNull(refreshed.getFounderEmail());
+            var last=claim();failRetry(last,System.currentTimeMillis());verified.set(true);email.set("");
+            mvc.perform(post("/v2/onboarding/operations/_retry").header("Cookie","identity=fixture").contentType("application/json").content(mapper.writeValueAsString(Map.of("Operation",Map.of("id",operation.getId().toString()))))).andExpect(status().isAccepted());
+            var missing=repository.findSignup(signup.getId()).orElseThrow();assertFalse(missing.isFounderEmailVerified());assertNull(missing.getFounderEmail());
         } finally {server.stop(0);}
+    }
+
+    @Test @SuppressWarnings("unchecked") public void delayedMdmsProjectionAutomaticallyCompletesBeyondOneRetryBudget() throws Exception {
+        // Small seed exercises the real six-step runner and durable record checkpoints.
+        var baseline=spy(new PlatformBaseline(mapper));var records=mapper.createArrayNode();
+        for(int i=0;i<15;i++) records.add(mapper.valueToTree(Map.of("schemaCode","test.Record","uniqueIdentifier","record"+i,"data",Map.of("code","record"+i))));
+        doReturn(records).when(baseline).records();
+        doReturn(mapper.valueToTree(List.of(Map.of("code","tenant.tenants"),Map.of("code","test.Record")))).when(baseline).schemas();
+        var client=mock(OnboardingProvisionerClient.class);Map<String,Object> stored=new HashMap<>();Set<String> hidden=new HashSet<>();
+        when(client.post(anyString(),anyString(),anyMap())).thenAnswer(call->{
+            String service=call.getArgument(0),path=call.getArgument(1);Map<String,Object> body=call.getArgument(2);
+            if(service.equals("mdms")) {
+                if(path.contains("schema/v1/_search")) return mapper.valueToTree(Map.of("SchemaDefinitions",List.of(Map.of("code","present"))));
+                if(path.contains("/v2/_search")) {
+                    var criteria=(Map<String,Object>)body.get("MdmsCriteria");var ids=(List<String>)criteria.get("uniqueIdentifiers");
+                    String key=criteria.get("tenantId")+"|"+criteria.get("schemaCode")+"|"+(ids==null?"":ids.get(0));
+                    return mapper.valueToTree(Map.of("mdms",hidden.remove(key)||!stored.containsKey(key)?List.of():List.of(stored.get(key))));
+                }
+                var record=(Map<String,Object>)body.get("Mdms");String key=record.get("tenantId")+"|"+record.get("schemaCode")+"|"+record.get("uniqueIdentifier");
+                assertFalse("projection recovery must search before another create",stored.containsKey(key));stored.put(key,record);hidden.add(key);return mapper.createObjectNode();
+            }
+            if(service.equals("hrms")) return mapper.valueToTree(Map.of("Employees",List.of(Map.of("user",Map.of("uuid","stable-founder")))));
+            if(service.equals("boundary")) return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","example")),"TenantBoundary",List.of(Map.of("tenantId","example","hierarchyType","ADMIN","boundary",List.of(Map.of("code","example","boundaryType","ROOT"))))));
+            return mapper.createObjectNode();
+        });
+        var realSteps=new OnboardingSteps(client,baseline,mapper);var worker=transactional(new OnboardingWorkerService(repository,"COUNTRY_NOT_SUPPORTED"));
+        var publisher=transactional(new OnboardingLifecyclePublisher(repository,realSteps));var runner=new OnboardingRunner(worker,repository,realSteps,publisher);
+        var original=submit();int retries=0;
+        for(int ticks=0;ticks<30;ticks++) {
+            runner.tick();var op=repository.findOperation(original.getId()).orElseThrow();
+            if("SUCCEEDED".equals(op.getStatus())) break;
+            assertEquals("RETRYABLE_FAILED",op.getStatus());assertNotNull(retryAt(op.getId()));assertTrue(retryCount(op.getId())<12);retries++;
+            // Advance the due time deterministically; no user/manual retry endpoint.
+            jdbc.update("UPDATE eg_pgr_onboarding_operation SET next_retry_at=0 WHERE id=?",op.getId());
+        }
+        var finished=repository.findOperation(original.getId()).orElseThrow();assertTrue(retries>12);assertEquals("SUCCEEDED",finished.getStatus());assertEquals(0,finished.getRestartNo());
+        assertEquals("stable-founder",finished.getFounderDigitUuid());assertEquals(OnboardingRunner.STEPS,finished.getCompletedSteps());
+        assertEquals("ACTIVE",repository.findSignup(signup.getId()).orElseThrow().getStatus());
+    }
+
+    @Test public void workerWinningClaimPreventsRetryFromChangingItsFounderSnapshot() {
+        repository.snapshotFounder(signup.getId(),new OnboardingPrincipal("issuer","founder","original@example.test","Founder",true));
+        var op=submit();var first=claim();failRetry(first,System.currentTimeMillis());
+        jdbc.update("UPDATE eg_pgr_onboarding_operation SET next_retry_at=0 WHERE id=?",op.getId());claim();
+        var service=transactional(new OnboardingService(repository,new OnboardingIdentifierService()));
+        assertThrows(org.egov.tracer.model.CustomException.class,()->service.retry(new OnboardingPrincipal("issuer","founder","changed@example.test","Founder",true),Map.of("id",op.getId().toString())));
+        assertEquals("original@example.test",repository.findSignup(signup.getId()).orElseThrow().getFounderEmail());
     }
 
 }

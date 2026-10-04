@@ -1,0 +1,38 @@
+8c PGR source regression evidence (JDK17, local PostgreSQL16)
+Owner base: identity/lane-d62f53bbd8; includes completion-base a92e9256f.
+Implementation: d4185863e plus founder HRMS pagination ffda1b51b; later test/evidence commit contains final cases.
+
+Executed command:
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home mvn -o -q -f backend/pgr-services/pom.xml -Dtest=OnboardingPostgresTest,OnboardingStepsTest,OnboardingServiceTest,OnboardingRepositoryTest,OnboardingWorkerServiceTest,OnboardingRecoveryTest -Donboarding.test.jdbc=jdbc:postgresql://127.0.0.1:16432/onboarding_test test
+
+OnboardingPostgresTest: tests/failures/errors/skipped [14, 0, 0, 1]
+OnboardingStepsTest: tests/failures/errors/skipped [13, 0, 0, 0]
+OnboardingServiceTest: tests/failures/errors/skipped [17, 0, 0, 0]
+OnboardingRepositoryTest: tests/failures/errors/skipped [3, 0, 0, 0]
+OnboardingWorkerServiceTest: tests/failures/errors/skipped [8, 0, 0, 0]
+OnboardingRecoveryTest: tests/failures/errors/skipped [5, 0, 0, 0]
+Total tests/failures/errors/skipped: [60, 0, 0, 1]
+One skip: actualBffBoundFounderRestartCollisionAndCrashBeforeAcknowledgement (no onboarding.test.bff supplied). Existing prior full BFF recovery evidence is historical; not rerun or claimed here. Full PGR suite reserved for owner integration.
+
+Failing-before evidence:
+8c-steps-before.log: 11 tests, 2 failures and 2 errors; canonical absence/invalid/unsupported country and null boundary response regressions.
+8c-retry-before.log: 1 test, 1 failure: retryableFailureBecomesClaimableWithoutManualRetry.
+8c-email-before.log: 2 tests, 2 failures at retry snapshot assertions. Initial verified HTTP introspection to signup and HRMS assertions passed before the retry assertion; initial live email loss is NOT reproduced.
+
+Passing-after cases:
+- OnboardingStepsTest: canonical IN/KE fallback target only, preserve configured rules including ET, malformed/ambiguous configured rules fail closed, transport failure never falls back, unsupported country explicit; null hierarchy/entity responses and empty TenantBoundary wrapper create root with valid Polygon geometry.
+- OnboardingPostgresTest: durable due retry, 1s exponential cap60s, no-progress cap12 stays RETRYABLE_FAILED without FAILED publication, manual retry resets budget and preserves operation/restart; only new DONE or newly completed step resets; concurrent automatic claims have one winner and stale lease cannot checkpoint.
+- delayedMdmsProjectionAutomaticallyCompletesBeyondOneRetryBudget: production six-step runner/steps, PostgreSQL and small mocked seed/DIGIT projections; >12 total projection failures automatically resume to SUCCEEDED/ACTIVE without _retry, same founder UUID/restart. Test advances only next_retry_at to simulate time; exact due-time behavior is separately tested.
+- trustedVerifiedEmailFlowsThroughHttpControllerDatabaseAndHrms and retryRefreshesTrustedFounderEmailBeforeHrmsWithoutReplacingIdentity: real HTTP IdentitySessionClient and provisioning client, controller, transactional service and PostgreSQL; local HTTP identity/HRMS fixtures. Trusted current email reaches HRMS; client email claims ignored; unverified/blank email omitted; retries refresh trusted snapshot and preserve operation, restart and UUID.
+- workerWinningClaimPreventsRetryFromChangingItsFounderSnapshot: competing worker claim causes retry conflict without changing running worker identity snapshot.
+
+No deployments or live-host requests. Root-owned real DIGIT/Kong gate and initial live email anomaly remain pending.
+
+Local logs SHA256:
+8c-email-after.log: 1791e3b59a1a4e9f2181b6f3a1e6e07aeab66e4cf8ab862c49f364971143c682
+8c-email-before.log: 872efa25dd32a0eb6fc6eaaf771fe4acaed9312b86f8c6e50c91af9f4006aa43
+8c-retry-after.log: 12dfe33a0e1ef18286b22d1926c4258f4abb8debcffe200ec0aeee18c2d040e8
+8c-retry-before.log: 53910c9e31ea6564bb05366043f8a6dfd4b50601e03150d1e653a84eb32bc9a5
+8c-steps-after.log: 39d8379348d8979039373859622f7ad14e5b5735ed70bc8b368d199a1ee3e3b0
+8c-steps-before.log: 857c62cee3204fd44e5c64fb91a46937932af5c6316d96e056ab529a937b36e8
+8c-targeted-after.log: fee7e8c8fc3534aac3ccb007cb8e77ca3cff7e8e2525105a818a70454fd37cf0
