@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs';
 
+export interface CountryMobileRule {
+  countryCode: string;
+  mobileNumberRegex: string;
+  default: true;
+}
+
 export interface PlatformSeed {
   version: string;
   founderRoles: string[];
+  /** Defaults keyed by ISO country, not tenant IDs or dial codes. */
+  countryMobileRules: Record<string, CountryMobileRule>;
   schemas: { code: string; definition: Record<string, unknown> }[];
   records: { schemaCode: string; uniqueIdentifier: string; data: Record<string, unknown> }[];
 }
