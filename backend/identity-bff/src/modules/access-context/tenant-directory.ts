@@ -12,6 +12,7 @@ import { DigitUnavailableError, type DigitAccount } from "../managed-accounts/di
 import type { KeycloakClaims } from "../authentication/types.js";
 
 export interface TenantOption {
+  code?: "DIGIT_ACCOUNT_INACTIVE";
   organizationId: string;
   organizationAlias: string;
   tenantId: string;
@@ -38,8 +39,8 @@ async function cachedMapping(organizationId: string): Promise<OrganizationMappin
 }
 
 /** Tenant codes present in DIGIT MDMS `tenant.tenants` for the tenant's root. */
-export async function isActiveDigitTenant(tenantId: string): Promise<boolean> {
-  return (await rootTenants(tenantId.split(".")[0])).value.has(tenantId);
+export async function isActiveDigitTenant(tenantId: string, options: { fresh?: boolean } = {}): Promise<boolean> {
+  return (await rootTenants(tenantId.split(".")[0], options.fresh)).value.has(tenantId);
 }
 
 /** The MDMS display name of an active DIGIT tenant, or null. */
@@ -47,9 +48,9 @@ export async function digitTenantName(tenantId: string): Promise<string | null> 
   return (await rootTenants(tenantId.split(".")[0])).names.get(tenantId) ?? null;
 }
 
-async function rootTenants(root: string): Promise<{ value: Set<string>; names: Map<string, string> }> {
+async function rootTenants(root: string, fresh = false): Promise<{ value: Set<string>; names: Map<string, string> }> {
   const hit = tenants.get(root);
-  if (hit && hit.expiresAt > Date.now()) return hit;
+  if (!fresh && hit && hit.expiresAt > Date.now()) return hit;
   if (!config.digitMdmsSearchUrl) {
     throw new DigitUnavailableError("DIGIT MDMS search is not configured");
   }
@@ -72,9 +73,12 @@ async function rootTenants(root: string): Promise<{ value: Set<string>; names: M
   }
   if (!response.ok) throw new DigitUnavailableError(`DIGIT tenant lookup returned ${response.status}`);
   const body = await response.json() as {
-    MdmsRes?: { tenant?: { tenants?: Array<{ code?: string; name?: string }> } };
+    MdmsRes?: { tenant?: { tenants?: Array<{ code?: string; name?: string; isActive?: boolean; active?: boolean; isactive?: boolean }> } };
   };
-  const list = body.MdmsRes?.tenant?.tenants || [];
+  // MDMS row envelopes use isActive; older V1 data can expose active/isactive.
+  // Existing tenant seeds omit an activity property, which means active.
+  const list = (body.MdmsRes?.tenant?.tenants || []).filter(tenant =>
+    tenant.isActive !== false && tenant.active !== false && tenant.isactive !== false);
   const value = new Set(list.flatMap((tenant) => tenant.code ? [tenant.code] : []));
   const names = new Map(list.flatMap((tenant) =>
     tenant.code && typeof tenant.name === "string" && tenant.name.trim() ? [[tenant.code, tenant.name.trim()] as const] : []));
@@ -129,16 +133,17 @@ export function tenantOption(
   membership: OrganizationMembership,
   account: DigitAccount | null,
 ): TenantOption | null {
-  if (!account?.active) return null;
+  if (!account) return null;
   const roles = [...new Set(account.roles
     .filter((role) => role.tenantId === membership.tenantId)
     .map((role) => role.code))].sort();
-  return roles.length ? {
+  return roles.length || !account.active ? {
     organizationId: membership.organizationId,
     organizationAlias: membership.alias,
     tenantId: membership.tenantId,
     name: membership.name,
     roles,
+    ...(!account.active && { code: "DIGIT_ACCOUNT_INACTIVE" as const }),
   } : null;
 }
 

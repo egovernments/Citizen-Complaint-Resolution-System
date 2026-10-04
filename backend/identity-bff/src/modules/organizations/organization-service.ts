@@ -345,7 +345,7 @@ function realmPath(path: string): string {
   return `/admin/realms/${encodeURIComponent(config.keycloakOrganizationRealm)}${path}`;
 }
 
-async function request(
+export async function request(
   path: string,
   init: RequestInit = {},
   accepted = [200, 204],

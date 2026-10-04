@@ -1,3 +1,4 @@
+import { pendingInvitationsFor } from "../bindings/invitations.js";
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
@@ -28,6 +29,7 @@ export function registerSessionRoutes(app: express.Application): void {
     const context = await getSelectedIdentityContext(current.sessionId);
     return response.json({
       authenticated: true,
+      pendingInvitations: surface === "citizen" ? [] : await pendingInvitationsFor(claims.sub),
       user: {
         id: claims.sub,
         email: claims.email,

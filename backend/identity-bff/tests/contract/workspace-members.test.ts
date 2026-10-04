@@ -1,0 +1,91 @@
+import express from "express";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+const f = vi.hoisted(() => ({ signedIn: false, failure: "", surface: "", calls: [] as unknown[] }));
+vi.mock("../../src/modules/sessions/current-session.js", () => ({ currentSession: vi.fn(async (_cookie: string, surface = "configurator") => {
+  f.surface = surface;
+  return f.signedIn ? { sessionId: "session", session: { claims: { sub: "person" } } } : null;
+}) }));
+vi.mock("../../src/modules/workspace-members/service.js", () => {
+  const check = () => { if (f.failure) throw Object.assign(new Error("Refused"), { code: f.failure }); };
+  return {
+    linkWorkspaceMember: vi.fn(async (input: unknown) => { check(); f.calls.push(input); return { identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } }; }),
+    listWorkspaceMembers: vi.fn(async () => { check(); return { members: [] }; }),
+    removeWorkspaceMember: vi.fn(async () => { check(); return { removed: true, state: "removed" }; }),
+    acceptWorkspaceInvitation: vi.fn(async (...args: unknown[]) => { check(); f.calls.push(args); return { binding: { state: "active" } }; }),
+    updateWorkspaceMemberEmail: vi.fn(async () => { check(); return { status: "verification_sent" }; }),
+  };
+});
+import { registerWorkspaceMemberRoutes } from "../../src/modules/workspace-members/routes.js";
+import { contractRoute, expectContractError } from "./harness.js";
+const routes = {
+  link: contractRoute("POST", "/identity/v1/workspace-members/_link"),
+  list: contractRoute("GET", "/identity/v1/workspace-members"),
+  remove: contractRoute("POST", "/identity/v1/workspace-members/_remove"),
+  accept: contractRoute("POST", "/identity/v1/workspace-invitations/_accept"),
+  email: contractRoute("POST", "/identity/v1/workspace-members/_updateEmail"),
+};
+const valid = { tenantId: "pg", digitUuid: "00000000-0000-4000-8000-000000000001", email: "employee@example.test" };
+let server: Server, base: string;
+beforeAll(async () => {
+  const app = express(); app.use(express.json()); registerWorkspaceMemberRoutes(app);
+  server = app.listen(0, "127.0.0.1"); await new Promise<void>((resolve) => server.once("listening", resolve));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+});
+afterAll(() => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+beforeEach(() => { f.signedIn = false; f.failure = ""; f.surface = ""; f.calls = []; });
+const post = (path: string, body: unknown, origin?: string) => fetch(base + path, { method: "POST", headers: { "Content-Type": "application/json", ...(origin && { Origin: origin }) }, body: JSON.stringify(body) });
+
+describe("workspace membership HTTP contract", () => {
+  it.each(Object.values(routes))("requires a session: $path", async (route) => {
+    const response = route.method === "GET" ? await fetch(base + route.path + "?tenantId=pg") : await post(route.path, valid);
+    await expectContractError(response, route, "SESSION_REQUIRED");
+  });
+  it("requires email when linking an employee", async () => {
+    f.signedIn = true;
+    await expectContractError(await post(routes.link.path, { tenantId: valid.tenantId, digitUuid: valid.digitUuid }), routes.link, "INVALID_REQUEST");
+  });
+  it("returns the new-user activation contract", async () => {
+    f.signedIn = true; const response = await post(routes.link.path, valid);
+    expect(response.status).toBe(201); expect(await response.json()).toMatchObject({ identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } });
+  });
+  it("exposes typed stale invitation conflicts", async () => {
+    f.signedIn = true; f.failure = "INVITATION_STALE";
+    await expectContractError(await post(routes.accept.path, { tenantId: "pg", invitationVersion: 1 }), routes.accept, "INVITATION_STALE");
+  });
+  it.each(["configurator", "employee"])("accepts through the %s surface's session", async (surface) => {
+    f.signedIn = true; const response = await post(`${routes.accept.path}?surface=${surface}`, { tenantId: "pg", invitationVersion: 2 });
+    expect(response.status).toBe(200); expect(f.surface).toBe(surface); expect(f.calls[0]).toEqual(["person", "pg", 2]);
+  });
+  it("rejects invitation acceptance through a citizen surface", async () => {
+    f.signedIn = true;
+    await expectContractError(await post(`${routes.accept.path}?surface=citizen`, { tenantId: "pg", invitationVersion: 1 }), routes.accept, "UNSUPPORTED_SURFACE");
+  });
+  it("keeps member pagination within the frozen bounds", async () => {
+    f.signedIn = true;
+    await expectContractError(await fetch(base + routes.list.path + "?tenantId=pg&max=501"), routes.list, "INVALID_REQUEST");
+    expect(await (await fetch(base + routes.list.path + "?tenantId=pg")).json()).toEqual({ members: [] });
+  });
+  it("returns removed state", async () => {
+    f.signedIn = true;
+    expect(await (await post(routes.remove.path, valid)).json()).toEqual({ removed: true, state: "removed" });
+  });
+  it("returns 202 while email verification is pending", async () => {
+    f.signedIn = true; const response = await post(routes.email.path, valid);
+    expect(response.status).toBe(202); expect(await response.json()).toEqual({ status: "verification_sent" });
+  });
+  it("returns the email collision contract", async () => {
+    f.signedIn = true; f.failure = "IDENTITY_EMAIL_CHANGED";
+    await expectContractError(await post(routes.email.path, valid), routes.email, "IDENTITY_EMAIL_CHANGED");
+  });
+  it("rejects an untrusted write Origin before acting", async () => {
+    f.signedIn = true;
+    await expectContractError(await post(routes.link.path, valid, "https://untrusted.example"), routes.link, "UNTRUSTED_ORIGIN");
+    expect(f.calls).toEqual([]);
+  });
+  it("includes Retry-After for busy bindings", async () => {
+    f.signedIn = true; f.failure = "BINDING_BUSY";
+    await expectContractError(await post(routes.link.path, valid), routes.link, "BINDING_BUSY");
+  });
+});
