@@ -1,3 +1,11 @@
+import { ensureActive, remove as removeBinding } from "../../src/modules/bindings/store.js";
+import { mirrorPerson } from "../../src/modules/sync/mirror.js";
+import * as syncMirror from "../../src/modules/sync/mirror.js";
+import * as sessionStore from "../../src/modules/sessions/session-store.js";
+import { BindingError } from "../../src/modules/bindings/types.js";
+import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
+import { clearBrandingCaches } from "../../src/modules/branding/tenant-branding.js";
+import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
@@ -35,6 +43,8 @@ import {
   type OtpMessage,
 } from "../../src/modules/citizen-otp/otp-sender.js";
 import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
+import * as subjectSync from "../../src/modules/reconciliation/subject-sync.js";
+import * as reconciliation from "../../src/modules/reconciliation/reconciliation-service.js";
 import { syncSubject, syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
 import { desiredRolesForSubjectTenant } from "../../src/modules/reconciliation/reconciliation-service.js";
 import {
@@ -57,8 +67,20 @@ import {
   stopIdentityTestApp as stopTestApp,
 } from "./identity-test-app.js";
 
+async function withoutSubjectReconciliation(run: () => Promise<Response>): Promise<Response> {
+  const spies = [vi.spyOn(subjectSync, "syncSubject"), vi.spyOn(subjectSync, "syncSubjectTenant"),
+    vi.spyOn(reconciliation, "desiredRolesBySubject")];
+  try {
+    const result = await run();
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    return result;
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+}
+
 const digit = createFakeDigitUser({
-  tenants: ["ke", "ke.bomet", "ke.bomet.ulb1", "ke.kisumu", "ke.nakuru", "ke.nyeri"],
+  tenants: ["ug", "ke", "ke.bomet", "ke.bomet.ulb1", "ke.kisumu", "ke.nakuru", "ke.nyeri"],
 });
 let nakuruOrganizationId = "";
 
@@ -360,7 +382,7 @@ describe("identity BFF", () => {
     const reconciliation = await post("/reconciliation/_run", {});
     expect(reconciliation.status).toBe(200);
     expect(await reconciliation.json()).toMatchObject({
-      acquired: true, organizations: 5, unchanged: 3, unprovisioned: 2, failures: [],
+      acquired: true, mirrored: 0, revoked: 0, propagated: 0, failures: [],
     });
   });
 
@@ -1084,12 +1106,12 @@ describe("identity BFF", () => {
     );
     expect(revoked.status).toBe(403);
 
-    // The Keycloak user attribute is the durable inventory. A full scan can
-    // still deactivate the former tenant account after the Redis index is lost.
+    // Reconcile never deactivates a DIGIT account, including after Redis loss.
+    // HRMS owns active; membership removal is an identity access/revocation gate.
     await getRedis().del(managedAccountsKey());
     const reconciled = await ensure("/reconciliation/_run", {});
     expect(reconciled.status).toBe(200);
-    expect(managedAccount.active).toBe(false);
+    expect(managedAccount.active).toBe(true);
 
     // Re-selecting the same tenant is the renewal operation.
     const renewed = await fetch(
@@ -1154,7 +1176,7 @@ describe("identity BFF", () => {
     "digit-identity-bff");
 
     await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
-    const selected = await fetch(
+    const selected = await withoutSubjectReconciliation(() => fetch(
       `http://localhost:${getAppPort()}/identity/v1/contexts/_select`,
       {
         method: "POST",
@@ -1165,7 +1187,7 @@ describe("identity BFF", () => {
         },
         body: JSON.stringify({ tenantId: "ke.bomet" }),
       },
-    );
+    ));
     expect(selected.status).toBe(200);
 
     const log = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json() as string[];
@@ -1326,6 +1348,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     returnTo = `/bomet-county/digit-ui/${surface}/`,
     tenantSlug = "bomet-county",
   ): Promise<string> {
+    // D10 reads verified phone state from Keycloak, not only the token fixture.
+    if (surface === "citizen" && !profile.startsWith("legacy")) {
+      const subject = profile === "other" ? "citizen-user-2" : "citizen-user-1";
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      const phone = profile === "other" ? "+254722000111" : profile === "newphone" ? "+254712345679" : profile === "foreign" ? "+14155550100" : "+254712345678";
+      await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes,
+        phoneNumber: [phone], phoneNumberVerified: [profile === "unverified" ? "false" : "true"] } });
+    }
     const { state, nonce, loginCookie } = await startSignIn(
       `surface=${surface}&tenantSlug=${tenantSlug}&returnTo=${encodeURIComponent(returnTo)}`,
     );
@@ -1682,7 +1712,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     // validateOtp (mobileNumber at the account tenant), even when search
     // responses mask the stored number.
     digit.setMaskSearchMobileNumbers(true);
-    const selected = await citizenSelect(cookie, { tenantId: "ke.kisumu" }).finally(() =>
+    const selected = await withoutSubjectReconciliation(() => citizenSelect(cookie, { tenantId: "ke.kisumu" })).finally(() =>
       digit.setMaskSearchMobileNumbers(false));
     expect(selected.status).toBe(200);
     // Bomet's Organization maps `ke.bomet`, but egov-user keeps citizens at
@@ -1877,6 +1907,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
 
   it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
+    const removedAccounts = [...digit.accounts.entries()].filter(([, account]) => account.userName === identity.username);
     for (const [key, account] of digit.accounts) {
       if (account.userName === identity.username) digit.accounts.delete(key);
     }
@@ -1896,6 +1927,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(JSON.stringify(digit.mdms.get(rolesKey) ?? null)).toBe(roles);
     } finally {
       digit.setUndefinedRoles([]);
+      // Restore this test's deleted records: later tests retain a durable
+      // digit.accounts reference and must exercise the same citizen UUID.
+      for (const [uuid, account] of removedAccounts) digit.accounts.set(uuid, account);
     }
   });
 
@@ -1915,8 +1949,8 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await fetch(`${app()}/identity/v1/tenant-contexts/dupe-slug`)).status).toBe(404);
       expect(warn.mock.calls.some(([line]) => String(line).includes("colliding mapping"))).toBe(true);
       // Dupe B also claims ke.nakuru, so the Nakuru mapping is dropped too. Its
-      // managed accounts must survive reconciliation: a missing mapping is
-      // "unknown", not "nobody is a member".
+      // managed accounts must stay active: reconcile never writes DIGIT active.
+      // Ambiguous Organization ownership is reported for operator repair.
       const nakuru = [...digit.accounts.values()].filter((account) =>
         account.tenantId === "ke.nakuru" && account.userName.startsWith("kcbff-") && account.active);
       expect(nakuru.length).toBeGreaterThan(0);
@@ -1928,9 +1962,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       });
       expect(reconciled.status).toBe(200);
       const result = await reconciled.json();
-      expect(result.deactivated).toBe(0);
-      expect(result.failures.some((failure: { subject: string; error: string }) =>
-        failure.subject.endsWith("@ke.nakuru") && failure.error.includes("collides"))).toBe(true);
+      expect(result).not.toHaveProperty("deactivated");
+      expect(result.failures.some((failure: { subject: string; code: string }) =>
+        failure.subject === "tenant:ke.nakuru" && failure.code === "IDENTITY_UNAVAILABLE")).toBe(true);
       expect(nakuru.every((account) => digit.accounts.get(account.uuid)!.active)).toBe(true);
     } finally {
       warn.mockRestore();
@@ -2068,6 +2102,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     const wrong = (code: string) => String((Number(code) + 1) % 1_000_000).padStart(6, "0");
 
     beforeAll(async () => {
+      // Reset the fresh Keycloak phone changed by the preceding new-phone gate.
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/citizen-user-1`)).json();
+      await kcUpdate("/users/citizen-user-1", { attributes: { ...user.attributes, phoneNumber: ["+254712345678"], phoneNumberVerified: ["true"] } });
       Object.assign(config as any, otpConfig);
       setOtpSender({
         configured: true,
@@ -2646,6 +2683,19 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         tenantId: input.tenantId, type: input.type, active: true, identificationMark: null,
         roles: input.roles.map((code) => ({ code, tenantId: input.tenantId })), password: "Legacy@123",
       });
+    // These legacy operator-route gates retain their old link assertions, but
+    // staff issuance now requires the binding and membership produced by item 19.
+    const bindLegacyEmployeeFixture = async (uuid: string) => {
+      const subject = "identity-user-unlinked";
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      const attributes = { ...user.attributes };
+      delete attributes["digit.bindings"]; delete attributes["digit.boundUuids"]; delete attributes["digit.accounts"];
+      await kcUpdate(`/users/${subject}`, { attributes });
+      await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: subject });
+      await ensureActive({ subject, tenantId: "ke.bomet", uuid, actor: { kind: "migration" } });
+      await mirrorPerson(subject);
+    };
+    const removeLegacyEmployeeFixture = (uuid: string) => removeBinding({ subject: "identity-user-unlinked", tenantId: "ke.bomet", uuid, removedBy: { kind: "operator" } });
     const profileUrl = () => `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/profile`;
     const setProfile = async (profile: unknown) => {
       await fetch(profileUrl(), {
@@ -2712,6 +2762,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         status: "LINKED", subject: "identity-user-unlinked", digitUserUuid: account.uuid,
       })]);
 
+      await bindLegacyEmployeeFixture(account.uuid);
       const passwordUpdates = digit.stats.passwordUpdates;
       const selected = await employeeSelect(cookie);
       expect(selected.status).toBe(200);
@@ -2729,6 +2780,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await inactive.json()).code).toBe("DIGIT_ACCOUNT_INACTIVE");
       expect(digit.tokens.has(token.access_token)).toBe(false);
       digit.accounts.get(account.uuid)!.active = true;
+      // HRMS reactivation restores access with the existing link, before any BFF relink.
+      const reactivated = await employeeSelect(cookie);
+      expect(reactivated.status).toBe(200);
+      expect((await reactivated.json()).UserRequest.uuid).toBe(account.uuid);
+      expect(digit.accounts.get(account.uuid)!.active).toBe(true);
 
       const again = await cp("account-links/_link", {
         links: [{ subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid }],
@@ -2739,6 +2795,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid, actor: "qa-admin",
       });
       expect(await unlinked.json()).toEqual({ removed: true });
+      await removeLegacyEmployeeFixture(account.uuid);
       expect((await (await employeeSelect(cookie)).json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
       expect(digit.accounts.get(account.uuid)!.active).toBe(true);
     });
@@ -2751,6 +2808,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       });
       expect((await linked.json()).results[0].status).toBe("LINKED");
 
+      await bindLegacyEmployeeFixture(account.uuid);
       digit.accounts.get(account.uuid)!.accountLocked = true;
       const locked = await employeeSelect(cookie);
       const body = await expectContractError(locked, contractRoute("POST", "/identity/v1/contexts/_select"), "ACCOUNT_LOCKED");
@@ -2759,6 +2817,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       digit.accounts.get(account.uuid)!.accountLocked = false;
       expect((await employeeSelect(cookie)).status).toBe(200);
       await cp("account-links/_unlink", { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid });
+      await removeLegacyEmployeeFixture(account.uuid);
     });
 
     it("refuses links that are unproven or already owned, item by item", async () => {
@@ -2946,5 +3005,200 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await auditRecords()).some((record) => record.event === "TENANT_ROUTE_BACKFILL" && record.actor === "control-plane:deploy"))
         .toBe(true);
     });
+  });
+});
+
+// These gates start at the authenticated BFF session boundary. The OIDC
+// callback that creates that session is exercised by the sign-in gates above.
+describe("binding workspace public routes", () => {
+  const app = () => `http://localhost:${getAppPort()}/identity/v1`;
+  let adminCookie: string;
+  let adminAccount: ReturnType<typeof digit.addAccount>;
+  const employee = (name: string) => digit.addAccount({ userName: name, name,
+    tenantId: "ug", type: "EMPLOYEE", active: true, mobileNumber: "712000999", emailId: null,
+    identificationMark: null, password: "Employee@123", roles: [{ code: "EMPLOYEE", tenantId: "ug" }] });
+  const cookieFor = async (subject: string, surface: "configurator" | "employee" = "configurator") => {
+    const { sessionId } = await createIdentitySession({ accessToken: "server-test-token", accessExpiresIn: 3600 },
+      { sub: subject, email: `${subject}@example.test` }, surface === "employee" ? config.keycloakEmployeeClientId : config.keycloakBffClientId,
+      { surface, ...(surface === "employee" && { boundTenant: { tenantId: "ug", rootTenantId: "ug", urlSlug: "binding-workspace", name: "Binding Workspace" } }) });
+    return `${surface === "employee" ? config.identityEmployeeCookieName : config.identityCookieName}=${sessionId}`;
+  };
+  const post = (path: string, cookie: string, body: unknown) => fetch(`${app()}${path}`, {
+    method: "POST", headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const read = (path: string, cookie: string) => fetch(`${app()}${path}`, { headers: { Cookie: cookie } });
+  const kcUser = async (subject: string) => (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+  beforeAll(async () => {
+    await kcAdmin("/organizations", { id: "binding-workspace", alias: "binding-workspace", name: "Binding Workspace", enabled: true,
+      attributes: { "digit.rootTenantId": ["ug"], "digit.urlSlug": ["binding-workspace"], "digit.lifecycle": ["ACTIVE"] } });
+    await kcAdmin("/users", { id: "binding-admin", username: "binding-admin", email: "binding-admin@example.test", enabled: true });
+    adminAccount = employee("BINDING-ADMIN");
+    adminAccount.roles.push({ code: "ACCOUNT_ADMIN", tenantId: "ug" });
+    await ensureActive({ subject: "binding-admin", tenantId: "ug", uuid: adminAccount.uuid, actor: { kind: "migration" } });
+    await ensureOrganizationMembership({ organizationId: "binding-workspace", userId: "binding-admin" });
+    await mirrorPerson("binding-admin");
+    adminCookie = await cookieFor("binding-admin");
+  });
+
+  it("links a new employee, discovers its inviting workspace without onboarding, and selects its existing DIGIT account", async () => {
+    const account = employee("BINDING-NEW");
+    const linked = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-new@example.test" });
+    expect(linked.status).toBe(201);
+    const result = await linked.json();
+    expect(result).toMatchObject({ identityUserCreated: true, activationEmailSent: true, binding: { state: "active" } });
+    const cookie = await cookieFor(result.binding.subject);
+    expect(await (await read("/session", cookie)).json()).toMatchObject({ pendingInvitations: [] });
+    expect(await (await read("/tenants", cookie)).json()).toMatchObject({ onboardingRequired: false, selectionRequired: false,
+      tenants: [{ tenantId: "ug", name: "Binding Workspace" }] });
+    const selected = await post("/contexts/_select", cookie, { tenantId: "ug" });
+    expect(selected.status).toBe(200);
+    expect(await selected.json()).toMatchObject({ UserRequest: { uuid: account.uuid, userName: account.userName } });
+    account.active = false;
+    expect(await (await read("/tenants", cookie)).json()).toMatchObject({ onboardingRequired: false,
+      tenants: [{ tenantId: "ug", code: "DIGIT_ACCOUNT_INACTIVE" }] });
+    expect(await (await post("/contexts/_select", cookie, { tenantId: "ug" })).json()).toMatchObject({ code: "DIGIT_ACCOUNT_INACTIVE" });
+    account.active = true;
+    expect((await post("/contexts/_select", cookie, { tenantId: "ug" })).status).toBe(200);
+  });
+
+  it.each(["configurator", "employee"] as const)("shows and accepts an existing person's invitation on %s, then selects its DIGIT account", async (surface) => {
+    const subject = `binding-existing-${surface}`;
+    await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, enabled: true });
+    const account = employee(`BINDING-EXISTING-${surface}`);
+    const response = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: `${subject}@example.test` });
+    expect(response.status).toBe(200);
+    const invite = await response.json();
+    expect(invite).toMatchObject({ identityUserCreated: false, binding: { state: "pending" } });
+    const cookie = await cookieFor(subject, surface);
+    expect(await (await read(`/session?surface=${surface}`, cookie)).json()).toMatchObject({ pendingInvitations: [{ tenantId: "ug", invitationVersion: invite.binding.invitationVersion }] });
+    expect(await (await post("/contexts/_select", cookie, { tenantId: "ug", surface })).json()).toMatchObject({ code: "PENDING_INVITATION" });
+    const body = { tenantId: "ug", invitationVersion: invite.binding.invitationVersion };
+    expect((await post(`/workspace-invitations/_accept?surface=${surface}`, cookie, body)).status).toBe(200);
+    expect((await post(`/workspace-invitations/_accept?surface=${surface}`, cookie, body)).status).toBe(200);
+    expect(await (await read(`/session?surface=${surface}`, cookie)).json()).toMatchObject({ pendingInvitations: [] });
+    expect(await (await post("/contexts/_select", cookie, { tenantId: "ug", surface })).json()).toMatchObject({ UserRequest: { uuid: account.uuid } });
+    expect(await (await read("/workspace-members?tenantId=ug", adminCookie)).json()).toMatchObject({ members: expect.arrayContaining([
+      expect.objectContaining({ subject: subject, state: "active", digitUuid: account.uuid }),
+    ]) });
+  });
+
+  it("rejects a removed or cross-tenant ACCOUNT_ADMIN role during the same session", async () => {
+    const account = employee("BINDING-DENIED");
+    const roles = [...adminAccount.roles];
+    try {
+      adminAccount.roles = [{ code: "EMPLOYEE", tenantId: "ug" }];
+      const body = { tenantId: "ug", digitUuid: account.uuid, email: "binding-denied@example.test" };
+      const removed = await post("/workspace-members/_link", adminCookie, body);
+      expect(removed.status).toBe(403); expect(await removed.json()).toMatchObject({ code: "ADMIN_REQUIRED" });
+      adminAccount.roles.push({ code: "ACCOUNT_ADMIN", tenantId: "ke.bomet" });
+      const wrongTenant = await post("/workspace-members/_link", adminCookie, body);
+      expect(wrongTenant.status).toBe(403); expect(await wrongTenant.json()).toMatchObject({ code: "ADMIN_REQUIRED" });
+    } finally { adminAccount.roles = roles; }
+  });
+
+  it("revokes and forgets a staff token when mirroring fails after issuance", async () => {
+    const account = employee("BINDING-CLEANUP");
+    const linked = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: "binding-cleanup@example.test" });
+    const { binding } = await linked.json();
+    const cookie = await cookieFor(binding.subject);
+    const spy = vi.spyOn(syncMirror, "mirrorPerson").mockRejectedValueOnce(new BindingError("IDENTITY_UNAVAILABLE", "Injected mirror failure"));
+    try {
+      const response = await post("/contexts/_select", cookie, { tenantId: "ug" });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: "IDENTITY_UNAVAILABLE" });
+      expect(spy).toHaveBeenCalledOnce();
+      expect([...digit.tokens.values()].some(token => token.uuid === account.uuid)).toBe(false);
+      expect(await getRedis().exists(tokenKey(account), tokenHoldersKey(account))).toBe(0);
+      expect(await getRedis().sismember(personTokensKey(binding.subject), accountId(account))).toBe(0);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("revokes and forgets a citizen token if the final session fence fails", async () => {
+    const subject = "binding-citizen-cleanup";
+    await kcAdmin("/users", { id: subject, username: subject, enabled: true,
+      attributes: { phoneNumber: ["+254799123987"], phoneNumberVerified: ["true"] } });
+    const { sessionId } = await createIdentitySession({ accessToken: "server-test-token", accessExpiresIn: 3600 },
+      { sub: subject, azp: config.keycloakCitizenClientId }, config.keycloakCitizenClientId,
+      { surface: "citizen", boundTenant: { tenantId: "ke.bomet", rootTenantId: "ke.bomet", urlSlug: "bomet-county", name: "Bomet County" } });
+    const original = sessionStore.requireCurrentSession;
+    let checks = 0;
+    const spy = vi.spyOn(sessionStore, "requireCurrentSession").mockImplementation(async (lease, id) => {
+      if (++checks === 3) throw new BindingError("SESSION_REVOKED", "Injected final fence failure");
+      return original(lease, id);
+    });
+    try {
+      const response = await post("/contexts/citizen/_select", `${config.identityCitizenCookieName}=${sessionId}`, {});
+      expect(checks).toBe(3);
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({ code: "SESSION_REVOKED" });
+      const account = [...digit.accounts.values()].find(account => account.mobileNumber === "799123987")!;
+      expect(account).toBeDefined();
+      expect([...digit.tokens.values()].some(token => token.uuid === account.uuid)).toBe(false);
+      expect(await getRedis().exists(tokenKey(account), tokenHoldersKey(account))).toBe(0);
+      expect(await getRedis().sismember(personTokensKey(subject), accountId(account))).toBe(0);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("records a newly signed-in citizen before issuance and propagates its changed verified phone to the same DIGIT account", async () => {
+    digit.mdms.set(digit.mdmsKey("ke", "common-masters.MobileNumberValidation"),
+      structuredClone(digit.mdms.get(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"))!));
+    clearBrandingCaches();
+    const subject = "binding-citizen-phone";
+    await kcAdmin("/users", { id: subject, username: subject, enabled: true,
+      attributes: { phoneNumber: ["+254799123981"], phoneNumberVerified: ["true"] } });
+    const { sessionId } = await createIdentitySession({ accessToken: "server-test-token", accessExpiresIn: 3600 },
+      { sub: subject, azp: config.keycloakCitizenClientId }, config.keycloakCitizenClientId,
+      { surface: "citizen", boundTenant: { tenantId: "ke.bomet", rootTenantId: "ke.bomet", urlSlug: "bomet-county", name: "Bomet County" } });
+    const original = citizenTokenMinter();
+    let checkedBeforeIssuance = false;
+    setCitizenTokenMinter({ async mint(account, ...args) {
+      const user = await kcUser(subject);
+      expect(JSON.parse(user.attributes["digit.accounts"][0]).entries).toContainEqual(expect.objectContaining({
+        kind: "citizen", tenantId: "ke", uuid: account.uuid, active: true,
+      }));
+      checkedBeforeIssuance = true;
+      return original.mint(account, ...args);
+    } });
+    let accountUuid: string;
+    try {
+      const selected = await post("/contexts/citizen/_select", `${config.identityCitizenCookieName}=${sessionId}`, {});
+      expect(selected.status).toBe(200);
+      accountUuid = (await selected.json()).UserRequest.uuid;
+      expect(checkedBeforeIssuance).toBe(true);
+    } finally { setCitizenTokenMinter(original); }
+    const user = await kcUser(subject);
+    expect(user.attributes["digit.citizenRegistrations"]).toHaveLength(1);
+    await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, phoneNumber: ["+254799123982"] } });
+    const count = digit.accounts.size;
+    expect(await propagateIdentifiers(subject)).toMatchObject({ written: 1, skipped: 0 });
+    expect(digit.accounts.get(accountUuid!)!).toMatchObject({ mobileNumber: "799123982", countryCode: "+254" });
+    expect(digit.accounts.size).toBe(count);
+  });
+
+  it.each(["stale", "expired", "removed"])("returns INVITATION_STALE for a %s invitation and releases removed UUIDs", async (kind) => {
+    const subject = `binding-${kind}`;
+    await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, enabled: true });
+    const account = employee(`BINDING-${kind.toUpperCase()}`);
+    const linked = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: `${subject}@example.test` });
+    expect(linked.status).toBe(200);
+    const { binding } = await linked.json();
+    const cookie = await cookieFor(subject);
+    if (kind === "expired") {
+      const user = await kcUser(subject);
+      const doc = JSON.parse(user.attributes["digit.bindings"][0]);
+      doc.bindings[0].expiresAt = Date.now() - 1;
+      await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, "digit.bindings": [JSON.stringify(doc)] } });
+    }
+    if (kind === "removed") expect((await post("/workspace-members/_remove", adminCookie, { tenantId: "ug", digitUuid: account.uuid })).status).toBe(200);
+    // Removal revokes old sessions; a fresh authenticated session still cannot accept the tombstone.
+    const activeCookie = kind === "removed" ? await cookieFor(subject) : cookie;
+    const accepted = await post("/workspace-invitations/_accept", activeCookie,
+      { tenantId: "ug", invitationVersion: binding.invitationVersion + (kind === "stale" ? 1 : 0) });
+    expect(accepted.status).toBe(409); expect(await accepted.json()).toMatchObject({ code: "INVITATION_STALE" });
+    if (kind !== "stale") {
+      expect((await kcUser(subject)).attributes["digit.boundUuids"] || []).not.toContain(account.uuid);
+      const retry = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: `replacement-${kind}@example.test` });
+      expect(retry.status).toBe(201);
+    }
   });
 });

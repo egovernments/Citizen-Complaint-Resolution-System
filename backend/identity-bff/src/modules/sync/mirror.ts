@@ -99,3 +99,31 @@ export function mirrorPerson(subject: string, hint?: MirrorHint): Promise<void> 
     await applyMirrorSnapshot(subject, snapshot, lease);
   });
 }
+
+export class CitizenAccountAmbiguousError extends Error {
+  readonly status = 409;
+  readonly code = "CITIZEN_ACCOUNT_AMBIGUOUS";
+  constructor() { super("A different citizen account is already resolved for this tenant"); }
+}
+
+/** Seed only an account already resolved by citizen selection or legacy conversion. */
+export function ensureCitizenEntry(subject: string, account: { tenantId: string; uuid: string }): Promise<void> {
+  return withPersonLease(subject, async () => {
+    if (!account.tenantId || !account.uuid) throw new Error("Citizen account requires tenantId and uuid");
+    await updateKeycloakUser(subject, user => {
+      const entries = accountEntries(user);
+      const existing = entries.find(entry => entry.kind === "citizen" && entry.tenantId === account.tenantId);
+      if (existing) {
+        if (existing.uuid !== account.uuid) throw new CitizenAccountAmbiguousError();
+        return null;
+      }
+      const entry: AccountEntry = { kind: "citizen", tenantId: account.tenantId, uuid: account.uuid,
+        boundAt: Date.now(), active: false, roles: [] };
+      const next = { ...user, attributes: { ...user.attributes,
+        "digit.accounts": [JSON.stringify({ v: 1, entries: [...entries, entry] })] } };
+      accountEntries(next); // Enforce the same schema and account limit before writing.
+      return next;
+    });
+    await mirrorPerson(subject);
+  });
+}

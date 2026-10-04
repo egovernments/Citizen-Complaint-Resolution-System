@@ -6,7 +6,7 @@ import { resetAdminToken } from "../../src/integrations/keycloak/admin-session.j
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { updateKeycloakUser, KeycloakConflictError } from "../../src/modules/sync/keycloak-writer.js";
 import { keycloakTestClient } from "../fixtures/keycloak/client.js";
-import { mirrorPerson } from "../../src/modules/sync/mirror.js";
+import { ensureCitizenEntry, mirrorPerson } from "../../src/modules/sync/mirror.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 
 const digit = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }));
@@ -30,7 +30,9 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", (
       return attribute;
     });
     for (const name of ["digit.accounts", "digit.bindings", "digit.boundUuids", "fixture.keep"]) {
-      profile.attributes.push({ name, multivalued: true, permissions: { view: ["admin"], edit: ["admin"] } });
+      if (!profile.attributes.some((attribute: {name: string}) => attribute.name === name)) {
+        profile.attributes.push({ name, multivalued: true, permissions: { view: ["admin"], edit: ["admin"] } });
+      }
     }
     await client.request("/users/profile", "PUT", profile);
   });
@@ -127,4 +129,22 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", (
       user => ({ ...user, email: `${second.username}@example.test`, emailVerified: false }),
       { allowEmailChange: true }))).rejects.toBeInstanceOf(KeycloakConflictError);
   });
+  it("seeds a resolved citizen once and mirrors it while preserving the real identity", async () => {
+    const { subject, username } = await createUser();
+    const uuid = randomUUID();
+    digit.read.mockResolvedValue({ uuid, tenantId: "tenant", type: "CITIZEN", userName: "citizen",
+      name: "Citizen Name", active: true, roles: [{ code: "CITIZEN", tenantId: "tenant" }] });
+    await withPersonLease(subject, () => ensureCitizenEntry(subject, { tenantId: "tenant", uuid }));
+    await ensureCitizenEntry(subject, { tenantId: "tenant", uuid });
+    const current = await (await client.request(`/users/${subject}`)).json();
+    expect(current).toMatchObject({ username, email: `${username}@example.test`, emailVerified: true,
+      enabled: true, firstName: "Citizen Name", attributes: { "fixture.keep": ["preserved"] } });
+    expect(JSON.parse(current.attributes["digit.accounts"][0]).entries).toEqual([
+      expect.objectContaining({ kind: "citizen", tenantId: "tenant", uuid, active: true,
+        roles: [{ code: "CITIZEN", tenantId: "tenant" }] }),
+    ]);
+    await expect(ensureCitizenEntry(subject, { tenantId: "tenant", uuid: randomUUID() }))
+      .rejects.toMatchObject({ code: "CITIZEN_ACCOUNT_AMBIGUOUS", status: 409 });
+  });
+
 });

@@ -1,6 +1,5 @@
-import { config } from "../../infrastructure/config.js";
 import { isActiveDigitTenant } from "../access-context/tenant-directory.js";
-import { findManagedAccount, managedIdentity } from "../managed-accounts/managed-account-service.js";
+import { managedFallbackAccess } from "./managed-fallback.js";
 import { isOrganizationMember } from "../organizations/organization-service.js";
 import { bindingsFromUser, effectiveBinding, readBindingUser, type Binding } from "./store.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
@@ -24,11 +23,14 @@ export async function staffAccess(subject: string, tenantId: string): Promise<St
   if (user.enabled === false) return deny("KEYCLOAK_DISABLED");
   // A pending/removed record must never fall back to a former managed account.
   if (binding && binding.state !== "active") return deny("NO_ACTIVE_BINDING");
+  if (!binding) {
+    const fallback = await managedFallbackAccess(subject, tenantId);
+    return fallback.allowed ? { ...base, allowed: true } : deny(fallback.denial);
+  }
   const org = await readOrganizationByTenant(tenantId);
   if (!org || !org.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return deny("ORGANIZATION_INACTIVE");
   if (!await isActiveDigitTenant(tenantId)) return deny("TENANT_INACTIVE");
   if (!await isOrganizationMember(org.id, subject)) return deny("NOT_A_MEMBER");
-  if (!binding && !await findManagedAccount(managedIdentity(config.keycloakIssuer, subject, tenantId))) return deny("NO_ACTIVE_BINDING");
   return { ...base, allowed: true };
 }
 

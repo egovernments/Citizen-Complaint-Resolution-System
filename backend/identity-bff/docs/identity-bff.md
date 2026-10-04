@@ -127,11 +127,11 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/contexts/_select` | session | changing | 7, 8, 10, 12 |
 | POST | `/identity/v1/contexts/citizen/_select` | session | changing | 10, 12, 13 |
 | POST | `/identity/v1/organization-members/_invite` | session | deleted-later | 14 |
-| POST | `/identity/v1/workspace-members/_link` | session | planned | 8, 9 |
-| GET | `/identity/v1/workspace-members` | session | planned | 9 |
-| POST | `/identity/v1/workspace-members/_remove` | session | planned | 9, 10 |
-| POST | `/identity/v1/workspace-members/_updateEmail` | session | planned | 9 |
-| POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
+| POST | `/identity/v1/workspace-members/_link` | session | live | 8, 9 |
+| GET | `/identity/v1/workspace-members` | session | live | 9 |
+| POST | `/identity/v1/workspace-members/_remove` | session | live | 9, 10 |
+| POST | `/identity/v1/workspace-members/_updateEmail` | session | live | 9 |
+| POST | `/identity/v1/workspace-invitations/_accept` | session | live | 9 |
 | POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | live | 11 |
 | POST | `/internal/identity/v1/identifiers/_check` | introspection | live | 11 |
@@ -139,7 +139,8 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/internal/identity/v1/organizations/_lifecycle` | workload | live | 11 |
 | POST | `/internal/identity/v1/memberships/_ensure` | workload | live | 11, 14 |
 | POST | `/internal/identity/v1/bindings/_ensure` | workload | live | 8, 11 |
-| POST | `/internal/identity/v1/reconciliation/_run` | operator | changing | 12 |
+| POST | `/internal/identity/v1/reconciliation/_run` | operator | live | 12 |
+
 | POST | `/internal/identity/v1/account-links/_link` | operator | changing | 14 |
 | POST | `/internal/identity/v1/account-links/_unlink` | operator | changing | 14 |
 | GET | `/internal/identity/v1/account-links` | operator | changing | 14 |
@@ -497,6 +498,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has l
 - Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
 - DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
 - An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
+- **Deferred (root, D18 scope):** notifying the old address about an email change, here or through self-service `UPDATE_EMAIL`, is not built in v1. Stock Keycloak doesn't send it, and custom Keycloak extensions are not allowed. Verification of the new address and "DIGIT only after verification" are unchanged and required.
 
 ### 3.4 Internal: PGR onboarding
 
