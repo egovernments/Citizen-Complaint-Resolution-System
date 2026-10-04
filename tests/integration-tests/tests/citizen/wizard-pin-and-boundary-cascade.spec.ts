@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Citizen-flow regression for theflywheel/digit-ui-esbuild#74:
  *   - egovernments/CCRS#469: pin-location validation trap. The map's
@@ -62,7 +63,7 @@ The dropdowns are scoped to the cascade's own .pgr-boundary-cascade container, s
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
     expect(token, 'OTP login should persist Citizen.token').toBeTruthy();
 
-    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

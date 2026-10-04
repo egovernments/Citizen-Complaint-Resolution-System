@@ -2,11 +2,11 @@
  * Configurator auth helper — injects session into localStorage.
  *
  * The CRS Configurator uses its own auth state format in localStorage
- * under key 'crs-auth-state'. This helper acquires a DIGIT token via API
- * and injects it so we bypass the configurator login form entirely.
+ * under key 'crs-auth-state'. This helper completes hosted BFF sign-in, then
+ * installs its selected context for management tests.
  */
 import { expect, type Page } from '@playwright/test';
-import { getDigitToken } from './auth';
+import { staffContext } from './auth';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from './env';
 
 const CONFIGURATOR_BASE = process.env.CONFIGURATOR_BASE_URL || `${BASE_URL}/configurator`;
@@ -47,15 +47,15 @@ export async function detectConfiguratorLogin(page: Page): Promise<ConfiguratorL
 
 /**
  * Seeds the configurator session the way configurator/src/lib/session.ts
- * installDigitContext() does after hosted sign-in — keep the two in step — with a
- * DIGIT token from the password grant, then opens /manage.
+ * installDigitContext() does after hosted sign-in — keep the two in step — with the
+ * DIGIT context selected after hosted sign-in, then opens /manage.
  */
 export async function loginConfigurator(page: Page): Promise<void> {
-  const tokenResponse = await getDigitToken({
+  const tokenResponse = await staffContext(page, {
     tenant: ROOT_TENANT,
     username: ADMIN_USER,
     password: ADMIN_PASS,
-  });
+  }, 'configurator');
 
   const user = tokenResponse.UserRequest as Record<string, unknown> | undefined;
 
