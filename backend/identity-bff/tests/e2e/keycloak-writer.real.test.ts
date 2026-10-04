@@ -1,0 +1,82 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { config } from "../../src/infrastructure/config.js";
+import { closeCache, initCache } from "../../src/infrastructure/redis.js";
+import { resetAdminToken } from "../../src/integrations/keycloak/admin-session.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
+import { updateKeycloakUser } from "../../src/modules/sync/keycloak-writer.js";
+import { keycloakTestClient } from "../fixtures/keycloak/client.js";
+
+describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", () => {
+  let client: Awaited<ReturnType<typeof keycloakTestClient>>;
+  const subjects: string[] = [];
+  beforeAll(async () => {
+    client = await keycloakTestClient();
+    Object.assign(config, { keycloakAdminUrl: client.base, keycloakAdminRealm: "master",
+      keycloakOrganizationRealm: "identity-test", keycloakAdminClientId: "admin-cli",
+      keycloakAdminClientSecret: "", keycloakAdminUsername: "test-admin",
+      keycloakAdminPassword: process.env.KEYCLOAK_TEST_ADMIN_PASSWORD });
+    resetAdminToken();
+    initCache(`redis://127.0.0.1:${process.env.REDIS_PORT || 16379}`);
+    const profile = await (await client.request("/users/profile")).json();
+    profile.attributes = profile.attributes.map((attribute: {name: string; required?: unknown}) => {
+      if (attribute.name === "lastName") delete attribute.required;
+      return attribute;
+    });
+    for (const name of ["digit.accounts", "digit.bindings", "digit.boundUuids", "fixture.keep"]) {
+      profile.attributes.push({ name, multivalued: true, permissions: { view: ["admin"], edit: ["admin"] } });
+    }
+    await client.request("/users/profile", "PUT", profile);
+  });
+  afterAll(async () => {
+    vi.restoreAllMocks();
+    if (client) for (const subject of subjects) await client.request(`/users/${subject}`, "DELETE");
+    await closeCache();
+    resetAdminToken();
+  });
+
+  async function createUser() {
+    const username = `writer-${randomUUID()}`;
+    const response = await client.request("/users", "POST", { username,
+      email: `${username}@example.test`, emailVerified: true, enabled: true,
+      firstName: "Before", lastName: "Name", attributes: { "fixture.keep": ["preserved"] } });
+    const subject = response.headers.get("location")!.split("/").at(-1)!;
+    subjects.push(subject);
+    return { subject, username };
+  }
+
+  it("preserves email, emailVerified, username and unrelated attributes", async () => {
+    const { subject, username } = await createUser();
+    await withPersonLease(subject, () => updateKeycloakUser(subject, user => ({ ...user,
+      firstName: "Whole DIGIT Name", lastName: "", attributes: { ...user.attributes,
+        "digit.accounts": [JSON.stringify({ v: 1, entries: [] })] } })));
+    const current = await (await client.request(`/users/${subject}`)).json();
+    expect(current).toMatchObject({ username, email: `${username}@example.test`, emailVerified: true,
+      enabled: true, firstName: "Whole DIGIT Name", attributes: { "fixture.keep": ["preserved"],
+        "digit.accounts": [JSON.stringify({ v: 1, entries: [] })] } });
+    expect(current.lastName || "").toBe("");
+  });
+
+  it("does not undo an admin disable between its fresh GET and PUT", async () => {
+    const { subject } = await createUser();
+    const original = globalThis.fetch;
+    let intercepted = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (!intercepted && String(input).endsWith(`/users/${subject}`) && init?.method === "PUT") {
+        intercepted = true;
+        // Bypass the spy for the independent admin operation.
+        vi.mocked(globalThis.fetch).mockImplementation(original);
+        await client.request(`/users/${subject}`, "PUT", { enabled: false });
+        expect(JSON.parse(init.body as string)).not.toHaveProperty("enabled");
+      }
+      return original(input, init);
+    });
+    try {
+      await withPersonLease(subject, () => updateKeycloakUser(subject, user => ({ ...user, firstName: "After" })));
+    } finally { vi.restoreAllMocks(); }
+    expect(intercepted).toBe(true);
+    const current = await (await client.request(`/users/${subject}`)).json();
+    expect(current.enabled).toBe(false);
+    expect(current.firstName).toBe("After");
+  });
+});
