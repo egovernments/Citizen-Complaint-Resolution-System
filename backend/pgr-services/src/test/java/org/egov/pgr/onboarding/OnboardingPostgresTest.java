@@ -233,6 +233,7 @@ public class OnboardingPostgresTest {
                 cookie.set(exchange.getRequestHeaders().getFirst("Cookie"));authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
                 response=Map.of("identity",Map.of("issuer","issuer","subject","founder","name","Trusted Founder","email",email.get(),"emailVerified",verified.get()));
             } else if(path.endsWith("/_check")) response=Map.of("available",true);
+            else if(path.endsWith("/_details")) response=Map.of("UserRequest",Map.of("uuid","provisioner","userName","fixture","tenantId","pg","type","EMPLOYEE","active",true,"roles",List.of("MDMS_ADMIN","ACCOUNT_ADMIN","LOC_ADMIN","HRMS_ADMIN").stream().map(role->Map.of("code",role,"tenantId","pg")).toList()));
             else if(path.endsWith("/oauth/token")) response=Map.of("access_token","fixture-token","UserRequest",Map.of("uuid","provisioner"));
             else if(path.endsWith("/_create")) {
                 var created=mapper.readTree(exchange.getRequestBody()).path("Employees").path(0).deepCopy();
@@ -257,7 +258,7 @@ public class OnboardingPostgresTest {
             var env=new org.springframework.mock.env.MockEnvironment().withProperty("egov.user.host",base).withProperty("egov.hrms.host",base)
                     .withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only").withProperty("pgr.onboarding.provisioner.tenant-id","pg");
             var steps=new OnboardingSteps(new OnboardingProvisionerClient(http,mapper,env),new PlatformBaseline(mapper),mapper);
-            var lease=claim();steps.perform("FOUNDER_HRMS",snapshot,lease.getOperation(),new OnboardingProgress(repository,lease.getOperation(),lease.getLeaseToken()));
+            var lease=claim();lease.getOperation().setCurrentStep("FOUNDER_HRMS");repository.checkpoint(lease.getOperation(),lease.getLeaseToken(),System.currentTimeMillis());steps.perform("FOUNDER_HRMS",snapshot,lease.getOperation(),new OnboardingProgress(repository,lease.getOperation(),lease.getLeaseToken()));
             assertEquals("trusted@example.test",employee.get().path("user").path("emailId").asText());assertFalse(employee.get().path("user").has("password"));
             failRetry(lease,System.currentTimeMillis());verified.set(false);email.set("unverified-change@example.test");
             mvc.perform(post("/v2/onboarding/operations/_retry").header("Cookie","identity=fixture").contentType("application/json").content(mapper.writeValueAsString(Map.of("Operation",Map.of("id",operation.getId().toString()))))).andExpect(status().isAccepted());
@@ -276,8 +277,9 @@ public class OnboardingPostgresTest {
         doReturn(records).when(baseline).records();
         doReturn(mapper.valueToTree(List.of(Map.of("code","tenant.tenants"),Map.of("code","test.Record")))).when(baseline).schemas();
         var client=mock(OnboardingProvisionerClient.class);Map<String,Object> stored=new HashMap<>();Set<String> hidden=new HashSet<>();
-        when(client.post(anyString(),anyString(),anyMap())).thenAnswer(call->{
-            String service=call.getArgument(0),path=call.getArgument(1);Map<String,Object> body=call.getArgument(2);
+        org.mockito.stubbing.Answer<com.fasterxml.jackson.databind.JsonNode> api=call->{
+            int offset=call.getMethod().getName().equals("write")?1:0;
+            String service=call.getArgument(offset),path=call.getArgument(offset+1);Map<String,Object> body=call.getArgument(offset+2);
             if(service.equals("mdms")) {
                 if(path.contains("schema/v1/_search")) return mapper.valueToTree(Map.of("SchemaDefinitions",List.of(Map.of("code","present"))));
                 if(path.contains("/v2/_search")) {
@@ -291,7 +293,9 @@ public class OnboardingPostgresTest {
             if(service.equals("hrms")) return mapper.valueToTree(Map.of("Employees",List.of(Map.of("user",Map.of("uuid","stable-founder")))));
             if(service.equals("boundary")) return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","example")),"TenantBoundary",List.of(Map.of("tenantId","example","hierarchyType","ADMIN","boundary",List.of(Map.of("code","example","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
-        });
+        };
+        when(client.read(anyString(),anyString(),anyMap())).thenAnswer(api);
+        when(client.write(any(),anyString(),anyString(),anyMap())).thenAnswer(api);
         var realSteps=new OnboardingSteps(client,baseline,mapper);var worker=transactional(new OnboardingWorkerService(repository,"COUNTRY_NOT_SUPPORTED"));
         var publisher=transactional(new OnboardingLifecyclePublisher(repository,realSteps));var runner=new OnboardingRunner(worker,repository,realSteps,publisher);
         var original=submit();int retries=0;
@@ -314,6 +318,21 @@ public class OnboardingPostgresTest {
         var service=transactional(new OnboardingService(repository,new OnboardingIdentifierService()));
         assertThrows(org.egov.tracer.model.CustomException.class,()->service.retry(new OnboardingPrincipal("issuer","founder","changed@example.test","Founder",true),Map.of("id",op.getId().toString())));
         assertEquals("original@example.test",repository.findSignup(signup.getId()).orElseThrow().getFounderEmail());
+    }
+
+    @Test public void signupWriteScopeUsesPersistedTenantStepRestartAndCurrentLease() {
+        submit();var lease=claim();var op=lease.getOperation();var progress=new OnboardingProgress(repository,op,lease.getLeaseToken());
+        var valid=progress.writeScope(signup,"TENANT_FOUNDATION");valid.requireLiveLease();
+        signup.setRequestedTenantId("foreign");var forgedTenant=progress.writeScope(signup,"TENANT_FOUNDATION");
+        assertThrows(OnboardingFailure.class,forgedTenant::requireLiveLease);signup.setRequestedTenantId("example");
+        assertThrows(OnboardingFailure.class,()->progress.writeScope(signup,"FOUNDER_HRMS").requireLiveLease());
+        op.setRestartNo(99);assertThrows(OnboardingFailure.class,()->progress.writeScope(signup,"TENANT_FOUNDATION").requireLiveLease());op.setRestartNo(0);
+        var stranger=new OnboardingProgress(repository,op,UUID.randomUUID()).writeScope(signup,"TENANT_FOUNDATION");assertThrows(OnboardingFailure.class,stranger::requireLiveLease);
+        jdbc.update("UPDATE eg_pgr_onboarding_operation SET lease_expires_at=0 WHERE id=?",op.getId());assertThrows(OnboardingFailure.class,valid::requireLiveLease);
+        var replacement=claim();assertThrows(OnboardingFailure.class,valid::requireLiveLease);
+        new OnboardingProgress(repository,replacement.getOperation(),replacement.getLeaseToken()).writeScope(signup,"TENANT_FOUNDATION").requireLiveLease();
+        jdbc.update("UPDATE eg_pgr_onboarding_signup SET status='ACTIVE' WHERE id=?",signup.getId());
+        assertThrows(OnboardingFailure.class,()->new OnboardingProgress(repository,replacement.getOperation(),replacement.getLeaseToken()).writeScope(signup,"TENANT_FOUNDATION").requireLiveLease());
     }
 
 }
