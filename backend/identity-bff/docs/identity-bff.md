@@ -127,11 +127,11 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/contexts/_select` | session | changing | 7, 8, 10, 12 |
 | POST | `/identity/v1/contexts/citizen/_select` | session | changing | 10, 12, 13 |
 | POST | `/identity/v1/organization-members/_invite` | session | deleted-later | 14 |
-| POST | `/identity/v1/workspace-members/_link` | session | planned | 8, 9 |
-| GET | `/identity/v1/workspace-members` | session | planned | 9 |
-| POST | `/identity/v1/workspace-members/_remove` | session | planned | 9, 10 |
-| POST | `/identity/v1/workspace-members/_updateEmail` | session | planned | 9 |
-| POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
+| POST | `/identity/v1/workspace-members/_link` | session | live | 8, 9 |
+| GET | `/identity/v1/workspace-members` | session | live | 9 |
+| POST | `/identity/v1/workspace-members/_remove` | session | live | 9, 10 |
+| POST | `/identity/v1/workspace-members/_updateEmail` | session | live | 9 |
+| POST | `/identity/v1/workspace-invitations/_accept` | session | live | 9 |
 | POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | changing | 11 |
 | POST | `/internal/identity/v1/identifiers/_check` | introspection | changing | 11 |

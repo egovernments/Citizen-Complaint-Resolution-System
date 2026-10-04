@@ -13,6 +13,7 @@ vi.mock("../../src/modules/access-context/tenant-directory.js", () => ({ isActiv
 vi.mock("../../src/modules/managed-accounts/managed-account-service.js", () => ({
   managedIdentity: vi.fn(), findManagedAccount: vi.fn(async () => f.managed),
 }));
+vi.mock("../../src/modules/bindings/managed-fallback.js", () => ({ managedFallbackAccess: vi.fn(async () => f.managed ? { allowed: true } : { allowed: false, denial: "NO_ACTIVE_BINDING" }) }));
 import { citizenAccess, staffAccess } from "../../src/modules/bindings/predicate.js";
 function binding(state = "active") {
   f.user.attributes!["digit.bindings"] = [JSON.stringify({ v: 1, bindings: [{

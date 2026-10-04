@@ -1,74 +1,35 @@
-import { config } from "../../infrastructure/config.js";
 import type { KeycloakClaims } from "../authentication/types.js";
-import {
-  isOrganizationGroupMember,
-  isOrganizationMember,
-  liveTenantMapping,
-  readTenantMappingForTenant,
-} from "../organizations/organization-service.js";
-import {
-  findManagedAccount,
-  ManagedAccountError,
-  managedIdentity,
-} from "../managed-accounts/managed-account-service.js";
-import {
-  isActiveDigitTenant,
-  liveMembershipsForSubject,
-  membershipsFromClaims,
-  tenantOption,
-  type TenantOption,
-} from "./tenant-directory.js";
+import { managedFallbackAccess } from "../bindings/managed-fallback.js";
+import { staffAccess } from "../bindings/predicate.js";
+import { readBindings } from "../bindings/store.js";
+import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
+import { readDigitAccount } from "../workspace-members/authority.js";
+import { liveMembershipsForSubject, tenantOption, type TenantOption } from "./tenant-directory.js";
 
-/**
- * Return only Organizations that also have a usable managed DIGIT account.
- * Discovery is read-only; creation and role projection happen during
- * provisioning or explicit context selection.
- */
-export async function resolveTenantOptions(
-  claims: KeycloakClaims,
-  live = false,
-): Promise<TenantOption[]> {
-  const memberships = live
-    ? await liveMembershipsForSubject(claims.sub)
-    : await membershipsFromClaims(claims);
-  const options: TenantOption[] = [];
-  for (const membership of memberships) {
-    const identity = managedIdentity(config.keycloakIssuer, claims.sub, membership.tenantId);
-    const account = await findManagedAccount(identity).catch((error) => {
-      if (error instanceof ManagedAccountError) return null;
-      throw error;
-    });
-    const option = tenantOption(membership, account);
-    if (option) options.push(option);
+/** Fresh authorization; inactive DIGIT employees remain visible with a reason. */
+export async function resolveTenantOptions(claims: KeycloakClaims, _live = false): Promise<TenantOption[]> {
+  const tenants = new Set((await liveMembershipsForSubject(claims.sub)).map((m) => m.tenantId));
+  for (const binding of await readBindings(claims.sub)) if (binding.state === "active") tenants.add(binding.tenantId);
+  const result: TenantOption[] = [];
+  for (const tenantId of tenants) {
+    const option = await resolveTenantOption(claims.sub, tenantId);
+    if (option) result.push(option);
   }
-  return options;
+  return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/**
- * The same option `resolveTenantOptions` would produce for one tenant, read
- * through that tenant's Organization alone.
- *
- * Context selection names the tenant it wants, so resolving the caller's whole
- * directory first — a membership probe against every Organization in the realm
- * — was work thrown away. (Dhruv review, #2088.)
- */
-export async function resolveTenantOption(
-  subject: string,
-  tenantId: string,
-): Promise<TenantOption | null> {
-  const cached = await readTenantMappingForTenant(tenantId);
-  // The directory is cached; the Organization (or group) that authorizes
-  // this sign-in is re-read live, so disabling it takes effect at once.
-  const mapping = cached ? await liveTenantMapping(cached) : null;
-  if (!mapping || !await isActiveDigitTenant(mapping.tenantId)) return null;
-  const member = mapping.mappingType === "organization-group"
-    ? await isOrganizationGroupMember(mapping.organizationId, mapping.groupId, subject)
-    : await isOrganizationMember(mapping.organizationId, subject);
-  if (!member) return null;
-  const identity = managedIdentity(config.keycloakIssuer, subject, mapping.tenantId);
-  const account = await findManagedAccount(identity).catch((error) => {
-    if (error instanceof ManagedAccountError) return null;
-    throw error;
-  });
-  return tenantOption({ ...mapping, roles: [] }, account);
+export async function resolveTenantOption(subject: string, tenantId: string): Promise<TenantOption | null> {
+  const access = await staffAccess(subject, tenantId);
+  if (!access.allowed) return null;
+  if (access.via === "managed") {
+    const fallback = await managedFallbackAccess(subject, tenantId);
+    return fallback.allowed ? tenantOption({ ...fallback.mapping, roles: [] }, fallback.account) : null;
+  }
+  const org = await readOrganizationByTenant(tenantId);
+  if (!org?.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) return null;
+  const account = await readDigitAccount(tenantId, access.binding!.uuid);
+  if (!account) return null;
+  return { organizationId: org.id, organizationAlias: org.alias, tenantId, name: org.name,
+    roles: [...new Set(account.roles.filter((r) => r.tenantId === tenantId).map((r) => r.code))].sort(),
+    ...(!account.active && { code: "DIGIT_ACCOUNT_INACTIVE" as const }) };
 }
