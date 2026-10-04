@@ -1,3 +1,4 @@
+import { accountEntries } from "../sync/state.js";
 import { requireCurrentSession } from "../sessions/session-store.js";
 import { currentPersonLease, withPersonLease } from "../accounts/person-lease.js";
 import { staffCredentialMode, staffLogin } from "../accounts/credential-service.js";
@@ -589,15 +590,12 @@ export async function managedUserLogin(
         const user = await response.json() as { attributes?: Record<string, string[]> };
         let keyVersion: number | undefined;
         try {
-          const mirror = JSON.parse(user.attributes?.["digit.accounts"]?.[0] || "null");
-          const entry = mirror?.v === 1 && Array.isArray(mirror.entries) ? mirror.entries.find(
-            (entry: { kind?: string; tenantId?: string; uuid?: string }) => entry.kind === "staff" &&
-              entry.tenantId === account.tenantId && entry.uuid === account.uuid,
-          ) : undefined;
-          if (Number.isSafeInteger(entry?.credential?.keyVersion) && entry.credential.keyVersion > 0) {
-            keyVersion = entry.credential.keyVersion;
+          const entry = accountEntries(user).find((entry) => entry.kind === "staff" &&
+            entry.tenantId === account.tenantId && entry.uuid === account.uuid);
+          if (Number.isSafeInteger(entry?.credential?.keyVersion) && (entry?.credential?.keyVersion ?? 0) > 0) {
+            keyVersion = entry!.credential!.keyVersion;
           }
-        } catch { /* No readable mirror: first issuance sets the credential. */ }
+        } catch { /* No readable mirror: staffLogin tries the current key before activation. */ }
         login = await staffLogin({ ...account, keyVersion }, lease);
       } else {
         const password = oneTimePassword();

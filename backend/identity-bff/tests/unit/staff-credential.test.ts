@@ -69,6 +69,25 @@ describe("derived staff credentials", () => {
     expect(account.pan).toBe("TESTPAN");
     expect(account.gender).toBe("FEMALE");
   });
+  it.each([undefined, 99])("unrecorded keyVersion %s after a mirror failure never logs out a previous session again", async (keyVersion) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mirror.mockRejectedValue(new Error("mirror unavailable"));
+    try {
+      const withoutVersion = { ...ref(), keyVersion };
+      const first = await run((lease) => staffLogin(withoutVersion, lease));
+      const logouts = fake.stats.logouts;
+      const writes = fake.stats.passwordUpdates;
+      const second = await run((lease) => staffLogin(withoutVersion, lease));
+      expect(second.accessToken).toBe(first.accessToken);
+      expect(fake.tokens.has(first.accessToken)).toBe(true);
+      expect(fake.stats.logouts).toBe(logouts);
+      expect(fake.stats.passwordUpdates).toBe(writes);
+      expect(mirror).toHaveBeenCalledTimes(2);
+    } finally {
+      mirror.mockResolvedValue(undefined);
+      warn.mockRestore();
+    }
+  });
   it("an out-of-band password change gets exactly one repair per lease object", async () => {
     const writes = fake.stats.passwordUpdates;
     await run(async (lease) => {
@@ -151,7 +170,7 @@ describe("derived staff credentials", () => {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: subject, username: subject, enabled: true, attributes: {
         "digit.accounts": [JSON.stringify({ v: 1, entries: [{ kind: "staff", uuid: account.uuid,
-          tenantId: "pg", credential: { keyVersion: 1 } }] })],
+          tenantId: "pg", active: true, roles: [], boundAt: 1, credential: { keyVersion: 1 } }] })],
       } }),
     });
     expect(response.ok).toBe(true);

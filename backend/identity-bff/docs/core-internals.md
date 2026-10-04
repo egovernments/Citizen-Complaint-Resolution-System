@@ -180,8 +180,12 @@ export function staffCredentialMode(): "rotate" | "derived";   // IDENTITY_STAFF
   (503). HRMS edits before the search are preserved; edits between search and
   update may still be overwritten because egov-user has no conditional update.
 - `StaffAccountRef.keyVersion` is the version freshly read from `digit.accounts`.
-  Absent/older/retired versions adopt the current key before login; a request
-  never probes several keys. `findLiveStaffToken` returns null for an absent
+  A known different version rolls over before login. An absent, current or
+  unavailable recorded version tries the current credential first; only an
+  invalid grant triggers activation, counting as the lease's one repair. This
+  prevents repeated logout when mirroring failed. A successful unrecorded-version
+  grant retries the mirror without rewriting the password or logging out. A
+  request never probes several keys. `findLiveStaffToken` returns null for an absent
   or unavailable recorded key, or in rotate mode, and never repairs.
 - Repair is allowed once per `PersonLease` object (a `WeakSet`), only for
   `INVALID_CREDENTIALS`. Key rollover and first activation use the current key

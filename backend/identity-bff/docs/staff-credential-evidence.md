@@ -3,10 +3,13 @@
 The staff credential service uses the frozen `derivedStaffPassword` implementation.
 `activateStaffCredential` writes the current key's credential, signs in, logs out
 the returned native token once, then mirrors the version. `staffLogin` repairs
-an invalid credential at most once per lease object. Locked, inactive and
-unknown/dependency failures never enter repair. Missing or older recorded versions
-adopt the current key before a grant; revocation uses only the recorded key and
-never repairs. No plaintext credential is persisted by the service.
+an invalid credential at most once per lease object, using activation's logout-once
+sequence. Locked, inactive and unknown/dependency failures never enter repair.
+A known different version rolls over before a grant. Missing, current or retired
+versions try the current key first; a successful grant never re-activates, so a
+failed mirror cannot cause the next login to revoke the previous session's token.
+A successful unrecorded-version grant retries its mirror without changing the
+password or logging out. Revocation uses only the recorded key and never repairs. No plaintext credential is persisted by the service.
 
 ## Configuration and rollback
 
@@ -47,7 +50,7 @@ issued before binding remain subject to the design's revocation limit.
 From `backend/identity-bff`, Redis at `127.0.0.1:16385`:
 
 - `npx tsc --noEmit`: clean.
-- `REDIS_PORT=16385 npx vitest run`: 326 passed, 3 skipped, 14 todo.
+- `REDIS_PORT=16385 npx vitest run`: 328 passed, 3 skipped, 14 todo.
   The skipped cases are the existing real-Keycloak fixture; this item exercised
   the stateful local egov-user fake, not a live egov-user deployment. No tests were
   removed. The fake now matches omitted-role update and optional-type search
@@ -57,7 +60,8 @@ Key tests (all executed):
 
 - `credential.test.ts`: frozen `encode_v1` vectors and 10,000 policy-valid passwords.
 - `staff-credential.test.ts`: activation logs out the existing native token once;
-  out-of-band change gets exactly one repair per lease object; locked/inactive
+  missing/retired versions after a failed mirror preserve the previous token (regression
+  failed before the fix and passed after); out-of-band change gets exactly one repair per lease object; locked/inactive
   never repair; masked fields prevent activation; failed mirror is logged;
   revocation never repairs/probes retired keys; current-key rollover; derived →
   rotate → derived; managed login reads the recorded version and rejects revoked

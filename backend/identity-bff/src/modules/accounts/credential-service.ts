@@ -99,29 +99,32 @@ export async function staffLogin(
   }
   const keyVersion = config.identityCredentialKeyCurrent;
   const password = passwordFor(account, keyVersion);
-  // Missing/retired/older versions all adopt the current key before any grant.
-  // No request probes multiple keys (which could trip egov-user's lockout).
-  if (account.keyVersion !== keyVersion) {
+  // A known older version rolls over directly. With no usable version, try
+  // the current key first: a failed mirror must not cause repeated logout.
+  // Every grant in this call uses the current key, never a sequence of keys.
+  if (account.keyVersion !== undefined && account.keyVersion !== keyVersion &&
+      config.identityCredentialKeys.has(account.keyVersion)) {
     await activateStaffCredential(account, lease);
     return { ...await login(account, password, lease), keyVersion };
   }
   try {
-    return { ...await login(account, password, lease), keyVersion };
+    const minted = await login(account, password, lease);
+    if (account.keyVersion !== keyVersion) {
+      try {
+        await mirror(account, lease, keyVersion);
+      } catch (failure) {
+        await revokeToken(minted.accessToken);
+        throw failure;
+      }
+    }
+    return { ...minted, keyVersion };
   } catch (error) {
     if (!(error instanceof StaffLoginError) || error.reason !== "INVALID_CREDENTIALS" || repaired.has(lease)) {
       throw error;
     }
     repaired.add(lease);
-    await writePassword(account, password, lease);
-    const minted = await login(account, password, lease);
-    try {
-      await mirror(account, lease, keyVersion);
-      await lease.assertHeld();
-    } catch (failure) {
-      await revokeToken(minted.accessToken);
-      throw failure;
-    }
-    return { ...minted, keyVersion };
+    await activateStaffCredential(account, lease);
+    return { ...await login(account, password, lease), keyVersion };
   }
 }
 
