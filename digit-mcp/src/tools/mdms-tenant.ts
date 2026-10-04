@@ -1208,7 +1208,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     access: 'admin',
     risk: 'write',
     description:
-      'Bootstrap a tenant using the versioned platform baseline shared with PGR. Requires an authenticated platform administrator and EGOV_MDMS_HOST. ' +
+      'Bootstrap a tenant using the versioned platform baseline shared with PGR. Requires an authenticated platform administrator. Uses the gateway by default; direct MDMS requires server opt-in and live state-admin verification. ' +
       'Seeds platform access/security/HRMS prerequisites and an ADMIN user. Workspace business masters are configured separately. ' +
       'source_tenant supplies country mobile rules only; no schemas or business data are cloned.',
     inputSchema: {
@@ -1220,14 +1220,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         },
         source_tenant: {
           type: 'string',
-          description: 'Existing tenant root to copy from (default: "pg")',
+          description: 'Country mobile-rule source only (default: configured state tenant). Platform schemas and records come from the versioned seed.',
         },
         mobile_regex: {
           type: 'string',
           description:
             'Mobile-number regex stored as mobileNumberRegex in the synthesized ' +
             'common-masters.MobileNumberValidation record. Inherited from the source tenant\'s ' +
-            'MobileNumberValidation when omitted. Default "^[6-9][0-9]{9}$" (India 10-digit). ' +
+            'MobileNumberValidation when omitted; fails if no country rule or explicit regex is available. ' +
             'Kenya: "^[17][0-9]{8}$". Mozambique: "^8[0-9]{8}$".',
         },
         mobile_length: {
@@ -1235,7 +1235,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           description:
             'Mobile-number length used to generate a conforming ADMIN mobile number when ' +
             'admin_mobile is not supplied. Default 10 (India). Kenya/Mozambique: 9. ' +
-            'Ignored when user_validation is supplied.',
+            'Used with user_validation too.',
         },
         mobile_prefix: {
           type: 'string',
@@ -1263,12 +1263,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           type: 'array',
           items: { type: ['string', 'integer'] },
           description:
-            'Serviceable postal codes, seeded as `pincode` on every active tenant.tenants record ' +
-            'under the target root. The citizen UI vetoes complaint submission when a typed postal ' +
-            'code falls outside a configured allowlist (CS_COMMON_PINCODE_NOT_SERVICABLE), so only ' +
-            'set this with real local postal codes for the deployment\'s country. Omit for no ' +
-            'allowlist — every postal code is then serviceable. Never seed an empty array: mdms-v2 ' +
-            'rejects pincode: [] on update; absence is the off state.',
+            'Legacy compatibility input, ignored by platform bootstrap with a warning. Configure postal codes in the workspace.',
         },
         dashboard_roles: {
           type: 'array',
@@ -1276,9 +1271,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           uniqueItems: true,
           items: { type: 'string' },
           description:
-            'Employee roles that receive the dashboard navigation action and base API capabilities on a fresh ' +
-            'tenant. Defaults to SUPERVISOR, GRO, DGRO, and SUPERUSER. Existing tenant ' +
-            'DashboardConfig, actions, and role-action records are never overwritten.',
+            'Legacy compatibility input, ignored by platform bootstrap with a warning. Configure dashboard access in the workspace.',
         },
         user_validation: {
           type: 'array',
@@ -1296,14 +1289,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             required: ['countryCode', 'mobileNumberRegex'],
           },
         },
-      },
         user_only: {
           type: 'boolean',
           description:
-            'When true, skip all MDMS copy steps and only re-create the ADMIN user on ' +
+            'When true, skip platform seeding and employee setup; create or update the administrator user on ' +
             'target_tenant. Called after post-bootstrap changes STATE_LEVEL_TENANT_ID ' +
             'from pg to the real state root so the user is stored with the correct enc key.',
         },
+      },
       required: ['target_tenant'],
     },
     handler: async (args) => {
@@ -2269,7 +2262,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let hint: string;
         if (msg.includes('Schema definition') && msg.includes('not found')) {
           hint = `Schema "${schemaCode}" is not registered for the "${stateRoot}" tenant root. ` +
-            `FIX: Call tenant_bootstrap with target_tenant="${stateRoot}" to copy all schemas and data from pg. ` +
+            `FIX: Call tenant_bootstrap with target_tenant="${stateRoot}" to install the versioned platform baseline. ` +
             `Or call mdms_schema_create with tenant_id="${stateRoot}", code="${schemaCode}", copy_from_tenant="pg".`;
         } else if (isDuplicateError(msg)) {
           hint = `Record already exists. Use mdms_search to find it.`;

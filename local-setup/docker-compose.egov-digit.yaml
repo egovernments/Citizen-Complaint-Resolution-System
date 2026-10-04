@@ -2414,7 +2414,9 @@ services:
       CRS_ENVIRONMENT: self-hosted
       CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
       CRS_API_URL: http://kong:8000
-      # Platform bootstrap checks admin authorization before using internal MDMS.
+      # Direct bootstrap also requires explicit MCP_PLATFORM_BOOTSTRAP_DIRECT=true
+      # in a deployment override and live state-root admin token verification.
+      # Leave the flag unset here: ordinary bootstrap uses Kong by default.
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
       CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}

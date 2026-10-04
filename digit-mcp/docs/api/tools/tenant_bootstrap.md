@@ -1,150 +1,56 @@
 # tenant_bootstrap
 
-> Bootstrap a new state-level tenant root by copying all schemas, essential MDMS data, an ADMIN user, and workflow definitions from an existing tenant.
+Bootstrap a tenant from the versioned platform baseline shared with PGR onboarding.
 
-**Group:** `mdms` | **Risk:** `write` | **DIGIT Service:** multiple (egov-mdms-service, user-otp, egov-workflow-v2)
+**Group:** `mdms` | **Risk:** `write` | **Access:** authenticated platform administrator
 
-## Description
+## Behavior
 
-This is the foundational setup tool for creating a new tenant root in DIGIT. It must be called once before any employees, PGR complaints, or other services can operate under the new root. The tool performs five steps in sequence:
+The canonical resource is `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`.
+The MCP build stages these same bytes into `dist/data/`; published npm packages and Docker images resolve the resource locally at runtime. Generated copies are not committed.
 
-1. **Copy all schema definitions** from the source tenant (e.g. `"pg"`) to the target. This includes every schema registered in MDMS v2 -- departments, designations, roles, PGR service definitions, ID formats, and more.
+Bootstrap creates missing schemas and baseline records, substitutes the target tenant into seed data, creates the tenant self-record and mobile validation records, and provisions the administrator user, employee, and minimal ADMIN boundary. The administrator username follows the authenticated caller (falling back to `ADMIN`); founder roles come from the seed.
 
-2. **Create a root tenant self-record** under `tenant.tenants` so that the new root is discoverable by DIGIT services that resolve tenant codes via MDMS.
+Only country mobile rules are read from `source_tenant`. Workspace branding, geography, business departments/designations, complaint hierarchy, and workflow setup are configured separately. Existing active records are skipped; inactive baseline records fail instead of being silently reactivated. New records must become visible before bootstrap continues. Replays reuse an existing administrator and employee.
 
-3. **Copy essential MDMS data records** from the source. This includes: `ACCESSCONTROL-ROLES.roles` (required before user provisioning), `common-masters.IdFormat`, `common-masters.Department`, `common-masters.Designation`, `common-masters.StateInfo`, `common-masters.GenderType`, `egov-hrms.EmployeeStatus`, `egov-hrms.EmployeeType`, `egov-hrms.DeactivationReason`, `RAINMAKER-PGR.ServiceDefs`, `Workflow.BusinessService`, `INBOX.InboxQueryConfiguration`, and all four `DataSecurity.*` schemas (required by services embedding egov-enc-service).
+## Authorization and transport
 
-4. **Provision an ADMIN user** on the target tenant with standard roles: EMPLOYEE, CITIZEN, CSR, GRO, PGR_LME, DGRO, SUPERUSER, and INTERNAL_MICROSERVICE_ROLE. If the user already exists, missing roles are added. This ensures direct API login with `tenantId=<target>` works.
+The default transport uses existing gateway APIs. Setting `EGOV_MDMS_HOST` alone does not enable direct calls.
 
-5. **Copy workflow definitions** (PGR, PT, TL, FSM, BPA, etc.) from the source to the target root. Workflow state machines are stored at the root level and inherited by city tenants.
-
-Each step is idempotent: duplicates are skipped, inactive records are reactivated. The tool is safe to run multiple times.
+An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIRECT=true`. This requires trusted server settings `EGOV_MDMS_HOST`, `EGOV_USER_HOST`, and the state root `CRS_STATE_TENANT` (default `pg`). Every direct bootstrap verifies the caller token live through trusted egov-user and requires an active user with `SUPERUSER` or `MDMS_ADMIN` scoped to that state root. Caller-supplied user claims or configurable API environments do not authorize direct access.
 
 ## Parameters
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `target_tenant` | string | yes | -- | The new tenant root to bootstrap (e.g. `"tenant"`, `"ke"`, `"mz"`) |
-| `source_tenant` | string | no | `"pg"` | Existing tenant root to copy from |
+| Parameter | Type | Behavior |
+| --- | --- | --- |
+| `target_tenant` | string, required | Tenant root to bootstrap. |
+| `source_tenant` | string | Country mobile-rule source; defaults to the configured environment's state tenant. |
+| `mobile_regex` | string | Overrides the source country's mobile regex. Missing source rule without an explicit regex fails. |
+| `mobile_prefix` | string | Overrides the country dialling prefix. |
+| `mobile_zone` | string | Legacy alias used only when `mobile_prefix` is absent. |
+| `mobile_length` | integer | Generated administrator mobile length; default 10. |
+| `admin_mobile` | string | Explicit administrator mobile number. |
+| `user_validation` | array | Explicit countryCode/mobileNumberRegex rules; supersedes mobile regex/prefix inputs. |
+| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration. |
+| `pincode_allowlist` | array | Legacy compatibility input; ignored with a warning. Configure postal codes in the workspace. |
+| `dashboard_roles` | array | Legacy compatibility input; ignored with a warning. Configure dashboard access in the workspace. |
 
-## Response
+## Response and retry
+
+The response retains `success`, `source`, `target`, `summary`, `adminUser`, `adminEmployee`, `results`, `localizations`, and `nextSteps`, and includes `seedVersion`. `results.schemas` and `results.data` report copied/skipped items. Workflow and localization counters remain zero because platform bootstrap does not clone those resources. `results.warnings` describes ignored legacy inputs and `summary.warnings` counts them.
+
+Failures reject the call. After correcting authorization, missing country rules, inactive records, or unavailable services, retry the same target; already visible records are reused. Ambiguous administrator or employee matches fail rather than selecting an arbitrary record.
+
+## Example
 
 ```json
 {
-  "success": true,
-  "source": "pg",
-  "target": "ke",
-  "summary": {
-    "schemas_copied": 22,
-    "schemas_skipped": 3,
-    "schemas_failed": 0,
-    "data_copied": 45,
-    "data_skipped": 12,
-    "data_failed": 0,
-    "workflows_created": 2,
-    "workflows_skipped": 5,
-    "workflows_failed": 0
-  },
-  "adminUser": {
-    "provisioned": true,
-    "username": "ADMIN",
-    "tenantId": "ke",
-    "roles": ["EMPLOYEE", "CITIZEN", "CSR", "GRO", "PGR_LME", "DGRO", "SUPERUSER", "INTERNAL_MICROSERVICE_ROLE"],
-    "note": "ADMIN user \"ADMIN\" provisioned on \"ke\" with roles: EMPLOYEE, CITIZEN, CSR, GRO, PGR_LME, DGRO, SUPERUSER, INTERNAL_MICROSERVICE_ROLE. Direct login with tenantId=\"ke\" now works."
-  },
-  "results": {
-    "schemas": {
-      "copied": ["common-masters.Department", "common-masters.Designation", "..."],
-      "skipped": ["tenant.tenants"],
-      "failed": []
-    },
-    "data": {
-      "copied": ["ACCESSCONTROL-ROLES.roles/EMPLOYEE", "common-masters.Department/DEPT_1", "..."],
-      "skipped": ["tenant.tenants/ke (root self-record)"],
-      "failed": []
-    },
-    "workflow": {
-      "created": ["PGR"],
-      "skipped": ["PT.CREATE", "PT.UPDATE"],
-      "failed": []
-    }
-  },
-  "nextSteps": [
-    "Create a city tenant: use city_setup with tenant_id=\"ke.nairobi\" and a city name",
-    "NOTE: DIGIT Java services (PGR, HRMS, inbox) use STATE_LEVEL_TENANT_ID from their config. A new root tenant requires restarting these services. For testing, create cities under \"pg\" instead."
-  ]
+  "target_tenant": "ke",
+  "source_tenant": "pg",
+  "mobile_regex": "^[17][0-9]{8}$",
+  "mobile_prefix": "+254",
+  "mobile_length": 9
 }
 ```
 
-## Examples
-
-### Basic Usage
-
-Bootstrap a new tenant root using defaults (copies from `"pg"`):
-
-```
-tenant_bootstrap({ target_tenant: "ke" })
-```
-
-### Copy from a Different Source
-
-Use a non-default source tenant:
-
-```
-tenant_bootstrap({
-  target_tenant: "mz",
-  source_tenant: "statea"
-})
-```
-
-### Typical Workflow
-
-Set up a complete new tenant from scratch:
-
-```
-// Step 1: Bootstrap the root
-tenant_bootstrap({ target_tenant: "ke" })
-
-// Step 2: Create a city under the root
-city_setup({ tenant_id: "ke.nairobi", city_name: "Nairobi" })
-
-// Step 3: Create employees
-employee_create({
-  tenant_id: "ke.nairobi",
-  name: "John Doe",
-  mobile_number: "9876543210",
-  department: "DEPT_1",
-  designation: "DESIG_1",
-  roles: [
-    { code: "EMPLOYEE", name: "Employee" },
-    { code: "GRO", name: "Grievance Routing Officer" }
-  ],
-  jurisdiction_boundary_type: "City",
-  jurisdiction_boundary: "ke.nairobi"
-})
-
-// Step 4: File a complaint
-pgr_create({
-  tenant_id: "ke.nairobi",
-  service_code: "StreetLightNotWorking",
-  description: "Street light broken on Main St",
-  address: { locality: { code: "LOC_NAIROBI_1" } },
-  citizen_name: "Jane Smith",
-  citizen_mobile: "9988776655"
-})
-```
-
-## Errors
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `Not authenticated` | No active session | Call `configure` first |
-| `schemas_failed > 0` | Some schemas could not be copied | Check the `results.schemas.failed` array for specific errors |
-| `data_failed > 0` | Some data records could not be copied | Check `results.data.failed` -- often caused by schema dependency ordering |
-| `adminUser.provisioned: false` | User creation or update failed | Use `user_create` manually to provision an admin user on the target tenant |
-| `workflows_failed > 0` | Workflow copy errors | Use `workflow_create` with `copy_from_tenant` to retry individually |
-
-## See Also
-
-- [city_setup](city_setup.md) -- next step after bootstrap: create city-level tenants with boundaries
-- [tenant_cleanup](tenant_cleanup.md) -- tear down a test tenant by soft-deleting all MDMS data and deactivating users
+Complete workspace setup after platform bootstrap before filing complaints.
