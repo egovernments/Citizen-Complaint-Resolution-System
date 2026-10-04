@@ -76,16 +76,29 @@ public class OnboardingProvisionerClient {
         return exchange(url.replaceAll("/$", "") + "/internal/identity/v1/" + path, body, token);
     }
 
+    /** Localization acknowledges cache invalidation with an empty successful response. */
+    public void bustLocalizationCache() {
+        exchange(base("localization") + "/localization/messages/cache-bust",
+                Map.of("RequestInfo", requestInfo()), null, false);
+    }
+
     private JsonNode exchange(String url, Map<String, Object> body, String token) {
+        return exchange(url, body, token, true);
+    }
+
+    private JsonNode exchange(String url, Map<String, Object> body, String token, boolean requireBody) {
         HttpHeaders headers = new HttpHeaders(); headers.setContentType(MediaType.APPLICATION_JSON);
         if (token != null) headers.setBearerAuth(token);
         try {
             JsonNode response = http.postForObject(url, new HttpEntity<>(body, headers), JsonNode.class);
-            if (response == null) throw new OnboardingFailure("EMPTY_PROVISIONING_RESPONSE", true);
+            if (response == null && requireBody) throw new OnboardingFailure("EMPTY_PROVISIONING_RESPONSE", true);
             return response;
         } catch (RestClientResponseException e) {
             String code = "PROVISIONING_HTTP_" + e.getStatusCode().value();
-            try { code = mapper.readTree(e.getResponseBodyAsString()).path("code").asText(code); }
+            try {
+                JsonNode error = mapper.readTree(e.getResponseBodyAsString());
+                code = error.path("code").asText(error.path("Errors").path(0).path("code").asText(code));
+            }
             catch (Exception ignored) { /* Preserve status classification without storing remote PII. */ }
             int status = e.getStatusCode().value();
             if (status == 401) { synchronized (this) { login = null; } }
