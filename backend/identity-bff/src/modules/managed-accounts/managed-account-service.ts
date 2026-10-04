@@ -1,3 +1,8 @@
+import { accountEntries } from "../sync/state.js";
+import { requireCurrentSession } from "../sessions/session-store.js";
+import { currentPersonLease, withPersonLease } from "../accounts/person-lease.js";
+import { staffCredentialMode, staffLogin } from "../accounts/credential-service.js";
+import { request } from "../organizations/organization-service.js";
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
@@ -160,7 +165,10 @@ async function writeLinkedAccount(
       "The BFF's DIGIT admin must be allowed to read unmasked user records.");
     throw new ManagedAccountError("The linked DIGIT account cannot be updated safely", 503, "DIGIT_PII_MASKED");
   }
-  await updateAccount(adminToken, { ...(account as DigitAccountInput), ...changes });
+  // Search returns yyyy-MM-dd, while the update DTO expects dd/MM/yyyy.
+  // Omitting DOB keeps its stored value and fixes rotation for legacy staff.
+  const { dob: _dob, ...safe } = account as DigitAccount & { dob?: unknown };
+  await updateAccount(adminToken, { ...(safe as DigitAccountInput), ...changes });
 }
 
 /** Unlink: revoke the linked account's cached token for every session. */
@@ -506,6 +514,14 @@ export async function managedUserLogin(
   verifiedMobileNumber?: string,
   verifiedCountryCode?: string,
 ): Promise<DigitLogin> {
+  if (identity.userType === MANAGED_USER_TYPE && staffCredentialMode() === "derived") {
+    const lease = currentPersonLease();
+    if (!lease) {
+      return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber, verifiedCountryCode));
+    }
+    if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
+    await requireCurrentSession(lease, sessionId);
+  }
   const ref = sessionTokenRef(sessionId);
   if (identity.linkedUuid) {
     // Every sign-in re-checks a linked account, cached token or not: a
@@ -567,6 +583,20 @@ export async function managedUserLogin(
           await getRedis().set(citizenMobileKey(identity), hint, "EX", CITIZEN_MOBILE_HINT_SECONDS);
         }
         login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
+      } else if (staffCredentialMode() === "derived") {
+        const lease = currentPersonLease()!;
+        if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
+        const response = await request(`/users/${encodeURIComponent(identity.subject)}`);
+        const user = await response.json() as { attributes?: Record<string, string[]> };
+        let keyVersion: number | undefined;
+        try {
+          const entry = accountEntries(user).find((entry) => entry.kind === "staff" &&
+            entry.tenantId === account.tenantId && entry.uuid === account.uuid);
+          if (Number.isSafeInteger(entry?.credential?.keyVersion) && (entry?.credential?.keyVersion ?? 0) > 0) {
+            keyVersion = entry!.credential!.keyVersion;
+          }
+        } catch { /* No readable mirror: staffLogin tries the current key before activation. */ }
+        login = await staffLogin({ ...account, keyVersion }, lease);
       } else {
         const password = oneTimePassword();
         if (identity.linkedUuid) await writeLinkedAccount(adminToken, account, { password });
