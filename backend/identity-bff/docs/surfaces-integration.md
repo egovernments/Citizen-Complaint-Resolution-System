@@ -26,6 +26,12 @@ evidence from accepted implementation. The completion gate is still open.
   logout/account-switch review finding. The merged frontend tree is identical
   to the tested leaf: 262 tests and build passed. See
   `digit-ui-esbuild/test-evidence/phone-race-verification.txt`.
+- Test migration PR 62, corrected head `673e40ba5`, is reviewed and merged at
+  `9a74d30a3`. Hosted helpers support combined and split forms and observe the
+  app-owned one-use auth-result response; nine browser fixture cases close
+  both review findings. All 24 isolated helpers pass, tsc is clean and original
+  discovery counts remain 278/88 (289/90 with local-only cases). Eight explicit
+  missing-environment skips do not close the root-owned real-system gate.
 
 ## Work in progress
 
@@ -36,7 +42,7 @@ evidence from accepted implementation. The completion gate is still open.
 | surf-keycloak | Realm configuration, extraction, public branding | PR 50 reviewed and merged; scoped evidence accepted |
 | surf-configurator | Members, invites, account actions, workspace settings | PR 59 reviewed and merged; scoped frontend evidence accepted |
 | surf-digitui | Phase 2 account actions, phone, invites, logout | Corrected PR 58 reviewed and merged; scoped frontend evidence accepted |
-| surf-tests | Item 18 migration and complete gate matrix | PR 62 returned for split hosted-form and one-use auth-result fixes |
+| surf-tests | Item 18 migration and complete gate matrix | Corrected PR 62 reviewed and merged under root's handoff plan; real runs pending |
 
 The task identifiers and durable coordination records live in Agent Bridge.
 Keycloak, configurator and digit-ui scopes are verified independently of the still-pending
@@ -95,6 +101,7 @@ the real-dependency cases; mocked tests do not satisfy those cases.
   password form; the stock realm flow also uses separate pages. The leaf must
   support and test both, including the admin login assertions. Its helper
   must also avoid competing with the landing app for a one-use auth result.
+  Resolved at `673e40ba5`; failed results also reject an older valid cookie.
 - Scoped logout, phone-session invalidation, identifier propagation and
   readiness consume core APIs from `docs/core-internals.md`; no duplicate
   implementation is permitted. Identifier propagation is consumed; poller
