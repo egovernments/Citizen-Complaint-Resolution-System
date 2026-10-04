@@ -101,10 +101,14 @@ async function writeManagedTenant(userId: string, tenantId: string): Promise<voi
   const user = await response.json() as UserRepresentation;
   const tenants = [...new Set([...(user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || []), tenantId])].sort();
   if (tenants.length === (user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || []).length) return;
+  // Profile fields and attributes only, as in `writeCitizenRegistrationValues`:
+  // replaying the stale `enabled` could undo an admin disable.
   await request(`/users/${encodeURIComponent(userId)}`, {
     method: "PUT",
     body: JSON.stringify({
-      ...user,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
       attributes: { ...user.attributes, [MANAGED_TENANTS_ATTRIBUTE]: tenants },
     }),
   });
@@ -428,9 +432,19 @@ export interface OrganizationGroupMapping {
 
 export type TenantMapping = OrganizationMapping | OrganizationGroupMapping;
 
+/**
+ * The tenant directory: every usable mapping, plus the tenant ids and slugs
+ * that more than one mapping claimed (those mappings are left out).
+ */
+export interface TenantDirectory {
+  mappings: TenantMapping[];
+  collidedTenantIds: Set<string>;
+  collidedUrlSlugs: Set<string>;
+}
+
 const TENANT_MAPPING_TTL_MS = 60_000;
-let tenantMappingCache: { value: TenantMapping[]; expiresAt: number } | null = null;
-let tenantMappingLoad: Promise<TenantMapping[]> | null = null;
+let tenantMappingCache: { value: TenantDirectory; expiresAt: number } | null = null;
+let tenantMappingLoad: Promise<TenantDirectory> | null = null;
 let tenantMappingGeneration = 0;
 
 export function clearTenantMappingCache(): void {
@@ -531,13 +545,53 @@ async function organizationGroupCandidatesForAttribute(
 
 export async function readTenantMappingForUrlSlug(urlSlug: string): Promise<TenantMapping | null> {
   const normalized = urlSlug.trim().toLowerCase();
-  const mappings = await cachedTenantMappings();
-  return mappings.find((mapping) => mapping.urlSlug.toLowerCase() === normalized) || null;
+  const directory = await cachedTenantMappings();
+  return directory.mappings.find((mapping) => mapping.urlSlug.toLowerCase() === normalized) ||
+    await uncachedOrganizationMapping(directory, "digit.urlSlug", normalized);
 }
 
 export async function readTenantMappingForTenant(tenantId: string): Promise<TenantMapping | null> {
-  const mappings = await cachedTenantMappings();
-  return mappings.find((mapping) => mapping.tenantId === tenantId) || null;
+  const directory = await cachedTenantMappings();
+  return directory.mappings.find((mapping) => mapping.tenantId === tenantId) ||
+    await uncachedOrganizationMapping(directory, "digit.rootTenantId", tenantId);
+}
+
+/**
+ * A directory miss may be an Organization created on another replica since
+ * this replica's directory was cached, so it is looked up live by attribute
+ * (one Admin call). Signup creates Organizations, never tenant groups, so only
+ * Organizations are looked up. A slug or tenant id that collided in the
+ * directory stays unavailable, and a live hit that clashes with a cached
+ * mapping is refused.
+ */
+async function uncachedOrganizationMapping(
+  directory: TenantDirectory,
+  name: "digit.urlSlug" | "digit.rootTenantId",
+  value: string,
+): Promise<OrganizationMapping | null> {
+  if (name === "digit.urlSlug" ? directory.collidedUrlSlugs.has(value.toLowerCase())
+    : directory.collidedTenantIds.has(value.toLowerCase())) {
+    return null;
+  }
+  const query = new URLSearchParams({ q: `${name}:${value}`, briefRepresentation: "false", max: "2" });
+  const response = await request(`/organizations?${query}`);
+  const found = (await response.json() as OrganizationRepresentation[])
+    .flatMap((organization) => {
+      const mapping = asMapping(organization);
+      return mapping ? [mapping] : [];
+    })
+    .filter((mapping) => name === "digit.urlSlug"
+      ? mapping.urlSlug.toLowerCase() === value.toLowerCase()
+      : mapping.tenantId === value);
+  if (found.length !== 1) return null;
+  const [mapping] = found;
+  const clashes = directory.mappings.some((cached) =>
+    cached.tenantId.toLowerCase() === mapping.tenantId.toLowerCase() ||
+    cached.urlSlug.toLowerCase() === mapping.urlSlug.toLowerCase());
+  if (clashes) return null;
+  // Pick the new Organization up in the directory at the next read.
+  clearTenantMappingCache();
+  return mapping;
 }
 
 function flattenGroups(groups: GroupRepresentation[]): GroupRepresentation[] {
@@ -545,6 +599,10 @@ function flattenGroups(groups: GroupRepresentation[]): GroupRepresentation[] {
 }
 
 export async function listTenantMappings(): Promise<TenantMapping[]> {
+  return (await listTenantDirectory()).mappings;
+}
+
+export async function listTenantDirectory(): Promise<TenantDirectory> {
   const organizations = await listOrganizationMappings();
   const groupMappings = (await Promise.all(organizations.map(async (organization) => {
     const query = new URLSearchParams({
@@ -566,9 +624,11 @@ export async function listTenantMappings(): Promise<TenantMapping[]> {
  * A tenant id or URL slug claimed by more than one mapping is ambiguous, so
  * every mapping involved is dropped (its routes answer "not available") and
  * logged. The rest of the directory keeps working: one bad record must never
- * take sign-in down for every tenant.
+ * take sign-in down for every tenant. The dropped tenant ids and slugs are
+ * reported so reconciliation can leave those tenants alone rather than read
+ * them as "no members".
  */
-function withoutCollisions(mappings: TenantMapping[]): TenantMapping[] {
+function withoutCollisions(mappings: TenantMapping[]): TenantDirectory {
   const count = (key: (mapping: TenantMapping) => string) => {
     const counts = new Map<string, number>();
     for (const mapping of mappings) counts.set(key(mapping), (counts.get(key(mapping)) || 0) + 1);
@@ -577,8 +637,12 @@ function withoutCollisions(mappings: TenantMapping[]): TenantMapping[] {
   const tenantCounts = count((mapping) => mapping.tenantId.toLowerCase());
   const slugCounts = count((mapping) => mapping.urlSlug.toLowerCase());
   const kept: TenantMapping[] = [];
+  const collidedTenantIds = new Set<string>();
+  const collidedUrlSlugs = new Set<string>();
   for (const mapping of mappings) {
     if (tenantCounts.get(mapping.tenantId.toLowerCase())! > 1 || slugCounts.get(mapping.urlSlug.toLowerCase())! > 1) {
+      collidedTenantIds.add(mapping.tenantId.toLowerCase());
+      collidedUrlSlugs.add(mapping.urlSlug.toLowerCase());
       console.warn("Tenant directory: dropping a colliding mapping", JSON.stringify({
         organizationId: mapping.organizationId,
         ...(mapping.mappingType === "organization-group" && { groupId: mapping.groupId }),
@@ -589,7 +653,7 @@ function withoutCollisions(mappings: TenantMapping[]): TenantMapping[] {
     }
     kept.push(mapping);
   }
-  return kept;
+  return { mappings: kept, collidedTenantIds, collidedUrlSlugs };
 }
 
 /**
@@ -598,25 +662,30 @@ function withoutCollisions(mappings: TenantMapping[]): TenantMapping[] {
  * unmapping an Organization (or group) must take effect at the next sign-in.
  */
 export async function liveTenantMapping(mapping: TenantMapping): Promise<TenantMapping | null> {
-  const organization = await readOrganizationMapping(mapping.organizationId);
+  // The Organization and its group are independent reads; fetch them together.
+  const [organization, group] = await Promise.all([
+    readOrganizationMapping(mapping.organizationId),
+    mapping.mappingType === "organization-group"
+      ? readOrganizationGroup(mapping.organizationId, mapping.groupId)
+      : Promise.resolve(null),
+  ]);
   if (!organization) return null;
   if (mapping.mappingType === "organization") {
     return organization.tenantId === mapping.tenantId && organization.urlSlug === mapping.urlSlug
       ? organization : null;
   }
-  const group = await readOrganizationGroup(mapping.organizationId, mapping.groupId);
   const live = group ? asGroupMapping(group, organization) : null;
   return live && live.tenantId === mapping.tenantId && live.urlSlug === mapping.urlSlug ? live : null;
 }
 
-async function cachedTenantMappings(): Promise<TenantMapping[]> {
+async function cachedTenantMappings(): Promise<TenantDirectory> {
   if (tenantMappingCache && tenantMappingCache.expiresAt > Date.now()) {
     return tenantMappingCache.value;
   }
   if (tenantMappingLoad) return tenantMappingLoad;
 
   const generation = tenantMappingGeneration;
-  const load = listTenantMappings().then((value) => {
+  const load = listTenantDirectory().then((value) => {
     // A control-plane write may invalidate the directory while this scan is
     // still in flight. Never let that older result repopulate the cache.
     if (generation === tenantMappingGeneration) {
@@ -775,6 +844,15 @@ export async function applyVerifiedSignupIdentityProfile(input: {
   firstName: string;
   lastName: string;
 }): Promise<boolean> {
+  return withUserAttributeLease(input.userId, () => writeVerifiedSignupIdentityProfile(input));
+}
+
+async function writeVerifiedSignupIdentityProfile(input: {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<boolean> {
   const response = await request(`/users/${encodeURIComponent(input.userId)}`);
   const user = await response.json() as UserRepresentation;
   if (user.id !== input.userId || user.enabled === false ||
@@ -791,7 +869,7 @@ export async function applyVerifiedSignupIdentityProfile(input: {
   await request(`/users/${encodeURIComponent(input.userId)}`, {
     method: "PUT",
     body: JSON.stringify({
-      ...user,
+      email: user.email,
       firstName: input.firstName,
       lastName: input.lastName,
       attributes,
@@ -827,13 +905,20 @@ export async function ensureMagicLinkSignupIdentity(input: {
     }
     if (managedDraft &&
         (existing.firstName !== input.firstName || existing.lastName !== input.lastName)) {
-      await request(`/users/${encodeURIComponent(existing.id)}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          ...existing,
-          firstName: input.firstName,
-          lastName: input.lastName,
-        }),
+      const userId = existing.id;
+      // Under the user's attribute lease, with a fresh read, sending only the
+      // profile and attributes: never the stale `enabled`.
+      await withUserAttributeLease(userId, async () => {
+        const current = await (await request(`/users/${encodeURIComponent(userId)}`)).json() as UserRepresentation;
+        await request(`/users/${encodeURIComponent(userId)}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            email: current.email,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            attributes: current.attributes,
+          }),
+        });
       });
     }
     return { id: existing.id, created: false };
@@ -1030,11 +1115,18 @@ export async function isOrganizationGroupMember(
   groupId: string,
   userId: string,
 ): Promise<boolean> {
-  if (!await isOrganizationMember(organizationId, userId)) return false;
-  const response = await request(
-    `/organizations/${encodeURIComponent(organizationId)}` +
-    `/members/${encodeURIComponent(userId)}/groups?briefRepresentation=true`,
-  );
+  // Keycloak answers 404 here for a non-member, so this one call also covers
+  // the Organization membership check.
+  let response: Response;
+  try {
+    response = await request(
+      `/organizations/${encodeURIComponent(organizationId)}` +
+      `/members/${encodeURIComponent(userId)}/groups?briefRepresentation=true`,
+    );
+  } catch (error) {
+    if (error instanceof IdentityAdminError && error.status === 404) return false;
+    throw error;
+  }
   const groups = await response.json() as GroupRepresentation[];
   return groups.some((group) => group.id === groupId);
 }

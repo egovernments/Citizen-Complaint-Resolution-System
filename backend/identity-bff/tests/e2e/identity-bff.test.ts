@@ -23,6 +23,8 @@ import {
   readOrganizationGroupReconciliation,
   clearTenantMappingCache,
   readTenantMappingForTenant,
+  readTenantMappingForUrlSlug,
+  recordManagedTenant,
   updateCitizenRegistrationValues,
 } from "../../src/modules/organizations/organization-service.js";
 import {
@@ -1832,6 +1834,24 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county`)).status).toBe(200);
       expect((await fetch(`${app()}/identity/v1/tenant-contexts/dupe-slug`)).status).toBe(404);
       expect(warn.mock.calls.some(([line]) => String(line).includes("colliding mapping"))).toBe(true);
+      // Dupe B also claims ke.nakuru, so the Nakuru mapping is dropped too. Its
+      // managed accounts must survive reconciliation: a missing mapping is
+      // "unknown", not "nobody is a member".
+      const nakuru = [...digit.accounts.values()].filter((account) =>
+        account.tenantId === "ke.nakuru" && account.userName.startsWith("kcbff-") && account.active);
+      expect(nakuru.length).toBeGreaterThan(0);
+      expect(await readTenantMappingForTenant("ke.nakuru")).toBeNull();
+      const reconciled = await fetch(`${app()}/internal/identity/v1/reconciliation/_run`, {
+        method: "POST",
+        headers: { Authorization: "Bearer test-control-plane", "Content-Type": "application/json" },
+        body: "{}",
+      });
+      expect(reconciled.status).toBe(200);
+      const result = await reconciled.json();
+      expect(result.deactivated).toBe(0);
+      expect(result.failures.some((failure: { subject: string; error: string }) =>
+        failure.subject.endsWith("@ke.nakuru") && failure.error.includes("collides"))).toBe(true);
+      expect(nakuru.every((account) => digit.accounts.get(account.uuid)!.active)).toBe(true);
     } finally {
       warn.mockRestore();
       await kcUpdate("/organizations/org-dupe-a", { enabled: false });
@@ -1866,6 +1886,60 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     }
   });
 
+  it("finds an Organization another replica created, without waiting for the directory cache", async () => {
+    // Warm this replica's directory, then create the Organization behind its
+    // back, as signup on another replica would.
+    expect(await readTenantMappingForUrlSlug("bomet-county")).not.toBeNull();
+    await kcAdmin("/organizations", {
+      id: "org-fresh-id", alias: "fresh", name: "Fresh County", enabled: true,
+      attributes: { "digit.rootTenantId": ["ke.fresh"], "digit.urlSlug": ["fresh-county"] },
+    });
+    try {
+      expect(await readTenantMappingForUrlSlug("fresh-county"))
+        .toMatchObject({ organizationId: "org-fresh-id", tenantId: "ke.fresh" });
+      expect(await readTenantMappingForTenant("ke.fresh"))
+        .toMatchObject({ organizationId: "org-fresh-id", urlSlug: "fresh-county" });
+      expect(await readTenantMappingForUrlSlug("never-created")).toBeNull();
+    } finally {
+      await kcUpdate("/organizations/org-fresh-id", { enabled: false });
+      clearTenantMappingCache();
+    }
+  });
+
+  it("stops citizen sign-in as soon as the bound Organization is disabled, cache or not", async () => {
+    const cookie = await signIn("citizen");
+    expect((await citizenSelect(cookie)).status).toBe(200);
+    // No cache clear: the directory still holds the mapping, and the session
+    // still holds a cached DIGIT token.
+    await kcUpdate("/organizations/org-bomet-id", { enabled: false });
+    try {
+      expect((await citizenSelect(cookie)).status).toBe(403);
+    } finally {
+      await kcUpdate("/organizations/org-bomet-id", { enabled: true });
+      clearTenantMappingCache();
+    }
+    expect((await citizenSelect(cookie)).status).toBe(200);
+  });
+
+  it("records a managed tenant without replaying the stale user representation", async () => {
+    const created = await kcAdmin("/users", {
+      id: "managed-put-1", username: "managed.put", email: "m1@example.test",
+      firstName: "Kipchoge", enabled: true, attributes: { "digit.managedTenants": ["ke.bomet"] },
+    });
+    expect(created.status).toBe(201);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      await recordManagedTenant("managed-put-1", "ke.kisumu");
+      const put = fetchSpy.mock.calls.find(([, init]) => init?.method === "PUT");
+      const body = JSON.parse(String(put?.[1]?.body));
+      // No `enabled`: an admin disable between the GET and the PUT must stick.
+      expect(Object.keys(body).sort()).toEqual(["attributes", "email", "firstName"]);
+      expect(body.attributes["digit.managedTenants"]).toEqual(["ke.bomet", "ke.kisumu"]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("lets a citizen who verified a new number keep signing in", async () => {
     expect((await citizenSelect(await signIn("citizen"))).status).toBe(200);
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
@@ -1874,5 +1948,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect(moved.status).toBe(200);
     const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
     expect(account.mobileNumber).toBe("712345679");
+    expect(account.countryCode).toBe("+254");
+
+    // The number is changed in DIGIT behind the BFF's back. The comparison is
+    // with what DIGIT stores, not with what the BFF last wrote, so the next
+    // mint writes the verified number back instead of failing the OTP grant.
+    digit.accounts.get(account.uuid)!.mobileNumber = "712345670";
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    expect((await citizenSelect(await signIn("citizen", "newphone"))).status).toBe(200);
+    expect(digit.accounts.get(account.uuid)!.mobileNumber).toBe("712345679");
   });
 });
