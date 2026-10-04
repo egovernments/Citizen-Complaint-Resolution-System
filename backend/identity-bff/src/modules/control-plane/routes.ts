@@ -91,14 +91,14 @@ export function registerControlPlaneRoutes(app: express.Application): void {
       ? config.identitySessionIntrospectionToken
       : config.identityControlPlaneToken;
     if (!expected) {
-      return res.status(503).json({ error: "Identity control plane is not configured" });
+      return res.status(503).json({ code: "CONTROL_PLANE_NOT_CONFIGURED", error: "Identity control plane is not configured" });
     }
     const authorization = req.get("authorization") || "";
     const supplied = authorization.startsWith("Bearer ")
       ? authorization.slice(7)
       : "";
     if (!supplied || !sameSecret(supplied, expected)) {
-      return res.status(401).json({ error: "Invalid workload credential" });
+      return res.status(401).json({ code: "WORKLOAD_UNAUTHORIZED", error: "Invalid workload credential" });
     }
     next();
   });

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:digit:identity:digit.linkPending:v1",
+  "title": "digit.linkPending v1: the in-flight new-user _link marker",
+  "description": "Single-valued Keycloak user attribute holding this JSON. Written inside the POST /users call that creates the person, so a crash after the create still leaves the marker. Cleared by the final PUT of the same _link. Only a _link with the same requestId resumes the new-user branch.",
+  "type": "object",
+  "required": ["v", "tenantId", "digitUuid", "email", "requestId", "actor", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "tenantId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,50}$" },
+    "digitUuid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "email": { "type": "string", "minLength": 3, "maxLength": 254, "pattern": "^[^A-Z\\s]+@[^A-Z\\s]+$", "description": "Normalized: trimmed, lower-case" },
+    "requestId": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "linkRequestId(actor, tenantId, digitUuid, email); see docs/identity-bff.md" },
+    "actor": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Keycloak subject of the ACCOUNT_ADMIN who called _link" },
+    "createdAt": { "type": "integer", "minimum": 0 }
+  }
+}
