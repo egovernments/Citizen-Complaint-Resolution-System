@@ -282,7 +282,7 @@ configure_digit_ui_client() {
   kc update "clients/$client_uuid_value" -r "$REALM" \
     -s standardFlowEnabled=true -s implicitFlowEnabled=false \
     -s "baseUrl=$DIGIT_UI_BASE_URL" \
-    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\"]" \
+    -s "redirectUris=[\"$IDENTITY_REDIRECT_URI\",\"$PASSWORD_SETUP_REDIRECT\"]" \
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s "authenticationFlowBindingOverrides.browser=$flow_id" >/dev/null
   kc get "clients/$client_uuid_value" -r "$REALM" |

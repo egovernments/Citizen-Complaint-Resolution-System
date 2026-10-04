@@ -62,14 +62,7 @@ export KEYCLOAK_BFF_CLIENT_SECRET KEYCLOAK_ADMIN_CLIENT_SECRET KEYCLOAK_EMPLOYEE
 # Placeholder social providers: never contacted, but configured like real ones.
 export KEYCLOAK_GOOGLE_CLIENT_ID=placeholder-google KEYCLOAK_GOOGLE_CLIENT_SECRET=placeholder
 export KEYCLOAK_GITHUB_CLIENT_ID=placeholder-github KEYCLOAK_GITHUB_CLIENT_SECRET=placeholder
-export KEYCLOAK_EVENTS_EXPIRATION_SECONDS=${KEYCLOAK_EVENTS_EXPIRATION_SECONDS:-1209600}
-
-if [ "${KEEP_STACK:-0}" = 1 ]; then
-  # Lets tests/live-check.py be re-run against the kept stack. Throwaway values.
-  env | grep -E '^(KEYCLOAK_|KC_BOOTSTRAP_|IDENTITY_)' | sed 's/^/export /' >"/tmp/$container.env"
-  printf 'export KC_URL=http://127.0.0.1:%s MAILPIT_URL=http://127.0.0.1:%s KEYCLOAK_CONFIGURE=%s\n' \
-    "$kc_port" "$mail_port" "$keycloak_dir/configure-keycloak.sh" >>"/tmp/$container.env"
-fi
+export KEYCLOAK_EVENTS_EXPIRATION_SECONDS=${KEYCLOAK_EVENTS_EXPIRATION_SECONDS:-604800}
 
 # Twice: the second run must be a no-op that still succeeds.
 "$keycloak_dir/configure-keycloak.sh"

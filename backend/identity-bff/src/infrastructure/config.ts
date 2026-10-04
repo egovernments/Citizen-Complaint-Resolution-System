@@ -166,9 +166,6 @@ export const config = {
   // for those accounts' lifecycle, never for business calls.
   digitUserServiceUrl: process.env.DIGIT_USER_SERVICE_URL || "",
   digitMdmsSearchUrl: process.env.DIGIT_MDMS_SEARCH_URL || "",
-  digitLocalizationSearchUrl:
-    process.env.DIGIT_LOCALIZATION_SEARCH_URL ||
-    `${digitGatewayHost}/localization/messages/v1/_search`,
   // Internal egov-otp create endpoint used only by the default
   // CitizenTokenMinter. Never route this through a public gateway: its
   // response contains the OTP value. Empty = citizen tokens unavailable.
@@ -179,19 +176,6 @@ export const config = {
   digitCitizenOtpIdentity:
     process.env.DIGIT_CITIZEN_OTP_IDENTITY === "userName" ? "userName" as const : "mobileNumber" as const,
   digitCitizenRoles: csv(process.env.DIGIT_CITIZEN_ROLES || "CITIZEN"),
-  // Public login branding (#2167): read-only MDMS + localization projection.
-  identityBrandingCacheSeconds: parseInt(
-    process.env.IDENTITY_BRANDING_CACHE_SECONDS || "300",
-  ),
-  identityBrandingDefaultLocale:
-    process.env.IDENTITY_BRANDING_DEFAULT_LOCALE || "en_IN",
-  digitUiConfigModuleName:
-    process.env.DIGIT_UI_CONFIG_MODULE_NAME || "commonMDMSConfig",
-  digitFooterUrl:
-    process.env.DIGIT_FOOTER_URL ?? "/digit-ui/brand/digit-footer.png",
-  digitFooterBwUrl:
-    process.env.DIGIT_FOOTER_BW_URL ?? "/digit-ui/brand/digit-footer-bw.png",
-  digitHomeUrl: process.env.DIGIT_HOME_URL || "https://www.digit.org/",
   // egov-user reached directly (internal network) for token revocation only:
   // Kong's RBAC evaluates the principal's home tenant, which a BFF-managed
   // account may hold no roles in. Defaults to DIGIT_USER_SERVICE_URL.

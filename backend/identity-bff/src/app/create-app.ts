@@ -2,7 +2,6 @@ import express from "express";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
 import { registerAccessContextRoutes } from "../modules/access-context/routes.js";
-import { registerBrandingRoutes } from "../modules/branding/routes.js";
 import { registerAuthenticationRoutes } from "../modules/authentication/routes.js";
 import { registerMagicLinkRoutes } from "../modules/authentication/magic-link-signup.js";
 import { registerPasswordSetupRoutes } from "../modules/authentication/password-setup.js";
@@ -47,7 +46,6 @@ export function createIdentityApp(): express.Application {
   registerCitizenOtpRoutes(app);
   registerSessionRoutes(app);
   registerAccessContextRoutes(app);
-  registerBrandingRoutes(app);
   registerOrganizationRoutes(app);
   registerControlPlaneRoutes(app);
   return app;

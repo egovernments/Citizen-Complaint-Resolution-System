@@ -35,10 +35,15 @@ export function BrandingProvider(props: {
     loginAction?: string;
     languageTag?: string;
     bffBaseUrl?: string;
+    publicApiBaseUrl?: string;
+    mdmsPath?: string;
+    configModule?: string;
+    defaultLocale?: string;
+    footer?: Branding["footer"];
     initial?: Branding | null;
     children: ReactNode;
 }) {
-    const { digitTenant, loginAction, languageTag, bffBaseUrl, initial, children } = props;
+    const { digitTenant, loginAction, languageTag, bffBaseUrl, publicApiBaseUrl, mdmsPath, configModule, defaultLocale, footer, initial, children } = props;
     const slug = useMemo(
         () => resolveTenantSlug({ digitTenant, loginAction }),
         [digitTenant, loginAction]
@@ -51,7 +56,7 @@ export function BrandingProvider(props: {
     useEffect(() => {
         if (initial !== undefined || slug === undefined) return;
         let cancelled = false;
-        fetchBranding({ baseUrl: bffBaseUrl, slug, locale: digitLocaleOf(languageTag) }).then(result => {
+        fetchBranding({ baseUrl: bffBaseUrl, publicApiBaseUrl, mdmsPath, configModule, defaultLocale, footer, slug, locale: digitLocaleOf(languageTag) }).then(result => {
             if (cancelled) return;
             setBranding(result);
             setStatus(result === undefined ? "fallback" : "ready");
@@ -59,7 +64,7 @@ export function BrandingProvider(props: {
         return () => {
             cancelled = true;
         };
-    }, [slug, languageTag, bffBaseUrl, initial]);
+    }, [slug, languageTag, bffBaseUrl, publicApiBaseUrl, mdmsPath, configModule, defaultLocale, footer, initial]);
 
     // Layout effect: the variables land before the first paint of the real
     // content (the provider withholds children while loading).

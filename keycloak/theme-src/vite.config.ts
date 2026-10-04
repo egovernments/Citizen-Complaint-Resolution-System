@@ -67,9 +67,15 @@ export default defineConfig({
             environmentVariables: [
                 { name: "DIGIT_BRAND_BASE_URL", default: "/configurator/brand" },
                 { name: "DIGIT_APP_NAME", default: "DIGIT Complaint Management" },
-                // digit-employee: where the identity BFF's
-                // public branding endpoint lives. Empty means same origin.
-                { name: "DIGIT_IDENTITY_BFF_BASE_URL", default: "" }
+                // Slug resolution and password setup only; branding is public DIGIT data.
+                { name: "DIGIT_IDENTITY_BFF_BASE_URL", default: "" },
+                { name: "DIGIT_PUBLIC_API_BASE_URL", default: "" },
+                { name: "DIGIT_MDMS_SEARCH_PATH", default: "/mdms-v2/v1/_search" },
+                { name: "DIGIT_UI_CONFIG_MODULE_NAME", default: "commonMDMSConfig" },
+                { name: "DIGIT_DEFAULT_LOCALE", default: "en_IN" },
+                { name: "DIGIT_FOOTER_URL", default: "/digit-ui/brand/digit-footer.png" },
+                { name: "DIGIT_FOOTER_BW_URL", default: "/digit-ui/brand/digit-footer-bw.png" },
+                { name: "DIGIT_HOME_URL", default: "https://www.digit.org/" }
             ]
         })
     ]

@@ -3126,6 +3126,15 @@ services:
       keycloak-postgres:
         condition: service_healthy
     environment:
+      # Login-page branding, rendered by Ansible from the values that feed
+      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
+      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
+      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
+      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
+      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
+      DIGIT_PUBLIC_API_BASE_URL: ${KEYCLOAK_DIGIT_PUBLIC_API_BASE_URL:-}
+      DIGIT_MDMS_SEARCH_PATH: ${KEYCLOAK_DIGIT_MDMS_SEARCH_PATH:-/mdms-v2/v1/_search}
+      DIGIT_DEFAULT_LOCALE: ${KEYCLOAK_DIGIT_DEFAULT_LOCALE:-en_IN}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
@@ -3245,21 +3254,10 @@ services:
       DIGIT_MDMS_SCHEMA_CREATE_URL: http://kong:8000/mdms-v2/schema/v1/_create
       DIGIT_FOUNDATION_SOURCE_TENANT: ${IDENTITY_FOUNDATION_SOURCE_TENANT:-pg}
       DIGIT_ENC_GENERATE_KEY_URL: http://egov-enc-service:1234/egov-enc-service/crypto/v1/_generatekey
-      # Public login branding for the digit-employee Keycloak
-      # theme (#2167). The BFF's default
-      # (gateway:8080) does not exist in this stack, and a failed lookup only
-      # degrades to untranslated screens, so it must be set explicitly.
-      DIGIT_LOCALIZATION_SEARCH_URL: http://kong:8000/localization/messages/v1/_search
       # Citizen DIGIT tokens (#2167): internal egov-otp create, never via Kong
       # (the response carries the OTP). egov-otp runs under the `otp` profile;
       # without it citizen context selection answers 503.
       DIGIT_OTP_CREATE_URL: ${IDENTITY_DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
-      # Login-page branding, rendered by Ansible from the values that feed
-      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
-      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
-      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
-      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
-      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
     ports:
       - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:

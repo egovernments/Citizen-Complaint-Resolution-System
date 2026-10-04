@@ -1,34 +1,11 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  LOGIN_MESSAGE_KEYS,
-  dynamicMessageKeys,
-  requestedBrandingLocale,
-  tenantMessageKey,
-} from "../../src/modules/branding/tenant-branding.js";
-
-/**
- * The theme's `LOGIN_MESSAGE_FALLBACKS` is the source of the static login
- * keys; the BFF image cannot import it (separate build), so this fails when
- * a key is added there but not to the BFF's filter.
- */
-function themeStaticKeys(): string[] {
-  const source = readFileSync(fileURLToPath(new URL(
-    "../../../../keycloak/theme-src/src/digit/branding/strings.ts", import.meta.url,
-  )), "utf8");
-  const block = /export const LOGIN_MESSAGE_FALLBACKS = \{([\s\S]*?)\n\} as const;/.exec(source);
-  expect(block, "LOGIN_MESSAGE_FALLBACKS block not found in theme strings.ts").not.toBeNull();
-  return [...block![1].matchAll(/^\s*([A-Z][A-Z0-9_]*):/gm)].map((match) => match[1]);
-}
+import { LOGIN_MESSAGE_KEYS } from "../src/digit/branding/strings";
+import { dynamicMessageKeys, requestedBrandingLocale, tenantMessageKey } from "../src/digit/branding/messages";
 
 describe("login message keys shared with the Keycloak theme", () => {
   it("covers every key the digit-employee/digit-citizen themes read", () => {
-    const themeKeys = themeStaticKeys();
-    expect(themeKeys.length).toBeGreaterThan(10);
-    const bff = new Set<string>(LOGIN_MESSAGE_KEYS);
-    const missing = themeKeys.filter((key) => !bff.has(key));
-    expect(missing).toEqual([]);
+    expect(LOGIN_MESSAGE_KEYS.length).toBeGreaterThan(10);
+    expect(new Set(LOGIN_MESSAGE_KEYS).size).toBe(LOGIN_MESSAGE_KEYS.length);
   });
 
   it("derives tenant, LoginConfig and PrivacyPolicy keys from the records", () => {

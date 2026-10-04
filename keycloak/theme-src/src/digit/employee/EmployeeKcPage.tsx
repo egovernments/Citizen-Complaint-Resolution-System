@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import DefaultPage from "keycloakify/login/DefaultPage";
 import type { KcContext } from "../../login/KcContext";
 import { useI18n } from "../../login/i18n";
@@ -19,6 +19,11 @@ const UserProfileFormFields = lazy(() => import("keycloakify/login/UserProfileFo
  */
 export default function EmployeeKcPage(props: { kcContext: KcContext }) {
     const { kcContext } = props;
+    const footer = useMemo(() => ({
+        digitFooter: kcContext.properties.DIGIT_FOOTER_URL,
+        digitFooterBw: kcContext.properties.DIGIT_FOOTER_BW_URL,
+        digitHomeUrl: kcContext.properties.DIGIT_HOME_URL
+    }), [kcContext.properties]);
     const { i18n } = useI18n({ kcContext });
     const pageProps = { kcContext, i18n, classes: digitClasses, Template, doUseDefaultCss: false } as const;
 
@@ -27,6 +32,11 @@ export default function EmployeeKcPage(props: { kcContext: KcContext }) {
             digitTenant={kcContext.digitTenant}
             loginAction={kcContext.url.loginAction}
             languageTag={kcContext.locale?.currentLanguageTag}
+            footer={footer}
+            publicApiBaseUrl={kcContext.properties.DIGIT_PUBLIC_API_BASE_URL}
+            mdmsPath={kcContext.properties.DIGIT_MDMS_SEARCH_PATH}
+            configModule={kcContext.properties.DIGIT_UI_CONFIG_MODULE_NAME}
+            defaultLocale={kcContext.properties.DIGIT_DEFAULT_LOCALE}
             bffBaseUrl={kcContext.properties.DIGIT_IDENTITY_BFF_BASE_URL}
         >
             <Suspense>

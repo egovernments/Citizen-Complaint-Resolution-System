@@ -14,14 +14,21 @@ export type ThemeName = "configurator-blue" | "digit-employee";
 
 export const themeNames: ThemeName[] = ["configurator-blue", "digit-employee"];
 
-export type KcEnvName = "DIGIT_BRAND_BASE_URL" | "DIGIT_APP_NAME" | "DIGIT_IDENTITY_BFF_BASE_URL";
+export type KcEnvName = "DIGIT_BRAND_BASE_URL" | "DIGIT_APP_NAME" | "DIGIT_IDENTITY_BFF_BASE_URL" | "DIGIT_PUBLIC_API_BASE_URL" | "DIGIT_MDMS_SEARCH_PATH" | "DIGIT_UI_CONFIG_MODULE_NAME" | "DIGIT_DEFAULT_LOCALE" | "DIGIT_FOOTER_URL" | "DIGIT_FOOTER_BW_URL" | "DIGIT_HOME_URL";
 
-export const kcEnvNames: KcEnvName[] = ["DIGIT_BRAND_BASE_URL", "DIGIT_APP_NAME", "DIGIT_IDENTITY_BFF_BASE_URL"];
+export const kcEnvNames: KcEnvName[] = ["DIGIT_BRAND_BASE_URL", "DIGIT_APP_NAME", "DIGIT_IDENTITY_BFF_BASE_URL", "DIGIT_PUBLIC_API_BASE_URL", "DIGIT_MDMS_SEARCH_PATH", "DIGIT_UI_CONFIG_MODULE_NAME", "DIGIT_DEFAULT_LOCALE", "DIGIT_FOOTER_URL", "DIGIT_FOOTER_BW_URL", "DIGIT_HOME_URL"];
 
 export const kcEnvDefaults: Record<KcEnvName, string> = {
   "DIGIT_BRAND_BASE_URL": "/configurator/brand",
   "DIGIT_APP_NAME": "DIGIT Complaint Management",
-  "DIGIT_IDENTITY_BFF_BASE_URL": ""
+  "DIGIT_IDENTITY_BFF_BASE_URL": "",
+  "DIGIT_PUBLIC_API_BASE_URL": "",
+  "DIGIT_MDMS_SEARCH_PATH": "/mdms-v2/v1/_search",
+  "DIGIT_UI_CONFIG_MODULE_NAME": "commonMDMSConfig",
+  "DIGIT_DEFAULT_LOCALE": "en_IN",
+  "DIGIT_FOOTER_URL": "/digit-ui/brand/digit-footer.png",
+  "DIGIT_FOOTER_BW_URL": "/digit-ui/brand/digit-footer-bw.png",
+  "DIGIT_HOME_URL": "https://www.digit.org/"
 };
 
 /**

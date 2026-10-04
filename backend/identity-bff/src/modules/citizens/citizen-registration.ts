@@ -1,5 +1,5 @@
 import { config } from "../../infrastructure/config.js";
-import type { MobileValidation } from "../branding/tenant-branding.js";
+import type { MobileValidation } from "../citizen-otp/mobile-validation.js";
 import {
   citizenIdentity,
   ensureManagedAccount,

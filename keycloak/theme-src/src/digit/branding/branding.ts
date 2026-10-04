@@ -1,17 +1,6 @@
-/**
- * Tenant branding for the digit-employee theme.
- *
- * Keycloak renders these screens for a tenant that only the BFF knows about:
- * the tenant comes from `/{slug}/digit-ui/{surface}/...` and the BFF passes the
- * slug to Keycloak as `digit_tenant` (display only; see resolveTenantSlug).
- * The theme then asks the BFF for that tenant's public branding (#2167
- * contract) — logo, ThemeConfig, login config, privacy policy and the login
- * strings — and paints the legacy digit-ui login with it.
- *
- * Nothing here is trusted for authorization. The slug only picks which
- * public branding document to show; a wrong or missing one degrades to the
- * default DIGIT look, never to a different tenant's session.
- */
+/** Public tenant branding, fetched by the theme directly from DIGIT. */
+import { dynamicMessageKeys, requestedBrandingLocale } from "./messages";
+import { LOGIN_MESSAGE_KEYS } from "./strings";
 
 export type BrandingLanguage = { label: string; value: string };
 
@@ -25,6 +14,7 @@ export type Branding = {
         bannerUrl?: string;
         languages?: BrandingLanguage[];
         defaultLocale?: string;
+    footer?: Branding["footer"];
     };
     /** Raw `common-masters.ThemeConfig[0]`, applied with the applyTheme port. */
     themeConfig: unknown;
@@ -109,25 +99,9 @@ export function resolveTenantSlug(params: {
     return undefined;
 }
 
-/**
- * Keycloak language tag → the DIGIT locale the branding endpoint localizes to.
- * English is the BFF's default (en_IN), so it sends no parameter at all.
- */
-const DEFAULT_REGION: Record<string, string> = { fr: "FR", pt: "PT", sw: "KE", hi: "IN", es: "ES" };
-
+/** Bare English uses the configured deployment default locale. */
 export function digitLocaleOf(languageTag: string | undefined): string | undefined {
-    if (!languageTag) return undefined;
-    const [language, region] = languageTag.split(/[-_]/);
-    if (!language || language.toLowerCase() === "en") return undefined;
-    const lang = language.toLowerCase();
-    const reg = (region ?? DEFAULT_REGION[lang] ?? "IN").toUpperCase();
-    return `${lang}_${reg}`;
-}
-
-export function brandingUrl(params: { baseUrl?: string; slug: string; locale?: string }): string {
-    const base = (params.baseUrl ?? "").replace(/\/+$/, "");
-    const query = params.locale ? `?locale=${encodeURIComponent(params.locale)}` : "";
-    return `${base}/identity/v1/tenant-contexts/${encodeURIComponent(params.slug)}/branding${query}`;
+    return !languageTag || languageTag === "en" ? undefined : requestedBrandingLocale(languageTag);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -211,26 +185,97 @@ function writeCache(url: string, branding: Branding) {
 
 export async function fetchBranding(params: {
     baseUrl?: string;
+    publicApiBaseUrl?: string;
+    mdmsPath?: string;
+    configModule?: string;
+    defaultLocale?: string;
+    footer?: Branding["footer"];
     slug: string;
     locale?: string;
     timeoutMs?: number;
     fetchImpl?: typeof fetch;
 }): Promise<Branding | undefined> {
-    const url = brandingUrl(params);
-    const cached = readCache(url);
+    if (!isValidSlug(params.slug)) return undefined;
+    const bffBase = (params.baseUrl ?? "").replace(/\/+$/, "");
+    const apiBase = (params.publicApiBaseUrl ?? "").replace(/\/+$/, "");
+    const mdmsPath = params.mdmsPath || "/mdms-v2/v1/_search";
+    const moduleName = params.configModule || "commonMDMSConfig";
+    const defaultLocale = params.defaultLocale || "en_IN";
+    const locale = params.locale || defaultLocale;
+    const cacheKey = JSON.stringify([bffBase, apiBase, mdmsPath, moduleName, params.slug, locale, params.footer]);
+    const cached = readCache(cacheKey);
     if (cached !== undefined) return cached;
 
-    const controller = typeof AbortController === "undefined" ? undefined : new AbortController();
-    const timer = setTimeout(() => controller?.abort(), params.timeoutMs ?? 6000);
-    try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), params.timeoutMs ?? 6000);
+    const request = async (url: string, body?: unknown): Promise<Record<string, unknown>> => {
         const response = await (params.fetchImpl ?? fetch)(url, {
+            method: body === undefined ? "GET" : "POST",
             credentials: "omit",
-            headers: { Accept: "application/json" },
-            signal: controller?.signal
+            headers: { Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+            signal: controller.signal
         });
-        if (!response.ok) return undefined;
-        const branding = normalizeBranding(await response.json());
-        if (branding !== undefined) writeCache(url, branding);
+        if (!response.ok) throw new Error("Public branding unavailable");
+        const result: unknown = await response.json();
+        if (!isRecord(result)) throw new Error("Invalid public branding response");
+        return result;
+    };
+    try {
+        // Only slug resolution belongs to the BFF; no branding is relayed through it.
+        const context = await request(`${bffBase}/identity/v1/tenant-contexts/${encodeURIComponent(params.slug)}`);
+        const tenant = context.tenant;
+        if (!isRecord(tenant) || !asString(tenant.tenantId)) return undefined;
+        const tenantId = tenant.tenantId as string;
+        const RequestInfo = { apiId: "digit-keycloak-theme" };
+        const result = await request(`${apiBase}${mdmsPath}?tenantId=${encodeURIComponent(tenantId)}`, {
+            RequestInfo,
+            MdmsCriteria: { tenantId, moduleDetails: [
+                { moduleName: "common-masters", masterDetails: [{ name: "StateInfo" }, { name: "ThemeConfig" }] },
+                { moduleName, masterDetails: [{ name: "LoginConfig" }, { name: "PrivacyPolicy" }] }
+            ] }
+        });
+        if (!isRecord(result.MdmsRes)) return undefined;
+        const records = (module: string, master: string): Record<string, unknown>[] => {
+            const values = (result.MdmsRes as Record<string, Record<string, unknown>>)[module]?.[master];
+            return Array.isArray(values) ? values.filter(v => isRecord(v) && v.isActive !== false) : [];
+        };
+        const stateInfo = records("common-masters", "StateInfo")[0] ?? {};
+        const masters = {
+            stateInfo,
+            themeConfig: records("common-masters", "ThemeConfig")[0] ?? null,
+            loginConfig: records(moduleName, "LoginConfig")[0] ?? null,
+            privacyPolicy: records(moduleName, "PrivacyPolicy")
+        };
+        const messages: Record<string, string> = {};
+        let complete = true;
+        try {
+            const modules = ["rainmaker-common", "digit-ui", "digit-tenants", `rainmaker-${tenantId}`];
+            const query = new URLSearchParams({ tenantId, locale, module: modules.join(",") });
+            const localized = await request(`${apiBase}/localization/messages/v1/_search?${query}`, { RequestInfo });
+            if (!Array.isArray(localized.messages)) throw new Error("Invalid localization response");
+            const wanted = dynamicMessageKeys({ tenantId, rootTenantId: tenantId }, masters);
+            for (const key of [...LOGIN_MESSAGE_KEYS, "CORE_COMMON_LANGUAGE", "CS_COMMON_CHOOSE_LANGUAGE"]) wanted.add(key);
+            for (const entry of localized.messages) {
+                if (isRecord(entry) && typeof entry.code === "string" && typeof entry.message === "string" && wanted.has(entry.code)) {
+                    messages[entry.code] = entry.message;
+                }
+            }
+        } catch {
+            // Still show the tenant's assets, with built-in strings; retry next time.
+            complete = false;
+        }
+        const languages = Array.isArray(stateInfo.languages) ? stateInfo.languages.filter(isRecord) : [];
+        const branding = normalizeBranding({
+            tenant: { ...tenant, urlSlug: params.slug },
+            ...masters,
+            stateInfo: { ...stateInfo, defaultLocale: !languages.length || languages.some(l => l.value === defaultLocale)
+                ? defaultLocale : languages[0].value },
+            footer: { digitFooter: `${apiBase}/digit-ui/brand/digit-footer.png`,
+                digitFooterBw: `${apiBase}/digit-ui/brand/digit-footer-bw.png`, digitHomeUrl: "https://www.digit.org/", ...params.footer },
+            messages
+        });
+        if (branding !== undefined && complete) writeCache(cacheKey, branding);
         return branding;
     } catch {
         return undefined;

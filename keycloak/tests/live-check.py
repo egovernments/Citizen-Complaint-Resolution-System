@@ -336,12 +336,8 @@ def _():
         page = Browser().request(action, fields, stop_at=REDIRECT)
     user = admin("GET", f"/users/{STATE['emp']}")
     assert user["email"] == "emp-new@example.test" and user["emailVerified"], user
-    try:
-        mail_to("emp@example.test", started)
-        STATE["old_address_notified"] = True
-    except AssertionError:
-        STATE["old_address_notified"] = False
-    return f"old address notified by Keycloak: {STATE['old_address_notified']}"
+    mail_to("emp@example.test", started)
+    return "new address verified; old address notified"
 
 
 @check("§8 VERIFY_EMAIL for an unverified address")
@@ -458,14 +454,18 @@ def _():
     return ", ".join(f"{t}={n}" for t, n in found.items())
 
 
-@check("lane C needs: user events carry sessionId and clientId")
+@check("frozen §10: password changes use code_id; login/logout use sessionId")
 def _():
-    for event_type in ("LOGIN", "UPDATE_PASSWORD"):
+    for event_type in ("LOGIN", "LOGOUT"):
         [event, *_] = events(event_type, STATE["emp"])
-        assert event.get("sessionId") and event.get("clientId") == EMPLOYEE[0], event
+        assert event.get("sessionId") and event.get("clientId") == EMPLOYEE[0]
+    changed = [e for e in events("UPDATE_CREDENTIAL", STATE["emp"])
+               if e.get("details", {}).get("credential_type") == "password"]
+    assert changed and changed[0]["details"].get("code_id")
+    assert changed[0]["clientId"] == EMPLOYEE[0]
 
 
-@check("lane C needs: ORGANIZATION_MEMBERSHIP admin events with the user representation")
+@check("frozen §10: membership removal identifies the person in resourcePath")
 def _():
     org = admin("POST", "/organizations", {"name": "Live Check Org", "alias": "live-check-org",
                                            "domains": [{"name": "live-check.example"}]})
@@ -474,11 +474,10 @@ def _():
         method="POST", headers={"Authorization": f"Bearer {master_token()}",
                                 "Content-Type": "application/json"})
     urllib.request.urlopen(req).read()
-    found = admin("GET", "/admin-events?resourceTypes=ORGANIZATION_MEMBERSHIP&max=5", token=service_token())
-    assert found, "no ORGANIZATION_MEMBERSHIP admin event"
-    representation = json.loads(found[0]["representation"])
-    assert representation.get("id") == STATE["emp"], representation
-    return f"{found[0]['operationType']} {found[0]['resourcePath']}"
+    admin("DELETE", f"/organizations/{org}/members/{STATE['emp']}")
+    found = admin("GET", "/admin-events?operationTypes=DELETE&resourceTypes=ORGANIZATION_MEMBERSHIP&max=5",
+                  token=service_token())
+    assert any(e["resourcePath"] == f"organizations/{org}/members/{STATE['emp']}" for e in found)
 
 
 # ----------------------------------- configuration-only changes (§9)
