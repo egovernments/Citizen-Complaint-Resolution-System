@@ -1,5 +1,6 @@
 import { currentPersonLease } from "../accounts/person-lease.js";
 import { request } from "../organizations/organization-service.js";
+import { config } from "../../infrastructure/config.js";
 
 export interface UserRepresentation {
   id?: string;
@@ -12,6 +13,24 @@ export interface UserRepresentation {
   attributes?: Record<string, string[]>;
   requiredActions?: string[];
   [key: string]: unknown;
+}
+
+/**
+ * Authorship suppresses mirror reruns only (core-owner, core-sync-echo).
+ * It must NEVER suppress security checks or verified-identifier propagation:
+ * binding/phone writes use the same client. Their idempotent effects still run.
+ */
+export async function isMirrorOnlyAdminEvent(event: {
+  authDetails?: { clientId?: string };
+  representation?: string;
+  resourceType?: string;
+  operationType?: string;
+  resourcePath?: string;
+}): Promise<boolean> {
+  return Boolean(config.keycloakAdminClientSecret &&
+    event.authDetails?.clientId === config.keycloakAdminClientId &&
+    event.resourceType === "USER" && event.operationType === "UPDATE" &&
+    /^users\/[^/]+$/.test(event.resourcePath ?? ""));
 }
 
 /**

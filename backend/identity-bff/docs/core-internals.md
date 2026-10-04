@@ -141,9 +141,9 @@ export function ensureActive(input: {
 export type StaffLoginFailure = "INVALID_CREDENTIALS" | "ACCOUNT_LOCKED" | "ACCOUNT_INACTIVE" | "DEPENDENCY";
 export class StaffLoginError extends Error { constructor(readonly reason: StaffLoginFailure, message?: string); }
 
-export interface StaffAccountRef { tenantId: string; uuid: string; userName: string }
+export interface StaffAccountRef { tenantId: string; uuid: string; userName: string; keyVersion?: number }
 
-/** Binding became active: write the derived credential, sign in, log out that token (logout-once), return nothing. */
+/** Derived mode only: write, sign in, log out the existing token once, then mirror the key version. Callers skip activation in rotate mode; calling it there throws. */
 export function activateStaffCredential(account: StaffAccountRef, lease: PersonLease): Promise<{ keyVersion: number }>;
 
 /** Mint a DIGIT token for an active binding. Derived mode: sign in; on INVALID_CREDENTIALS repair once per lease, never on locked/inactive. Rotate mode: today's per-login rotation. */
@@ -156,16 +156,51 @@ export function findLiveStaffToken(account: StaffAccountRef): Promise<DigitLogin
 export function staffCredentialMode(): "rotate" | "derived";   // IDENTITY_STAFF_CREDENTIAL_MODE, default "rotate"
 ```
 
-- `accounts/digit-writer.ts` is the only code that writes egov-user. It exports
-  `writeDigitIdentifiers(account, { emailId?, mobileNumber?, password? })`:
-  read-modify-write with the §6 field map of `03-state-schema.md` (omit `dob`,
-  `active`, roles, locks; skip the write if a written-as-sent field is masked;
-  a validation reject is `DIGIT_VALIDATION`). core-sync uses it for email and
-  phone write-through.
-- `digit-user-client.passwordLogin` keeps the OAuth error body and throws
-  `StaffLoginError` with the typed reason.
+- `accounts/digit-writer.ts` exports the safe writer used for the derived
+  credential and verified identifiers (legacy rotate/provisioning paths remain
+  until their owning items replace them):
+
+  ```ts
+  export interface DigitIdentifierChanges {
+    emailId?: string; mobileNumber?: string; countryCode?: string; password?: string;
+  }
+  export interface DigitWriteResult {
+    status: "written" | "unchanged" | "skipped-masked";
+    account: DigitAccount;
+  }
+  export function writeDigitIdentifiers(
+    account: { tenantId: string; uuid: string }, changes: DigitIdentifierChanges,
+  ): Promise<DigitWriteResult>;
+  ```
+
+  It does its own fresh admin search, never clears an identifier, and does no
+  phone parsing. The §6 field map of `03-state-schema.md` omits `dob`, `active`,
+  roles and locks. A masked copied field skips the write; activation maps this
+  to `DIGIT_PII_MASKED`. `DigitValidationError` exposes `DIGIT_ACCOUNT_INVALID`
+  (503). HRMS edits before the search are preserved; edits between search and
+  update may still be overwritten because egov-user has no conditional update.
+- `StaffAccountRef.keyVersion` is the version freshly read from `digit.accounts`.
+  A known different version rolls over before login. An absent, current or
+  unavailable recorded version tries the current credential first; only an
+  invalid grant triggers activation, counting as the lease's one repair. This
+  prevents repeated logout when mirroring failed. A successful unrecorded-version
+  grant retries the mirror without rewriting the password or logging out. A
+  request never probes several keys. `findLiveStaffToken` returns null for an absent
+  or unavailable recorded key, or in rotate mode, and never repairs.
+- Repair is allowed once per `PersonLease` object (a `WeakSet`), only for
+  `INVALID_CREDENTIALS`. Key rollover and first activation use the current key
+  directly. Locked/inactive accounts never trigger repair.
+- Activation order is write → login → revokeToken → mirrorPerson. A failed
+  mirror is logged without undoing the changed DIGIT credential. Callers must
+  authorize an active binding first; this API never activates pending bindings.
+- Login refusals come from item 6: `digit-user-client.passwordLogin` throws
+  `DigitLoginRejectedError {reason: invalid_credentials | locked | inactive | unknown}`.
+  The credential service maps it (no re-parsing): `invalid_credentials` → one
+  repair; `locked` → `ACCOUNT_LOCKED`; `inactive` → `DIGIT_ACCOUNT_INACTIVE`;
+  anything else → `DEPENDENCY`. `StaffLoginError` is the credential service's
+  own error carrying that mapped reason.
 - The keyVersion goes into the `digit.accounts` staff entry by calling the
-  mirror (§4) with `{ credential: { keyVersion, setAt } }`.
+  mirror (§4) with `{ credential: { tenantId, keyVersion, setAt } }`.
 
 ## 4. The sync module (§4, item 12) — `sync/`
 
