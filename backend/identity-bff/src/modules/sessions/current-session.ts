@@ -30,14 +30,17 @@ export async function currentSession(
   const sessionId = sessionIdFromCookie(cookieHeader, surface);
   if (!sessionId) return null;
   let session = await getIdentitySession(sessionId);
-  if (!session || identitySessionSurface(session) !== surface) return null;
+  if (!session || identitySessionSurface(session) !== surface || session.sessionExpiresAt <= Date.now()) return null;
+  // Read-only requests must not queue behind a slow token mint or mirror.
+  if (session.authMethod === "phone_otp"
+    ? Date.now() - (session.identityCheckedAt || 0) <= PHONE_OTP_IDENTITY_CHECK_MS
+    : session.accessExpiresAt > Date.now() + 30_000) return { sessionId, session };
   return withPersonLease(session.claims.sub, async () => {
     session = await getIdentitySession(sessionId);
     if (!session || session.sessionExpiresAt <= Date.now()) return null;
     if (session.authMethod === "phone_otp") {
       // No Keycloak token to refresh, so the Keycloak user is re-checked
       // directly: disabling or deleting it ends the session within a minute.
-      if (session.sessionExpiresAt <= Date.now()) return null;
       if (Date.now() - (session.identityCheckedAt || 0) > PHONE_OTP_IDENTITY_CHECK_MS) {
         let enabled = true;
         try {

@@ -399,6 +399,24 @@ export async function getIdentitySession(
   }
 }
 
+/** Public session metadata only; expired/revoked index entries are pruned. */
+export async function listPersonSessions(subject: string): Promise<Array<{
+  sessionId: string; surface: IdentitySurface; oidcClientId?: string;
+  createdAt?: number; lastSeenAt?: number; kcSessionId?: string;
+}>> {
+  const sessions = [];
+  for (const sessionId of await getRedis().smembers(personSessionsKey(subject))) {
+    const session = await getIdentitySession(sessionId);
+    if (!session || session.claims.sub !== subject || session.sessionExpiresAt <= Date.now()) {
+      await getRedis().srem(personSessionsKey(subject), sessionId);
+      continue;
+    }
+    sessions.push({ sessionId, surface: identitySessionSurface(session), oidcClientId: session.oidcClientId,
+      createdAt: session.createdAt, lastSeenAt: session.lastSeenAt, kcSessionId: session.kcSessionId });
+  }
+  return sessions;
+}
+
 export function identitySessionSurface(session: IdentitySession): IdentitySurface {
   return session.surface || DEFAULT_SURFACE;
 }

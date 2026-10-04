@@ -1,9 +1,11 @@
 Session revocation validation, 2026-10-04
 Commands run from backend/identity-bff:
   npx tsc --noEmit: exit 0
-  REDIS_PORT=16387 npx vitest run: 17 files passed, 211 tests passed, 21 todo, 0 failed
-Focused file: tests/unit/session-revocation.test.ts (8 passed)
+  REDIS_PORT=16387 npx vitest run: 17 files passed, 213 tests passed, 21 todo, 0 failed
+Focused file: tests/unit/session-revocation.test.ts (10 passed)
 Covers version/generation/index creation; no recreation by refresh/touch/context;
 generation mismatch and fresh-login recovery; TTL preservation; lost lease;
 deleted session during refresh (disable/logout-all/credential-change simulations);
 legacy generation-zero refresh.
+Owner review additions: concurrent fast-path reads do not wait on an occupied
+person lease; listPersonSessions exposes safe metadata and prunes expired ids.

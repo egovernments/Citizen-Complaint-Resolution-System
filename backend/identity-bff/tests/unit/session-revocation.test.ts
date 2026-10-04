@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { personLeaseKey, withPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { createIdentitySession, deleteIdentitySession, getIdentitySession, personSessionsKey, requireCurrentSession, revocationGenerationKey, saveIdentitySession, saveSelectedIdentityContext, sessionCookie, sessionKey, SessionRevokedError, touchIdentitySession } from "../../src/modules/sessions/session-store.js";
+import { createIdentitySession, deleteIdentitySession, getIdentitySession, personSessionsKey, listPersonSessions, requireCurrentSession, revocationGenerationKey, saveIdentitySession, saveSelectedIdentityContext, sessionCookie, sessionKey, SessionRevokedError, touchIdentitySession } from "../../src/modules/sessions/session-store.js";
 import { currentSession } from "../../src/modules/sessions/current-session.js";
 import * as oidc from "../../src/modules/authentication/oidc.js";
 
@@ -28,6 +28,27 @@ describe("session revocation fencing", () => {
     expect(await getIdentitySession(sessionId)).toMatchObject({ schemaVersion: 2, revocationGeneration: 4, kcSessionId: "kc-session" });
     expect(await getRedis().smembers(personSessionsKey(claims.sub))).toEqual([sessionId]);
     expect(await getRedis().pttl(personSessionsKey(claims.sub))).toBeGreaterThan(0);
+  });
+  it("concurrent currentSession fast paths return while another request holds the person lease", async () => {
+    const { sessionId } = await createIdentitySession(tokens, claims, "client");
+    await getRedis().set(personLeaseKey(claims.sub), "slow-mint", "PX", 30_000);
+    const reads = Promise.all([currentSession(sessionCookie(sessionId, 600)), currentSession(sessionCookie(sessionId, 600))]);
+    let timeout: ReturnType<typeof setTimeout>;
+    try {
+      const result = await Promise.race([reads, new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("valid reads waited for person lease")), 1000);
+      })]);
+      expect(result.map(value => value?.sessionId)).toEqual([sessionId, sessionId]);
+    } finally { clearTimeout(timeout!); }
+  });
+  it("lists safe person session metadata and removes stale index entries", async () => {
+    const { sessionId } = await createIdentitySession(tokens, claims, "client");
+    await getRedis().sadd(personSessionsKey(claims.sub), "expired-session");
+    const sessions = await listPersonSessions(claims.sub);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ sessionId, surface: "configurator", kcSessionId: "kc-session" });
+    expect(sessions[0]).not.toHaveProperty("accessToken");
+    expect(await getRedis().smembers(personSessionsKey(claims.sub))).toEqual([sessionId]);
   });
   it("never recreates a revoked session through refresh, touch or context selection", async () => {
     const { sessionId } = await createIdentitySession(tokens, claims, "client");
