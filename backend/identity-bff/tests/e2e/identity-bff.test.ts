@@ -828,7 +828,7 @@ describe("identity BFF", () => {
       "http://localhost:5173",
     );
     const authorizeUrl = new URL(authorize.headers.get("location")!);
-    expect(authorizeUrl.origin).toBe("http://localhost:9999");
+    expect(authorizeUrl.origin).toBe(new URL(getIssuer()).origin);
     expect(authorizeUrl.searchParams.get("client_id")).toBe("digit-identity-bff");
     expect(authorizeUrl.searchParams.get("scope")).toContain("organization:*");
     expect(authorizeUrl.searchParams.get("kc_idp_hint")).toBe("google");
