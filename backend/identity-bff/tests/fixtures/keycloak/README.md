@@ -12,7 +12,11 @@ memory, and stops its compose project after the tests. There are no persistent
 volumes and no realm-delete calls. Pass Vitest file paths after `run.mjs` to
 run other suites. Each test owns and removes its users and Organizations.
 
-Normal Vitest runs skip the real suite unless `KEYCLOAK_TEST_URL` is set.
+The default run executes the safe user-writer and reconciliation suites. Run
+this separately from other Vitest commands in the same lane: the test setup
+shares the lane JWKS listener and signing-key fixture.
+
+Normal Vitest runs skip the real suites unless `KEYCLOAK_TEST_URL` is set.
 An explicitly enabled but unreachable or unauthorized fixture fails the tests.
 The minimal realm import will be replaced by the declarative realm from the
 Keycloak configuration owner when it lands.
