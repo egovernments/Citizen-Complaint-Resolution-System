@@ -2,13 +2,19 @@ Item 10, event poller and retry workers (PR B), 2026-10-04
 
 Executed from backend/identity-bff on Redis 16387:
 - npx tsc --noEmit: passed.
-- REDIS_PORT=16387 npx vitest run: 411 passed, 7 opt-in real-Keycloak
+- REDIS_PORT=16387 npx vitest run: 415 passed, 7 opt-in real-Keycloak
   cases skipped, 15 existing todo, 0 failed.
-- revocation.test.ts + keycloak-poller.test.ts: 39/39 passed.
+- Bootstrap review: revocation.test.ts + keycloak-poller.test.ts: 39/39 passed.
+- Fallback review: revocation.test.ts: 25/25 passed (4 added cases).
 - REDIS_PORT=16387 node tests/fixtures/keycloak/run.mjs
   tests/e2e/keycloak-poller.real.test.ts: 2/2 passed against stock 26.7.3.
 
 Acceptance mapping (tests/unit/keycloak-poller.test.ts unless noted):
+- steady-state revocation (revocation.test.ts): person/account 'fallback false
+  cleans up new inventory and sessions without grants on steady passes';
+  person/account 'fallback false survives a durable job retry'. These verify
+  cleanup, repeated empty passes, newly minted inventory, the default true
+  behavior and the persisted false option after failure.
 - first deployment: 'missing checkpoints bootstrap at now without revocation
   or historical replay, including the next overlap'. Fenced bootstrap logs
   its start time and retains startedAt as the overlap lower bound.

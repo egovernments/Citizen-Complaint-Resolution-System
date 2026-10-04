@@ -17,7 +17,7 @@ export type RevocationReason =
   | "MEMBERSHIP_REMOVED" | "BINDING_REMOVED" | "DIGIT_INACTIVE" | "ROLE_CHANGED"
   | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "DIGIT_ACCOUNT_MISSING" | "LOGOUT";
 
-interface JobOptions { account?: AccountRef; tenantId?: string; keepSessionId?: string; eventId?: string }
+interface JobOptions { account?: AccountRef; tenantId?: string; keepSessionId?: string; eventId?: string; fallback?: boolean }
 interface SubjectJob { subject: string; reason: RevocationReason; options: JobOptions }
 
 /** The job itself carries only ids; never tokens or credentials. */
@@ -65,7 +65,7 @@ async function bumpGeneration(lease: PersonLease, keepSessionId?: string): Promi
   if (result === -1) throw new LeaseLostError();
 }
 
-async function revokeOne(lease: PersonLease, account: AccountRef, entry: AccountEntry | undefined, reason: RevocationReason, keepSessionId?: string): Promise<void> {
+async function revokeOne(lease: PersonLease, account: AccountRef, entry: AccountEntry | undefined, reason: RevocationReason, keepSessionId?: string, fallback = true): Promise<void> {
   const token = await readToken(account);
   if (token && token.subject !== lease.subject) return;
   if (keepSessionId && await getRedis().sismember(tokenHoldersKey(account), privateRef("session", keepSessionId))) return;
@@ -75,7 +75,7 @@ async function revokeOne(lease: PersonLease, account: AccountRef, entry: Account
     await forgetToken(lease, account, token.accessToken);
     return;
   }
-  if (entry?.kind !== "staff" || !entry.userName) return;
+  if (!fallback || entry?.kind !== "staff" || !entry.userName) return;
   await lease.assertHeld();
   const live = await findLiveStaffToken({ tenantId: account.tenantId, uuid: account.uuid, userName: entry.userName, keyVersion: entry.credential?.keyVersion });
   if (!live) return;
@@ -116,7 +116,7 @@ async function perform(job: SubjectJob): Promise<void> {
     const entries = job.reason === "KEYCLOAK_DELETED" ? [] : accountEntries(await getRevocationUser(job.subject) ?? {});
     for (const entry of entries) {
       if (!matches(entry) || inventoried.has(accountId(entry))) continue;
-      await revokeOne(lease, entry, entry, job.reason, keepSessionId);
+      await revokeOne(lease, entry, entry, job.reason, keepSessionId, job.options.fallback);
     }
   });
 }
@@ -124,12 +124,12 @@ async function runJob(id: string): Promise<void> {
   await perform(decodeJob(id));
   await getRedis().zrem(key("revoke-jobs"), id);
 }
-export async function revokePerson(subject: string, reason: RevocationReason, options: { keepSessionId?: string } = {}): Promise<void> {
+export async function revokePerson(subject: string, reason: RevocationReason, options: { keepSessionId?: string; fallback?: boolean } = {}): Promise<void> {
   const id = await enqueueRevocation(subject, reason, options);
   await runJob(id);
 }
-export async function revokeAccount(subject: string, account: AccountRef, reason: RevocationReason): Promise<void> {
-  const id = await enqueueRevocation(subject, reason, { account });
+export async function revokeAccount(subject: string, account: AccountRef, reason: RevocationReason, options: { fallback?: boolean } = {}): Promise<void> {
+  const id = await enqueueRevocation(subject, reason, { ...options, account });
   await runJob(id);
 }
 

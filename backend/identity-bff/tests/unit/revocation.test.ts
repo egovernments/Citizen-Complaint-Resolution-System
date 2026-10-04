@@ -124,6 +124,46 @@ describe("token inventory and revocation", () => {
     expect(await getRedis().zcard(key("revoke-jobs"))).toBe(0);
     expect(digit.revokeToken).toHaveBeenCalledWith("digit-token");
   });
+  it.each(["person", "account"] as const)("%s fallback false cleans up new inventory and sessions without grants on steady passes", async scope => {
+    vi.mocked(keycloak.getRevocationUser).mockResolvedValue({ id: subject, attributes: { "digit.accounts": [JSON.stringify({ v: 1, entries: [
+      { ...account, kind: "staff", boundAt: 1, active: true, roles: [], userName: "staff", credential: { keyVersion: 1 } },
+    ] })] } });
+    const revoke = (fallback?: boolean) => scope === "person"
+      ? revokePerson(subject, "KEYCLOAK_DISABLED", { fallback })
+      : revokeAccount(subject, account, "DIGIT_INACTIVE", { fallback });
+    for (const name of ["first-token", "new-token"]) {
+      const sid = await session();
+      await saveSelectedIdentityContext(sid, { organizationId: "o", organizationAlias: "a", tenantId: account.tenantId, name: "Tenant" });
+      await inventory(account, login(account, name), sid);
+      await revoke(false);
+      expect(await getIdentitySession(sid)).toBeNull(); expect(await readToken(account)).toBeNull();
+      expect(digit.revokeToken).toHaveBeenCalledWith(name);
+      const calls = vi.mocked(digit.revokeToken).mock.calls.length;
+      await revoke(false);
+      expect(digit.revokeToken).toHaveBeenCalledTimes(calls);
+      expect(credentials.findLiveStaffToken).not.toHaveBeenCalled();
+    }
+    await revoke(); // Default remains the full fallback path.
+    expect(credentials.findLiveStaffToken).toHaveBeenCalledExactlyOnceWith({ ...account, userName: "staff", keyVersion: 1 });
+  });
+  it.each(["person", "account"] as const)("%s fallback false survives a durable job retry", async scope => {
+    await inventory();
+    vi.mocked(keycloak.getRevocationUser).mockRejectedValueOnce(new Error("Keycloak unavailable"));
+    const attempt = scope === "person"
+      ? revokePerson(subject, "KEYCLOAK_DISABLED", { fallback: false })
+      : revokeAccount(subject, account, "DIGIT_INACTIVE", { fallback: false });
+    await expect(attempt).rejects.toThrow("unavailable");
+    const jobs = await getRedis().zrange(key("revoke-jobs"), 0, -1);
+    expect(jobs).toHaveLength(1);
+    expect(JSON.parse(Buffer.from(jobs[0].split("|")[2], "base64url").toString())).toMatchObject({ fallback: false });
+    vi.mocked(keycloak.getRevocationUser).mockResolvedValue({ id: subject, attributes: { "digit.accounts": [JSON.stringify({ v: 1, entries: [
+      { ...account, kind: "staff", boundAt: 1, active: true, roles: [], userName: "staff", credential: { keyVersion: 1 } },
+    ] })] } });
+    await drainRevocationJobs();
+    expect(await getRedis().zcard(key("revoke-jobs"))).toBe(0);
+    expect(credentials.findLiveStaffToken).not.toHaveBeenCalled();
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("digit-token");
+  });
   it("keeps only initiating session generation after self password change", async () => {
     const keep = await session(); const other = await session("other");
     await inventory(account, login(), keep); await withPersonLease(subject, lease => holdToken(lease, account, other));
