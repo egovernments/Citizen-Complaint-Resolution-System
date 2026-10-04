@@ -39,6 +39,8 @@ export async function fetchCitizenSigninMethods({ fetchImpl }) {
 // `{{attempts}}` are filled from the response; when the response lacks the
 // number, NO_COUNT gives a sentence without it.
 const OTP_ERRORS = Object.freeze({
+  PHONE_IN_USE: ["CORE_IDENTITY_PHONE_IN_USE", "This phone number cannot be used for this account."],
+  SESSION_REQUIRED: ["CORE_IDENTITY_SESSION_REQUIRED", "Your session has ended. Sign in again."],
   INVALID_MOBILE_NUMBER: ["CORE_IDENTITY_OTP_INVALID_MOBILE", "This mobile number cannot be used here."],
   OTP_CHANNEL_UNAVAILABLE: [
     "CORE_IDENTITY_OTP_CHANNEL_UNAVAILABLE",
@@ -106,9 +108,9 @@ export function fillMessage(template, params) {
  * adds the route tenant's). Resolves to
  * `{ ok: true, challengeId, expiresIn, resendAfter }` or a failure.
  */
-export async function sendCitizenOtp({ tenant, mobileNumber, locale, fetchImpl }) {
+export async function sendCitizenOtp({ tenant, mobileNumber, locale, purpose = "signin", fetchImpl }) {
   const { response, body } = await postJson(fetchImpl, OTP_SEND_PATH, {
-    tenantSlug: tenant.urlSlug,
+    ...(purpose === "signin" ? { tenantSlug: tenant.urlSlug } : { purpose }),
     mobileNumber,
     ...(locale ? { locale } : {}),
   });
@@ -124,12 +126,14 @@ export async function sendCitizenOtp({ tenant, mobileNumber, locale, fetchImpl }
 }
 
 /** Checks `code`; on success the BFF has set the citizen session cookie. */
-export async function verifyCitizenOtp({ tenant, challengeId, code, fetchImpl }) {
+export async function verifyCitizenOtp({ tenant, challengeId, code, purpose = "signin", fetchImpl }) {
   const { response, body } = await postJson(fetchImpl, OTP_VERIFY_PATH, {
-    tenantSlug: tenant.urlSlug,
+    ...(purpose === "signin" ? { tenantSlug: tenant.urlSlug } : { purpose }),
     challengeId,
     code,
   });
-  if (response.ok && body?.authenticated === true) return { ok: true };
+  if (response.ok && (purpose === "signin" ? body?.authenticated === true : body?.phoneNumberVerified === true)) {
+    return { ok: true, ...(purpose !== "signin" ? { phoneNumber: body.phoneNumber } : {}) };
+  }
   return citizenOtpFailure(response, body);
 }

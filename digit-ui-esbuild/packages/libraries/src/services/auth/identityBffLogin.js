@@ -1,3 +1,5 @@
+import { identityMessage } from "./identityMessages";
+
 /**
  * Identity BFF login helpers shared by the employee and citizen adapters on
  * canonical tenant routes (`/{tenantSlug}/digit-ui/{employee|citizen}/...`).
@@ -98,8 +100,9 @@ export const requestJson = async (fetchImpl, url, init) => {
  * Resolves to one of:
  *   { status: "authenticated", user: { info, ...tokens } }
  *   { status: "signed-out", fromAuthResult, messageKey?, message? }
+ *   { status: "pending-invitation", invitation, messageKey, message }
  *   { status: "forbidden" | "error", messageKey, message }
- * `message` is a BFF-supplied or English fallback text for `messageKey`.
+ * `message` is a local English fallback; BFF display text is never rendered.
  */
 export async function establishIdentityBffSession({ surface, tenant, authResultId, fetchImpl }) {
   const config = IDENTITY_BFF_SURFACES[surface];
@@ -114,8 +117,7 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
       return {
         status: "signed-out",
         fromAuthResult: true,
-        messageKey: "CORE_IDENTITY_SIGNIN_FAILED",
-        message: body?.message || "Sign-in could not be completed. Please try again.",
+        ...identityMessage(body?.code || "SIGNIN_FAILED"),
       };
     }
   }
@@ -156,11 +158,21 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
   if (selected.response.status === 401) {
     return { status: "signed-out", fromAuthResult: Boolean(authResultId) };
   }
+  if (surface === "employee" && selected.body?.code === "PENDING_INVITATION") {
+    const invitation = session.body.pendingInvitations?.find((item) => item.tenantId === tenant.tenantId);
+    return {
+      status: invitation ? "pending-invitation" : "forbidden",
+      invitation,
+      ...identityMessage("PENDING_INVITATION"),
+    };
+  }
   if (selected.response.status === 403) {
     return {
       status: "forbidden",
-      messageKey: "CORE_IDENTITY_TENANT_FORBIDDEN",
-      message: `Your account does not have access to ${tenant.name}.`,
+      ...(selected.body?.code ? identityMessage(selected.body.code) : {
+        messageKey: "CORE_IDENTITY_TENANT_FORBIDDEN",
+        message: `Your account does not have access to ${tenant.name}.`,
+      }),
     };
   }
   if (!selected.response.ok) {
@@ -203,11 +215,14 @@ export function identityBffLogoutRedirect(appBasePath, surface) {
     : `/${appBasePath}/employee/user/login`;
 }
 
-export function identityBffLogout({ surface, fetchImpl }) {
-  return fetchImpl("/identity/v1/logout", {
+export async function identityBffLogout({ surface, scope = "current", fetchImpl }) {
+  if (!["current", "others", "all"].includes(scope)) throw new Error("Invalid logout scope");
+  const response = await fetchImpl("/identity/v1/logout", {
     method: "POST",
     credentials: "include",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ surface: surface === "citizen" ? "citizen" : "employee" }),
+    body: JSON.stringify({ surface: surface === "citizen" ? "citizen" : "employee", scope }),
   });
+  if (!response.ok) throw new Error("Sign-out could not be completed. Please try again.");
+  return response;
 }

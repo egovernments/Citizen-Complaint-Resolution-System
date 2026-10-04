@@ -1,0 +1,107 @@
+TAP version 13
+# Subtest: staff account offers advertised actions, second factors, providers and scoped sessions
+ok 1 - staff account offers advertised actions, second factors, providers and scoped sessions
+  ---
+  duration_ms: 228.434375
+  ...
+# Subtest: phone-only account hides credential actions and offers phone change
+ok 2 - phone-only account hides credential actions and offers phone change
+  ---
+  duration_ms: 1.816084
+  ...
+# Subtest: phone change verifies before refreshing the same citizen uuid and token aliases
+ok 3 - phone change verifies before refreshing the same citizen uuid and token aliases
+  ---
+  duration_ms: 3.388709
+  ...
+# Subtest: phone change cannot write auth state after logout during pending verify
+ok 4 - phone change cannot write auth state after logout during pending verify
+  ---
+  duration_ms: 1.867459
+  ...
+# Subtest: phone change cannot write auth state after account switch during pending verify
+ok 5 - phone change cannot write auth state after account switch during pending verify
+  ---
+  duration_ms: 1.592042
+  ...
+# Subtest: phone change cannot write auth state after same-person new session during pending verify
+ok 6 - phone change cannot write auth state after same-person new session during pending verify
+  ---
+  duration_ms: 1.324417
+  ...
+# Subtest: phone change cannot write auth state after other-tab logout during pending verify
+ok 7 - phone change cannot write auth state after other-tab logout during pending verify
+  ---
+  duration_ms: 1.27975
+  ...
+# Subtest: phone change cannot write auth state after other-tab account switch during pending verify
+ok 8 - phone change cannot write auth state after other-tab account switch during pending verify
+  ---
+  duration_ms: 1.456333
+  ...
+# Subtest: phone change cannot write auth state after logout during pending select
+ok 9 - phone change cannot write auth state after logout during pending select
+  ---
+  duration_ms: 1.650375
+  ...
+# Subtest: phone change cannot write auth state after account switch during pending select
+ok 10 - phone change cannot write auth state after account switch during pending select
+  ---
+  duration_ms: 1.9255
+  ...
+# Subtest: phone change cannot write auth state after same-person new session during pending select
+ok 11 - phone change cannot write auth state after same-person new session during pending select
+  ---
+  duration_ms: 1.230208
+  ...
+# Subtest: phone change cannot write auth state after other-tab logout during pending select
+ok 12 - phone change cannot write auth state after other-tab logout during pending select
+  ---
+  duration_ms: 2.4795
+  ...
+# Subtest: phone change cannot write auth state after other-tab account switch during pending select
+ok 13 - phone change cannot write auth state after other-tab account switch during pending select
+  ---
+  duration_ms: 1.299333
+  ...
+# Subtest: phone change cannot adopt a different UUID returned by the citizen cookie
+ok 14 - phone change cannot adopt a different UUID returned by the citizen cookie
+  ---
+  duration_ms: 1.183667
+  ...
+# Subtest: pending invitation UI waits for consent and shows stale rejection
+ok 15 - pending invitation UI waits for consent and shows stale rejection
+  ---
+  duration_ms: 1.485417
+  ...
+# Subtest: employee profile keeps identity fields read-only and offers account settings without BFF reads
+ok 16 - employee profile keeps identity fields read-only and offers account settings without BFF reads
+  ---
+  duration_ms: 2.3265
+  ...
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the render method of `PopUp`. It was passed a child from LogoutDialog. See https://reactjs.org/link/warning-keys for more information.
+#     at Button2 (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.2814.cjs:30334:18)
+#     at PopUp (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.2814.cjs:30335:16)
+#     at LogoutDialog (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.2814.cjs:30365:23)
+#     at Router2 (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.2814.cjs:3817:34)
+#     at MemoryRouter3 (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.2814.cjs:3884:39)
+# Subtest: citizen profile keeps identity fields read-only and offers account settings without BFF reads
+ok 17 - citizen profile keeps identity fields read-only and offers account settings without BFF reads
+  ---
+  duration_ms: 0.881542
+  ...
+# Subtest: logout dialog keeps a failed sign-out visible for retry
+ok 18 - logout dialog keeps a failed sign-out visible for retry
+  ---
+  duration_ms: 3.747833
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 375.538

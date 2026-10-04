@@ -121,6 +121,7 @@ const PREFERENCE_CODE = "USER_NOTIFICATION_PREFERENCES";
 
 const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const history = useHistory();
+  const identityManaged = isIdentityBffAuth();
   const { t } = useTranslation();
   const url = window.location.href;
   const stateId = Digit.ULBService.getStateId();
@@ -683,7 +684,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             familyName: userDetails?.name?.familyName,
             otherNames: userDetails?.name?.otherNames,
           },
-          mobileNumber: mobileNumber,
+          mobileNumber: identityManaged ? userInfo.mobileNumber : mobileNumber,
           isDeleted: false,
           isSystemUser: true,
           isSystemUserActive: true,
@@ -695,7 +696,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         }
 
         if (email) {
-          individualPayload.email = email;
+          individualPayload.email = identityManaged ? userInfo.emailId : email;
         }
 
         if (profilePic) {
@@ -724,8 +725,8 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           ...userInfo,
           name,
           gender: gender?.value,
-          emailId: email,
-          mobileNumber,
+          emailId: identityManaged ? userInfo.emailId : email,
+          mobileNumber: identityManaged ? userInfo.mobileNumber : mobileNumber,
           photo: profilePic,
         };
         const response = await Digit.UserService.updateUser(requestData, stateCode);
@@ -882,7 +883,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   // component scope so both the citizen and employee profile branches can
   // read it (previously scoped inside the citizen branch only, which
   // crashed the employee profile with "canEditMobile is not defined").
-  const canEditMobile = !!window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
+  const canEditMobile = !identityManaged && !!window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
 
   // ----------------------------------------------------------------------
   // v2 Citizen branch — modernized chrome (form sections in a Card,
@@ -1077,6 +1078,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             >
               {tr("CORE_COMMON_PROFILE_PERSONAL_DETAILS", "Personal details")}
             </h2>
+            {identityManaged && <V2Button type="button" variant="secondary" onClick={() => history.push(`/${window.contextPath}/${userType}/user/account`)}>
+              {tr("CORE_IDENTITY_ACCOUNT", "Account and security")}
+            </V2Button>}
+            {identityManaged && <p>{userInfo.userName} · {mobileNumber}</p>}
             <V2Field
               label={t("CORE_COMMON_PROFILE_NAME")}
               required
@@ -1108,6 +1113,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
               error={errors?.emailAddress ? t(errors.emailAddress.message) : undefined}
             >
               <V2Input
+                readOnly={identityManaged}
                 id="profile-email"
                 type="email"
                 value={email}
@@ -1464,6 +1470,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           >
             {tr("CORE_COMMON_PROFILE_PERSONAL_DETAILS", "Personal details")}
           </h2>
+          {identityManaged && <V2Button type="button" variant="secondary" onClick={() => history.push(`/${window.contextPath}/${userType}/user/account`)}>
+            {tr("CORE_IDENTITY_ACCOUNT", "Account and security")}
+          </V2Button>}
 
           <V2Field
             label={t("CORE_COMMON_PROFILE_NAME")}
@@ -1597,12 +1606,13 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             error={errors?.emailAddress ? t(errors.emailAddress.message) : undefined}
           >
             <V2Input
+              readOnly={identityManaged}
               id="profile-email"
               type="email"
               value={email}
               onChange={(e) => setUserEmailAddress(e.target.value)}
               invalid={!!errors?.emailAddress}
-              disabled={isMultiRoot ? true : editScreen}
+              disabled={identityManaged || isMultiRoot ? true : editScreen}
               autoComplete="email"
             />
           </V2Field>

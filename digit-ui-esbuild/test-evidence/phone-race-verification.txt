@@ -1,0 +1,33 @@
+PR58 owner-review correction: citizen phone session ownership
+Source: f0ca40f1687bd72c7354aa3b6ddab98b56d18166
+Review: bridge message msg_e1dee2d3a45547abbf690256f24263ec
+Date: 2026-10-04
+
+ChangePhone now pins the initial CITIZEN UUID/access token and shared citizen
+and generic browser aliases. It rechecks ownership before and after OTP calls,
+after context re-selection, and before any local authentication writes. A result
+with a different citizen UUID is refused. Successful same-person writes renew
+the snapshot for another phone change. Unmounted forms cannot write auth state.
+
+Regression interaction tests defer verify and re-select responses, then change
+local state while the hook awaits them: logout, account switch, same-person token
+replacement, another tab clearing localStorage while this tab retains its cached
+user, or another surface taking shared aliases. They assert no User cache,
+citizen token/profile alias, or shared alias write and no success callback.
+A separate test returns a different citizen UUID from the BFF. The existing
+same-UUID happy path still passes and updates the citizen token aliases.
+
+Executed from digit-ui-esbuild, sequentially at low concurrency:
+- node --test --test-concurrency=1 tests/identity-account-ui.test.js
+  Exit 0; 18 passed, 0 failed/skipped. Iteration log: phone-race-focused.txt.
+- node --test --test-concurrency=1 tests/*.test.js src/theme/*.test.js products/dashboard/src/services/authSessionOwnership.test.js
+  Exit 0; 262 passed, 0 failed/skipped. Full suite run once before PR update.
+  Pinned-source log: phone-race-suite.txt.
+- npm run build
+  Exit 0; both frontend bundles generated, 20 warnings in untouched files.
+  Pinned-source log: phone-race-build.txt. Output trailing whitespace normalized.
+
+The previous 16-alias check is reused: imports/aliases are unchanged. Generated
+vendor CSS was restored. No heavy backend/Keycloak/Docker test was repeated.
+These are frontend hook tests with HTTP fixtures and primitive doubles, not a
+claim of real Keycloak/Redis/egov-user/egov-otp or SMS gate completion.
