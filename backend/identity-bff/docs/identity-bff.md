@@ -345,7 +345,7 @@ Query: `surface`; `include=account` (optional).
 Body or query `{surface, scope?: "current" | "others" | "all"}`, default `current` → **`204`**, and clears the cookie for `current` and `all`.
 
 - `current`: ends this session and its Keycloak session, and revokes this session's DIGIT token claim.
-- `others`: ends every **other** BFF and Keycloak session of the person, and revokes their DIGIT tokens.
+- `others`: ends every **other** BFF and Keycloak session of the person. It skips DIGIT logout for accounts whose token is held by the current session; tokens used only by the ended sessions are revoked. See the shared-token limitation in §8.
 - `all`: both, and raises the person's revocation generation (§6).
 - Failed DIGIT logouts go on the revocation retry set. They never fail the request.
 - Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `UNTRUSTED_ORIGIN` 403. A missing session is still `204`.
@@ -878,6 +878,19 @@ Reference implementation and unit tests: `src/modules/accounts/credential.ts`, `
 - **Keys:** `IDENTITY_CREDENTIAL_KEYS` = `1:<base64 ≥ 32 bytes>,2:<…>` and `IDENTITY_CREDENTIAL_KEY_CURRENT`. The version used is stored in `digit.accounts[].credential.keyVersion`. A new version is adopted lazily at the next issuance. An old key is removed only when no entry still uses it.
 - **When it's set:** only when a binding becomes `active` (new-user `_link`, `_accept`), at the founder's first `_select` (D25/B8), or at first issuance for converted links. Never while `pending`. At activation, the BFF signs in once with the new credential and logs out the token it gets back before minting the one it hands out.
 - **Changing the algorithm** changes every staff password. Add `encode_v2` and bump the version prefix instead.
+
+### Shared DIGIT tokens and scoped logout
+
+egov-user can return the same live access token for repeated grants of one
+account. The BFF cannot revoke only the copies held by other consumers of that
+token. `logout {scope: "others"}` therefore preserves every current-session-held
+account token while ending the other BFF/Keycloak sessions. Other consumers who
+already possess that shared DIGIT token can use it until expiry or a later
+account-wide revocation (including logout-all). Tokens belonging only to ended
+sessions are still revoked. This limitation also applies when staff use the
+derived credential; deterministic credentials do not create per-session DIGIT
+tokens. Logout-current releases its claim and preserves tokens with remaining
+holders; logout-all ends all claims and revokes the shared token.
 
 **Frozen test vectors** (test keys only: `K1` = bytes `00 01 … 1f`, `K2` = 32 bytes of `ab`). They were cross-checked against an independent Python implementation.
 
