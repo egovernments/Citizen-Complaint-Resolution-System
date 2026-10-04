@@ -879,6 +879,16 @@ Reference implementation and unit tests: `src/modules/accounts/credential.ts`, `
 - **When it's set:** only when a binding becomes `active` (new-user `_link`, `_accept`), at the founder's first `_select` (D25/B8), or at first issuance for converted links. Never while `pending`. At activation, the BFF signs in once with the new credential and logs out the token it gets back before minting the one it hands out.
 - **Changing the algorithm** changes every staff password. Add `encode_v2` and bump the version prefix instead.
 
+**Frozen test vectors** (test keys only: `K1` = bytes `00 01 … 1f`, `K2` = 32 bytes of `ab`). They were cross-checked against an independent Python implementation.
+
+| Key | uuid | tenantId | HMAC (hex) | Password |
+|---|---|---|---|---|
+| K1 | `00000000-0000-4000-8000-000000000001` | `pg` | `af3993b634002e81bec3eebe81116c9c4eee4ce5ae716e3a79a576635628925e` | `W8%$wiVkCM39sks` |
+| K1 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `pg` | `e3f76de39a836f107c50416fb08406857f83305d35cd3da866561ac8aff1f43c` | `W6RgS$HeadQrdYN` |
+| K1 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `ke` | `306cd3b8552cb8c4116c6341d9cce98ef2db5a5fa0d58c12bfd6feda038eeaee` | `%@uYT8MwZkS$J4q` |
+| K2 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `pg` | `06b4508a015652bf1c412cb091ae877e10b21c8106843a6599a55347d1d83be1` | `@rQXAhqy6Tz6R5b` |
+| K2 | `a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d` | `bomet-county` | `0287838160bbdc66bd28d6ab0cc510988ed30454819aef0e32c079d8c4cd2a12` | `rQuGP8HDAhM2c@E` |
+
 ### Shared DIGIT tokens and scoped logout
 
 egov-user can return the same live access token for repeated grants of one
@@ -891,16 +901,6 @@ sessions are still revoked. This limitation also applies when staff use the
 derived credential; deterministic credentials do not create per-session DIGIT
 tokens. Logout-current releases its claim and preserves tokens with remaining
 holders; logout-all ends all claims and revokes the shared token.
-
-**Frozen test vectors** (test keys only: `K1` = bytes `00 01 … 1f`, `K2` = 32 bytes of `ab`). They were cross-checked against an independent Python implementation.
-
-| Key | uuid | tenantId | HMAC (hex) | Password |
-|---|---|---|---|---|
-| K1 | `00000000-0000-4000-8000-000000000001` | `pg` | `af3993b634002e81bec3eebe81116c9c4eee4ce5ae716e3a79a576635628925e` | `W8%$wiVkCM39sks` |
-| K1 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `pg` | `e3f76de39a836f107c50416fb08406857f83305d35cd3da866561ac8aff1f43c` | `W6RgS$HeadQrdYN` |
-| K1 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `ke` | `306cd3b8552cb8c4116c6341d9cce98ef2db5a5fa0d58c12bfd6feda038eeaee` | `%@uYT8MwZkS$J4q` |
-| K2 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `pg` | `06b4508a015652bf1c412cb091ae877e10b21c8106843a6599a55347d1d83be1` | `@rQXAhqy6Tz6R5b` |
-| K2 | `a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d` | `bomet-county` | `0287838160bbdc66bd28d6ab0cc510988ed30454819aef0e32c079d8c4cd2a12` | `rQuGP8HDAhM2c@E` |
 
 ## 9. Onboarding: payload hash, `restartNo` and lifecycle
 
