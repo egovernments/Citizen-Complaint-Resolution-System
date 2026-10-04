@@ -1,4 +1,7 @@
 import type { UserRepresentation } from "./keycloak-writer.js";
+import { bindingsFromUser } from "../bindings/store.js";
+import type { Binding } from "../bindings/types.js";
+export type { Binding } from "../bindings/types.js";
 
 export interface AccountEntry {
   kind: "staff" | "citizen";
@@ -10,13 +13,6 @@ export interface AccountEntry {
   userName?: string;
   missing?: true;
   credential?: { keyVersion: number; setAt?: number };
-}
-export interface Binding {
-  tenantId: string;
-  uuid: string;
-  state: "pending" | "active" | "removed";
-  boundAt?: number;
-  expiresAt?: number;
 }
 
 function document(user: UserRepresentation, attribute: string): Record<string, unknown> | null {
@@ -50,20 +46,7 @@ export function accountEntries(user: UserRepresentation): AccountEntry[] {
 }
 
 export function activeBindings(user: UserRepresentation): Binding[] {
-  const value = document(user, "digit.bindings");
-  if (!value) return [];
-  if (!Array.isArray(value.bindings) || value.bindings.length > 64) throw new Error("Invalid digit.bindings");
-  const seen = new Set<string>();
-  for (const binding of value.bindings) {
-    if (!binding || typeof binding.tenantId !== "string" || typeof binding.uuid !== "string" ||
-        !["pending", "active", "removed"].includes(binding.state) ||
-        (binding.state === "active" && (!Number.isSafeInteger(binding.boundAt) || binding.boundAt < 0))) {
-      throw new Error("Invalid digit.bindings entry");
-    }
-    if (seen.has(binding.tenantId)) throw new Error("Duplicate binding tenant");
-    seen.add(binding.tenantId);
-  }
-  return value.bindings.filter((binding: Binding) => binding.state === "active");
+  return bindingsFromUser(user).filter(binding => binding.state === "active");
 }
 
 export function canonical(value: unknown): string {

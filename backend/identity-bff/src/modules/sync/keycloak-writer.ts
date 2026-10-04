@@ -15,6 +15,12 @@ export interface UserRepresentation {
   [key: string]: unknown;
 }
 
+export class KeycloakConflictError extends Error {
+  readonly status = 409;
+  readonly code = "IDENTITY_EMAIL_CHANGED";
+  constructor() { super("The email address belongs to another identity"); }
+}
+
 /**
  * Authorship suppresses mirror reruns only (core-owner, core-sync-echo).
  * It must NEVER suppress security checks or verified-identifier propagation:
@@ -43,6 +49,7 @@ export async function isMirrorOnlyAdminEvent(event: {
 export async function updateKeycloakUser(
   subject: string,
   change: (user: UserRepresentation) => UserRepresentation | null,
+  options: { allowEmailChange?: boolean } = {},
 ): Promise<void> {
   const lease = currentPersonLease();
   if (!lease || lease.subject !== subject) {
@@ -58,8 +65,20 @@ export async function updateKeycloakUser(
   for (const field of ["attributes", "firstName", "lastName"] as const) {
     if (Object.hasOwn(changed, field)) Object.assign(body, { [field]: changed[field] });
   }
+  if (options.allowEmailChange) {
+    if (typeof changed.email !== "string" || !changed.email.trim() || changed.emailVerified !== false) {
+      throw new Error("An email change requires a nonempty email and emailVerified=false");
+    }
+    body.email = changed.email.trim();
+    body.emailVerified = false;
+  }
   delete body.enabled;
   await lease.assertHeld();
-  await request(path, { method: "PUT", body: JSON.stringify(body) });
+  try {
+    await request(path, { method: "PUT", body: JSON.stringify(body) });
+  } catch (error) {
+    if (options.allowEmailChange && (error as { status?: number })?.status === 409) throw new KeycloakConflictError();
+    throw error;
+  }
   await lease.assertHeld();
 }
