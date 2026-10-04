@@ -99,9 +99,6 @@ beforeAll(async () => {
     identityEmployeeScope: "openid profile email",
     identityCitizenScope: "openid profile phone",
     digitOtpCreateUrl: `${digitBase}/otp/v1/_create`,
-    digitLocalizationSearchUrl: `${digitBase}/localization/messages/v1/_search`,
-    digitUiConfigModuleName: "commonMDMSConfig",
-    identityBrandingCacheSeconds: 300,
   });
   (config as any).identityRedirectUri =
     "http://localhost:18200/identity/v1/callback";
@@ -1413,64 +1410,8 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     });
   });
 
-  it("serves public, cached tenant login branding", async () => {
-    const response = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
-    expect(await response.json()).toEqual({
-      tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", name: "Bomet County" },
-      stateInfo: {
-        code: "ke.bomet", name: "Bomet",
-        logoUrl: "https://cdn.example/logo.png", logoUrlWhite: "https://cdn.example/logo-white.png",
-        bannerUrl: "https://cdn.example/banner.jpg",
-        languages: [{ label: "ENGLISH", value: "en_IN" }, { label: "KISWAHILI", value: "sw_KE" }],
-        defaultLocale: "en_IN",
-      },
-      themeConfig: { code: "default", version: 3, colors: { primary: "#c84c0e" } },
-      loginConfig: {
-        bannerImages: [{ id: 1, image: "https://cdn.example/b1.png", title: "BOMET_BANNER_TITLE" }],
-        texts: { header: "CORE_COMMON_LOGIN" },
-      },
-      privacyPolicy: [{
-        module: "HCM", header: "ES_PRIVACY_POLICY_HEADER", contents: [{ header: "ES_PRIVACY_SECTION_1" }],
-      }],
-      footer: {
-        digitFooter: "/digit-ui/brand/digit-footer.png",
-        digitFooterBw: "/digit-ui/brand/digit-footer-bw.png",
-        digitHomeUrl: "https://www.digit.org/",
-      },
-      messages: {
-        BOMET_BANNER_TITLE: "Report it",
-        CORE_COMMON_LOGIN: "Login",
-        ES_PRIVACY_POLICY: "Privacy Policy",
-        ES_PRIVACY_POLICY_HEADER: "Privacy",
-        TENANT_TENANTS_KE_BOMET: "Bomet County Government",
-      },
-    });
-
-    const searches = digit.stats.localizationSearches;
-    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`)).status).toBe(200);
-    expect(digit.stats.localizationSearches).toBe(searches);
-
-    // A subtenant's own localization rows override the root's.
-    const subtenant = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-ulb-one/branding`);
-    expect(subtenant.status).toBe(200);
-    const subtenantBody = await subtenant.json();
-    expect(subtenantBody.tenant).toEqual({
-      urlSlug: "bomet-ulb-one", tenantId: "ke.bomet.ulb1", name: "Bomet ULB One",
-    });
-    expect(subtenantBody.messages.CORE_COMMON_LOGIN).toBe("Ingia");
-
-    // The theme sends Keycloak locales; `fr` and `fr_FR` are the same DIGIT locale.
-    for (const locale of ["fr_FR", "fr"]) {
-      const french = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=${locale}`);
-      expect(french.status).toBe(200);
-      expect((await french.json()).messages).toEqual({ CORE_COMMON_LOGIN: "Connexion" });
-    }
-
-    expect((await fetch(`${app()}/identity/v1/tenant-contexts/missing-county/branding`)).status).toBe(404);
-    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=..%2Fx`)).status)
-      .toBe(400);
+  it("does not serve the retired branding relay", async () => {
+    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`)).status).toBe(404);
   });
 
   it("discovers each surface's methods from its own Keycloak client", async () => {

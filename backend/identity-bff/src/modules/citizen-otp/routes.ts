@@ -13,7 +13,7 @@ import {
   type PublicTenantRoute,
 } from "../access-context/tenant-route.js";
 import { enabledIdentityMethods } from "../authentication/methods.js";
-import { mobileValidationForRoute } from "../branding/tenant-branding.js";
+import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import {

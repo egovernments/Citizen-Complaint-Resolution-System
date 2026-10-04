@@ -1,0 +1,82 @@
+{
+  "commit": "09e4791393cf290102a01f21337ce9c97d864e53",
+  "local": {
+    "theme_unit": {
+      "passed": 57,
+      "log": "theme-unit.log"
+    },
+    "theme_typecheck": {
+      "exit": 0,
+      "log": "theme-typecheck.log"
+    },
+    "bff_typecheck": {
+      "exit": 0,
+      "log": "bff-typecheck.log"
+    },
+    "bff_affected_regression": {
+      "passed": 70,
+      "exit": 0,
+      "log": "bff-regression.log"
+    },
+    "deployment_contracts": {
+      "passed": 111,
+      "exit": 0,
+      "log": "deployment-contracts.log"
+    },
+    "shellcheck": {
+      "exit": 0,
+      "version": "0.10.0",
+      "log": "shellcheck.log"
+    },
+    "browser_helper": {
+      "passed": 2,
+      "exit": 0,
+      "log": "browser-helper.log"
+    },
+    "bff_full": {
+      "passed": 229,
+      "todo": 14,
+      "total": 243,
+      "exit": 0,
+      "log": "bff-full.log",
+      "source_note": "09e479139 plus the agreed obsolete branding ROUTES/doc-row removal in this evidence commit."
+    }
+  },
+  "ci": {
+    "image_and_smoke": {
+      "status": "passed",
+      "browser_tests": 1,
+      "url": "https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/actions/runs/37214279799/job/111471520127"
+    },
+    "theme": {
+      "status": "passed",
+      "unit_tests": 57,
+      "screenshots": 26,
+      "url": "https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/actions/runs/37214279799/job/111471519956"
+    },
+    "realm": {
+      "status": "passed",
+      "checks": 24,
+      "total": 24,
+      "version": "26.7.3",
+      "exit": 0,
+      "log": "live-check-summary.log",
+      "url": "https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/actions/runs/37214279799/job/111471519864",
+      "artifact": "keycloak-realm-check"
+    }
+  },
+  "pending": [],
+  "outside_scope": "Full real BFF/Redis/egov-user/egov-otp gate; local BFF suite uses mocked Keycloak and DIGIT services.",
+  "diagnostic_live": {
+    "passed": 18,
+    "total": 24,
+    "exit": 1,
+    "elapsed_seconds": 699,
+    "log": "live-check-diagnostic.log",
+    "note": "Before AIA/IdP test-driver fixes and root old-address notification deferral; not completion evidence."
+  },
+  "decisions": {
+    "old_address_notification": "Deferred by identity-root approval apr_2a08b76cd6b041a8b7958fb3d8f67999; new-address verification remains required. Frozen contract: 63e88080f backend/identity-bff/docs/identity-bff.md \u00a73.3.11.",
+    "branding_contract_row": "Root approved apr_1810cd9a95a04b42bf1cddaa6a76c6c3: remove exactly the obsolete branding route from executable ROUTES and frozen docs \u00a73; preserve drift assertion."
+  }
+}

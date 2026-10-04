@@ -19,12 +19,7 @@ import {
   sessionCookie,
   sessionIdFromCookie,
 } from "../../src/modules/sessions/session-store.js";
-import {
-  LOGIN_MESSAGE_KEYS,
-  pickMobileValidation,
-  requestedBrandingLocale,
-  tenantMessageKey,
-} from "../../src/modules/branding/tenant-branding.js";
+import { pickMobileValidation } from "../../src/modules/citizen-otp/mobile-validation.js";
 import {
   parseCitizenRegistration,
   splitE164,
@@ -178,7 +173,7 @@ describe("citizen phone numbers and registrations", () => {
   });
 });
 
-describe("login branding helpers", () => {
+describe("mobile validation helpers", () => {
   it("selects the default active mobile rule like digit-ui", () => {
     expect(pickMobileValidation([
       { countryCode: "+1", mobileNumberRegex: "^x$" },
@@ -188,11 +183,5 @@ describe("login branding helpers", () => {
     expect(pickMobileValidation([])).toBeNull();
   });
 
-  it("validates locales and names tenant keys", () => {
-    expect(requestedBrandingLocale(undefined)).toBe(config.identityBrandingDefaultLocale);
-    expect(requestedBrandingLocale("sw_KE")).toBe("sw_KE");
-    expect(() => requestedBrandingLocale("../../x")).toThrow(/Unsupported locale/);
-    expect(tenantMessageKey("ke.bomet")).toBe("TENANT_TENANTS_KE_BOMET");
-    expect(new Set(LOGIN_MESSAGE_KEYS).size).toBe(LOGIN_MESSAGE_KEYS.length);
-  });
+
 });

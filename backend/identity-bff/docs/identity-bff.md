@@ -119,7 +119,6 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/password/setup-requests` | none (optional session) | live | — |
 | GET | `/identity/v1/password/setup-complete/:state` | login-attempt | live | — |
 | GET | `/identity/v1/tenant-contexts/:urlSlug` | none | changing | 11, 15 |
-| GET | `/identity/v1/tenant-contexts/:urlSlug/branding` | none | deleted-later | 14 |
 | POST | `/identity/v1/citizen/otp/_send` | none (session for step-up and change) | changing | 3, 13 |
 | POST | `/identity/v1/citizen/otp/_verify` | none (session for step-up and change) | changing | 13 |
 | GET | `/identity/v1/session` | session | changing | 4, 9, 10, 15 |
