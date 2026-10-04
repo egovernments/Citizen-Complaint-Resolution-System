@@ -2,6 +2,7 @@ import { config } from "../../infrastructure/config.js";
 import {
   type DigitAccount,
   type DigitLogin,
+  DigitLoginRejectedError,
   DigitUnavailableError,
   passwordLogin,
 } from "./digit-user-client.js";
@@ -101,7 +102,11 @@ export class EgovOtpCitizenTokenMinter implements CitizenTokenMinter {
       });
     } catch (error) {
       // A rejected OTP grant is a platform integration failure, not a
-      // citizen error: surface it as unavailability.
+      // citizen error: surface it as unavailability. A locked or inactive
+      // account is the citizen's own state and keeps its typed reason.
+      if (error instanceof DigitLoginRejectedError && (error.reason === "locked" || error.reason === "inactive")) {
+        throw error;
+      }
       throw error instanceof DigitUnavailableError && error.status === 503
         ? error
         : new DigitUnavailableError("DIGIT citizen login failed");

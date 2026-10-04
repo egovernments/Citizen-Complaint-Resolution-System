@@ -21,6 +21,8 @@ interface Account {
   /** Fields egov-user clears when an update omits them. */
   pan?: string | null;
   gender?: string | null;
+  /** egov-user locks an account after repeated failed logins. */
+  accountLocked?: boolean;
 }
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -148,9 +150,14 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     const credentialValid = account?.type === "CITIZEN"
       ? Boolean(citizenOtps?.delete(String(req.body.password)))
       : account?.passwordHash === hash(String(req.body.password));
-    if (!account || !account.active || !credentialValid) {
-      return res.status(400).json({ error: "invalid_request", error_description: "Invalid login credentials" });
-    }
+    // Same order and messages as egov-user's CustomAuthenticationProvider:
+    // inactive and locked are reported before the credential is checked.
+    const refuse = (description: string) =>
+      res.status(400).json({ error: "invalid_request", error_description: description });
+    if (!account) return refuse("Invalid login credentials");
+    if (!account.active) return refuse("Please activate your account");
+    if (account.accountLocked) return refuse("Account locked");
+    if (!credentialValid) return refuse("Invalid login credentials");
     if (account.type === "CITIZEN") stats.citizenOtpLogins += 1;
     if (account.roles.some((role) => role.code === "ACCOUNT_ADMIN")) stats.adminLogins += 1;
     else stats.userLogins += 1;

@@ -112,11 +112,11 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/readyz` | none | changing | 15 |
 | GET | `/identity/v1/auth-methods` | none | changing | 1, 2 |
 | GET | `/identity/v1/authorize` | none (session for `action`) | changing | 1, 4 |
-| GET | `/identity/v1/callback` | login-attempt | changing | 4, 6, 15 |
-| GET | `/identity/v1/auth-results/:id` | none | changing | 6 |
-| POST | `/identity/v1/authentication/magic-link-requests` | none | changing | 6 |
-| POST | `/identity/v1/password/setup-requests` | none (optional session) | changing | 5, 6 |
-| GET | `/identity/v1/password/setup-complete/:state` | login-attempt | changing | 5 |
+| GET | `/identity/v1/callback` | login-attempt | changing | 4, 15 |
+| GET | `/identity/v1/auth-results/:id` | none | live | — |
+| POST | `/identity/v1/authentication/magic-link-requests` | none | live | — |
+| POST | `/identity/v1/password/setup-requests` | none (optional session) | live | — |
+| GET | `/identity/v1/password/setup-complete/:state` | login-attempt | live | — |
 | GET | `/identity/v1/tenant-contexts/:urlSlug` | none | changing | 11, 15 |
 | GET | `/identity/v1/tenant-contexts/:urlSlug/branding` | none | deleted-later | 14 |
 | POST | `/identity/v1/citizen/otp/_send` | none (session for step-up and change) | changing | 3, 13 |
@@ -124,8 +124,8 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/identity/v1/session` | session | changing | 4, 9, 10, 15 |
 | POST | `/identity/v1/logout` | session | changing | 4, 10 |
 | GET | `/identity/v1/tenants` | session | changing | 8, 15 |
-| POST | `/identity/v1/contexts/_select` | session | changing | 6, 7, 8, 10, 12 |
-| POST | `/identity/v1/contexts/citizen/_select` | session | changing | 6, 10, 12, 13 |
+| POST | `/identity/v1/contexts/_select` | session | changing | 7, 8, 10, 12 |
+| POST | `/identity/v1/contexts/citizen/_select` | session | changing | 10, 12, 13 |
 | POST | `/identity/v1/organization-members/_invite` | session | deleted-later | 14 |
 | POST | `/identity/v1/workspace-members/_link` | session | planned | 8, 9 |
 | GET | `/identity/v1/workspace-members` | session | planned | 9 |
@@ -241,7 +241,7 @@ One-time read (GETDEL).
 
 #### 3.2.5 `POST /identity/v1/authentication/magic-link-requests`
 
-Unchanged. Body `{email, firstName, lastName, returnTo?}`. Always `202 {message}`; existing, new, rate-limited and failed requests are indistinguishable. Errors: `INVALID_REQUEST` 400, `UNTRUSTED_ORIGIN` 403, `SIGNUP_UNAVAILABLE` 503.
+Unchanged. Body `{email, firstName, lastName, returnTo?}`. Always `202 {message}`; existing, new, rate-limited and failed requests are indistinguishable. Errors: `INVALID_REQUEST`, `UNSUPPORTED_RETURN_TO` (400); `UNTRUSTED_ORIGIN` 403; `SIGNIN_METHODS_UNAVAILABLE` (the method catalogue can't be read), `SIGNUP_UNAVAILABLE` (magic link not enabled) (503).
 
 #### 3.2.6 `POST /identity/v1/password/setup-requests` (item 5)
 
@@ -787,7 +787,7 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | `{p}:identity:revgen:{sub}` | integer | none. A few bytes per person who ever had logout-all | S |
 | `{p}:identity:context:{sid}` | the selected context, + `digitUuid` | the session's remaining TTL; `XX`-guarded | S |
 | `{p}:identity:auth-result:{id}` | result JSON | 300 s | S |
-| `{p}:identity:password-setup:{id}` | setup attempt JSON, + `surface` | 2700 s | S |
+| `{p}:identity:password-setup:{id}` | setup attempt JSON (`returnTo` already holds the surface's path) | 2700 s | S |
 | `{p}:identity:magic-link-signup-limit:{ip\|email}:{ref}` | counter | 1800 s | S |
 | `{p}:identity:password-setup-limit:{ip\|account}:{ref}` | counter | 900 s | S |
 
