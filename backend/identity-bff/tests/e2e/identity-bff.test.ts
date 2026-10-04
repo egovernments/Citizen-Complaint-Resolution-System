@@ -2515,7 +2515,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const created = await (await fetch(
         `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${user.id}`,
       )).json();
-      expect(created.username).toBe(`${username}-1`);
+      expect(created.username).toMatch(/^phone-[0-9a-f-]{36}$/);
       // The same number signs in to the same user again.
       const again = await (await send("799000523")).json();
       const second = cookieFrom(await verify(again.challengeId, lastCode()), "digit_identity_session_citizen")!;

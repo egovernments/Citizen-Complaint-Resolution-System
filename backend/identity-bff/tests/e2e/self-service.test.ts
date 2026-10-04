@@ -106,3 +106,23 @@ describe("account self-service", () => {
     expect(await responses.find(response => response.status === 409)!.json()).toMatchObject({ code: "LAST_SIGNIN_METHOD" });
   });
 });
+
+describe("scoped logout", () => {
+  it.each(["current", "others", "all"])("ends only the %s sessions across surfaces", async scope => {
+    const subject = `logout-${scope}`;
+    const first = await session(subject);
+    const second = await createIdentitySession(tokens, { sub: subject, email: "" }, config.keycloakEmployeeClientId, { surface: "employee", boundTenant: { tenantId: "ke", rootTenantId: "ke", urlSlug: "county", name: "County" } });
+    const third = await createPhoneOtpSession({ subject, name: "Citizen", phoneNumber: "+254711222333", boundTenant: { tenantId: "ke", rootTenantId: "ke", urlSlug: "county", name: "County" } });
+    const response = await fetch(`${base}/identity/v1/logout`, { method: "POST", headers: { Cookie: cookie(first.sessionId), "Content-Type": "application/json" }, body: JSON.stringify({ scope }) });
+    expect(response.status).toBe(204);
+    expect(response.headers.has("set-cookie")).toBe(scope !== "others");
+    expect(Boolean(await getIdentitySession(first.sessionId))).toBe(scope === "others");
+    for (const other of [second, third]) expect(Boolean(await getIdentitySession(other.sessionId))).toBe(scope === "current");
+  });
+  it("rejects invalid scopes without ending the session", async () => {
+    const { sessionId } = await session("invalid-logout");
+    const response = await fetch(`${base}/identity/v1/logout?scope=everyone`, { method: "POST", headers: { Cookie: cookie(sessionId) } });
+    expect(response.status).toBe(400);
+    expect(await getIdentitySession(sessionId)).not.toBeNull();
+  });
+});

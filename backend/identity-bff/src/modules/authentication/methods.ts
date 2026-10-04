@@ -154,3 +154,8 @@ export async function enabledIdentityMethods(
       : [];
   });
 }
+
+/** Fresh capability probe: readiness must not be satisfied by an old catalog. */
+export async function checkIdentityMethodCatalog(surface: IdentitySurface): Promise<void> {
+  await loadIdentityMethodCatalog(surface);
+}

@@ -103,6 +103,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (!tenant) {
         return response.status(404).json({ error: "Tenant route is not available" });
       }
+      response.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       return response.json({ tenant });
     } catch (error) {
       return digitFailure(error, response, "Tenant routes are temporarily unavailable");
@@ -265,7 +266,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         phoneTrusted,
         subject: claims.sub,
         tenant: boundTenant,
-        name: claims.name?.trim() || "Citizen",
+        name: claims.name?.trim() || phone.mobileNumber,
         ...phone,
       });
       const login = await managedUserLogin(

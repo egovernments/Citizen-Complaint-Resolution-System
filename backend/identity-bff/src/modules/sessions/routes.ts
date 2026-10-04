@@ -6,14 +6,10 @@ import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import { logoutFromKeycloak } from "../authentication/oidc.js";
 import { DEFAULT_SURFACE, parseSurface, surfaceContextKind } from "../authentication/surfaces.js";
-import {
-  revokeCitizenLogin,
-  revokeManagedUserLogins,
-} from "../managed-accounts/managed-account-service.js";
+import { logoutSessions } from "../revocation/index.js";
 import { currentSession } from "./current-session.js";
 import {
   clearedSessionCookie,
-  deleteIdentitySession,
   getIdentitySession,
   getSelectedIdentityContext,
   identitySessionSurface,
@@ -83,29 +79,22 @@ export function registerSessionRoutes(app: express.Application): void {
     }
     const surface = parseSurface(request.body?.surface ?? request.query.surface);
     if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
+    const scope = request.body?.scope ?? request.query.scope ?? "current";
+    if (scope !== "current" && scope !== "others" && scope !== "all") return response.status(400).json({ code: "INVALID_REQUEST", error: "Unsupported logout scope" });
     const sessionId = sessionIdFromCookie(request.headers.cookie, surface);
     if (sessionId) {
-      const stored = await getIdentitySession(sessionId);
-      // Another surface's session id in this cookie is left untouched.
-      const session = stored && identitySessionSurface(stored) === surface ? stored : null;
-      if (!stored || session) await deleteIdentitySession(sessionId);
-      if (session) {
-        const revocation = surfaceContextKind(surface) === "citizen" && session.boundTenant
-          ? revokeCitizenLogin(config.keycloakIssuer, session.claims.sub,
-            session.boundTenant.tenantId, sessionId)
-          : revokeManagedUserLogins(config.keycloakIssuer, session.claims.sub, sessionId);
-        await revocation.catch((error: Error) => {
-          console.warn("DIGIT token revocation failed:", error.message);
-        });
-        await logoutFromKeycloak(
-          session.refreshToken,
-          session.oidcClientId || config.keycloakBffClientId,
-        ).catch((error: Error) => {
-          console.warn("Keycloak logout failed:", error.message);
-        });
+      const session = await getIdentitySession(sessionId);
+      if (session && identitySessionSurface(session) === surface) {
+        // Retain logout support for sessions created before Keycloak sid was recorded.
+        const legacy = (await Promise.all((await listPersonSessions(session.claims.sub))
+          .filter(item => scope === "all" || (scope === "current" ? item.sessionId === sessionId : item.sessionId !== sessionId))
+          .map(item => getIdentitySession(item.sessionId)))).filter(item => item && !item.kcSessionId);
+        await logoutSessions(session.claims.sub, scope, sessionId);
+        for (const item of legacy) await logoutFromKeycloak(item!.refreshToken, item!.oidcClientId || config.keycloakBffClientId)
+          .catch(error => console.warn("Keycloak logout failed:", (error as Error).message));
       }
     }
-    response.setHeader("Set-Cookie", clearedSessionCookie(surface));
+    if (scope !== "others") response.setHeader("Set-Cookie", clearedSessionCookie(surface));
     return response.status(204).end();
   }));
 }

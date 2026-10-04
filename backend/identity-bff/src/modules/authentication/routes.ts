@@ -161,7 +161,7 @@ async function redirectWithResult(
 export function registerAuthenticationRoutes(app: express.Application): void {
   app.get("/identity/v1/auth-methods", asyncRoute(async (request, response) => {
     const intent = request.query.intent === undefined
-      ? undefined
+      ? "signin"
       : requestedIntent(request.query.intent);
     if (request.query.intent !== undefined && !intent) {
       return response.status(400).json({ error: "Unsupported authentication intent", code: "UNSUPPORTED_INTENT" });

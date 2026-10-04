@@ -1,4 +1,9 @@
 import type express from "express";
+import { currentSession } from "../sessions/current-session.js";
+import { withPersonLease } from "../accounts/person-lease.js";
+import { IdentityUnavailableError } from "../authentication/oidc.js";
+import { assertPhoneAvailable, completePhoneProof, phoneSignIn, PhoneProofError, type PhoneEffects } from "./phone-service.js";
+import { withPhoneLock } from "./phone-lock.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import {
@@ -11,13 +16,12 @@ import { mobileValidationForRoute } from "../branding/tenant-branding.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import {
-  ensurePhoneIdentityUser,
   IdentityAdminError,
 } from "../organizations/organization-service.js";
-import { createPhoneOtpSession, sessionCookie } from "../sessions/session-store.js";
+import { requireCurrentSession, sessionCookie } from "../sessions/session-store.js";
 import { config } from "../../infrastructure/config.js";
 import { audit } from "./audit.js";
-import { fixedOtpCode, OtpDeliveryError, otpSender } from "./otp-sender.js";
+import { fixedOtpCode, OtpDeliveryError, otpSender, phoneOtpAvailable } from "./otp-sender.js";
 import {
   claimCode,
   createChallenge,
@@ -28,6 +32,7 @@ import {
   releaseChallenge,
   replacePreviousChallenge,
   reserveSend,
+  type OtpPurpose,
 } from "./otp-store.js";
 
 const LOCALE = /^[a-z]{2,3}_[A-Z]{2}$/;
@@ -76,7 +81,24 @@ async function phoneOtpEnabled(): Promise<boolean> {
   return methods.some((method) => method.type === "phone_otp");
 }
 
-export function registerCitizenOtpRoutes(app: express.Application): void {
+async function requestContext(request: express.Request, response: express.Response) {
+  const purpose = request.body?.purpose ?? "signin";
+  if (!["signin", "stepup", "change_phone"].includes(purpose)) {
+    response.status(400).json({ code: "INVALID_REQUEST", error: "Unsupported OTP purpose" }); return null;
+  }
+  const current = purpose === "signin" ? null : await currentSession(request.headers.cookie, "citizen");
+  if (purpose !== "signin" && !current?.session.boundTenant) {
+    response.status(401).json({ code: "SESSION_REQUIRED", error: "A citizen session is required" }); return null;
+  }
+  const route = await routeTenant(current?.session.boundTenant?.urlSlug ?? request.body?.tenantSlug, response);
+  if (!route) return null;
+  if (current && current.session.boundTenant?.tenantId !== route.tenantId) {
+    response.status(404).json({ code: "TENANT_ROUTE_NOT_FOUND", error: "The session tenant route changed" }); return null;
+  }
+  return { purpose: purpose as OtpPurpose, current, route };
+}
+
+export function registerCitizenOtpRoutes(app: express.Application, phoneEffects?: PhoneEffects): void {
   /**
    * Sends a sign-in code to a mobile number valid for the route tenant. The
    * answer does not depend on whether the number has an account.
@@ -85,8 +107,9 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     if (!hasTrustedWriteOrigin(request)) {
       return response.status(403).json({ error: "Untrusted request origin", code: "UNTRUSTED_ORIGIN" });
     }
-    const route = await routeTenant(request.body?.tenantSlug, response);
-    if (!route) return;
+    const context = await requestContext(request, response);
+    if (!context) return;
+    const { route, purpose, current } = context;
     const mobileNumber = request.body?.mobileNumber;
     const locale = request.body?.locale;
     if (typeof mobileNumber !== "string" || !/^\d{4,15}$/.test(mobileNumber) ||
@@ -97,7 +120,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     const ipRef = privateRef("ip", request.ip || "unknown");
 
     try {
-      if (!await phoneOtpEnabled()) {
+      if (!(purpose === "signin" ? await phoneOtpEnabled() : phoneOtpAvailable())) {
         return response.status(400).json({ error: "Phone sign-in is not enabled", code: "PHONE_OTP_DISABLED" });
       }
       const rule = await mobileValidationForRoute(route);
@@ -112,6 +135,13 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
           code: "INVALID_MOBILE_NUMBER",
         });
       }
+      if (current) await withPersonLease(current.session.claims.sub, async lease => {
+        await requireCurrentSession(lease, current.sessionId);
+        await withPhoneLock(phoneNumber, async lock => {
+          await assertPhoneAvailable(phoneNumber, current.session.claims.sub);
+          await lock.assertHeld();
+        });
+      });
       const phoneRef = privateRef("phone", phoneNumber);
       const base = { event: "OTP_SEND" as const, tenantId: tenant.tenantId, urlSlug: tenant.urlSlug, phoneRef, ipRef };
 
@@ -128,7 +158,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         });
       }
 
-      const { challenge, code } = await createChallenge(phoneNumber, tenant).catch(async (error) => {
+      const { challenge, code } = await createChallenge(phoneNumber, tenant, { purpose, ...(current && { subject: current.session.claims.sub, sessionRef: privateRef("session", current.sessionId) }) }).catch(async (error) => {
         await refundSend(allowance.reservation);
         throw error;
       });
@@ -138,6 +168,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
           challengeId: challenge.id,
           tenantId: tenant.tenantId,
           phoneNumber,
+          purpose,
           code,
           expiresInSeconds: config.identityCitizenOtpTtlSeconds,
           ...(typeof locale === "string" && { locale }),
@@ -169,6 +200,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         resendAfter: config.identityCitizenOtpResendSeconds,
       });
     } catch (error) {
+      if (error instanceof PhoneProofError) return response.status(error.status).json({ code: error.code, error: error.message });
       if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
         console.warn("Citizen OTP send failed:", error.message);
         return response.status(503).json({ error: "Citizen sign-in is temporarily unavailable", code: "IDENTITY_UNAVAILABLE" });
@@ -186,8 +218,9 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     if (!hasTrustedWriteOrigin(request)) {
       return response.status(403).json({ error: "Untrusted request origin", code: "UNTRUSTED_ORIGIN" });
     }
-    const route = await routeTenant(request.body?.tenantSlug, response);
-    if (!route) return;
+    const context = await requestContext(request, response);
+    if (!context) return;
+    const { route, purpose, current } = context;
     const { challengeId, code } = request.body ?? {};
     if (typeof challengeId !== "string" || !CHALLENGE_ID.test(challengeId) ||
         typeof code !== "string" || !CODE.test(code)) {
@@ -197,10 +230,11 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     // Switching phone_otp off also stops codes already sent (e.g. after codes
     // leaked through the log sender), not only new ones.
     try {
-      if (!await phoneOtpEnabled()) {
+      if (!(purpose === "signin" ? await phoneOtpEnabled() : phoneOtpAvailable())) {
         return response.status(400).json({ error: "Phone sign-in is not enabled", code: "PHONE_OTP_DISABLED" });
       }
     } catch (error) {
+      if (error instanceof PhoneProofError) return response.status(error.status).json({ code: error.code, error: error.message });
       if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
         console.warn("Citizen OTP verify failed:", error.message);
         return response.status(503).json({ error: "Citizen sign-in is temporarily unavailable", code: "IDENTITY_UNAVAILABLE" });
@@ -214,13 +248,18 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
 
     const challenge = await readChallenge(challengeId);
     // A challenge is usable only from the tenant route it was sent for.
-    if (!challenge || challenge.tenant.urlSlug !== route.urlSlug) {
+    if (!challenge || challenge.tenant.urlSlug !== route.urlSlug || challenge.tenant.tenantId !== route.tenantId ||
+        challenge.purpose !== purpose || (current && (challenge.subject !== current.session.claims.sub || challenge.sessionRef !== privateRef("session", current.sessionId)))) {
       await audit({ event: "OTP_VERIFY", outcome: "REFUSED", reason: "OTP_EXPIRED", urlSlug: route.urlSlug, ipRef, challengeId });
       return expired();
     }
     const tenant = challenge.tenant;
     const phoneRef = privateRef("phone", challenge.phoneNumber);
     const base = { tenantId: tenant.tenantId, urlSlug: tenant.urlSlug, phoneRef, ipRef, challengeId };
+
+    const rule = await mobileValidationForRoute(route);
+    const national = rule && splitE164(challenge.phoneNumber, rule);
+    if (!national) return expired();
 
     const check = await claimCode(challenge, code, fixedOtpCode());
     if (check.status === "MISSING") {
@@ -245,17 +284,20 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
     let user;
     let session;
     try {
-      user = await ensurePhoneIdentityUser(challenge.phoneNumber);
-      session = await createPhoneOtpSession({
-        subject: user.id,
-        name: user.name,
-        phoneNumber: challenge.phoneNumber,
-        boundTenant: tenant,
-      });
+      if (current) {
+        if (!phoneEffects) throw new IdentityUnavailableError("Phone identifier propagation is unavailable");
+        await completePhoneProof(challenge, current.sessionId, phoneEffects);
+        await deleteChallenge(challenge.id);
+        return response.json({ phoneNumber: challenge.phoneNumber, phoneNumberVerified: true });
+      }
+      const signedIn = await phoneSignIn(challenge.phoneNumber, tenant, national.mobileNumber);
+      user = signedIn.user;
+      session = signedIn.session;
     } catch (error) {
-      const refused = error instanceof IdentityAdminError && (error.status === 403 || error.status === 409);
+      const refused = error instanceof PhoneProofError || (error instanceof IdentityAdminError && (error.status === 403 || error.status === 409));
       if (refused) await deleteChallenge(challenge.id);
       else await releaseChallenge(challenge.id);
+      if (error instanceof PhoneProofError) return response.status(error.status).json({ code: error.code, error: error.message });
       if (!(error instanceof IdentityAdminError)) throw error;
       const disabled = error.status === 403;
       console.warn("Citizen OTP identity resolution failed:", error.message);
