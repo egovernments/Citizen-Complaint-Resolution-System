@@ -3,7 +3,7 @@ import { writeDigitIdentifiers } from "../accounts/digit-writer.js";
 import { readBindings } from "../bindings/store.js";
 import { request } from "../organizations/organization-service.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
-import { mobileValidationForRoute } from "../branding/tenant-branding.js";
+import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import type { UserRepresentation } from "./keycloak-writer.js";
 import { accountEntries } from "./state.js";
 
