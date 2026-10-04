@@ -11,9 +11,11 @@ import {
   citizenTokenMinter,
   setCitizenTokenMinter,
 } from "../../src/modules/managed-accounts/citizen-token-minter.js";
+import { createHash } from "node:crypto";
 import {
   createIdentitySession,
   saveSelectedIdentityContext,
+  touchIdentitySession,
 } from "../../src/modules/sessions/session-store.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
@@ -2323,6 +2325,132 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const stored = JSON.parse((await getRedis().get(key))!);
       await getRedis().set(key, JSON.stringify({ ...stored, identityCheckedAt: 0 }), "KEEPTTL");
       expect((await session()).status).toBe(401);
+    });
+
+    const ageIdentityCheck = async (cookie: string) => {
+      const key = `${config.cachePrefix}:identity:session:${cookie.split("=")[1]}`;
+      const stored = JSON.parse((await getRedis().get(key))!);
+      await getRedis().set(key, JSON.stringify({ ...stored, identityCheckedAt: 0 }), "KEEPTTL");
+      return key;
+    };
+
+    it("ends a phone OTP session once its user no longer holds the number as verified", async () => {
+      const { challengeId } = await (await send("799000520")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const session = () => fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+      const { user } = await (await session()).json();
+      await kcUpdate(`/users/${user.id}`, {
+        attributes: { phoneNumber: ["+254799000520"], phoneNumberVerified: ["false"] },
+      });
+      await ageIdentityCheck(cookie);
+      expect((await session()).status).toBe(401);
+    });
+
+    it("keeps a phone OTP session through a failed identity check, and checks again next time", async () => {
+      const { challengeId } = await (await send("799000521")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const session = () => fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+      const { user } = await (await session()).json();
+      const key = await ageIdentityCheck(cookie);
+      await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "GET", path: `/users/${user.id}`, status: 503, count: 1 }),
+      });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        expect((await session()).status).toBe(200);
+      } finally {
+        warn.mockRestore();
+      }
+      // The failed check does not count as a pass.
+      expect(JSON.parse((await getRedis().get(key))!).identityCheckedAt).toBe(0);
+      await kcUpdate(`/users/${user.id}`, { enabled: false });
+      expect((await session()).status).toBe(401);
+    });
+
+    it("never recreates a session that was deleted while it was being rewritten", async () => {
+      const { challengeId } = await (await send("799000522")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const sessionId = cookie.split("=")[1];
+      const key = `${config.cachePrefix}:identity:session:${sessionId}`;
+      const stored = JSON.parse((await getRedis().get(key))!);
+      await getRedis().del(key);
+      await touchIdentitySession(sessionId, stored);
+      expect(await getRedis().exists(key)).toBe(0);
+    });
+
+    it("signs in a new owner of a number whose phone username an earlier owner still holds", async () => {
+      const phone = "+254799000523";
+      const username = `phone-${createHash("sha256").update(phone).digest("hex").slice(0, 24)}`;
+      // The earlier owner moved to another number but keeps the username.
+      await kcAdmin("/users", {
+        id: "earlier-owner-523", username, enabled: true,
+        attributes: { phoneNumber: ["+254799000599"], phoneNumberVerified: ["true"] },
+      });
+      const { challengeId } = await (await send("799000523")).json();
+      const ok = await verify(challengeId, lastCode());
+      expect(ok.status).toBe(200);
+      const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+      const { user } = await (await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).json();
+      expect(user.id).not.toBe("earlier-owner-523");
+      const created = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${user.id}`,
+      )).json();
+      expect(created.username).toBe(`${username}-1`);
+      // The same number signs in to the same user again.
+      const again = await (await send("799000523")).json();
+      const second = cookieFrom(await verify(again.challengeId, lastCode()), "digit_identity_session_citizen")!;
+      expect((await (await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: second } })).json()).user.id)
+        .toBe(user.id);
+    });
+
+    it("does not charge the IP budget for a resend refused by the cooldown", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60, identityCitizenOtpIpSendLimit: 2 });
+      try {
+        const ip = "203.0.113.77";
+        expect((await send("799000524", ip)).status).toBe(202);
+        for (let press = 0; press < 3; press += 1) {
+          expect((await (await send("799000524", ip)).json()).code).toBe("OTP_RESEND_TOO_SOON");
+        }
+        // Only the one real send counted against this address.
+        expect((await send("799000525", ip)).status).toBe(202);
+      } finally {
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0, identityCitizenOtpIpSendLimit: otpConfig.identityCitizenOtpIpSendLimit,
+        });
+      }
+    });
+
+    it("sends nothing when Redis fails to store the challenge", async () => {
+      const count = sent.length;
+      const redis = getRedis();
+      const chain = {
+        hset() { return chain; },
+        expire() { return chain; },
+        async exec() { return [[new Error("OOM command not allowed"), null], [null, 0]]; },
+      };
+      const spy = vi.spyOn(redis, "multi").mockImplementationOnce(() => chain as any);
+      try {
+        expect((await send("799000526")).status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(sent.length).toBe(count);
+    });
+
+    it("stops already-sent codes when phone_otp is switched off", async () => {
+      const { challengeId } = await (await send("799000527")).json();
+      const code = lastCode();
+      (config as any).identityCitizenOtpSecret = "";
+      resetIdentityMethodCatalog();
+      try {
+        const refused = await verify(challengeId, code);
+        expect([refused.status, (await refused.json()).code]).toEqual([400, "PHONE_OTP_DISABLED"]);
+      } finally {
+        (config as any).identityCitizenOtpSecret = otpConfig.identityCitizenOtpSecret;
+        resetIdentityMethodCatalog();
+      }
+      expect((await verify(challengeId, code)).status).toBe(200);
     });
 
     it("ignores a fixed code that is not six digits", async () => {

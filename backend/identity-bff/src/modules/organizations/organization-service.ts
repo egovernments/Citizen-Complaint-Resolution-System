@@ -1025,12 +1025,20 @@ async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserRepresen
     .filter((user) => verifiedPhoneOwner(user, phoneNumber));
 }
 
-/** False when the Keycloak user is disabled or no longer exists. */
-export async function identityUserEnabled(userId: string): Promise<boolean> {
+/**
+ * False when the Keycloak user is disabled, no longer exists, or no longer
+ * holds `phoneNumber` as its verified phone (removed, unverified or moved to
+ * another person).
+ */
+export async function phoneIdentityStillValid(userId: string, phoneNumber: string): Promise<boolean> {
   const response = await request(`/users/${encodeURIComponent(userId)}`, {}, [200, 404]);
   if (response.status === 404) return false;
-  return (await response.json() as UserRepresentation).enabled !== false;
+  const user = await response.json() as UserRepresentation;
+  return user.enabled !== false && verifiedPhoneOwner(user, phoneNumber);
 }
+
+/** How many usernames past the first a recycled number may move on to. */
+const PHONE_USERNAME_ALTERNATES = 4;
 
 /**
  * The Keycloak user who owns a phone number the caller has just proved with a
@@ -1046,8 +1054,29 @@ export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<Phon
   if (owners[0]) return phoneIdentityUser(owners[0], false);
 
   // Deterministic, so a concurrent verify for the same number collides on
-  // the username instead of creating a second identity.
-  const username = `phone-${createHash("sha256").update(phoneNumber).digest("hex").slice(0, 24)}`;
+  // the username instead of creating a second identity. A username can be
+  // held by an earlier owner who no longer verifiably owns the number (a
+  // changed or recycled number); the next one in the sequence is used then,
+  // still deterministic, so concurrent verifies keep colliding.
+  const base = `phone-${createHash("sha256").update(phoneNumber).digest("hex").slice(0, 24)}`;
+  for (let alternate = 0; alternate <= PHONE_USERNAME_ALTERNATES; alternate += 1) {
+    const user = await createPhoneIdentityUser(
+      alternate === 0 ? base : `${base}-${alternate}`, phoneNumber,
+    );
+    if (user) return user;
+  }
+  throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+}
+
+/**
+ * Creates the phone user under `username`, or returns whoever won a race to
+ * create it for the same number. Null when the username belongs to someone
+ * who no longer owns the number.
+ */
+async function createPhoneIdentityUser(
+  username: string,
+  phoneNumber: string,
+): Promise<PhoneIdentityUser | null> {
   const response = await request("/users", {
     method: "POST",
     body: JSON.stringify({
@@ -1079,10 +1108,10 @@ export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<Phon
   }
 
   const query = new URLSearchParams({ username, exact: "true", briefRepresentation: "false" });
-  const raced = (await (await request(`/users?${query}`)).json() as UserRepresentation[])
-    .find((user) => user.username === username && verifiedPhoneOwner(user, phoneNumber));
-  if (!raced) throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
-  return phoneIdentityUser(raced, false);
+  const holder = (await (await request(`/users?${query}`)).json() as UserRepresentation[])
+    .find((user) => user.username === username);
+  if (!holder) throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+  return verifiedPhoneOwner(holder, phoneNumber) ? phoneIdentityUser(holder, false) : null;
 }
 
 export interface PasswordSetupInspection {

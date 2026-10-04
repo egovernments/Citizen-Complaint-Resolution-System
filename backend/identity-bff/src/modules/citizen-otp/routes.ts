@@ -1,9 +1,12 @@
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
-import { resolvePublicTenantRoute, type PublicTenantRoute } from "../access-context/tenant-route.js";
+import {
+  boundTenantOf,
+  resolvePublicTenantRoute,
+  type PublicTenantRoute,
+} from "../access-context/tenant-route.js";
 import { enabledIdentityMethods } from "../authentication/methods.js";
-import type { BoundTenant } from "../authentication/surfaces.js";
 import { mobileValidationForRoute } from "../branding/tenant-branding.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
@@ -17,7 +20,6 @@ import { audit } from "./audit.js";
 import { fixedOtpCode, OtpDeliveryError, otpSender } from "./otp-sender.js";
 import {
   claimCode,
-  consumeChallenge,
   createChallenge,
   deleteChallenge,
   privateRef,
@@ -68,10 +70,6 @@ async function routeTenant(
   }
 }
 
-function boundTenant(route: PublicTenantRoute): BoundTenant {
-  return { urlSlug: route.urlSlug, tenantId: route.tenantId, rootTenantId: route.rootTenantId, name: route.name };
-}
-
 async function phoneOtpEnabled(): Promise<boolean> {
   const methods = await enabledIdentityMethods("signin", "citizen");
   return methods.some((method) => method.type === "phone_otp");
@@ -94,7 +92,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         (locale !== undefined && (typeof locale !== "string" || !LOCALE.test(locale)))) {
       return response.status(400).json({ error: "A valid mobile number is required", code: "INVALID_REQUEST" });
     }
-    const tenant = boundTenant(route);
+    const tenant = boundTenantOf(route);
     const ipRef = privateRef("ip", request.ip || "unknown");
 
     try {
@@ -129,7 +127,10 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         });
       }
 
-      const { challenge, code } = await createChallenge(phoneNumber, tenant);
+      const { challenge, code } = await createChallenge(phoneNumber, tenant).catch(async (error) => {
+        await refundSend(allowance.reservation);
+        throw error;
+      });
       let reason: string | undefined;
       try {
         await otpSender().send({
@@ -188,6 +189,19 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
       return response.status(400).json({ error: "A challenge and a six-digit code are required", code: "INVALID_REQUEST" });
     }
     const ipRef = privateRef("ip", request.ip || "unknown");
+    // Switching phone_otp off also stops codes already sent (e.g. after codes
+    // leaked through the log sender), not only new ones.
+    try {
+      if (!await phoneOtpEnabled()) {
+        return response.status(400).json({ error: "Phone sign-in is not enabled", code: "PHONE_OTP_DISABLED" });
+      }
+    } catch (error) {
+      if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
+        console.warn("Citizen OTP verify failed:", error.message);
+        return response.status(503).json({ error: "Citizen sign-in is temporarily unavailable", code: "IDENTITY_UNAVAILABLE" });
+      }
+      throw error;
+    }
     const expired = () => response.status(400).json({
       error: "This code has expired. Request a new one.",
       code: "OTP_EXPIRED",
@@ -235,7 +249,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
       });
     } catch (error) {
       const refused = error instanceof IdentityAdminError && (error.status === 403 || error.status === 409);
-      if (refused) await consumeChallenge(challenge.id);
+      if (refused) await deleteChallenge(challenge.id);
       else await releaseChallenge(challenge.id);
       if (!(error instanceof IdentityAdminError)) throw error;
       const disabled = error.status === 403;
@@ -252,7 +266,7 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         code: error.status === 409 ? "IDENTITY_CONFLICT" : "IDENTITY_UNAVAILABLE",
       });
     }
-    await consumeChallenge(challenge.id);
+    await deleteChallenge(challenge.id);
     const { sessionId, maxAge } = session;
     await audit({
       ...base, event: "SESSION_CREATE", outcome: "SUCCESS", subject: user.id,

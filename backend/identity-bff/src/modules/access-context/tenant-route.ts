@@ -2,6 +2,7 @@ import {
   liveTenantMapping,
   readTenantMappingForUrlSlug,
 } from "../organizations/organization-service.js";
+import type { BoundTenant } from "../authentication/surfaces.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 
 const URL_SLUG = /^[a-z0-9-]{2,63}$/;
@@ -58,4 +59,9 @@ export async function isLiveTenantRoute(
   const mapping = await readTenantMappingForUrlSlug(route.urlSlug);
   if (!mapping || mapping.tenantId !== route.tenantId) return false;
   return (await liveTenantMapping(mapping)) !== null;
+}
+
+/** The tenant a sign-in is bound to, from its resolved route. */
+export function boundTenantOf(route: PublicTenantRoute): BoundTenant {
+  return { urlSlug: route.urlSlug, tenantId: route.tenantId, rootTenantId: route.rootTenantId, name: route.name };
 }
