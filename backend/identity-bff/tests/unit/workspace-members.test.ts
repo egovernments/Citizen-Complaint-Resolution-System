@@ -51,6 +51,7 @@ vi.mock("../../src/modules/workspace-members/authority.js", () => ({
 }));
 vi.mock("../../src/modules/bindings/invitations.js", () => ({ invitationExpiryHours: vi.fn(async () => 336) }));
 vi.mock("../../src/modules/accounts/credential-service.js", () => ({
+  StaffLoginError: class StaffLoginError extends Error {},
   staffCredentialMode: () => "derived",
   activateStaffCredential: vi.fn(async (account: { tenantId: string; uuid: string }, lease: { subject: string }) => {
     f.activations++;
@@ -64,6 +65,9 @@ vi.mock("../../src/modules/sync/mirror.js", () => ({ mirrorPerson: vi.fn(async (
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(async (subject: string) => { f.revoked.push(subject); }) }));
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, linkWorkspaceMember, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
+import { requireWorkspace } from "../../src/modules/workspace-members/authority.js";
+import { BindingError } from "../../src/modules/bindings/types.js";
+import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
 const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
 beforeAll(() => { Object.assign(config, { cachePrefix: `members-test-${process.pid}`, identityCredentialKeyCurrent: 1 }); initCache(); });
@@ -123,5 +127,35 @@ describe("resumable workspace membership", () => {
   it("maps a concurrent Keycloak email conflict to IDENTITY_EMAIL_CHANGED", async () => {
     await linkWorkspaceMember(input); f.conflict = true;
     await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
+  });
+  it("allows returning to the target's original username email", async () => {
+    await linkWorkspaceMember(input);
+    await updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test");
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, input.email)).resolves.toEqual({ status: "verification_sent" });
+    expect(f.users.get("new-1")?.email).toBe(input.email);
+  });
+  it("keeps explicit reinvites pending after an interrupted new-user flow was removed", async () => {
+    f.crash = "mirror";
+    await expect(linkWorkspaceMember(input)).rejects.toThrow("crash:mirror");
+    await removeWorkspaceMember("admin", "pg", uuid);
+    const reinvite = await linkWorkspaceMember({ ...input, reinvite: true });
+    expect(reinvite.binding.state).toBe("pending");
+    expect((await linkWorkspaceMember({ ...input, reinvite: true })).binding.state).toBe("pending");
+    expect(f.members.has("pg:new-1")).toBe(false);
+  });
+  it("keeps a workspace dependency failure retryable during acceptance", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, attributes: {} });
+    const invite = await linkWorkspaceMember(input);
+    vi.mocked(requireWorkspace).mockRejectedValueOnce(new BindingError("IDENTITY_UNAVAILABLE", "Temporary read failure"));
+    await expect(acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "IDENTITY_UNAVAILABLE" });
+    expect(bindingDoc(f.users.get("existing")!).bindings[0].state).toBe("pending");
+    await expect(acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).resolves.toMatchObject({ binding: { state: "active" } });
+  });
+  it.each(["locked", "masked"])("maps %s activation failure to the workspace dependency contract", async (kind) => {
+    vi.mocked(activateStaffCredential).mockRejectedValueOnce(kind === "locked" ? new StaffLoginError("ACCOUNT_LOCKED")
+      : Object.assign(new Error("masked"), { code: "DIGIT_PII_MASKED" }));
+    await expect(linkWorkspaceMember(input)).rejects.toMatchObject({ code: "DIGIT_UNAVAILABLE" });
+    expect(f.users.get("new-1")?.attributes?.["digit.linkPending"]).toBeDefined();
+    await expect(linkWorkspaceMember(input)).resolves.toMatchObject({ binding: { state: "active" } });
   });
 });
