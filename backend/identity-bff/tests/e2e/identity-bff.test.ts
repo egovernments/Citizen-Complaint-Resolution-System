@@ -16,6 +16,8 @@ import {
 import { createHash } from "node:crypto";
 import {
   createIdentitySession,
+  createPhoneOtpSession,
+  getIdentitySession,
   saveSelectedIdentityContext,
   touchIdentitySession,
 } from "../../src/modules/sessions/session-store.js";
@@ -2264,6 +2266,88 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(logout.status).toBe(204);
       expect((await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).status)
         .toBe(401);
+    });
+
+    it("changes a citizen phone through production propagation, preserves its uuid, and retries a DIGIT outage", async () => {
+      const subject = "phone-change-propagation";
+      const oldPhone = "+254799000610", newPhone = "+254799000611";
+      digit.mdms.set(digit.mdmsKey("ke", "common-masters.MobileNumberValidation"), [{
+        tenantId: "ke", schemaCode: "common-masters.MobileNumberValidation", uniqueIdentifier: "phone-change-rule",
+        isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$", default: true },
+      }]);
+      const account = digit.addAccount({ userName: "phone-change-citizen", name: "Citizen", tenantId: "ke",
+        type: "CITIZEN", active: true, mobileNumber: "799000610", countryCode: "+254", emailId: null,
+        identificationMark: null, roles: [{ code: "CITIZEN", tenantId: "ke" }], password: "Cit1zen@Test" });
+      const accounts = JSON.stringify({ v: 1, entries: [{ kind: "citizen", tenantId: "ke", uuid: account.uuid,
+        boundAt: 1, active: true, roles: account.roles }] });
+      await kcAdmin("/users", { id: subject, username: subject, enabled: true, attributes: {
+        phoneNumber: [oldPhone], phoneNumberVerified: ["true"], "digit.accounts": [accounts],
+      } });
+      const makeSession = () => createPhoneOtpSession({ subject, name: "Citizen", phoneNumber: oldPhone,
+        boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+      const first = await makeSession(), other = await makeSession();
+      const proofPost = (path: string, body: unknown) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { "Content-Type": "application/json", Cookie: `${config.identityCitizenCookieName}=${first.sessionId}` },
+        body: JSON.stringify({ purpose: "change_phone", ...body as object }),
+      });
+      const invalid = await proofPost("_send", { mobileNumber: "12345" });
+      expect([invalid.status, (await invalid.json()).code]).toEqual([400, "INVALID_MOBILE_NUMBER"]);
+      const sentResponse = await proofPost("_send", { mobileNumber: "799000611" });
+      expect(sentResponse.status).toBe(202);
+      const { challengeId } = await sentResponse.json();
+      const code = lastCode();
+      // Fail only the DIGIT write: Keycloak and old-session revocation have already succeeded.
+      const realFetch = globalThis.fetch;
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+        if (String(input).includes("/user/users/_updatenovalidate")) return Promise.resolve(new Response("{}", { status: 503 }));
+        return realFetch(input, init);
+      });
+      try {
+        const failed = await proofPost("_verify", { challengeId, code });
+        expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        expect(await getIdentitySession(other.sessionId)).toBeNull();
+        expect((await getIdentitySession(first.sessionId))?.claims.phone_number).toBe(newPhone);
+        expect(digit.accounts.get(account.uuid)?.mobileNumber).toBe("799000610");
+      } finally { fetchSpy.mockRestore(); }
+      const retried = await proofPost("_verify", { challengeId, code });
+      expect(retried.status).toBe(200);
+      expect(await retried.json()).toEqual({ phoneNumber: newPhone, phoneNumberVerified: true });
+      expect(digit.accounts.get(account.uuid)).toMatchObject({ uuid: account.uuid, mobileNumber: "799000611", name: "Citizen" });
+      const stored = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      expect(stored.attributes["digit.accounts"]).toEqual([accounts]);
+      expect((await proofPost("_verify", { challengeId, code })).status).toBe(400);
+    });
+
+    it("rechecks ownership at verification and cannot take a phone claimed after the code was sent", async () => {
+      const subject = "phone-late-claimant";
+      await kcAdmin("/users", { id: subject, username: subject, enabled: true });
+      const { sessionId } = await createIdentitySession({ accessToken: "test", accessExpiresIn: 600 },
+        { sub: subject, email: "" }, config.keycloakCitizenClientId, { surface: "citizen",
+          boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+      const proofPost = (path: string, body: object) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { "Content-Type": "application/json", Cookie: `${config.identityCitizenCookieName}=${sessionId}` },
+        body: JSON.stringify({ purpose: "stepup", ...body }),
+      });
+      const { challengeId } = await (await proofPost("_send", { mobileNumber: "799000612" })).json();
+      const code = lastCode();
+      await kcAdmin("/users", { id: "phone-late-owner", username: "phone-late-owner", enabled: true,
+        attributes: { phoneNumber: ["+254799000612"], phoneNumberVerified: ["true"] } });
+      const refused = await proofPost("_verify", { challengeId, code });
+      expect([refused.status, (await refused.json()).code]).toEqual([409, "PHONE_IN_USE"]);
+      const blockedSend = await proofPost("_send", { mobileNumber: "799000612" });
+      expect([blockedSend.status, (await blockedSend.json()).code]).toEqual([409, "PHONE_IN_USE"]);
+      expect((await getIdentitySession(sessionId))?.claims.phone_number_verified).not.toBe(true);
+    });
+
+    it("uses the national mobile number as a new unnamed citizen's DIGIT name", async () => {
+      const { challengeId } = await (await send("799000613")).json();
+      const signedIn = await verify(challengeId, lastCode());
+      expect(signedIn.status).toBe(200);
+      const cookie = cookieFrom(signedIn, "digit_identity_session_citizen")!;
+      const selected = await citizenSelect(cookie);
+      expect(selected.status).toBe(200);
+      const account = [...digit.accounts.values()].find(value => value.mobileNumber === "799000613");
+      expect(account).toMatchObject({ name: "799000613", countryCode: "+254", type: "CITIZEN" });
     });
 
     it("creates one Keycloak user for a new number and never takes over an unverified one", async () => {

@@ -94,6 +94,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
   - `SET NX PX 30000`, renewed every 10 s; a caller waits at most 15 s, then gets 503 `IDENTITY_BUSY` with `Retry-After`.
   - Re-entry for the **same** person within one async chain is allowed. Taking a **different** person's lease while holding one throws.
   - The uuid lock and the phone lock are taken only **inside** a person lease.
+  - Anonymous phone bootstrap first makes an advisory ownership lookup. With no owner it takes a prospective random-subject lease, then the normalized phone lock, and checks ownership again. If still unowned, it creates an opaque Keycloak user through the plain Admin API; it does not call actual-person writers, mirrors or revocation under the prospective lease. It releases both locks, then takes the actual owner's person lease and phone lock, checks ownership fresh, and creates the session. If an owner appeared, it releases both locks and retries under that owner instead. Distinct-person leases are never nested (accepted item 13 ruling).
 - Writes made under the person lease are **fenced**: a Lua script checks that the lease token still matches before it writes. A lease lost mid-request answers 503 `IDENTITY_BUSY`, and a token minted under the lost lease is revoked before the error is returned.
 - Key names are in §7.
 

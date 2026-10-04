@@ -5,6 +5,7 @@ import { createPhoneOtpSession, createIdentitySession, getIdentitySession } from
 import { completePhoneProof, phoneSignIn } from "../../src/modules/citizen-otp/phone-service.js";
 import { createChallenge, privateRef, readChallenge } from "../../src/modules/citizen-otp/otp-store.js";
 import { endPhoneSessions } from "../../src/modules/revocation/index.js";
+import { currentPersonLease, personLeaseKey } from "../../src/modules/accounts/person-lease.js";
 const saved = { ...config };
 const prefix = `phone-proof-${process.pid}`;
 const tenant = { urlSlug: "county", tenantId: "ke", rootTenantId: "ke", name: "County" };
@@ -16,8 +17,21 @@ beforeAll(() => { Object.assign(config, { cachePrefix: prefix, keycloakOrganizat
 afterAll(async () => { const keys = await getRedis().keys(`${prefix}:*`); if (keys.length) await getRedis().del(...keys); await closeCache(); Object.assign(config, saved); });
 describe("phone ownership and proof", () => {
   it("concurrent first-time sign-ins create one opaque identity with a national default name", async () => {
-    const results = await Promise.all([phoneSignIn(phone, tenant, "712345678"), phoneSignIn(phone, tenant, "712345678")]);
+    const bootstrapSubjects: string[] = [];
+    const realFetch = globalThis.fetch;
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      if (String(input).endsWith("/users") && init?.method === "POST") {
+        expect(currentPersonLease()).not.toBeNull();
+        bootstrapSubjects.push(currentPersonLease()!.subject);
+      }
+      return realFetch(input, init);
+    });
+    const results = await Promise.all([phoneSignIn(phone, tenant, "712345678"), phoneSignIn(phone, tenant, "712345678")])
+      .finally(() => spy.mockRestore());
     expect(results[0].user.id).toBe(results[1].user.id);
+    expect(bootstrapSubjects).toHaveLength(1);
+    expect(bootstrapSubjects).not.toContain(results[0].user.id);
+    expect(await getRedis().exists(personLeaseKey(bootstrapSubjects[0]))).toBe(0);
     const stored = await readUser(results[0].user.id);
     expect(stored.username).toMatch(/^phone-[0-9a-f-]{36}$/);
     expect((await getIdentitySession(results[0].session.sessionId))?.claims.name).toBe("712345678");
@@ -51,5 +65,23 @@ describe("phone ownership and proof", () => {
     expect(released.user.id).not.toBe(subject);
     await expect(completePhoneProof({ ...challenge, sessionRef: privateRef("session", other.sessionId) }, other.sessionId, effects)).rejects.toMatchObject({ code: "SESSION_REVOKED" });
     expect(effects.propagateIdentifiers).toHaveBeenCalledWith(subject);
+  });
+
+  it("serializes changes from old-phone sessions so the loser cannot overwrite the winner", async () => {
+    const subject = "racing-change-person", oldPhone = "+254755345678";
+    await user(subject, { phoneNumber: [oldPhone], phoneNumberVerified: ["true"] });
+    const proofs = await Promise.all(["+254766345678", "+254777345678"].map(async phoneNumber => {
+      const { sessionId } = await createPhoneOtpSession({ subject, name: "Person", phoneNumber: oldPhone, boundTenant: tenant });
+      const { challenge } = await createChallenge(phoneNumber, tenant, {
+        purpose: "change_phone", subject, sessionRef: privateRef("session", sessionId),
+      });
+      return { sessionId, challenge };
+    }));
+    const results = await Promise.allSettled(proofs.map(proof => completePhoneProof(proof.challenge, proof.sessionId, effects)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find(result => result.status === "rejected")).toMatchObject({ reason: { code: "SESSION_REVOKED" } });
+    const winner = proofs[results.findIndex(result => result.status === "fulfilled")];
+    expect((await readUser(subject)).attributes.phoneNumber).toEqual([winner.challenge.phoneNumber]);
+    expect((await getIdentitySession(winner.sessionId))?.claims.phone_number).toBe(winner.challenge.phoneNumber);
   });
 });
