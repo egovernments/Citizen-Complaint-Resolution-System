@@ -82,6 +82,21 @@ public class UserService {
 
         // Search on mobile number as user name
         UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber(),request.getRequestInfo());
+        if (userDetailResponse.getUser().isEmpty()) {
+            // Identity-created citizens need not use their mobile as username.
+            UserSearchRequest byMobile = new UserSearchRequest();
+            byMobile.setActive(true);
+            byMobile.setUserType(USERTYPE_CITIZEN);
+            byMobile.setTenantId(userUtils.getStateLevelTenant(tenantId));
+            byMobile.setRequestInfo(request.getRequestInfo());
+            byMobile.setMobileNumber(user.getMobileNumber());
+            userDetailResponse = userUtils.userCall(byMobile,
+                    new StringBuilder(config.getUserHost()).append(config.getUserSearchEndpoint()));
+            if (userDetailResponse.getUser().size() > 1) {
+                throw new CustomException("CITIZEN_ACCOUNT_AMBIGUOUS",
+                        "More than one citizen uses this mobile number");
+            }
+        }
         if (!userDetailResponse.getUser().isEmpty()) {
             User userFromSearch = userDetailResponse.getUser().get(0);
             if(!user.getName().equalsIgnoreCase(userFromSearch.getName())){

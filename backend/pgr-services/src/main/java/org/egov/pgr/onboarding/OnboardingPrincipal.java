@@ -12,4 +12,9 @@ public class OnboardingPrincipal {
     private String subject;
     private String email;
     private String name;
+    private boolean emailVerified;
+
+    public OnboardingPrincipal(String issuer, String subject, String email, String name) {
+        this(issuer, subject, email, name, false);
+    }
 }
