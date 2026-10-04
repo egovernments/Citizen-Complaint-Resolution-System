@@ -15,6 +15,12 @@ evidence from accepted implementation. The completion gate is still open.
   coverage and the passing live CI log. The merge was conflict-free; the
   runtime files match the tested leaf source. Evidence and limits are in
   `keycloak/evidence/validation.json`.
+- Configurator PR 59, `4763e73ad`, is reviewed and merged at `68d35e02f`.
+  The configurator and evidence trees match the tested leaf exactly. Owner
+  review covered retry-safe member actions, identifier preservation, entry
+  ordering, PGR rename/version/polling and invitation expiry. Evidence lives
+  in `artifacts/configurator/README.md`: 103 affected tests, 576 full-suite
+  passes, the unchanged postal baseline failure, and clean typecheck/build.
 
 ## Work in progress
 
@@ -23,12 +29,13 @@ evidence from accepted implementation. The completion gate is still open.
 | surf-bff | Items 1–4, 15 | Self-service/logout slices committed; readiness awaits reviewed core providers |
 | surf-phone | Item 13 | Split from surf-bff at `1526ec668`; production effects handoff `417557d50`; gap audit and regression coverage underway |
 | surf-keycloak | Realm configuration, extraction, public branding | PR 50 reviewed and merged; scoped evidence accepted |
-| surf-configurator | Members, invites, account actions, workspace settings | PR 59 at `4763e73ad` implemented; owner review pending |
+| surf-configurator | Members, invites, account actions, workspace settings | PR 59 reviewed and merged; scoped frontend evidence accepted |
 | surf-digitui | Phase 2 account actions, phone, invites, logout | PR 58 returned for phone-change logout/account-switch race fix |
-| surf-tests | Item 18 migration and complete gate matrix | Accepted; baseline inventory and migration underway |
+| surf-tests | Item 18 migration and complete gate matrix | PR 62 returned for split hosted-form and one-use auth-result fixes |
 
 The task identifiers and durable coordination records live in Agent Bridge.
-Keycloak scope is verified independently of the still-pending full system gate.
+Keycloak and configurator scopes are verified independently of the still-pending
+full system gate.
 
 ## Reviewed evidence
 
@@ -54,6 +61,10 @@ Keycloak scope is verified independently of the still-pending full system gate.
 - Integration-test discovery at `171e5fe1a` found 278 cases in 88 files.
   Discovery is not execution or a pass-rate baseline. The test leaf records
   the exact per-file mapping and the existing dashboard-harness type error.
+- Test migration PR 62 at `60f33a76a` preserves 278/88 default discovery and
+  289/90 including local-only cases, reports 16 isolated fixture passes and
+  clean tsc, and explicitly reports eight missing-environment real-gate skips.
+  Owner review returned the hosted-entry assumptions below for correction.
 
 Final PR evidence must pin the tested commit and include commands, exit codes,
 test counts and logs. Every lane-E gate needs executed coverage, including
@@ -73,11 +84,19 @@ the real-dependency cases; mocked tests do not satisfy those cases.
   without checking original UUID/current local session ownership after the
   asynchronous calls. The leaf must prevent logout resurrection and adopting
   another person's cookie result, with interaction regression cases.
+- Test migration hostedSignIn at `60f33a76a` assumes a combined username and
+  password form; the stock realm flow also uses separate pages. The leaf must
+  support and test both, including the admin login assertions. Its helper
+  must also avoid competing with the landing app for a one-use auth result.
 - Scoped logout, phone-session invalidation, identifier propagation and
   readiness consume core APIs from `docs/core-internals.md`; no duplicate
-  implementation is permitted. Identifier propagation is consumed; reviewed
-  poller/reconcile providers remain awaited. Core replaces the old reconcile
+  implementation is permitted. Identifier propagation is consumed; poller
+  provider `0d2af5878` is available and reconcile remains awaited. Core replaces the old reconcile
   scheduler; surf-bff starts/stops the poller exactly once, including retries.
+- Core bindings `1fae11312` supplies member/admin-email/invitation routes and
+  the new `_select`. Core also owns adding frozen citizen digit.accounts
+  entries at selection, needed for subsequent phone propagation; surf-phone
+  tests its effects against those entries without duplicating the writer.
 - Root settled D18: core-bindings provides session-authenticated
   `POST /identity/v1/workspace-members/_updateEmail {tenantId,digitUuid,email}`.
   It requires live tenant ACCOUNT_ADMIN and an ACTIVE target binding; sets
