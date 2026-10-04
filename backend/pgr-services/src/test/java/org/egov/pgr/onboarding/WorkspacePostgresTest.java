@@ -239,4 +239,26 @@ public class WorkspacePostgresTest {
         assertEquals(2,(int)jdbc.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_identifier WHERE status='RELEASED'",Integer.class));
     }
 
+    @Test public void productionFlywayParserExecutesDollarQuotedMigrationTransactionally() {
+        jdbc.update("INSERT INTO eg_pgr_onboarding_workspace_name VALUES (?,?)","cafe\u0301\u00a0council","example");
+        var flyway=org.flywaydb.core.Flyway.configure().dataSource(source).defaultSchema(schema)
+                .baselineOnMigrate(true).baselineVersion("20261004010000").locations("classpath:db/migration/main").load();
+        assertEquals(1,flyway.migrate().migrationsExecuted);
+        assertEquals("café council",jdbc.queryForObject("SELECT normalized_name FROM eg_pgr_onboarding_workspace_name",String.class));
+        assertEquals(0,flyway.migrate().migrationsExecuted);
+    }
+    @Test public void crossTableOwnershipCollisionRollsBackUnderFlyway() {
+        var signup=signup("first");onboarding.reserveIdentifier("ORGANIZATION_NAME","cafe\u0301",signup.getId(),1L);
+        jdbc.update("DELETE FROM eg_pgr_onboarding_workspace_name");
+        jdbc.update("INSERT INTO eg_pgr_onboarding_workspace_name VALUES (?,?),(?,?)","café","other","north\u00a0office","third");
+        var flyway=org.flywaydb.core.Flyway.configure().dataSource(source).defaultSchema(schema)
+                .baselineOnMigrate(true).baselineVersion("20261004010000").locations("classpath:db/migration/main").load();
+        var failure=assertThrows(org.flywaydb.core.api.FlywayException.class,flyway::migrate);
+        assertTrue(failure.getMessage().contains("normalization ownership conflict"));
+        assertEquals("cafe\u0301",jdbc.queryForObject("SELECT normalized_value FROM eg_pgr_onboarding_identifier",String.class));
+        assertEquals("other",jdbc.queryForObject("SELECT tenant_id FROM eg_pgr_onboarding_workspace_name WHERE normalized_name='café'",String.class));
+        assertEquals("third",jdbc.queryForObject("SELECT tenant_id FROM eg_pgr_onboarding_workspace_name WHERE normalized_name=?",String.class,"north\u00a0office"));
+        assertEquals(0,(int)jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE version='20261004020000'",Integer.class));
+    }
+
 }
