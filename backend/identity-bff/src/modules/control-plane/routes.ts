@@ -15,7 +15,7 @@ import {
 } from "../organizations/organization-service.js";
 import { currentSession } from "../sessions/current-session.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { runIdentityReconciliation } from "../reconciliation/reconciliation-service.js";
+import { runReconcile } from "../sync/reconcile.js";
 import { syncSubject } from "../reconciliation/subject-sync.js";
 import { clearTenantCaches, isActiveDigitTenant } from "../access-context/tenant-directory.js";
 import {
@@ -385,7 +385,7 @@ export function registerControlPlaneRoutes(app: express.Application): void {
   }));
 
   app.post("/internal/identity/v1/reconciliation/_run", asyncRoute(async (_req, res) => {
-    const result = await runIdentityReconciliation();
+    const result = await runReconcile();
     return res.status(result.acquired ? 200 : 202).json(result);
   }));
 }

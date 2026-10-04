@@ -143,7 +143,7 @@ export const ROUTES: RouteContract[] = [
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
 
   // Internal: operator
-  { method: "POST", path: "/internal/identity/v1/reconciliation/_run", auth: "operator", state: "changing", items: [12],
+  { method: "POST", path: "/internal/identity/v1/reconciliation/_run", auth: "operator", state: "live", items: [12],
     codes: ["WORKLOAD_UNAUTHORIZED", "CONTROL_PLANE_NOT_CONFIGURED"] },
   { method: "POST", path: "/internal/identity/v1/account-links/_link", auth: "operator", state: "changing", items: [14],
     codes: [...WORKLOAD_AUTH],

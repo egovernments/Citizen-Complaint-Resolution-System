@@ -30,7 +30,9 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", (
       return attribute;
     });
     for (const name of ["digit.accounts", "digit.bindings", "digit.boundUuids", "fixture.keep"]) {
-      profile.attributes.push({ name, multivalued: true, permissions: { view: ["admin"], edit: ["admin"] } });
+      if (!profile.attributes.some((attribute: {name: string}) => attribute.name === name)) {
+        profile.attributes.push({ name, multivalued: true, permissions: { view: ["admin"], edit: ["admin"] } });
+      }
     }
     await client.request("/users/profile", "PUT", profile);
   });
