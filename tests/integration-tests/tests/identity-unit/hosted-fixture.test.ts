@@ -9,7 +9,7 @@ let browser: Awaited<ReturnType<typeof chromium.launch>>;
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
-type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean };
+type Options = { split?: boolean; result?: 'complete' | 'failed'; existingSession?: boolean; denySession?: boolean; consent?: boolean };
 async function fixture(options: Options, run: (page: Page, baseURL: string, state: {
   paths: string[]; submissions: string[][]; resultReads: number;
 }) => Promise<void>) {
@@ -17,7 +17,22 @@ async function fixture(options: Options, run: (page: Page, baseURL: string, stat
   const formPage = (passwordOnly = false) => `<form method="post" action="${passwordOnly ? '/auth/realms/test/password' : '/auth/realms/test/login'}">
     ${passwordOnly ? '' : '<input id="username" name="username">'}
     ${passwordOnly || !options.split ? '<input id="password" name="password" type="password" autocomplete="current-password">' : ''}
-    <button id="kc-login" type="submit">Log in</button></form>`;
+    ${options.consent ? `<div style="position:relative;display:inline-flex">
+      <input id="privacy-component-check" type="checkbox" style="position:absolute;left:0;top:0;width:18px;height:18px;margin:0;opacity:0">
+      <label for="privacy-component-check" class="dg-checkbox__box" style="display:block;width:18px;height:18px;border:1px solid">✓</label>
+      <label for="privacy-component-check">Privacy consent</label>
+    </div><input id="unrelated-checkbox" type="checkbox">` : ''}
+    <button id="kc-login" type="submit" ${options.consent ? 'disabled' : ''}>Log in</button></form>
+    ${options.consent ? `<script>
+      const form = document.querySelector('form');
+      const consent = document.getElementById('privacy-component-check');
+      const button = document.getElementById('kc-login');
+      const allowed = () => form.username.value.trim() && form.password.value.trim() && consent.checked;
+      const update = () => { button.disabled = !allowed(); };
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      form.addEventListener('submit', event => { if (!allowed()) event.preventDefault(); });
+    </script>` : ''}`;
   const server = createServer(async (request, response) => {
     const path = new URL(request.url!, 'http://localhost').pathname;
     state.paths.push(path);
@@ -122,4 +137,34 @@ for (const split of [false, true]) {
 
 test('successful landing without an authenticated session is rejected', async () => fixture({ denySession: true }, async (page, base) => {
   await assert.rejects(signIn(page, base), /did not establish a BFF session/);
+}));
+
+// Mirrors employee Login.tsx's canSubmit gate and Privacy.tsx's styled checkbox.
+test('employee consent gates Login and hosted helper checks only the required consent', async () => fixture({ consent: true, result: 'complete' }, async (page, base, state) => {
+  page.setDefaultTimeout(3_000);
+  await page.goto(`${base}/auth/realms/test/login`);
+  await page.locator('#username').fill('fixture-user');
+  await page.locator('#password').fill('fixture-password');
+  assert.equal(await page.locator('#privacy-component-check').isChecked(), false);
+  assert.equal(await page.locator('#kc-login').isDisabled(), true);
+  assert.equal(state.submissions.length, 0);
+  let consentAtSubmission = false;
+  let unrelatedAtSubmission = true;
+  await page.exposeFunction('observeConsent', (consented: boolean, unrelated: boolean) => {
+    consentAtSubmission = consented;
+    unrelatedAtSubmission = unrelated;
+  });
+  await page.addInitScript(() => {
+    document.addEventListener('submit', () => {
+      void (window as any).observeConsent(
+        (document.getElementById('privacy-component-check') as HTMLInputElement).checked,
+        (document.getElementById('unrelated-checkbox') as HTMLInputElement).checked,
+      );
+    });
+  });
+  await signIn(page, base);
+  assert.equal(consentAtSubmission, true);
+  assert.equal(unrelatedAtSubmission, false);
+  assert.equal(state.resultReads, 1);
+  assert.equal((await selectContext(page.request, base, 'employee', 'fixture')).UserRequest.uuid, 'fixture-uuid');
 }));

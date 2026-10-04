@@ -86,6 +86,12 @@ export async function hostedSignIn(page: Page, config: {
     await page.goto(authorizeUrl(config.baseURL, config.surface));
     await enterHostedUsername(page, config.username);
     await page.locator('#password').fill(config.password);
+    const consent = page.locator('#privacy-component-check');
+    if (await consent.count()) {
+      // Employee PrivacyConsent retains an interactive, transparent checkbox.
+      await consent.check();
+      await expect(consent).toBeChecked();
+    }
     await page.locator('#kc-login, button[type="submit"]').first().click();
     await page.waitForURL(url => url.origin === origin &&
       (url.pathname.startsWith('/configurator/') || url.pathname.includes('/digit-ui/')), { timeout: 30_000 });
