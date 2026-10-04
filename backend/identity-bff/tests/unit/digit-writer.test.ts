@@ -26,13 +26,26 @@ beforeEach(() => {
 });
 
 describe("safe DIGIT writer", () => {
-  it("preserves fresh HRMS fields and roles; omits DOB, active and locks", async () => {
+  // 8c gate 2: egov-user saves active=false when `active` is absent, so every
+  // credential write deactivated the account. The fresh value is copied as is.
+  it("copies the fresh active flag unchanged, for active and inactive accounts", async () => {
+    await writeDigitIdentifiers(ref, { password: "test-only-password" });
+    expect(api.update.mock.calls[0][1]).toHaveProperty("active", true);
+    api.search.mockReset();
+    api.search.mockResolvedValueOnce([]).mockResolvedValueOnce([{ ...fresh(), active: false }]);
+    // Identifier propagation still writes to an inactive account and must not reactivate it.
+    await writeDigitIdentifiers(ref, { emailId: "verified-new@example.org" });
+    expect(api.update.mock.calls[1][1]).toHaveProperty("active", false);
+  });
+
+  it("preserves fresh HRMS fields, roles and active; omits DOB and locks", async () => {
     expect((await writeDigitIdentifiers(ref, { password: "test-only-password" })).status).toBe("written");
     expect(api.search).toHaveBeenCalledWith("admin-test-token", { ...ref, uuid: [ref.uuid], active: true });
     const body = api.update.mock.calls[0][1];
     expect(body).toMatchObject({ name: "HRMS Updated Name", gender: "FEMALE", emailId: "hrms@example.org",
-      permanentAddress: "Street", permanentCity: "City", permanentPinCode: "12345", roles: fresh().roles });
-    for (const key of ["dob", "active", "accountLocked", "accountLockedDate", "pwdExpiryDate",
+      permanentAddress: "Street", permanentCity: "City", permanentPinCode: "12345", roles: fresh().roles,
+      active: true });
+    for (const key of ["dob", "accountLocked", "accountLockedDate", "pwdExpiryDate",
       "lastModifiedDate", "mobileNumber", "countryCode", "type", "ignored"]) expect(body).not.toHaveProperty(key);
   });
   it("copies fresh roles unchanged and ignores caller attempts to change them", async () => {

@@ -77,12 +77,23 @@ export async function recordToken(lease: PersonLease, account: AccountRef, login
   }
 }
 
+/**
+ * egov-user's token details endpoint, reached on the same direct internal path
+ * as logout (DIGIT_USER_LOGOUT_URL). Through Kong, `/_details` returns 401 for
+ * valid tokens (8c gate 2), which made every cached token look revoked.
+ */
+export function tokenDetailsUrl(): string {
+  const direct = config.digitUserLogoutUrl.trim();
+  if (direct && /\/_logout\/?$/.test(direct)) return direct.replace(/\/_logout\/?$/, "/_details");
+  return `${config.digitUserServiceUrl.replace(/\/$/, "")}/_details`;
+}
+
 /** egov-user's token details endpoint validates the token and returns its current profile. */
 export async function cachedToken(lease: PersonLease, account: AccountRef): Promise<DigitLogin | null> {
   await lease.assertHeld();
   const token = await readToken(account);
   if (!token || token.subject !== lease.subject || token.expiresAt <= Date.now() + 60_000) return null;
-  const url = new URL(`${config.digitUserServiceUrl.replace(/\/$/, "")}/_details`);
+  const url = new URL(tokenDetailsUrl());
   url.searchParams.set("access_token", token.accessToken);
   let response: Response;
   try {

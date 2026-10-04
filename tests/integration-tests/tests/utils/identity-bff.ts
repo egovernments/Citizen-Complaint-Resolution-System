@@ -88,8 +88,9 @@ export async function hostedSignIn(page: Page, config: {
     await page.locator('#password').fill(config.password);
     const consent = page.locator('#privacy-component-check');
     if (await consent.count()) {
-      // Employee PrivacyConsent retains an interactive, transparent checkbox.
-      await consent.check();
+      // Employee PrivacyConsent: an svg inside the label intercepts pointer
+      // events on the checkbox (8c gate 2), so click the label like a user.
+      await page.locator('label[for="privacy-component-check"]').first().click();
       await expect(consent).toBeChecked();
     }
     await page.locator('#kc-login, button[type="submit"]').first().click();

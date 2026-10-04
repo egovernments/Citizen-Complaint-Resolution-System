@@ -134,8 +134,11 @@ public class OnboardingSteps {
         progress.record("boundary-root", () -> ensureBoundary("/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
                 Map.of(), "Boundary", tenant, "/boundary-service/boundary/_create",
                 Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry)))));
-        progress.record("boundary-relationship", () -> ensureBoundary("/boundary-service/boundary-relationships/_search",
-                Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "hierarchyType", "ADMIN")), "TenantBoundary", tenant,
+        // Stock boundary-service reads relationship search criteria from the query
+        // string only; criteria in the body were ignored (8c gate 2).
+        progress.record("boundary-relationship", () -> ensureBoundary(
+                "/boundary-service/boundary-relationships/_search?tenantId=" + tenant + "&hierarchyType=ADMIN",
+                Map.of(), "TenantBoundary", tenant,
                 "/boundary-service/boundary-relationships/_create", Map.of("BoundaryRelationship",
                         Map.of("tenantId", tenant, "code", tenant, "hierarchyType", "ADMIN", "boundaryType", "ROOT"))));
     }
@@ -170,7 +173,8 @@ public class OnboardingSteps {
                 // A wrapper exists even when no relationship exists. Only the target
                 // root node proves the HRMS prerequisite, never wrapper cardinality.
                 JsonNode hierarchy = entry.path("hierarchyType");
-                String hierarchyCode = hierarchy.isObject() ? hierarchy.path("code").asText() : hierarchy.asText();
+                String hierarchyCode = hierarchy.isObject() ? hierarchy.path("code").asText()
+                        : hierarchy.isTextual() ? hierarchy.asText() : ""; // a JSON null is not the string "null"
                 if (!hierarchyCode.isBlank() && !"ADMIN".equals(hierarchyCode)) continue;
                 JsonNode roots = entry.path("boundary");
                 if (roots.isMissingNode() || roots.isNull()) continue;

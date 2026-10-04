@@ -133,6 +133,27 @@ public class OnboardingStepsTest {
         prerequisites();assertTrue(made[0]);assertTrue(made[1]);assertTrue(made[2]);
         assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
+    // 8c gate 2: stock boundary-service reads relationship criteria from the query
+    // string only, and returns hierarchyType as JSON null. An existing relationship
+    // must be recognised without re-creating it.
+    @Test public void existingRelationshipIsFoundByQueryCriteriaWithNullHierarchyType() throws Exception {
+        final boolean[] created={false};
+        when(client.post(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
+            String path=call.getArgument(1);
+            if(path.contains("boundary-hierarchy-definition")) return mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}");
+            if(path.contains("boundary-relationships")) {
+                if(path.contains("_create")){created[0]=true;return mapper.createObjectNode();}
+                boolean queryCriteria=path.contains("tenantId=newtown")&&path.contains("hierarchyType=ADMIN");
+                return mapper.readTree(queryCriteria
+                        ?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":null,\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}"
+                        :"{\"TenantBoundary\":[]}");
+            }
+            return mapper.readTree("{\"Boundary\":[{\"code\":\"newtown\"}]}");
+        });
+        prerequisites();
+        assertFalse(created[0]);
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
+    }
     @Test public void kenyaFallbackUsesCanonicalRuleAndConfiguredOtherCountryRemainsSupported() {
         rows.clear();signup.setCountryCode("KE");prerequisites();
         assertEquals("^[17][0-9]{8}$",rows.get("newtown|common-masters.MobileNumberValidation|+254").path("data").path("mobileNumberRegex").asText());

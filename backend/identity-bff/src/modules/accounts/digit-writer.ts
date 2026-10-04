@@ -25,11 +25,12 @@ export interface DigitWriteResult {
 }
 
 // UserRepository.update writes these values as sent, including null/absent.
-// Stock egov-user also requires roles on update: copy the fresh array unchanged.
-// Everything else is deliberately omitted (especially DOB, active and locks).
+// Stock egov-user also requires roles on update, and saves active=false when
+// `active` is absent: copy both fresh values unchanged. The BFF never changes
+// them (D4). Everything else is deliberately omitted (especially DOB and locks).
 const COPIED_FIELDS = [
   "id", "uuid", "tenantId", "userName", "name", "gender", "emailId", "roles",
-  "altContactNumber", "alternatemobilenumber", "pan", "aadhaarNumber",
+  "active", "altContactNumber", "alternatemobilenumber", "pan", "aadhaarNumber",
   "salutation", "signature", "identificationMark", "locale", "fatherOrHusbandName",
   "relationship", "photo", "permanentAddress", "permanentCity", "permanentPinCode",
   "correspondenceAddress", "correspondenceCity", "correspondencePinCode",
