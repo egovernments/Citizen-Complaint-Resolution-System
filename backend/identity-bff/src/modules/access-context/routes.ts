@@ -19,7 +19,7 @@ import {
 } from "../citizens/citizen-registration.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 import { DigitLoginRejectedError, DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { withPersonLease } from "../accounts/person-lease.js";
+import { withPersonLease, type PersonLease } from "../accounts/person-lease.js";
 import { staffLogin, StaffLoginError } from "../accounts/credential-service.js";
 import { citizenAccess, staffAccess } from "../bindings/predicate.js";
 import { readBindingUser } from "../bindings/store.js";
@@ -28,6 +28,7 @@ import { readDigitAccount } from "../workspace-members/authority.js";
 import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
 import { cachedToken, recordToken, holdToken } from "../revocation/index.js";
+import { forgetToken, revokeInventoriedToken, type AccountRef } from "../revocation/inventory.js";
 import { findManagedAccount } from "../managed-accounts/managed-account-service.js";
 import { revokeToken } from "../managed-accounts/digit-user-client.js";
 import { currentSession } from "../sessions/current-session.js";
@@ -58,6 +59,21 @@ function tokenResponse(login: DigitLogin) {
     scope: "read",
     UserRequest: login.user,
   };
+}
+
+/** Cleanup must preserve the original failure, including when its lease expired. */
+async function cleanupIssuedToken(lease: PersonLease, account: AccountRef, login: DigitLogin, kind: "staff" | "citizen") {
+  try {
+    await revokeInventoriedToken(account, { accessToken: login.accessToken, expiresAt: login.expiresAt,
+      subject: lease.subject, mintedAt: Date.now(), kind }, "SELECT_FAILED");
+  } catch {
+    // Redis unavailable: attempt logout, but retain inventory for a later retry.
+    await revokeToken(login.accessToken).catch(() => undefined);
+    return;
+  }
+  // Revocation succeeded or has a durable retry. Compare-and-delete cannot erase
+  // a replacement token, and lease loss leaves inventory for the current owner.
+  await forgetToken(lease, account, login.accessToken).catch(() => undefined);
 }
 
 function send(response: express.Response, code: HttpErrorCode, message: string) {
@@ -190,7 +206,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
             token = access.binding ? await staffLogin({ tenantId, uuid: account.uuid, userName: account.userName, keyVersion: recorded?.credential?.keyVersion }, lease)
               : await managedUserLogin(identity, current.sessionId);
             minted = token;
-            await recordToken(lease, account, token, "staff");
+            if (access.binding) await recordToken(lease, account, token, "staff");
           }
           await holdToken(lease, account, current.sessionId);
           if (access.binding) await mirrorPerson(subject);
@@ -199,7 +215,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
             organizationAlias: selected.organizationAlias, tenantId, name: selected.name })) throw new BindingError("SESSION_REVOKED", "The identity session is no longer current");
           return token;
         } catch (error) {
-          if (minted) await revokeToken(minted.accessToken);
+          if (minted) await cleanupIssuedToken(lease, account, minted, "staff");
           throw error;
         }
       });
@@ -233,6 +249,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
     try {
       return await withPersonLease(claims.sub, async (lease) => {
         let issued: DigitLogin | null = null;
+        let issuedAccount: AccountRef | null = null;
         try {
       await requireCurrentSession(lease, current.sessionId);
       const access = await citizenAccess(claims.sub);
@@ -268,13 +285,14 @@ export function registerAccessContextRoutes(app: express.Application): void {
       // their existing one for good.
       const phoneTrusted = current.session.authMethod === "phone_otp" ||
         await keycloakPhoneIsAdminControlled();
-      const { identity } = await ensureCitizenRegistration({
+      const { identity, registration } = await ensureCitizenRegistration({
         phoneTrusted,
         subject: claims.sub,
         tenant: boundTenant,
         name: claims.name?.trim() || "Citizen",
         ...phone,
       });
+      issuedAccount = { tenantId: identity.tenantId, uuid: registration.digitUserUuid };
       const login = await managedUserLogin(
         identity, current.sessionId, phone.mobileNumber, phone.countryCode,
       );
@@ -297,7 +315,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         tenant: { urlSlug: boundTenant.urlSlug, tenantId: boundTenant.tenantId },
       });
         } catch (error) {
-          if (issued) await revokeToken(issued.accessToken);
+          if (issued && issuedAccount) await cleanupIssuedToken(lease, issuedAccount, issued, "citizen");
           throw error;
         }
       });
