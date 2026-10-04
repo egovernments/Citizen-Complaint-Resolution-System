@@ -158,14 +158,28 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toEqual(before);
     expect(f.emails).toBe(emails);
   });
-  it.each(["pending", "removed"])("allows recovery with only a %s binding and no membership elsewhere", async (state) => {
-    await linkWorkspaceMember(input);
+  const withOtherBinding = (state: string, expiresAt: number) => {
     const user = f.users.get("new-1")!;
     const doc = bindingDoc(user);
-    doc.bindings.push({ ...doc.bindings[0], tenantId: "other", state, expiresAt: Date.now() + 3600_000 });
+    doc.bindings.push({ ...doc.bindings[0], tenantId: "other", state, expiresAt });
     user.attributes!["digit.bindings"] = [JSON.stringify(doc)];
-    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
+  };
+  // Security review 2: a pending invitation elsewhere could be accepted by
+  // whoever controls the new email, so it blocks tenant-admin recovery.
+  it("rejects recovery when an unexpired pending invitation exists in another workspace", async () => {
+    await linkWorkspaceMember(input);
+    withOtherBinding("pending", Date.now() + 3600_000);
+    const before = structuredClone(f.users.get("new-1"));
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "attacker@example.test"))
+      .rejects.toMatchObject({ code: "ADMIN_EMAIL_CHANGE_NOT_ALLOWED" });
+    expect(f.users.get("new-1")).toEqual(before);
   });
+  it.each([["removed", Date.now() + 3600_000], ["pending", Date.now() - 1000]])(
+    "allows recovery with only a %s binding elsewhere (expired invitations don't count)", async (state, expiresAt) => {
+      await linkWorkspaceMember(input);
+      withOtherBinding(state as string, expiresAt as number);
+      await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
+    });
   it("maps a concurrent Keycloak email conflict to IDENTITY_EMAIL_CHANGED", async () => {
     await linkWorkspaceMember(input); f.conflict = true;
     await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
