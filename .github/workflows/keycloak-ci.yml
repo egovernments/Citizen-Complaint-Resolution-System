@@ -18,6 +18,7 @@ on:
 
 jobs:
   realm:
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,7 +34,14 @@ jobs:
       # through it: events, self-service actions (design §8) and the
       # configuration-only changes of design §9.
       - name: Live realm check
-        run: tests/run-live-check.sh
+        run: |
+          set -o pipefail
+          tests/run-live-check.sh 2>&1 | tee realm-check.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: keycloak-realm-check
+          path: keycloak/realm-check.log
 
   image:
     runs-on: ubuntu-latest

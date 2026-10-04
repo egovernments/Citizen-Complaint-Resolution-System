@@ -106,5 +106,16 @@
       "view-identity-providers",
       "view-events"
     ]
+  },
+  "clientPolicy": {
+    "$comment": "Client capability policy consumed by the BFF. Allowance never substitutes for a signed-in person or credential eligibility checks.",
+    "accountActions": [
+      "UPDATE_PASSWORD",
+      "CONFIGURE_TOTP",
+      "delete_credential",
+      "UPDATE_EMAIL",
+      "idp_link"
+    ],
+    "passwordSetupRedirectPath": "/password/setup-complete/*"
   }
 }

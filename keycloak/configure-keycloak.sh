@@ -38,6 +38,8 @@ jq -e . "$REALM_CONFIG" >/dev/null || {
 }
 readonly EMPLOYEE_OTP_FLOW=$(jq -r '.employeeFlow.otpSubFlow' "$REALM_CONFIG")
 readonly EMPLOYEE_OTP_REQUIREMENT=$(jq -r '.employeeFlow.otpRequirement' "$REALM_CONFIG")
+readonly ACCOUNT_ACTIONS=$(jq -r '.clientPolicy.accountActions | join(",")' "$REALM_CONFIG")
+readonly PASSWORD_SETUP_PATH=$(jq -r '.clientPolicy.passwordSetupRedirectPath' "$REALM_CONFIG")
 readonly IDP_SYNC_MODE=$(jq -r '.identityProviders.syncMode' "$REALM_CONFIG")
 # How long Keycloak keeps user and admin events. The BFF reads them to revoke
 # DIGIT tokens, so this must outlast the longest outage a box may have.
@@ -75,7 +77,7 @@ readonly BFF_SIGNIN_METHODS=${KEYCLOAK_BFF_SIGNIN_METHODS:-password,google,githu
 readonly BFF_SIGNUP_METHODS=${KEYCLOAK_BFF_SIGNUP_METHODS:-magic_link,google,github}
 # Keycloak's execute-actions redirect validation matches this path wildcard but
 # does not treat a trailing wildcard as matching a query string.
-readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}/password/setup-complete/*"
+readonly PASSWORD_SETUP_REDIRECT="${IDENTITY_REDIRECT_URI%/callback}$PASSWORD_SETUP_PATH"
 readonly POST_LOGIN_REDIRECT=${IDENTITY_POST_LOGIN_REDIRECT:-/}
 # digit-ui lives at /{tenantSlug}/digit-ui/... on the same origin as the BFF.
 readonly DIGIT_UI_BASE_URL=${IDENTITY_DIGIT_UI_BASE_URL:-${IDENTITY_REDIRECT_URI%%/identity/*}/}
@@ -286,7 +288,7 @@ configure_digit_ui_client() {
     -s "webOrigins=$ALLOWED_ORIGINS_JSON" \
     -s "authenticationFlowBindingOverrides.browser=$flow_id" >/dev/null
   kc get "clients/$client_uuid_value" -r "$REALM" |
-    jq --arg theme "$theme" --arg surface "$surface" --arg signin "$signin_methods" \
+    jq --arg theme "$theme" --arg surface "$surface" --arg signin "$signin_methods" --arg actions "$ACCOUNT_ACTIONS" \
       '.attributes = ((.attributes // {}) + {
          "pkce.code.challenge.method": "S256",
          "post.logout.redirect.uris": "+",
@@ -294,6 +296,7 @@ configure_digit_ui_client() {
          "digit.auth.surface": $surface,
          "digit.auth.signin.methods": $signin,
          "digit.auth.signup.methods": "",
+         "digit.auth.account.actions": $actions,
          "standard.token.exchange.enabled": "false"
        })' |
     docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
@@ -519,6 +522,7 @@ kc update "clients/$bff_uuid" -r "$REALM" \
   -s "attributes.\"login_theme\"=$LOGIN_THEME" \
   -s "attributes.\"digit.auth.signin.methods\"=$BFF_SIGNIN_METHODS" \
   -s "attributes.\"digit.auth.signup.methods\"=$BFF_SIGNUP_METHODS" \
+  -s "attributes.\"digit.auth.account.actions\"=$ACCOUNT_ACTIONS" \
   -s 'attributes."standard.token.exchange.enabled"=false' >/dev/null
 
 retired_uuid=$(client_uuid "$RETIRED_ASSERTION_AUDIENCE")

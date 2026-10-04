@@ -101,7 +101,11 @@ export function resolveTenantSlug(params: {
 
 /** Bare English uses the configured deployment default locale. */
 export function digitLocaleOf(languageTag: string | undefined): string | undefined {
-    return !languageTag || languageTag === "en" ? undefined : requestedBrandingLocale(languageTag);
+    try {
+        return !languageTag || languageTag === "en" ? undefined : requestedBrandingLocale(languageTag);
+    } catch {
+        return undefined;
+    }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

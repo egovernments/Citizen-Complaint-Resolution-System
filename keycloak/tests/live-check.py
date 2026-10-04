@@ -78,11 +78,15 @@ def configure(realm_config=None):
     """Re-runs configure-keycloak.sh, optionally with another realm.json."""
     env = dict(os.environ)
     if realm_config is not None:
-        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", dir=os.path.dirname(CONFIGURE), delete=False)
         json.dump(realm_config, handle)
         handle.close()
         env["KEYCLOAK_REALM_CONFIG"] = handle.name
-    subprocess.run([CONFIGURE], env=env, check=True, stdout=subprocess.DEVNULL)
+    try:
+        subprocess.run([CONFIGURE], env=env, check=True, stdout=subprocess.DEVNULL, timeout=600)
+    finally:
+        if realm_config is not None:
+            os.unlink(handle.name)
 
 
 def create_user(username, email=None, verified=True, first_name=None, password=PASSWORD):
@@ -266,6 +270,14 @@ def _():
         if config:
             stored = admin("GET", f"/authentication/required-actions/{alias}/config")["config"]
             assert {k: stored.get(k) for k in config} == config, stored
+
+
+@check("surface client policy: CSV action allowlist and password-setup redirect")
+def _():
+    for client in (BFF[0], EMPLOYEE[0], "digit-ui-citizen"):
+        [stored] = admin("GET", "/clients?clientId=" + client)
+        assert stored["attributes"]["digit.auth.account.actions"] == ",".join(DECLARED["clientPolicy"]["accountActions"])
+        assert REDIRECT.removesuffix("/callback") + DECLARED["clientPolicy"]["passwordSetupRedirectPath"] in stored["redirectUris"]
 
 
 # ------------------------------------------ sign-in and self-service (§8)

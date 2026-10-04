@@ -75,6 +75,12 @@ export function pickMobileValidation(values: unknown[]): MobileValidation | null
 
 /** Phone possession must be checked against the current tenant rule. */
 export async function mobileValidationForRoute(route: PublicTenantRoute): Promise<MobileValidation | null> {
-  const result = await searchMdmsV1(route.tenantId);
-  return pickMobileValidation(records(result, "common-masters", "MobileNumberValidation"));
+  // Preserve the existing route/root fallback until the route contract removes
+  // legacy subtenant records. With plain tenants these ids are identical.
+  for (const tenantId of new Set([route.tenantId, route.rootTenantId])) {
+    const result = await searchMdmsV1(tenantId);
+    const values = records(result, "common-masters", "MobileNumberValidation");
+    if (values.length) return pickMobileValidation(values);
+  }
+  return null;
 }

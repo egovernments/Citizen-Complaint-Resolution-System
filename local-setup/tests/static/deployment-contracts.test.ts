@@ -173,6 +173,10 @@ describe('ansible playbook-deploy.yml', () => {
     const env = read('local-setup/ansible/templates/digit.env.j2');
     const compose = read('local-setup/docker-compose.egov-digit.yaml');
     const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+    const keycloak = compose.slice(compose.indexOf('\n  keycloak:\n'), compose.indexOf('\n  identity-bff:\n'));
+    const bff = compose.slice(compose.indexOf('\n  identity-bff:\n'));
+    expect(bff).not.toContain('DIGIT_FOOTER_URL:');
+    expect(bff).not.toContain('DIGIT_LOCALIZATION_SEARCH_URL:');
     const pairs: Array<[string, string, string]> = [
       ['IDENTITY_DIGIT_FOOTER_URL', 'footer_logo_url', 'DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-'],
       ['IDENTITY_DIGIT_FOOTER_BW_URL', 'footer_bw_logo_url', 'DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-'],
@@ -183,7 +187,7 @@ describe('ansible playbook-deploy.yml', () => {
     for (const [envName, ansibleVar, composeLine] of pairs) {
       expect(env).toMatch(new RegExp(`^${envName}='?\\{\\{ \\(?${ansibleVar}\\b`, 'm'));
       expect(globalConfig).toContain(`{{ ${ansibleVar} | to_json }}`);
-      expect(compose).toContain(composeLine);
+      expect(keycloak).toContain(composeLine);
     }
   });
 
@@ -1629,7 +1633,7 @@ describe('identity Keycloak lives in keycloak/', () => {
   test('Keycloak has its own CI workflow, which runs the live realm check', () => {
     const workflow = read('.github/workflows/keycloak-ci.yml');
     expect(workflow).toContain('- "keycloak/**"');
-    expect(workflow).toContain('run: tests/run-live-check.sh');
+    expect(workflow).toContain('tests/run-live-check.sh 2>&1 | tee realm-check.log');
     expect(workflow).toContain('docker build -f keycloak/Dockerfile -t identity-keycloak:test keycloak');
     expect(read('.github/workflows/identity-bff-ci.yml')).not.toMatch(/keycloak\/Dockerfile|theme-src\/package-lock/);
   });
@@ -1644,7 +1648,7 @@ describe('declared realm (keycloak/realm.json, design §12)', () => {
     expect(realm.events.adminEventsDetailsEnabled).toBe(true);
     expect(realm.events.enabledEventTypes).toEqual(expect.arrayContaining(
       ['VERIFY_EMAIL', 'LOGOUT', 'UPDATE_PASSWORD', 'UPDATE_CREDENTIAL']));
-    expect(realm.events.eventsExpiration).toBeGreaterThanOrEqual(7 * 24 * 3600);
+    expect(realm.events.eventsExpiration).toBe(7 * 24 * 3600);
   });
 
   test('the BFF admin service account can read events', () => {
@@ -1668,7 +1672,36 @@ describe('declared realm (keycloak/realm.json, design §12)', () => {
       { 'conditional-user-configured': 'REQUIRED', 'auth-otp-form': 'REQUIRED' });
   });
 
+  test('surface clients declare the frozen actions as CSV and retain password setup callbacks', () => {
+    expect(realm.clientPolicy.accountActions).toEqual([
+      'UPDATE_PASSWORD', 'CONFIGURE_TOTP', 'delete_credential', 'UPDATE_EMAIL', 'idp_link']);
+    expect(realm.clientPolicy.passwordSetupRedirectPath).toBe('/password/setup-complete/*');
+    const script = read('keycloak/configure-keycloak.sh');
+    expect(script).toContain('.clientPolicy.accountActions | join(",")');
+    expect(script).toContain('"digit.auth.account.actions": $actions');
+    expect(script).toContain('$PASSWORD_SETUP_PATH');
+  });
+
   test('UPDATE_EMAIL verifies the new address before saving it (D18)', () => {
     expect(realm.requiredActions.UPDATE_EMAIL).toEqual({ verifyEmail: 'true' });
+  });
+});
+
+
+describe('Keycloak extraction preserves password setup and direct branding', () => {
+  test('employee and citizen clients permit their password-setup callback', () => {
+    const script = read('keycloak/configure-keycloak.sh');
+    const surfaceClient = script.slice(script.indexOf('configure_digit_ui_client()'), script.indexOf('configure_user_profile()'));
+    expect(surfaceClient).toContain('$PASSWORD_SETUP_REDIRECT');
+    expect(read('keycloak/theme-src/src/digit/employee/pages/Login.tsx')).toContain('surface: "employee"');
+    expect(read('keycloak/theme-src/src/digit/shared/passwordHelp.ts')).toContain('tenantSlug');
+  });
+  test('the theme fetches MDMS and localization and the BFF no longer registers a branding route', () => {
+    const theme = read('keycloak/theme-src/src/digit/branding/branding.ts');
+    expect(theme).toContain('/mdms-v2/v1/_search');
+    expect(theme).toContain('/localization/messages/v1/_search');
+    expect(theme).not.toContain('/branding${');
+    expect(read('backend/identity-bff/src/app/create-app.ts')).not.toContain('registerBrandingRoutes');
+    expect(fs.existsSync(path.join(REPO_ROOT, 'backend/identity-bff/src/modules/branding/routes.ts'))).toBe(false);
   });
 });

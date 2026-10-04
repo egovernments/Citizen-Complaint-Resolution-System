@@ -134,8 +134,26 @@ matching the image's Keycloak 26.7.3. When Keycloak is upgraded:
 ## digit-employee
 
 The legacy digit-ui employee login pages rendered by Keycloak (#2167). The tenant slug comes from the `digit_tenant`
-authorize parameter; branding is fetched from
-`{DIGIT_IDENTITY_BFF_BASE_URL}/identity/v1/tenant-contexts/{slug}/branding`
-(default: same origin) and ThemeConfig is applied by a port of digit-ui's
-`applyTheme.js`. On any failure the pages render the default DIGIT look.
-No dev-server preview and no tests.
+authorize parameter. The theme resolves the slug through
+`{DIGIT_IDENTITY_BFF_BASE_URL}/identity/v1/tenant-contexts/{slug}`, then POSTs
+anonymous requests directly to public MDMS and localization. It reads
+`common-masters.StateInfo`, `common-masters.ThemeConfig`, and the configured
+UI module's `LoginConfig` and `PrivacyPolicy`. Only referenced login strings
+are retained. ThemeConfig is applied by a port of digit-ui's `applyTheme.js`.
+
+Runtime theme settings (same origin by default):
+
+- `DIGIT_PUBLIC_API_BASE_URL`: public DIGIT gateway origin.
+- `DIGIT_MDMS_SEARCH_PATH`: `/mdms-v2/v1/_search` by default.
+- `DIGIT_UI_CONFIG_MODULE_NAME`: `commonMDMSConfig` by default.
+- `DIGIT_DEFAULT_LOCALE`: `en_IN` by default.
+- `DIGIT_FOOTER_URL`, `DIGIT_FOOTER_BW_URL`, `DIGIT_HOME_URL`: the same Ansible values as digit-ui.
+- `DIGIT_IDENTITY_BFF_BASE_URL`: tenant resolution and password setup only.
+
+The browser sends no cookies or bearer token to public branding services.
+A separate API origin needs CORS for the Keycloak origin. MDMS or route failure
+uses the default DIGIT look; localization failure keeps tenant assets and
+built-in strings. Successful results are cached in sessionStorage for ten
+minutes, partitioned by tenant, locale and deployment settings. A localization
+failure is retried on the next page. `tests/branding.test.ts` replaces the former
+BFF relay coverage; `tests/login-message-keys.test.ts` moved with its logic.

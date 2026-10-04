@@ -4,15 +4,11 @@ on:
   pull_request:
     paths:
       - "backend/identity-bff/**"
-      # tests/unit/login-message-keys.test.ts reads the theme's message keys.
-      - "keycloak/theme-src/src/digit/branding/strings.ts"
       - ".github/workflows/identity-bff-ci.yml"
   push:
     branches: [develop]
     paths:
       - "backend/identity-bff/**"
-      # tests/unit/login-message-keys.test.ts reads the theme's message keys.
-      - "keycloak/theme-src/src/digit/branding/strings.ts"
       - ".github/workflows/identity-bff-ci.yml"
 
 jobs:
