@@ -728,7 +728,8 @@ novu_bridge_smscountry_password: ""
 # `admin`). The identity secrets — keycloak_bff_client_secret,
 # keycloak_magic_link_client_secret, keycloak_admin_client_secret,
 # keycloak_employee_client_secret, keycloak_citizen_client_secret,
-# identity_control_plane_token, identity_session_introspection_token and
+# identity_control_plane_token, identity_session_introspection_token,
+# identity_onboarding_token and
 # pgr_onboarding_worker_token — are generated independently on first deploy
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
@@ -748,12 +749,12 @@ identity_signup_methods: [magic_link, google, github]
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
-identity_onboarding_worker_enabled: false # requires the PGR workload routes
+pgr_onboarding_runner_enabled: false # enable with the coordinated PGR/BFF cutover
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
-identity_digit_provisioner_username: "" # optional MDMS_ADMIN for tenant foundation
-identity_digit_provisioner_tenant_id: ""
-identity_foundation_source_tenant: "pg"
+pgr_digit_provisioner_username: "" # platform provisioner; PGR only, internal APIs
+pgr_digit_provisioner_tenant_id: ""
+pgr_digit_oauth_client_id: "egov-user-client"
 identity_smtp_host: ""
 identity_smtp_port: 587
 identity_smtp_from: ""
@@ -1300,5 +1301,6 @@ bootstrap_secrets:
   # BFF account-management credential. The legacy key remains a migration
   # fallback; new environments should set identity_digit_admin_password.
   identity_digit_admin_password: "CHANGE_ME"
-  identity_digit_provisioner_password: ""
+  pgr_digit_provisioner_password: "" # existing identity_digit_provisioner_password is a fallback
+  pgr_digit_oauth_client_secret: ""
   identity_smtp_password: ""

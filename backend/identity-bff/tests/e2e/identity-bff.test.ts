@@ -19,6 +19,12 @@ import {
   saveSelectedIdentityContext,
   touchIdentitySession,
 } from "../../src/modules/sessions/session-store.js";
+
+async function clearTokenInventory(identity: { subject: string; tenantId: string }): Promise<void> {
+  const ids = await getRedis().smembers(`${config.cachePrefix}:identity:person-tokens:${identity.subject}`);
+  const keys = ids.filter(id => id.startsWith(`${identity.tenantId}:`)).map(id => `${config.cachePrefix}:identity:token:${id}`);
+  if (keys.length) await getRedis().del(...keys);
+}
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
   LogOtpSender,
@@ -29,9 +35,11 @@ import {
   type OtpMessage,
 } from "../../src/modules/citizen-otp/otp-sender.js";
 import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
-import { syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
+import { syncSubject, syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
 import { desiredRolesForSubjectTenant } from "../../src/modules/reconciliation/reconciliation-service.js";
 import {
+  ensureOrganizationMembership,
+  readOrganizationMapping,
   isOrganizationGroupMember,
   readOrganizationGroupReconciliation,
   clearTenantMappingCache,
@@ -68,6 +76,15 @@ async function kcUpdate(path: string, body: unknown): Promise<Response> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** Legacy managed-account fixtures keep unrelated sign-in/reconciliation coverage
+ * until their separately owned removal. Onboarding membership no longer creates accounts. */
+async function legacyMembershipFixture(organizationId: string, userId: string, mobileNumber = "") {
+  await ensureOrganizationMembership({ organizationId, userId });
+  const mapping = await readOrganizationMapping(organizationId);
+  const outcome = (await syncSubject(userId, mobileNumber)).get(mapping!.tenantId);
+  return { tenantId: mapping!.tenantId, digitUserUuid: outcome?.account?.uuid ?? null, created: outcome?.created ?? false };
 }
 
 beforeAll(async () => {
@@ -116,6 +133,7 @@ beforeAll(async () => {
     identityOrganizationMemberGroup: "employees",
   });
   (config as any).identityControlPlaneToken = "test-control-plane";
+  config.identityOnboardingToken = "test-onboarding";
   (config as any).identitySessionIntrospectionToken = "test-session-introspection";
   (config as any).identityReconciliationLeaseSeconds = 30;
   (config as any).keycloakOrganizationRealm = "digit-sandbox";
@@ -263,7 +281,7 @@ describe("identity BFF", () => {
     });
   });
 
-  it("provisions Organizations and BFF-managed DIGIT accounts through the control plane", async () => {
+  it("uses onboarding-owned Organizations while preserving legacy managed-account fixtures", async () => {
     const base = `http://localhost:${getAppPort()}/internal/identity/v1`;
     const unauthorized = await fetch(`${base}/organizations/_ensure`, {
       method: "POST",
@@ -277,16 +295,17 @@ describe("identity BFF", () => {
       "Content-Type": "application/json",
     };
     const post = (path: string, body: unknown) => fetch(`${base}${path}`, {
-      method: "POST", headers, body: JSON.stringify(body),
+      method: "POST", headers: { ...headers, Authorization: `Bearer ${["/organizations/_ensure", "/organizations/_lifecycle", "/memberships/_ensure"].includes(path) ? "test-onboarding" : "test-control-plane"}` }, body: JSON.stringify(body),
     });
 
     expect((await post("/organizations/_ensure", {
-      tenantId: "ke.missing", alias: "missing", name: "Missing",
+      operationId: "test-missing", restartNo: 0, tenantId: "ke.missing", slug: "missing", name: "Missing",
     })).status).toBe(409);
 
     const ensureOrganization = async (tenantId: string, alias: string) => {
-      const response = await post("/organizations/_ensure", { tenantId, alias, name: alias });
+      const response = await post("/organizations/_ensure", { operationId: `test-${alias}`, restartNo: 0, tenantId, slug: alias, name: alias });
       expect(response.status).toBe(200);
+      expect((await post("/organizations/_lifecycle", { operationId: `test-${alias}`, restartNo: 0, state: "ACTIVE" })).status).toBe(200);
       return (await response.json()).organization.id as string;
     };
     const nakuru = await ensureOrganization("ke.nakuru", "nakuru");
@@ -302,17 +321,14 @@ describe("identity BFF", () => {
     expect((await post("/memberships/_ensure", {
       organizationId: nakuru, userId: memberId, digitUserUuid: "legacy-employee",
     })).status).toBe(400);
-    expect((await post("/memberships/_ensure", { organizationId: nakuru, userId: memberId })).status)
-      .toBe(409);
-
-    const first = await post("/memberships/_ensure", {
-      organizationId: nakuru, userId: memberId, mobileNumber: "0712345678",
+    const membership = await post("/memberships/_ensure", {
+      operationId: "test-nakuru", restartNo: 0, tenantId: "ke.nakuru", subject: memberId,
     });
-    expect(first.status).toBe(200);
-    const firstBody = await first.json();
+    expect(await membership.json()).toEqual({ tenantId: "ke.nakuru", subject: memberId, member: true });
+    await expect(legacyMembershipFixture(nakuru, memberId)).rejects.toMatchObject({ status: 409 });
+    const firstBody = await legacyMembershipFixture(nakuru, memberId, "0712345678");
     expect(firstBody).toMatchObject({ created: true });
-    const repeat = await post("/memberships/_ensure", { organizationId: nakuru, userId: memberId });
-    expect(await repeat.json()).toEqual({
+    expect(await legacyMembershipFixture(nakuru, memberId)).toEqual({
       tenantId: "ke.nakuru", digitUserUuid: firstBody.digitUserUuid, created: false,
     });
 
@@ -325,8 +341,7 @@ describe("identity BFF", () => {
     });
 
     const nyeri = await ensureOrganization("ke.nyeri", "nyeri");
-    const second = await post("/memberships/_ensure", { organizationId: nyeri, userId: memberId });
-    const secondBody = await second.json();
+    const secondBody = await legacyMembershipFixture(nyeri, memberId);
     // DIGIT authorizes a token only at its account's home tenant: one account per tenant.
     expect(secondBody).toMatchObject({ tenantId: "ke.nyeri", created: true });
     expect(secondBody.digitUserUuid).not.toBe(firstBody.digitUserUuid);
@@ -801,10 +816,7 @@ describe("identity BFF", () => {
       ["org-bomet-id", "bomet-officers", "GRO"],
       ["org-kisumu-id", "kisumu-viewers", "PGR_VIEWER"],
     ]) {
-      const membership = await ensure("/memberships/_ensure", {
-        organizationId, userId: "identity-user-1", mobileNumber: "0712345678",
-      });
-      expect(membership.status).toBe(200);
+      await legacyMembershipFixture(organizationId, "identity-user-1", "0712345678");
       const assignment = await ensure("/role-assignments/_ensure", {
         organizationId, userId: "identity-user-1", groupName,
         clientId: "digit-ui", roles: [role],
@@ -915,6 +927,7 @@ describe("identity BFF", () => {
         issuer: getIssuer(),
         subject: "identity-user-1",
         email: "person@example.com",
+        emailVerified: true,
         name: "Demo Person",
         preferredUsername: "demo.person",
       },
@@ -1041,11 +1054,7 @@ describe("identity BFF", () => {
       `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/organizations/${nakuruOrganizationId}/members`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify("identity-user-1") },
     );
-    expect((await ensure("/memberships/_ensure", {
-      organizationId: nakuruOrganizationId,
-      userId: "identity-user-1",
-      mobileNumber: "0712345678",
-    })).status).toBe(200);
+    await legacyMembershipFixture(nakuruOrganizationId, "identity-user-1", "0712345678");
     expect((await ensure("/role-assignments/_ensure", {
       organizationId: nakuruOrganizationId,
       userId: "identity-user-1",
@@ -1132,9 +1141,7 @@ describe("identity BFF", () => {
       });
       const userId = created.headers.get("location")!.split("/").pop()!;
       crowd.push(userId);
-      expect((await control("/memberships/_ensure", {
-        organizationId: "org-bomet-id", userId, mobileNumber: "0712345678",
-      })).status).toBe(200);
+      await legacyMembershipFixture("org-bomet-id", userId, "0712345678");
       expect((await control("/role-assignments/_ensure", {
         organizationId: "org-bomet-id", userId, groupName: "bomet-officers",
         clientId: "digit-ui", roles: ["GRO"],
@@ -1845,9 +1852,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     const original = citizenTokenMinter();
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet.ulb1");
     expect(identity.tenantId).toBe("ke");
-    const tokenCache = `${config.cachePrefix}:digit-user-token:${identity.key}`;
+    const tokenCache = () => clearTokenInventory(identity);
     for (const tenantId of ["ke.bomet", "zz", "ke.kisumu"]) {
-      await getRedis().del(tokenCache);
+      await tokenCache();
       setCitizenTokenMinter({
         async mint(account) {
           return {
@@ -1865,7 +1872,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         setCitizenTokenMinter(original);
       }
     }
-    await getRedis().del(tokenCache);
+    await tokenCache();
   });
 
   it("answers a stable 503 when the tenant has no CITIZEN role, without seeding one", async () => {
@@ -1873,7 +1880,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     for (const [key, account] of digit.accounts) {
       if (account.userName === identity.username) digit.accounts.delete(key);
     }
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await clearTokenInventory(identity);
     const creates = digit.stats.creates;
     const rolesKey = digit.mdmsKey("ke", "ACCESSCONTROL-ROLES.roles");
     const roles = JSON.stringify(digit.mdms.get(rolesKey) ?? null);
@@ -2016,7 +2023,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
   it("lets a citizen who verified a new number keep signing in", async () => {
     expect((await citizenSelect(await signIn("citizen"))).status).toBe(200);
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await clearTokenInventory(identity);
     const moved = await citizenSelect(await signIn("citizen", "newphone"));
     expect(moved.status).toBe(200);
     const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
@@ -2027,7 +2034,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     // with what DIGIT stores, not with what the BFF last wrote, so the next
     // mint writes the verified number back instead of failing the OTP grant.
     digit.accounts.get(account.uuid)!.mobileNumber = "712345670";
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await clearTokenInventory(identity);
     expect((await citizenSelect(await signIn("citizen", "newphone"))).status).toBe(200);
     expect(digit.accounts.get(account.uuid)!.mobileNumber).toBe("712345679");
   });
@@ -2858,7 +2865,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const identity = linkedIdentity(config.keycloakIssuer, "linked-employee-3", {
         userType: "EMPLOYEE", tenantId: "ke.bomet", digitUuid: account.uuid,
       });
-      const login = () => managedUserLogin(identity, "session-emp3");
+      const { sessionId } = await createIdentitySession(
+        { accessToken: "test-access", accessExpiresIn: 600 },
+        { sub: "linked-employee-3", email: "emp3.kc@example.com" }, config.keycloakBffClientId,
+      );
+      const login = () => managedUserLogin(identity, sessionId);
       const updates = digit.stats.updates;
       digit.setMaskSearchMobileNumbers(true);
       try {

@@ -1,3 +1,4 @@
+import { parseStaffCredentialConfig } from "./staff-credential-config.js";
 const keycloakBffClientId =
   process.env.KEYCLOAK_BFF_CLIENT_ID || "digit-identity-bff";
 const digitMdmsCreateUrl = process.env.DIGIT_MDMS_CREATE_URL || "";
@@ -42,6 +43,7 @@ function keycloakIssuerRealm(): string {
 }
 
 export const config = {
+  ...parseStaffCredentialConfig(process.env),
   port: parseInt(process.env.PORT || "3000"),
 
   // Keycloak
@@ -150,6 +152,8 @@ export const config = {
   ),
   identityControlPlaneToken:
     process.env.IDENTITY_CONTROL_PLANE_TOKEN || "",
+  identityOnboardingToken:
+    process.env.IDENTITY_ONBOARDING_TOKEN || "",
   identitySessionIntrospectionToken:
     process.env.IDENTITY_SESSION_INTROSPECTION_TOKEN || "",
   identityReconcileOnStartup:

@@ -4,8 +4,14 @@ import { config } from "../../src/infrastructure/config.js";
 import { closeCache, initCache } from "../../src/infrastructure/redis.js";
 import { resetAdminToken } from "../../src/integrations/keycloak/admin-session.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { updateKeycloakUser } from "../../src/modules/sync/keycloak-writer.js";
+import { updateKeycloakUser, KeycloakConflictError } from "../../src/modules/sync/keycloak-writer.js";
 import { keycloakTestClient } from "../fixtures/keycloak/client.js";
+import { mirrorPerson } from "../../src/modules/sync/mirror.js";
+import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
+
+const digit = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }));
+vi.mock("../../src/modules/sync/digit-reader.js", () => ({ readDigitAccount: digit.read }));
+vi.mock("../../src/modules/accounts/digit-writer.js", () => ({ writeDigitIdentifiers: digit.write }));
 
 describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", () => {
   let client: Awaited<ReturnType<typeof keycloakTestClient>>;
@@ -78,5 +84,47 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak 26.7.3 writer", (
     const current = await (await client.request(`/users/${subject}`)).json();
     expect(current.enabled).toBe(false);
     expect(current.firstName).toBe("After");
+  });
+
+  it("never mirrors a masked DIGIT name into the real user profile", async () => {
+    const { subject } = await createUser();
+    const uuid = randomUUID();
+    await withPersonLease(subject, () => updateKeycloakUser(subject, user => ({ ...user,
+      attributes: { ...user.attributes, "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "tenant", uuid,
+        state: "active", invitationVersion: 1, createdAt: 1, boundAt: 1, createdBy: { kind: "workload" } }] })] },
+    })));
+    digit.read.mockResolvedValue({ uuid, tenantId: "tenant", type: "EMPLOYEE", userName: "employee",
+      name: "****", active: true, roles: [{ code: "EMPLOYEE", tenantId: "tenant" }] });
+    await mirrorPerson(subject);
+    const current = await (await client.request(`/users/${subject}`)).json();
+    expect(current.firstName).toBe("Before");
+    expect(current.lastName).toBe("Name");
+    expect(JSON.parse(current.attributes["digit.accounts"][0]).entries[0]).toMatchObject({ uuid, active: true });
+  });
+
+  it("propagates a changed staff email only after Keycloak reports it verified", async () => {
+    const { subject } = await createUser();
+    const uuid = randomUUID();
+    await withPersonLease(subject, () => updateKeycloakUser(subject, profile => ({ ...profile,
+      email: "changed@example.test", emailVerified: false,
+      attributes: { ...profile.attributes, "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "tenant", uuid,
+        state: "active", invitationVersion: 1, createdAt: 1, boundAt: 1, createdBy: { kind: "workload" } }] })] },
+    }), { allowEmailChange: true }));
+    digit.write.mockReset().mockResolvedValue({ status: "written" });
+    await propagateIdentifiers(subject);
+    expect(digit.write).not.toHaveBeenCalled();
+    const verified = await (await client.request(`/users/${subject}`)).json();
+    await client.request(`/users/${subject}`, "PUT", { ...verified, emailVerified: true });
+    expect((await propagateIdentifiers(subject)).written).toBe(1);
+    expect(digit.write).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "tenant", uuid }),
+      { emailId: "changed@example.test" });
+  });
+
+  it("reports a typed conflict when changing to another real user's email", async () => {
+    const first = await createUser();
+    const second = await createUser();
+    await expect(withPersonLease(first.subject, () => updateKeycloakUser(first.subject,
+      user => ({ ...user, email: `${second.username}@example.test`, emailVerified: false }),
+      { allowEmailChange: true }))).rejects.toBeInstanceOf(KeycloakConflictError);
   });
 });
