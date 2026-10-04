@@ -92,6 +92,19 @@ describe("person lease", () => {
 });
 
 describe("uuid lock", () => {
+  it("is renewed while held and reports a lost lock", async () => {
+    const uuid = `uuid-renew-${process.pid}-${++run}`;
+    await withPersonLease(subject(), () => withUuidLock("pg", uuid, async (lock) => {
+      await getRedis().pexpire(uuidLockKey("pg", uuid), 50);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      await expect(lock.assertHeld()).rejects.toBeInstanceOf(LeaseLostError);
+    }));
+    await withPersonLease(subject(), () => withUuidLock("pg", uuid, async (lock) => {
+      await lock.assertHeld();
+      expect(await getRedis().pttl(uuidLockKey("pg", uuid))).toBeGreaterThan(20_000);
+    }));
+  });
+
   it("is refused outside a person lease", async () => {
     await expect(withUuidLock("pg", "u-1", async () => undefined)).rejects.toThrow(/inside a person lease/);
   });
