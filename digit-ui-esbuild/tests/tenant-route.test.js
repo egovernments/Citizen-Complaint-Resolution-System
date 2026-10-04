@@ -175,3 +175,139 @@ test("MDMS app id stays separate from the tenant route base", () => {
   }
   assert.equal(mdmsAppId(), "digit-ui");
 });
+
+// --- Slug→context cache: used only when the BFF is down (network error or 5xx).
+
+function memoryStorage() {
+  const data = new Map();
+  return {
+    data,
+    getItem: (key) => (data.has(key) ? data.get(key) : null),
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: (key) => data.delete(key),
+  };
+}
+
+function tenantReply(name = "Bomet County Government") {
+  return async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      tenant: {
+        urlSlug: "bomet-county",
+        tenantId: "ke.bomet",
+        rootTenantId: "ke",
+        parentTenantId: "ke",
+        fallbackTenantIds: ["ke"],
+        name,
+      },
+    }),
+  });
+}
+
+const ROUTE = "/bomet-county/digit-ui/citizen";
+const CACHE_KEY = "Digit.tenantContext.bomet-county";
+
+test("a successful lookup saves the tenant context and returns the live answer", async () => {
+  const storage = memoryStorage();
+  const resolved = await resolveTenantRoute(ROUTE, tenantReply(), storage);
+  assert.equal(resolved.tenantId, "ke.bomet");
+  assert.equal(JSON.parse(storage.data.get(CACHE_KEY)).tenant.tenantId, "ke.bomet");
+});
+
+test("a successful lookup is used instead of the cache and refreshes it (tenant rename)", async () => {
+  const storage = memoryStorage();
+  await resolveTenantRoute(ROUTE, tenantReply("Old Name"), storage);
+  const resolved = await resolveTenantRoute(ROUTE, tenantReply("Bomet Renamed"), storage);
+  assert.equal(resolved.name, "Bomet Renamed");
+  assert.equal(JSON.parse(storage.data.get(CACHE_KEY)).tenant.name, "Bomet Renamed");
+  // The next outage now falls back to the new name, not the old one.
+  const offline = await resolveTenantRoute(ROUTE, async () => { throw new TypeError("Failed to fetch"); }, storage);
+  assert.equal(offline.name, "Bomet Renamed");
+});
+
+test("a network error falls back to the saved context", async () => {
+  const storage = memoryStorage();
+  await resolveTenantRoute(ROUTE, tenantReply(), storage);
+  const resolved = await resolveTenantRoute(ROUTE, async () => { throw new TypeError("Failed to fetch"); }, storage);
+  assert.equal(resolved.tenantId, "ke.bomet");
+  assert.equal(resolved.appBasePath, "bomet-county/digit-ui");
+  assert.equal(resolved.surface, "citizen");
+});
+
+for (const status of [500, 502, 503, 504]) {
+  test(`a ${status} from the BFF falls back to the saved context`, async () => {
+    const storage = memoryStorage();
+    await resolveTenantRoute(ROUTE, tenantReply(), storage);
+    const resolved = await resolveTenantRoute(ROUTE, async () => ({ ok: false, status }), storage);
+    assert.equal(resolved.tenantId, "ke.bomet");
+    assert.ok(storage.data.has(CACHE_KEY));
+  });
+}
+
+for (const status of [400, 401, 403, 404, 410]) {
+  test(`a ${status} never uses the saved context and removes it`, async () => {
+    const storage = memoryStorage();
+    await resolveTenantRoute(ROUTE, tenantReply(), storage);
+    await assert.rejects(
+      resolveTenantRoute(ROUTE, async () => ({ ok: false, status }), storage),
+      (error) => error.status === status,
+    );
+    assert.equal(storage.data.has(CACHE_KEY), false);
+    // A later outage has nothing to fall back to.
+    await assert.rejects(
+      resolveTenantRoute(ROUTE, async () => { throw new TypeError("Failed to fetch"); }, storage),
+      /temporarily unavailable/i,
+    );
+  });
+}
+
+test("an outage with nothing saved still fails", async () => {
+  const storage = memoryStorage();
+  await assert.rejects(
+    resolveTenantRoute(ROUTE, async () => { throw new TypeError("Failed to fetch"); }, storage),
+    /temporarily unavailable/i,
+  );
+  await assert.rejects(
+    resolveTenantRoute(ROUTE, async () => ({ ok: false, status: 503 }), storage),
+    /temporarily unavailable/i,
+  );
+});
+
+test("a reply that fails verification is not treated as an outage", async () => {
+  const storage = memoryStorage();
+  await resolveTenantRoute(ROUTE, tenantReply(), storage);
+  await assert.rejects(
+    resolveTenantRoute(ROUTE, async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ tenant: { urlSlug: "another", tenantId: "ke.bomet", rootTenantId: "ke" } }),
+    }), storage),
+    /could not be verified/i,
+  );
+});
+
+test("a saved entry for another slug is ignored", async () => {
+  const storage = memoryStorage();
+  storage.setItem(CACHE_KEY, JSON.stringify({ tenant: { urlSlug: "other", tenantId: "ke.other" } }));
+  await assert.rejects(
+    resolveTenantRoute(ROUTE, async () => ({ ok: false, status: 503 }), storage),
+    /temporarily unavailable/i,
+  );
+});
+
+test("broken or blocked storage does not break a live lookup", async () => {
+  const throwing = {
+    getItem() { throw new Error("blocked"); },
+    setItem() { throw new Error("quota"); },
+    removeItem() { throw new Error("blocked"); },
+  };
+  const resolved = await resolveTenantRoute(ROUTE, tenantReply(), throwing);
+  assert.equal(resolved.tenantId, "ke.bomet");
+  const corrupt = memoryStorage();
+  corrupt.setItem(CACHE_KEY, "{not json");
+  await assert.rejects(
+    resolveTenantRoute(ROUTE, async () => ({ ok: false, status: 500 }), corrupt),
+    /temporarily unavailable/i,
+  );
+});
