@@ -13508,17 +13508,6 @@
       }
     },
     {
-      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
-      "uniqueIdentifier": "SUPERUSER.900000",
-      "data": {
-        "rolecode": "SUPERUSER",
-        "actionid": 900000,
-        "actioncode": "",
-        "tenantId": "{tenantid}",
-        "id": 900000
-      }
-    },
-    {
       "schemaCode": "ACCESSCONTROL-ACTIONS-TEST.actions-test",
       "uniqueIdentifier": "900001",
       "data": {
@@ -13537,17 +13526,6 @@
       "uniqueIdentifier": "ACCOUNT_ADMIN.900001",
       "data": {
         "rolecode": "ACCOUNT_ADMIN",
-        "actionid": 900001,
-        "actioncode": "",
-        "tenantId": "{tenantid}",
-        "id": 900001
-      }
-    },
-    {
-      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
-      "uniqueIdentifier": "SUPERUSER.900001",
-      "data": {
-        "rolecode": "SUPERUSER",
         "actionid": 900001,
         "actioncode": "",
         "tenantId": "{tenantid}",
@@ -15661,17 +15639,6 @@
       "uniqueIdentifier": "ACCOUNT_ADMIN.901000",
       "data": {
         "rolecode": "ACCOUNT_ADMIN",
-        "actionid": 901000,
-        "actioncode": "",
-        "tenantId": "{tenantid}",
-        "id": 901000
-      }
-    },
-    {
-      "schemaCode": "ACCESSCONTROL-ROLEACTIONS.roleactions",
-      "uniqueIdentifier": "SUPERUSER.901000",
-      "data": {
-        "rolecode": "SUPERUSER",
         "actionid": 901000,
         "actioncode": "",
         "tenantId": "{tenantid}",

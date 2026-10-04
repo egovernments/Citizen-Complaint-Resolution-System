@@ -56,6 +56,11 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     workflow: { created: [] as string[], skipped: [] as string[], failed: [] as string[] },
     warnings: [] as string[],
   };
+  for (const input of ['pincode_allowlist', 'dashboard_roles']) {
+    if (Object.prototype.hasOwnProperty.call(args, input)) {
+      results.warnings.push(`${input} is a legacy input and is ignored by platform bootstrap; configure it in the workspace.`);
+    }
+  }
   async function post(path: string, body: Record<string, unknown>): Promise<Record<string, any>> {
     if (!direct) {
       // Default transport retains normal Kong authorization and endpoint mapping.
@@ -169,7 +174,7 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     summary: { schemas_copied: results.schemas.copied.length, schemas_skipped: results.schemas.skipped.length, schemas_failed: 0,
       data_copied: results.data.copied.length, data_skipped: results.data.skipped.length, data_failed: 0,
       workflows_created: 0, workflows_skipped: 0, workflows_failed: 0, localizations_copied: 0, localizations_failed: 0,
-      locales_seen: 0, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, warnings: 0 },
+      locales_seen: 0, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, warnings: results.warnings.length },
     adminUser: { provisioned: true, username, tenantId: target, roles: employeeRoles.map((role) => role.code) },
     adminEmployee: { provisioned: employeeProvisioned, code: username, department: 'ONBOARDING_ADMIN', designation: 'ONBOARDING_FOUNDER' },
     localizations: [], results, nextSteps: ['Configure workspace branding, geography, departments, employees and complaint types.'],
