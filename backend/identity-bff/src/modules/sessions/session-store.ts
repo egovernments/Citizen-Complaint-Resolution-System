@@ -373,12 +373,23 @@ export async function createPhoneOtpSession(input: {
   return { sessionId, maxAge };
 }
 
-/** Rewrites a session record without changing its expiry. */
-export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<void> {
-  await withPersonLease(session.claims.sub, async (lease) => {
-    const fresh = await requireCurrentSession(lease, sessionId);
-    if ((fresh.revocationGeneration ?? 0) !== (session.revocationGeneration ?? 0)) throw new SessionRevokedError();
-    await writeSessionRecord(lease, sessionId, { ...session, lastSeenAt: Date.now() }, "KEEP", "XX");
+/**
+ * Rewrites a session record without changing its expiry. Only an existing,
+ * unrevoked record is rewritten (`XX`): a logout or revocation that ended it
+ * meanwhile is never undone. Returns false, without throwing, when the
+ * session has ended, so the caller can treat it as signed out.
+ */
+export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<boolean> {
+  return withPersonLease(session.claims.sub, async (lease) => {
+    try {
+      const fresh = await requireCurrentSession(lease, sessionId);
+      if ((fresh.revocationGeneration ?? 0) !== (session.revocationGeneration ?? 0)) return false;
+      await writeSessionRecord(lease, sessionId, { ...session, lastSeenAt: Date.now() }, "KEEP", "XX");
+      return true;
+    } catch (error) {
+      if (error instanceof SessionRevokedError) return false;
+      throw error;
+    }
   });
 }
 
