@@ -66,9 +66,9 @@ export default function OnboardingLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per step opened, not per tenant re-render
   }, [openedStep?.id]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try { await logout(); navigate('/login'); }
+    catch (error) { window.alert(error instanceof Error ? error.message : 'Sign-out failed. Please retry.'); }
   };
 
   const handleGoToManagement = () => {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -75,12 +76,13 @@ export function StepActions({
   hint,
 }: {
   onBack?: () => void;
-  onContinue: () => void;
+  onContinue: () => void | Promise<void>;
   continueLabel?: string;
   busy?: boolean;
   disabled?: boolean;
   hint?: string;
 }) {
+  const [pending, setPending] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-3 pt-2">
       {onBack && (
@@ -89,7 +91,7 @@ export function StepActions({
           Back
         </Button>
       )}
-      <Button onClick={onContinue} disabled={busy || disabled} className="h-10 gap-2 px-5">
+      <Button onClick={async () => { setPending(true); try { await onContinue(); } finally { setPending(false); } }} disabled={busy || pending || disabled} className="h-10 gap-2 px-5">
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         {continueLabel}
       </Button>
