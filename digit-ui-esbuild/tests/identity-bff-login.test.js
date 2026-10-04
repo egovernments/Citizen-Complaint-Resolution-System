@@ -242,16 +242,16 @@ test("signed-out after an authResult round trip does not auto-redirect (no loop)
   assert.equal(result.fromAuthResult, true);
 });
 
-test("a failed authResult reports the BFF message", async () => {
+test("a failed authResult localizes its code and ignores deprecated BFF copy", async () => {
   const { fetchImpl } = stubBff({
-    "GET /identity/v1/auth-results/r-2": json(200, { status: "failed", message: "Wrong tenant" }),
+    "GET /identity/v1/auth-results/r-2": json(200, { status: "failed", code: "ACCOUNT_LOCKED", message: "Deprecated server text" }),
   });
   const result = await establishIdentityBffSession({
     surface: "citizen", tenant: TENANT, authResultId: "r-2", fetchImpl,
   });
   assert.equal(result.status, "signed-out");
-  assert.equal(result.messageKey, "CORE_IDENTITY_SIGNIN_FAILED");
-  assert.equal(result.message, "Wrong tenant");
+  assert.equal(result.messageKey, "CORE_IDENTITY_ACCOUNT_LOCKED");
+  assert.match(result.message, /locked/);
 });
 
 // ------------------------------------------------------------- citizen session
@@ -392,7 +392,7 @@ test("UserService.logout on a citizen tenant route posts surface=citizen and lan
   assert.equal(calls[0].url, "/identity/v1/logout");
   assert.equal(calls[0].init.method, "POST");
   assert.equal(calls[0].init.credentials, "include");
-  assert.deepEqual(calls[0].body, { surface: "citizen" });
+  assert.deepEqual(calls[0].body, { surface: "citizen", scope: "current" });
   assert.deepEqual(cleared.sort(), ["local", "session"]);
   assert.equal(replacedWith, "https://example.test/bomet-county/digit-ui/citizen/login");
 });
@@ -401,6 +401,70 @@ test("UserService.logout on an employee tenant route posts surface=employee and 
   const { calls, replacedWith } = await withBrowser(
     "/bomet-county/digit-ui/employee/pgr/inbox", "employee", () => UserService.logout(),
   );
-  assert.deepEqual(calls[0].body, { surface: "employee" });
+  assert.deepEqual(calls[0].body, { surface: "employee", scope: "current" });
   assert.equal(replacedWith, "https://example.test/bomet-county/digit-ui/employee/user/login");
+});
+
+
+test("pending employee invitation becomes an explicit accept step for this tenant", async () => {
+  const invitation = { tenantId: TENANT.tenantId, invitationVersion: 3, name: "Bomet", expiresAt: 9999999999999 };
+  const { fetchImpl } = stubBff({
+    "GET /identity/v1/session?surface=employee": json(200, { ...SESSION, pendingInvitations: [invitation] }),
+    "POST /identity/v1/contexts/_select": json(403, { code: "PENDING_INVITATION" }),
+  });
+  const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
+  assert.equal(result.status, "pending-invitation");
+  assert.deepEqual(result.invitation, invitation);
+});
+
+test("an invitation for a different tenant is never offered for acceptance", async () => {
+  const { fetchImpl } = stubBff({
+    "GET /identity/v1/session?surface=employee": json(200, { ...SESSION, pendingInvitations: [{ tenantId: "ke.other", invitationVersion: 3 }] }),
+    "POST /identity/v1/contexts/_select": json(403, { code: "PENDING_INVITATION" }),
+  });
+  const result = await establishIdentityBffSession({ surface: "employee", tenant: TENANT, fetchImpl });
+  assert.equal(result.status, "forbidden");
+  assert.equal(result.invitation, undefined);
+});
+
+test("sign out others preserves the current app session and does not navigate", async () => {
+  const { calls, cleared, replacedWith } = await withBrowser(
+    "/bomet-county/digit-ui/employee/pgr/inbox", "employee", () => UserService.logout("others"),
+  );
+  assert.deepEqual(calls[0].body, { surface: "employee", scope: "others" });
+  assert.deepEqual(cleared, []);
+  assert.equal(replacedWith, null);
+});
+
+test("sign out everywhere clears local credentials and returns to tenant login", async () => {
+  const { calls, cleared, replacedWith } = await withBrowser(
+    "/bomet-county/digit-ui/employee/pgr/inbox", "employee", () => UserService.logout("all"),
+  );
+  assert.deepEqual(calls[0].body, { surface: "employee", scope: "all" });
+  assert.deepEqual(cleared.sort(), ["local", "session"]);
+  assert.match(replacedWith, /employee\/user\/login$/);
+});
+
+test("BFF logout does not call native token revocation even with a stored user", async () => {
+  const original = UserService.logoutUser;
+  let nativeCalls = 0;
+  UserService.logoutUser = () => { nativeCalls += 1; throw new Error("native logout must not run"); };
+  try {
+    await withBrowser("/bomet-county/digit-ui/citizen/pgr/complaints", "citizen", () => UserService.logout());
+    assert.equal(nativeCalls, 0);
+  } finally { UserService.logoutUser = original; }
+});
+
+
+test("failed BFF logout retains local state for retry on every scope", async () => {
+  for (const scope of ["current", "others", "all"]) {
+    const { cleared, replacedWith } = await withBrowser(
+      "/bomet-county/digit-ui/employee/pgr/inbox", "employee", async () => {
+        window.fetch = async () => json(503, {});
+        await assert.rejects(UserService.logout(scope));
+      },
+    );
+    assert.deepEqual(cleared, []);
+    assert.equal(replacedWith, null);
+  }
 });

@@ -1,3 +1,4 @@
+import IdentityAccount from "../../components/IdentityAccount";
 import { BackLink, CitizenHomeCard, CitizenInfoLabel } from "@egovernments/digit-ui-components";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -245,6 +246,10 @@ const Home = ({
               redirect to /citizen/login with a `from` state so post-
               login the user lands back on the profile page they tried
               to open (CCRS#556 follow-up). */}
+          <Route path={`${path}/user/account`} render={({ location }) =>
+            Digit.UserService.getUser()?.access_token ? <IdentityAccount surface="citizen" /> :
+              <Redirect to={{ pathname: `${path}/login`, state: { from: location.pathname } }} />
+          } />
           <Route
             path={`${path}/user/profile`}
             render={({ location }) =>
