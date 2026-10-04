@@ -1,3 +1,4 @@
+import { startKeycloakEventPoller } from "../modules/revocation/poller.js";
 import { closeCache, initCache } from "../infrastructure/redis.js";
 import { config } from "../infrastructure/config.js";
 import { createIdentityApp } from "./create-app.js";
@@ -12,6 +13,7 @@ initCache();
 warnAboutInsecureOtpModes();
 
 const app = createIdentityApp();
+const stopEventPoller = startKeycloakEventPoller();
 const reconcile = () => void runIdentityReconciliation()
   .then((result) => console.log("Identity reconciliation:", result))
   .catch((error) => console.error(
@@ -35,6 +37,7 @@ if (config.identityReconciliationIntervalSeconds > 0) {
 }
 
 process.on("SIGTERM", () => {
+  stopEventPoller();
   server.close(() => {
     void closeCache().finally(() => process.exit(0));
   });
