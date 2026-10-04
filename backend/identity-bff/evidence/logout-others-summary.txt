@@ -1,49 +1,62 @@
 Shared DIGIT token preservation for logout scope=others
-Source tested: a22b65f07 (base: identity/completion-base69f9af553)
+Source tested: 55ea8649cdcfa170b5ebf92a72fde93f77d81f9a
+Integrated base: identity/completion-base a92e9256f (roles-write gate fix)
 Task: task_36a3f61c33814e998119686124e65d18
 
-Observed real gate symptom: 8c-gate-report.md reported that logout-others
-kept the current BFF session but invalidated its shared DIGIT access token.
-The report did not record the Redis inventory/holder topology.
+Gate context supplied by root through surfaces-owner:
+- Employee kdemp1, tenant kd, MANAGED kcbff- account, binding-else-managed
+  transition path, rotate mode, two employee sessions both selecting kd.
+- Reported symptom: logout-others kept current BFF session but invalidated its
+  shared DIGIT token. No Redis inventory/holder trace is available.
 
 Reproduction boundary:
-- Accurate same-account/same-token holders already pass on base69f9af553.
-- A plausible variant fails there: an additional tenant-alias inventory entry
-  for the same UUID/token is held only by an ended session. Revoking through
-  that entry invalidates the token still held by the current session.
-- This proves the variant, NOT the cause of the 8c observation. Owner approved
-  scoped protection for this variant on the identity-gate-fixes bridge thread.
-- Before code change, the two new regression cases yielded 1 pass / 1 fail.
-  Failed case: logout others keeps current shared token (duplicate inventory).
-  No live token/cookie values are included in this evidence.
+- Ordinary same-account/same-token holders already pass on base69f9af553.
+- Required public HTTP managed/rotate topology also passes using a92e9256f's
+  pre-fix revocation source. Fixture uses ke.bomet and a dedicated subject.
+- Additional alias variant fails before the fix: same UUID/token inventoried
+  under a second tenant ref held only by the ended session. Current BFF stays
+  active, but original DIGIT /_details returns401 after logout-others.
+- Public cases before fix: 1 passed / 1 failed. Both pass with this fix.
+  See logout-others-managed-before.log (test source55ea8649c, revocation source
+  a92e9256f). This proves the variant, NOT the cause of the live8c observation.
+- Owner approved alias protection under the root shared-token rule.
 
 Implemented:
-- Snapshot current-session-held accounts and token values under the person
-  lease before ending the other BFF/Keycloak sessions.
+- Snapshot current-session-held account refs and token values under the person
+  lease before ending other BFF/Keycloak sessions. This inventory-based check
+  covers both managed and binding accounts without filtering account type.
 - Preserve current holder/inventory; skip external logout and retry enqueue
-  for any protected token, including duplicate inventory aliases.
-- Forget an unheld duplicate alias record after ending its other sessions.
-- Other-only tokens still revoke. Current/all use their existing behavior.
-- Frozen contract section8 documents that other consumers of a retained shared
-  token can continue until expiry/account-wide revocation. Logout section3.3.2
-  and core-internals API comment match this limitation.
+  for any protected token value, including duplicate inventory aliases.
+- Forget unheld alias records after ending their other sessions.
+- Other-only tokens still revoke. Current/all keep existing behavior.
+- Contract section8 explains continued usability by other consumers, including
+  consumers who obtained the same token directly from egov-user outside BFF.
 
-Executed (serial test files, real Redis16390, local provider doubles):
-REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff tests/unit/revocation.test.ts tests/e2e/self-service.test.ts
-42 tests passed. Log: logout-others-focused.log.
+Managed-path holder inspection and HTTP regression:
+- staffAccess returns allowed:true/via:managed with no binding seeded.
+- First public _select takes managedUserLogin in rotate mode (one password
+  update), whose cacheLogin records token + current holder (managed-account-
+  service.ts:351). The public route also holds the token (routes.ts:213).
+- Second public _select returns the same cached token without another password
+  update; both actual session hashes are present in tokenHoldersKey(account).
+- Public logoutothers leaves current /session200 and other /session401; mock
+  Keycloak admin log requests DELETE for only the other KC session.
+- Original DIGIT token /_details200 is asserted BEFORE any possible reselection.
+  Current holder remains, alias record is removed, no DIGIT logout is called.
+- Public logoutall then removes current BFF session and invalidates that token.
+- Unit coverage additionally checks unrelated-account revocation, repeat logout,
+  delayed KC logout processing, empty retry queue, and unchanged current scope.
+
+Executed with serial test files, real Redis16390 and local provider doubles:
+REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff tests/unit/revocation.test.ts tests/e2e/self-service.test.ts tests/e2e/identity-bff.test.ts
+120 passed. Log: logout-others-focused.log.
 
 REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff
-650 passed, 11 skipped, 2 todo; 51 files passed, 3 skipped.
+661 passed, 11 skipped, 2 todo; 51 files passed, 3 skipped.
 Log: logout-others-full.log.
 
 npx --prefix backend/identity-bff tsc --noEmit -p backend/identity-bff/tsconfig.json
-Exit 0, no diagnostics. Log: logout-others-tsc.log.
+Exit0, no diagnostics. Log: logout-others-tsc.log.
 
-Regression assertions include current DIGIT token validation after logout,
-other BFF/Keycloak session termination, unrelated account revocation, retained
-holder/inventory, duplicate cleanup, repeated logout, delayed Keycloak logout
-processing, empty retry queue, and subsequent logout-all revocation. Existing
-current/shared-token behavior remains covered.
-
-No deployment or live dependency rerun. Root owns redeploy and the 8c gate;
-its sanitized holder/selection trace was still pending at implementation handoff.
+No deployment or live dependency rerun. Root owns redeploy and the8c gate.
+No token/cookie values are included in these logs.
