@@ -108,7 +108,6 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | Method | Path | Auth | State | Items |
 |---|---|---|---|---|
 | GET | `/livez` | none | live | — |
-| GET | `/healthz` | none | deleted-later | 15 |
 | GET | `/readyz` | none | changing | 15 |
 | GET | `/identity/v1/auth-methods` | none | changing | 1, 2 |
 | GET | `/identity/v1/authorize` | none (session for `action`) | changing | 1, 4 |
@@ -174,7 +173,7 @@ Check = "ok" | "down" | "disabled"
 - Poller lag above `IDENTITY_POLLER_MAX_LAG_SECONDS` makes the poller check `down`. A reconcile lag above twice the interval makes the reconcile check `down`.
 - PGR is never a readiness dependency.
 
-**`GET /healthz`** keeps today's `{status, redis}` until item 15 deletes it.
+`GET /healthz` was removed by item 15. Use `/livez` for process liveness and `/readyz` for dependencies.
 
 ### 3.2 Browser, anonymous
 

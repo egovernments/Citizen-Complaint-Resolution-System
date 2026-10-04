@@ -51,7 +51,6 @@ const BROWSER_WRITE: HttpErrorCode[] = ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "
 export const ROUTES: RouteContract[] = [
   // Probes
   { method: "GET", path: "/livez", auth: "none", state: "live", items: [], codes: [] },
-  { method: "GET", path: "/healthz", auth: "none", state: "deleted-later", items: [15], codes: [] },
   { method: "GET", path: "/readyz", auth: "none", state: "changing", items: [15], codes: [] },
 
   // Browser, anonymous

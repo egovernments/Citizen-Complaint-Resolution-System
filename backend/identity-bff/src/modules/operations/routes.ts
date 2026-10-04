@@ -5,15 +5,6 @@ import { getRedis } from "../../infrastructure/redis.js";
 export function registerOperationalRoutes(app: express.Application): void {
   app.get("/livez", (_request, response) => response.json({ status: "ok" }));
 
-  app.get("/healthz", async (_request, response) => {
-    try {
-      await getRedis().ping();
-      return response.json({ status: "ok", redis: "connected" });
-    } catch {
-      return response.status(503).json({ status: "unhealthy", redis: "disconnected" });
-    }
-  });
-
   app.get("/readyz", async (_request, response) => {
     const checks: Record<string, string> = {};
     try {
