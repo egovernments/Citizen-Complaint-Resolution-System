@@ -490,7 +490,10 @@ Forwards the configurator session cookie.
 ```
 200 {active: true, identity: {issuer, subject, email, emailVerified, name, preferredUsername}}
 401 {code: "SESSION_REQUIRED", error}
+503 {code: "IDENTITY_UNAVAILABLE", error}   // the fresh Keycloak read failed; never reported as SESSION_REQUIRED
 ```
+
+It takes no person lease, so it never answers `IDENTITY_BUSY`.
 
 - `emailVerified` is new. PGR copies the founder's email into HRMS only when it is `true`.
 - "Before `IDENTITY_READY` only" is a **PGR-side** rule: the BFF has no saga state to enforce it.
@@ -974,7 +977,7 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 ## 12. Operations
 
 **External dependency: PGR workspace readiness (#2103).** The BFF does not expose or relay workspace readiness or any other onboarding state.
-- The configurator calls PGR directly: `POST /pgr-services/v2/onboarding/workspaces/_search` and `POST /pgr-services/v2/onboarding/workspaces/_update {tenantId, step, state, version}`.
+- The configurator calls PGR directly: `POST /pgr-services/v2/onboarding/workspaces/_search`, `POST /pgr-services/v2/onboarding/workspaces/_update {tenantId, step, state, version}` and `POST /pgr-services/v2/onboarding/workspaces/_rename`.
 - These calls are authorized with the founder's normal DIGIT token and Kong role-actions for `ACCOUNT_ADMIN` at that tenant, not with BFF cookie introspection.
 - `GET /identity/v1/tenants` carries no readiness fields.
 - A tenant without a workspace row counts as ready (legacy).
