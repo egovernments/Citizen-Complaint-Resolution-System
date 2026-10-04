@@ -6,23 +6,29 @@ evidence from accepted implementation. The completion gate is still open.
 ## Integrated
 
 - Owner branch includes the frozen contract and root fixes through base
-  `83f2c240e`, merged at `50067f68a` without conflicts.
+  `75b157446`, including the source-level mock JWKS port fallback.
 - The earlier digit-ui slug-cache change is included through `7cc754440`.
   Its original verification is carried by the handoff; this review has not
   rerun that suite.
+- Keycloak PR 50, `c5583f3e4`, is reviewed and merged. The owner inspected
+  realm policy, public theme fetches, retained mobile validation, replacement
+  coverage and the passing live CI log. The merge was conflict-free; the
+  runtime files match the tested leaf source. Evidence and limits are in
+  `keycloak/evidence/validation.json`.
 
 ## Work in progress
 
 | Owner | Scope | Integration state |
 | --- | --- | --- |
-| surf-bff | Items 1–4, 13, 15 | Registry/HTTP OTP and refresh slices committed; self-service, phone, readiness and full verification pending |
-| surf-keycloak | Realm configuration, extraction, public branding | WIP preserved; local theme/deployment checks recorded; live gate pending |
-| surf-configurator | Members, invites, account actions, workspace settings | Contract agreed; implementation underway |
-| surf-digitui | Phase 2 account actions, phone, invites, logout | Accepted; implementation underway |
+| surf-bff | Items 1–4, 15 | Self-service/logout slices committed; readiness awaits reviewed core providers |
+| surf-phone | Item 13 | Split from surf-bff at `1526ec668`; production effects handoff `417557d50`; gap audit and regression coverage underway |
+| surf-keycloak | Realm configuration, extraction, public branding | PR 50 reviewed and merged; scoped evidence accepted |
+| surf-configurator | Members, invites, account actions, workspace settings | PR 59 at `4763e73ad` implemented; owner review pending |
+| surf-digitui | Phase 2 account actions, phone, invites, logout | PR 58 returned for phone-change logout/account-switch race fix |
 | surf-tests | Item 18 migration and complete gate matrix | Accepted; baseline inventory and migration underway |
 
 The task identifiers and durable coordination records live in Agent Bridge.
-No leaf task is marked verified by this record.
+Keycloak scope is verified independently of the still-pending full system gate.
 
 ## Reviewed evidence
 
@@ -36,9 +42,15 @@ No leaf task is marked verified by this record.
   by its leaf. Inspected local logs report 57 theme tests and 110 deployment
   contract tests passed. These logs are interim, not a final immutable
   verification artifact. The live harness has not supplied a passing result.
-- Keycloak draft PR 50 is now pinned at `d3e2c8a0c` for review. The theme
-  CI passed. The realm and BFF jobs failed before executing their suites;
-  concrete findings are below. Packaging and live checks remain pending.
+- Keycloak final source `c5583f3e4`: local BFF 229 passed / 14 existing todo,
+  deployment contracts 111 passed, clean typechecks. The unchanged realm and
+  harness at `09e479139` passed 24/24 live checks on Keycloak 26.7.3;
+  image browser smoke 1/1, theme 57/57 and screenshots 26/26 also passed.
+  Final BFF CI passed at `c5583f3e4`. See the pinned URLs in validation.json.
+- digit-ui PR 58 at `4771ca1cd`: inspected 251 passing frontend cases,
+  successful build and 16 alias checks. These use HTTP/component fixtures.
+  Owner code review found the phone-change race below, so this evidence does
+  not establish acceptance of the final implementation.
 - Integration-test discovery at `171e5fe1a` found 278 cases in 88 files.
   Discovery is not execution or a pass-rate baseline. The test leaf records
   the exact per-file mapping and the existing dashboard-harness type error.
@@ -49,18 +61,23 @@ the real-dependency cases; mocked tests do not satisfy those cases.
 
 ## Review findings and integration holds
 
-- Refresh lease failure classification at `083e66ddc`: the generic refresh
-  catch changes `LeaseLostError` into `IDENTITY_UNAVAILABLE`; lease acquisition
-  errors also need an HTTP mapping. Preserve the frozen `503 IDENTITY_BUSY`
-  response with `Retry-After`. Sent to surf-bff for correction and HTTP-level
-  coverage before accepting the refresh slice.
-- Core changed the registry integration order: surf-bff may now land narrow
-  `surfaceContextKind(surface)` checks on the current access-context routes.
-  Core-bindings will apply its later `_select` rewrite on that published SHA.
-  Session parsing consumes `parseSurface`.
+- Refresh lease classification correction is present at `417557d50`:
+  currentSession rethrows busy/lost errors and the HTTP handler maps them to
+  IDENTITY_BUSY with Retry-After. Final integrated evidence remains pending.
+- Whichever owner lands second must preserve both the surfaces registry
+  context-kind checks and core's `_select` predicate/ordering rewrite.
+- Core removes the obsolete full-directory subject sync rather than
+  optimizing it. The new `_select` uses subject-scoped mirrorPerson; core owns
+  the regression showing the old syncSubject path is never invoked.
+- digit-ui ChangePhone.verify at `4771ca1cd` writes the re-selection result
+  without checking original UUID/current local session ownership after the
+  asynchronous calls. The leaf must prevent logout resurrection and adopting
+  another person's cookie result, with interaction regression cases.
 - Scoped logout, phone-session invalidation, identifier propagation and
   readiness consume core APIs from `docs/core-internals.md`; no duplicate
-  implementation is permitted. Final provider commits are awaited.
+  implementation is permitted. Identifier propagation is consumed; reviewed
+  poller/reconcile providers remain awaited. Core replaces the old reconcile
+  scheduler; surf-bff starts/stops the poller exactly once, including retries.
 - Root settled D18: core-bindings provides session-authenticated
   `POST /identity/v1/workspace-members/_updateEmail {tenantId,digitUuid,email}`.
   It requires live tenant ACCOUNT_ADMIN and an ACTIVE target binding; sets
@@ -68,11 +85,12 @@ the real-dependency cases; mocked tests do not satisfy those cases.
   VERIFY_EMAIL; returns 202 `{status:"verification_sent"}`. A conflicting
   Keycloak email returns 409 IDENTITY_EMAIL_CHANGED. DIGIT changes only after
   verification. Configurator is implementing this contract.
-- PR 50 realm CI fails SC2155 on readonly command substitutions; separate
-  assignment and declaration so failed configuration reads propagate.
-- PR 50 BFF CI uses REDIS_PORT=6379, producing JWKS_PORT=-1 in the existing
-  test formula. Configure its supported IDENTITY_TEST_JWKS_PORT override.
-  Both findings were returned to surf-keycloak before integration.
+- Earlier Keycloak shellcheck and mock JWKS-port CI failures are resolved.
+  The obsolete branding doc/ROUTES row was removed together under root
+  approval `apr_1810cd9a95a04b42bf1cddaa6a76c6c3`; drift tests remain intact.
+- Configurator's untouched postal-code parity test is a known upstream
+  baseline failure, explicitly accepted by root under a no-new-failures gate.
+  No data edit or skipped assertion is authorized to hide it.
 
 ## Agreed consumer contracts
 
