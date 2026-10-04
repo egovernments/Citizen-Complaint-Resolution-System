@@ -8,8 +8,8 @@ import { ensureActive, readBindingUser } from "../bindings/store.js";
 import { BindingError } from "../bindings/types.js";
 import { request, ensureOrganizationMembership } from "../organizations/organization-service.js";
 import { updateKeycloakUser, type UserRepresentation } from "../sync/keycloak-writer.js";
-import { accountEntries, type AccountEntry } from "../sync/state.js";
-import { mirrorPerson } from "../sync/mirror.js";
+import { accountEntries } from "../sync/state.js";
+import { ensureCitizenEntry, mirrorPerson } from "../sync/mirror.js";
 import { readDigitAccount, requireWorkspace } from "../workspace-members/authority.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
@@ -34,21 +34,9 @@ async function seedCitizen(subject: string, link: AccountLink): Promise<boolean>
     matches = !!rule && splitE164(phone, rule)?.mobileNumber === mobile;
   }
   if (!matches) throw Object.assign(new Error("The citizen phone does not match"), { code: "PHONE_MISMATCH" });
-  let created = false;
-  // Sanctioned conversion-only exception to sync ownership: seed a resolved
-  // citizen entry; the normal mirror fills its roles/status immediately after.
-  await updateKeycloakUser(subject, (current) => {
-    const entries = accountEntries(current);
-    const existing = entries.find((e) => e.kind === "citizen" && e.tenantId === link.tenantId);
-    if (existing && existing.uuid !== link.digitUuid) throw new BindingError("CITIZEN_ACCOUNT_AMBIGUOUS", "Another citizen account already exists at the tenant");
-    if (existing) return null;
-    const entry: AccountEntry = { kind: "citizen", tenantId: link.tenantId, uuid: link.digitUuid,
-      boundAt: Date.now(), active: account.active, roles: [] };
-    if (entries.length >= 64) throw new BindingError("IDENTITY_UNAVAILABLE", "The account limit was reached");
-    created = true;
-    return { ...current, attributes: { ...current.attributes,
-      "digit.accounts": [JSON.stringify({ v: 1, entries: [...entries, entry] })] } };
-  });
+  const existed = accountEntries(user).some((entry) => entry.kind === "citizen" && entry.tenantId === link.tenantId);
+  await ensureCitizenEntry(subject, { tenantId: link.tenantId, uuid: link.digitUuid });
+  const created = !existed;
   return created;
 }
 
@@ -74,8 +62,8 @@ export async function convertAccountLinks(): Promise<ConversionOutcome[]> {
                 created = result.created;
                 await lease.assertHeld();
                 await ensureOrganizationMembership({ organizationId: org.id, userId: subject });
+                await mirrorPerson(subject);
               } else created = await seedCitizen(subject, link);
-              await mirrorPerson(subject);
               await updateKeycloakUser(subject, (current) => ({ ...current, attributes: { ...current.attributes,
                 "digit.accountLinks": (current.attributes?.["digit.accountLinks"] || []).filter((v) => v !== value) } }));
               outcomes.push({ subject, tenantId: link.tenantId, uuid: link.digitUuid, status: created ? "converted" : "already-converted" });

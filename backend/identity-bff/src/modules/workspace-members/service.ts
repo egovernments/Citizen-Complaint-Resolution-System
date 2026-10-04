@@ -1,6 +1,6 @@
 import { config } from "../../infrastructure/config.js";
 import { withPersonLease, type PersonLease } from "../accounts/person-lease.js";
-import { activateStaffCredential, staffCredentialMode } from "../accounts/credential-service.js";
+import { activateStaffCredential, staffCredentialMode, StaffLoginError } from "../accounts/credential-service.js";
 import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.js";
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
@@ -19,8 +19,8 @@ export function publicBinding(subject: string, binding: Binding) {
   return { subject, digitUuid: uuid, ...rest };
 }
 
-async function findPerson(email: string): Promise<BindingUser | null> {
-  for (const field of ["email", "username"]) {
+async function findPerson(email: string, emailOnly = false): Promise<BindingUser | null> {
+  for (const field of emailOnly ? ["email"] : ["email", "username"]) {
     const query = new URLSearchParams({ [field]: email, exact: "true", briefRepresentation: "false", max: "100" });
     const users = await (await request(`/users?${query}`)).json() as BindingUser[];
     const matches = users.filter((u) => (field === "email" ? u.email : u.username)?.toLowerCase() === email);
@@ -45,7 +45,16 @@ async function activate(binding: Binding, lease: PersonLease): Promise<void> {
   if (recorded?.credential?.keyVersion === config.identityCredentialKeyCurrent) return;
   const account = await readDigitAccount(binding.tenantId, binding.uuid);
   if (!account?.active) throw new BindingError("DIGIT_UNAVAILABLE", "The employee is not available for activation");
-  await activateStaffCredential({ tenantId: binding.tenantId, uuid: binding.uuid, userName: account.userName }, lease);
+  try {
+    await activateStaffCredential({ tenantId: binding.tenantId, uuid: binding.uuid, userName: account.userName }, lease);
+  } catch (error) {
+    // Workspace activation exposes dependency failure, not the sign-in route's
+    // account-lock/PII codes. Retain the binding/marker so a retry can resume.
+    if (error instanceof StaffLoginError || (error as { code?: string }).code === "DIGIT_PII_MASKED") {
+      throw new BindingError("DIGIT_UNAVAILABLE", "Employee activation is temporarily unavailable");
+    }
+    throw error;
+  }
 }
 
 async function linkAudit(subject: string, tenantId: string, uuid: string, actor: string, event: "ACCOUNT_LINK_CREATE" | "ACCOUNT_LINK_REVOKE") {
@@ -78,7 +87,8 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     const fresh = await readBindingUser(subject);
     if (normalizeLinkEmail(fresh.email || "") !== email) throw new BindingError("IDENTITY_EMAIL_CHANGED", "This identity now uses a different email");
     await validateBinding({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor });
-    const resumeNew = pendingMarker(fresh)?.requestId === requestId;
+    const previous = (await readBindings(subject)).find((b) => b.tenantId === input.tenantId);
+    const resumeNew = pendingMarker(fresh)?.requestId === requestId && previous?.state !== "pending" && !(previous?.state === "removed" && input.reinvite);
     if (!resumeNew) {
       const { binding } = await createPending({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor,
         expiresAt: Date.now() + await invitationExpiryHours(input.tenantId) * 3600_000, reinvite: input.reinvite });
@@ -86,7 +96,6 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
       await linkAudit(subject, input.tenantId, input.digitUuid, input.actor, "ACCOUNT_LINK_CREATE");
       return { binding: publicBinding(subject, binding), identityUserCreated: false };
     }
-    const previous = (await readBindings(subject)).find((b) => b.tenantId === input.tenantId);
     if (previous?.state === "removed") throw new BindingError("BINDING_REMOVED", "This binding was removed");
     if (previous && previous.uuid !== input.digitUuid) throw new BindingConflictError();
     const org = await requireWorkspace(input.tenantId);
@@ -116,7 +125,12 @@ export async function acceptWorkspaceInvitation(subject: string, tenantId: strin
   return withPersonLease(subject, async (lease) => {
     const pending = (await readBindings(subject)).find((b) => b.tenantId === tenantId);
     if (!pending || pending.state === "removed" || pending.invitationVersion !== invitationVersion) throw new BindingError("INVITATION_STALE", "The invitation is no longer current");
-    const org = await requireWorkspace(tenantId).catch(() => { throw new BindingError("INVITATION_STALE", "The inviting workspace is unavailable"); });
+    const org = await requireWorkspace(tenantId).catch((error) => {
+      if (error instanceof BindingError && error.code === "WORKSPACE_TENANT_REQUIRED") {
+        throw new BindingError("INVITATION_STALE", "The inviting workspace is unavailable");
+      }
+      throw error;
+    });
     await lease.assertHeld();
     await ensureOrganizationMembership({ organizationId: org.id, userId: subject });
     const binding = await accept({ subject, tenantId, invitationVersion });
@@ -181,7 +195,7 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
   return withPersonLease(subject, async (lease) => {
     const active = (await readBindings(subject)).find((b) => b.tenantId === tenantId && b.uuid === digitUuid && b.state === "active");
     if (!active) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "The binding is no longer active");
-    const owner = await findPerson(email);
+    const owner = await findPerson(email, true);
     if (owner?.id && owner.id !== subject) throw new BindingError("IDENTITY_EMAIL_CHANGED", "This email belongs to another identity");
     try {
       await updateKeycloakUser(subject, (user) => ({ ...user, email, emailVerified: false }), { allowEmailChange: true });

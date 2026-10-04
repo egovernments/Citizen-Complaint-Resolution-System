@@ -19,15 +19,16 @@ import {
 } from "../citizens/citizen-registration.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 import { DigitLoginRejectedError, DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { withPersonLease } from "../accounts/person-lease.js";
+import { withPersonLease, type PersonLease } from "../accounts/person-lease.js";
 import { staffLogin, StaffLoginError } from "../accounts/credential-service.js";
 import { citizenAccess, staffAccess } from "../bindings/predicate.js";
 import { readBindingUser } from "../bindings/store.js";
 import { BindingError } from "../bindings/types.js";
 import { readDigitAccount } from "../workspace-members/authority.js";
 import { accountEntries } from "../sync/state.js";
-import { mirrorPerson } from "../sync/mirror.js";
+import { ensureCitizenEntry, mirrorPerson } from "../sync/mirror.js";
 import { cachedToken, recordToken, holdToken } from "../revocation/index.js";
+import { forgetToken, revokeInventoriedToken, type AccountRef } from "../revocation/inventory.js";
 import { findManagedAccount } from "../managed-accounts/managed-account-service.js";
 import { revokeToken } from "../managed-accounts/digit-user-client.js";
 import { currentSession } from "../sessions/current-session.js";
@@ -59,6 +60,21 @@ function tokenResponse(login: DigitLogin) {
     scope: "read",
     UserRequest: login.user,
   };
+}
+
+/** Cleanup must preserve the original failure, including when its lease expired. */
+async function cleanupIssuedToken(lease: PersonLease, account: AccountRef, login: DigitLogin, kind: "staff" | "citizen") {
+  try {
+    await revokeInventoriedToken(account, { accessToken: login.accessToken, expiresAt: login.expiresAt,
+      subject: lease.subject, mintedAt: Date.now(), kind }, "SELECT_FAILED");
+  } catch {
+    // Redis unavailable: attempt logout, but retain inventory for a later retry.
+    await revokeToken(login.accessToken).catch(() => undefined);
+    return;
+  }
+  // Revocation succeeded or has a durable retry. Compare-and-delete cannot erase
+  // a replacement token, and lease loss leaves inventory for the current owner.
+  await forgetToken(lease, account, login.accessToken).catch(() => undefined);
 }
 
 function send(response: express.Response, code: HttpErrorCode, message: string) {
@@ -192,7 +208,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
             token = access.binding ? await staffLogin({ tenantId, uuid: account.uuid, userName: account.userName, keyVersion: recorded?.credential?.keyVersion }, lease)
               : await managedUserLogin(identity, current.sessionId);
             minted = token;
-            await recordToken(lease, account, token, "staff");
+            if (access.binding) await recordToken(lease, account, token, "staff");
           }
           await holdToken(lease, account, current.sessionId);
           if (access.binding) await mirrorPerson(subject);
@@ -201,7 +217,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
             organizationAlias: selected.organizationAlias, tenantId, name: selected.name })) throw new BindingError("SESSION_REVOKED", "The identity session is no longer current");
           return token;
         } catch (error) {
-          if (minted) await revokeToken(minted.accessToken);
+          if (minted) await cleanupIssuedToken(lease, account, minted, "staff");
           throw error;
         }
       });
@@ -236,71 +252,74 @@ export function registerAccessContextRoutes(app: express.Application): void {
     try {
       return await withPersonLease(claims.sub, async (lease) => {
         let issued: DigitLogin | null = null;
+        let issuedAccount: AccountRef | null = null;
         try {
-      await requireCurrentSession(lease, current.sessionId);
-      const access = await citizenAccess(claims.sub);
-      if (!access.allowed) return send(response, access.denial === "PHONE_NOT_VERIFIED" ? "PHONE_NOT_VERIFIED" : "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
-      const livePhone = (await readBindingUser(claims.sub)).attributes?.phoneNumber?.[0];
-      if (!livePhone) return send(response, "PHONE_NOT_VERIFIED", "A verified phone number is required");
-      // Like employee `_select`, re-read the tenant's Organization (or group)
-      // live: disabling or unmapping it stops citizen sign-in at once, not
-      // when the session expires.
-      if (!await isLiveTenantRoute(boundTenant) || !await isActiveDigitTenant(boundTenant.tenantId)) {
-        return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
-      }
-      const rule = await mobileValidationForRoute({
-        urlSlug: boundTenant.urlSlug,
-        tenantId: boundTenant.tenantId,
-        rootTenantId: boundTenant.rootTenantId,
-        parentTenantId: null,
-        fallbackTenantIds: [],
-        name: boundTenant.name,
-      });
-      if (!rule) {
-        console.warn("Citizen context: tenant has no MobileNumberValidation rule");
-        return send(response, "CITIZEN_SIGNIN_NOT_CONFIGURED", "Citizen sign-in is not configured for this tenant");
-      }
-      const phone = splitE164(livePhone, rule);
-      if (!phone) {
-        return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "This phone number cannot be used for this tenant");
-      }
-      // Only a number the BFF proved, or one users cannot edit in Keycloak,
-      // may link an existing DIGIT citizen (#2167).
-      // A failed check is retryable (503), never "untrusted": treating it as
-      // untrusted would create a new account and split a legacy citizen from
-      // their existing one for good.
-      const phoneTrusted = current.session.authMethod === "phone_otp" ||
-        await keycloakPhoneIsAdminControlled();
-      const { identity } = await ensureCitizenRegistration({
-        phoneTrusted,
-        subject: claims.sub,
-        tenant: boundTenant,
-        name: claims.name?.trim() || phone.mobileNumber,
-        ...phone,
-      });
-      const login = await managedUserLogin(
-        identity, current.sessionId, phone.mobileNumber, phone.countryCode,
-      );
-      issued = login;
-      await lease.assertHeld();
-      await requireCurrentSession(lease, current.sessionId);
-      // egov-user issues every CITIZEN token at the state root, so the token
-      // tenant is the bound tenant's citizen tenant (`identity.tenantId`),
-      // never the city itself. Fail closed on anything else: another user
-      // type, or a token for a different root than the session is bound to.
-      if (login.user.type !== "CITIZEN" || login.user.tenantId !== identity.tenantId ||
-          login.user.tenantId !== digitCitizenTenantId(boundTenant.tenantId)) {
-        console.error("Citizen context: DIGIT returned a token for an unexpected account");
-        throw new BindingError("DIGIT_ACCOUNT_MISMATCH", "Citizen context is temporarily unavailable");
-      }
-      // `tenant` is the bound route tenant: the client keeps using it for
-      // business requests even though the token's home tenant is the root.
-      return response.json({
-        ...tokenResponse(login),
-        tenant: { urlSlug: boundTenant.urlSlug, tenantId: boundTenant.tenantId },
-      });
+          await requireCurrentSession(lease, current.sessionId);
+          const access = await citizenAccess(claims.sub);
+          if (!access.allowed) return send(response, access.denial === "PHONE_NOT_VERIFIED" ? "PHONE_NOT_VERIFIED" : "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
+          const livePhone = (await readBindingUser(claims.sub)).attributes?.phoneNumber?.[0];
+          if (!livePhone) return send(response, "PHONE_NOT_VERIFIED", "A verified phone number is required");
+          // Like employee `_select`, re-read the tenant's Organization (or group)
+          // live: disabling or unmapping it stops citizen sign-in at once, not
+          // when the session expires.
+          if (!await isLiveTenantRoute(boundTenant) || !await isActiveDigitTenant(boundTenant.tenantId)) {
+            return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
+          }
+          const rule = await mobileValidationForRoute({
+            urlSlug: boundTenant.urlSlug,
+            tenantId: boundTenant.tenantId,
+            rootTenantId: boundTenant.rootTenantId,
+            parentTenantId: null,
+            fallbackTenantIds: [],
+            name: boundTenant.name,
+          });
+          if (!rule) {
+            console.warn("Citizen context: tenant has no MobileNumberValidation rule");
+            return send(response, "CITIZEN_SIGNIN_NOT_CONFIGURED", "Citizen sign-in is not configured for this tenant");
+          }
+          const phone = splitE164(livePhone, rule);
+          if (!phone) {
+            return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "This phone number cannot be used for this tenant");
+          }
+          // Only a number the BFF proved, or one users cannot edit in Keycloak,
+          // may link an existing DIGIT citizen (#2167).
+          // A failed check is retryable (503), never "untrusted": treating it as
+          // untrusted would create a new account and split a legacy citizen from
+          // their existing one for good.
+          const phoneTrusted = current.session.authMethod === "phone_otp" ||
+            await keycloakPhoneIsAdminControlled();
+          const { identity, registration } = await ensureCitizenRegistration({
+            phoneTrusted,
+            subject: claims.sub,
+            tenant: boundTenant,
+            name: claims.name?.trim() || phone.mobileNumber,
+            ...phone,
+          });
+          issuedAccount = { tenantId: identity.tenantId, uuid: registration.digitUserUuid };
+          await ensureCitizenEntry(claims.sub, issuedAccount);
+          const login = await managedUserLogin(
+            identity, current.sessionId, phone.mobileNumber, phone.countryCode,
+          );
+          issued = login;
+          await lease.assertHeld();
+          await requireCurrentSession(lease, current.sessionId);
+          // egov-user issues every CITIZEN token at the state root, so the token
+          // tenant is the bound tenant's citizen tenant (`identity.tenantId`),
+          // never the city itself. Fail closed on anything else: another user
+          // type, or a token for a different root than the session is bound to.
+          if (login.user.type !== "CITIZEN" || login.user.tenantId !== identity.tenantId ||
+              login.user.tenantId !== digitCitizenTenantId(boundTenant.tenantId)) {
+            console.error("Citizen context: DIGIT returned a token for an unexpected account");
+            throw new BindingError("DIGIT_ACCOUNT_MISMATCH", "Citizen context is temporarily unavailable");
+          }
+          // `tenant` is the bound route tenant: the client keeps using it for
+          // business requests even though the token's home tenant is the root.
+          return response.json({
+            ...tokenResponse(login),
+            tenant: { urlSlug: boundTenant.urlSlug, tenantId: boundTenant.tenantId },
+          });
         } catch (error) {
-          if (issued) await revokeToken(issued.accessToken);
+          if (issued && issuedAccount) await cleanupIssuedToken(lease, issuedAccount, issued, "citizen");
           throw error;
         }
       });
