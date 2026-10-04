@@ -150,6 +150,8 @@ export const config = {
   ),
   identityControlPlaneToken:
     process.env.IDENTITY_CONTROL_PLANE_TOKEN || "",
+  identityOnboardingToken:
+    process.env.IDENTITY_ONBOARDING_TOKEN || "",
   identitySessionIntrospectionToken:
     process.env.IDENTITY_SESSION_INTROSPECTION_TOKEN || "",
   identityReconcileOnStartup:

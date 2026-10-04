@@ -8,6 +8,7 @@ export async function onboardingAdminRequest(path: string, init: RequestInit = {
   try {
     const response = await fetch(`${config.keycloakAdminUrl}/admin/realms/${encodeURIComponent(config.keycloakOrganizationRealm)}${path}`, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(config.digitTimeoutMs),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${await getAdminToken()}`, ...init.headers },
     });
     if (accepted ? accepted.includes(response.status) : response.ok) return response;
