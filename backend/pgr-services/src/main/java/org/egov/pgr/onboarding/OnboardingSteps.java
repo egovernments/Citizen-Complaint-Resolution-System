@@ -87,12 +87,25 @@ public class OnboardingSteps {
         progress.record("mobile", () -> {
             // Country master is deployment-owned; never inherit a regex from an unrelated tenant.
             JsonNode rules = records(signup.getCountryCode().toLowerCase(Locale.ROOT), "common-masters.MobileNumberValidation", null);
-            JsonNode rule = null;
-            for (JsonNode r : rules) if (r.path("isActive").asBoolean(true) && r.path("data").path("default").asBoolean()) {
-                if (rule != null) throw new OnboardingFailure("COUNTRY_MOBILE_RULE_AMBIGUOUS", true);
-                rule = r.path("data");
+            JsonNode rule = null; boolean active = false;
+            for (JsonNode r : rules) {
+                if (!r.isObject() || (r.has("isActive") && !r.path("isActive").isBoolean()))
+                    throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true);
+                if (!r.path("isActive").asBoolean(true)) continue;
+                active = true;
+                JsonNode data = r.path("data");
+                validateMobileRule(data);
+                if (data.path("default").booleanValue()) {
+                    if (rule != null) throw new OnboardingFailure("COUNTRY_MOBILE_RULE_AMBIGUOUS", true);
+                    rule = data;
+                }
             }
-            if (rule == null) throw new OnboardingFailure("COUNTRY_MOBILE_RULE_MISSING", true);
+            if (rule == null && active) throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true);
+            if (rule == null) {
+                rule = seed.countryMobileRule(signup.getCountryCode());
+                if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
+                validateMobileRule(rule);
+            }
             ensureRecord(tenant, "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
         });
         progress.record("state-info", () -> {
@@ -113,29 +126,78 @@ public class OnboardingSteps {
     private void rootBoundary(String tenant, OnboardingProgress progress) {
         Map<String,Object> root = new LinkedHashMap<>(); root.put("boundaryType", "ROOT"); root.put("parentBoundaryType", null); root.put("active", true);
         progress.record("boundary-hierarchy", () -> ensureBoundary("/boundary-service/boundary-hierarchy-definition/_search",
-                Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType","ADMIN")), "BoundaryHierarchy",
+                Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType","ADMIN")), "BoundaryHierarchy", tenant,
                 "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
                         Map.of("tenantId", tenant, "hierarchyType", "ADMIN", "boundaryHierarchy", List.of(root)))));
+        // Technical root placeholder only; operational geography remains workspace-owned.
+        var geometry = Map.of("type", "Point", "coordinates", List.of(0,0));
         progress.record("boundary-root", () -> ensureBoundary("/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
-                Map.of(), "Boundary", "/boundary-service/boundary/_create", Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant)))));
+                Map.of(), "Boundary", tenant, "/boundary-service/boundary/_create",
+                Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry)))));
         progress.record("boundary-relationship", () -> ensureBoundary("/boundary-service/boundary-relationships/_search",
-                Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "hierarchyType", "ADMIN")), "TenantBoundary",
+                Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "hierarchyType", "ADMIN")), "TenantBoundary", tenant,
                 "/boundary-service/boundary-relationships/_create", Map.of("BoundaryRelationship",
                         Map.of("tenantId", tenant, "code", tenant, "hierarchyType", "ADMIN", "boundaryType", "ROOT"))));
     }
 
-    private void ensureBoundary(String search, Map<String,Object> criteria, String field, String create, Map<String,Object> body) {
-        JsonNode existing = client.post("boundary", search, criteria).path(field);
-        if (!existing.isArray()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
-        if (!existing.isEmpty()) return;
+    private void validateMobileRule(JsonNode rule) {
+        if (!rule.isObject() || !rule.path("default").isBoolean() || !rule.path("countryCode").isTextual()
+                || !rule.path("countryCode").asText().matches("\\+[1-9][0-9]{0,3}")
+                || !rule.path("mobileNumberRegex").isTextual() || rule.path("mobileNumberRegex").asText().isBlank())
+            throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true);
+        try { java.util.regex.Pattern.compile(rule.path("mobileNumberRegex").asText()); }
+        catch (java.util.regex.PatternSyntaxException invalid) { throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true); }
+    }
+
+    private void ensureBoundary(String search, Map<String,Object> criteria, String field, String tenant, String create, Map<String,Object> body) {
+        if (boundaryPresent(client.post("boundary", search, criteria), field, tenant)) return;
         createProjectedRecord("boundary", create, body);
-        existing = client.post("boundary", search, criteria).path(field);
-        if (!existing.isArray() || existing.isEmpty()) throw new OnboardingFailure("BOUNDARY_NOT_VISIBLE", true);
+        if (!boundaryPresent(client.post("boundary", search, criteria), field, tenant))
+            throw new OnboardingFailure("BOUNDARY_NOT_VISIBLE", true);
+    }
+
+    private boolean boundaryPresent(JsonNode response, String field, String tenant) {
+        JsonNode entries = response.get(field);
+        if (entries == null) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
+        if (entries.isNull()) return false; // stock boundary-service represents an empty search as null
+        if (!entries.isArray()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
+        for (JsonNode entry : entries) {
+            if (!entry.isObject()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
+            if (!boundaryIdentity(entry, tenant)) continue;
+            if ("BoundaryHierarchy".equals(field) && "ADMIN".equals(entry.path("hierarchyType").asText())) return true;
+            if ("Boundary".equals(field) && tenant.equals(entry.path("code").asText())) return true;
+            if ("TenantBoundary".equals(field)) {
+                // A wrapper exists even when no relationship exists. Only the target
+                // root node proves the HRMS prerequisite, never wrapper cardinality.
+                JsonNode hierarchy = entry.path("hierarchyType");
+                String hierarchyCode = hierarchy.isObject() ? hierarchy.path("code").asText() : hierarchy.asText();
+                if (!hierarchyCode.isBlank() && !"ADMIN".equals(hierarchyCode)) continue;
+                JsonNode roots = entry.path("boundary");
+                if (roots.isMissingNode() || roots.isNull()) continue;
+                if (roots.isObject()) { if (rootNode(roots, tenant)) return true; }
+                else if (roots.isArray()) { for (JsonNode root : roots) if (rootNode(root, tenant)) return true; }
+                else throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
+            }
+        }
+        return false;
+    }
+
+    private boolean rootNode(JsonNode node, String tenant) {
+        return node.isObject() && boundaryIdentity(node, tenant) && tenant.equals(node.path("code").asText())
+                && "ROOT".equals(node.path("boundaryType").asText());
+    }
+
+    private boolean boundaryIdentity(JsonNode node, String tenant) {
+        // Some scoped search projections omit these fields; explicit foreign or
+        // inactive entries never establish the target tenant's prerequisite.
+        return (!node.hasNonNull("tenantId") || tenant.equals(node.path("tenantId").asText()))
+                && (!node.has("isActive") || node.path("isActive").isBoolean() && node.path("isActive").booleanValue())
+                && (!node.has("active") || node.path("active").isBoolean() && node.path("active").booleanValue());
     }
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
         String tenant = signup.getRequestedTenantId(), code = "FOUNDER_" + signup.getId().toString().replace("-", "");
-        JsonNode employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code, Map.of()).path("Employees");
+        JsonNode employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
         if (!employees.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
         if (employees.size() > 1) throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
         if (employees.isEmpty()) {
@@ -172,7 +234,7 @@ public class OnboardingSteps {
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }
             // HRMS/egov-user persist asynchronously. A later claim searches again before create.
-            employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code, Map.of()).path("Employees");
+            employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
         }
         String uuid = employees.path(0).path("user").path("uuid").asText();
         if (uuid.isBlank()) throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);

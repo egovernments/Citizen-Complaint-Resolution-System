@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.*;
+import org.egov.pgr.web.controllers.WorkspaceApiController;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.util.UriComponentsBuilder;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -18,6 +23,9 @@ public class WorkspaceGatewayTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private HttpServer server;
     private WorkspaceGateway gateway;
+    private OnboardingProvisionerClient client;
+    private int hrmsStatus = 200;
+    private List<Map<String,Object>> employees = List.of(Map.of("code","EMP_1","isActive",true,"user",Map.of("active",true)));
     private JsonNode nameCheck;
     private int nameStatus;
     private String tenantName;
@@ -36,14 +44,30 @@ public class WorkspaceGatewayTest {
             if(path.equals("/user/oauth/token")) response=Map.of("access_token","internal-token","UserRequest",Map.of("uuid","provisioner"));
             else {
                 Map<String,Object> request=mapper.readValue(body,Map.class);
-                requests.add(Map.of("path",path,"body",request,"authorization",Objects.toString(exchange.getRequestHeaders().getFirst("Authorization"),"")));
+                requests.add(Map.of("path",path,"body",request,"authorization",Objects.toString(exchange.getRequestHeaders().getFirst("Authorization"),""),"query",Objects.toString(exchange.getRequestURI().getRawQuery(),"")));
                 switch(path) {
+                    case "/user/_details" -> response=Map.of("uuid","admin","active",true,"roles",List.of(Map.of("code","ACCOUNT_ADMIN","tenantId","example")));
+                    case "/boundary-service/boundary/_search" -> response=Map.of("Boundary",List.of(Map.of("code","example")));
+                    case "/egov-hrms/employees/_search" -> {
+                        var query=UriComponentsBuilder.fromUri(exchange.getRequestURI()).build().getQueryParams();
+                        // Stock EmployeeQueryBuilder needs both boxed pagination fields.
+                        // Reject the pre-fix request instead of silently supplying defaults.
+                        boolean pagination=query.containsKey("offset") && query.containsKey("limit");
+                        if(pagination) {
+                            try {pagination=Integer.parseInt(query.getFirst("offset"))>=0 && Integer.parseInt(query.getFirst("limit"))>0;}
+                            catch(NumberFormatException e) {pagination=false;}
+                        }
+                        status=pagination?hrmsStatus:500;
+                        response=status==200?Map.of("Employees",employees):Map.of("Errors",List.of(Map.of("code","HRMS_SEARCH_FAILED")));
+                    }
                     case "/internal/identity/v1/identifiers/_check" -> { response=nameCheck;status=nameStatus; }
                     case "/egov-mdms-service/v2/_search" -> {
                         String schema=((Map<?,?>)request.get("MdmsCriteria")).get("schemaCode").toString();
-                        response=Map.of("mdms",List.of(schema.equals("tenant.tenants")
-                                ? Map.of("id","tenant-record","tenantId","example","uniqueIdentifier","example","data",Map.of("code","example","name",tenantName))
-                                : Map.of("tenantId","example","data",Map.of("languages",List.of(Map.of("value","en_IN"),Map.of("value","hi_IN"))))));
+                        response=Map.of("mdms",switch(schema) {
+                            case "tenant.tenants" -> List.of(Map.of("id","tenant-record","tenantId","example","uniqueIdentifier","example","data",Map.of("code","example","name",tenantName)));
+                            case "common-masters.StateInfo" -> List.of(Map.of("tenantId","example","data",Map.of("languages",List.of(Map.of("value","en_IN"),Map.of("value","hi_IN")))));
+                            default -> List.of();
+                        });
                     }
                     case "/egov-mdms-service/v2/_update/tenant.tenants" -> {
                         tenantName=((Map<?,?>)((Map<?,?>)request.get("Mdms")).get("data")).get("name").toString();response=Map.of("ok",true);
@@ -62,11 +86,11 @@ public class WorkspaceGatewayTest {
             exchange.close();
         });server.start();
         String host="http://127.0.0.1:"+server.getAddress().getPort();
-        var env=new MockEnvironment().withProperty("egov.user.host",host).withProperty("egov.mdms.host",host).withProperty("egov.localization.host",host)
+        var env=new MockEnvironment().withProperty("egov.user.host",host).withProperty("egov.mdms.host",host).withProperty("egov.localization.host",host).withProperty("egov.hrms.host",host).withProperty("egov.boundary.host",host)
                 .withProperty("pgr.onboarding.identity-bff.url",host).withProperty("pgr.onboarding.identity-bff.token","onboarding-token")
                 .withProperty("pgr.onboarding.provisioner.username","test").withProperty("pgr.onboarding.provisioner.password","test")
                 .withProperty("pgr.onboarding.provisioner.tenant-id","platform");
-        var client=new OnboardingProvisionerClient(new RestTemplate(),mapper,env);
+        client=new OnboardingProvisionerClient(new RestTemplate(),mapper,env);
         var steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
         gateway=new WorkspaceGateway(new RestTemplate(),env,client,steps,mapper);
     }
@@ -107,4 +131,29 @@ public class WorkspaceGatewayTest {
             }
         }
     }
+    @Test public void workspaceSearchSuppliesPaginationToStrictHrms() throws Exception {
+        // The fixture first proves the previous URL fails without offset.
+        assertThrows(OnboardingFailure.class,()->client.post("hrms","/egov-hrms/employees/_search?tenantId=example&limit=1000",Map.of()));
+        workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(true));
+        Map<String,Object> hrms=requests.stream().filter(r->r.get("path").equals("/egov-hrms/employees/_search")).reduce((a,b)->b).orElseThrow();
+        var query=UriComponentsBuilder.fromUriString("http://hrms/?"+hrms.get("query")).build().getQueryParams();
+        assertEquals("example",query.getFirst("tenantId"));assertEquals("0",query.getFirst("offset"));assertEquals("1000",query.getFirst("limit"));
+    }
+    @Test public void paginatedProbeStillExcludesFounderAndInactiveEmployees() throws Exception {
+        employees=List.of(Map.of("code","FOUNDER_1"),Map.of("code","INACTIVE_EMP","isActive",false),
+                Map.of("code","DISABLED_USER","user",Map.of("active",false)));
+        workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(false));
+    }
+    @Test public void paginatedHrmsFailureStillReturnsDependencyUnavailable() throws Exception {
+        hrmsStatus=503;
+        workspaceSearch().andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"));
+    }
+    private org.springframework.test.web.servlet.ResultActions workspaceSearch() throws Exception {
+        var repository=mock(WorkspaceRepository.class);
+        when(repository.find("example",false)).thenReturn(Optional.of(Map.of("tenantId","example","legacy",false,"status","NOT_STARTED","version",1L)));
+        var mvc=MockMvcBuilders.standaloneSetup(new WorkspaceApiController(new WorkspaceService(repository,gateway,new OnboardingIdentifierService()))).build();
+        return mvc.perform(post("/v2/onboarding/workspaces/_search").contentType("application/json")
+                .content("{\"tenantId\":\"example\",\"RequestInfo\":{\"authToken\":\"normal-token\"}}"));
+    }
+
 }

@@ -56,7 +56,7 @@ public class WorkspaceGateway {
         requireArray(boundaries); boolean geography=false;
         for(JsonNode boundary:boundaries) if(!boundary.path("code").asText().isBlank() && !tenant.equals(boundary.path("code").asText()) && boundary.path("isActive").asBoolean(true))geography=true;
         probes.put("GEOGRAPHY",geography);
-        JsonNode employees=client.post("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&limit=1000",Map.of()).path("Employees");
+        JsonNode employees=client.post("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
         requireArray(employees);boolean employee=false;
         for(JsonNode row:employees) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))employee=true;
         probes.put("EMPLOYEES",employee);

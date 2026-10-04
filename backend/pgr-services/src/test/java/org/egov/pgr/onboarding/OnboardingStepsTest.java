@@ -37,14 +37,14 @@ public class OnboardingStepsTest {
                 Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
             }
             if(service.equals("hrms")) {
-                if(path.contains("_search"))return mapper.valueToTree(Map.of("Employees",employees));
+                if(path.contains("_search")) { assertTrue("stock HRMS requires explicit offset",path.contains("&offset=0")); assertTrue("founder uniqueness search needs two results",path.contains("&limit=2")); return mapper.valueToTree(Map.of("Employees",employees)); }
                 assertTrue("platform prerequisites before HRMS",rows.containsKey("newtown|common-masters.Department|ONBOARDING_ADMIN"));
                 if(createFailure!=null)throw createFailure;
                 Map<String,Object> employee=((List<Map<String,Object>>)body.get("Employees")).get(0);createdUser=(Map<String,Object>)employee.get("user");
                 createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");employees.add(mapper.valueToTree(Map.of("user",createdUser)));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
             }
             writes.add(service+":"+path);
-            if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("code","root")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("code","newtown"))));
+            if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("tenantId","newtown","hierarchyType","ADMIN","boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
         });
     }
@@ -98,4 +98,68 @@ public class OnboardingStepsTest {
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));
         assertTrue(failure.isRetryable());assertEquals("STARTED",op.getRecordProgress().get("schema:tenant.tenants"));
     }
+    @Test public void countryAbsenceUsesCanonicalDefaultsOnlyInTargetTenant() {
+        rows.clear();prerequisites();
+        assertEquals("^[6-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
+        assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
+    }
+    @Test public void configuredCountryRuleIsPreservedAndMalformedRuleNeverFallsBack() {
+        rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","mobileNumberRegex","^[7-9][0-9]{9}$","default",true))));
+        prerequisites();assertEquals("^[7-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
+        op.getRecordProgress().remove("mobile");
+        rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","default",true))));
+        assertEquals("COUNTRY_MOBILE_RULE_INVALID",assertThrows(OnboardingFailure.class,()->steps.perform("PLATFORM_BASELINE",signup,op,progress)).getCode());
+    }
+    @Test public void unsupportedCountryIsExplicitAndAmbiguousConfiguredRulesFailClosed() {
+        signup.setCountryCode("ZZ");assertEquals("COUNTRY_NOT_SUPPORTED",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+        signup.setCountryCode("IN");rows.put("in|common-masters.MobileNumberValidation|second",rows.get("in|common-masters.MobileNumberValidation|+91"));
+        assertEquals("COUNTRY_MOBILE_RULE_AMBIGUOUS",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+    }
+    @Test public void nullBoundaryResultsCreateValidEntityAndEmptyWrapperDoesNotCountAsRelationship() throws Exception {
+        final boolean[] made={false,false,false};
+        when(client.post(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
+            String path=call.getArgument(1);Map<String,Object> body=call.getArgument(2);
+            if(path.contains("boundary-hierarchy-definition")) {
+                if(path.contains("_create")){made[0]=true;return mapper.createObjectNode();}
+                return mapper.readTree(made[0]?"{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}":"{\"BoundaryHierarchy\":null}");
+            }
+            if(path.contains("boundary-relationships")) {
+                if(path.contains("_create")){made[2]=true;return mapper.createObjectNode();}
+                return mapper.readTree(made[2]?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}":"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[]}]}");
+            }
+            if(path.contains("_create")) {JsonNode geometry=mapper.valueToTree(body).path("Boundary").path(0).path("geometry");assertEquals("Point",geometry.path("type").asText());assertEquals(mapper.valueToTree(List.of(0,0)),geometry.path("coordinates"));made[1]=true;return mapper.createObjectNode();}
+            return mapper.readTree(made[1]?"{\"Boundary\":[{\"code\":\"newtown\"}]}":"{\"Boundary\":null}");
+        });
+        prerequisites();assertTrue(made[0]);assertTrue(made[1]);assertTrue(made[2]);
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
+    }
+    @Test public void kenyaFallbackUsesCanonicalRuleAndConfiguredOtherCountryRemainsSupported() {
+        rows.clear();signup.setCountryCode("KE");prerequisites();
+        assertEquals("^[17][0-9]{8}$",rows.get("newtown|common-masters.MobileNumberValidation|+254").path("data").path("mobileNumberRegex").asText());
+        assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
+        signup.setCountryCode("ET");op.getRecordProgress().remove("mobile");
+        rows.put("et|common-masters.MobileNumberValidation|+251",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+251","mobileNumberRegex","^[0-9]{9}$","default",true))));
+        steps.perform("PLATFORM_BASELINE",signup,op,progress);assertTrue(rows.containsKey("newtown|common-masters.MobileNumberValidation|+251"));
+    }
+    @Test public void countryTransportFailureNeverUsesCanonicalFallback() {
+        when(client.post(eq("mdms"),contains("/v2/_search"),argThat(body->body.toString().contains("tenantId=in"))))
+                .thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
+        assertEquals("PROVISIONING_UNAVAILABLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+        assertFalse(rows.containsKey("newtown|common-masters.MobileNumberValidation|+91"));assertEquals("STARTED",op.getRecordProgress().get("mobile"));
+    }
+
+    @Test public void foreignOrInactiveBoundaryEntriesDoNotProvePrerequisites() {
+        for(String field:List.of("BoundaryHierarchy","Boundary","TenantBoundary")) {
+            for(String invalid:List.of("foreign","inactive")) {
+                op.getRecordProgress().clear();
+                Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","ADMIN","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
+                when(client.post(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
+                        "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","ADMIN")),
+                        "Boundary",field.equals("Boundary")?List.of(entry):List.of(Map.of("code","newtown")),
+                        "TenantBoundary",field.equals("TenantBoundary")?List.of(entry):List.of(Map.of("boundary",List.of(Map.of("code","newtown","boundaryType","ROOT")))))));
+                assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+            }
+        }
+    }
+
 }
