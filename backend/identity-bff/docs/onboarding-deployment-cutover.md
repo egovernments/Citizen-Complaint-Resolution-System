@@ -39,6 +39,25 @@ boundary and encryption. Baseline creation uses these hosts rather than
 Kong, so a new tenant can receive its initial role-action grants. Business
 acceptance tests still use the founder's normal token through Kong.
 
+Each signup write now validates fresh `/user/_details` authority for the
+configured active EMPLOYEE provisioner. It requires `MDMS_ADMIN`,
+`ACCOUNT_ADMIN`, `LOC_ADMIN` and `HRMS_ADMIN`, all at the configured state-root
+tenant; `SUPERUSER` alone is insufficient. Cached login role claims do not
+authorize writes. Persisted signup tenant, step, restart and unexpired lease
+must agree before and after authorization, and only fixed signup actions and
+tenant-scoped payloads are permitted. Check these role prerequisites before
+deployment; this change does not modify live credentials or role assignments.
+
+Workspace rename uses the current caller's DIGIT token through Kong. Compose
+sets PGR's `EGOV_GATEWAY_HOST` to `http://kong:8000`; an absent or invalid origin
+fails closed. The caller needs live tenant `ACCOUNT_ADMIN` and the existing
+downstream action grants (including `MDMS_ADMIN` for tenant MDMS updates).
+There is no provisioner fallback or grant expansion. Rename progresses only
+on authenticated `_rename` requests. Partial failures retain progress and name
+reservations; after fresh login, explicit Retry reuses the accepted operation's
+original name and request version. Tokens are never persisted. See the
+[workspace contract](../../pgr-services/docs/onboarding-workspace-contract.md).
+
 `pgr_onboarding_runner_enabled` renders `PGR_ONBOARDING_RUNNER_ENABLED`.
 It defaults to false. The deployment owner must enable the PGR runner with
 the provisioner and onboarding credentials configured when releasing this

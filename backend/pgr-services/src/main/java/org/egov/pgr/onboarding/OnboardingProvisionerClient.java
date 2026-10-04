@@ -70,10 +70,6 @@ public class OnboardingProvisionerClient {
         return value.replaceAll("/$", "");
     }
 
-    /** Compatibility alias; it has no direct-write authority. */
-    @Deprecated
-    public JsonNode post(String service, String path, Map<String, Object> body) { return read(service, path, body); }
-
     public JsonNode read(String service, String path, Map<String, Object> body) {
         String endpoint = path == null ? "" : path.split("\\?", 2)[0];
         Set<String> reads = Set.of("mdms:/egov-mdms-service/schema/v1/_search", "mdms:/egov-mdms-service/v2/_search",
@@ -178,10 +174,6 @@ public class OnboardingProvisionerClient {
         if (token.isBlank() || url.isBlank()) throw new OnboardingFailure("IDENTITY_NOT_CONFIGURED", true);
         return exchange(url.replaceAll("/$", "") + "/internal/identity/v1/" + path, body, token);
     }
-
-    /** Retained only for source compatibility; workspace cache writes must use its authenticated gateway. */
-    @Deprecated
-    public void bustLocalizationCache() { denied(); }
 
     private JsonNode exchange(String url, Map<String, Object> body, String token) {
         return exchange(url, body, token, true);

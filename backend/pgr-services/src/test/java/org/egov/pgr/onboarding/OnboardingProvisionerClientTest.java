@@ -48,10 +48,10 @@ public class OnboardingProvisionerClientTest {
     private void encrypt(){client.write(scope("TENANT_FOUNDATION"),"enc","/egov-enc-service/crypto/v1/_generatekey",Map.of("tenantId","newtown"));}
     @After public void stop(){if(server!=null)server.stop(0);}
     @Test public void genericInternalPostCannotWriteWithoutSignupAuthorization(){
-        assertThrows(OnboardingFailure.class,()->client.post("hrms","/egov-hrms/employees/_create",Map.of()));assertEquals(0,writes);assertEquals(0,logins);
+        assertThrows(OnboardingFailure.class,()->client.read("hrms","/egov-hrms/employees/_create",Map.of()));assertEquals(0,writes);assertEquals(0,logins);
     }
     @Test public void genericInternalCacheBustCannotBypassWorkspaceAuthorization(){
-        assertThrows(OnboardingFailure.class,client::bustLocalizationCache);assertEquals(0,writes);assertEquals(0,logins);
+        assertThrows(OnboardingFailure.class,()->client.read("localization","/localization/messages/cache-bust",Map.of()));assertEquals(0,writes);assertEquals(0,logins);
     }
     @Test public void everyRequiredRootRoleIsCheckedFromLiveDetailsNotCachedLogin(){
         for(String missing:ROLES){user.set("roles",mapper.valueToTree(ROLES.stream().filter(r->!r.equals(missing)).map(code->Map.of("code",code,"tenantId","pg")).toList()));
