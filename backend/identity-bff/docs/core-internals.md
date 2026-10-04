@@ -220,6 +220,11 @@ export function updateKeycloakUser(subject: string, change: (user: UserRepresent
 
 ## 5. Revocation (§6, item 10) — `revocation/`
 
+`revokePerson` and `revokeAccount` default to credential fallback. Reconciliation
+uses `{ fallback: false }` for steady denial: sessions and inventoried tokens
+are still revoked, but `findLiveStaffToken` is skipped. This option is persisted
+in the subject job so retries preserve it (core-owner decision, thread `core`).
+
 ```ts
 export type RevocationReason =
   | "KEYCLOAK_DISABLED" | "KEYCLOAK_DELETED" | "LOGOUT_ALL" | "CREDENTIAL_CHANGED"
@@ -227,10 +232,10 @@ export type RevocationReason =
   | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE" | "DIGIT_ACCOUNT_MISSING" | "LOGOUT";
 
 /** Bump the revocation generation, revoke every inventoried token (fallback via findLiveStaffToken), end BFF sessions; failures go to the retry set. Takes the person lease. */
-export function revokePerson(subject: string, reason: RevocationReason, options?: { keepSessionId?: string }): Promise<void>;
+export function revokePerson(subject: string, reason: RevocationReason, options?: { keepSessionId?: string; fallback?: boolean }): Promise<void>;
 
 /** Revoke one DIGIT account's tokens only (binding removed at one tenant, role change at one tenant). */
-export function revokeAccount(subject: string, account: { tenantId: string; uuid: string }, reason: RevocationReason): Promise<void>;
+export function revokeAccount(subject: string, account: { tenantId: string; uuid: string }, reason: RevocationReason, options?: { fallback?: boolean }): Promise<void>;
 
 /** Inventory: record a minted token under the lease fence. Called by _select. */
 export function recordToken(lease: PersonLease, account: { tenantId: string; uuid: string }, login: DigitLogin, kind: "staff" | "citizen"): Promise<void>;
