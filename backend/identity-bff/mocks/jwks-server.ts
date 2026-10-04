@@ -18,9 +18,9 @@ const KID = "test-key-1";
  * so test runs in different worktrees don't fight over one port.
  * IDENTITY_TEST_JWKS_PORT overrides it.
  */
-export const JWKS_PORT = Number(
-  process.env.IDENTITY_TEST_JWKS_PORT || 9999 + Number(process.env.REDIS_PORT || 16379) - 16379,
-);
+const derivedJwksPort = 9999 + Number(process.env.REDIS_PORT || 16379) - 16379;
+export const JWKS_PORT = Number(process.env.IDENTITY_TEST_JWKS_PORT ||
+  (derivedJwksPort >= 1024 && derivedJwksPort <= 65535 ? derivedJwksPort : 9999));
 export const ISSUER = `http://localhost:${JWKS_PORT}/realms/digit-sandbox`;
 const KEY_FILE = join(
   import.meta.dirname || process.cwd(),
