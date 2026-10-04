@@ -19,18 +19,32 @@ import {
 } from "../citizens/citizen-registration.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 import { DigitLoginRejectedError, DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { syncSubjectTenant } from "../reconciliation/subject-sync.js";
+import { withPersonLease } from "../accounts/person-lease.js";
+import { staffLogin, StaffLoginError } from "../accounts/credential-service.js";
+import { citizenAccess, staffAccess } from "../bindings/predicate.js";
+import { readBindingUser } from "../bindings/store.js";
+import { BindingError } from "../bindings/types.js";
+import { readDigitAccount } from "../workspace-members/authority.js";
+import { accountEntries } from "../sync/state.js";
+import { mirrorPerson } from "../sync/mirror.js";
+import { cachedToken, recordToken, holdToken } from "../revocation/index.js";
+import { findManagedAccount } from "../managed-accounts/managed-account-service.js";
+import { revokeToken } from "../managed-accounts/digit-user-client.js";
 import { currentSession } from "../sessions/current-session.js";
-import { saveSelectedIdentityContext } from "../sessions/session-store.js";
+import { requireCurrentSession, saveSelectedIdentityContext } from "../sessions/session-store.js";
 import {
   IdentityAdminError,
   keycloakPhoneIsAdminControlled,
-  readTenantMappingForTenant,
 } from "../organizations/organization-service.js";
 import type { TenantOption } from "./tenant-directory.js";
 import { isLiveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
-import { AccountLinkError, EMPLOYEE_USER_TYPE, linkedIdentityFor } from "../account-links/account-links.js";
+import { AccountLinkError } from "../account-links/account-links.js";
+
+// The surface-registry lane replaces this one policy helper at integration.
+function staffSurfacePolicy(surface: ReturnType<typeof parseSurface>) {
+  return { supported: surface !== null && surface !== "citizen", tenantBound: surface === "employee" };
+}
 
 function publicTenant({ organizationId: _organizationId, ...tenant }: TenantOption) {
   return tenant;
@@ -47,6 +61,7 @@ function tokenResponse(login: DigitLogin) {
 }
 
 function send(response: express.Response, code: HttpErrorCode, message: string) {
+  if (code === "IDENTITY_BUSY" || code === "BINDING_BUSY") response.setHeader("Retry-After", "1");
   return response.status(errorStatus(code)).json(errorBody(code, message));
 }
 
@@ -56,6 +71,9 @@ function send(response: express.Response, code: HttpErrorCode, message: string) 
  * from the catalogue, so a code is never sent with two statuses.
  */
 function digitFailure(error: unknown, response: express.Response, message: string, citizen = false) {
+  if (error instanceof StaffLoginError) return send(response, error.reason === "ACCOUNT_LOCKED" ? "ACCOUNT_LOCKED" : error.reason === "ACCOUNT_INACTIVE" ? "DIGIT_ACCOUNT_INACTIVE" : "DIGIT_UNAVAILABLE", error.reason === "ACCOUNT_LOCKED" ? "This account is locked" : error.reason === "ACCOUNT_INACTIVE" ? "This account is not active" : message);
+  const typed = error as { code?: unknown };
+  if (isErrorCode(typed?.code) && typeof errorStatus(typed.code as HttpErrorCode) === "number") return send(response, typed.code as HttpErrorCode, message);
   if (error instanceof CitizenContextError || error instanceof ManagedAccountError ||
       error instanceof AccountLinkError) {
     const code = isErrorCode(error.code) && errorStatus(error.code as HttpErrorCode) === error.status
@@ -131,7 +149,8 @@ export function registerAccessContextRoutes(app: express.Application): void {
       return send(response, "UNTRUSTED_ORIGIN", "Untrusted request origin");
     }
     const surface = parseSurface(request.body?.surface ?? request.query.surface);
-    if (!surface || surface === "citizen") {
+    const surfacePolicy = staffSurfacePolicy(surface);
+    if (!surface || !surfacePolicy.supported) {
       return send(response, "UNSUPPORTED_SURFACE", "Unsupported sign-in surface");
     }
     const current = await currentSession(request.headers.cookie, surface);
@@ -144,60 +163,46 @@ export function registerAccessContextRoutes(app: express.Application): void {
     if (!tenantId) return send(response, "INVALID_REQUEST", "tenantId is required");
     // An employee session is bound to the tenant of the route it signed in
     // on; it can never select another tenant, whatever its memberships.
-    if (surface === "employee" && current.session.boundTenant?.tenantId !== tenantId) {
+    if (surfacePolicy.tenantBound && current.session.boundTenant?.tenantId !== tenantId) {
       return send(response, "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
     }
 
     try {
       const subject = current.session.claims.sub;
-      // An existing DIGIT employee linked by an admin (#2167) signs in to that
-      // account as it is: its own uuid, roles and history, re-checked active
-      // on every _select. The link itself authorizes the bound tenant.
-      const linked = surface === "employee"
-        ? await linkedIdentityFor(subject, EMPLOYEE_USER_TYPE, tenantId)
-        : null;
-      if (linked) {
-        const login = await managedUserLogin(linked, current.sessionId);
-        const mapping = await readTenantMappingForTenant(tenantId);
-        const saved = await saveSelectedIdentityContext(current.sessionId, {
-          organizationId: mapping?.organizationId || "",
-          organizationAlias: mapping?.alias || "",
-          tenantId,
-          name: current.session.boundTenant?.name || mapping?.name || tenantId,
-        });
-        if (!saved) return send(response, "SESSION_EXPIRED", "Identity session expired");
-        return response.json(tokenResponse(login));
-      }
-      // Only the requested tenant is resolved, and its live Organization
-      // membership is what authorizes the switch.
-      const selected = await resolveTenantOption(subject, tenantId);
-      if (!selected) {
-        return surface === "employee"
-          ? send(response, "EMPLOYEE_ACCOUNT_NOT_LINKED", "Tenant context is not available")
-          : send(response, "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
-      }
-      const outcome = await syncSubjectTenant(
-        subject,
-        selected.tenantId,
-        current.session.claims.phone_number,
-      );
-      if (!outcome.account) {
-        return send(response, "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
-      }
-      if (!outcome.account.active) {
-        return send(response, "DIGIT_ACCOUNT_INACTIVE", "This account is not active");
-      }
-      const identity = managedIdentity(config.keycloakIssuer, subject, selected.tenantId);
-      const login = await managedUserLogin(identity, current.sessionId);
-      const saved = await saveSelectedIdentityContext(current.sessionId, {
-        organizationId: selected.organizationId,
-        organizationAlias: selected.organizationAlias,
-        tenantId: selected.tenantId,
-        name: selected.name,
+      const login = await withPersonLease(subject, async (lease) => {
+        await requireCurrentSession(lease, current.sessionId);
+        const access = await staffAccess(subject, tenantId);
+        if (!access.allowed) throw new BindingError(access.binding?.state === "pending" ? "PENDING_INVITATION" : surfacePolicy.tenantBound ? "EMPLOYEE_ACCOUNT_NOT_LINKED" : "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
+        const selected = await resolveTenantOption(subject, tenantId);
+        if (!selected) throw new BindingError("TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
+        const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
+        const account = access.binding ? await readDigitAccount(tenantId, access.binding.uuid) : await findManagedAccount(identity);
+        if (!account) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "The bound employee account is missing");
+        if (!account.active) {
+          await cachedToken(lease, account); // Invalidates any already-issued inactive account token; never mints.
+          throw new BindingError("DIGIT_ACCOUNT_INACTIVE", "This account is not active");
+        }
+        let minted: DigitLogin | null = null;
+        try {
+          let token = await cachedToken(lease, account);
+          if (!token) {
+            const recorded = accountEntries(await readBindingUser(subject)).find((e) => e.kind === "staff" && e.tenantId === tenantId && e.uuid === account.uuid);
+            token = access.binding ? await staffLogin({ tenantId, uuid: account.uuid, userName: account.userName, keyVersion: recorded?.credential?.keyVersion }, lease)
+              : await managedUserLogin(identity, current.sessionId);
+            minted = token;
+            await recordToken(lease, account, token, "staff");
+          }
+          await holdToken(lease, account, current.sessionId);
+          if (access.binding) await mirrorPerson(subject);
+          await lease.assertHeld();
+          if (!await saveSelectedIdentityContext(current.sessionId, { organizationId: selected.organizationId,
+            organizationAlias: selected.organizationAlias, tenantId, name: selected.name })) throw new BindingError("SESSION_REVOKED", "The identity session is no longer current");
+          return token;
+        } catch (error) {
+          if (minted) await revokeToken(minted.accessToken);
+          throw error;
+        }
       });
-      if (!saved) {
-        return send(response, "SESSION_EXPIRED", "Identity session expired");
-      }
       return response.json(tokenResponse(login));
     } catch (error) {
       return digitFailure(error, response, "Sign-in context is temporarily unavailable");
@@ -224,13 +229,16 @@ export function registerAccessContextRoutes(app: express.Application): void {
         current.session.oidcClientId !== config.keycloakCitizenClientId) {
       return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
     }
-    // A DIGIT citizen account is keyed by a verified mobile number. How a
-    // citizen without one gets a DIGIT account is open (#2189): fail closed.
-    if (claims.phone_number_verified !== true || !claims.phone_number) {
-      return send(response, "PHONE_NOT_VERIFIED", "A verified phone number is required");
-    }
 
     try {
+      return await withPersonLease(claims.sub, async (lease) => {
+        let issued: DigitLogin | null = null;
+        try {
+      await requireCurrentSession(lease, current.sessionId);
+      const access = await citizenAccess(claims.sub);
+      if (!access.allowed) return send(response, access.denial === "PHONE_NOT_VERIFIED" ? "PHONE_NOT_VERIFIED" : "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
+      const livePhone = (await readBindingUser(claims.sub)).attributes?.phoneNumber?.[0];
+      if (!livePhone) return send(response, "PHONE_NOT_VERIFIED", "A verified phone number is required");
       // Like employee `_select`, re-read the tenant's Organization (or group)
       // live: disabling or unmapping it stops citizen sign-in at once, not
       // when the session expires.
@@ -249,7 +257,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         console.warn("Citizen context: tenant has no MobileNumberValidation rule");
         return send(response, "CITIZEN_SIGNIN_NOT_CONFIGURED", "Citizen sign-in is not configured for this tenant");
       }
-      const phone = splitE164(claims.phone_number, rule);
+      const phone = splitE164(livePhone, rule);
       if (!phone) {
         return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "This phone number cannot be used for this tenant");
       }
@@ -270,6 +278,9 @@ export function registerAccessContextRoutes(app: express.Application): void {
       const login = await managedUserLogin(
         identity, current.sessionId, phone.mobileNumber, phone.countryCode,
       );
+      issued = login;
+      await lease.assertHeld();
+      await requireCurrentSession(lease, current.sessionId);
       // egov-user issues every CITIZEN token at the state root, so the token
       // tenant is the bound tenant's citizen tenant (`identity.tenantId`),
       // never the city itself. Fail closed on anything else: another user
@@ -277,13 +288,18 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (login.user.type !== "CITIZEN" || login.user.tenantId !== identity.tenantId ||
           login.user.tenantId !== digitCitizenTenantId(boundTenant.tenantId)) {
         console.error("Citizen context: DIGIT returned a token for an unexpected account");
-        return send(response, "DIGIT_ACCOUNT_MISMATCH", "Citizen context is temporarily unavailable");
+        throw new BindingError("DIGIT_ACCOUNT_MISMATCH", "Citizen context is temporarily unavailable");
       }
       // `tenant` is the bound route tenant: the client keeps using it for
       // business requests even though the token's home tenant is the root.
       return response.json({
         ...tokenResponse(login),
         tenant: { urlSlug: boundTenant.urlSlug, tenantId: boundTenant.tenantId },
+      });
+        } catch (error) {
+          if (issued) await revokeToken(issued.accessToken);
+          throw error;
+        }
       });
     } catch (error) {
       if (error instanceof IdentityAdminError) {

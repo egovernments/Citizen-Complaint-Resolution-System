@@ -1,3 +1,5 @@
+import { ensureActive, remove as removeBinding } from "../../src/modules/bindings/store.js";
+import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
 import { getIssuer } from "../helpers.js";
@@ -35,9 +37,12 @@ import {
   type OtpMessage,
 } from "../../src/modules/citizen-otp/otp-sender.js";
 import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
+import * as subjectSync from "../../src/modules/reconciliation/subject-sync.js";
+import * as reconciliation from "../../src/modules/reconciliation/reconciliation-service.js";
 import { syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
 import { desiredRolesForSubjectTenant } from "../../src/modules/reconciliation/reconciliation-service.js";
 import {
+  ensureOrganizationMembership,
   isOrganizationGroupMember,
   readOrganizationGroupReconciliation,
   clearTenantMappingCache,
@@ -54,6 +59,18 @@ import {
   startIdentityTestApp as startTestApp,
   stopIdentityTestApp as stopTestApp,
 } from "./identity-test-app.js";
+
+async function withoutSubjectReconciliation(run: () => Promise<Response>): Promise<Response> {
+  const spies = [vi.spyOn(subjectSync, "syncSubject"), vi.spyOn(subjectSync, "syncSubjectTenant"),
+    vi.spyOn(reconciliation, "desiredRolesBySubject")];
+  try {
+    const result = await run();
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    return result;
+  } finally {
+    for (const spy of spies) spy.mockRestore();
+  }
+}
 
 const digit = createFakeDigitUser({
   tenants: ["ke", "ke.bomet", "ke.bomet.ulb1", "ke.kisumu", "ke.nakuru", "ke.nyeri"],
@@ -1153,7 +1170,7 @@ describe("identity BFF", () => {
     "digit-identity-bff");
 
     await fetch(`${config.keycloakAdminUrl}/__test/admin-log`, { method: "DELETE" });
-    const selected = await fetch(
+    const selected = await withoutSubjectReconciliation(() => fetch(
       `http://localhost:${getAppPort()}/identity/v1/contexts/_select`,
       {
         method: "POST",
@@ -1164,7 +1181,7 @@ describe("identity BFF", () => {
         },
         body: JSON.stringify({ tenantId: "ke.bomet" }),
       },
-    );
+    ));
     expect(selected.status).toBe(200);
 
     const log = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json() as string[];
@@ -1325,6 +1342,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     returnTo = `/bomet-county/digit-ui/${surface}/`,
     tenantSlug = "bomet-county",
   ): Promise<string> {
+    // D10 reads verified phone state from Keycloak, not only the token fixture.
+    if (surface === "citizen" && !profile.startsWith("legacy")) {
+      const subject = profile === "other" ? "citizen-user-2" : "citizen-user-1";
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      const phone = profile === "other" ? "+254722000111" : profile === "newphone" ? "+254712345679" : profile === "foreign" ? "+14155550100" : "+254712345678";
+      await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes,
+        phoneNumber: [phone], phoneNumberVerified: [profile === "unverified" ? "false" : "true"] } });
+    }
     const { state, nonce, loginCookie } = await startSignIn(
       `surface=${surface}&tenantSlug=${tenantSlug}&returnTo=${encodeURIComponent(returnTo)}`,
     );
@@ -1681,7 +1706,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     // validateOtp (mobileNumber at the account tenant), even when search
     // responses mask the stored number.
     digit.setMaskSearchMobileNumbers(true);
-    const selected = await citizenSelect(cookie, { tenantId: "ke.kisumu" }).finally(() =>
+    const selected = await withoutSubjectReconciliation(() => citizenSelect(cookie, { tenantId: "ke.kisumu" })).finally(() =>
       digit.setMaskSearchMobileNumbers(false));
     expect(selected.status).toBe(200);
     // Bomet's Organization maps `ke.bomet`, but egov-user keeps citizens at
@@ -2067,6 +2092,9 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     const wrong = (code: string) => String((Number(code) + 1) % 1_000_000).padStart(6, "0");
 
     beforeAll(async () => {
+      // Reset the fresh Keycloak phone changed by the preceding new-phone gate.
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/citizen-user-1`)).json();
+      await kcUpdate("/users/citizen-user-1", { attributes: { ...user.attributes, phoneNumber: ["+254712345678"], phoneNumberVerified: ["true"] } });
       Object.assign(config as any, otpConfig);
       setOtpSender({
         configured: true,
@@ -2645,6 +2673,19 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         tenantId: input.tenantId, type: input.type, active: true, identificationMark: null,
         roles: input.roles.map((code) => ({ code, tenantId: input.tenantId })), password: "Legacy@123",
       });
+    // These legacy operator-route gates retain their old link assertions, but
+    // staff issuance now requires the binding and membership produced by item 19.
+    const bindLegacyEmployeeFixture = async (uuid: string) => {
+      const subject = "identity-user-unlinked";
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      const attributes = { ...user.attributes };
+      delete attributes["digit.bindings"]; delete attributes["digit.boundUuids"]; delete attributes["digit.accounts"];
+      await kcUpdate(`/users/${subject}`, { attributes });
+      await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: subject });
+      await ensureActive({ subject, tenantId: "ke.bomet", uuid, actor: { kind: "migration" } });
+      await mirrorPerson(subject);
+    };
+    const removeLegacyEmployeeFixture = (uuid: string) => removeBinding({ subject: "identity-user-unlinked", tenantId: "ke.bomet", uuid, removedBy: { kind: "operator" } });
     const profileUrl = () => `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/profile`;
     const setProfile = async (profile: unknown) => {
       await fetch(profileUrl(), {
@@ -2711,6 +2752,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         status: "LINKED", subject: "identity-user-unlinked", digitUserUuid: account.uuid,
       })]);
 
+      await bindLegacyEmployeeFixture(account.uuid);
       const passwordUpdates = digit.stats.passwordUpdates;
       const selected = await employeeSelect(cookie);
       expect(selected.status).toBe(200);
@@ -2738,6 +2780,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid, actor: "qa-admin",
       });
       expect(await unlinked.json()).toEqual({ removed: true });
+      await removeLegacyEmployeeFixture(account.uuid);
       expect((await (await employeeSelect(cookie)).json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
       expect(digit.accounts.get(account.uuid)!.active).toBe(true);
     });
@@ -2750,6 +2793,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       });
       expect((await linked.json()).results[0].status).toBe("LINKED");
 
+      await bindLegacyEmployeeFixture(account.uuid);
       digit.accounts.get(account.uuid)!.accountLocked = true;
       const locked = await employeeSelect(cookie);
       const body = await expectContractError(locked, contractRoute("POST", "/identity/v1/contexts/_select"), "ACCOUNT_LOCKED");
@@ -2758,6 +2802,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       digit.accounts.get(account.uuid)!.accountLocked = false;
       expect((await employeeSelect(cookie)).status).toBe(200);
       await cp("account-links/_unlink", { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid });
+      await removeLegacyEmployeeFixture(account.uuid);
     });
 
     it("refuses links that are unproven or already owned, item by item", async () => {

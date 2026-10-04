@@ -1,3 +1,4 @@
+import { registerWorkspaceMemberRoutes } from "../modules/workspace-members/routes.js";
 import express from "express";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
@@ -46,6 +47,7 @@ export function createIdentityApp(): express.Application {
   registerPasswordSetupRoutes(app);
   registerCitizenOtpRoutes(app);
   registerSessionRoutes(app);
+  registerWorkspaceMemberRoutes(app);
   registerAccessContextRoutes(app);
   registerBrandingRoutes(app);
   registerOrganizationRoutes(app);
