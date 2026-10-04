@@ -497,6 +497,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has l
 - Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
 - DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
 - An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
+- **Deferred (root, D18 scope):** notifying the old address about an email change, here or through self-service `UPDATE_EMAIL`, is not built in v1. Stock Keycloak doesn't send it, and custom Keycloak extensions are not allowed. Verification of the new address and "DIGIT only after verification" are unchanged and required.
 
 ### 3.4 Internal: PGR onboarding
 
