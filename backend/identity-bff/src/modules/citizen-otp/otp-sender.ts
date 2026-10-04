@@ -2,6 +2,7 @@ import { config } from "../../infrastructure/config.js";
 
 export interface OtpMessage {
   challengeId: string;
+  purpose?: "signin" | "stepup" | "change_phone";
   tenantId: string;
   /** E.164, already validated against the tenant's mobile rule. */
   phoneNumber: string;
@@ -20,7 +21,39 @@ export interface OtpSender {
   send(message: OtpMessage): Promise<void>;
 }
 
-export class OtpDeliveryError extends Error {}
+export class OtpDeliveryError extends Error {
+  constructor(message: string, readonly code: "OTP_CHANNEL_UNAVAILABLE" | "OTP_RATE_LIMITED" = "OTP_CHANNEL_UNAVAILABLE") {
+    super(message);
+  }
+}
+
+export class HttpOtpSender implements OtpSender {
+  get configured(): boolean {
+    return config.identityCitizenOtpSender === "http" && Boolean(config.identityOtpSenderUrl);
+  }
+
+  async send(message: OtpMessage): Promise<void> {
+    if (!this.configured) throw new OtpDeliveryError("No OTP channel is configured");
+    try {
+      const response = await fetch(config.identityOtpSenderUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(config.identityOtpSenderTimeoutMs),
+        redirect: "error",
+        body: JSON.stringify({
+          phone: message.phoneNumber, code: message.code,
+          purpose: message.purpose || "signin", tenantId: message.tenantId,
+          locale: message.locale, expiresIn: message.expiresInSeconds,
+        }),
+      });
+      if (response.status === 429) throw new OtpDeliveryError("OTP channel rate limited", "OTP_RATE_LIMITED");
+      if (!response.ok) throw new OtpDeliveryError("OTP channel unavailable");
+    } catch (error) {
+      if (error instanceof OtpDeliveryError) throw error;
+      throw new OtpDeliveryError("OTP channel unavailable");
+    }
+  }
+}
 
 /**
  * Interim sender (#2189): writes the code to the BFF's log. Anyone who can
@@ -44,10 +77,12 @@ export class LogOtpSender implements OtpSender {
   }
 }
 
-let sender: OtpSender = new LogOtpSender();
+let sender: OtpSender | undefined;
+const httpSender = new HttpOtpSender();
+const logSender = new LogOtpSender();
 
 export function otpSender(): OtpSender {
-  return sender;
+  return sender || (config.identityCitizenOtpSender === "http" ? httpSender : logSender);
 }
 
 /** Test hook, like `setCitizenTokenMinter`. */
@@ -73,7 +108,7 @@ export function fixedOtpCode(): string | null {
  * delivery that fails later still answers OTP_CHANNEL_UNAVAILABLE.
  */
 export function phoneOtpAvailable(): boolean {
-  return Boolean(config.identityCitizenOtpSecret) && (sender.configured || fixedOtpCode() !== null);
+  return Boolean(config.identityCitizenOtpSecret) && (otpSender().configured || fixedOtpCode() !== null);
 }
 
 /** Startup warnings for the two modes that weaken phone proof. */

@@ -36,8 +36,9 @@ export interface IdentityTokenSet {
 
 export interface IdentityAuthMethod {
   id: string;
-  label: string;
-  type: "password" | "oauth" | "magic_link" | "phone_otp";
+  labelKey: string;
+  label?: string;
+  type: "password" | "idp" | "magic_link" | "phone_otp" | "hosted";
   idpHint?: string;
   intents: IdentityAuthIntent[];
 }

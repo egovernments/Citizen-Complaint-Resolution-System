@@ -73,6 +73,7 @@ export const config = {
     process.env.KEYCLOAK_CITIZEN_CLIENT_SECRET || "",
 
   // Identity BFF
+  identitySurfacesJson: process.env.IDENTITY_SURFACES_JSON || "",
   identityRedirectUri:
     process.env.IDENTITY_REDIRECT_URI ||
     "http://localhost:18201/identity/v1/callback",
@@ -122,7 +123,9 @@ export const config = {
   identityCitizenOtpIpSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT || "20"),
   // Interim OTP channel: "log" writes codes to the BFF log (development only).
   // Anything else = no channel, so a send answers OTP_CHANNEL_UNAVAILABLE.
-  identityCitizenOtpSender: process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  identityCitizenOtpSender: process.env.IDENTITY_OTP_SENDER || process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  identityOtpSenderUrl: process.env.IDENTITY_OTP_SENDER_URL || "",
+  identityOtpSenderTimeoutMs: parseInt(process.env.IDENTITY_OTP_SENDER_TIMEOUT_MS || "10000"),
   // Same switch and value egov-user reads (citizen.login.password.otp.fixed.*):
   // when on, the fixed code is accepted for any challenge. Development only.
   citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
@@ -266,8 +269,8 @@ export const config = {
   keycloakAdminClientId: process.env.KEYCLOAK_ADMIN_CLIENT_ID || "admin-cli",
   keycloakAdminClientSecret:
     process.env.KEYCLOAK_ADMIN_CLIENT_SECRET || "",
-  keycloakAdminUsername: process.env.KEYCLOAK_ADMIN_USERNAME || "admin",
-  keycloakAdminPassword: process.env.KEYCLOAK_ADMIN_PASSWORD || "admin",
+  keycloakAdminUsername: process.env.KEYCLOAK_ADMIN_USERNAME || "",
+  keycloakAdminPassword: process.env.KEYCLOAK_ADMIN_PASSWORD || "",
   // Redis
   redisHost: process.env.REDIS_HOST || "localhost",
   redisPort: parseInt(process.env.REDIS_PORT || "6379"),

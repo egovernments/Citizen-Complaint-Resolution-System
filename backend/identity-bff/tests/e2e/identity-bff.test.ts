@@ -352,10 +352,10 @@ describe("identity BFF", () => {
     );
     expect(methods.status).toBe(200);
     expect(await methods.json()).toEqual({ methods: [
-      { id: "password", label: "Email and password", type: "password", intents: ["signin"] },
-      { id: "google", label: "Continue with Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
-      { id: "github", label: "Continue with GitHub", type: "oauth", idpHint: "github", intents: ["signin", "signup"] },
-      { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
+      { id: "google", labelKey: "IDENTITY_METHOD_GOOGLE", label: "Google", type: "idp", idpHint: "google", intents: ["signin", "signup"] },
+      { id: "github", labelKey: "IDENTITY_METHOD_GITHUB", label: "github", type: "idp", idpHint: "github", intents: ["signin", "signup"] },
+      { id: "magic_link", labelKey: "IDENTITY_METHOD_MAGIC_LINK", type: "magic_link", intents: ["signup"] },
     ] });
     const initialAdminReads = await (
       await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
@@ -1467,11 +1467,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       return (await response.json()).methods;
     };
     expect(await methods("surface=employee")).toEqual([
-      { id: "password", label: "Username and password", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
     ]);
     expect(await methods("surface=employee&intent=signup")).toEqual([]);
     expect(await methods("surface=citizen")).toEqual([
-      { id: "password", label: "Username and password", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
     ]);
     expect(await methods("surface=citizen&intent=signup")).toEqual([]);
     expect((await methods("")).map((method: { id: string }) => method.id))
@@ -1538,6 +1538,37 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect(crossedTo.pathname.startsWith("/bomet-county/digit-ui/employee/")).toBe(true);
     expect(crossedTo.searchParams.get("authResult")).toBeTruthy();
     expect(cookieFrom(crossed, "digit_identity_session_employee")).toBeUndefined();
+  });
+
+  it("adds an employee surface through configuration alone", async () => {
+    const original = config.identitySurfacesJson;
+    config.identitySurfacesJson = JSON.stringify({ reviewer: {
+      contextKind: "employee", clientId: "digit-ui-reviewer", clientSecret: "test-reviewer-secret",
+      scope: "openid profile email", cookieName: "digit_identity_session_reviewer", prompt: "select_account",
+    } });
+    resetIdentityMethodCatalog();
+    try {
+      const start = await startSignIn("surface=reviewer&tenantSlug=bomet-county");
+      expect(start.url.searchParams.get("client_id")).toBe("digit-ui-reviewer");
+      expect(start.url.searchParams.get("prompt")).toBe("select_account");
+      const callback = await fetch(`${app()}/identity/v1/callback?code=valid-code:${encodeURIComponent(start.nonce)}&state=${encodeURIComponent(start.state)}`, {
+        redirect: "manual", headers: { Cookie: start.loginCookie },
+      });
+      expect(callback.headers.get("location")).toBe("/bomet-county/digit-ui/reviewer/");
+      const cookie = cookieFrom(callback, "digit_identity_session_reviewer")!;
+      const session = await fetch(`${app()}/identity/v1/session?surface=reviewer`, { headers: { Cookie: cookie } });
+      expect(session.status).toBe(200);
+      expect(await session.json()).toMatchObject({ surface: "reviewer", tenant: { tenantId: "ke.bomet" } });
+      const select = (tenantId: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+        method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ surface: "reviewer", tenantId }),
+      });
+      expect((await select("ke.nakuru")).status).toBe(403);
+      expect((await select("ke.bomet")).status).toBe(200);
+    } finally {
+      config.identitySurfacesJson = original;
+      resetIdentityMethodCatalog();
+    }
   });
 
   it("signs an employee in to the bound tenant only", async () => {

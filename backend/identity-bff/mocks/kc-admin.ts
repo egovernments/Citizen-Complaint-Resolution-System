@@ -144,6 +144,11 @@ function getOrCreateRealm(name: string): RealmState {
           },
           roles: [],
         }],
+        ["digit-ui-reviewer", {
+          id: "digit-ui-reviewer-uuid", clientId: "digit-ui-reviewer",
+          enabled: true, standardFlowEnabled: true,
+          attributes: { "digit.auth.surface": "reviewer", "digit.auth.signin.methods": "password" }, roles: [],
+        }],
         ["digit-ui-citizen", {
           id: "digit-ui-citizen-uuid",
           clientId: "digit-ui-citizen",

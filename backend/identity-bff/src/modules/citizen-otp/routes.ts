@@ -147,10 +147,11 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
           await refundSend(allowance.reservation);
           if (!(error instanceof OtpDeliveryError)) throw error;
           console.warn("Citizen OTP delivery failed:", error.message);
-          await audit({ ...base, challengeId: challenge.id, outcome: "FAILED", reason: "OTP_CHANNEL_UNAVAILABLE" });
-          return response.status(503).json({
+          await audit({ ...base, challengeId: challenge.id, outcome: "FAILED", reason: error.code });
+          if (error.code === "OTP_RATE_LIMITED") response.setHeader("Retry-After", String(Math.max(1, config.identityCitizenOtpResendSeconds)));
+          return response.status(error.code === "OTP_RATE_LIMITED" ? 429 : 503).json({
             error: "The code could not be sent. Try again later.",
-            code: "OTP_CHANNEL_UNAVAILABLE",
+            code: error.code,
           });
         }
         // Fixed-code mode (development): the challenge stays usable undelivered.

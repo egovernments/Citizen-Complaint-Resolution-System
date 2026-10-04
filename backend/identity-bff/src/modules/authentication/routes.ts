@@ -1,7 +1,6 @@
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { config } from "../../infrastructure/config.js";
-import { resolveTenantOptions } from "../access-context/tenant-options.js";
 import {
   applyVerifiedSignupIdentityProfile,
   IdentityAdminError,
@@ -34,6 +33,7 @@ import {
   isTenantBoundSurface,
   parseSurface,
   surfaceReturnPrefix,
+  surfaceConfig,
   type BoundTenant,
 } from "./surfaces.js";
 import type {
@@ -166,17 +166,17 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       ? undefined
       : requestedIntent(request.query.intent);
     if (request.query.intent !== undefined && !intent) {
-      return response.status(400).json({ error: "Unsupported authentication intent" });
+      return response.status(400).json({ error: "Unsupported authentication intent", code: "UNSUPPORTED_INTENT" });
     }
     const surface = parseSurface(request.query.surface);
-    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface" });
+    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     try {
       return response.json({
         methods: await enabledIdentityMethods(intent || undefined, surface),
       });
     } catch (error) {
       if (error instanceof IdentityAdminError) {
-        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
+        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable", code: "SIGNIN_METHODS_UNAVAILABLE" });
       }
       throw error;
     }
@@ -187,10 +187,10 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       ? "signin"
       : requestedIntent(request.query.intent);
     if (!intent) {
-      return response.status(400).json({ error: "Unsupported authentication intent" });
+      return response.status(400).json({ error: "Unsupported authentication intent", code: "UNSUPPORTED_INTENT" });
     }
     const surface = parseSurface(request.query.surface);
-    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface" });
+    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     const tenantSlug = request.query.tenantSlug;
     if (tenantSlug !== undefined && typeof tenantSlug !== "string") {
       return response.status(400).json({ error: "Unsupported tenant route" });
@@ -248,7 +248,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       methods = await enabledIdentityMethods(intent, surface);
     } catch (error) {
       if (error instanceof IdentityAdminError) {
-        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
+        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable", code: "SIGNIN_METHODS_UNAVAILABLE" });
       }
       throw error;
     }
@@ -274,24 +274,25 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     // The client follows from the surface alone, never from returnTo.
     const oidcClient = oidcClientForSurface(surface, method.type);
     if (!oidcClient) {
-      return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
+      return response.status(503).json({ error: "Sign-in methods are temporarily unavailable", code: "SIGNIN_METHODS_UNAVAILABLE" });
     }
     const { state, codeChallenge, nonce } = await createLoginAttempt({
       oidcClientId: oidcClient.clientId,
       intent,
       methodId: method.id,
       returnTo,
-      ...(boundTenant && { surface, boundTenant }),
+      surface,
+      ...(boundTenant && { boundTenant }),
     });
     const extraParams: Record<string, string> = boundTenant
       ? {
         // Display only: the theme shows the tenant's branding. Authority is
         // the tenant bound to this attempt, never a value echoed back.
         digit_tenant: boundTenant.urlSlug,
-        // No cross-client SSO for digit-ui: always ask for credentials.
-        prompt: "login",
       }
       : {};
+    const prompt = surfaceConfig(surface).prompt;
+    if (prompt) extraParams.prompt = prompt;
     if (typeof uiLocales === "string") extraParams.ui_locales = uiLocales;
     response.setHeader("Set-Cookie", loginCookie(state, surface));
     return response.redirect(
@@ -391,13 +392,6 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         attempt.oidcClientId,
         { surface, boundTenant: attempt.boundTenant },
       );
-      // Organization tenant options are a configurator concept: digit-ui
-      // sessions are already bound to their route tenant.
-      if (surface === DEFAULT_SURFACE) {
-        await resolveTenantOptions(sessionClaims).catch((error) => {
-          console.warn("DIGIT account resolution after sign-in failed:", (error as Error).message);
-        });
-      }
       response.setHeader("Set-Cookie", [
         sessionCookie(sessionId, maxAge, surface),
         clearedLoginCookie(surface),

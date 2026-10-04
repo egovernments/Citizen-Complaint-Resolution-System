@@ -2,7 +2,7 @@ import { config } from "../../infrastructure/config.js";
 import { validateJwt } from "./token-verifier.js";
 import type { IdentityAuthMethod, IdentityTokenSet, KeycloakClaims } from "./types.js";
 
-import type { IdentitySurface } from "./surfaces.js";
+import { surfaceRegistry, type IdentitySurface } from "./surfaces.js";
 
 export interface OidcClient {
   clientId: string;
@@ -21,34 +21,15 @@ export interface OidcClient {
  * a development default.
  */
 function oidcClients(): OidcClient[] {
-  const clients: OidcClient[] = [{
-    clientId: config.keycloakBffClientId,
-    clientSecret: config.keycloakBffClientSecret,
-    surface: "configurator",
-    scope: config.identityScope,
-  }];
+  const clients: OidcClient[] = Object.entries(surfaceRegistry())
+    .filter(([, entry]) => entry.clientSecret)
+    .map(([surface, entry]) => ({ surface, clientId: entry.clientId, clientSecret: entry.clientSecret, scope: entry.scope }));
   if (config.keycloakMagicLinkClientSecret) {
     clients.push({
       clientId: config.keycloakMagicLinkClientId,
       clientSecret: config.keycloakMagicLinkClientSecret,
       surface: "configurator",
       scope: config.identityScope,
-    });
-  }
-  if (config.keycloakEmployeeClientSecret) {
-    clients.push({
-      clientId: config.keycloakEmployeeClientId,
-      clientSecret: config.keycloakEmployeeClientSecret,
-      surface: "employee",
-      scope: config.identityEmployeeScope,
-    });
-  }
-  if (config.keycloakCitizenClientSecret) {
-    clients.push({
-      clientId: config.keycloakCitizenClientId,
-      clientSecret: config.keycloakCitizenClientSecret,
-      surface: "citizen",
-      scope: config.identityCitizenScope,
     });
   }
   return clients;
@@ -71,19 +52,12 @@ export function oidcClientForSurface(
   surface: IdentitySurface,
   type: IdentityAuthMethod["type"],
 ): OidcClient | null {
-  if (surface === "configurator") {
-    return type === "magic_link"
-      ? oidcClients().find((client) => client.clientId === config.keycloakMagicLinkClientId) || null
-      : oidcClient(config.keycloakBffClientId);
+  if (type === "magic_link") {
+    return surface === "configurator"
+      ? oidcClients().find(client => client.clientId === config.keycloakMagicLinkClientId) || null
+      : null;
   }
-  // Employee and citizen journeys each run in their own Keycloak client,
-  // flow and theme; magic links are a configurator-only signup channel.
-  if (type === "magic_link") return null;
-  const clientId = surface === "employee"
-    ? config.keycloakEmployeeClientId
-    : config.keycloakCitizenClientId;
-  return oidcClients().find((client) =>
-    client.clientId === clientId && client.surface === surface) || null;
+  return oidcClients().find(client => client.surface === surface && client.clientId !== config.keycloakMagicLinkClientId) || null;
 }
 
 function oidcUrl(path: string, backchannel = false): string {

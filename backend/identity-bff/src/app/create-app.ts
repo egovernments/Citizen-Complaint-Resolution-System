@@ -1,4 +1,5 @@
 import express from "express";
+import { surfaceRegistry } from "../modules/authentication/surfaces.js";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
 import { registerAccessContextRoutes } from "../modules/access-context/routes.js";
@@ -17,6 +18,7 @@ import { registerCitizenOtpRoutes } from "../modules/citizen-otp/routes.js";
  * dependencies.
  */
 export function createIdentityApp(): express.Application {
+  surfaceRegistry(); // Fail startup on unsafe or incomplete surface configuration.
   const app = express();
   if (config.identityTrustProxyHops > 0) {
     app.set("trust proxy", config.identityTrustProxyHops);

@@ -3,7 +3,7 @@ import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import { logoutFromKeycloak } from "../authentication/oidc.js";
-import { DEFAULT_SURFACE, parseSurface } from "../authentication/surfaces.js";
+import { DEFAULT_SURFACE, parseSurface, surfaceContextKind } from "../authentication/surfaces.js";
 import {
   revokeCitizenLogin,
   revokeManagedUserLogins,
@@ -33,7 +33,7 @@ export function registerSessionRoutes(app: express.Application): void {
         email: claims.email,
         name: claims.name,
         preferredUsername: claims.preferred_username,
-        ...(surface === "citizen" && {
+        ...(surfaceContextKind(surface) === "citizen" && {
           phoneNumber: claims.phone_number,
           phoneNumberVerified: claims.phone_number_verified === true,
         }),
@@ -69,7 +69,7 @@ export function registerSessionRoutes(app: express.Application): void {
       const session = stored && identitySessionSurface(stored) === surface ? stored : null;
       if (!stored || session) await deleteIdentitySession(sessionId);
       if (session) {
-        const revocation = surface === "citizen" && session.boundTenant
+        const revocation = surfaceContextKind(surface) === "citizen" && session.boundTenant
           ? revokeCitizenLogin(config.keycloakIssuer, session.claims.sub,
             session.boundTenant.tenantId, sessionId)
           : revokeManagedUserLogins(config.keycloakIssuer, session.claims.sub, sessionId);
