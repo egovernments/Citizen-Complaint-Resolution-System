@@ -1,0 +1,58 @@
+BFF items 1-4 and 15: implementation handoff
+
+Phone item 13 transferred to surf-phone by root/owner decision.
+Final phone PR63 (aa89930ce) is merged at bc44c9f23 at owner request.
+Affected phone/HTTP tests passed 70/70 after merging with current core.
+Phone behavior is implemented by surf-phone; this is combined integration evidence.
+
+Executed after integrating core 9bf112ec6, surfaces 49fd676ba and phone aa89930ce:
+REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff
+47 files passed, 3 skipped; 557 tests passed, 11 skipped, 4 todo.
+Log: evidence/bff-final-full.log. File concurrency is disabled.
+
+npx --prefix backend/identity-bff tsc --noEmit -p backend/identity-bff/tsconfig.json
+Exit 0, no diagnostics. Log: evidence/bff-final-tsc.log.
+
+Deployment contracts: 111/111 passed, serial Jest (local-setup/tests).
+Command/result and Python prerequisite note: deployment-contract-summary.txt.
+
+git diff --check
+Exit 0.
+
+Coverage:
+- Config-only reviewer surface: methods, authorize, callback, session, bound
+  tenant selection. Frozen signin default, hosted methods, localization keys.
+- HTTP OTP sender transport/error handling. Phone purpose orchestration belongs
+  to surf-phone after handoff.
+- Action allowlist and second-factor restriction; same-person/session callback;
+  deleted session cannot return; account/session metadata; concurrent provider
+  unlink and last-primary-method protection; staff cannot rely on citizen phone.
+- Logout current/others/all across surfaces; current cookie retained for others.
+- Keycloak transient failures retain sessions; lease failures are typed 503s.
+- Public tenant success cache headers and no-store failures.
+- Readiness collects every dependency, bounds stalls, checks authenticated DIGIT
+  user/MDMS (not PGR), uses fresh catalogues, and reports core poller/reconcile lag.
+- Core _select integration retains registry eligibility, core person lease and
+  predicate ordering. Core regression spies prove no old full subject scan.
+- Core pendingInvitations coexists with self-service account/session metadata.
+
+Integration:
+- 0d2af5878: reviewed poller/revocation; starter includes retry worker, called once.
+- 1fae11312: reviewed bindings, workspace routes, conversion and _select.
+- 9bf112ec6: reviewed reconcile and identifier/citizen projection provider.
+- 49fd676ba: owner branding relay extraction; import-only mobile-rule relocation.
+- Poller and reconcile both register stop callbacks; no second retry starter.
+
+Contract/document changes in this delivery:
+- Provider unlink moved from planned to changing when registered.
+- GET /healthz removed from runtime, ROUTES, and matching doc route row (item15).
+- Both BFF Compose healthchecks use /livez; other services/timings unchanged.
+- Core workspace/reconcile route-state changes are preserved during integration.
+- Core _select policy helper reads surface registry contextKind in the same
+  position, preserving tenant binding and core authorization checks.
+
+Limits:
+Express/Redis are real; normal suite uses local Keycloak and DIGIT mocks.
+Skipped live Keycloak/DIGIT gates were not run here. Browser-hosted actions,
+TOTP, IdP linking and real identifier write-through require owner gate evidence.
+The four TODO routes remain outside this leaf's current scope.

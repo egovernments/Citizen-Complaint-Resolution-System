@@ -51,7 +51,6 @@ const BROWSER_WRITE: HttpErrorCode[] = ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "
 export const ROUTES: RouteContract[] = [
   // Probes
   { method: "GET", path: "/livez", auth: "none", state: "live", items: [], codes: [] },
-  { method: "GET", path: "/healthz", auth: "none", state: "deleted-later", items: [15], codes: [] },
   { method: "GET", path: "/readyz", auth: "none", state: "changing", items: [15], codes: [] },
 
   // Browser, anonymous
@@ -73,8 +72,6 @@ export const ROUTES: RouteContract[] = [
   { method: "GET", path: "/identity/v1/password/setup-complete/:state", auth: "login-attempt", state: "live", items: [], codes: [],
     results: ["PASSWORD_SETUP_COMPLETE", "PASSWORD_SETUP_FAILED", "AUTH_ATTEMPT_EXPIRED"] },
   { method: "GET", path: "/identity/v1/tenant-contexts/:urlSlug", auth: "none", state: "changing", items: [11, 15],
-    codes: ["TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE"] },
-  { method: "GET", path: "/identity/v1/tenant-contexts/:urlSlug/branding", auth: "none", state: "deleted-later", items: [14],
     codes: ["TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE"] },
   { method: "POST", path: "/identity/v1/citizen/otp/_send", auth: "none", state: "changing", items: [3, 13],
     codes: ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "TENANT_ROUTE_NOT_FOUND", "TENANT_ROUTE_UNAVAILABLE", "PHONE_OTP_DISABLED",
@@ -121,7 +118,7 @@ export const ROUTES: RouteContract[] = [
     codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
   // `?surface=` (optional, default configurator) picks the session cookie.
-  { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "planned", items: [4],
+  { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "changing", items: [4],
     codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "PROVIDER_NOT_LINKED", "LAST_SIGNIN_METHOD", "IDENTITY_BUSY",
       "IDENTITY_UNAVAILABLE"] },
 

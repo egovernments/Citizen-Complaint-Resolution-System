@@ -10,8 +10,8 @@ import {
   managedUserLogin,
 } from "../managed-accounts/managed-account-service.js";
 import type { DigitLogin } from "../managed-accounts/digit-user-client.js";
-import { parseSurface } from "../authentication/surfaces.js";
-import { mobileValidationForRoute } from "../branding/tenant-branding.js";
+import { parseSurface, surfaceContextKind, surfaceConfig } from "../authentication/surfaces.js";
+import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import {
   CitizenContextError,
   ensureCitizenRegistration,
@@ -42,9 +42,10 @@ import { isLiveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
 import { AccountLinkError } from "../account-links/account-links.js";
 
-// The surface-registry lane replaces this one policy helper at integration.
+// Registry context kinds preserve the core selection checks for every surface.
 function staffSurfacePolicy(surface: ReturnType<typeof parseSurface>) {
-  return { supported: surface !== null && surface !== "citizen", tenantBound: surface === "employee" };
+  const kind = surface ? surfaceContextKind(surface) : null;
+  return { supported: kind !== null && kind !== "citizen", tenantBound: kind === "employee" };
 }
 
 function publicTenant({ organizationId: _organizationId, ...tenant }: TenantOption) {
@@ -137,6 +138,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
       if (!tenant) {
         return response.status(404).json({ error: "Tenant route is not available" });
       }
+      response.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       return response.json({ tenant });
     } catch (error) {
       return digitFailure(error, response, "Tenant routes are temporarily unavailable");
@@ -233,16 +235,17 @@ export function registerAccessContextRoutes(app: express.Application): void {
       return send(response, "UNTRUSTED_ORIGIN", "Untrusted request origin");
     }
     const requestedSurface = request.body?.surface ?? request.query.surface;
-    if (requestedSurface !== undefined && requestedSurface !== "citizen") {
+    const surface = parseSurface(requestedSurface ?? "citizen");
+    if (!surface || surfaceContextKind(surface) !== "citizen") {
       return send(response, "UNSUPPORTED_SURFACE", "Unsupported sign-in surface");
     }
-    const current = await currentSession(request.headers.cookie, "citizen");
+    const current = await currentSession(request.headers.cookie, surface);
     if (!current) {
       return send(response, "SESSION_REQUIRED", "Invalid or missing identity session");
     }
     const { claims, boundTenant } = current.session;
-    if (!boundTenant || claims.azp !== config.keycloakCitizenClientId ||
-        current.session.oidcClientId !== config.keycloakCitizenClientId) {
+    if (!boundTenant || claims.azp !== surfaceConfig(surface).clientId ||
+        current.session.oidcClientId !== surfaceConfig(surface).clientId) {
       return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
     }
 
@@ -289,7 +292,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
             phoneTrusted,
             subject: claims.sub,
             tenant: boundTenant,
-            name: claims.name?.trim() || "Citizen",
+            name: claims.name?.trim() || phone.mobileNumber,
             ...phone,
           });
           issuedAccount = { tenantId: identity.tenantId, uuid: registration.digitUserUuid };

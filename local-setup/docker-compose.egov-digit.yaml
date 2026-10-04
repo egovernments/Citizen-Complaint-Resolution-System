@@ -3123,7 +3123,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Built from backend/identity-bff/keycloak/Dockerfile.magic-link. It pins
+    # Built from keycloak/Dockerfile. It pins
     # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
     # upstream image only when magic-link authentication is disabled.
     image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}
@@ -3135,6 +3135,15 @@ services:
       keycloak-postgres:
         condition: service_healthy
     environment:
+      # Login-page branding, rendered by Ansible from the values that feed
+      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
+      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
+      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
+      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
+      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
+      DIGIT_PUBLIC_API_BASE_URL: ${KEYCLOAK_DIGIT_PUBLIC_API_BASE_URL:-}
+      DIGIT_MDMS_SEARCH_PATH: ${KEYCLOAK_DIGIT_MDMS_SEARCH_PATH:-/mdms-v2/v1/_search}
+      DIGIT_DEFAULT_LOCALE: ${KEYCLOAK_DIGIT_DEFAULT_LOCALE:-en_IN}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
@@ -3243,25 +3252,14 @@ services:
       CACHE_PREFIX: digit-identity
       DIGIT_MDMS_V2_SEARCH_URL: http://kong:8000/mdms-v2/v2/_search
       DIGIT_MDMS_SCHEMA_SEARCH_URL: http://kong:8000/mdms-v2/schema/v1/_search
-      # Public login branding for the digit-employee Keycloak
-      # theme (#2167). The BFF's default
-      # (gateway:8080) does not exist in this stack, and a failed lookup only
-      # degrades to untranslated screens, so it must be set explicitly.
-      DIGIT_LOCALIZATION_SEARCH_URL: http://kong:8000/localization/messages/v1/_search
       # Citizen DIGIT tokens (#2167): internal egov-otp create, never via Kong
       # (the response carries the OTP). egov-otp runs under the `otp` profile;
       # without it citizen context selection answers 503.
       DIGIT_OTP_CREATE_URL: ${IDENTITY_DIGIT_OTP_CREATE_URL:-http://egov-otp:8089/otp/v1/_create}
-      # Login-page branding, rendered by Ansible from the values that feed
-      # globalConfigs.js. `-` (not `:-`) keeps an explicit empty footer = none.
-      DIGIT_FOOTER_URL: ${IDENTITY_DIGIT_FOOTER_URL-/digit-ui/brand/digit-footer.png}
-      DIGIT_FOOTER_BW_URL: ${IDENTITY_DIGIT_FOOTER_BW_URL-/digit-ui/brand/digit-footer-bw.png}
-      DIGIT_HOME_URL: ${IDENTITY_DIGIT_HOME_URL:-https://www.digit.org/}
-      DIGIT_UI_CONFIG_MODULE_NAME: ${IDENTITY_DIGIT_UI_CONFIG_MODULE_NAME:-commonMDMSConfig}
     ports:
       - "${BIND_IP:-127.0.0.1}:18400:3000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/livez >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

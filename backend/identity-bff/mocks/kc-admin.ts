@@ -144,6 +144,11 @@ function getOrCreateRealm(name: string): RealmState {
           },
           roles: [],
         }],
+        ["digit-ui-reviewer", {
+          id: "digit-ui-reviewer-uuid", clientId: "digit-ui-reviewer",
+          enabled: true, standardFlowEnabled: true,
+          attributes: { "digit.auth.surface": "reviewer", "digit.auth.signin.methods": "password" }, roles: [],
+        }],
         ["digit-ui-citizen", {
           id: "digit-ui-citizen-uuid",
           clientId: "digit-ui-citizen",
@@ -482,6 +487,13 @@ export function createKcAdminMock() {
     return user
       ? res.json(user.credentials || [])
       : res.status(404).json({ error: "User not found" });
+  });
+
+  app.delete("/admin/realms/:realm/users/:userId/federated-identity/:alias", (req, res) => {
+    const user = getOrCreateRealm(req.params.realm).users.find(candidate => candidate.id === req.params.userId);
+    if (!user) return res.status(404).end();
+    user.federatedIdentities = (user.federatedIdentities || []).filter(item => item.identityProvider !== req.params.alias);
+    return res.status(204).end();
   });
 
   app.get("/admin/realms/:realm/users/:userId/federated-identity", (req, res) => {

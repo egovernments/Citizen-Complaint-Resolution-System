@@ -1,7 +1,9 @@
-import { withPersonLease } from "../accounts/person-lease.js";
+import { withPersonLease, LeaseBusyError, LeaseLostError } from "../accounts/person-lease.js";
 import { config } from "../../infrastructure/config.js";
 import {
   refreshIdentityTokens,
+  InvalidGrantError,
+  IdentityUnavailableError,
   verifyIdentityAccessToken,
 } from "../authentication/oidc.js";
 import {
@@ -9,6 +11,7 @@ import {
   getIdentitySession,
   identitySessionSurface,
   saveIdentitySession,
+  SessionRevokedError,
   sessionIdFromCookie,
   touchIdentitySession,
 } from "./session-store.js";
@@ -50,6 +53,7 @@ export async function currentSession(
           // A Keycloak blip must not sign every OTP citizen out. The check is
           // not marked done, so the next request tries again.
           console.warn("Phone OTP session identity check failed:", (error as Error).message);
+          return { sessionId, session };
         }
         if (valid === false) {
           await deleteIdentitySession(sessionId);
@@ -101,8 +105,13 @@ export async function currentSession(
       return session ? { sessionId, session } : null;
     } catch (error) {
       console.warn("Identity session refresh failed:", (error as Error).message);
-      await deleteIdentitySession(sessionId);
-      return null;
+      if (error instanceof SessionRevokedError) return null;
+      if (error instanceof LeaseBusyError || error instanceof LeaseLostError) throw error;
+      if (error instanceof InvalidGrantError) {
+        await deleteIdentitySession(sessionId);
+        return null;
+      }
+      throw new IdentityUnavailableError("Identity service is temporarily unavailable");
     }
   });
 }

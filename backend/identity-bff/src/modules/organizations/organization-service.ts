@@ -1104,7 +1104,7 @@ function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIde
     throw new IdentityAdminError("The Keycloak user for this phone number is disabled", 403);
   }
   const name = [user.firstName, user.lastName].map((part) => part?.trim()).filter(Boolean).join(" ");
-  return { id: user.id, name: name || "Citizen", created };
+  return { id: user.id, name, created };
 }
 
 /**
@@ -1112,7 +1112,7 @@ function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIde
  * verified owners only, and all pages are read, so unverified holders of the
  * number can never hide the real owner behind a result limit.
  */
-async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserRepresentation[]> {
+export async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserRepresentation[]> {
   const query = new URLSearchParams({
     q: `${PHONE_ATTRIBUTE}:${phoneNumber} ${PHONE_VERIFIED_ATTRIBUTE}:true`,
     briefRepresentation: "false",
@@ -1133,14 +1133,12 @@ export async function phoneIdentityStillValid(userId: string, phoneNumber: strin
   return user.enabled !== false && verifiedPhoneOwner(user, phoneNumber);
 }
 
-/** How many usernames past the first a recycled number may move on to. */
-const PHONE_USERNAME_ALTERNATES = 4;
-
 /**
  * The Keycloak user who owns a phone number the caller has just proved with a
  * citizen OTP (#2189): the one user whose VERIFIED phone matches, or a new
  * user created with that number marked verified. An unverified match is never
  * taken over. Two verified owners, or a disabled owner, fail closed.
+ * Caller holds a person lease followed by the normalized phone lock.
  */
 export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<PhoneIdentityUser> {
   const owners = await findVerifiedPhoneUsers(phoneNumber);
@@ -1149,19 +1147,9 @@ export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<Phon
   }
   if (owners[0]) return phoneIdentityUser(owners[0], false);
 
-  // Deterministic, so a concurrent verify for the same number collides on
-  // the username instead of creating a second identity. A username can be
-  // held by an earlier owner who no longer verifiably owns the number (a
-  // changed or recycled number); the next one in the sequence is used then,
-  // still deterministic, so concurrent verifies keep colliding.
-  const base = `phone-${createHash("sha256").update(phoneNumber).digest("hex").slice(0, 24)}`;
-  for (let alternate = 0; alternate <= PHONE_USERNAME_ALTERNATES; alternate += 1) {
-    const user = await createPhoneIdentityUser(
-      alternate === 0 ? base : `${base}-${alternate}`, phoneNumber,
-    );
-    if (user) return user;
-  }
-  throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+  const user = await createPhoneIdentityUser(`phone-${randomUUID()}`, phoneNumber);
+  if (!user) throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+  return user;
 }
 
 /**
@@ -1200,7 +1188,7 @@ async function createPhoneIdentityUser(
       );
       throw new IdentityAdminError("Keycloak did not store the phone attributes", 503);
     }
-    return { id, name: "Citizen", created: true };
+    return { id, name: "", created: true };
   }
 
   const query = new URLSearchParams({ username, exact: "true", briefRepresentation: "false" });

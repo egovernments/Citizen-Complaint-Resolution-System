@@ -1,0 +1,13 @@
+
+Running 8 tests using 1 worker
+
+  -  1 tests/identity-real/dependencies.spec.ts:5:5 › gate targets a live Keycloak issuer and ready BFF dependencies
+  -  2 tests/identity-real/non-fixed-otp.spec.ts:5:5 › O2: real non-fixed egov-otp code mints a citizen token accepted by egov-user
+  -  3 tests/identity-real/personas.spec.ts:16:7 › configurator founder: sign-in, tenant context, account metadata and logout
+  -  4 tests/identity-real/personas.spec.ts:16:7 › configurator admin: sign-in, tenant context, account metadata and logout
+  -  5 tests/identity-real/personas.spec.ts:16:7 › employee: sign-in, tenant context, account metadata and logout
+  -  6 tests/identity-real/personas.spec.ts:16:7 › Keycloak citizen: sign-in, tenant context, account metadata and logout
+  -  7 tests/identity-real/personas.spec.ts:16:7 › phone-only citizen: sign-in, tenant context, account metadata and logout
+  -  8 tests/identity-real/personas.spec.ts:52:5 › one person lists sessions, signs out others, then signs out everywhere
+
+  8 skipped

@@ -1,0 +1,30 @@
+Owner surfaces integration verification
+
+Source: 8d43cedcc, after PR52/63 merge080dae354 and core94ae613eb merge6d32d6988.
+
+Executed from identity-lane-e:
+REDIS_PORT=16390 node backend/identity-bff/node_modules/vitest/vitest.mjs run --root backend/identity-bff
+Exit0: 47 files passed,3 skipped;572 tests passed,11 skipped,4 todo.
+Evidence: owner-integration-full.log.
+
+Affected identity-bff.test.ts:76/76 passed (owner-integration-affected.log).
+node backend/identity-bff/node_modules/typescript/bin/tsc --noEmit -p backend/identity-bff/tsconfig.json
+Exit0, no diagnostics (owner-integration-tsc.log).
+Typecheck was executed at6d32d6988; the only later source change removes a
+nonexistent test cache import/call. Production tree is unchanged.
+git diff --check: exit0.
+
+The first owner run could not load one imported core test because it referenced
+removed branding/tenant-branding.js.8d43cedcc removes only the obsolete cache
+setup; the replacement mobile validation always reads fresh MDMS.
+All new core assertions remain, including a new citizen entry before issuance,
+changed verified phone propagation to the same account, and token cleanup.
+
+Deployment files exactly match4582d5b29's111/111-tested tree, so that scoped
+evidence was reused. Frontend, realm and migration evidence is preserved in
+surfaces-integration.md. No duplicate live stack or deployment was performed.
+
+Limits: real Express/Redis, mocked Keycloak/DIGIT. Missing real-service gates
+remain skipped and four TODOs remain explicit. Realm24/24 live evidence is
+separate; full persona/O2, real phone/identifier propagation and final gate
+execution remain root-owned and pending. Parent completion is not claimed.

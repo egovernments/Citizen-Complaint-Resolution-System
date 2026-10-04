@@ -77,6 +77,7 @@ const CLIENT_SURFACES = new Map([
   ["digit-identity-bff:test-bff-secret", "configurator"],
   ["digit-identity-bff-magic-link:test-magic-secret", "configurator"],
   ["digit-ui-employee:test-employee-secret", "employee"],
+  ["digit-ui-reviewer:test-reviewer-secret", "employee"],
   ["digit-ui-citizen:test-citizen-secret", "citizen"],
 ]);
 

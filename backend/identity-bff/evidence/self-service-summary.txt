@@ -1,0 +1,20 @@
+Slice: surfaces, authentication methods, HTTP OTP transport, account actions and provider unlink, session refresh resilience.
+Branch: identity/surf-bff. The overall bridge task remains incomplete.
+
+Executed:
+REDIS_PORT=16390 npx vitest run
+25 files passed, 1 skipped. 297 tests passed, 3 skipped, 14 todo.
+
+npx tsc --noEmit
+Exit 0, no diagnostics.
+
+The HTTP tests use real Express and Redis with local Keycloak/DIGIT mocks.
+They do not verify Keycloak 26.7.3 browser actions, TOTP enrollment/enforcement,
+provider browser linking, or real DIGIT identifier propagation.
+
+Additional evidence: self-service-full.log, self-service-focused.log,
+refresh-http-tests.log, jwks-port.txt.
+
+Remaining task scope: scoped logout, pending invitations rendering, phone
+locking/stepup/change, national default name, full readiness and related perf.
+Dependent core providers are being supplied by core-owner through surfaces-owner.

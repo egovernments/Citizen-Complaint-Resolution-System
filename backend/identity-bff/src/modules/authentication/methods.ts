@@ -6,7 +6,7 @@ import {
 } from "../organizations/organization-service.js";
 import type { IdentityAuthMethod } from "./types.js";
 import type { IdentityAuthIntent } from "./types.js";
-import { DEFAULT_SURFACE, type IdentitySurface } from "./surfaces.js";
+import { DEFAULT_SURFACE, surfaceContextKind, type IdentitySurface } from "./surfaces.js";
 import { oidcClientForSurface } from "./oidc.js";
 import { phoneOtpAvailable } from "../citizen-otp/otp-sender.js";
 
@@ -33,29 +33,10 @@ function methodIds(value: string | undefined, attribute: string, optional = fals
     throw new IdentityAdminError(`Keycloak client attribute ${attribute} is not configured`, 503);
   }
   const ids = [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
-  if (ids.some((id) => !/^[a-z0-9._-]+$/.test(id))) {
+  if (ids.some((id) => !/^(?:[a-z0-9._-]+|hosted:[a-z0-9._-]+)$/.test(id))) {
     throw new IdentityAdminError(`Keycloak client attribute ${attribute} is invalid`, 503);
   }
   return ids;
-}
-
-function providerName(alias: string, displayName: string): string {
-  if (alias.toLowerCase() === "github") return "GitHub";
-  if (alias.toLowerCase() === "google") return "Google";
-  const name = displayName.trim() || alias;
-  return name === alias
-    ? alias
-      .split(/[._-]+/)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ")
-    : name;
-}
-
-function providerLabel(alias: string, displayName: string): string {
-  const name = providerName(alias, displayName);
-  return /^(continue with|log in with)\b/i.test(name)
-    ? name
-    : `Continue with ${name}`;
 }
 
 /**
@@ -63,15 +44,18 @@ function providerLabel(alias: string, displayName: string): string {
  * configurator, employee and citizen journeys can offer different methods
  * without sharing a client or a flow.
  */
-async function loadIdentityMethodCatalog(surface: IdentitySurface): Promise<IdentityMethodCatalog> {
+async function loadIdentityMethodCatalog(surface: IdentitySurface, readiness = false): Promise<IdentityMethodCatalog> {
   // The same surface -> client mapping authorize uses; a client without a
   // secret is absent from it.
   const oidc = oidcClientForSurface(surface, "password");
+  const empty = { signin: [], signup: [], providers: new Map(), magicLinkEnabled: false };
   if (!oidc) {
+    if (!readiness && surfaceContextKind(surface) === "citizen") return empty;
     throw new IdentityAdminError(`The ${surface} sign-in client is not configured`, 503);
   }
   const client = await identityClient(oidc.clientId);
   if (!client?.enabled || !client.standardFlowEnabled) {
+    if (!readiness && surfaceContextKind(surface) === "citizen") return empty;
     throw new IdentityAdminError(`The Keycloak ${surface} sign-in client is not enabled`, 503);
   }
   const declaredSurface = client.attributes[SURFACE_ATTRIBUTE];
@@ -89,7 +73,7 @@ async function loadIdentityMethodCatalog(surface: IdentitySurface): Promise<Iden
   );
   const configured = [...new Set([...signin, ...signup])];
   const [providers, magicClient] = await Promise.all([
-    configured.some((id) => id !== "password" && id !== "magic_link" && id !== "phone_otp")
+    configured.some((id) => id !== "password" && id !== "magic_link" && id !== "phone_otp" && !id.startsWith("hosted:"))
       ? enabledIdentityProviders()
       : Promise.resolve(new Map()),
     surface === DEFAULT_SURFACE && configured.includes("magic_link")
@@ -143,28 +127,35 @@ export async function enabledIdentityMethods(
 
   return requested.flatMap((id): IdentityAuthMethod[] => {
     const intents = policy.get(id) || [];
+    const labelKey = `IDENTITY_METHOD_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+    if (id.startsWith("hosted:")) return [{ id, labelKey, type: "hosted", intents }];
     if (id === "password") {
       return [{
         id,
-        label: surface === DEFAULT_SURFACE ? "Email and password" : "Username and password",
+        labelKey,
         type: "password",
         intents,
       }];
     }
     if (id === "phone_otp") {
       // Citizen only, and only when the BFF can hash and deliver a code.
-      return surface === "citizen" && phoneOtpAvailable()
-        ? [{ id, label: "Mobile number and one-time code", type: "phone_otp", intents }]
+      return surfaceContextKind(surface) === "citizen" && phoneOtpAvailable()
+        ? [{ id, labelKey, type: "phone_otp", intents }]
         : [];
     }
     if (id === "magic_link") {
       return surface === DEFAULT_SURFACE && magicLinkEnabled
-        ? [{ id, label: "Email me a sign-in link", type: "magic_link", intents }]
+        ? [{ id, labelKey, type: "magic_link", intents }]
         : [];
     }
     const provider = providers.get(id);
     return provider
-      ? [{ id, label: providerLabel(provider.alias, provider.displayName), type: "oauth", idpHint: id, intents }]
+      ? [{ id, labelKey, label: provider.displayName, type: "idp", idpHint: id, intents }]
       : [];
   });
+}
+
+/** Fresh capability probe: readiness must not be satisfied by an old catalog. */
+export async function checkIdentityMethodCatalog(surface: IdentitySurface): Promise<void> {
+  await loadIdentityMethodCatalog(surface, true);
 }

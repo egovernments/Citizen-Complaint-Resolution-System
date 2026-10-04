@@ -106,3 +106,5 @@ export * from "./constants/mobileValidation";
 export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter, isIdentityBffAuth,
   buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase,
   fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp };
+
+export * as IdentityAccount from "./services/auth/identityAccount";

@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT } from '../utils/env';
 import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
@@ -28,7 +29,7 @@ Catches a regression where the validationRules Redis cache wasn't invalidated af
   const validMobile = generateValidMobile(rule);
   const tooLong = '0'.repeat(expectedLen + 1);
 
-  await page.goto(`${BASE_URL}/digit-ui/citizen/login`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(8000);
 
   // Inspect the mobile input directly — placeholder + maxLength reflect MDMS rule

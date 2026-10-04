@@ -5,6 +5,7 @@ import {
   parseSurface,
   sessionCookieName,
   surfaceReturnPrefix,
+  surfaceRegistry,
 } from "../../src/modules/authentication/surfaces.js";
 import {
   authorizationUrl,
@@ -18,12 +19,7 @@ import {
   sessionCookie,
   sessionIdFromCookie,
 } from "../../src/modules/sessions/session-store.js";
-import {
-  LOGIN_MESSAGE_KEYS,
-  pickMobileValidation,
-  requestedBrandingLocale,
-  tenantMessageKey,
-} from "../../src/modules/branding/tenant-branding.js";
+import { pickMobileValidation } from "../../src/modules/citizen-otp/mobile-validation.js";
 import {
   parseCitizenRegistration,
   splitE164,
@@ -50,6 +46,17 @@ describe("sign-in surfaces", () => {
     expect(isTenantBoundSurface("configurator")).toBe(false);
     expect(isTenantBoundSurface("citizen")).toBe(true);
     expect(surfaceReturnPrefix("employee", "bomet-county")).toBe("/bomet-county/digit-ui/employee/");
+  });
+
+  it("rejects unsafe registry entries and colliding cookies at startup", () => {
+    for (const override of [
+      { "../bad": {} }, { employee: { contextKind: "unknown" } },
+      { employee: { cookieName: "digit_identity_session_login" } },
+      { employee: { cookieName: "bad;cookie" } }, { employee: { prompt: "bad" } },
+    ]) {
+      config.identitySurfacesJson = JSON.stringify(override);
+      expect(() => surfaceRegistry()).toThrow();
+    }
   });
 
   it("keeps the configurator cookie and gives each surface its own cookies", () => {
@@ -166,7 +173,7 @@ describe("citizen phone numbers and registrations", () => {
   });
 });
 
-describe("login branding helpers", () => {
+describe("mobile validation helpers", () => {
   it("selects the default active mobile rule like digit-ui", () => {
     expect(pickMobileValidation([
       { countryCode: "+1", mobileNumberRegex: "^x$" },
@@ -176,11 +183,5 @@ describe("login branding helpers", () => {
     expect(pickMobileValidation([])).toBeNull();
   });
 
-  it("validates locales and names tenant keys", () => {
-    expect(requestedBrandingLocale(undefined)).toBe(config.identityBrandingDefaultLocale);
-    expect(requestedBrandingLocale("sw_KE")).toBe("sw_KE");
-    expect(() => requestedBrandingLocale("../../x")).toThrow(/Unsupported locale/);
-    expect(tenantMessageKey("ke.bomet")).toBe("TENANT_TENANTS_KE_BOMET");
-    expect(new Set(LOGIN_MESSAGE_KEYS).size).toBe(LOGIN_MESSAGE_KEYS.length);
-  });
+
 });

@@ -4,7 +4,6 @@ import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
-import { clearBrandingCaches } from "../../src/modules/branding/tenant-branding.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
@@ -24,6 +23,8 @@ import {
 import { createHash } from "node:crypto";
 import {
   createIdentitySession,
+  createPhoneOtpSession,
+  getIdentitySession,
   saveSelectedIdentityContext,
   touchIdentitySession,
 } from "../../src/modules/sessions/session-store.js";
@@ -130,9 +131,6 @@ beforeAll(async () => {
     identityEmployeeScope: "openid profile email",
     identityCitizenScope: "openid profile phone",
     digitOtpCreateUrl: `${digitBase}/otp/v1/_create`,
-    digitLocalizationSearchUrl: `${digitBase}/localization/messages/v1/_search`,
-    digitUiConfigModuleName: "commonMDMSConfig",
-    identityBrandingCacheSeconds: 300,
   });
   (config as any).identityRedirectUri =
     "http://localhost:18200/identity/v1/callback";
@@ -193,6 +191,7 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/bomet-county`,
     );
     expect(resolved.status).toBe(200);
+    expect(resolved.headers.get("cache-control")).toBe("public, max-age=60, stale-while-revalidate=300");
     expect(await resolved.json()).toEqual({
       tenant: {
         urlSlug: "bomet-county",
@@ -204,9 +203,9 @@ describe("identity BFF", () => {
       },
     });
 
-    expect((await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/missing-county`,
-    )).status).toBe(404);
+    const missing = await fetch(`http://localhost:${getAppPort()}/identity/v1/tenant-contexts/missing-county`);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("cache-control")).toBe("no-store");
     expect((await fetch(
       `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/a-123`,
     )).status).toBe(404);
@@ -394,10 +393,9 @@ describe("identity BFF", () => {
     );
     expect(methods.status).toBe(200);
     expect(await methods.json()).toEqual({ methods: [
-      { id: "password", label: "Email and password", type: "password", intents: ["signin"] },
-      { id: "google", label: "Continue with Google", type: "oauth", idpHint: "google", intents: ["signin", "signup"] },
-      { id: "github", label: "Continue with GitHub", type: "oauth", idpHint: "github", intents: ["signin", "signup"] },
-      { id: "magic_link", label: "Email me a sign-in link", type: "magic_link", intents: ["signup"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
+      { id: "google", labelKey: "IDENTITY_METHOD_GOOGLE", label: "Google", type: "idp", idpHint: "google", intents: ["signin", "signup"] },
+      { id: "github", labelKey: "IDENTITY_METHOD_GITHUB", label: "github", type: "idp", idpHint: "github", intents: ["signin", "signup"] },
     ] });
     const initialAdminReads = await (
       await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
@@ -1442,64 +1440,8 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     });
   });
 
-  it("serves public, cached tenant login branding", async () => {
-    const response = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
-    expect(await response.json()).toEqual({
-      tenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", name: "Bomet County" },
-      stateInfo: {
-        code: "ke.bomet", name: "Bomet",
-        logoUrl: "https://cdn.example/logo.png", logoUrlWhite: "https://cdn.example/logo-white.png",
-        bannerUrl: "https://cdn.example/banner.jpg",
-        languages: [{ label: "ENGLISH", value: "en_IN" }, { label: "KISWAHILI", value: "sw_KE" }],
-        defaultLocale: "en_IN",
-      },
-      themeConfig: { code: "default", version: 3, colors: { primary: "#c84c0e" } },
-      loginConfig: {
-        bannerImages: [{ id: 1, image: "https://cdn.example/b1.png", title: "BOMET_BANNER_TITLE" }],
-        texts: { header: "CORE_COMMON_LOGIN" },
-      },
-      privacyPolicy: [{
-        module: "HCM", header: "ES_PRIVACY_POLICY_HEADER", contents: [{ header: "ES_PRIVACY_SECTION_1" }],
-      }],
-      footer: {
-        digitFooter: "/digit-ui/brand/digit-footer.png",
-        digitFooterBw: "/digit-ui/brand/digit-footer-bw.png",
-        digitHomeUrl: "https://www.digit.org/",
-      },
-      messages: {
-        BOMET_BANNER_TITLE: "Report it",
-        CORE_COMMON_LOGIN: "Login",
-        ES_PRIVACY_POLICY: "Privacy Policy",
-        ES_PRIVACY_POLICY_HEADER: "Privacy",
-        TENANT_TENANTS_KE_BOMET: "Bomet County Government",
-      },
-    });
-
-    const searches = digit.stats.localizationSearches;
-    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`)).status).toBe(200);
-    expect(digit.stats.localizationSearches).toBe(searches);
-
-    // A subtenant's own localization rows override the root's.
-    const subtenant = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-ulb-one/branding`);
-    expect(subtenant.status).toBe(200);
-    const subtenantBody = await subtenant.json();
-    expect(subtenantBody.tenant).toEqual({
-      urlSlug: "bomet-ulb-one", tenantId: "ke.bomet.ulb1", name: "Bomet ULB One",
-    });
-    expect(subtenantBody.messages.CORE_COMMON_LOGIN).toBe("Ingia");
-
-    // The theme sends Keycloak locales; `fr` and `fr_FR` are the same DIGIT locale.
-    for (const locale of ["fr_FR", "fr"]) {
-      const french = await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=${locale}`);
-      expect(french.status).toBe(200);
-      expect((await french.json()).messages).toEqual({ CORE_COMMON_LOGIN: "Connexion" });
-    }
-
-    expect((await fetch(`${app()}/identity/v1/tenant-contexts/missing-county/branding`)).status).toBe(404);
-    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding?locale=..%2Fx`)).status)
-      .toBe(400);
+  it("does not serve the retired branding relay", async () => {
+    expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county/branding`)).status).toBe(404);
   });
 
   it("discovers each surface's methods from its own Keycloak client", async () => {
@@ -1509,15 +1451,15 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       return (await response.json()).methods;
     };
     expect(await methods("surface=employee")).toEqual([
-      { id: "password", label: "Username and password", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
     ]);
     expect(await methods("surface=employee&intent=signup")).toEqual([]);
     expect(await methods("surface=citizen")).toEqual([
-      { id: "password", label: "Username and password", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
     ]);
     expect(await methods("surface=citizen&intent=signup")).toEqual([]);
     expect((await methods("")).map((method: { id: string }) => method.id))
-      .toEqual(["password", "google", "github", "magic_link"]);
+      .toEqual(["password", "google", "github"]);
     expect((await fetch(`${app()}/identity/v1/auth-methods?surface=admin`)).status).toBe(400);
   });
 
@@ -1637,6 +1579,37 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect(crossedTo.pathname.startsWith("/bomet-county/digit-ui/employee/")).toBe(true);
     expect(crossedTo.searchParams.get("authResult")).toBeTruthy();
     expect(cookieFrom(crossed, "digit_identity_session_employee")).toBeUndefined();
+  });
+
+  it("adds an employee surface through configuration alone", async () => {
+    const original = config.identitySurfacesJson;
+    config.identitySurfacesJson = JSON.stringify({ reviewer: {
+      contextKind: "employee", clientId: "digit-ui-reviewer", clientSecret: "test-reviewer-secret",
+      scope: "openid profile email", cookieName: "digit_identity_session_reviewer", prompt: "select_account",
+    } });
+    resetIdentityMethodCatalog();
+    try {
+      const start = await startSignIn("surface=reviewer&tenantSlug=bomet-county");
+      expect(start.url.searchParams.get("client_id")).toBe("digit-ui-reviewer");
+      expect(start.url.searchParams.get("prompt")).toBe("select_account");
+      const callback = await fetch(`${app()}/identity/v1/callback?code=valid-code:${encodeURIComponent(start.nonce)}&state=${encodeURIComponent(start.state)}`, {
+        redirect: "manual", headers: { Cookie: start.loginCookie },
+      });
+      expect(callback.headers.get("location")).toBe("/bomet-county/digit-ui/reviewer/");
+      const cookie = cookieFrom(callback, "digit_identity_session_reviewer")!;
+      const session = await fetch(`${app()}/identity/v1/session?surface=reviewer`, { headers: { Cookie: cookie } });
+      expect(session.status).toBe(200);
+      expect(await session.json()).toMatchObject({ surface: "reviewer", tenant: { tenantId: "ke.bomet" } });
+      const select = (tenantId: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+        method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ surface: "reviewer", tenantId }),
+      });
+      expect((await select("ke.nakuru")).status).toBe(403);
+      expect((await select("ke.bomet")).status).toBe(200);
+    } finally {
+      config.identitySurfacesJson = original;
+      resetIdentityMethodCatalog();
+    }
   });
 
   it("signs an employee in to the bound tenant only", async () => {
@@ -2184,6 +2157,32 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(sent.length).toBe(count);
     });
 
+    it("binds phone step-up to the session, person, purpose and bound tenant", async () => {
+      const subject = "phone-stepup-person";
+      await kcAdmin("/users", { id: subject, username: subject, enabled: true });
+      const makeSession = () => createIdentitySession({ accessToken: "access", accessExpiresIn: 600 }, { sub: subject, email: "" }, config.keycloakCitizenClientId, { surface: "citizen", boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+      const first = await makeSession(), second = await makeSession();
+      const proofPost = (path: string, body: unknown, sid?: string) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...(sid && { Cookie: `${config.identityCitizenCookieName}=${sid}` }) }, body: JSON.stringify(body) });
+      expect((await proofPost("_send", { purpose: "stepup", mobileNumber: "799000601" })).status).toBe(401);
+      const invalid = await proofPost("_send", { purpose: "stepup", mobileNumber: "12345" }, first.sessionId);
+      expect((await invalid.json()).code).toBe("INVALID_MOBILE_NUMBER");
+      const sentResponse = await proofPost("_send", { purpose: "stepup", mobileNumber: "799000601", tenantSlug: "ignored-route" }, first.sessionId);
+      expect(sentResponse.status).toBe(202);
+      const { challengeId } = await sentResponse.json();
+      const code = lastCode();
+      expect(sent[sent.length - 1]).toMatchObject({ purpose: "stepup", tenantId: "ke.bomet" });
+      const wrongPurpose = await proofPost("_verify", { purpose: "change_phone", challengeId, code }, first.sessionId);
+      expect((await wrongPurpose.json()).code).toBe("OTP_EXPIRED");
+      const wrongSession = await proofPost("_verify", { purpose: "stepup", challengeId, code }, second.sessionId);
+      expect((await wrongSession.json()).code).toBe("OTP_EXPIRED");
+      const verified = await proofPost("_verify", { purpose: "stepup", challengeId, code }, first.sessionId);
+      expect(verified.status).toBe(200);
+      expect(verified.headers.has("set-cookie")).toBe(false);
+      expect(await verified.json()).toEqual({ phoneNumber: "+254799000601", phoneNumberVerified: true });
+      const current = await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: `${config.identityCitizenCookieName}=${first.sessionId}` } });
+      expect((await current.json()).user).toMatchObject({ id: subject, phoneNumber: "+254799000601", phoneNumberVerified: true });
+    });
+
     it("signs in the verified phone owner with a token-free session that _select accepts", async () => {
       const response = await send("712345678");
       expect(response.status).toBe(202);
@@ -2245,6 +2244,88 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(logout.status).toBe(204);
       expect((await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).status)
         .toBe(401);
+    });
+
+    it("changes a citizen phone through production propagation, preserves its uuid, and retries a DIGIT outage", async () => {
+      const subject = "phone-change-propagation";
+      const oldPhone = "+254799000610", newPhone = "+254799000611";
+      digit.mdms.set(digit.mdmsKey("ke", "common-masters.MobileNumberValidation"), [{
+        tenantId: "ke", schemaCode: "common-masters.MobileNumberValidation", uniqueIdentifier: "phone-change-rule",
+        isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^[17][0-9]{8}$", default: true },
+      }]);
+      const account = digit.addAccount({ userName: "phone-change-citizen", name: "Citizen", tenantId: "ke",
+        type: "CITIZEN", active: true, mobileNumber: "799000610", countryCode: "+254", emailId: null,
+        identificationMark: null, roles: [{ code: "CITIZEN", tenantId: "ke" }], password: "Cit1zen@Test" });
+      const accounts = JSON.stringify({ v: 1, entries: [{ kind: "citizen", tenantId: "ke", uuid: account.uuid,
+        boundAt: 1, active: true, roles: account.roles }] });
+      await kcAdmin("/users", { id: subject, username: subject, enabled: true, attributes: {
+        phoneNumber: [oldPhone], phoneNumberVerified: ["true"], "digit.accounts": [accounts],
+      } });
+      const makeSession = () => createPhoneOtpSession({ subject, name: "Citizen", phoneNumber: oldPhone,
+        boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+      const first = await makeSession(), other = await makeSession();
+      const proofPost = (path: string, body: unknown) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { "Content-Type": "application/json", Cookie: `${config.identityCitizenCookieName}=${first.sessionId}` },
+        body: JSON.stringify({ purpose: "change_phone", ...body as object }),
+      });
+      const invalid = await proofPost("_send", { mobileNumber: "12345" });
+      expect([invalid.status, (await invalid.json()).code]).toEqual([400, "INVALID_MOBILE_NUMBER"]);
+      const sentResponse = await proofPost("_send", { mobileNumber: "799000611" });
+      expect(sentResponse.status).toBe(202);
+      const { challengeId } = await sentResponse.json();
+      const code = lastCode();
+      // Fail only the DIGIT write: Keycloak and old-session revocation have already succeeded.
+      const realFetch = globalThis.fetch;
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+        if (String(input).includes("/user/users/_updatenovalidate")) return Promise.resolve(new Response("{}", { status: 503 }));
+        return realFetch(input, init);
+      });
+      try {
+        const failed = await proofPost("_verify", { challengeId, code });
+        expect([failed.status, (await failed.json()).code]).toEqual([503, "IDENTITY_UNAVAILABLE"]);
+        expect(await getIdentitySession(other.sessionId)).toBeNull();
+        expect((await getIdentitySession(first.sessionId))?.claims.phone_number).toBe(newPhone);
+        expect(digit.accounts.get(account.uuid)?.mobileNumber).toBe("799000610");
+      } finally { fetchSpy.mockRestore(); }
+      const retried = await proofPost("_verify", { challengeId, code });
+      expect(retried.status).toBe(200);
+      expect(await retried.json()).toEqual({ phoneNumber: newPhone, phoneNumberVerified: true });
+      expect(digit.accounts.get(account.uuid)).toMatchObject({ uuid: account.uuid, mobileNumber: "799000611", name: "Citizen" });
+      const stored = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      expect(stored.attributes["digit.accounts"]).toEqual([accounts]);
+      expect((await proofPost("_verify", { challengeId, code })).status).toBe(400);
+    });
+
+    it("rechecks ownership at verification and cannot take a phone claimed after the code was sent", async () => {
+      const subject = "phone-late-claimant";
+      await kcAdmin("/users", { id: subject, username: subject, enabled: true });
+      const { sessionId } = await createIdentitySession({ accessToken: "test", accessExpiresIn: 600 },
+        { sub: subject, email: "" }, config.keycloakCitizenClientId, { surface: "citizen",
+          boundTenant: { urlSlug: "bomet-county", tenantId: "ke.bomet", rootTenantId: "ke.bomet", name: "Bomet" } });
+      const proofPost = (path: string, body: object) => fetch(`${app()}/identity/v1/citizen/otp/${path}`, {
+        method: "POST", headers: { "Content-Type": "application/json", Cookie: `${config.identityCitizenCookieName}=${sessionId}` },
+        body: JSON.stringify({ purpose: "stepup", ...body }),
+      });
+      const { challengeId } = await (await proofPost("_send", { mobileNumber: "799000612" })).json();
+      const code = lastCode();
+      await kcAdmin("/users", { id: "phone-late-owner", username: "phone-late-owner", enabled: true,
+        attributes: { phoneNumber: ["+254799000612"], phoneNumberVerified: ["true"] } });
+      const refused = await proofPost("_verify", { challengeId, code });
+      expect([refused.status, (await refused.json()).code]).toEqual([409, "PHONE_IN_USE"]);
+      const blockedSend = await proofPost("_send", { mobileNumber: "799000612" });
+      expect([blockedSend.status, (await blockedSend.json()).code]).toEqual([409, "PHONE_IN_USE"]);
+      expect((await getIdentitySession(sessionId))?.claims.phone_number_verified).not.toBe(true);
+    });
+
+    it("uses the national mobile number as a new unnamed citizen's DIGIT name", async () => {
+      const { challengeId } = await (await send("799000613")).json();
+      const signedIn = await verify(challengeId, lastCode());
+      expect(signedIn.status).toBe(200);
+      const cookie = cookieFrom(signedIn, "digit_identity_session_citizen")!;
+      const selected = await citizenSelect(cookie);
+      expect(selected.status).toBe(200);
+      const account = [...digit.accounts.values()].find(value => value.mobileNumber === "799000613");
+      expect(account).toMatchObject({ name: "799000613", countryCode: "+254", type: "CITIZEN" });
     });
 
     it("creates one Keycloak user for a new number and never takes over an unverified one", async () => {
@@ -2501,7 +2582,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const key = `${config.cachePrefix}:identity:session:${sessionId}`;
       const stored = JSON.parse((await getRedis().get(key))!);
       await getRedis().del(key);
-      await touchIdentitySession(sessionId, stored);
+      expect(await touchIdentitySession(sessionId, stored)).toBe(false);
       expect(await getRedis().exists(key)).toBe(0);
     });
 
@@ -2522,7 +2603,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const created = await (await fetch(
         `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${user.id}`,
       )).json();
-      expect(created.username).toBe(`${username}-1`);
+      expect(created.username).toMatch(/^phone-[0-9a-f-]{36}$/);
       // The same number signs in to the same user again.
       const again = await (await send("799000523")).json();
       const second = cookieFrom(await verify(again.challengeId, lastCode()), "digit_identity_session_citizen")!;
@@ -3142,7 +3223,7 @@ describe("binding workspace public routes", () => {
   it("records a newly signed-in citizen before issuance and propagates its changed verified phone to the same DIGIT account", async () => {
     digit.mdms.set(digit.mdmsKey("ke", "common-masters.MobileNumberValidation"),
       structuredClone(digit.mdms.get(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"))!));
-    clearBrandingCaches();
+    // Mobile validation is fetched fresh; no former branding cache to clear.
     const subject = "binding-citizen-phone";
     await kcAdmin("/users", { id: subject, username: subject, enabled: true,
       attributes: { phoneNumber: ["+254799123981"], phoneNumberVerified: ["true"] } });

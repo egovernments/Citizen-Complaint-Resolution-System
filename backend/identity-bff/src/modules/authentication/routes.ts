@@ -1,8 +1,10 @@
 import type express from "express";
+import { withPersonLease } from "../accounts/person-lease.js";
+import { currentSession } from "../sessions/current-session.js";
+import { AccountActionError, authorizeAccountAction } from "./account-service.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { errorBody } from "../../contract/error-codes.js";
 import { config } from "../../infrastructure/config.js";
-import { resolveTenantOptions } from "../access-context/tenant-options.js";
 import {
   applyVerifiedSignupIdentityProfile,
   IdentityAdminError,
@@ -21,6 +23,9 @@ import {
   loginCookie,
   loginStateFromCookie,
   sessionCookie,
+  sessionIdFromCookie,
+  requireCurrentSession,
+  saveIdentitySession,
 } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
 import {
@@ -35,6 +40,7 @@ import {
   isTenantBoundSurface,
   parseSurface,
   surfaceReturnPrefix,
+  surfaceConfig,
   type BoundTenant,
 } from "./surfaces.js";
 import type {
@@ -57,6 +63,9 @@ const UI_LOCALES = /^[A-Za-z]{2,3}([_-][A-Za-z0-9]{2,8})*( [A-Za-z]{2,3}([_-][A-
  * deployment source of truth and avoids introducing a competing redirect list.
  */
 const RESULT_COPY: Record<IdentityAuthResultCode, Omit<IdentityAuthResult, "code">> = {
+  ACTION_COMPLETE: { status: "complete", actions: [] },
+  ACTION_CANCELLED: { status: "failed", actions: ["TRY_AGAIN"] },
+  ACTION_FAILED: { status: "failed", actions: ["TRY_AGAIN"] },
   AUTH_CANCELLED: {
     status: "failed",
     message: "Sign-in was cancelled. No changes were made to your account.",
@@ -152,34 +161,36 @@ async function redirectWithResult(
 export function registerAuthenticationRoutes(app: express.Application): void {
   app.get("/identity/v1/auth-methods", asyncRoute(async (request, response) => {
     const intent = request.query.intent === undefined
-      ? undefined
+      ? "signin"
       : requestedIntent(request.query.intent);
     if (request.query.intent !== undefined && !intent) {
-      return response.status(400).json({ error: "Unsupported authentication intent" });
+      return response.status(400).json({ error: "Unsupported authentication intent", code: "UNSUPPORTED_INTENT" });
     }
     const surface = parseSurface(request.query.surface);
-    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface" });
+    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     try {
       return response.json({
         methods: await enabledIdentityMethods(intent || undefined, surface),
       });
     } catch (error) {
       if (error instanceof IdentityAdminError) {
-        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
+        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable", code: "SIGNIN_METHODS_UNAVAILABLE" });
       }
       throw error;
     }
   }));
 
   app.get("/identity/v1/authorize", asyncRoute(async (request, response) => {
+    const action = request.query.action;
+    if (action !== undefined && request.query.intent !== undefined) return response.status(400).json(errorBody("INVALID_REQUEST", "action and intent are mutually exclusive"));
     const intent = request.query.intent === undefined
       ? "signin"
       : requestedIntent(request.query.intent);
     if (!intent) {
-      return response.status(400).json({ error: "Unsupported authentication intent" });
+      return response.status(400).json({ error: "Unsupported authentication intent", code: "UNSUPPORTED_INTENT" });
     }
     const surface = parseSurface(request.query.surface);
-    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface" });
+    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     const tenantSlug = request.query.tenantSlug;
     if (tenantSlug !== undefined && typeof tenantSlug !== "string") {
       return response.status(400).json({ error: "Unsupported tenant route" });
@@ -227,55 +238,62 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       returnTo = requestedReturnTo || config.identityPostLoginRedirect;
     }
 
-    let methods;
-    try {
-      methods = await enabledIdentityMethods(intent, surface);
-    } catch (error) {
-      if (error instanceof IdentityAdminError) {
-        return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
+    let accountAction: { sid: string; sub: string; action: string } | undefined;
+    let kcAction: string | undefined;
+    let method: { id: string; type: import("./types.js").IdentityAuthMethod["type"]; idpHint?: string };
+    if (action !== undefined) {
+      const current = await currentSession(request.headers.cookie, surface);
+      if (!current) return response.status(401).json(errorBody("SESSION_REQUIRED", "A signed-in session is required"));
+      if (boundTenant && current.session.boundTenant?.tenantId !== boundTenant.tenantId) return response.status(400).json(errorBody("INVALID_REQUEST", "The session belongs to another tenant"));
+      try {
+        kcAction = await withPersonLease(current.session.claims.sub, async lease => {
+          const session = await requireCurrentSession(lease, current.sessionId);
+          return authorizeAccountAction(session, surface, action, request.query.credentialId, request.query.provider);
+        });
+      } catch (error) {
+        if (error instanceof AccountActionError) return response.status(error.status).json({ code: error.code, error: error.message });
+        throw error;
       }
-      throw error;
-    }
-    // Without an explicit method, the first one that runs through Keycloak.
-    const requestedMethod = typeof request.query.method === "string"
-      ? request.query.method
-      : surface === DEFAULT_SURFACE
-        ? "password"
-        : methods.find((candidate) => candidate.type !== "magic_link" && candidate.type !== "phone_otp")?.id;
-    const method = methods.find((candidate) => candidate.id === requestedMethod);
-    if (!method) return response.status(400).json({ error: "Unsupported sign-in method" });
-    if (method.type === "phone_otp") {
-      return response.status(400).json({
-        error: "Phone sign-in must be started through the citizen OTP API",
-      });
-    }
-    if (method.type === "magic_link") {
-      return response.status(400).json({
-        error: "Email sign-up must be started through the magic-link request API",
-      });
+      accountAction = { sid: current.sessionId, sub: current.session.claims.sub, action: String(action) };
+      method = { id: "account_action", type: "hosted" };
+    } else {
+      let methods;
+      try { methods = await enabledIdentityMethods(intent, surface); }
+      catch (error) {
+        if (error instanceof IdentityAdminError) return response.status(503).json(errorBody("SIGNIN_METHODS_UNAVAILABLE", "Sign-in methods are temporarily unavailable"));
+        throw error;
+      }
+      const requestedMethod = typeof request.query.method === "string" ? request.query.method
+        : methods.find(candidate => candidate.type !== "magic_link" && candidate.type !== "phone_otp")?.id;
+      const selected = methods.find(candidate => candidate.id === requestedMethod);
+      if (!selected || selected.type === "phone_otp" || selected.type === "magic_link") return response.status(400).json(errorBody("UNSUPPORTED_METHOD", "Unsupported sign-in method"));
+      method = selected;
     }
 
     // The client follows from the surface alone, never from returnTo.
     const oidcClient = oidcClientForSurface(surface, method.type);
     if (!oidcClient) {
-      return response.status(503).json({ error: "Sign-in methods are temporarily unavailable" });
+      return response.status(503).json({ error: "Sign-in methods are temporarily unavailable", code: "SIGNIN_METHODS_UNAVAILABLE" });
     }
     const { state, codeChallenge, nonce } = await createLoginAttempt({
       oidcClientId: oidcClient.clientId,
       intent,
       methodId: method.id,
+      ...(accountAction && { accountAction }),
       returnTo,
-      ...(boundTenant && { surface, boundTenant }),
+      surface,
+      ...(boundTenant && { boundTenant }),
     });
     const extraParams: Record<string, string> = boundTenant
       ? {
         // Display only: the theme shows the tenant's branding. Authority is
         // the tenant bound to this attempt, never a value echoed back.
         digit_tenant: boundTenant.urlSlug,
-        // No cross-client SSO for digit-ui: always ask for credentials.
-        prompt: "login",
       }
       : {};
+    const prompt = surfaceConfig(surface).prompt;
+    if (prompt) extraParams.prompt = prompt;
+    if (kcAction) extraParams.kc_action = kcAction;
     if (typeof uiLocales === "string") extraParams.ui_locales = uiLocales;
     response.setHeader("Set-Cookie", loginCookie(state, surface));
     return response.redirect(
@@ -329,7 +347,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       await redirectWithResult(
         response,
         attempt.returnTo,
-        providerErrorCode(request.query.error, request.query.error_description),
+        attempt.accountAction ? (request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED") : providerErrorCode(request.query.error, request.query.error_description),
         attempt.intent,
       );
       return;
@@ -349,6 +367,21 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       );
       if (idClaims.sub !== claims.sub) {
         throw new Error("Keycloak token subjects do not match");
+      }
+      if (attempt.accountAction) {
+        const binding = attempt.accountAction;
+        if (claims.sub !== binding.sub || sessionIdFromCookie(request.headers.cookie, surface) !== binding.sid) throw new Error("Account action changed the initiating person or session");
+        await withPersonLease(binding.sub, async lease => {
+          const session = await requireCurrentSession(lease, binding.sid);
+          if (session.surface && session.surface !== surface) throw new Error("Account action changed surface");
+          await saveIdentitySession(binding.sid, tokens, claims,
+            Math.max(1, Math.floor((session.sessionExpiresAt - Date.now()) / 1000)), attempt.oidcClientId,
+            session.sessionExpiresAt, { surface, boundTenant: session.boundTenant });
+        });
+        response.setHeader("Set-Cookie", clearedLoginCookie(surface));
+        const outcome = request.query.kc_action_status === "success" ? "ACTION_COMPLETE"
+          : request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED";
+        return redirectWithResult(response, attempt.returnTo, outcome);
       }
       let sessionClaims = claims;
       if (attempt.identityProfileDraft) {
@@ -375,13 +408,6 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         attempt.oidcClientId,
         { surface, boundTenant: attempt.boundTenant },
       );
-      // Organization tenant options are a configurator concept: digit-ui
-      // sessions are already bound to their route tenant.
-      if (surface === DEFAULT_SURFACE) {
-        await resolveTenantOptions(sessionClaims).catch((error) => {
-          console.warn("DIGIT account resolution after sign-in failed:", (error as Error).message);
-        });
-      }
       response.setHeader("Set-Cookie", [
         sessionCookie(sessionId, maxAge, surface),
         clearedLoginCookie(surface),
@@ -390,7 +416,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     } catch (error) {
       console.error("Identity callback failed:", (error as Error).message);
       response.setHeader("Set-Cookie", clearedLoginCookie(surface));
-      await redirectWithResult(response, attempt.returnTo, "SIGN_IN_FAILED", attempt.intent);
+      await redirectWithResult(response, attempt.returnTo, attempt.accountAction ? "ACTION_FAILED" : "SIGN_IN_FAILED", attempt.intent);
       return;
     }
   }));

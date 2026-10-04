@@ -288,8 +288,8 @@ export default function EmployeesStep() {
 
       <StepActions
         onBack={previous ? () => navigate(previous.path) : undefined}
-        onContinue={() => {
-          completePhase(STEP.number);
+        onContinue={async () => {
+          if (!await completePhase(STEP.number)) return;
           if (next) navigate(next.path);
         }}
         disabled={others.length === 0}

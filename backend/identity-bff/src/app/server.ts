@@ -1,3 +1,4 @@
+import { startKeycloakEventPoller } from "../modules/revocation/poller.js";
 import { closeCache, initCache } from "../infrastructure/redis.js";
 import { config } from "../infrastructure/config.js";
 import { createIdentityApp } from "./create-app.js";
@@ -12,6 +13,7 @@ initCache();
 warnAboutInsecureOtpModes();
 
 const app = createIdentityApp();
+const stopEventPoller = startKeycloakEventPoller();
 let stopReconcile = () => {};
 const server = app.listen(config.port, () => {
   console.log(`digit-identity-bff listening on :${config.port}`);
@@ -26,6 +28,7 @@ const server = app.listen(config.port, () => {
 });
 
 process.on("SIGTERM", () => {
+  stopEventPoller();
   stopReconcile();
   server.close(() => {
     void closeCache().finally(() => process.exit(0));

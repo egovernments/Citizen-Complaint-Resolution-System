@@ -1466,9 +1466,17 @@
 
     - name: Copy idempotent Identity Keycloak configurator
       copy:
-        src: ../../backend/identity-bff/deploy/digit-compose/configure-keycloak.sh
+        src: ../../keycloak/configure-keycloak.sh
         dest: "{{ digit_dir }}/configure-identity-keycloak.sh"
         mode: '0750'
+
+    # The declared realm state the configurator applies (events, self-service
+    # actions, name fields, IMPORT sync, employee one-time code).
+    - name: Copy the declared Identity Keycloak realm
+      copy:
+        src: ../../keycloak/realm.json
+        dest: "{{ digit_dir }}/identity-keycloak-realm.json"
+        mode: '0640'
 
     # Sourced by the "notification stack — remove the retired OTP senders" tasks: proves
     # novu-bridge has taken over the login-OTP topic before the old senders go (#2097).
@@ -6459,6 +6467,8 @@
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
       environment:
         IDENTITY_ENV_DIR: "{{ digit_dir }}/identity"
+        KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"
+        KEYCLOAK_EVENTS_EXPIRATION_SECONDS: "{{ identity_keycloak_events_expiration_seconds | default('') }}"
         KEYCLOAK_ORGANIZATION_REALM: "{{ keycloak_organization_realm | default('digit') }}"
         KEYCLOAK_SSL_REQUIRED: "{{ 'external' if (tls_enabled | default(true)) else 'none' }}"
         # The same resolved values that went into .env, so Keycloak's clients

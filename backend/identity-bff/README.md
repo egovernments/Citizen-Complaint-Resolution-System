@@ -35,7 +35,6 @@ POST /identity/v1/password/setup-requests
 GET  /identity/v1/password/setup-complete/:state
 GET  /identity/v1/session?surface=employee
 GET  /identity/v1/tenant-contexts/:urlSlug
-GET  /identity/v1/tenant-contexts/:urlSlug/branding?locale=en_IN
 GET  /identity/v1/tenants
 POST /identity/v1/contexts/_select
 POST /identity/v1/contexts/citizen/_select
@@ -64,8 +63,7 @@ route: `/authorize` resolves `tenantSlug` server-side and binds it to the
 login attempt and session. An employee session can select only that tenant;
 `POST /identity/v1/contexts/citizen/_select` takes it from the session, ensures
 the citizen's registration and BFF-managed DIGIT `CITIZEN` account, and
-returns a `CITIZEN` token. The public `.../branding` route gives the Keycloak
-themes the tenant's legacy login branding and texts. Citizen token minting is
+returns a `CITIZEN` token. The Keycloak theme reads public MDMS branding and localization directly. Citizen token minting is
 not yet verified against a live egov-user; see
 [the guide](docs/identity-bff.md#digit-ui-employee-and-citizen-sign-in-2167).
 
@@ -119,7 +117,7 @@ Read the code in this order:
 3. `src/modules/authentication` and `src/modules/sessions` — OIDC and opaque sessions.
 4. `src/modules/access-context` — tenant routes, tenant list and selection
    (employee and citizen contexts); `src/modules/citizens` — citizen
-   registrations; `src/modules/branding` — public login branding.
+   registrations; `src/modules/citizen-otp/mobile-validation.ts` — tenant phone rules.
 5. `src/modules/managed-accounts` — per-tenant egov-user accounts and DIGIT tokens.
 6. `src/modules/organizations` — Organizations, membership, roles, and invites.
 7. `src/modules/reconciliation` — startup and periodic Keycloak-to-DIGIT sync.
@@ -131,7 +129,7 @@ Read the code in this order:
 
 The `keycloak` Compose profile starts:
 
-- `identity-keycloak`, built from `keycloak/Dockerfile.magic-link`, which pins
+- `identity-keycloak`, built from the repository's top-level `keycloak/Dockerfile`, which pins
   Keycloak 26.7.3 and the Phase Two magic-link provider;
 - `identity-bff`, built from this folder; and
 - the existing dedicated Keycloak Postgres container.
@@ -143,7 +141,7 @@ not silently fall back to the legacy direct egov-user password form. Older
 Configurator images remain deployable without the identity profile, so the
 shared playbook does not impose this requirement on every historical image.
 
-Ansible runs `deploy/digit-compose/configure-keycloak.sh` after Keycloak is
+Ansible runs `keycloak/configure-keycloak.sh` (top level) after Keycloak is
 healthy. The script idempotently enables Organizations and reconciles the BFF,
 magic-link resource client, admin, role, Google, and GitHub configuration. Kong publishes only
 `/identity/v1`; `/internal/identity/v1` remains private.

@@ -42,7 +42,10 @@ const latestKey = (phoneRef: string) => `${PREFIX()}:latest:${phoneRef}`;
 const phoneSendsKey = (phoneRef: string) => `${PREFIX()}:sends:phone:${phoneRef}`;
 const ipSendsKey = (ipRef: string) => `${PREFIX()}:sends:ip:${ipRef}`;
 
-export interface OtpChallenge {
+export type OtpPurpose = "signin" | "stepup" | "change_phone";
+export interface OtpBinding { purpose: OtpPurpose; subject?: string; sessionRef?: string }
+
+export interface OtpChallenge extends OtpBinding {
   id: string;
   phoneNumber: string;
   tenant: BoundTenant;
@@ -105,6 +108,7 @@ export async function refundSend(reservation: SendReservation): Promise<void> {
 export async function createChallenge(
   phoneNumber: string,
   tenant: BoundTenant,
+  binding: OtpBinding = { purpose: "signin" },
 ): Promise<{ challenge: OtpChallenge; code: string }> {
   const id = randomBytes(24).toString("base64url");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -115,6 +119,9 @@ export async function createChallenge(
       attempts: "0",
       phoneNumber,
       tenant: JSON.stringify(tenant),
+      purpose: binding.purpose,
+      ...(binding.subject && { subject: binding.subject }),
+      ...(binding.sessionRef && { sessionRef: binding.sessionRef }),
     })
     .expire(key, config.identityCitizenOtpTtlSeconds)
     .exec();
@@ -125,7 +132,7 @@ export async function createChallenge(
     await getRedis().del(key).catch(() => undefined);
     throw new Error("The OTP challenge could not be stored");
   }
-  return { challenge: { id, phoneNumber, tenant }, code };
+  return { challenge: { id, phoneNumber, tenant, ...binding }, code };
 }
 
 /**
@@ -152,7 +159,11 @@ export async function readChallenge(id: string): Promise<OtpChallenge | null> {
   const stored = await getRedis().hgetall(challengeKey(id));
   if (!stored.hash || !stored.phoneNumber || !stored.tenant) return null;
   try {
-    return { id, phoneNumber: stored.phoneNumber, tenant: JSON.parse(stored.tenant) as BoundTenant };
+    if (!["signin", "stepup", "change_phone"].includes(stored.purpose || "signin")) return null;
+    return { id, phoneNumber: stored.phoneNumber, tenant: JSON.parse(stored.tenant) as BoundTenant,
+      purpose: (stored.purpose || "signin") as OtpPurpose,
+      ...(stored.subject && { subject: stored.subject }), ...(stored.sessionRef && { sessionRef: stored.sessionRef }),
+    };
   } catch {
     return null;
   }

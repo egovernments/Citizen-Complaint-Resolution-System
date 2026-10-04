@@ -1,3 +1,4 @@
+vi.mock('@/identity/api', () => ({ removeMember: vi.fn(async () => ({})) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hrmsService } from '@/api';
 import type { Employee } from '@/api/types';
@@ -33,7 +34,7 @@ const options: EmployeeOptions = {
   mobilePattern: /^\d{10}$/,
 };
 
-const employee = (code: string, extra: Partial<Employee> = {}) => ({ code, ...extra }) as Employee;
+const employee = (code: string, extra: Partial<Employee> = {}) => ({ code, tenantId: 'acme', uuid: code, user: { uuid: code }, ...extra }) as Employee;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -68,7 +69,7 @@ describe('addEmployee', () => {
         code: 'EMP_0001',
         name: ' Anita Wanjiru ',
         mobileNumber: '9876543210',
-        emailId: '',
+        emailId: 'anita@example.org',
         departments: ['ROADS', 'PARKS'],
         designation: 'ENGINEER',
         roles: ['EMPLOYEE', 'GRO'],
@@ -82,7 +83,7 @@ describe('addEmployee', () => {
         code: 'EMP_0001',
         name: 'Anita Wanjiru',
         userName: 'anita.wanjiru',
-        emailId: undefined,
+        emailId: 'anita@example.org',
         department: 'ROADS,PARKS',
         designation: 'ENGINEER',
         roles: [
@@ -99,7 +100,7 @@ describe('addEmployee', () => {
     hrms.checkUsernameAvailable.mockResolvedValue(false);
     await addEmployee(
       'acme',
-      { code: 'EMP_0007', name: 'Anita Wanjiru', mobileNumber: '9876543210', departments: ['ROADS'], designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
+      { code: 'EMP_0007', name: 'Anita Wanjiru', emailId: 'anita@example.org', mobileNumber: '9876543210', departments: ['ROADS'], designation: 'ENGINEER', roles: ['EMPLOYEE'], jurisdictions: ['WARD_1'] },
       options,
     );
     expect(hrms.buildEmployee).toHaveBeenCalledWith(expect.objectContaining({ userName: 'anita.wanjiru.emp_0007' }));
@@ -108,6 +109,7 @@ describe('addEmployee', () => {
 
 describe('removeEmployee', () => {
   it('deactivates with a reason, as management does', async () => {
+    hrms.searchEmployees.mockResolvedValue([employee('A')]);
     await removeEmployee(employee('A'));
     expect(hrms.updateEmployee).toHaveBeenCalledWith(
       expect.objectContaining({

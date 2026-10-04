@@ -1,0 +1,1327 @@
+TAP version 13
+# Subtest: expired BFF token re-selects with the surface cookie and retries without native refresh
+ok 1 - expired BFF token re-selects with the surface cookie and retries without native refresh
+  ---
+  duration_ms: 3.691041
+  ...
+# Subtest: signed-in BFF dashboard makes no identity request until token rejection
+ok 2 - signed-in BFF dashboard makes no identity request until token rejection
+  ---
+  duration_ms: 0.668875
+  ...
+# Subtest: BFF re-select outage retains the current token
+ok 3 - BFF re-select outage retains the current token
+  ---
+  duration_ms: 0.676375
+  ...
+# Subtest: BFF re-select cannot resurrect logout or adopt a different person
+ok 4 - BFF re-select cannot resurrect logout or adopt a different person
+  ---
+  duration_ms: 0.779666
+  ...
+# Subtest: silent refresh does not clobber a citizen's aliases
+ok 5 - silent refresh does not clobber a citizen's aliases
+  ---
+  duration_ms: 0.221667
+  ...
+# Subtest: silent refresh DOES update aliases it still owns
+ok 6 - silent refresh DOES update aliases it still owns
+  ---
+  duration_ms: 0.321583
+  ...
+# Subtest: explicit sign-in claims the aliases
+ok 7 - explicit sign-in claims the aliases
+  ---
+  duration_ms: 0.185666
+  ...
+# Subtest: aliases are claimed when absent
+ok 8 - aliases are claimed when absent
+  ---
+  duration_ms: 0.2055
+  ...
+# Subtest: a refresh re-syncs our OWN cache even when it is a vintage behind
+ok 9 - a refresh re-syncs our OWN cache even when it is a vintage behind
+  ---
+  duration_ms: 0.482
+  ...
+# Subtest: a silent refresh does not claim an EXPIRED cache while aliases are foreign
+ok 10 - a silent refresh does not claim an EXPIRED cache while aliases are foreign
+  ---
+  duration_ms: 0.447667
+  ...
+# Subtest: forced sign-out clears aliases even when the alias was rewritten
+ok 11 - forced sign-out clears aliases even when the alias was rewritten
+  ---
+  duration_ms: 0.638625
+  ...
+# Subtest: forced sign-out spares aliases that are provably a DIFFERENT user's
+ok 12 - forced sign-out spares aliases that are provably a DIFFERENT user's
+  ---
+  duration_ms: 0.376625
+  ...
+# Subtest: automatic teardown still spares a citizen's live aliases
+ok 13 - automatic teardown still spares a citizen's live aliases
+  ---
+  duration_ms: 0.597125
+  ...
+# Subtest: a refresh in flight when the user signs out does not resurrect the session
+ok 14 - a refresh in flight when the user signs out does not resurrect the session
+  ---
+  duration_ms: 1.167292
+  ...
+# Subtest: automatic teardown drops a dead token cached under a foreign alias
+ok 15 - automatic teardown drops a dead token cached under a foreign alias
+  ---
+  duration_ms: 0.256958
+  ...
+# Subtest: valid config: writes all flattened variables
+ok 16 - valid config: writes all flattened variables
+  ---
+  duration_ms: 27.82375
+  ...
+# Subtest: missing colors key: valid config shape, no-op
+ok 17 - missing colors key: valid config shape, no-op
+  ---
+  duration_ms: 24.530083
+  ...
+# Subtest: invalid value shape (not a hex): no-op
+ok 18 - invalid value shape (not a hex): no-op
+  ---
+  duration_ms: 23.700917
+  ...
+# Subtest: MDMS-shaped config with code field: applies colors, ignores extra properties
+ok 19 - MDMS-shaped config with code field: applies colors, ignores extra properties
+  ---
+  duration_ms: 21.354917
+  ...
+# Subtest: null / undefined / non-object config: no-op
+ok 20 - null / undefined / non-object config: no-op
+  ---
+  duration_ms: 9.490042
+  ...
+# Subtest: v2: `brand` fans out to --color-primary-main
+ok 21 - v2: `brand` fans out to --color-primary-main
+  ---
+  duration_ms: 13.627708
+  ...
+# Subtest: v2: `brand-on` fans out to primary-dark, primary-accent, link-*, text-heading
+ok 22 - v2: `brand-on` fans out to primary-dark, primary-accent, link-*, text-heading
+  ---
+  duration_ms: 16.87275
+  ...
+# Subtest: v2: `surface-header` covers both --color-secondary and --color-digitv2-header-sidenav
+ok 23 - v2: `surface-header` covers both --color-secondary and --color-digitv2-header-sidenav
+  ---
+  duration_ms: 13.947459
+  ...
+# Subtest: v2: `text-disabled` collapses both `grey.disabled` and `digitv2.text-color-disabled`
+ok 24 - v2: `text-disabled` collapses both `grey.disabled` and `digitv2.text-color-disabled`
+  ---
+  duration_ms: 13.73025
+  ...
+# Subtest: v2: `border` collapses both border and input-border
+ok 25 - v2: `border` collapses both border and input-border
+  ---
+  duration_ms: 16.329875
+  ...
+# Subtest: v2: `error` writes both --color-error and --color-error-dark (semantics collapse)
+ok 26 - v2: `error` writes both --color-error and --color-error-dark (semantics collapse)
+  ---
+  duration_ms: 20.105
+  ...
+# Subtest: v2: `chart-palette` array fans out to chart-1..5
+ok 27 - v2: `chart-palette` array fans out to chart-1..5
+  ---
+  duration_ms: 28.262834
+  ...
+# Subtest: v1 record (no `brand` key): legacy flatten only, no semantic expansion side-effects
+ok 28 - v1 record (no `brand` key): legacy flatten only, no semantic expansion side-effects
+  ---
+  duration_ms: 14.252542
+  ...
+# Subtest: v2 wins on overlap with v1: same record can carry both shapes
+ok 29 - v2 wins on overlap with v1: same record can carry both shapes
+  ---
+  duration_ms: 11.975375
+  ...
+# Subtest: v3: `primary-1` fans out to dark/accent/link/heading/secondary/header-sidenav AND new --color-primary-1
+ok 30 - v3: `primary-1` fans out to dark/accent/link/heading/secondary/header-sidenav AND new --color-primary-1
+  ---
+  duration_ms: 11.720042
+  ...
+# Subtest: v3: `primary-2` fans out to --color-primary-main and --color-primary-2
+ok 31 - v3: `primary-2` fans out to --color-primary-main and --color-primary-2
+  ---
+  duration_ms: 18.582417
+  ...
+# Subtest: v3: granular button-state inputs each write their own dedicated CSS var
+ok 32 - v3: granular button-state inputs each write their own dedicated CSS var
+  ---
+  duration_ms: 14.011833
+  ...
+# Subtest: v3: `page-secondary-bg` aliases all four legacy grey vars (designer eliminated grey scale)
+ok 33 - v3: `page-secondary-bg` aliases all four legacy grey vars (designer eliminated grey scale)
+  ---
+  duration_ms: 14.041917
+  ...
+# Subtest: v3: status text/bg/border are 3 distinct roles per severity
+ok 34 - v3: status text/bg/border are 3 distinct roles per severity
+  ---
+  duration_ms: 11.187167
+  ...
+# Subtest: v3: chart-1..5 individual keys write to --color-digitv2-chart-N
+ok 35 - v3: chart-1..5 individual keys write to --color-digitv2-chart-N
+  ---
+  duration_ms: 10.897541
+  ...
+# Subtest: v3 wins over v2 on overlap (record carries both)
+ok 36 - v3 wins over v2 on overlap (record carries both)
+  ---
+  duration_ms: 10.823167
+  ...
+# Subtest: v3 not active without `primary-1` marker — v1/v2-only records keep their behavior
+ok 37 - v3 not active without `primary-1` marker — v1/v2-only records keep their behavior
+  ---
+  duration_ms: 33.185958
+  ...
+# Subtest: hexToHslTriplet: known conversions + invalid input
+ok 38 - hexToHslTriplet: known conversions + invalid input
+  ---
+  duration_ms: 0.224167
+  ...
+# Subtest: v2 bridge: primary.main drives .v2-scope --v2-primary HSL triplet
+ok 39 - v2 bridge: primary.main drives .v2-scope --v2-primary HSL triplet
+  ---
+  duration_ms: 14.954917
+  ...
+# Subtest: v2 bridge: v3 button-primary-bg-default wins over primary.main
+ok 40 - v2 bridge: v3 button-primary-bg-default wins over primary.main
+  ---
+  duration_ms: 13.029709
+  ...
+# Subtest: v2 bridge: no usable color → no style tag injected
+ok 41 - v2 bridge: no usable color → no style tag injected
+  ---
+  duration_ms: 13.5595
+  ...
+# Subtest: v2 bridge: re-apply reuses the same style tag (no duplicates)
+ok 42 - v2 bridge: re-apply reuses the same style tag (no duplicates)
+  ---
+  duration_ms: 12.340209
+  ...
+# Subtest: v3 backfill: v1 record feeds button + primary-N tokens from palette
+ok 43 - v3 backfill: v1 record feeds button + primary-N tokens from palette
+  ---
+  duration_ms: 9.445709
+  ...
+# Subtest: v3 backfill: record's own button background wins over any derived one
+ok 44 - v3 backfill: record's own button background wins over any derived one
+  ---
+  duration_ms: 11.917042
+  ...
+# Subtest: v3 backfill: no primary in record → nothing invented
+ok 45 - v3 backfill: no primary in record → nothing invented
+  ---
+  duration_ms: 12.313
+  ...
+# Subtest: button states: partial v3 record gets its missing state, not vendored orange
+ok 46 - button states: partial v3 record gets its missing state, not vendored orange
+  ---
+  duration_ms: 9.666791
+  ...
+# Subtest: button foreground: judged across all three states, not just the resting one
+ok 47 - button foreground: judged across all three states, not just the resting one
+  ---
+  duration_ms: 8.234916
+  ...
+# Subtest: button foreground: light brand with no stated text colour gets near-black
+ok 48 - button foreground: light brand with no stated text colour gets near-black
+  ---
+  duration_ms: 13.123958
+  ...
+# Subtest: button states: a stated text colour is never made invisible by a generated hover
+ok 49 - button states: a stated text colour is never made invisible by a generated hover
+  ---
+  duration_ms: 8.995833
+  ...
+# Subtest: button foreground: AA is judged on \#0B0C0C, not on pure black
+ok 50 - button foreground: AA is judged on \#0B0C0C, not on pure black
+  ---
+  duration_ms: 16.143708
+  ...
+# Subtest: button foreground: the ticket's \#2563EB clears AA with white
+ok 51 - button foreground: the ticket's \#2563EB clears AA with white
+  ---
+  duration_ms: 16.380625
+  ...
+# Subtest: button foreground: a record that states one is left alone
+ok 52 - button foreground: a record that states one is left alone
+  ---
+  duration_ms: 10.980417
+  ...
+# Subtest: button foreground: v1 record derives from primary.main
+ok 53 - button foreground: v1 record derives from primary.main
+  ---
+  duration_ms: 7.855167
+  ...
+# Subtest: button states: nothing to derive from → nothing invented
+ok 54 - button states: nothing to derive from → nothing invented
+  ---
+  duration_ms: 9.29425
+  ...
+# Subtest: text ramp: secondary seeds muted when the record names no muted tone
+ok 55 - text ramp: secondary seeds muted when the record names no muted tone
+  ---
+  duration_ms: 9.924708
+  ...
+# Subtest: text ramp: an explicit text-muted wins over the secondary seed
+ok 56 - text ramp: an explicit text-muted wins over the secondary seed
+  ---
+  duration_ms: 11.699125
+  ...
+# Subtest: text ramp: a flat v3 key wins over the nested v1 block of the same record
+ok 57 - text ramp: a flat v3 key wins over the nested v1 block of the same record
+  ---
+  duration_ms: 11.090792
+  ...
+# Subtest: default environment (no records) issues the two reads and initialises nothing
+ok 58 - default environment (no records) issues the two reads and initialises nothing
+  ---
+  duration_ms: 2.932708
+  ...
+# Subtest: no STATE_LEVEL_TENANT_ID means zero requests
+ok 59 - no STATE_LEVEL_TENANT_ID means zero requests
+  ---
+  duration_ms: 0.461
+  ...
+# Subtest: the uitest placeholder tenant means zero requests
+ok 60 - the uitest placeholder tenant means zero requests
+  ---
+  duration_ms: 2.083083
+  ...
+# Subtest: kill switch disables only on an explicit true
+ok 61 - kill switch disables only on an explicit true
+  ---
+  duration_ms: 2.70325
+  ...
+# Subtest: per-browser opt-out disables everything
+ok 62 - per-browser opt-out disables everything
+  ---
+  duration_ms: 0.879708
+  ...
+# Subtest: TESTING_MODE disables everything
+ok 63 - TESTING_MODE disables everything
+  ---
+  duration_ms: 0.79425
+  ...
+# Subtest: a non-canonical entrance disables everything
+ok 64 - a non-canonical entrance disables everything
+  ---
+  duration_ms: 2.090792
+  ...
+# Subtest: Do Not Track disables everything and cannot be overridden by data
+ok 65 - Do Not Track disables everything and cannot be overridden by data
+  ---
+  duration_ms: 0.884875
+  ...
+# Subtest: the registry read is anonymous, single-header, bounded and boolean-free
+ok 66 - the registry read is anonymous, single-header, bounded and boolean-free
+  ---
+  duration_ms: 1.554292
+  ...
+# Subtest: MDMS_V2_CONTEXT_PATH is honoured rather than hardcoded
+ok 67 - MDMS_V2_CONTEXT_PATH is honoured rather than hardcoded
+  ---
+  duration_ms: 0.678958
+  ...
+# Subtest: a city tenant adds a second read, and the same tenant does not
+ok 68 - a city tenant adds a second read, and the same tenant does not
+  ---
+  duration_ms: 1.192875
+  ...
+# Subtest: an expired city envelope reads as unknown, never as the state tenant
+ok 69 - an expired city envelope reads as unknown, never as the state tenant
+  ---
+  duration_ms: 0.946458
+  ...
+# Subtest: a transport failure yields no providers rather than failing open
+ok 70 - a transport failure yields no providers rather than failing open
+  ---
+  duration_ms: 4.454541
+  ...
+# Subtest: collect drops foreign-tenant rows, which is what stops the fallback double-count
+ok 71 - collect drops foreign-tenant rows, which is what stops the fallback double-count
+  ---
+  duration_ms: 0.412083
+  ...
+# Subtest: collect drops envelope-inactive rows
+ok 72 - collect drops envelope-inactive rows
+  ---
+  duration_ms: 0.95225
+  ...
+# Subtest: a city row replaces the state row of the same code, wholesale
+ok 73 - a city row replaces the state row of the same code, wholesale
+  ---
+  duration_ms: 0.837125
+  ...
+# Subtest: a city row with enabled:false overrides an enabled state row (per-city opt-out)
+ok 74 - a city row with enabled:false overrides an enabled state row (per-city opt-out)
+  ---
+  duration_ms: 0.868375
+  ...
+# Subtest: city-only codes are additive
+ok 75 - city-only codes are additive
+  ---
+  duration_ms: 0.437542
+  ...
+# Subtest: surfaces gates by citizen/employee and empty means both
+ok 76 - surfaces gates by citizen/employee and empty means both
+  ---
+  duration_ms: 1.068333
+  ...
+# Subtest: validate enforces per-type required fields with stable reason codes
+ok 77 - validate enforces per-type required fields with stable reason codes
+  ---
+  duration_ms: 2.031709
+  ...
+# Subtest: CUSTOM is refused unless ops opted in, even when otherwise valid
+ok 78 - CUSTOM is refused unless ops opted in, even when otherwise valid
+  ---
+  duration_ms: 2.137042
+  ...
+# Subtest: CUSTOM records cannot claim a dangerous global or smuggle a placeholder
+ok 79 - CUSTOM records cannot claim a dangerous global or smuggle a placeholder
+  ---
+  duration_ms: 1.191083
+  ...
+# Subtest: the script host allowlist accepts vendor patterns and rejects everything else
+ok 80 - the script host allowlist accepts vendor patterns and rejects everything else
+  ---
+  duration_ms: 0.445542
+  ...
+# Subtest: a userinfo trick cannot smuggle a foreign host past the allowlist
+ok 81 - a userinfo trick cannot smuggle a foreign host past the allowlist
+  ---
+  duration_ms: 0.388792
+  ...
+# Subtest: ops can widen the allowlist but MDMS cannot
+ok 82 - ops can widen the allowlist but MDMS cannot
+  ---
+  duration_ms: 0.372125
+  ...
+# Subtest: every live complaint-id format is parameterised, including one-letter prefixes
+ok 83 - every live complaint-id format is parameterised, including one-letter prefixes
+  ---
+  duration_ms: 0.629791
+  ...
+# Subtest: uuids, mobile numbers, emails and numeric segments never survive
+ok 84 - uuids, mobile numbers, emails and numeric segments never survive
+  ---
+  duration_ms: 0.347084
+  ...
+# Subtest: the query string is default-deny
+ok 85 - the query string is default-deny
+  ---
+  duration_ms: 0.38775
+  ...
+# Subtest: interpolation resolves only allowlisted placeholders and scrubs the result
+ok 86 - interpolation resolves only allowlisted placeholders and scrubs the result
+  ---
+  duration_ms: 0.583916
+  ...
+# Subtest: an enabled Matomo record initialises exactly one allowlisted script
+ok 87 - an enabled Matomo record initialises exactly one allowlisted script
+  ---
+  duration_ms: 1.185083
+  ...
+# Subtest: a vendor queue that is no longer an array is never replaced
+ok 88 - a vendor queue that is no longer an array is never replaced
+  ---
+  duration_ms: 0.595334
+  ...
+# Subtest: a tagged click keeps its event name as the Matomo action
+ok 89 - a tagged click keeps its event name as the Matomo action
+  ---
+  duration_ms: 0.634958
+  ...
+# Subtest: a record whose script host is not allowlisted loads nothing
+ok 90 - a record whose script host is not allowlisted loads nothing
+  ---
+  duration_ms: 0.503583
+  ...
+# Subtest: a disabled record is inert, and one bad record does not stop a good sibling
+ok 91 - a disabled record is inert, and one bad record does not stop a good sibling
+  ---
+  duration_ms: 1.788791
+  ...
+# Subtest: the registry response is cached, including the negative result
+ok 92 - the registry response is cached, including the negative result
+  ---
+  duration_ms: 0.656584
+  ...
+# Subtest: a provider waits for the surface to be decidable, then activates on the route change
+ok 93 - a provider waits for the surface to be decidable, then activates on the route change
+  ---
+  duration_ms: 0.607667
+  ...
+# Subtest: a record scoped to the other surface stays inert
+ok 94 - a record scoped to the other surface stays inert
+  ---
+  duration_ms: 0.439292
+  ...
+# Subtest: trackEvent is a no-op when nothing is configured
+ok 95 - trackEvent is a no-op when nothing is configured
+  ---
+  duration_ms: 0.366917
+  ...
+# Subtest: a pageview emitted before array.js lands is replayed, not dropped
+ok 96 - a pageview emitted before array.js lands is replayed, not dropped
+  ---
+  duration_ms: 0.651084
+  ...
+# Subtest: PostHog init forces every restraint, and no record can loosen them
+ok 97 - PostHog init forces every restraint, and no record can loosen them
+  ---
+  duration_ms: 1.470875
+  ...
+# Subtest: sanitize_properties scrubs content but not PostHog's own identity keys
+ok 98 - sanitize_properties scrubs content but not PostHog's own identity keys
+  ---
+  duration_ms: 0.771375
+  ...
+# Subtest: the pending queue is bounded so a script that never loads cannot grow it
+ok 99 - the pending queue is bounded so a script that never loads cannot grow it
+  ---
+  duration_ms: 2.228833
+  ...
+# Subtest: the PostHog property sanitiser scrubs vendor-injected urls
+ok 100 - the PostHog property sanitiser scrubs vendor-injected urls
+  ---
+  duration_ms: 0.636709
+  ...
+# Subtest: a same-origin script path is accepted with no host declaration at all
+ok 101 - a same-origin script path is accepted with no host declaration at all
+  ---
+  duration_ms: 0.564583
+  ...
+# Subtest: things that only LOOK same-origin are still refused
+ok 102 - things that only LOOK same-origin are still refused
+  ---
+  duration_ms: 0.582042
+  ...
+# Subtest: a same-origin path cannot smuggle a script past loadScript either
+ok 103 - a same-origin path cannot smuggle a script past loadScript either
+  ---
+  duration_ms: 0.482458
+  ...
+# Subtest: a cache-busted same-origin script URL is allowed
+ok 104 - a cache-busted same-origin script URL is allowed
+  ---
+  duration_ms: 0.413459
+  ...
+# Subtest: titles are derived from the parameterised path, with no configuration
+ok 105 - titles are derived from the parameterised path, with no configuration
+  ---
+  duration_ms: 4.816625
+  ...
+# Subtest: a parameterised id never leaks into a title
+ok 106 - a parameterised id never leaks into a title
+  ---
+  duration_ms: 0.398083
+  ...
+# Subtest: an unknown module degrades visibly rather than silently
+ok 107 - an unknown module degrades visibly rather than silently
+  ---
+  duration_ms: 1.4725
+  ...
+# Subtest: settings.titleMap gives an exact override, settings.modules renames a module
+ok 108 - settings.titleMap gives an exact override, settings.modules renames a module
+  ---
+  duration_ms: 0.974458
+  ...
+# Subtest: the title reaches Matomo as setDocumentTitle, per record
+ok 109 - the title reaches Matomo as setDocumentTitle, per record
+  ---
+  duration_ms: 1.374125
+  ...
+# Subtest: the shim never touches document.title
+ok 110 - the shim never touches document.title
+  ---
+  duration_ms: 1.415834
+  ...
+# Subtest: endpointUrl is host-allowlisted, not just scriptUrl (CWE-201)
+ok 111 - endpointUrl is host-allowlisted, not just scriptUrl (CWE-201)
+  ---
+  duration_ms: 1.02275
+  ...
+# Subtest: the URL handed to a provider resolves to the real page, context path and all
+ok 112 - the URL handed to a provider resolves to the real page, context path and all
+  ---
+  duration_ms: 1.339125
+  ...
+# Subtest: the grouping key stays stripped even though the tracked URL is not
+ok 113 - the grouping key stays stripped even though the tracked URL is not
+  ---
+  duration_ms: 0.6525
+  ...
+# Subtest: an error page records which error it was
+ok 114 - an error page records which error it was
+  ---
+  duration_ms: 0.726417
+  ...
+# Subtest: a redirect chain that settles in one tick records one pageview
+ok 115 - a redirect chain that settles in one tick records one pageview
+  ---
+  duration_ms: 0.565667
+  ...
+# Subtest: a redirect chain gated on async work records every hop it passes through
+ok 116 - a redirect chain gated on async work records every hop it passes through
+  ---
+  duration_ms: 0.5515
+  ...
+# Subtest: with nothing chosen, every level lists every node of its type
+ok 117 - with nothing chosen, every level lists every node of its type
+  ---
+  duration_ms: 0.935584
+  ...
+# Subtest: a level lists only what sits under the nearest choice above it
+ok 118 - a level lists only what sits under the nearest choice above it
+  ---
+  duration_ms: 0.149209
+  ...
+# Subtest: picking a ward first fills its own sub-county and county
+ok 119 - picking a ward first fills its own sub-county and county
+  ---
+  duration_ms: 0.099333
+  ...
+# Subtest: a root above the shown levels never enters the selection
+ok 120 - a root above the shown levels never enters the selection
+  ---
+  duration_ms: 0.054667
+  ...
+# Subtest: re-picking a level's current value clears the levels below it
+ok 121 - re-picking a level's current value clears the levels below it
+  ---
+  duration_ms: 0.467375
+  ...
+# Subtest: picking another branch keeps nothing from the old one
+ok 122 - picking another branch keeps nothing from the old one
+  ---
+  duration_ms: 0.230166
+  ...
+# Subtest: a level too long to list whole waits for the level above
+ok 123 - a level too long to list whole waits for the level above
+  ---
+  duration_ms: 0.452417
+  ...
+# Subtest: only names shared within a level carry their parent
+ok 124 - only names shared within a level carry their parent
+  ---
+  duration_ms: 0.714875
+  ...
+# Subtest: a pick reports how many levels above it it filled in
+ok 125 - a pick reports how many levels above it it filled in
+  ---
+  duration_ms: 0.290917
+  ...
+# Subtest: auth-methods: phone_otp is shown in digit-ui, anything else is a redirect
+ok 126 - auth-methods: phone_otp is shown in digit-ui, anything else is a redirect
+  ---
+  duration_ms: 1.923417
+  ...
+# Subtest: _send posts the route slug and the national number, and returns the challenge
+ok 127 - _send posts the route slug and the national number, and returns the challenge
+  ---
+  duration_ms: 0.172041
+  ...
+# Subtest: _send: OTP_CHANNEL_UNAVAILABLE gets its own message
+ok 128 - _send: OTP_CHANNEL_UNAVAILABLE gets its own message
+  ---
+  duration_ms: 0.231833
+  ...
+# Subtest: _send: 429 codes carry retryAfter, from the body or the Retry-After header
+ok 129 - _send: 429 codes carry retryAfter, from the body or the Retry-After header
+  ---
+  duration_ms: 0.237458
+  ...
+# Subtest: _send: unknown tenant route and uncoded errors fall back to generic messages
+ok 130 - _send: unknown tenant route and uncoded errors fall back to generic messages
+  ---
+  duration_ms: 0.16125
+  ...
+# Subtest: _verify posts the challenge and code; 200 authenticated is success
+ok 131 - _verify posts the challenge and code; 200 authenticated is success
+  ---
+  duration_ms: 0.152667
+  ...
+# Subtest: _verify: OTP_INVALID reports the attempts left
+ok 132 - _verify: OTP_INVALID reports the attempts left
+  ---
+  duration_ms: 0.155375
+  ...
+# Subtest: _verify: expired, locked and identity failures map to their own keys
+ok 133 - _verify: expired, locked and identity failures map to their own keys
+  ---
+  duration_ms: 0.586333
+  ...
+# Subtest: a missing retryAfter or attemptsRemaining gives a sentence without the number
+ok 134 - a missing retryAfter or attemptsRemaining gives a sentence without the number
+  ---
+  duration_ms: 0.764166
+  ...
+# Subtest: _send accepts any 2xx that carries a challenge
+ok 135 - _send accepts any 2xx that carries a challenge
+  ---
+  duration_ms: 0.370458
+  ...
+# Subtest: no attempts left gets its own message, whatever the code
+ok 136 - no attempts left gets its own message, whatever the code
+  ---
+  duration_ms: 0.331625
+  ...
+# Subtest: status tones: open until closed, rejected kept apart
+ok 137 - status tones: open until closed, rejected kept apart
+  ---
+  duration_ms: 0.379125
+  ...
+# Subtest: a search matches the complaint number, the description, the concern or the category
+ok 138 - a search matches the complaint number, the description, the concern or the category
+  ---
+  duration_ms: 0.232667
+  ...
+# Subtest: results come newest first
+ok 139 - results come newest first
+  ---
+  duration_ms: 0.379125
+  ...
+# Subtest: paging clamps into range and reports the span shown
+ok 140 - paging clamps into range and reports the span shown
+  ---
+  duration_ms: 0.204333
+  ...
+# Subtest: one category per parent, labelled as the app labels a node, sorted by label
+ok 141 - one category per parent, labelled as the app labels a node, sorted by label
+  ---
+  duration_ms: 9.302291
+  ...
+# Subtest: a subcategory searches itself; a category alone searches all of its subcategories
+ok 142 - a subcategory searches itself; a category alone searches all of its subcategories
+  ---
+  duration_ms: 0.254625
+  ...
+# Subtest: picking a category drops a subcategory that isn't one of its own, a parentless one included
+ok 143 - picking a category drops a subcategory that isn't one of its own, a parentless one included
+  ---
+  duration_ms: 0.103792
+  ...
+# Subtest: a section lands directly after Home
+ok 144 - a section lands directly after Home
+  ---
+  duration_ms: 1.078291
+  ...
+# Subtest: rows carry SideNav's icon shape
+ok 145 - rows carry SideNav's icon shape
+  ---
+  duration_ms: 0.103959
+  ...
+# Subtest: Home with a trailing slash still anchors the section
+ok 146 - Home with a trailing slash still anchors the section
+  ---
+  duration_ms: 0.073167
+  ...
+# Subtest: without a Home row the section goes first
+ok 147 - without a Home row the section goes first
+  ---
+  duration_ms: 0.123583
+  ...
+# Subtest: an access-control row for a section's route is dropped, not duplicated
+ok 148 - an access-control row for a section's route is dropped, not duplicated
+  ---
+  duration_ms: 0.112541
+  ...
+# Subtest: a group emptied by that de-duplication is removed with it
+ok 149 - a group emptied by that de-duplication is removed with it
+  ---
+  duration_ms: 0.065375
+  ...
+# Subtest: no usable sections leaves the items untouched
+ok 150 - no usable sections leaves the items untouched
+  ---
+  duration_ms: 0.097375
+  ...
+# Subtest: the citizen app anchors on its own Home
+ok 151 - the citizen app anchors on its own Home
+  ---
+  duration_ms: 0.732
+  ...
+# Subtest: MDMS sidebar links become rows, skipping modules with their own section
+ok 152 - MDMS sidebar links become rows, skipping modules with their own section
+  ---
+  duration_ms: 7.744333
+  ...
+# Subtest: MDMS rows keep a configured icon and fall back by kind
+ok 153 - MDMS rows keep a configured icon and fall back by kind
+  ---
+  duration_ms: 0.336583
+  ...
+# Subtest: no link data gives no rows
+ok 154 - no link data gives no rows
+  ---
+  duration_ms: 0.101583
+  ...
+# Subtest: multi-root puts the tenant into citizen and employee routes
+ok 155 - multi-root puts the tenant into citizen and employee routes
+  ---
+  duration_ms: 0.073333
+  ...
+# Subtest: a route that already has the tenant, or is not an app route, is left alone
+ok 156 - a route that already has the tenant, or is not an app route, is left alone
+  ---
+  duration_ms: 0.0395
+  ...
+# Subtest: the citizen rail offers the public dashboard only once it is published
+ok 157 - the citizen rail offers the public dashboard only once it is published
+  ---
+  duration_ms: 0.069542
+  ...
+# Subtest: on a tenant route MDMS rows match the app id and move onto the tenant route
+ok 158 - on a tenant route MDMS rows match the app id and move onto the tenant route
+  ---
+  duration_ms: 0.150625
+  ...
+# Subtest: staff account offers advertised actions, second factors, providers and scoped sessions
+ok 159 - staff account offers advertised actions, second factors, providers and scoped sessions
+  ---
+  duration_ms: 135.171834
+  ...
+# Subtest: phone-only account hides credential actions and offers phone change
+ok 160 - phone-only account hides credential actions and offers phone change
+  ---
+  duration_ms: 2.178375
+  ...
+# Subtest: phone change verifies before refreshing the same citizen uuid and token aliases
+ok 161 - phone change verifies before refreshing the same citizen uuid and token aliases
+  ---
+  duration_ms: 5.562625
+  ...
+# Subtest: phone change cannot write auth state after logout during pending verify
+ok 162 - phone change cannot write auth state after logout during pending verify
+  ---
+  duration_ms: 3.568334
+  ...
+# Subtest: phone change cannot write auth state after account switch during pending verify
+ok 163 - phone change cannot write auth state after account switch during pending verify
+  ---
+  duration_ms: 3.570541
+  ...
+# Subtest: phone change cannot write auth state after same-person new session during pending verify
+ok 164 - phone change cannot write auth state after same-person new session during pending verify
+  ---
+  duration_ms: 3.560333
+  ...
+# Subtest: phone change cannot write auth state after other-tab logout during pending verify
+ok 165 - phone change cannot write auth state after other-tab logout during pending verify
+  ---
+  duration_ms: 3.58325
+  ...
+# Subtest: phone change cannot write auth state after other-tab account switch during pending verify
+ok 166 - phone change cannot write auth state after other-tab account switch during pending verify
+  ---
+  duration_ms: 4.626833
+  ...
+# Subtest: phone change cannot write auth state after logout during pending select
+ok 167 - phone change cannot write auth state after logout during pending select
+  ---
+  duration_ms: 5.020417
+  ...
+# Subtest: phone change cannot write auth state after account switch during pending select
+ok 168 - phone change cannot write auth state after account switch during pending select
+  ---
+  duration_ms: 4.23275
+  ...
+# Subtest: phone change cannot write auth state after same-person new session during pending select
+ok 169 - phone change cannot write auth state after same-person new session during pending select
+  ---
+  duration_ms: 3.059667
+  ...
+# Subtest: phone change cannot write auth state after other-tab logout during pending select
+ok 170 - phone change cannot write auth state after other-tab logout during pending select
+  ---
+  duration_ms: 5.926959
+  ...
+# Subtest: phone change cannot write auth state after other-tab account switch during pending select
+ok 171 - phone change cannot write auth state after other-tab account switch during pending select
+  ---
+  duration_ms: 2.618459
+  ...
+# Subtest: phone change cannot adopt a different UUID returned by the citizen cookie
+ok 172 - phone change cannot adopt a different UUID returned by the citizen cookie
+  ---
+  duration_ms: 2.703791
+  ...
+# Subtest: pending invitation UI waits for consent and shows stale rejection
+ok 173 - pending invitation UI waits for consent and shows stale rejection
+  ---
+  duration_ms: 2.570167
+  ...
+# Subtest: employee profile keeps identity fields read-only and offers account settings without BFF reads
+ok 174 - employee profile keeps identity fields read-only and offers account settings without BFF reads
+  ---
+  duration_ms: 5.642125
+  ...
+# Warning: Each child in a list should have a unique "key" prop.
+# Check the render method of `PopUp`. It was passed a child from LogoutDialog. See https://reactjs.org/link/warning-keys for more information.
+#     at Button2 (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.3804.cjs:30334:18)
+#     at PopUp (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.3804.cjs:30335:16)
+#     at LogoutDialog (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.3804.cjs:30365:23)
+#     at Router2 (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.3804.cjs:3817:34)
+#     at MemoryRouter3 (/private/var/folders/6b/1w6q5qpx769fxk0p8cl1z8z40000gn/T/identity-account-ui.3804.cjs:3884:39)
+# Subtest: citizen profile keeps identity fields read-only and offers account settings without BFF reads
+ok 175 - citizen profile keeps identity fields read-only and offers account settings without BFF reads
+  ---
+  duration_ms: 2.316833
+  ...
+# Subtest: logout dialog keeps a failed sign-out visible for retry
+ok 176 - logout dialog keeps a failed sign-out visible for retry
+  ---
+  duration_ms: 6.589292
+  ...
+# Subtest: account metadata is fetched only by an explicit account request
+ok 177 - account metadata is fetched only by an explicit account request
+  ---
+  duration_ms: 1.026541
+  ...
+# Subtest: account actions use allowlisted required actions and tenant-bound return paths without intent
+ok 178 - account actions use allowlisted required actions and tenant-bound return paths without intent
+  ---
+  duration_ms: 0.732
+  ...
+# Subtest: provider catalogue uses idp methods and excludes already linked providers
+ok 179 - provider catalogue uses idp methods and excludes already linked providers
+  ---
+  duration_ms: 0.135042
+  ...
+# Subtest: provider unlink preserves the frozen body and surfaces last-method protection
+ok 180 - provider unlink preserves the frozen body and surfaces last-method protection
+  ---
+  duration_ms: 0.264917
+  ...
+# Subtest: accept invitation sends its exact version and employee cookie selector, then permits selection
+ok 181 - accept invitation sends its exact version and employee cookie selector, then permits selection
+  ---
+  duration_ms: 1.235541
+  ...
+# Subtest: stale invitations remain failed and expose a recoverable message
+ok 182 - stale invitations remain failed and expose a recoverable message
+  ---
+  duration_ms: 0.104708
+  ...
+# Subtest: stepup binds send and verify to the same challenge/purpose without a caller tenant
+ok 183 - stepup binds send and verify to the same challenge/purpose without a caller tenant
+  ---
+  duration_ms: 0.334833
+  ...
+# Subtest: change_phone binds send and verify to the same challenge/purpose without a caller tenant
+ok 184 - change_phone binds send and verify to the same challenge/purpose without a caller tenant
+  ---
+  duration_ms: 0.139209
+  ...
+# Subtest: phone rejection and invalid verification never report a changed phone
+ok 185 - phone rejection and invalid verification never report a changed phone
+  ---
+  duration_ms: 0.425042
+  ...
+# Subtest: failed scoped logout is not reported as success
+ok 186 - failed scoped logout is not reported as success
+  ---
+  duration_ms: 0.394209
+  ...
+# Subtest: employee authorize URL carries surface, tenant slug and password method
+ok 187 - employee authorize URL carries surface, tenant slug and password method
+  ---
+  duration_ms: 0.677
+  ...
+# Subtest: citizen authorize URL names no method and uses a citizen returnTo
+ok 188 - citizen authorize URL names no method and uses a citizen returnTo
+  ---
+  duration_ms: 0.156791
+  ...
+# Subtest: `from` is restricted to the same tenant and surface
+ok 189 - `from` is restricted to the same tenant and surface
+  ---
+  duration_ms: 0.21475
+  ...
+# Subtest: `from` pointing at the surface's own sign-in pages collapses to the base
+ok 190 - `from` pointing at the surface's own sign-in pages collapses to the base
+  ---
+  duration_ms: 0.097125
+  ...
+# Subtest: employee session exchange passes surface=employee and scopes roles to the route tenant and its ancestors
+ok 191 - employee session exchange passes surface=employee and scopes roles to the route tenant and its ancestors
+  ---
+  duration_ms: 0.561667
+  ...
+# Subtest: employee session rejects a token for a different tenant
+ok 192 - employee session rejects a token for a different tenant
+  ---
+  duration_ms: 0.087917
+  ...
+# Subtest: employee 403 from _select is surfaced as forbidden
+ok 193 - employee 403 from _select is surfaced as forbidden
+  ---
+  duration_ms: 0.188541
+  ...
+# Subtest: signed-out without an authResult is eligible for a direct Keycloak redirect
+ok 194 - signed-out without an authResult is eligible for a direct Keycloak redirect
+  ---
+  duration_ms: 0.074666
+  ...
+# Subtest: signed-out after an authResult round trip does not auto-redirect (no loop)
+ok 195 - signed-out after an authResult round trip does not auto-redirect (no loop)
+  ---
+  duration_ms: 0.288917
+  ...
+# Subtest: a failed authResult localizes its code and ignores deprecated BFF copy
+ok 196 - a failed authResult localizes its code and ignores deprecated BFF copy
+  ---
+  duration_ms: 0.349042
+  ...
+# Subtest: citizen session exchange uses surface=citizen and the citizen _select with an empty body
+ok 197 - citizen session exchange uses surface=citizen and the citizen _select with an empty body
+  ---
+  duration_ms: 0.923875
+  ...
+# Subtest: citizen tokens are accepted at the root of root and city routes
+ok 198 - citizen tokens are accepted at the root of root and city routes
+  ---
+  duration_ms: 0.15175
+  ...
+# Subtest: citizen session rejects a token for anything but the route tenant's root
+ok 199 - citizen session rejects a token for anything but the route tenant's root
+  ---
+  duration_ms: 0.29025
+  ...
+# Subtest: a session bound to another tenant starts a fresh sign-in without selecting
+ok 200 - a session bound to another tenant starts a fresh sign-in without selecting
+  ---
+  duration_ms: 0.084208
+  ...
+# Subtest: a foreign-tenant session after an authResult round trip does not loop
+ok 201 - a foreign-tenant session after an authResult round trip does not loop
+  ---
+  duration_ms: 0.073417
+  ...
+# Subtest: citizen session rejects a non-CITIZEN user
+ok 202 - citizen session rejects a non-CITIZEN user
+  ---
+  duration_ms: 0.058
+  ...
+# Subtest: logout redirect targets the tenant's login page for the surface
+ok 203 - logout redirect targets the tenant's login page for the surface
+  ---
+  duration_ms: 0.041
+  ...
+# Subtest: UserService.logout on a citizen tenant route posts surface=citizen and lands on citizen login
+ok 204 - UserService.logout on a citizen tenant route posts surface=citizen and lands on citizen login
+  ---
+  duration_ms: 0.32275
+  ...
+# Subtest: UserService.logout on an employee tenant route posts surface=employee and lands on employee login
+ok 205 - UserService.logout on an employee tenant route posts surface=employee and lands on employee login
+  ---
+  duration_ms: 0.091042
+  ...
+# Subtest: pending employee invitation becomes an explicit accept step for this tenant
+ok 206 - pending employee invitation becomes an explicit accept step for this tenant
+  ---
+  duration_ms: 0.081083
+  ...
+# Subtest: an invitation for a different tenant is never offered for acceptance
+ok 207 - an invitation for a different tenant is never offered for acceptance
+  ---
+  duration_ms: 0.060583
+  ...
+# Subtest: sign out others preserves the current app session and does not navigate
+ok 208 - sign out others preserves the current app session and does not navigate
+  ---
+  duration_ms: 0.356083
+  ...
+# Subtest: sign out everywhere clears local credentials and returns to tenant login
+ok 209 - sign out everywhere clears local credentials and returns to tenant login
+  ---
+  duration_ms: 0.401084
+  ...
+# Subtest: BFF logout does not call native token revocation even with a stored user
+ok 210 - BFF logout does not call native token revocation even with a stored user
+  ---
+  duration_ms: 0.410625
+  ...
+# Subtest: failed BFF logout retains local state for retry on every scope
+ok 211 - failed BFF logout retains local state for retry on every scope
+  ---
+  duration_ms: 0.28475
+  ...
+# Subtest: the holder of the complaint may escalate it
+ok 212 - the holder of the complaint may escalate it
+  ---
+  duration_ms: 0.574167
+  ...
+# Subtest: a level the complaint has already moved past may not
+ok 213 - a level the complaint has already moved past may not
+  ---
+  duration_ms: 0.057667
+  ...
+# Subtest: a level below the current holder may not escalate somebody else's ladder
+ok 214 - a level below the current holder may not escalate somebody else's ladder
+  ---
+  duration_ms: 0.046125
+  ...
+# Subtest: an unassigned complaint offers no escalation to anyone
+ok 215 - an unassigned complaint offers no escalation to anyone
+  ---
+  duration_ms: 0.103291
+  ...
+# Subtest: a caller with no uuid is never a match
+ok 216 - a caller with no uuid is never a match
+  ---
+  duration_ms: 0.0465
+  ...
+# Subtest: bare-uuid assignee lists are accepted too
+ok 217 - bare-uuid assignee lists are accepted too
+  ---
+  duration_ms: 0.0415
+  ...
+# Subtest: a malformed assignee entry never matches
+ok 218 - a malformed assignee entry never matches
+  ---
+  duration_ms: 0.088459
+  ...
+# Subtest: one match among several co-assignees is enough
+ok 219 - one match among several co-assignees is enough
+  ---
+  duration_ms: 0.03825
+  ...
+# Subtest: a self-loop without assignees does not erase the holder
+ok 220 - a self-loop without assignees does not erase the holder
+  ---
+  duration_ms: 0.570125
+  ...
+# Subtest: multiple assignee-less self-loops retain the newest named holder
+ok 221 - multiple assignee-less self-loops retain the newest named holder
+  ---
+  duration_ms: 1.480666
+  ...
+# Subtest: walking stops at a state boundary instead of resurrecting an old owner
+ok 222 - walking stops at a state boundary instead of resurrecting an old owner
+  ---
+  duration_ms: 0.295542
+  ...
+# Subtest: the first named assignee in the current occupancy wins
+ok 223 - the first named assignee in the current occupancy wins
+  ---
+  duration_ms: 0.189792
+  ...
+# Subtest: missing or malformed workflow history has no holder
+ok 224 - missing or malformed workflow history has no holder
+  ---
+  duration_ms: 0.14925
+  ...
+# Subtest: digit-ui-components PrivateRoute treats /{slug}/digit-ui/employee as employee
+ok 225 - digit-ui-components PrivateRoute treats /{slug}/digit-ui/employee as employee
+  ---
+  duration_ms: 3.89475
+  ...
+# Subtest: digit-ui-components PrivateRoute sends tenant citizen routes to the tenant citizen login
+ok 226 - digit-ui-components PrivateRoute sends tenant citizen routes to the tenant citizen login
+  ---
+  duration_ms: 0.584
+  ...
+# Subtest: digit-ui-components PrivateRoute keeps legacy /digit-ui targets
+ok 227 - digit-ui-components PrivateRoute keeps legacy /digit-ui targets
+  ---
+  duration_ms: 0.55275
+  ...
+# Subtest: react-components PrivateRoute treats /{slug}/digit-ui/employee as employee
+ok 228 - react-components PrivateRoute treats /{slug}/digit-ui/employee as employee
+  ---
+  duration_ms: 0.328958
+  ...
+# Subtest: react-components PrivateRoute sends tenant citizen routes to the tenant citizen login
+ok 229 - react-components PrivateRoute sends tenant citizen routes to the tenant citizen login
+  ---
+  duration_ms: 0.240958
+  ...
+# Subtest: react-components PrivateRoute keeps legacy /digit-ui targets
+ok 230 - react-components PrivateRoute keeps legacy /digit-ui targets
+  ---
+  duration_ms: 0.209666
+  ...
+# Subtest: privateRouteLogin keeps the legacy Keycloak login target
+ok 231 - privateRouteLogin keeps the legacy Keycloak login target
+  ---
+  duration_ms: 0.422083
+  ...
+# Subtest: the verb is translated along with the field
+ok 232 - the verb is translated along with the field
+  ---
+  duration_ms: 0.421375
+  ...
+# Subtest: a locale without the key keeps today's English
+ok 233 - a locale without the key keeps today's English
+  ---
+  duration_ms: 0.065833
+  ...
+# Subtest: translateOr falls back on a missing or empty value
+ok 234 - translateOr falls back on a missing or empty value
+  ---
+  duration_ms: 0.05625
+  ...
+# Subtest: canonical tenant routes disable legacy in-app multi-root selection
+ok 235 - canonical tenant routes disable legacy in-app multi-root selection
+  ---
+  duration_ms: 0.591291
+  ...
+# Subtest: tenant route parser recognizes only the canonical tenant-prefixed mount
+ok 236 - tenant route parser recognizes only the canonical tenant-prefixed mount
+  ---
+  duration_ms: 0.492667
+  ...
+# Subtest: tenant slug validation rejects ambiguous and reserved route values
+ok 237 - tenant slug validation rejects ambiguous and reserved route values
+  ---
+  duration_ms: 0.054917
+  ...
+# Subtest: canonical employee routes use the Identity BFF without a global-config toggle
+ok 238 - canonical employee routes use the Identity BFF without a global-config toggle
+  ---
+  duration_ms: 0.715916
+  ...
+# Subtest: canonical citizen routes also use the Identity BFF; legacy citizen routes keep their provider
+ok 239 - canonical citizen routes also use the Identity BFF; legacy citizen routes keep their provider
+  ---
+  duration_ms: 0.286917
+  ...
+# Subtest: legacy routes under any context path keep the employee surface
+ok 240 - legacy routes under any context path keep the employee surface
+  ---
+  duration_ms: 0.156917
+  ...
+# Subtest: tenant routes without a surface segment do not force the Identity BFF
+ok 241 - tenant routes without a surface segment do not force the Identity BFF
+  ---
+  duration_ms: 0.13325
+  ...
+# Subtest: tenant route resolver keeps the slug separate from the tenant id
+ok 242 - tenant route resolver keeps the slug separate from the tenant id
+  ---
+  duration_ms: 0.644
+  ...
+# Subtest: tenant route resolver fails closed for missing and inconsistent mappings
+ok 243 - tenant route resolver fails closed for missing and inconsistent mappings
+  ---
+  duration_ms: 1.329459
+  ...
+# Subtest: MDMS app id stays separate from the tenant route base
+ok 244 - MDMS app id stays separate from the tenant route base
+  ---
+  duration_ms: 0.770833
+  ...
+# Subtest: a successful lookup saves the tenant context and returns the live answer
+ok 245 - a successful lookup saves the tenant context and returns the live answer
+  ---
+  duration_ms: 0.238208
+  ...
+# Subtest: a successful lookup is used instead of the cache and refreshes it (tenant rename)
+ok 246 - a successful lookup is used instead of the cache and refreshes it (tenant rename)
+  ---
+  duration_ms: 0.1645
+  ...
+# Subtest: a network error falls back to the saved context
+ok 247 - a network error falls back to the saved context
+  ---
+  duration_ms: 0.164917
+  ...
+# Subtest: a 500 from the BFF falls back to the saved context
+ok 248 - a 500 from the BFF falls back to the saved context
+  ---
+  duration_ms: 0.1105
+  ...
+# Subtest: a 502 from the BFF falls back to the saved context
+ok 249 - a 502 from the BFF falls back to the saved context
+  ---
+  duration_ms: 0.054417
+  ...
+# Subtest: a 503 from the BFF falls back to the saved context
+ok 250 - a 503 from the BFF falls back to the saved context
+  ---
+  duration_ms: 0.050583
+  ...
+# Subtest: a 504 from the BFF falls back to the saved context
+ok 251 - a 504 from the BFF falls back to the saved context
+  ---
+  duration_ms: 0.059042
+  ...
+# Subtest: a 400 never uses the saved context and removes it
+ok 252 - a 400 never uses the saved context and removes it
+  ---
+  duration_ms: 0.167459
+  ...
+# Subtest: a 401 never uses the saved context and removes it
+ok 253 - a 401 never uses the saved context and removes it
+  ---
+  duration_ms: 0.110042
+  ...
+# Subtest: a 403 never uses the saved context and removes it
+ok 254 - a 403 never uses the saved context and removes it
+  ---
+  duration_ms: 0.15425
+  ...
+# Subtest: a 404 never uses the saved context and removes it
+ok 255 - a 404 never uses the saved context and removes it
+  ---
+  duration_ms: 0.126042
+  ...
+# Subtest: a 410 never uses the saved context and removes it
+ok 256 - a 410 never uses the saved context and removes it
+  ---
+  duration_ms: 0.081583
+  ...
+# Subtest: an outage with nothing saved still fails
+ok 257 - an outage with nothing saved still fails
+  ---
+  duration_ms: 0.095959
+  ...
+# Subtest: a reply that fails verification is not treated as an outage
+ok 258 - a reply that fails verification is not treated as an outage
+  ---
+  duration_ms: 0.106583
+  ...
+# Subtest: a saved entry for another slug is ignored
+ok 259 - a saved entry for another slug is ignored
+  ---
+  duration_ms: 0.345
+  ...
+# Subtest: broken or blocked storage does not break a live lookup
+ok 260 - broken or blocked storage does not break a live lookup
+  ---
+  duration_ms: 0.336792
+  ...
+# Subtest: voice input stays on where the tenant hasn't set the flag
+ok 261 - voice input stays on where the tenant hasn't set the flag
+  ---
+  duration_ms: 0.415417
+  ...
+# Subtest: only an explicit false turns it off
+ok 262 - only an explicit false turns it off
+  ---
+  duration_ms: 0.0635
+  ...
+1..262
+# tests 262
+# suites 0
+# pass 262
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3469.898583

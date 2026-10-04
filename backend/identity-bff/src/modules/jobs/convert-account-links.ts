@@ -11,7 +11,7 @@ import { updateKeycloakUser, type UserRepresentation } from "../sync/keycloak-wr
 import { accountEntries } from "../sync/state.js";
 import { ensureCitizenEntry, mirrorPerson } from "../sync/mirror.js";
 import { readDigitAccount, requireWorkspace } from "../workspace-members/authority.js";
-import { mobileValidationForRoute } from "../branding/tenant-branding.js";
+import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
 
 export interface ConversionOutcome { subject: string; tenantId?: string; uuid?: string; status: "converted" | "already-converted" | "skipped" | "failed"; reason?: string }

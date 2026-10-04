@@ -94,6 +94,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
   - `SET NX PX 30000`, renewed every 10 s; a caller waits at most 15 s, then gets 503 `IDENTITY_BUSY` with `Retry-After`.
   - Re-entry for the **same** person within one async chain is allowed. Taking a **different** person's lease while holding one throws.
   - The uuid lock and the phone lock are taken only **inside** a person lease.
+  - Anonymous phone bootstrap first makes an advisory ownership lookup. With no owner it takes a prospective random-subject lease, then the normalized phone lock, and checks ownership again. If still unowned, it creates an opaque Keycloak user through the plain Admin API; it does not call actual-person writers, mirrors or revocation under the prospective lease. It releases both locks, then takes the actual owner's person lease and phone lock, checks ownership fresh, and creates the session. If an owner appeared, it releases both locks and retries under that owner instead. Distinct-person leases are never nested (accepted item 13 ruling).
 - Writes made under the person lease are **fenced**: a Lua script checks that the lease token still matches before it writes. A lease lost mid-request answers 503 `IDENTITY_BUSY`, and a token minted under the lost lease is revoked before the error is returned.
 - Key names are in §7.
 
@@ -108,7 +109,6 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | Method | Path | Auth | State | Items |
 |---|---|---|---|---|
 | GET | `/livez` | none | live | — |
-| GET | `/healthz` | none | deleted-later | 15 |
 | GET | `/readyz` | none | changing | 15 |
 | GET | `/identity/v1/auth-methods` | none | changing | 1, 2 |
 | GET | `/identity/v1/authorize` | none (session for `action`) | changing | 1, 4 |
@@ -118,7 +118,6 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/password/setup-requests` | none (optional session) | live | — |
 | GET | `/identity/v1/password/setup-complete/:state` | login-attempt | live | — |
 | GET | `/identity/v1/tenant-contexts/:urlSlug` | none | changing | 11, 15 |
-| GET | `/identity/v1/tenant-contexts/:urlSlug/branding` | none | deleted-later | 14 |
 | POST | `/identity/v1/citizen/otp/_send` | none (session for step-up and change) | changing | 3, 13 |
 | POST | `/identity/v1/citizen/otp/_verify` | none (session for step-up and change) | changing | 13 |
 | GET | `/identity/v1/session` | session | changing | 4, 9, 10, 15 |
@@ -132,7 +131,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/workspace-members/_remove` | session | live | 9, 10 |
 | POST | `/identity/v1/workspace-members/_updateEmail` | session | live | 9 |
 | POST | `/identity/v1/workspace-invitations/_accept` | session | live | 9 |
-| POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
+| POST | `/identity/v1/account/providers/_unlink` | session | changing | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | live | 11 |
 | POST | `/internal/identity/v1/identifiers/_check` | introspection | live | 11 |
 | POST | `/internal/identity/v1/organizations/_ensure` | workload | live | 11 |
@@ -176,7 +175,7 @@ Check = "ok" | "down" | "disabled"
 - Poller lag above `IDENTITY_POLLER_MAX_LAG_SECONDS` makes the poller check `down`. A reconcile lag above twice the interval makes the reconcile check `down`.
 - PGR is never a readiness dependency.
 
-**`GET /healthz`** keeps today's `{status, redis}` until item 15 deletes it.
+`GET /healthz` was removed by item 15. Use `/livez` for process liveness and `/readyz` for dependencies.
 
 ### 3.2 Browser, anonymous
 

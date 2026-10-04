@@ -1,0 +1,11 @@
+
+ RUN  v5.0.1 /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-bff/backend/identity-bff
+
+
+ Test Files  47 passed | 3 skipped (50)
+      Tests  557 passed | 11 skipped | 4 todo (572)
+   Start at  21:51:07
+   Duration  22.13s (tests 65%, setup 18%, import 11%, transform 5%, worker 1%)
+
+    Isolate  50 workers spawned · ~93ms startup each (spawn + environment, per file)
+             at least ~4.57s faster with isolate: false — reuses workers across files instead of one per file

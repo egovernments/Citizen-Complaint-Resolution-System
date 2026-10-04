@@ -7,7 +7,6 @@ import {
   type Operation,
   type ProvisioningStep,
   type Signup,
-  type TenantReadiness,
   type SignupDraftInput,
   type TenantOption,
   OnboardingError,
@@ -21,12 +20,9 @@ import {
   isOperationSettled,
   isValidAccountCode,
   isValidUrlSlug,
-  logout,
   newIdempotencyKey,
   retryOperation,
   requestMagicLinkSignup,
-  selectContext,
-  tenantReadiness,
   session,
   slugifyAccountName,
   startSignIn,
@@ -34,7 +30,9 @@ import {
   tenants,
   updateSignup,
 } from '@/api/onboarding';
-import { clearLocalSession, installDigitContext } from '@/lib/session';
+import { enterWorkspace } from '@/identity/entry';
+import { Invitations } from '@/identity/Invitations';
+import type { Invitation } from '@/api/onboarding';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -157,7 +155,7 @@ type Phase =
   | 'provisioning'
   | 'entering'
   | 'resuming'
-  | 'setupRequired'
+  | 'invitations'
   | 'stuck'
   | 'failed';
 
@@ -257,7 +255,7 @@ function SignupFlow() {
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   // The tenant the operator picked and how far it has actually been built. Set
   // only when the pick is refused, so the gate can name what it is holding.
-  const [gated, setGated] = useState<{ option: TenantOption; readiness: TenantReadiness } | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [step, setStep] = useState<string>('account');
@@ -324,10 +322,13 @@ function SignupFlow() {
         return;
       }
       const view = await tenants();
-      if (!view.onboardingRequired && view.tenants.length) {
+      if (view.tenants.length) {
         setTenantOptions(view.tenants);
         setPhase('chooseTenant');
         return;
+      }
+      if (current.pendingInvitations?.length) {
+        setInvitations(current.pendingInvitations); setPhase('invitations'); return;
       }
       // One signup per founder: search first so a closed tab resumes rather
       // than starting a second.
@@ -608,27 +609,7 @@ function SignupFlow() {
     setSaving(true);
     setError(null);
     try {
-      // Readiness is checked BEFORE anything is minted or mounted. A tenant
-      // with no platform configuration can still hand out a correctly scoped
-      // DIGIT token, so getting one proves nothing and entering on the strength
-      // of it drops the operator into a console where every call is refused.
-      // Only gate on a readiness the backend actually stated. An unknown value
-      // must not hold a configured tenant out of its own workspace.
-      const readiness = tenantReadiness(option);
-      if (readiness && readiness !== 'READY') {
-        setGated({ option, readiness });
-        setPhase('setupRequired');
-        setSaving(false);
-        return;
-      }
-      const context = await selectContext(option.tenantId);
-      // Hand the DIGIT token to the session the app actually restores from.
-      // App.tsx reads one blob under `crs-auth-state`; writing digit-ui's
-      // `Employee.*` keys instead left the operator looking at whichever
-      // session was already there.
-      installDigitContext(context, sessionUser);
-      setPhase('entering');
-      window.location.assign('/configurator/');
+      await enterWorkspace(option.tenantId, sessionUser);
     } catch (caught) {
       setError(errorText(caught));
       setSaving(false);
@@ -838,74 +819,7 @@ function SignupFlow() {
     );
   }
 
-  if (phase === 'setupRequired' && gated) {
-    // Deliberately an honest gate, not a loading screen: nothing is running in
-    // the background, so a spinner or "still being set up" would be a promise
-    // the backend is not keeping (CCRS#2073 G9). Management modules are never
-    // mounted from here, so none of the calls that return AccessDeniedException
-    // are fired at all.
-    // READY never reaches this screen, so it is excluded rather than carried
-    // here as an empty entry nobody can read.
-    const copy: Record<Exclude<TenantReadiness, 'READY'>, { title: string; body: string }> = {
-      IDENTITY_READY: {
-        title: 'Tenant created — workspace setup required',
-        body: 'Your organisation and administrator account are ready. Workspace configuration has not been installed yet.',
-      },
-      PROVISIONING: {
-        title: 'Workspace setup is running',
-        body: 'Your organisation and administrator account are ready. The workspace configuration is still being installed.',
-      },
-      FAILED: {
-        title: 'Workspace setup did not finish',
-        body: 'Your organisation and administrator account are ready, but the workspace configuration could not be installed.',
-      },
-    };
-    const { title, body } = copy[gated.readiness as Exclude<TenantReadiness, 'READY'>];
-    return (
-      <div>
-        <h1 className="text-[28px] font-semibold leading-[1.15]">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{body}</p>
-        <div className="mt-6 rounded border px-4 py-3 text-sm">
-          <div className="font-medium">{gated.option.name}</div>
-          <div className="text-xs text-muted-foreground">{gated.option.tenantId}</div>
-        </div>
-        {banner}
-        <div className="mt-6 flex flex-wrap gap-2">
-          {tenantOptions.length > 1 && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setGated(null);
-                setPhase('chooseTenant');
-              }}
-            >
-              Choose a different workspace
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await logout();
-              } catch {
-                // The local half below is what strands the operator if it is
-                // skipped, so a failed remote revoke must not stop it.
-              }
-              // Both halves, then a full-page navigation so App re-initialises
-              // from the emptied storage instead of keeping the session it
-              // restored at load.
-              clearLocalSession();
-              window.location.assign('/configurator/signup');
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  if (phase === 'invitations') return <Invitations invitations={invitations} onAccepted={bootstrap} />;
 
   if (phase === 'entering') {
     return (

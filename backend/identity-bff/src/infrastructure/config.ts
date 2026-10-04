@@ -75,6 +75,7 @@ export const config = {
     process.env.KEYCLOAK_CITIZEN_CLIENT_SECRET || "",
 
   // Identity BFF
+  identitySurfacesJson: process.env.IDENTITY_SURFACES_JSON || "",
   identityRedirectUri:
     process.env.IDENTITY_REDIRECT_URI ||
     "http://localhost:18201/identity/v1/callback",
@@ -124,7 +125,9 @@ export const config = {
   identityCitizenOtpIpSendLimit: parseInt(process.env.IDENTITY_CITIZEN_OTP_IP_SEND_LIMIT || "20"),
   // Interim OTP channel: "log" writes codes to the BFF log (development only).
   // Anything else = no channel, so a send answers OTP_CHANNEL_UNAVAILABLE.
-  identityCitizenOtpSender: process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  identityCitizenOtpSender: process.env.IDENTITY_OTP_SENDER || process.env.IDENTITY_CITIZEN_OTP_SENDER || "",
+  identityOtpSenderUrl: process.env.IDENTITY_OTP_SENDER_URL || "",
+  identityOtpSenderTimeoutMs: parseInt(process.env.IDENTITY_OTP_SENDER_TIMEOUT_MS || "10000"),
   // Same switch and value egov-user reads (citizen.login.password.otp.fixed.*):
   // when on, the fixed code is accepted for any challenge. Development only.
   citizenLoginPasswordOtpFixedEnabled: process.env.CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED === "true",
@@ -170,9 +173,6 @@ export const config = {
   // for those accounts' lifecycle, never for business calls.
   digitUserServiceUrl: process.env.DIGIT_USER_SERVICE_URL || "",
   digitMdmsSearchUrl: process.env.DIGIT_MDMS_SEARCH_URL || "",
-  digitLocalizationSearchUrl:
-    process.env.DIGIT_LOCALIZATION_SEARCH_URL ||
-    `${digitGatewayHost}/localization/messages/v1/_search`,
   // Internal egov-otp create endpoint used only by the default
   // CitizenTokenMinter. Never route this through a public gateway: its
   // response contains the OTP value. Empty = citizen tokens unavailable.
@@ -183,19 +183,6 @@ export const config = {
   digitCitizenOtpIdentity:
     process.env.DIGIT_CITIZEN_OTP_IDENTITY === "userName" ? "userName" as const : "mobileNumber" as const,
   digitCitizenRoles: csv(process.env.DIGIT_CITIZEN_ROLES || "CITIZEN"),
-  // Public login branding (#2167): read-only MDMS + localization projection.
-  identityBrandingCacheSeconds: parseInt(
-    process.env.IDENTITY_BRANDING_CACHE_SECONDS || "300",
-  ),
-  identityBrandingDefaultLocale:
-    process.env.IDENTITY_BRANDING_DEFAULT_LOCALE || "en_IN",
-  digitUiConfigModuleName:
-    process.env.DIGIT_UI_CONFIG_MODULE_NAME || "commonMDMSConfig",
-  digitFooterUrl:
-    process.env.DIGIT_FOOTER_URL ?? "/digit-ui/brand/digit-footer.png",
-  digitFooterBwUrl:
-    process.env.DIGIT_FOOTER_BW_URL ?? "/digit-ui/brand/digit-footer-bw.png",
-  digitHomeUrl: process.env.DIGIT_HOME_URL || "https://www.digit.org/",
   // egov-user reached directly (internal network) for token revocation only:
   // Kong's RBAC evaluates the principal's home tenant, which a BFF-managed
   // account may hold no roles in. Defaults to DIGIT_USER_SERVICE_URL.
@@ -270,8 +257,8 @@ export const config = {
   keycloakAdminClientId: process.env.KEYCLOAK_ADMIN_CLIENT_ID || "admin-cli",
   keycloakAdminClientSecret:
     process.env.KEYCLOAK_ADMIN_CLIENT_SECRET || "",
-  keycloakAdminUsername: process.env.KEYCLOAK_ADMIN_USERNAME || "admin",
-  keycloakAdminPassword: process.env.KEYCLOAK_ADMIN_PASSWORD || "admin",
+  keycloakAdminUsername: process.env.KEYCLOAK_ADMIN_USERNAME || "",
+  keycloakAdminPassword: process.env.KEYCLOAK_ADMIN_PASSWORD || "",
   // Redis
   redisHost: process.env.REDIS_HOST || "localhost",
   redisPort: parseInt(process.env.REDIS_PORT || "6379"),
