@@ -127,7 +127,7 @@ public class OnboardingStepsTest {
                 if(path.contains("_create")){made[2]=true;return mapper.createObjectNode();}
                 return mapper.readTree(made[2]?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}":"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[]}]}");
             }
-            if(path.contains("_create")) {JsonNode geometry=mapper.valueToTree(body).path("Boundary").path(0).path("geometry");assertEquals("Polygon",geometry.path("type").asText());assertEquals(5,geometry.path("coordinates").path(0).size());made[1]=true;return mapper.createObjectNode();}
+            if(path.contains("_create")) {JsonNode geometry=mapper.valueToTree(body).path("Boundary").path(0).path("geometry");assertEquals("Point",geometry.path("type").asText());assertEquals(mapper.valueToTree(List.of(0,0)),geometry.path("coordinates"));made[1]=true;return mapper.createObjectNode();}
             return mapper.readTree(made[1]?"{\"Boundary\":[{\"code\":\"newtown\"}]}":"{\"Boundary\":null}");
         });
         prerequisites();assertTrue(made[0]);assertTrue(made[1]);assertTrue(made[2]);
@@ -146,6 +146,20 @@ public class OnboardingStepsTest {
                 .thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
         assertEquals("PROVISIONING_UNAVAILABLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
         assertFalse(rows.containsKey("newtown|common-masters.MobileNumberValidation|+91"));assertEquals("STARTED",op.getRecordProgress().get("mobile"));
+    }
+
+    @Test public void foreignOrInactiveBoundaryEntriesDoNotProvePrerequisites() {
+        for(String field:List.of("BoundaryHierarchy","Boundary","TenantBoundary")) {
+            for(String invalid:List.of("foreign","inactive")) {
+                op.getRecordProgress().clear();
+                Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","ADMIN","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
+                when(client.post(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
+                        "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","ADMIN")),
+                        "Boundary",field.equals("Boundary")?List.of(entry):List.of(Map.of("code","newtown")),
+                        "TenantBoundary",field.equals("TenantBoundary")?List.of(entry):List.of(Map.of("boundary",List.of(Map.of("code","newtown","boundaryType","ROOT")))))));
+                assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+            }
+        }
     }
 
 }

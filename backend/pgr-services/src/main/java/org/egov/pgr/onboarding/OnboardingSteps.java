@@ -130,8 +130,7 @@ public class OnboardingSteps {
                 "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
                         Map.of("tenantId", tenant, "hierarchyType", "ADMIN", "boundaryHierarchy", List.of(root)))));
         // Technical root placeholder only; operational geography remains workspace-owned.
-        var geometry = Map.of("type", "Polygon", "coordinates", List.of(List.of(
-                List.of(0,0), List.of(0,1), List.of(1,1), List.of(1,0), List.of(0,0))));
+        var geometry = Map.of("type", "Point", "coordinates", List.of(0,0));
         progress.record("boundary-root", () -> ensureBoundary("/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
                 Map.of(), "Boundary", tenant, "/boundary-service/boundary/_create",
                 Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant, "geometry", geometry)))));
@@ -164,12 +163,12 @@ public class OnboardingSteps {
         if (!entries.isArray()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
         for (JsonNode entry : entries) {
             if (!entry.isObject()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
+            if (!boundaryIdentity(entry, tenant)) continue;
             if ("BoundaryHierarchy".equals(field) && "ADMIN".equals(entry.path("hierarchyType").asText())) return true;
             if ("Boundary".equals(field) && tenant.equals(entry.path("code").asText())) return true;
             if ("TenantBoundary".equals(field)) {
                 // A wrapper exists even when no relationship exists. Only the target
                 // root node proves the HRMS prerequisite, never wrapper cardinality.
-                if (entry.hasNonNull("tenantId") && !tenant.equals(entry.path("tenantId").asText())) continue;
                 JsonNode hierarchy = entry.path("hierarchyType");
                 String hierarchyCode = hierarchy.isObject() ? hierarchy.path("code").asText() : hierarchy.asText();
                 if (!hierarchyCode.isBlank() && !"ADMIN".equals(hierarchyCode)) continue;
@@ -184,8 +183,16 @@ public class OnboardingSteps {
     }
 
     private boolean rootNode(JsonNode node, String tenant) {
-        return node.isObject() && tenant.equals(node.path("code").asText())
-                && "ROOT".equals(node.path("boundaryType").asText()) && node.path("isActive").asBoolean(true);
+        return node.isObject() && boundaryIdentity(node, tenant) && tenant.equals(node.path("code").asText())
+                && "ROOT".equals(node.path("boundaryType").asText());
+    }
+
+    private boolean boundaryIdentity(JsonNode node, String tenant) {
+        // Some scoped search projections omit these fields; explicit foreign or
+        // inactive entries never establish the target tenant's prerequisite.
+        return (!node.hasNonNull("tenantId") || tenant.equals(node.path("tenantId").asText()))
+                && (!node.has("isActive") || node.path("isActive").isBoolean() && node.path("isActive").booleanValue())
+                && (!node.has("active") || node.path("active").isBoolean() && node.path("active").booleanValue());
     }
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {

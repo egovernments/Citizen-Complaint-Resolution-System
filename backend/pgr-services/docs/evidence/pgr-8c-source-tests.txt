@@ -20,7 +20,7 @@ Failing-before evidence:
 8c-email-before.log: 2 tests, 2 failures at retry snapshot assertions. Initial verified HTTP introspection to signup and HRMS assertions passed before the retry assertion; initial live email loss is NOT reproduced.
 
 Passing-after cases:
-- OnboardingStepsTest: canonical IN/KE fallback target only, preserve configured rules including ET, malformed/ambiguous configured rules fail closed, transport failure never falls back, unsupported country explicit; null hierarchy/entity responses and empty TenantBoundary wrapper create root with valid Polygon geometry.
+- OnboardingStepsTest: canonical IN/KE fallback target only, preserve configured rules including ET, malformed/ambiguous configured rules fail closed, transport failure never falls back, unsupported country explicit; null hierarchy/entity responses and empty TenantBoundary wrapper create root with valid Point geometry.
 - OnboardingPostgresTest: durable due retry, 1s exponential cap60s, no-progress cap12 stays RETRYABLE_FAILED without FAILED publication, manual retry resets budget and preserves operation/restart; only new DONE or newly completed step resets; concurrent automatic claims have one winner and stale lease cannot checkpoint.
 - delayedMdmsProjectionAutomaticallyCompletesBeyondOneRetryBudget: production six-step runner/steps, PostgreSQL and small mocked seed/DIGIT projections; >12 total projection failures automatically resume to SUCCEEDED/ACTIVE without _retry, same founder UUID/restart. Test advances only next_retry_at to simulate time; exact due-time behavior is separately tested.
 - trustedVerifiedEmailFlowsThroughHttpControllerDatabaseAndHrms and retryRefreshesTrustedFounderEmailBeforeHrmsWithoutReplacingIdentity: real HTTP IdentitySessionClient and provisioning client, controller, transactional service and PostgreSQL; local HTTP identity/HRMS fixtures. Trusted current email reaches HRMS; client email claims ignored; unverified/blank email omitted; retries refresh trusted snapshot and preserve operation, restart and UUID.
@@ -36,3 +36,13 @@ Local logs SHA256:
 8c-steps-after.log: 39d8379348d8979039373859622f7ad14e5b5735ed70bc8b368d199a1ee3e3b0
 8c-steps-before.log: 857c62cee3204fd44e5c64fb91a46937932af5c6316d96e056ab529a937b36e8
 8c-targeted-after.log: fee7e8c8fc3534aac3ccb007cb8e77ca3cff7e8e2525105a818a70454fd37cf0
+
+Owner-review follow-up (after PR75 initial opening):
+Command: same JDK17/PostgreSQL Maven invocation above with -Dtest=OnboardingStepsTest,OnboardingWorkerServiceTest,WorkspacePostgresTest
+OnboardingStepsTest: tests=14, failures=0, errors=0, skipped=0
+OnboardingWorkerServiceTest: tests=9, failures=0, errors=0, skipped=0
+WorkspacePostgresTest: tests=12, failures=0, errors=0, skipped=0
+- Actual application.properties default now includes COUNTRY_NOT_SUPPORTED; resolved-property worker test proves draft reopening.
+- Boundary geometry uses the established MCP Point [0,0] placeholder. Explicit foreign/inactive hierarchy/entity/wrapper entries never establish prerequisites; scoped projections may omit tenant/active fields. New six-combination regression passes.
+- Production Flyway parser test expects both normalization and retry migrations, preserving collision and rollback coverage. Workspace implementation unchanged.
+Log SHA256 8c-review-after.log: 084bbce3bc2e4afeecd5af93e758f2d3019b2670582a8cc1a4542ae9fb24074e
