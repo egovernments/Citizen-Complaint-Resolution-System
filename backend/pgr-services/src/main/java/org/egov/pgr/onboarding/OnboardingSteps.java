@@ -135,7 +135,7 @@ public class OnboardingSteps {
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
         String tenant = signup.getRequestedTenantId(), code = "FOUNDER_" + signup.getId().toString().replace("-", "");
-        JsonNode employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code, Map.of()).path("Employees");
+        JsonNode employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
         if (!employees.isArray()) throw new OnboardingFailure("HRMS_INVALID_RESPONSE", true);
         if (employees.size() > 1) throw new OnboardingFailure("FOUNDER_AMBIGUOUS", false);
         if (employees.isEmpty()) {
@@ -172,7 +172,7 @@ public class OnboardingSteps {
                 throw new OnboardingFailure("TENANT_ADMIN_ACCOUNT_REJECTED", false);
             }
             // HRMS/egov-user persist asynchronously. A later claim searches again before create.
-            employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code, Map.of()).path("Employees");
+            employees = client.post("hrms", "/egov-hrms/employees/_search?tenantId=" + tenant + "&codes=" + code + "&offset=0&limit=2", Map.of()).path("Employees");
         }
         String uuid = employees.path(0).path("user").path("uuid").asText();
         if (uuid.isBlank()) throw new OnboardingFailure("FOUNDER_NOT_VISIBLE", true);

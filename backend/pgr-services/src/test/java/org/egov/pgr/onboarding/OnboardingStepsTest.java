@@ -37,7 +37,7 @@ public class OnboardingStepsTest {
                 Map<String,Object> row=(Map<String,Object>)body.get("Mdms");String key=row.get("tenantId")+"|"+row.get("schemaCode")+"|"+row.get("uniqueIdentifier");rows.put(key,mapper.valueToTree(row));writes.add("record:"+row.get("schemaCode"));return mapper.createObjectNode();
             }
             if(service.equals("hrms")) {
-                if(path.contains("_search"))return mapper.valueToTree(Map.of("Employees",employees));
+                if(path.contains("_search")) { assertTrue("stock HRMS requires explicit offset",path.contains("&offset=0")); assertTrue("founder uniqueness search needs two results",path.contains("&limit=2")); return mapper.valueToTree(Map.of("Employees",employees)); }
                 assertTrue("platform prerequisites before HRMS",rows.containsKey("newtown|common-masters.Department|ONBOARDING_ADMIN"));
                 if(createFailure!=null)throw createFailure;
                 Map<String,Object> employee=((List<Map<String,Object>>)body.get("Employees")).get(0);createdUser=(Map<String,Object>)employee.get("user");
