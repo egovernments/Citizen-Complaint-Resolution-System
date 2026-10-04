@@ -1,0 +1,2 @@
+tests/dashboard-performance/dashboard-harness.ts(266,27): error TS7053: Element implicitly has an 'any' type because expression of type '"content-length"' can't be used to index type '{ [key: string]: string; } | {}'.
+  Property 'content-length' does not exist on type '{ [key: string]: string; } | {}'.

@@ -1,0 +1,14 @@
+{
+  "baselineRevision": "171e5fe1a",
+  "discoveryOnly": true,
+  "baselinePassRate": null,
+  "currentPassRate": null,
+  "baseline": {
+    "cases": 289,
+    "files": 90
+  },
+  "current": {
+    "cases": 289,
+    "files": 90
+  }
+}

@@ -1,0 +1,2153 @@
+{
+  "baselineRevision": "171e5fe1a",
+  "discoveryOnly": true,
+  "baselinePassRate": null,
+  "currentPassRate": null,
+  "baseline": {
+    "cases": 289,
+    "files": 90
+  },
+  "current": {
+    "cases": 289,
+    "files": 90
+  },
+  "files": [
+    {
+      "file": "admin/boundary-create.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "creates a root and child with hierarchy-derived relationship fields",
+          "after": "creates a root and child with hierarchy-derived relationship fields"
+        }
+      ]
+    },
+    {
+      "file": "admin/boundary-hierarchies.spec.ts",
+      "baselineCount": 6,
+      "currentCount": 6,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. list renders with hierarchy type + levels columns",
+          "after": "1. list renders with hierarchy type + levels columns"
+        },
+        {
+          "before": "2. UI create happy path \u2014 chain of 2 levels shows up in list + API",
+          "after": "2. UI create happy path \u2014 chain of 2 levels shows up in list + API"
+        },
+        {
+          "before": "3. show page renders levels in chain order",
+          "after": "3. show page renders levels in chain order"
+        },
+        {
+          "before": "4. duplicate hierarchyType is rejected with DUPLICATE_RECORD",
+          "after": "4. duplicate hierarchyType is rejected with DUPLICATE_RECORD"
+        },
+        {
+          "before": "5. validation \u2014 empty hierarchyType blocks client-side submit",
+          "after": "5. validation \u2014 empty hierarchyType blocks client-side submit"
+        },
+        {
+          "before": "6. API response shape \u2014 BoundaryHierarchy comes back as an array",
+          "after": "6. API response shape \u2014 BoundaryHierarchy comes back as an array"
+        }
+      ]
+    },
+    {
+      "file": "admin/complaint-form-validators-2026-05-31.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "users + edit + create + validators bidirectional",
+          "after": "users + edit + create + validators bidirectional"
+        }
+      ]
+    },
+    {
+      "file": "admin/complaint-types.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. list renders with Service Code / Name / Department / SLA / Status columns",
+          "after": "1. list renders with Service Code / Name / Department / SLA / Status columns"
+        },
+        {
+          "before": "2. create \u2192 edit \u2192 deactivate round-trip; visible at city tenant",
+          "after": "2. create \u2192 edit \u2192 deactivate round-trip; visible at city tenant"
+        },
+        {
+          "before": "4. department reference filter narrows the list",
+          "after": "4. department reference filter narrows the list"
+        },
+        {
+          "before": "5. tenant parity \u2014 api create at root is visible at city tenant",
+          "after": "5. tenant parity \u2014 api create at root is visible at city tenant"
+        }
+      ]
+    },
+    {
+      "file": "admin/complaints.spec.ts",
+      "baselineCount": 14,
+      "currentCount": 14,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. file complaint \u2014 citizen, locality, required landmark",
+          "after": "1. file complaint \u2014 citizen, locality, required landmark"
+        },
+        {
+          "before": "2. edit merges description + workflow ASSIGN in one round-trip",
+          "after": "2. edit merges description + workflow ASSIGN in one round-trip"
+        },
+        {
+          "before": "3. workflow dropdown labels are human-readable, not UUIDs",
+          "after": "3. workflow dropdown labels are human-readable, not UUIDs"
+        },
+        {
+          "before": "4. source select offers only Web/Mobile/WhatsApp",
+          "after": "4. source select offers only Web/Mobile/WhatsApp"
+        },
+        {
+          "before": "5. list footer count matches /pgr-services/v2/request/_count",
+          "after": "5. list footer count matches /pgr-services/v2/request/_count"
+        },
+        {
+          "before": "6. status filter fires as an XHR query param",
+          "after": "6. status filter fires as an XHR query param"
+        },
+        {
+          "before": "6b. From-date filter fires as a fromDate XHR query param",
+          "after": "6b. From-date filter fires as a fromDate XHR query param"
+        },
+        {
+          "before": "7. department filter narrows visible rows",
+          "after": "7. department filter narrows visible rows"
+        },
+        {
+          "before": "8. show page renders address extras and a working geo link",
+          "after": "8. show page renders address extras and a working geo link"
+        },
+        {
+          "before": "9. mobile-only citizen heuristic shows suffix on Show page",
+          "after": "9. mobile-only citizen heuristic shows suffix on Show page"
+        },
+        {
+          "before": "10. real pagination \u2014 offset-based _search fires with page 2 nav, not client-slice of first 100",
+          "after": "10. real pagination \u2014 offset-based _search fires with page 2 nav, not client-slice of first 100"
+        },
+        {
+          "before": "11. department column renders the readable department name, not a raw code",
+          "after": "11. department column renders the readable department name, not a raw code"
+        },
+        {
+          "before": "12. edit saves description + workflow in a single _update round-trip",
+          "after": "12. edit saves description + workflow in a single _update round-trip"
+        },
+        {
+          "before": "13. PENDINGFORASSIGNMENT filter returns the expected queue size",
+          "after": "13. PENDINGFORASSIGNMENT filter returns the expected queue size"
+        }
+      ]
+    },
+    {
+      "file": "admin/configurator-mdms-fixes-2026-04-29.spec.ts",
+      "baselineCount": 5,
+      "currentCount": 5,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "Department create REJECTS the legacy `description` field",
+          "after": "Department create REJECTS the legacy `description` field"
+        },
+        {
+          "before": "Department create with only schema-allowed fields SUCCEEDS",
+          "after": "Department create with only schema-allowed fields SUCCEEDS"
+        },
+        {
+          "before": "Department update with leaked `_isActive` / `_uniqueIdentifier` / `id` is REJECTED by MDMS",
+          "after": "Department update with leaked `_isActive` / `_uniqueIdentifier` / `id` is REJECTED by MDMS"
+        },
+        {
+          "before": "ComplaintHierarchy schema declares keywords / order / parentCode (so ComplaintTypeCreate defaults are safe)",
+          "after": "ComplaintHierarchy schema declares keywords / order / parentCode (so ComplaintTypeCreate defaults are safe)"
+        },
+        {
+          "before": "mdmsCreate REJECTS the same `_isActive` / `id` leak",
+          "after": "mdmsCreate REJECTS the same `_isActive` / `id` leak"
+        }
+      ]
+    },
+    {
+      "file": "admin/departments.spec.ts",
+      "baselineCount": 8,
+      "currentCount": 8,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. list renders with header columns and filters narrow to the expected rows",
+          "after": "1. list renders with header columns and filters narrow to the expected rows"
+        },
+        {
+          "before": "2. single create \u2192 edit \u2192 deactivate round-trip",
+          "after": "2. single create \u2192 edit \u2192 deactivate round-trip"
+        },
+        {
+          "before": "3. bulk import \u2014 happy path creates 5 rows",
+          "after": "3. bulk import \u2014 happy path creates 5 rows"
+        },
+        {
+          "before": "4. bulk import \u2014 duplicate code rejected client-side",
+          "after": "4. bulk import \u2014 duplicate code rejected client-side"
+        },
+        {
+          "before": "5a. Show page renders \"Related\" reverse references (complaint-types + employees)",
+          "after": "5a. Show page renders \"Related\" reverse references (complaint-types + employees)"
+        },
+        {
+          "before": "5b. deactivation guard probes designation + employee APIs",
+          "after": "5b. deactivation guard probes designation + employee APIs"
+        },
+        {
+          "before": "5c. API update round-trip preserves auditDetails on a department",
+          "after": "5c. API update round-trip preserves auditDetails on a department"
+        },
+        {
+          "before": "6. bulk export round-trip \u2014 downloaded xlsx parses",
+          "after": "6. bulk export round-trip \u2014 downloaded xlsx parses"
+        }
+      ]
+    },
+    {
+      "file": "admin/designations.spec.ts",
+      "baselineCount": 9,
+      "currentCount": 9,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. create with multi-department persists as a string[]",
+          "after": "1. create with multi-department persists as a string[]"
+        },
+        {
+          "before": "2. edit round-trip preserves array shape (add then remove)",
+          "after": "2. edit round-trip preserves array shape (add then remove)"
+        },
+        {
+          "before": "4. department filter narrows list to designations referencing that code",
+          "after": "4. department filter narrows list to designations referencing that code"
+        },
+        {
+          "before": "5. deactivation guard counts dependent records",
+          "after": "5. deactivation guard counts dependent records"
+        },
+        {
+          "before": "5a. department chip input dropdown loads options from mdms",
+          "after": "5a. department chip input dropdown loads options from mdms"
+        },
+        {
+          "before": "5b. show page renders department chips for a multi-dept designation",
+          "after": "5b. show page renders department chips for a multi-dept designation"
+        },
+        {
+          "before": "5c. API soft-delete (isActive=false) removes row from active list",
+          "after": "5c. API soft-delete (isActive=false) removes row from active list"
+        },
+        {
+          "before": "5d. HRMS probe returns assignments.designation for guard counter",
+          "after": "5d. HRMS probe returns assignments.designation for guard counter"
+        },
+        {
+          "before": "6. bulk import accepts comma-list department values as array",
+          "after": "6. bulk import accepts comma-list department values as array"
+        }
+      ]
+    },
+    {
+      "file": "admin/employee-create-tenant-459.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "fills the create form and submits \u2014 tenant correct + form clears",
+          "after": "fills the create form and submits \u2014 tenant correct + form clears"
+        }
+      ]
+    },
+    {
+      "file": "admin/employee-mobile-validator-447.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "valid mobile clears aria-invalid",
+          "after": "valid mobile clears aria-invalid"
+        },
+        {
+          "before": "invalid mobile surfaces help text and aria-invalid",
+          "after": "invalid mobile surfaces help text and aria-invalid"
+        },
+        {
+          "before": "second valid mobile candidate clears aria-invalid \u2014 #674 fallback",
+          "after": "second valid mobile candidate clears aria-invalid \u2014 #674 fallback"
+        }
+      ]
+    },
+    {
+      "file": "admin/employees.spec.ts",
+      "baselineCount": 8,
+      "currentCount": 8,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. list renders; search narrows to the matching row; Status filter partitions the list",
+          "after": "1. list renders; search narrows to the matching row; Status filter partitions the list"
+        },
+        {
+          "before": "2. single create \u2014 happy path derives code + username, employee lands",
+          "after": "2. single create \u2014 happy path derives code + username, employee lands"
+        },
+        {
+          "before": "3. too-short mobile shows inline validation error",
+          "after": "3. too-short mobile shows inline validation error"
+        },
+        {
+          "before": "4. edit \u2014 DOB round-trips as YYYY-MM-DD (not epoch-ms)",
+          "after": "4. edit \u2014 DOB round-trips as YYYY-MM-DD (not epoch-ms)"
+        },
+        {
+          "before": "4a. edit \u2014 add GRO role round-trips without JsonMappingException (CCRS#439)",
+          "after": "4a. edit \u2014 add GRO role round-trips without JsonMappingException (CCRS#439)"
+        },
+        {
+          "before": "5. deactivate \u2014 INACTIVE + deactivation reason applied",
+          "after": "5. deactivate \u2014 INACTIVE + deactivation reason applied"
+        },
+        {
+          "before": "6. reset password \u2014 collapsed by default, expand rotates token",
+          "after": "6. reset password \u2014 collapsed by default, expand rotates token"
+        },
+        {
+          "before": "7. bulk import \u2014 3 valid + 2 invalid rows, create 3 lands",
+          "after": "7. bulk import \u2014 3 valid + 2 invalid rows, create 3 lands"
+        }
+      ]
+    },
+    {
+      "file": "admin/hardcoding.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. login tenant placeholder uses configured tenant, not \"pg\"",
+          "after": "1. login tenant placeholder uses configured tenant, not \"pg\""
+        },
+        {
+          "before": "2. employee create surface addresses only the configured tenant",
+          "after": "2. employee create surface addresses only the configured tenant"
+        },
+        {
+          "before": "3. complaint create surface addresses only the configured tenant",
+          "after": "3. complaint create surface addresses only the configured tenant"
+        },
+        {
+          "before": "4. localization never falls back to a foreign tenant",
+          "after": "4. localization never falls back to a foreign tenant"
+        }
+      ]
+    },
+    {
+      "file": "admin/localization-modules.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "department localizations are in rainmaker-common, not rainmaker-common-masters",
+          "after": "department localizations are in rainmaker-common, not rainmaker-common-masters"
+        },
+        {
+          "before": "designation localizations are in rainmaker-common, not rainmaker-common-masters",
+          "after": "designation localizations are in rainmaker-common, not rainmaker-common-masters"
+        },
+        {
+          "before": "rainmaker-common-masters module has no localization data at all",
+          "after": "rainmaker-common-masters module has no localization data at all"
+        }
+      ]
+    },
+    {
+      "file": "admin/localization.spec.ts",
+      "baselineCount": 7,
+      "currentCount": 7,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. tenant parity \u2014 root and city tenants serve a coherent rainmaker-common en_IN bundle",
+          "after": "1. tenant parity \u2014 root and city tenants serve a coherent rainmaker-common en_IN bundle"
+        },
+        {
+          "before": "2. upsert + cache-bust round-trip \u2014 value lands after bust, not before",
+          "after": "2. upsert + cache-bust round-trip \u2014 value lands after bust, not before"
+        },
+        {
+          "before": "3. _upsert rejects same code on different modules in one batch (DUPLICATE_RECORDS)",
+          "after": "3. _upsert rejects same code on different modules in one batch (DUPLICATE_RECORDS)"
+        },
+        {
+          "before": "4. list renders with a usable layout and shows data",
+          "after": "4. list renders with a usable layout and shows data"
+        },
+        {
+          "before": "5. inline edit \u2014 UI save round-trips via localizationUpsert + cache-bust",
+          "after": "5. inline edit \u2014 UI save round-trips via localizationUpsert + cache-bust"
+        },
+        {
+          "before": "6. missing locale translation renders em-dash placeholder",
+          "after": "6. missing locale translation renders em-dash placeholder"
+        },
+        {
+          "before": "7. module filter narrows rows to the selected module",
+          "after": "7. module filter narrows rows to the selected module"
+        }
+      ]
+    },
+    {
+      "file": "admin/login.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "username, password, tenant inputs render empty on initial load",
+          "after": "fresh configurator contains no credential or tenant inputs"
+        },
+        {
+          "before": "form + password input carry autocomplete-off attributes",
+          "after": "hosted credential inputs start empty and declare password autocomplete"
+        },
+        {
+          "before": "Log in starts the password sign-in through identity-bff",
+          "after": "Log in starts the password sign-in through identity-bff"
+        }
+      ]
+    },
+    {
+      "file": "admin/pgr-dashboard.spec.ts",
+      "baselineCount": 8,
+      "currentCount": 8,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "route and navigation follow the baked feature flag",
+          "after": "route and navigation follow the baked feature flag"
+        },
+        {
+          "before": "dashboard page loads with heading",
+          "after": "dashboard page loads with heading"
+        },
+        {
+          "before": "overview card shows 3 KPI metrics",
+          "after": "overview card shows 3 KPI metrics"
+        },
+        {
+          "before": "all chart canvases render",
+          "after": "all chart canvases render"
+        },
+        {
+          "before": "chart section titles are visible",
+          "after": "chart section titles are visible"
+        },
+        {
+          "before": "sidebar has PGR Dashboard nav link",
+          "after": "sidebar has PGR Dashboard nav link"
+        },
+        {
+          "before": "KPI values show numbers",
+          "after": "KPI values show numbers"
+        },
+        {
+          "before": "breakdown table with 4 tabs",
+          "after": "breakdown table with 4 tabs"
+        }
+      ]
+    },
+    {
+      "file": "admin/recently-shipped-fixes.spec.ts",
+      "baselineCount": 10,
+      "currentCount": 10,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "API: active=true & isActive=true returns the tenant employee list",
+          "after": "API: active=true & isActive=true returns the tenant employee list"
+        },
+        {
+          "before": "API: workflow business service exposes the 11 PGR states (drives statusMap)",
+          "after": "API: workflow business service exposes the 11 PGR states (drives statusMap)"
+        },
+        {
+          "before": "API: pgr-services SortBy accepts `sla` but rejects unknown literals like `serviceSla`",
+          "after": "API: pgr-services SortBy accepts `sla` but rejects unknown literals like `serviceSla`"
+        },
+        {
+          "before": "Bundle: open-states constant is present in the served JS",
+          "after": "Bundle: open-states constant is present in the served JS"
+        },
+        {
+          "before": "API: rainmaker-pgr en_IN has sentence-cased labels for ESCALATE/ASSIGN/etc",
+          "after": "API: rainmaker-pgr en_IN has sentence-cased labels for ESCALATE/ASSIGN/etc"
+        },
+        {
+          "before": "API: ES_COMMON_TAKE_ACTION resolves to \"Take Action\"",
+          "after": "API: ES_COMMON_TAKE_ACTION resolves to \"Take Action\""
+        },
+        {
+          "before": "API: every COMPLAINT_HIERARCHY.<categoryCode> row is labelled in every advertised locale",
+          "after": "API: every COMPLAINT_HIERARCHY.<categoryCode> row is labelled in every advertised locale"
+        },
+        {
+          "before": "API: every locale this deployment advertises resolves rainmaker-common rows",
+          "after": "API: every locale this deployment advertises resolves rainmaker-common rows"
+        },
+        {
+          "before": "API: the region-appended mangle of each advertised locale is empty \u2014 proves the dataset itself is clean",
+          "after": "API: the region-appended mangle of each advertised locale is empty \u2014 proves the dataset itself is clean"
+        },
+        {
+          "before": "UI: no UndoToast container is mounted after navigating into the configurator",
+          "after": "UI: no UndoToast container is mounted after navigating into the configurator"
+        }
+      ]
+    },
+    {
+      "file": "admin/tenants.spec.ts",
+      "baselineCount": 6,
+      "currentCount": 6,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. list renders expected columns and at least one row",
+          "after": "1. list renders expected columns and at least one row"
+        },
+        {
+          "before": "2. search filter narrows to a known tenant code",
+          "after": "2. search filter narrows to a known tenant code"
+        },
+        {
+          "before": "3. show page renders Code / Name / City / District for a known tenant",
+          "after": "3. show page renders Code / Name / City / District for a known tenant"
+        },
+        {
+          "before": "4. API shape \u2014 search returns records with code / name / city",
+          "after": "4. API shape \u2014 search returns records with code / name / city"
+        },
+        {
+          "before": "5. QUIRK \u2014 city tenant object may lack districtName, list tolerates it",
+          "after": "5. QUIRK \u2014 city tenant object may lack districtName, list tolerates it"
+        },
+        {
+          "before": "6. create via API \u2014 new tenant row shows up in the UI list",
+          "after": "6. create via API \u2014 new tenant row shows up in the UI list"
+        }
+      ]
+    },
+    {
+      "file": "admin/theme-applied.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "MDMS ThemeConfig is fetched and applied as CSS variables",
+          "after": "MDMS ThemeConfig is fetched and applied as CSS variables"
+        }
+      ]
+    },
+    {
+      "file": "admin/theme-editor.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "API smoke \u2014 ThemeConfig record exists on the expected tenant",
+          "after": "API smoke \u2014 ThemeConfig record exists on the expected tenant"
+        },
+        {
+          "before": "edit page renders the flagship editor (tabs + preview)",
+          "after": "edit page renders the flagship editor (tabs + preview)"
+        },
+        {
+          "before": "editing a brand token updates the preview live",
+          "after": "editing a brand token updates the preview live"
+        }
+      ]
+    },
+    {
+      "file": "admin/users.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1. list renders with profile columns + at least one citizen row",
+          "after": "1. list renders with profile columns + at least one citizen row"
+        },
+        {
+          "before": "2. create \u2014 citizen user lands and is retrievable via API",
+          "after": "2. create \u2014 citizen user lands and is retrievable via API"
+        },
+        {
+          "before": "3. edit \u2014 username disabled, name updates round-trip",
+          "after": "3. edit \u2014 username disabled, name updates round-trip"
+        },
+        {
+          "before": "4. show \u2014 profile fields render for a freshly seeded user",
+          "after": "4. show \u2014 profile fields render for a freshly seeded user"
+        }
+      ]
+    },
+    {
+      "file": "admin/workflow-action-select-521.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/manage/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME",
+          "after": "Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME"
+        }
+      ]
+    },
+    {
+      "file": "api/api-helpers.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "mdms search returns Department schema records",
+          "after": "mdms search returns Department schema records"
+        },
+        {
+          "before": "pgr search round-trips a known CLOSEDAFTERRESOLUTION complaint",
+          "after": "pgr search round-trips a known CLOSEDAFTERRESOLUTION complaint"
+        },
+        {
+          "before": "hrms employee search returns >0 LMEs",
+          "after": "hrms employee search returns >0 LMEs"
+        },
+        {
+          "before": "PGR business service is present",
+          "after": "PGR business service is present"
+        }
+      ]
+    },
+    {
+      "file": "api/boundary-jurisdiction-496.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "boundary-relationships API returns only the ward subtree",
+          "after": "boundary-relationships API returns only the ward subtree"
+        }
+      ]
+    },
+    {
+      "file": "api/enc-key-drift-622.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "ADMIN can oauth/token (post-bootstrap enc-key guard)",
+          "after": "ADMIN can oauth/token (post-bootstrap enc-key guard)"
+        },
+        {
+          "before": "a pre-existing seeded employee still authenticates and still decrypts",
+          "after": "a pre-existing seeded employee still authenticates and still decrypts"
+        }
+      ]
+    },
+    {
+      "file": "api/filestore-fixes-2026-04-29.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "a valid 1x1 JPEG uploads successfully \u2014 CCRS#474",
+          "after": "a valid 1x1 JPEG uploads successfully \u2014 CCRS#474"
+        },
+        {
+          "before": "a corrupt JPEG is rejected with a clean error, not a crash",
+          "after": "a corrupt JPEG is rejected with a clean error, not a crash"
+        },
+        {
+          "before": "Larger valid JPEG should succeed regardless of fix state (control)",
+          "after": "Larger valid JPEG should succeed regardless of fix state (control)"
+        }
+      ]
+    },
+    {
+      "file": "api/hrms-proxy.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "HRMS _count returns employee count without offset/limit in URL",
+          "after": "HRMS _count returns employee count without offset/limit in URL"
+        },
+        {
+          "before": "HRMS _search returns employee data without offset/limit in URL",
+          "after": "HRMS _search returns employee data without offset/limit in URL"
+        },
+        {
+          "before": "HRMS _search response contains employee records",
+          "after": "HRMS _search response contains employee records"
+        },
+        {
+          "before": "HRMS _search with explicit offset/limit preserves them",
+          "after": "HRMS _search with explicit offset/limit preserves them"
+        }
+      ]
+    },
+    {
+      "file": "api/pgr-escalation.spec.ts",
+      "baselineCount": 14,
+      "currentCount": 14,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1 \u2014 acquire admin token",
+          "after": "1 \u2014 acquire admin token"
+        },
+        {
+          "before": "2 \u2014 ensure PGR workflow uses only ESCALATE self-loops",
+          "after": "2 \u2014 ensure PGR workflow uses only ESCALATE self-loops"
+        },
+        {
+          "before": "3 \u2014 ensure 2-level employee hierarchy (reportingTo) in HRMS",
+          "after": "3 \u2014 ensure 2-level employee hierarchy (reportingTo) in HRMS"
+        },
+        {
+          "before": "4 \u2014 citizen creates complaint",
+          "after": "4 \u2014 citizen creates complaint"
+        },
+        {
+          "before": "5 \u2014 admin assigns complaint to specific employee",
+          "after": "5 \u2014 admin assigns complaint to specific employee"
+        },
+        {
+          "before": "6 \u2014 manual ESCALATE level 0\u21921",
+          "after": "6 \u2014 manual ESCALATE level 0\u21921"
+        },
+        {
+          "before": "7 \u2014 verify escalation: workflow action + PGR assignee",
+          "after": "7 \u2014 verify escalation: workflow action + PGR assignee"
+        },
+        {
+          "before": "8 \u2014 second ESCALATE level 1\u21922 (skip if no second-level supervisor)",
+          "after": "8 \u2014 second ESCALATE level 1\u21922 (skip if no second-level supervisor)"
+        },
+        {
+          "before": "9 \u2014 resolve the escalated complaint",
+          "after": "9 \u2014 resolve the escalated complaint"
+        },
+        {
+          "before": "10 \u2014 citizen creates an unassigned PENDINGFORASSIGNMENT complaint",
+          "after": "10 \u2014 citizen creates an unassigned PENDINGFORASSIGNMENT complaint"
+        },
+        {
+          "before": "11 \u2014 ESCALATE rejects an unassigned complaint",
+          "after": "11 \u2014 ESCALATE rejects an unassigned complaint"
+        },
+        {
+          "before": "12 \u2014 cleanup: assign and resolve the unassigned-case complaint",
+          "after": "12 \u2014 cleanup: assign and resolve the unassigned-case complaint"
+        },
+        {
+          "before": "13 \u2014 auto-escalation: SLA breach triggers scheduler",
+          "after": "13 \u2014 auto-escalation: SLA breach triggers scheduler"
+        },
+        {
+          "before": "14 \u2014 audit: PGR workflow config matches the shipped seed",
+          "after": "14 \u2014 audit: PGR workflow config matches the shipped seed"
+        }
+      ]
+    },
+    {
+      "file": "api/pgr-lifecycle.spec.ts",
+      "baselineCount": 5,
+      "currentCount": 5,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1 \u2014 acquire admin and citizen tokens",
+          "after": "1 \u2014 acquire admin and citizen tokens"
+        },
+        {
+          "before": "2 \u2014 citizen creates complaint",
+          "after": "2 \u2014 citizen creates complaint"
+        },
+        {
+          "before": "3 \u2014 admin assigns complaint",
+          "after": "3 \u2014 admin assigns complaint"
+        },
+        {
+          "before": "4 \u2014 admin resolves complaint",
+          "after": "4 \u2014 admin resolves complaint"
+        },
+        {
+          "before": "5 \u2014 citizen verifies complaint is resolved",
+          "after": "5 \u2014 citizen verifies complaint is resolved"
+        }
+      ]
+    },
+    {
+      "file": "api/proxy-coverage.spec.ts",
+      "baselineCount": 7,
+      "currentCount": 7,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "all employee flow APIs return valid responses through proxy",
+          "after": "all employee flow APIs return valid responses through proxy"
+        },
+        {
+          "before": "all API calls carry JWT through proxy (no 401s after login)",
+          "after": "all API calls carry JWT through proxy (no 401s after login)"
+        },
+        {
+          "before": "MDMS, localization, and access APIs work with JWT auth",
+          "after": "MDMS, localization, and access APIs work with JWT auth"
+        },
+        {
+          "before": "KC OIDC endpoints are accessible (not blocked by proxy)",
+          "after": "KC OIDC endpoints are accessible (not blocked by proxy)"
+        },
+        {
+          "before": "citizen flow APIs work without authentication",
+          "after": "citizen flow APIs work without authentication"
+        },
+        {
+          "before": "KC client has deployment domain in redirect URIs",
+          "after": "KC client has deployment domain in redirect URIs"
+        },
+        {
+          "before": "KC CORS allows deployment domain",
+          "after": "KC CORS allows deployment domain"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-help-and-faq.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "FAQ page does not render the error fallback",
+          "after": "FAQ page does not render the error fallback"
+        },
+        {
+          "before": "How-it-works page does not render the error fallback",
+          "after": "How-it-works page does not render the error fallback"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-home-page.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "/citizen/ redirects to /citizen/all-services",
+          "after": "/citizen/ redirects to /citizen/all-services"
+        },
+        {
+          "before": "/all-services renders CMS title + File a Complaint + My Complaints links",
+          "after": "/all-services renders CMS title + File a Complaint + My Complaints links"
+        },
+        {
+          "before": "/pgr-home renders the PGR module home with action links",
+          "after": "/pgr-home renders the PGR module home with action links"
+        },
+        {
+          "before": "header language pill renders the current locale",
+          "after": "header language pill renders the current locale"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-landing-dispatch.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "smoke: lands on a usable citizen page",
+          "after": "smoke: lands on a usable citizen page"
+        },
+        {
+          "before": "dispatch: lands on the branch globalConfigs selects, and that branch works",
+          "after": "dispatch: lands on the branch globalConfigs selects, and that branch works"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-logout.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "citizen logout redirects to login page",
+          "after": "citizen logout redirects to login page"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-otp-login.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "login page renders with mobile input",
+          "after": "login page renders with mobile input"
+        },
+        {
+          "before": "citizen can log in with OTP and reach home page",
+          "after": "citizen can log in with OTP and reach home page"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-profile-page.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "only Name + Gender + Email + photo render (no password/language/mobile/notifications)",
+          "after": "only Name + Gender + Email + photo render (no password/language/mobile/notifications)"
+        }
+      ]
+    },
+    {
+      "file": "citizen/citizen-registration.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "fresh phone \u2192 OTP \u2192 name+email \u2192 /all-services",
+          "after": "fresh phone \u2192 OTP \u2192 default national-number name \u2192 citizen home"
+        }
+      ]
+    },
+    {
+      "file": "citizen/complaint-attachment.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "upload preview renders, then detail page surfaces the same image",
+          "after": "upload preview renders, then detail page surfaces the same image"
+        }
+      ]
+    },
+    {
+      "file": "citizen/complaint-create-payload-contract.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "digit-ui bundle declares AddressOne + AddressTwo populators (PR-C re-enabled)",
+          "after": "digit-ui bundle declares AddressOne + AddressTwo populators (PR-C re-enabled)"
+        },
+        {
+          "before": "the deployment postal-code pattern accepts this tenant's valid sample and rejects malformed input",
+          "after": "the deployment postal-code pattern accepts this tenant's valid sample and rejects malformed input"
+        },
+        {
+          "before": "postal validation is driven by the tenant's own configured rule, not the legacy Indian PIN pattern",
+          "after": "postal validation is driven by the tenant's own configured rule, not the legacy Indian PIN pattern"
+        },
+        {
+          "before": "the discovered postal pattern is self-consistent with the deployment's own globalConfigs",
+          "after": "the discovered postal pattern is self-consistent with the deployment's own globalConfigs"
+        }
+      ]
+    },
+    {
+      "file": "citizen/complaint-detail-page.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "complaint details page loads without crashing for a freshly-filed complaint",
+          "after": "complaint details page loads without crashing for a freshly-filed complaint"
+        },
+        {
+          "before": "complaint location section is hidden when absent and supports valid zero-axis coordinates (#1750)",
+          "after": "complaint location section is hidden when absent and supports valid zero-axis coordinates (#1750)"
+        }
+      ]
+    },
+    {
+      "file": "citizen/complaint-timeline-and-rating-display.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "PGR _search returns service.rating + workflow.action=RATE for the rated complaint",
+          "after": "PGR _search returns service.rating + workflow.action=RATE for the rated complaint"
+        },
+        {
+          "before": "Localization keys for the timeline rendering are seeded across the deployment locales (rainmaker-common + rainmaker-pgr)",
+          "after": "Localization keys for the timeline rendering are seeded across the deployment locales (rainmaker-common + rainmaker-pgr)"
+        }
+      ]
+    },
+    {
+      "file": "citizen/complaint-type-dropdown-labels.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "complaint type dropdown shows human-readable translated names",
+          "after": "complaint type dropdown shows human-readable translated names"
+        }
+      ]
+    },
+    {
+      "file": "citizen/file-complaint-wizard.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "walks 6 steps + submits + lands on /pgr/response with PGR ID",
+          "after": "walks 6 steps + submits + lands on /pgr/response with PGR ID"
+        },
+        {
+          "before": "no raw localization keys visible at any wizard step",
+          "after": "no raw localization keys visible at any wizard step"
+        }
+      ]
+    },
+    {
+      "file": "citizen/full-complaint-lifecycle-ui.spec.ts",
+      "baselineCount": 6,
+      "currentCount": 6,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1 \u2014 citizen logs in via UI with fixed OTP",
+          "after": "1 \u2014 citizen logs in via UI with fixed OTP"
+        },
+        {
+          "before": "2 \u2014 citizen creates complaint via UI wizard",
+          "after": "2 \u2014 citizen creates complaint via UI wizard"
+        },
+        {
+          "before": "3 \u2014 admin sees complaint in PGR inbox (UI)",
+          "after": "3 \u2014 admin sees complaint in PGR inbox (UI)"
+        },
+        {
+          "before": "4 \u2014 admin assigns complaint via UI",
+          "after": "4 \u2014 admin assigns complaint via UI"
+        },
+        {
+          "before": "5 \u2014 admin resolves complaint via UI",
+          "after": "5 \u2014 admin resolves complaint via UI"
+        },
+        {
+          "before": "6 \u2014 citizen sees resolved complaint on complaints page (UI)",
+          "after": "6 \u2014 citizen sees resolved complaint on complaints page (UI)"
+        }
+      ]
+    },
+    {
+      "file": "citizen/login-mobile-input-validation.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "5-digit number shows inline error + helper hint",
+          "after": "5-digit number shows inline error + helper hint"
+        }
+      ]
+    },
+    {
+      "file": "citizen/pgr-home-layout-and-scroll.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "#421 \u2014 landing ServicesSection top padding matches side padding",
+          "after": "#421 \u2014 landing ServicesSection top padding matches side padding"
+        },
+        {
+          "before": "#422 \u2014 navigating into Create New Complaint lands at top of page",
+          "after": "#422 \u2014 navigating into Create New Complaint lands at top of page"
+        },
+        {
+          "before": "#441 \u2014 submit rating without \"What was good?\" boxes does not crash",
+          "after": "#441 \u2014 submit rating without \"What was good?\" boxes does not crash"
+        }
+      ]
+    },
+    {
+      "file": "citizen/postal-code-alnum-input.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "postal-code field retains alnum + dash characters instead of stripping them",
+          "after": "postal-code field retains alnum + dash characters instead of stripping them"
+        },
+        {
+          "before": "invalid postal code renders the error the tenant's own pattern implies",
+          "after": "invalid postal code renders the error the tenant's own pattern implies"
+        }
+      ]
+    },
+    {
+      "file": "citizen/profile-photo-save-445.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "upload JPEG photo, _update returns 2xx, no hard reload",
+          "after": "upload JPEG photo, _update returns 2xx, no hard reload"
+        }
+      ]
+    },
+    {
+      "file": "citizen/profile-photo-save.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "upload photo, _update returns 2xx, no hard reload",
+          "after": "upload photo, _update returns 2xx, no hard reload"
+        }
+      ]
+    },
+    {
+      "file": "citizen/rate-resolved-complaint.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "rate page renders 5 stars + 4 feedback checkboxes + Comments textarea",
+          "after": "rate page renders 5 stars + 4 feedback checkboxes + Comments textarea"
+        }
+      ]
+    },
+    {
+      "file": "citizen/reopen-closed-complaint.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "reopen step 0 renders title + 4 reason radios + Next button",
+          "after": "reopen step 0 renders title + 4 reason radios + Next button"
+        }
+      ]
+    },
+    {
+      "file": "citizen/reopen-window-1252.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "offers REOPEN while still inside the configured window",
+          "after": "offers REOPEN while still inside the configured window"
+        },
+        {
+          "before": "hides REOPEN once the configured window has elapsed",
+          "after": "hides REOPEN once the configured window has elapsed"
+        },
+        {
+          "before": "defers to the server and keeps REOPEN when REOPENSLA is absent",
+          "after": "defers to the server and keeps REOPEN when REOPENSLA is absent"
+        }
+      ]
+    },
+    {
+      "file": "citizen/track-my-complaint.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "My Complaints list shows the seeded complaint with OPEN badge",
+          "after": "My Complaints list shows the seeded complaint with OPEN badge"
+        },
+        {
+          "before": "Detail page renders Summary / Details / Map / Timeline sections",
+          "after": "Detail page renders Summary / Details / Map / Timeline sections"
+        },
+        {
+          "before": "Detail URL uses /complaints/:id (PLURAL) \u2014 Routes.js export diverges",
+          "after": "Detail URL uses /complaints/:id (PLURAL) \u2014 Routes.js export diverges"
+        }
+      ]
+    },
+    {
+      "file": "citizen/wizard-pin-and-boundary-cascade.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "pin step + locality cascade no longer trap the citizen",
+          "after": "pin step + locality cascade no longer trap the citizen"
+        }
+      ]
+    },
+    {
+      "file": "dashboard-performance/dashboard.functional.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "loading reaches a strict, error-free ready state",
+          "after": "loading reaches a strict, error-free ready state"
+        },
+        {
+          "before": "ward and date filters issue bounded analytics queries and clear cleanly",
+          "after": "ward and date filters issue bounded analytics queries and clear cleanly"
+        },
+        {
+          "before": "widget move and resize persist and trigger zero analytics queries",
+          "after": "widget move and resize persist and trigger zero analytics queries"
+        },
+        {
+          "before": "group-by re-queries with hierLevel and telemetry correlates the load",
+          "after": "group-by re-queries with hierLevel and telemetry correlates the load"
+        }
+      ]
+    },
+    {
+      "file": "dashboard-performance/load.benchmark.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "cold-context dashboard hard-navigation sample",
+          "after": "cold-context dashboard hard-navigation sample"
+        }
+      ]
+    },
+    {
+      "file": "employee/change-password-visibility-812.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "Change Password button styling check",
+          "after": "Change Password button styling check"
+        }
+      ]
+    },
+    {
+      "file": "employee/digit-ui-shell-2026-05-31.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "login + chrome + visible decrypt + inbox honest drives",
+          "after": "login + chrome + visible decrypt + inbox honest drives"
+        }
+      ]
+    },
+    {
+      "file": "employee/escalate-action-521.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "PENDINGATLME \u2192 Escalate \u2192 real ESCALATE transition into the configured target state",
+          "after": "PENDINGATLME \u2192 Escalate \u2192 real ESCALATE transition into the configured target state"
+        }
+      ]
+    },
+    {
+      "file": "employee/inbox-filters.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "status filter \u2192 only rows in the chosen workflow state @p0",
+          "after": "status filter \u2192 only rows in the chosen workflow state @p0"
+        },
+        {
+          "before": "complaint-type filter \u2192 only rows of the chosen serviceCode @p0",
+          "after": "complaint-type filter \u2192 only rows of the chosen serviceCode @p0"
+        },
+        {
+          "before": "locality filter \u2192 only rows in the chosen leaf boundary @p0",
+          "after": "locality filter \u2192 only rows in the chosen leaf boundary @p0"
+        }
+      ]
+    },
+    {
+      "file": "employee/inbox-search.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "search by complaint number returns exactly that complaint @p1",
+          "after": "search by complaint number returns exactly that complaint @p1"
+        },
+        {
+          "before": "search by mobile number returns the matching complaint @p1",
+          "after": "search by mobile number returns the matching complaint @p1"
+        },
+        {
+          "before": "search for a well-formed but non-existent complaint number returns nothing @p1",
+          "after": "search for a well-formed but non-existent complaint number returns nothing @p1"
+        }
+      ]
+    },
+    {
+      "file": "employee/login.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "valid credentials return access token",
+          "after": "valid credentials return access token"
+        },
+        {
+          "before": "bad credentials are rejected",
+          "after": "bad credentials are rejected"
+        },
+        {
+          "before": "API session injection loads employee home",
+          "after": "API session injection loads employee home"
+        }
+      ]
+    },
+    {
+      "file": "employee/pgr-details.spec.ts",
+      "baselineCount": 10,
+      "currentCount": 10,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "Story 5.1 \u2014 details page loads without error (terminal fixture) @p0",
+          "after": "Story 5.1 \u2014 details page loads without error (terminal fixture) @p0"
+        },
+        {
+          "before": "Story 5.4 \u2014 Complaint No. label + value match the SRID @p0",
+          "after": "Story 5.4 \u2014 Complaint No. label + value match the SRID @p0"
+        },
+        {
+          "before": "Story 5.5 \u2014 Current Status chip renders localized status text @p0",
+          "after": "Story 5.5 \u2014 Current Status chip renders localized status text @p0"
+        },
+        {
+          "before": "Story 5.6 \u2014 complaint classification rows render localized values @p1",
+          "after": "Story 5.6 \u2014 complaint classification rows render localized values @p1"
+        },
+        {
+          "before": "Story 5.9 \u2014 Filed Date renders in DD/MM/YYYY @p1",
+          "after": "Story 5.9 \u2014 Filed Date renders in DD/MM/YYYY @p1"
+        },
+        {
+          "before": "Story 5.16 \u2014 Complaint Timeline section renders with checkpoint rows @p0",
+          "after": "Story 5.16 \u2014 Complaint Timeline section renders with checkpoint rows @p0"
+        },
+        {
+          "before": "Story 5.18 \u2014 timeline actor name is clean (no role-list concat) \u2014 #524",
+          "after": "Story 5.18 \u2014 timeline actor name is clean (no role-list concat) \u2014 #524"
+        },
+        {
+          "before": "Story 5.24a \u2014 Take Action HIDDEN on terminal-state complaint @p1",
+          "after": "Story 5.24a \u2014 Take Action HIDDEN on terminal-state complaint @p1"
+        },
+        {
+          "before": "Story 5.24b \u2014 Take Action VISIBLE on non-terminal complaint @p0",
+          "after": "Story 5.24b \u2014 Take Action VISIBLE on non-terminal complaint @p0"
+        },
+        {
+          "before": "Story 5.location \u2014 optional coordinates hide/show the complete location card (#1750)",
+          "after": "Story 5.location \u2014 optional coordinates hide/show the complete location card (#1750)"
+        }
+      ]
+    },
+    {
+      "file": "employee/pgr-fixes-2026-04-29.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "PGR business service: PENDINGFORASSIGNMENT.ASSIGN forward-state is PENDINGATLME, not a self-loop",
+          "after": "PGR business service: PENDINGFORASSIGNMENT.ASSIGN forward-state is PENDINGATLME, not a self-loop"
+        },
+        {
+          "before": "PGR_LME-only role filter returns LMEs (not all-of-HRMS)",
+          "after": "PGR_LME-only role filter returns LMEs (not all-of-HRMS)"
+        },
+        {
+          "before": "REJECTED state advertises a non-empty rejection-reason mdms list",
+          "after": "REJECTED state advertises a non-empty rejection-reason mdms list"
+        }
+      ]
+    },
+    {
+      "file": "employee/pgr-inbox-sort-922.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "clicking Locality sorts ascending server-side, by the raw code, with no page error @p0",
+          "after": "clicking Locality sorts ascending server-side, by the raw code, with no page error @p0"
+        },
+        {
+          "before": "clicking Locality again toggles to descending, in both the request and the row order @p0",
+          "after": "clicking Locality again toggles to descending, in both the request and the row order @p0"
+        },
+        {
+          "before": "the sort icon toggles direction across repeated clicks, instead of staying on one arrow @p0",
+          "after": "the sort icon toggles direction across repeated clicks, instead of staying on one arrow @p0"
+        },
+        {
+          "before": "\"Current Owner\" has no sort affordance \u2014 pgr-services has no sort-by equivalent for it @p0",
+          "after": "\"Current Owner\" has no sort affordance \u2014 pgr-services has no sort-by equivalent for it @p0"
+        }
+      ]
+    },
+    {
+      "file": "employee/profile-validation-config-445.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "post-auth UserProfile mount + onChange do not throw",
+          "after": "post-auth UserProfile mount + onChange do not throw"
+        }
+      ]
+    },
+    {
+      "file": "employee/profile.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "mobile prefix chip renders the tenant dial code (not hardcoded +91)",
+          "after": "mobile prefix chip renders the tenant dial code (not hardcoded +91)"
+        }
+      ]
+    },
+    {
+      "file": "employee/reopen-limit-925.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "blocks reopen and shows a toast once the configured window has elapsed",
+          "after": "blocks reopen and shows a toast once the configured window has elapsed"
+        },
+        {
+          "before": "allows reopen while still inside the configured window",
+          "after": "allows reopen while still inside the configured window"
+        }
+      ]
+    },
+    {
+      "file": "employee/sidebar.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "HRMS + Workbench are absent from the employee shell",
+          "after": "HRMS + Workbench are absent from the employee shell"
+        },
+        {
+          "before": "sidebar drops modules listed in EMPLOYEE_MODULE_DENYLIST",
+          "after": "sidebar drops modules listed in EMPLOYEE_MODULE_DENYLIST"
+        }
+      ]
+    },
+    {
+      "file": "employee/workflow-lifecycle-ui.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "ASSIGN (GRO) \u2192 PENDINGATLME, then RESOLVE (LME) \u2192 RESOLVED @p0",
+          "after": "ASSIGN (GRO) \u2192 PENDINGATLME, then RESOLVE (LME) \u2192 RESOLVED @p0"
+        }
+      ]
+    },
+    {
+      "file": "employee/workflow-reject-ui.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "REJECT (GRO) with a rejection reason \u2192 REJECTED, reason on timeline @p0",
+          "after": "REJECT (GRO) with a rejection reason \u2192 REJECTED, reason on timeline @p0"
+        }
+      ]
+    },
+    {
+      "file": "fixtures/api.setup.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "authenticate via api",
+          "after": "authenticate via api"
+        }
+      ]
+    },
+    {
+      "file": "fixtures/auth.setup.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "authenticate",
+          "after": "authenticate"
+        }
+      ]
+    },
+    {
+      "file": "fixtures/citizen.setup.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "provision a fresh citizen (suite-wide)",
+          "after": "provision a fresh citizen (suite-wide)"
+        }
+      ]
+    },
+    {
+      "file": "fixtures/lifecycle.setup.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "seed lifecycle fixtures (non-terminal + assigned + terminal-with-rating complaints)",
+          "after": "seed lifecycle fixtures (non-terminal + assigned + terminal-with-rating complaints)"
+        }
+      ]
+    },
+    {
+      "file": "fixtures/profile.setup.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "discover the deployment profile",
+          "after": "discover the deployment profile"
+        }
+      ]
+    },
+    {
+      "file": "keycloak/kc-api.spec.ts",
+      "baselineCount": 6,
+      "currentCount": 6,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "OIDC discovery: issuer includes the /auth prefix (frontendUrl regression)",
+          "after": "OIDC discovery: issuer includes the /auth prefix (frontendUrl regression)"
+        },
+        {
+          "before": "OIDC discovery: every endpoint URL lives under the issuer origin + /auth prefix",
+          "after": "OIDC discovery: every endpoint URL lives under the issuer origin + /auth prefix"
+        },
+        {
+          "before": "Overlay password grant mints a KC JWT for ADMIN (KC\u2192DIGIT fallback on first login, KC direct after)",
+          "after": "Hosted sign-in and _select mint an EMPLOYEE DIGIT context"
+        },
+        {
+          "before": "Overlay-issued JWT round-trips through the proxy: /mdms-v2 _search returns a DIGIT response (not 401)",
+          "after": "Selected DIGIT token round-trips directly to MDMS"
+        },
+        {
+          "before": "Authorize URL with PKCE + kc_idp_hint=google does not 400 at KC (realm allows the SPA client to redirect to Google)",
+          "after": "BFF authorize owns PKCE and the configured Google IdP hint"
+        },
+        {
+          "before": "Overlay healthz: status=ok and redis connected",
+          "after": "BFF readiness reports Redis and all identity dependencies"
+        }
+      ]
+    },
+    {
+      "file": "keycloak/kc-ui.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-login.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "mobile + OTP (existing citizen) authenticates via overlay and lands at dashboard with KC tokens",
+          "after": "mobile + OTP authenticates through BFF and reaches the citizen home"
+        },
+        {
+          "before": "Continue with Google emits an /authorize URL with PKCE S256 + kc_idp_hint=google",
+          "after": "Google entry uses BFF authorize and server-owned PKCE"
+        }
+      ]
+    },
+    {
+      "file": "keycloak/new-citizen-provisioning.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "MDMS search works for new citizen through proxy",
+          "after": "MDMS search works for new citizen through BFF-selected context"
+        },
+        {
+          "before": "localization search works for new citizen through proxy",
+          "after": "localization search works for new citizen through BFF-selected context"
+        },
+        {
+          "before": "access control works for new citizen through proxy",
+          "after": "access control works for new citizen through BFF-selected context"
+        },
+        {
+          "before": "PGR complaint creation works for new citizen through proxy",
+          "after": "PGR complaint creation works for new citizen through BFF-selected context"
+        }
+      ]
+    },
+    {
+      "file": "keycloak/sso-config.spec.ts",
+      "baselineCount": 7,
+      "currentCount": 7,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "KC issuer uses the deployment domain (not an old hostname)",
+          "after": "KC issuer uses the deployment domain (not an old hostname)"
+        },
+        {
+          "before": "KC client has deployment domain in redirect URIs",
+          "after": "KC client has deployment domain in redirect URIs"
+        },
+        {
+          "before": "KC client has deployment domain in web origins (CORS)",
+          "after": "KC client has deployment domain in web origins (CORS)"
+        },
+        {
+          "before": "Google IdP is enabled and configured",
+          "after": "Google IdP is enabled and configured"
+        },
+        {
+          "before": "Google OAuth authorize endpoint accepts the redirect",
+          "after": "Google OAuth authorize endpoint accepts the redirect"
+        },
+        {
+          "before": "Google broker login redirects to accounts.google.com",
+          "after": "Google broker login redirects to accounts.google.com"
+        },
+        {
+          "before": "Google client secret is valid (KC can exchange auth code)",
+          "after": "Google client secret is valid (KC can exchange auth code)"
+        }
+      ]
+    },
+    {
+      "file": "lifecycle/pgr-sla-auto-escalate.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts",
+        "utils/launch-fixes/api.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "1 \u2014 acquire admin token",
+          "after": "1 \u2014 acquire admin token"
+        },
+        {
+          "before": "2 \u2014 verify ESCALATE allows SYSTEM role on PENDINGATLME",
+          "after": "2 \u2014 verify ESCALATE allows SYSTEM role on PENDINGATLME"
+        },
+        {
+          "before": "3 \u2014 verify HRMS reportingTo chain has at least one link",
+          "after": "3 \u2014 verify HRMS reportingTo chain has at least one link"
+        },
+        {
+          "before": "4 \u2014 auto-escalation: scheduler fires within ~120 s of SLA breach",
+          "after": "4 \u2014 auto-escalation: scheduler fires within ~120 s of SLA breach"
+        }
+      ]
+    },
+    {
+      "file": "smoke/auth.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [],
+      "replacementMapping": [
+        {
+          "before": "login returns token",
+          "after": "login returns token"
+        }
+      ]
+    },
+    {
+      "file": "smoke/deployment-profile.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "deployment profile describes the deployment under test",
+          "after": "deployment profile describes the deployment under test"
+        },
+        {
+          "before": "deployment profile is non-empty",
+          "after": "deployment profile is non-empty"
+        },
+        {
+          "before": "deployment meets its declared expectations",
+          "after": "deployment meets its declared expectations"
+        }
+      ]
+    },
+    {
+      "file": "specs/configurator/employee-create.spec.ts",
+      "baselineCount": 3,
+      "currentCount": 3,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "no Username input field exists (#460)",
+          "after": "no Username input field exists (#460)"
+        },
+        {
+          "before": "assignment without dept/designation shows validation error (#458)",
+          "after": "assignment without dept/designation shows validation error (#458)"
+        },
+        {
+          "before": "form has all expected sections",
+          "after": "form has all expected sections"
+        }
+      ]
+    },
+    {
+      "file": "specs/configurator/employee-edit.spec.ts",
+      "baselineCount": 2,
+      "currentCount": 2,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "employee list loads",
+          "after": "employee list loads"
+        },
+        {
+          "before": "edit employee preserves assignments and jurisdictions",
+          "after": "edit employee preserves assignments and jurisdictions"
+        }
+      ]
+    },
+    {
+      "file": "specs/configurator/user-create.spec.ts",
+      "baselineCount": 4,
+      "currentCount": 4,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/configurator-auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "mobile field shows tenant help text",
+          "after": "mobile field shows tenant help text"
+        },
+        {
+          "before": "mobile field is required \u2014 form stays on create page",
+          "after": "mobile field is required \u2014 form stays on create page"
+        },
+        {
+          "before": "submit with invalid mobile shows format error",
+          "after": "submit with invalid mobile shows format error"
+        },
+        {
+          "before": "valid tenant mobile does not show validation error",
+          "after": "valid tenant mobile does not show validation error"
+        }
+      ]
+    },
+    {
+      "file": "specs/pgr-geo-location-contract.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [],
+      "replacementMapping": [
+        {
+          "before": "distinguishes missing/legacy coordinates from valid zero-axis points",
+          "after": "distinguishes missing/legacy coordinates from valid zero-axis points"
+        }
+      ]
+    },
+    {
+      "file": "specs/pgr-postal-code.spec.ts",
+      "baselineCount": 5,
+      "currentCount": 5,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "postal code field is not required \u2014 form proceeds without it",
+          "after": "postal code field is not required \u2014 form proceeds without it"
+        },
+        {
+          "before": "valid postal code (deployment format) is accepted",
+          "after": "valid postal code (deployment format) is accepted"
+        },
+        {
+          "before": "postal error shows in real time while typing, without submit",
+          "after": "postal error shows in real time while typing, without submit"
+        },
+        {
+          "before": "invalid postal code (6 digits / Indian format) is rejected",
+          "after": "invalid postal code (6 digits / Indian format) is rejected"
+        },
+        {
+          "before": "invalid postal code (short / 3 digits) is rejected",
+          "after": "invalid postal code (short / 3 digits) is rejected"
+        }
+      ]
+    },
+    {
+      "file": "specs/verify-mobile-validation.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "mobile validation reflects the deployment MDMS rule",
+          "after": "mobile validation reflects the deployment MDMS rule"
+        }
+      ]
+    },
+    {
+      "file": "utils/citizen-provision.spec.ts",
+      "baselineCount": 1,
+      "currentCount": 1,
+      "migratedHelperDependencies": [
+        "utils/auth.ts",
+        "utils/citizen-provision.ts"
+      ],
+      "replacementMapping": [
+        {
+          "before": "provisionFreshCitizen returns identity matching MDMS rule + working token",
+          "after": "provisionFreshCitizen returns identity matching MDMS rule + working token"
+        }
+      ]
+    }
+  ]
+}

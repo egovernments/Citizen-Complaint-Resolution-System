@@ -1,0 +1,40 @@
+Item18 test migration verification
+Date: 2026-10-04
+Tested source commit: f255cb1f4ebf0bfddfa6228b111f3d53e1e4df56
+Implementation commit: 6c0d8753a; owner merge b7c727ade preserved.
+Baseline inventory: 171e5fe1a.
+
+Executed from tests/integration-tests (low concurrency):
+1. npx tsc --noEmit
+   Exit0, no diagnostics (typecheck.txt). Baseline TS7053 preserved in baseline-typecheck.txt;
+   fixed by typing the empty response-header fallback without changing behavior.
+2. PLAYWRIGHT_BROWSERS_PATH="$PWD/.identity-browsers" npx tsx --test --test-concurrency=1 tests/identity-unit/*.test.ts
+   Exit0;16 passed,0 failed,0 skipped. helper-tests.txt.
+   Includes Chromium147 headless-shell1217 hosted-form double plus local HTTP doubles.
+   No real Keycloak/DIGIT/Redis/egov-otp integration claim.
+3. npx playwright test --config playwright.identity.config.ts
+   Exit0;8 skipped,0 passed because real gate environment was not supplied.
+   real-gate-unset.txt. Missing-env behavior only, not successful system tests.
+4. BASE_URL=http://127.0.0.1:18081 npx playwright test --list --reporter=json
+   Exit0;278 cases/88files, matching baseline. No network execution.
+5. LOCAL_STACK=1 BASE_URL=http://127.0.0.1:18081 npx playwright test --list --reporter=json
+   Exit0;289 cases/90files, matching full baseline with local-only cases.
+6. python3 scripts/identity-inventory.py
+   Exit0;per-file count preservation and one-for-one replacement mapping.
+   counts.txt/replacement-map.json. Baseline and final pass rates are unknown, not100%.
+7. git diff 171e5fe1a --check
+   Exit0.
+
+Reused sibling evidence (not rerun):
+- Keycloak09e479139:24/24 real26.7.3 realm checks. Independently queried CI run37214279799:
+  completed/success, head09e4791393cf290102a01f21337ce9c97d864e53.
+  Curated exact cases from c5583f3e4:keycloak/evidence/live-check-summary.log copied to keycloak-dry-run.txt.
+- Frontend4771ca1cd:251 passing fixtures are historical; owner rejected handoff for
+  ChangePhone logout/account-switch race. Corrected evidence still pending.
+- Configurator4763e73ad:103 affected passes;576 full passes+1 unchanged baseline failure
+  under recorded root exception. Backend integration still pending.
+
+Full deployment pass-rate comparison and real persona/O2 runs are pending gate run.
+Root decision msg_9bc5a98780e645c8bb7dc1b121cac2b4 authorizes compile+missing-env skips
+plus pinned isolated Keycloak dry-run evidence for current handoff. Root alone executes
+full real gates on its8c environment. No live host or upstream write performed.
