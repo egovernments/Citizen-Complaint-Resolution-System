@@ -120,7 +120,7 @@ export const ROUTES: RouteContract[] = [
 
   // Internal: PGR onboarding (workload)
   { method: "POST", path: "/internal/identity/v1/sessions/_introspect", auth: "introspection", state: "changing", items: [11],
-    codes: ["WORKLOAD_UNAUTHORIZED", "CONTROL_PLANE_NOT_CONFIGURED", "SESSION_REQUIRED"] },
+    codes: ["WORKLOAD_UNAUTHORIZED", "CONTROL_PLANE_NOT_CONFIGURED", "SESSION_REQUIRED", "IDENTITY_UNAVAILABLE"] },
   { method: "POST", path: "/internal/identity/v1/identifiers/_check", auth: "introspection", state: "changing", items: [11],
     codes: [...WORKLOAD_AUTH, "IDENTITY_UNAVAILABLE"] },
   { method: "POST", path: "/internal/identity/v1/organizations/_ensure", auth: "workload", state: "changing", items: [11],
