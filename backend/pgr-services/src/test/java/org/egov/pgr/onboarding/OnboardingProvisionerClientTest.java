@@ -39,6 +39,7 @@ public class OnboardingProvisionerClientTest {
         client=new OnboardingProvisionerClient(new RestTemplate(),mapper,env);
     }
     private void respond(com.sun.net.httpserver.HttpExchange exchange,int status,String body) throws java.io.IOException {
+        exchange.getResponseHeaders().set("Connection","close");
         if(status==204)exchange.sendResponseHeaders(204,-1);
         else {byte[] bytes=body.getBytes(StandardCharsets.UTF_8);exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(status,bytes.length);exchange.getResponseBody().write(bytes);}
         exchange.close();
@@ -124,6 +125,19 @@ public class OnboardingProvisionerClientTest {
         String founder="FOUNDER_"+signup.getId().toString().replace("-","");
         client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",founder,"user",Map.of("tenantId","newtown","userName",founder)))));
         assertEquals(10,writes);assertEquals(writes,details);assertEquals(1,logins);
+    }
+
+    @Test public void entireCanonicalBaselineIsAcceptedOnlyForTheLeasedTargetTenant() throws Exception {
+        var baseline=new PlatformBaseline(mapper);var scope=scope("PLATFORM_BASELINE");int expected=0;
+        for(JsonNode schema:baseline.schemas()) {
+            var definition=(ObjectNode)schema.deepCopy();definition.put("tenantId","newtown");
+            client.write(scope,"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",definition));expected++;
+        }
+        for(JsonNode input:baseline.records()) {
+            var record=(ObjectNode)mapper.readTree(mapper.writeValueAsString(input).replace("{tenantid}","newtown"));record.put("tenantId","newtown");record.put("isActive",true);
+            client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+record.path("schemaCode").asText(),Map.of("Mdms",record));expected++;
+        }
+        assertTrue(expected>900);assertEquals(expected,writes);assertEquals(expected,details);
     }
 
 }
