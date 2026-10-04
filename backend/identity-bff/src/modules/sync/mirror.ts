@@ -3,9 +3,10 @@ import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import { withPersonLease, LeaseLostError, type PersonLease } from "../accounts/person-lease.js";
 import { request } from "../organizations/organization-service.js";
+import { readBindings } from "../bindings/store.js";
 import type { DigitAccount } from "../managed-accounts/digit-user-client.js";
 import { updateKeycloakUser, type UserRepresentation } from "./keycloak-writer.js";
-import { accountEntries, activeBindings, canonical, type AccountEntry } from "./state.js";
+import { accountEntries, canonical, type AccountEntry } from "./state.js";
 import { readDigitAccount } from "./digit-reader.js";
 
 export interface MirrorHint { credential?: { tenantId: string; keyVersion: number; setAt: number } }
@@ -22,9 +23,10 @@ const masked = (value: string) => /\*{2,}/.test(value);
 
 /** Caller holds the lease. Only bindings and already-resolved citizens seed entries. */
 export async function readMirrorSnapshot(subject: string, hint: MirrorHint = {}): Promise<MirrorSnapshot> {
+  const bindings = await readBindings(subject);
   const user = await (await request(`/users/${encodeURIComponent(subject)}`)).json() as UserRepresentation;
   const previous = accountEntries(user);
-  const candidates: AccountEntry[] = activeBindings(user).map(binding => {
+  const candidates: AccountEntry[] = bindings.filter(binding => binding.state === "active").map(binding => {
     const existing = previous.find(entry => entry.kind === "staff" && entry.tenantId === binding.tenantId && entry.uuid === binding.uuid);
     return { ...(existing ?? {}), kind: "staff", tenantId: binding.tenantId, uuid: binding.uuid,
       boundAt: existing?.boundAt ?? binding.boundAt!, active: existing?.active ?? false, roles: existing?.roles ?? [] };
