@@ -4,7 +4,6 @@ import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
-import { clearBrandingCaches } from "../../src/modules/branding/tenant-branding.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
@@ -3224,7 +3223,7 @@ describe("binding workspace public routes", () => {
   it("records a newly signed-in citizen before issuance and propagates its changed verified phone to the same DIGIT account", async () => {
     digit.mdms.set(digit.mdmsKey("ke", "common-masters.MobileNumberValidation"),
       structuredClone(digit.mdms.get(digit.mdmsKey("ke.bomet", "common-masters.MobileNumberValidation"))!));
-    clearBrandingCaches();
+    // Mobile validation is fetched fresh; no former branding cache to clear.
     const subject = "binding-citizen-phone";
     await kcAdmin("/users", { id: subject, username: subject, enabled: true,
       attributes: { phoneNumber: ["+254799123981"], phoneNumberVerified: ["true"] } });
