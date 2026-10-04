@@ -223,3 +223,70 @@ test('registered bootstrap input schema exposes user_only and retains compatibil
   assert.ok(validate({ target_tenant: 'in.newtown', user_only: true }));
   assert.equal(validate({ target_tenant: 'in.newtown', user_only: 'yes' }), false);
 });
+
+test('every role-action refers to an already seeded role and action', () => {
+  const seed = loadPlatformSeed();
+  const roles = new Set<unknown>(), actions = new Set<unknown>();
+  for (const row of seed.records) {
+    if (row.schemaCode === 'ACCESSCONTROL-ROLES.roles') roles.add(row.data.code);
+    if (row.schemaCode === 'ACCESSCONTROL-ACTIONS-TEST.actions-test') actions.add(row.data.id);
+    if (row.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions') {
+      assert.ok(roles.has(row.data.rolecode), `${row.uniqueIdentifier} needs earlier role ${row.data.rolecode}`);
+      assert.ok(actions.has(row.data.actionid), `${row.uniqueIdentifier} needs earlier action ${row.data.actionid}`);
+    }
+  }
+  assert.ok(roles.has('PGR_SUPERVISOR'));
+  for (const role of seed.founderRoles) assert.ok(roles.has(role), `founder role ${role} must exist`);
+});
+
+test('branding gateway create and update authorize only tenant ACCOUNT_ADMIN', () => {
+  const seed = loadPlatformSeed();
+  assert.ok(seed.founderRoles.includes('ACCOUNT_ADMIN'));
+  for (const verb of ['_create', '_update']) {
+    const path = `/mdms-v2/v2/${verb}/common-masters.ThemeConfig`;
+    const actions = seed.records.filter(r => r.schemaCode === 'ACCESSCONTROL-ACTIONS-TEST.actions-test' && r.data.url === path);
+    assert.equal(actions.length, 1, `exactly one action for ${path}`);
+    assert.equal(actions[0].data.enabled, true);
+    const grants = seed.records.filter(r => r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions' && r.data.actionid === actions[0].data.id);
+    assert.deepEqual(grants.map(r => r.data.rolecode), ['ACCOUNT_ADMIN']);
+    assert.equal(substituteTenant(grants[0].data, 'newfounder').tenantId, 'newfounder');
+  }
+});
+
+test('canonical country defaults have an explicit supported inventory and valid mobile-rule data', async () => {
+  const seed = loadPlatformSeed();
+  assert.deepEqual(Object.keys(seed.countryMobileRules).sort(), ['IN', 'KE']);
+  assert.deepEqual(seed.countryMobileRules.IN, { countryCode: '+91', mobileNumberRegex: '^[6-9][0-9]{9}$', default: true });
+  const nairobi = JSON.parse(await readFile('../ansible/nairobi-mdms/mdms/common-masters/MobileNumberValidation.json', 'utf8'));
+  assert.deepEqual(seed.countryMobileRules.KE, nairobi[0].data);
+  const definition = seed.schemas.find(s => s.code === 'common-masters.MobileNumberValidation')!.definition;
+  const validate = new Ajv({ strict: false }).compile(definition);
+  for (const [iso, rule] of Object.entries(seed.countryMobileRules)) {
+    assert.match(iso, /^[A-Z]{2}$/); assert.ok(validate(rule)); assert.equal(rule.default, true);
+    assert.doesNotThrow(() => new RegExp(rule.mobileNumberRegex));
+  }
+  assert.equal(seed.countryMobileRules.ET, undefined);
+  assert.equal(seed.countryMobileRules.MZ, undefined);
+  assert.equal(seed.records.filter(r => r.schemaCode === 'common-masters.MobileNumberValidation').length, 0,
+    'country defaults must not be blindly seeded into every tenant');
+});
+
+test('MCP preserves source overrides and does not infer country defaults from tenant IDs', async () => {
+  const configured = fixture();
+  const search = configured.options.api.mdmsV2SearchRaw;
+  const override = { countryCode: '+254', mobileNumberRegex: '^7[0-9]{8}$', default: true };
+  configured.options.api.mdmsV2SearchRaw = async (tenant: string, code: string, ...rest: any[]) =>
+    tenant === 'in' ? [{ isActive: true, data: override }] : search(tenant, code, ...rest);
+  await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in' }, configured.options);
+  assert.deepEqual(configured.rows.get('common-masters.MobileNumberValidation/+254').data, override);
+
+  const missing = fixture();
+  missing.options.api.mdmsV2SearchRaw = async () => [];
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in' }, missing.options), /Country mobile rule is missing/);
+  assert.equal(missing.writes(), 0, 'matching tenant name must not opt into canonical ISO fallback');
+
+  const explicit = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'pg', user_validation: [override] }, explicit.options);
+  assert.equal(explicit.reads(), 0);
+  assert.deepEqual(explicit.rows.get('common-masters.MobileNumberValidation/+254').data, override);
+});
