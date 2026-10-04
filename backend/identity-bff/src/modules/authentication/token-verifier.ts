@@ -88,6 +88,9 @@ export async function validateJwt(
         (verified.preferred_username as string) || undefined,
       email_verified: verified.email_verified as boolean | undefined,
       phone_number: (verified.phone_number as string) || undefined,
+      phone_number_verified: typeof verified.phone_number_verified === "boolean"
+        ? verified.phone_number_verified
+        : undefined,
       realm_access: (verified.realm_access as { roles: string[] }) || undefined,
       groups: (verified.groups as string[]) || undefined,
       organization:

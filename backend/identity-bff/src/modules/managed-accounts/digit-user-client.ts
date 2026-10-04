@@ -6,7 +6,8 @@ import { config } from "../../infrastructure/config.js";
  * can contain personal data, so neither is ever logged or rethrown.
  */
 export class DigitUnavailableError extends Error {
-  constructor(message: string, readonly status = 503) {
+  /** DIGIT's own error codes from a rejected request, e.g. `INVALID_ROLE`. */
+  constructor(message: string, readonly status = 503, readonly digitCodes: string[] = []) {
     super(message);
   }
 }
@@ -71,13 +72,25 @@ async function send(path: string, init: RequestInit, operation: string): Promise
     throw new DigitUnauthorizedError(`DIGIT ${operation} was not authorized`);
   }
   if (!response.ok) {
-    await response.body?.cancel();
     throw new DigitUnavailableError(
       `DIGIT ${operation} returned ${response.status}`,
       response.status,
+      await errorCodes(response),
     );
   }
   return response;
+}
+
+/** Only `Errors[].code` is kept: the rest of the body may hold personal data. */
+async function errorCodes(response: Response): Promise<string[]> {
+  try {
+    const errors = (await response.json() as { Errors?: unknown })?.Errors;
+    return Array.isArray(errors)
+      ? errors.map((error) => error?.code).filter((code): code is string => typeof code === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 async function json(response: Response, operation: string): Promise<Record<string, unknown>> {

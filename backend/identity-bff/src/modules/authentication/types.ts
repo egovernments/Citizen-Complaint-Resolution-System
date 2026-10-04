@@ -5,6 +5,7 @@ export interface KeycloakClaims {
   preferred_username?: string;
   email_verified?: boolean;
   phone_number?: string;
+  phone_number_verified?: boolean;
   realm_access?: {
     roles: string[];
   };
