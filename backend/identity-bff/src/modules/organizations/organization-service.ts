@@ -1146,9 +1146,11 @@ export async function sendPasswordSetupEmail(input: {
   userId: string;
   emailVerified: boolean;
   redirectUri: string;
+  /** The surface's Keycloak client: its theme renders the action pages (item 5). */
+  clientId?: string;
 }): Promise<void> {
   const query = new URLSearchParams({
-    client_id: config.keycloakBffClientId,
+    client_id: input.clientId || config.keycloakBffClientId,
     lifespan: String(config.identityPasswordSetupTtlSeconds),
     redirect_uri: input.redirectUri,
   });
