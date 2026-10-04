@@ -21,20 +21,25 @@ evidence from accepted implementation. The completion gate is still open.
   ordering, PGR rename/version/polling and invitation expiry. Evidence lives
   in `artifacts/configurator/README.md`: 103 affected tests, 576 full-suite
   passes, the unchanged postal baseline failure, and clean typecheck/build.
+- digit-ui PR 58, corrected head `66eb372aa`, is reviewed and merged at
+  `6b8097841`. Its ownership guard and deferred hook tests close the phone-change
+  logout/account-switch review finding. The merged frontend tree is identical
+  to the tested leaf: 262 tests and build passed. See
+  `digit-ui-esbuild/test-evidence/phone-race-verification.txt`.
 
 ## Work in progress
 
 | Owner | Scope | Integration state |
 | --- | --- | --- |
 | surf-bff | Items 1–4, 15 | Self-service/logout slices committed; readiness awaits reviewed core providers |
-| surf-phone | Item 13 | Split from surf-bff at `1526ec668`; production effects handoff `417557d50`; gap audit and regression coverage underway |
+| surf-phone | Item 13 | PR 63 at `aa89930ce` reviewed; integration awaits current BFF prerequisites and combined-tree verification |
 | surf-keycloak | Realm configuration, extraction, public branding | PR 50 reviewed and merged; scoped evidence accepted |
 | surf-configurator | Members, invites, account actions, workspace settings | PR 59 reviewed and merged; scoped frontend evidence accepted |
-| surf-digitui | Phase 2 account actions, phone, invites, logout | PR 58 returned for phone-change logout/account-switch race fix |
+| surf-digitui | Phase 2 account actions, phone, invites, logout | Corrected PR 58 reviewed and merged; scoped frontend evidence accepted |
 | surf-tests | Item 18 migration and complete gate matrix | PR 62 returned for split hosted-form and one-use auth-result fixes |
 
 The task identifiers and durable coordination records live in Agent Bridge.
-Keycloak and configurator scopes are verified independently of the still-pending
+Keycloak, configurator and digit-ui scopes are verified independently of the still-pending
 full system gate.
 
 ## Reviewed evidence
@@ -83,7 +88,9 @@ the real-dependency cases; mocked tests do not satisfy those cases.
 - digit-ui ChangePhone.verify at `4771ca1cd` writes the re-selection result
   without checking original UUID/current local session ownership after the
   asynchronous calls. The leaf must prevent logout resurrection and adopting
-  another person's cookie result, with interaction regression cases.
+  another person's cookie result, with interaction regression cases. Resolved
+  at `66eb372aa`: UUID/token/shared-alias checks across each asynchronous step,
+  plus 18 interaction cases and the 262-case full frontend suite.
 - Test migration hostedSignIn at `60f33a76a` assumes a combined username and
   password form; the stock realm flow also uses separate pages. The leaf must
   support and test both, including the admin login assertions. Its helper
