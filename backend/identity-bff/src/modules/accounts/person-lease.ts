@@ -22,9 +22,10 @@ export const PERSON_LEASE_RENEW_MS = 10_000;
 export const PERSON_LEASE_WAIT_MS = 15_000;
 const RETRY_MS = 100;
 
-/** The person is busy in another request; retry later. */
+/** The person is busy in another request; routes answer 503 with Retry-After. */
 export class LeaseBusyError extends Error {
   readonly status = 503;
+  readonly code = "IDENTITY_BUSY";
   constructor(message = "This account is busy; retry") {
     super(message);
   }
