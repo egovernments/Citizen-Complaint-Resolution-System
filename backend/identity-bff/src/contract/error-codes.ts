@@ -103,6 +103,7 @@ export const ERROR_CODES = {
   DIGIT_ACCOUNT_MISMATCH: { status: 502, retry: "no", meaning: "egov-user returned the wrong account type or tenant" },
 
   // Workspace members and invitations.
+  ADMIN_EMAIL_CHANGE_NOT_ALLOWED: { status: 403, retry: "no", meaning: "Tenant admin cannot change this global identity email; use UPDATE_EMAIL or operator global recovery" },
   ADMIN_REQUIRED: { status: 403, retry: "no", meaning: "The caller lacks live DIGIT ACCOUNT_ADMIN at the tenant (D5)" },
   SELF_BINDING_FORBIDDEN: { status: 403, retry: "no", meaning: "A browser caller tried to bind themselves" },
   ROLE_ESCALATION_FORBIDDEN: { status: 403, retry: "no", meaning: "The target account holds a role the caller lacks" },

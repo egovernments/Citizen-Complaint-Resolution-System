@@ -75,6 +75,10 @@ describe("workspace membership HTTP contract", () => {
     f.signedIn = true; const response = await post(routes.email.path, valid);
     expect(response.status).toBe(202); expect(await response.json()).toEqual({ status: "verification_sent" });
   });
+  it("returns 403 when tenant authority cannot change a global identity email", async () => {
+    f.signedIn = true; f.failure = "ADMIN_EMAIL_CHANGE_NOT_ALLOWED";
+    await expectContractError(await post(routes.email.path, valid), routes.email, "ADMIN_EMAIL_CHANGE_NOT_ALLOWED");
+  });
   it("returns the email collision contract", async () => {
     f.signedIn = true; f.failure = "IDENTITY_EMAIL_CHANGED";
     await expectContractError(await post(routes.email.path, valid), routes.email, "IDENTITY_EMAIL_CHANGED");

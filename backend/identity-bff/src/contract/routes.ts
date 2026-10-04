@@ -98,8 +98,6 @@ export const ROUTES: RouteContract[] = [
       "CITIZEN_SIGNIN_NOT_CONFIGURED", "CITIZEN_ACCOUNT_AMBIGUOUS", "CITIZEN_ACCOUNT_LINK_BLOCKED", "ACCOUNT_LOCKED",
       "DIGIT_ACCOUNT_INACTIVE", "ACCOUNT_LINK_BUSY", "DIGIT_PII_MASKED", "DIGIT_ACCOUNT_MISMATCH", "DIGIT_UNAVAILABLE",
       "IDENTITY_UNAVAILABLE", "IDENTITY_BUSY"] },
-  { method: "POST", path: "/identity/v1/organization-members/_invite", auth: "session", state: "deleted-later", items: [14],
-    codes: [...BROWSER_WRITE] },
   { method: "POST", path: "/identity/v1/workspace-members/_link", auth: "session", state: "live", items: [8, 9],
     codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "WORKSPACE_TENANT_REQUIRED", "SELF_BINDING_FORBIDDEN",
       "ROLE_ESCALATION_FORBIDDEN", "DIGIT_ACCOUNT_NOT_FOUND", "DIGIT_ACCOUNT_LINKED_ELSEWHERE", "DIGIT_ACCOUNT_MANAGED",
@@ -111,7 +109,7 @@ export const ROUTES: RouteContract[] = [
     codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "SELF_REMOVAL_FORBIDDEN", "BINDING_BUSY", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
   { method: "POST", path: "/identity/v1/workspace-members/_updateEmail", auth: "session", state: "live", items: [9],
-    codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "DIGIT_ACCOUNT_NOT_FOUND", "IDENTITY_EMAIL_CHANGED", "IDENTITY_BUSY",
+    codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "ADMIN_EMAIL_CHANGE_NOT_ALLOWED", "DIGIT_ACCOUNT_NOT_FOUND", "IDENTITY_EMAIL_CHANGED", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
   // `?surface=` (optional, default configurator) picks the session cookie; staff surfaces only.
   { method: "POST", path: "/identity/v1/workspace-invitations/_accept", auth: "session", state: "live", items: [9],

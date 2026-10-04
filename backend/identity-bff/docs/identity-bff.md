@@ -125,7 +125,6 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/identity/v1/tenants` | session | changing | 8, 15 |
 | POST | `/identity/v1/contexts/_select` | session | changing | 7, 8, 10, 12 |
 | POST | `/identity/v1/contexts/citizen/_select` | session | changing | 10, 12, 13 |
-| POST | `/identity/v1/organization-members/_invite` | session | deleted-later | 14 |
 | POST | `/identity/v1/workspace-members/_link` | session | live | 8, 9 |
 | GET | `/identity/v1/workspace-members` | session | live | 9 |
 | POST | `/identity/v1/workspace-members/_remove` | session | live | 9, 10 |
@@ -494,6 +493,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has l
 ```
 
 - The target must have an `active` binding at `tenantId`; otherwise → 404 `DIGIT_ACCOUNT_NOT_FOUND`.
+- The target must not be the caller; every target role at this tenant must be held by the caller; and the target must have no active binding or Organization membership in another workspace (including disabled workspaces). These checks use fresh reads under the target's person lease. A failed check → 403 `ADMIN_EMAIL_CHANGE_NOT_ALLOWED`. The person uses self-service `UPDATE_EMAIL`, or an operator performs global recovery.
 - Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
 - DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
 - An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
@@ -647,6 +647,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `CITIZEN_ACCOUNT_AMBIGUOUS` | 409 | after-change | More than one legacy CITIZEN uses the number; an admin links one |
 | `CITIZEN_ACCOUNT_LINK_BLOCKED` | 409 | after-change | An admin removed this phone link with block |
 | `DIGIT_ACCOUNT_MISMATCH` | 502 | no | egov-user returned the wrong account type or tenant |
+| `ADMIN_EMAIL_CHANGE_NOT_ALLOWED` | 403 | no | Tenant admin cannot change this global identity email; use UPDATE_EMAIL or operator global recovery |
 | `ADMIN_REQUIRED` | 403 | no | The caller lacks live DIGIT ACCOUNT_ADMIN at the tenant (D5) |
 | `SELF_BINDING_FORBIDDEN` | 403 | no | A browser caller tried to bind themselves |
 | `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds a role the caller lacks |

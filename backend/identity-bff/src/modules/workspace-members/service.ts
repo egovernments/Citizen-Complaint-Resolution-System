@@ -5,7 +5,9 @@ import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.j
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
-import { ensureOrganizationMembership, request, sendPasswordSetupEmail } from "../organizations/organization-service.js";
+import { ensureOrganizationMembership, isOrganizationMember, request, sendPasswordSetupEmail } from "../organizations/organization-service.js";
+import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
+import { organizationAttribute } from "../onboarding/primitives.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
@@ -193,10 +195,25 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
   if (rows.length !== 1) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No active binding matches the employee");
   const subject = rows[0].user.id!;
   return withPersonLease(subject, async (lease) => {
-    const active = (await readBindings(subject)).find((b) => b.tenantId === tenantId && b.uuid === digitUuid && b.state === "active");
+    const bindings = await readBindings(subject);
+    const active = bindings.find((b) => b.tenantId === tenantId && b.uuid === digitUuid && b.state === "active");
     if (!active) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "The binding is no longer active");
+    const denied = () => new BindingError("ADMIN_EMAIL_CHANGE_NOT_ALLOWED", "Use self-service UPDATE_EMAIL or operator global recovery");
+    if (actor === subject || bindings.some((b) => b.tenantId !== tenantId && b.state === "active")) throw denied();
+    // Re-read live authority under the lease: email is a global recovery identifier.
+    const caller = await requireAccountAdmin(actor, tenantId);
+    const target = await readDigitAccount(tenantId, digitUuid);
+    if (!target) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "The employee is no longer available");
+    const roles = new Set(caller.roles.filter((r) => r.tenantId === tenantId).map((r) => r.code));
+    if (target.roles.some((r) => r.tenantId === tenantId && !roles.has(r.code))) throw denied();
+    // Membership can exist without a binding (including managed founder accounts).
+    // Disabled workspaces are included: their membership can later be reactivated.
+    for (const org of await readOnboardingOrganizations()) {
+      if (organizationAttribute(org, "rootTenantId") !== tenantId && await isOrganizationMember(org.id, subject)) throw denied();
+    }
     const owner = await findPerson(email, true);
     if (owner?.id && owner.id !== subject) throw new BindingError("IDENTITY_EMAIL_CHANGED", "This email belongs to another identity");
+    await lease.assertHeld();
     try {
       await updateKeycloakUser(subject, (user) => ({ ...user, email, emailVerified: false }), { allowEmailChange: true });
     } catch (error) {

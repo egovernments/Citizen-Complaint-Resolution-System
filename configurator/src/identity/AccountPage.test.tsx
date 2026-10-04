@@ -4,13 +4,17 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import AccountPage from './AccountPage';
 import { authMethods, logout, session } from '@/api/onboarding';
 import { accountAction, unlinkProvider } from './api';
-import { clearLocalSession } from '@/lib/session';
+import { AUTH_STORAGE_KEY } from '@/lib/session';
 vi.mock('@/api/onboarding', () => ({ authMethods: vi.fn(), logout: vi.fn(), session: vi.fn() }));
 vi.mock('./api', () => ({ accountAction: vi.fn(), unlinkProvider: vi.fn() }));
-vi.mock('@/lib/session', () => ({ clearLocalSession: vi.fn() }));
+vi.mock('@/api', () => ({ apiClient: { logout: vi.fn() } }));
+vi.mock('@/providers/bridge', () => ({ digitClient: { clearAuth: vi.fn() }, resetProviders: vi.fn() }));
+vi.mock('@/lib/telemetry', () => ({ clearUser: vi.fn() }));
 vi.mock('@/hooks/useAuthResult', () => ({ useAuthResult: () => ({ result: null, error: null }) }));
 beforeEach(() => {
   vi.resetAllMocks();
+  window.localStorage.clear();
+  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ isAuthenticated: true, authToken: "test-digit-token" }));
   vi.mocked(session).mockResolvedValue({ authenticated: true, account: { actions: ['UPDATE_PASSWORD', 'CONFIGURE_TOTP', 'UPDATE_EMAIL', 'delete_credential', 'idp_link'], credentials: [{ id: 'password', type: 'password', label: 'Password' }, { id: 'otp', type: 'otp', label: 'Phone app' }], providers: [{ alias: 'google' }] }, sessions: [{ id: 's', current: true, surface: 'configurator', createdAt: 1, lastSeenAt: 1 }] });
   vi.mocked(authMethods).mockResolvedValue({ methods: [{ id: 'github', idpHint: 'github', type: 'idp', label: 'GitHub' }] });
 });
@@ -34,10 +38,19 @@ it('surfaces last-method protection from the provider unlink', async () => {
 it('signs out others without dropping the initiating local session', async () => {
   page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out other sessions' }));
   await waitFor(() => expect(logout).toHaveBeenCalledWith('others'));
-  expect(clearLocalSession).not.toHaveBeenCalled();
+  expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toContain("test-digit-token");
 });
 it('signs out everywhere and clears the local token after acknowledgement', async () => {
   page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
-  await waitFor(() => expect(clearLocalSession).toHaveBeenCalled());
+  await waitFor(() => expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull());
   expect(logout).toHaveBeenCalledWith('all');
+});
+it('keeps the local token until logout is acknowledged', async () => {
+  let acknowledge!: () => void;
+  vi.mocked(logout).mockReturnValue(new Promise<void>((resolve) => { acknowledge = resolve; }));
+  page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
+  await waitFor(() => expect(logout).toHaveBeenCalledWith('all'));
+  expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toContain('test-digit-token');
+  acknowledge();
+  await waitFor(() => expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull());
 });

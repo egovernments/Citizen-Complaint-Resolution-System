@@ -1463,8 +1463,7 @@ describe('fixed citizen OTP settings are shared with egov-user', () => {
     const end = rest.slice(1).search(/\n  [a-z0-9-]+:\n/);
     return end < 0 ? rest : rest.slice(0, end + 1);
   };
-  // Same variables as egov-user, but the BFF defaults the switch OFF: an unset
-  // .env must never make it accept 123456 for any phone (review, #2199).
+  // Both services default OFF: an unset .env must never enable a public code.
   const vars = [
     'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}',
     'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}',
@@ -1472,14 +1471,46 @@ describe('fixed citizen OTP settings are shared with egov-user', () => {
 
   test('egov-user and identity-bff read the same variables', () => {
     const compose = read('local-setup/docker-compose.egov-digit.yaml');
-    expect(service(compose, 'egov-user')).toContain('${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-');
-    expect(service(compose, 'egov-user')).toContain(vars[1]);
+    for (const v of vars) expect(service(compose, 'egov-user')).toContain(v);
     for (const v of vars) expect(service(compose, 'identity-bff')).toContain(v);
   });
+
+  test.each(['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml'])(
+    '%s also requires explicit fixed-OTP opt-in', (file) => {
+      expect(service(read(file), 'egov-user')).toContain(vars[0]);
+    },
+  );
 
   test('the identity overlay passes them from the stack .env, off by default', () => {
     const overlay = read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml');
     for (const v of vars) expect(service(overlay, 'identity-bff')).toContain(v);
+  });
+});
+
+// Execute the real Jinja expressions, rather than merely matching their source.
+// Python/Jinja2 is the same template engine used by the deployment tooling.
+describe('rendered OTP deployment defaults', () => {
+  const render = (variables: Record<string, unknown>) => JSON.parse(execFileSync(process.env.PYTHON || 'python3', ['-c', `
+import json, sys
+from pathlib import Path
+from jinja2 import Environment, StrictUndefined
+source = Path(sys.argv[1]).read_text()
+keys = ('CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED=', 'IDENTITY_CITIZEN_OTP_SENDER=')
+source = "\\n".join(line for line in source.splitlines() if line.startswith(keys))
+rendered = Environment(undefined=StrictUndefined).from_string(source).render(json.loads(sys.argv[2]))
+print(json.dumps(dict(line.split('=', 1) for line in rendered.splitlines())))
+`, path.join(REPO_ROOT, 'local-setup/ansible/templates/digit.env.j2'), JSON.stringify(variables)], { encoding: 'utf8' }));
+
+  test.each([{}, { enable_otp_services: false }, { enable_otp_services: true }, { identity_dev_fixed_otp: false }])(
+    'never implicitly enables fixed codes or log delivery: %j', (variables) => {
+      expect(render(variables)).toEqual({ CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'false', IDENTITY_CITIZEN_OTP_SENDER: '' });
+    },
+  );
+  test('explicit development opt-in enables the fixed code and log sender', () => {
+    expect(render({ identity_dev_fixed_otp: true })).toEqual({ CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true', IDENTITY_CITIZEN_OTP_SENDER: 'log' });
+  });
+  test('an explicit real sender keeps fixed codes disabled', () => {
+    expect(render({ identity_citizen_otp_sender: 'http' })).toEqual({ CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'false', IDENTITY_CITIZEN_OTP_SENDER: 'http' });
   });
 });
 
@@ -1492,7 +1523,7 @@ describe('citizen phone OTP deployment', () => {
     expect(script).toMatch(/\nconfigure_user_profile\n/);
   });
 
-  test('development boxes offer phone_otp with the log sender', () => {
+  test('phone_otp delivery requires configuration or an explicit development opt-in', () => {
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
     expect(playbook).toContain(
       "identity_citizen_signin_methods\n             | default([] if (enable_otp_services | default(false)) else ['phone_otp'])");
@@ -1500,7 +1531,7 @@ describe('citizen phone OTP deployment', () => {
       'KEYCLOAK_CITIZEN_SIGNIN_METHODS: "{{ identity_citizen_signin_methods_effective | join(\',\') }}"');
     expect(playbook).toContain('IDENTITY_CITIZEN_OTP_SECRET={{ identity_secrets.identity_citizen_otp_secret }}');
     expect(read('local-setup/ansible/templates/digit.env.j2')).toContain(
-      "IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('' if (enable_otp_services | default(false)) else 'log') }}");
+      "IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if (identity_dev_fixed_otp | default(false)) else '') }}");
   });
 
   test('the BFF receives the OTP secret and sender', () => {

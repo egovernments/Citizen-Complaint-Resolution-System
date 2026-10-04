@@ -770,8 +770,10 @@ identity_smtp_starttls: true
 identity_employee_login_theme: "digit-employee"
 identity_employee_signin_methods: [password]
 # Citizen sign-in methods (#2189). Unset: [phone_otp] on development boxes
-# (enable_otp_services: false; codes go to the BFF log, see
-# identity_citizen_otp_sender) and [] elsewhere until a real SMS sender exists.
+# (enable_otp_services: false) and [] elsewhere until a real SMS sender exists.
+# Delivery is unconfigured by default. Fixed OTP and log delivery require
+# this separate development-only opt-in; never enable it with real users.
+# identity_dev_fixed_otp: true
 # identity_citizen_signin_methods: [phone_otp]
 # identity_citizen_otp_sender: log
 # Existing DIGIT roots (e.g. Bomet's `ke`) have no Organization, so no

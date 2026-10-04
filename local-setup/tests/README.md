@@ -1,5 +1,10 @@
 # Tests
 
+Static deployment contracts require Python 3 with Jinja2 (`python3 -m pip install Jinja2`).
+Run them with `npx jest --runInBand static/`. Set `PYTHON` to an alternate Python
+interpreter if needed. OTP tests render the template's actual configuration
+expressions with unset defaults and explicit development overrides.
+
 ## Layout
 
 - `e2e/specs/` — Playwright end-to-end tests against a running DIGIT UI + backend stack.
