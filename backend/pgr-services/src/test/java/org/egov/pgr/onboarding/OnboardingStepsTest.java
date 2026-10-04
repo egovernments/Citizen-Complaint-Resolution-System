@@ -85,4 +85,17 @@ public class OnboardingStepsTest {
         op.setFounderDigitUuid("prior-uuid");assertEquals("FOUNDER_NOT_FOUND",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
         verify(client,never()).post(eq("hrms"),contains("_create"),anyMap());
     }
+    @Test public void asynchronousBoundaryWriteIsNotCheckpointedUntilVisible() throws Exception {
+        String path="/boundary-service/boundary-hierarchy-definition/_search";
+        when(client.post(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}"));
+        assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+        assertEquals("STARTED",op.getRecordProgress().get("boundary-hierarchy"));
+        prerequisites();assertEquals("DONE",op.getRecordProgress().get("boundary-hierarchy"));
+        verify(client,times(1)).post(eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_create"),anyMap());
+    }
+    @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
+        when(client.post(eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
+        OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));
+        assertTrue(failure.isRetryable());assertEquals("STARTED",op.getRecordProgress().get("schema:tenant.tenants"));
+    }
 }

@@ -1,6 +1,6 @@
 # Onboarding implementation review evidence
 
-Current port evidence is in `onboarding-worker-replacements.md`. The port task remains accepted; seed/MCP and workspace/rename ownership moved to onb-seed and onb-workspace. Earlier counts below are historical checkpoints.
+Current port evidence is in `onboarding-worker-replacements.md`. Source port implementation is complete with the live check pending 8c gate; seed/MCP and workspace/rename ownership moved to onb-seed and onb-workspace. Earlier counts below are historical checkpoints.
 The coordinated BFF worker cutover is not approved by this evidence.
 
 Executed locally with JDK 17:

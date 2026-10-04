@@ -111,25 +111,26 @@ public class OnboardingSteps {
     }
 
     private void rootBoundary(String tenant, OnboardingProgress progress) {
-        progress.record("boundary-hierarchy", () -> {
-            JsonNode existing = client.post("boundary", "/boundary-service/boundary-hierarchy-definition/_search", Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType","ADMIN"))).path("BoundaryHierarchy");
-            if (!existing.isArray() || existing.isEmpty()) {
-                Map<String,Object> root = new LinkedHashMap<>(); root.put("boundaryType", "ROOT"); root.put("parentBoundaryType", null); root.put("active", true);
-                client.post("boundary", "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
-                        Map.of("tenantId", tenant, "hierarchyType", "ADMIN", "boundaryHierarchy", List.of(root))));
-            }
-        });
-        progress.record("boundary-root", () -> {
-            JsonNode existing = client.post("boundary", "/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant, Map.of()).path("Boundary");
-            if (!existing.isArray() || existing.isEmpty()) client.post("boundary", "/boundary-service/boundary/_create",
-                    Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant))));
-        });
-        progress.record("boundary-relationship", () -> {
-            JsonNode existing = client.post("boundary", "/boundary-service/boundary-relationships/_search",
-                    Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "hierarchyType", "ADMIN"))).path("TenantBoundary");
-            if (!existing.isArray() || existing.isEmpty()) client.post("boundary", "/boundary-service/boundary-relationships/_create",
-                    Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "code", tenant, "hierarchyType", "ADMIN", "boundaryType", "ROOT")));
-        });
+        Map<String,Object> root = new LinkedHashMap<>(); root.put("boundaryType", "ROOT"); root.put("parentBoundaryType", null); root.put("active", true);
+        progress.record("boundary-hierarchy", () -> ensureBoundary("/boundary-service/boundary-hierarchy-definition/_search",
+                Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType","ADMIN")), "BoundaryHierarchy",
+                "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
+                        Map.of("tenantId", tenant, "hierarchyType", "ADMIN", "boundaryHierarchy", List.of(root)))));
+        progress.record("boundary-root", () -> ensureBoundary("/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
+                Map.of(), "Boundary", "/boundary-service/boundary/_create", Map.of("Boundary", List.of(Map.of("tenantId", tenant, "code", tenant)))));
+        progress.record("boundary-relationship", () -> ensureBoundary("/boundary-service/boundary-relationships/_search",
+                Map.of("BoundaryRelationship", Map.of("tenantId", tenant, "hierarchyType", "ADMIN")), "TenantBoundary",
+                "/boundary-service/boundary-relationships/_create", Map.of("BoundaryRelationship",
+                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", "ADMIN", "boundaryType", "ROOT"))));
+    }
+
+    private void ensureBoundary(String search, Map<String,Object> criteria, String field, String create, Map<String,Object> body) {
+        JsonNode existing = client.post("boundary", search, criteria).path(field);
+        if (!existing.isArray()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
+        if (!existing.isEmpty()) return;
+        createProjectedRecord("boundary", create, body);
+        existing = client.post("boundary", search, criteria).path(field);
+        if (!existing.isArray() || existing.isEmpty()) throw new OnboardingFailure("BOUNDARY_NOT_VISIBLE", true);
     }
 
     private void founder(OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
@@ -190,7 +191,7 @@ public class OnboardingSteps {
         if (!found.isArray()) throw new OnboardingFailure("MDMS_INVALID_RESPONSE", true);
         if (!found.isEmpty()) return;
         var body = asMap(schema); body.put("tenantId", tenant); body.put("description", code); body.put("isActive", true);
-        client.post("mdms", "/egov-mdms-service/schema/v1/_create", Map.of("SchemaDefinition", body));
+        createProjectedRecord("mdms", "/egov-mdms-service/schema/v1/_create", Map.of("SchemaDefinition", body));
         found = client.post("mdms", "/egov-mdms-service/schema/v1/_search", Map.of("SchemaDefCriteria", Map.of("tenantId", tenant, "codes", List.of(code)))).path("SchemaDefinitions");
         if (!found.isArray() || found.isEmpty()) throw new OnboardingFailure("MDMS_SCHEMA_NOT_VISIBLE", true);
     }
@@ -207,7 +208,7 @@ public class OnboardingSteps {
     private void ensureRecord(String tenant, String schema, String id, Map<String,Object> data, boolean refresh) {
         JsonNode rows = records(tenant, schema, id);
         if (rows.isEmpty()) {
-            client.post("mdms", "/egov-mdms-service/v2/_create/" + schema, Map.of("Mdms", Map.of(
+            createProjectedRecord("mdms", "/egov-mdms-service/v2/_create/" + schema, Map.of("Mdms", Map.of(
                     "tenantId", tenant, "schemaCode", schema, "uniqueIdentifier", id, "isActive", true, "data", data)));
             rows = records(tenant, schema, id);
         }
@@ -220,6 +221,15 @@ public class OnboardingSteps {
             JsonNode visible = records(tenant, schema, id).path(0).path("data");
             for (var field : data.entrySet()) if (!Objects.equals(visible.get(field.getKey()), mapper.valueToTree(field.getValue())))
                 throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
+        }
+    }
+    private void createProjectedRecord(String service, String path, Map<String,Object> body) {
+        try { client.post(service, path, body); }
+        catch (OnboardingFailure failure) {
+            String code = failure.getCode().toUpperCase(Locale.ROOT);
+            if (code.contains("DUPLICATE") || code.contains("ALREADY_EXIST") || code.equals("PROVISIONING_HTTP_409"))
+                throw new OnboardingFailure("PROVISIONING_RECORD_NOT_VISIBLE", true);
+            throw failure;
         }
     }
     private Map<String,Object> substitute(JsonNode node, String tenant) {

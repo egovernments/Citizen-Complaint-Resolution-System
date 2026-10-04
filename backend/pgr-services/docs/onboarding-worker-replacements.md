@@ -51,4 +51,8 @@ Other PostgreSQL tests exercise lease expiry/replacement fencing, monotonic orga
 
 ## Open integration gate
 
-No DIGIT/Kong stack is currently running in this lane. Fresh founder creation of department, boundary and branding through Kong without 403 remains unverified and has been escalated to onboarding-owner for a shared local integration target. No live host was contacted and no deployment was performed. The port task remains accepted until that gate and owner review are complete. The old BFF worker deletion remains coordinated by the owner.
+**pending 8c gate**: root owns the final fresh-founder department, boundary and branding requests through real DIGIT/Kong from `identity/completion-base`. Root decision `apr_fd351ab1` prohibits a full local stack on this Mac; source testing uses the explicitly disclosed HTTP fixtures. No live host was contacted and no deployment was performed. Source implementation is complete; end-to-end readiness is not claimed. The old BFF worker removal remains blocked until root reports the 8c pass.
+
+## Final source-review follow-up
+
+After integrating the owner's reviewed seed and normalization changes, `OnboardingStepsTest` passed all seven tests. The two added cases are `asynchronousBoundaryWriteIsNotCheckpointedUntilVisible` and `duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup`. Boundary creation now waits for its search projection before checkpointing DONE; duplicate MDMS/boundary create responses after uncertain writes stay retryable. Required search response shapes fail closed. These affected-class checks supplement the full-suite result above; the full suite was not repeated for this narrow follow-up. `docs/evidence/pgr-port-tests.txt` records execution results and log hashes.
