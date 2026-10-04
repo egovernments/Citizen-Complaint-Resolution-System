@@ -2,18 +2,14 @@ import { timingSafeEqual } from "node:crypto";
 import type express from "express";
 import { config } from "../../infrastructure/config.js";
 import {
-  ensureOrganization,
-  ensureOrganizationMembership,
   ensureOrganizationRoleAssignment,
   ensureOrganizationTenantGroup,
   findEnabledIdentityUser,
   IdentityAdminError,
-  organizationIdentifierAvailable,
   readOrganizationMapping,
   readTenantMappingForTenant,
   type TenantMapping,
 } from "../organizations/organization-service.js";
-import { currentSession } from "../sessions/current-session.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { runReconcile } from "../sync/reconcile.js";
 import { syncSubject } from "../reconciliation/subject-sync.js";
@@ -31,6 +27,8 @@ import {
   linksOf,
   removeAccountLink,
 } from "../account-links/account-links.js";
+import { onboardingAuthorization, registerOnboardingRoutes } from "../onboarding/routes.js";
+import { onboardingDependencies } from "../onboarding/production.js";
 import { backfillTenantRoutes } from "../tenant-routes/backfill.js";
 
 function asyncRoute(
@@ -85,11 +83,12 @@ function linkUserType(value: unknown): ManagedUserType {
 export function registerControlPlaneRoutes(app: express.Application): void {
   app.use("/internal/identity/v1", (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
-    const onboardingRead = req.path === "/sessions/_introspect" ||
-      req.path === "/identifiers/_check";
-    const expected = onboardingRead
-      ? config.identitySessionIntrospectionToken
-      : config.identityControlPlaneToken;
+    const onboarding = onboardingAuthorization(req, res);
+    if (onboarding !== undefined) {
+      if (onboarding) next();
+      return;
+    }
+    const expected = config.identityControlPlaneToken;
     if (!expected) {
       return res.status(503).json({ code: "CONTROL_PLANE_NOT_CONFIGURED", error: "Identity control plane is not configured" });
     }
@@ -195,27 +194,7 @@ export function registerControlPlaneRoutes(app: express.Application): void {
     }
   }));
 
-  app.post("/internal/identity/v1/organizations/_ensure", asyncRoute(async (req, res) => {
-    try {
-      const tenantId = requiredString(req.body?.tenantId, "tenantId");
-      const alias = requiredString(req.body?.alias, "alias");
-      const name = requiredString(req.body?.name, "name");
-      if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(alias)) {
-        throw new IdentityAdminError("alias is invalid", 400);
-      }
-      clearTenantCaches();
-      if (!await isActiveDigitTenant(tenantId)) {
-        throw new IdentityAdminError("The DIGIT tenant foundation does not exist yet", 409);
-      }
-      // Control-plane _ensure is an operator-driven idempotent upsert: an
-      // Organization that already maps to the tenant is the expected steady state.
-      const organization = await ensureOrganization({ tenantId, alias, name, adoptExisting: true });
-      clearTenantCaches();
-      return res.json({ organization });
-    } catch (error) {
-      return handleAdminError(error, res);
-    }
-  }));
+  registerOnboardingRoutes(app, onboardingDependencies);
 
   app.post("/internal/identity/v1/tenant-groups/_ensure", asyncRoute(async (req, res) => {
     try {
@@ -287,70 +266,6 @@ export function registerControlPlaneRoutes(app: express.Application): void {
       });
       clearTenantCaches();
       return res.json({ tenant: mapping });
-    } catch (error) {
-      return handleAdminError(error, res);
-    }
-  }));
-
-  app.post("/internal/identity/v1/sessions/_introspect", asyncRoute(async (req, res) => {
-    const current = await currentSession(req.headers.cookie);
-    if (!current) {
-      return res.status(401).json({ error: "Invalid or missing identity session" });
-    }
-    const { claims } = current.session;
-    return res.json({
-      active: true,
-      identity: {
-        issuer: config.keycloakIssuer,
-        subject: claims.sub,
-        email: claims.email,
-        name: claims.name,
-        preferredUsername: claims.preferred_username,
-      },
-    });
-  }));
-
-  app.post("/internal/identity/v1/identifiers/_check", asyncRoute(async (req, res) => {
-    try {
-      const type = requiredString(req.body?.type, "type").toUpperCase();
-      const value = requiredString(req.body?.value, "value");
-      let available = await organizationIdentifierAvailable(type, value);
-      if (available && type === "TENANT_ID") {
-        clearTenantCaches();
-        available = !await isActiveDigitTenant(value.toLowerCase());
-      }
-      return res.json({ type, value, available });
-    } catch (error) {
-      return handleAdminError(error, res);
-    }
-  }));
-
-  // Adds Keycloak Organization membership, then resolves the member's managed
-  // DIGIT account: created when absent (requires mobileNumber) and given the
-  // Organization tenant's base and allowlisted group roles. Existing
-  app.post("/internal/identity/v1/memberships/_ensure", asyncRoute(async (req, res) => {
-    try {
-      const organizationId = requiredString(req.body?.organizationId, "organizationId");
-      const userId = requiredString(req.body?.userId, "userId");
-      if (req.body?.digitUserUuid !== undefined) {
-        throw new IdentityAdminError(
-          "digitUserUuid is not supported: only BFF-managed DIGIT accounts are linked",
-          400,
-        );
-      }
-      const mobileNumber = optionalString(req.body?.mobileNumber, "mobileNumber") || "";
-      const countryCode = optionalString(req.body?.countryCode, "countryCode") || "";
-      const mapping = await readOrganizationMapping(organizationId);
-      if (!mapping) {
-        throw new IdentityAdminError("Organization is not mapped to a DIGIT tenant", 404);
-      }
-      await ensureOrganizationMembership({ organizationId, userId });
-      const outcome = (await syncSubject(userId, mobileNumber, countryCode)).get(mapping.tenantId);
-      return res.json({
-        tenantId: mapping.tenantId,
-        digitUserUuid: outcome?.account?.uuid ?? null,
-        created: outcome?.created ?? false,
-      });
     } catch (error) {
       return handleAdminError(error, res);
     }

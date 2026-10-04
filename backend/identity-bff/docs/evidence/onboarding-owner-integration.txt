@@ -1,0 +1,118 @@
+2026-10-04 owner integration checkpoint, primitives merged at 55a61d6c0
+
+REDIS_HOST=127.0.0.1 REDIS_PORT=16382 npx vitest run
+Test Files 36 passed | 1 skipped (37)
+Tests 467 passed | 5 skipped | 13 todo (485)
+Exit 0
+
+npx tsc --noEmit
+Exit 0
+
+local-setup/tests: npx jest --runInBand static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts static/mcp-baseline-packaging.test.ts
+Test Suites 3 passed, 3 total
+Tests 108 passed, 108 total
+Exit 0; local Python PATH includes PyYAML for the existing preflight check.
+
+Modified CI/Ansible YAML parsed; bash -n mcp-build.sh passed.
+Git/Docker wrapper tests use local stubs. No image build, push or deployment.
+Initial BFF test attempt lacked a running Redis; dedicated Redis started and
+the full suite above reran successfully. Skipped/todo tests are not verified.
+This earlier checkpoint predates the source integration below.
+
+
+2026-10-04 final source integration at 91cd26feb
+Root core base94ae613eb and shared reader6c2e0d98c are ancestors.
+Integrated PGR9ba66e722, workspace a6029e035, seed e34e9872d and BFF548492f35.
+Merge conflicts: retained workspace route tests (superset of inherited PGR cases);
+combined named onboarding imports with core spy namespaces in BFF e2e tests;
+retained live onboarding routes and core live reconciliation in documentation.
+No production conflict in access-context or mobileValidationForRoute on this branch.
+
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home backend/pgr-services/src/test/fixtures/run-onboarding-recovery.sh --full
+Exit 0; 560 tests run, 554 passed, 6 skipped, 0 failures/errors.
+PostgreSQL16 on16432 and existing Redis16382; isolated schemas and Redis prefix.
+Actual production BFF onboarding/core providers called over HTTP; Keycloak/DIGIT
+are HTTP fixtures and browser session introspection is mocked.
+
+REDIS_HOST=127.0.0.1 REDIS_PORT=16382 npx vitest run (backend/identity-bff)
+Exit 0; 43 files passed, 3 skipped; 589 tests passed, 11 skipped, 8 todo.
+npx tsc --noEmit (backend/identity-bff): exit0.
+Skipped/todo tests are not verified. No additional full-suite rerun.
+
+Log SHA256:
+.artifacts/onboarding/owner-combined-pgr.log 7b08ce87038c799609f932248c4bf486c8431b8747402f7e376983df848d42f2
+.artifacts/onboarding/owner-combined-bff.log 10e967597179c06587eead2c3da115ba38390886d9545b8e40513a8f6a09d0e6
+.artifacts/onboarding/owner-final-typecheck.log e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+Executed PGR acceptance cases (owner combined suite):
+org.egov.pgr.onboarding.OnboardingPostgresTest {'tests': '6', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS realSubmitEndpointReopensFailedBoundFounderWithSameAndChangedSlug
+  PASS historicalEnsureCannotUseNoIdentitySideEffectsBypass
+  PASS terminalBeforeAnyEnsureSettlesPublicationAndRestartKeepsFounder
+  PASS expiredOrReplacedLeaseCannotCheckpointOrFinish
+  PASS actualBffBoundFounderRestartCollisionAndCrashBeforeAcknowledgement
+  PASS signupWorkspaceAndDecisionRollbackTogetherThenCommitTogether
+org.egov.pgr.onboarding.OnboardingProvisionerClientTest {'tests': '2', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS onlyFixedCacheBustAcceptsSuccessfulEmptyBody
+  PASS errorEnvelopePreservesDuplicateClassificationAndServerFailuresRetry
+org.egov.pgr.onboarding.OnboardingRecoveryTest {'tests': '5', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS crashAtEveryStepResumesWithoutRepeatingCompletedSteps
+  PASS perRecordIntentSurvivesCrashAndCompletionIsFenced
+  PASS uncertainEnsureIsRecoveredBeforeFailedPublicationAndReplayedUntilAck
+  PASS lostLeaseCannotWriteOrFinish
+  PASS staleLifecycleIsAcknowledgedWithoutRetry
+org.egov.pgr.onboarding.OnboardingStepsTest {'tests': '7', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS asynchronousBoundaryWriteIsNotCheckpointedUntilVisible
+  PASS foreignTenantCollisionFailsBeforeEncryptionOrFounder
+  PASS founderValidationIsCorrectableAndDuplicateProjectionIsRetried
+  PASS retryUpdatesOwnedTenantNameAndStateInfoAndIncludesOnlyVerifiedEmail
+  PASS completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy
+  PASS foundationTransportFailureIsRetryableAndMissingFounderNeverReplaced
+  PASS duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup
+org.egov.pgr.onboarding.WorkspaceGatewayTest {'tests': '3', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS publisherWritesAuthoritativeMdmsEveryLocaleAndAcceptsEmptyCacheBust
+  PASS nameCheckUsesDedicatedBearerAndExactBatchWire
+  PASS occupiedLegacyNameAndUnreadableResultsFailClosed
+org.egov.pgr.onboarding.WorkspaceNameNormalizationTest {'tests': '1', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS signupAndRenameShareIdempotentUnicodeKeys
+org.egov.pgr.onboarding.WorkspacePostgresTest {'tests': '12', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS signupReservationWinsConcurrentRenameWithoutTheft
+  PASS canonicalCollisionAbortsWithoutPartialNormalizationOrOwnershipChanges
+  PASS staleCompletionCannotRetireNewReservationsOrOverwriteNewName
+  PASS partialPublicationKeepsBothNamesAndResumesWithoutRepeatingAcknowledgedWrites
+  PASS crossTableOwnershipCollisionRollsBackUnderFlyway
+  PASS renameAndSetupAtSameVersionCommitExactlyOnce
+  PASS productionFlywayParserExecutesDollarQuotedMigrationTransactionally
+  PASS releasedIdentifierCollisionAlsoAbortsWithoutDeletingHistory
+  PASS normalizationMigrationPreservesOwnersHistoryAndMatchesJavaForOldKeys
+  PASS activationIsAtomicIdempotentAndAudited
+  PASS renameReservationWinsConcurrentSignupWithoutTheft
+  PASS simultaneousFirstLegacyRenamesSerializeAndStayUngated
+org.egov.pgr.onboarding.WorkspaceRouteTest {'tests': '8', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS allRoutesRejectForgedCallerRoleAndCrossTenantAdmin
+  PASS probesExcludePlatformPrerequisitesAndInactiveRows
+  PASS normalDigitTokenReturnsLegacyWithoutProbesAndFreshlyChecksEachRequest
+  PASS absentTokenAndDisabledUserAreUnauthorized
+  PASS unreadableLocalReservationReturns503WithoutRenameWrites
+  PASS unreadableWorkspaceRowReturns503BeforeNameChecksOrRenameWrites
+  PASS unreadableProbeReturns503InsteadOfFalseReadiness
+  PASS unreadableBffNameCheckReturns503WithoutRenameWrites
+org.egov.pgr.onboarding.WorkspaceServiceTest {'tests': '9', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS partialRenameRetriesOnlyUnacknowledgedWrites
+  PASS renameReplayPrecedesVersionConflictAndReturnsCurrentState
+  PASS unchangedAuthoritativeNameSkipsExternalSelfCollision
+  PASS legacySearchDoesNotWriteOrProbe
+  PASS overallDoneRequiresEveryStepDoneOrBrandingSkipped
+  PASS newRenameCapturesAllLanguagesAndHoldsBothNames
+  PASS staleVersionCannotWriteOrProbe
+  PASS localConflictPrecedesBffAndOccupiedLegacyNameCannotReserve
+  PASS doneRequiresProbeAndOnlyBrandingCanSkip
+org.egov.pgr.service.CitizenLookupTest {'tests': '3', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS legacyUsernameStillWins
+  PASS existingNameUpdateIsPreserved
+  PASS bffCitizenIsFoundByMobileWithoutDuplicate
+
+Only design-held work: pending 8c gate (root apr_fd351ab1) for fresh founder
+creating department, boundary and branding through real DIGIT/Kong. BFF worker
+removal remains held until root confirms pass and owner releases removal task.
+No live deployment. Parent and original cutover acceptance remain incomplete.

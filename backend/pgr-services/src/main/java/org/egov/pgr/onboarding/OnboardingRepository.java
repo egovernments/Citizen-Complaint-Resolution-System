@@ -23,9 +23,9 @@ public class OnboardingRepository {
     // "cached plan must not change result type" once a migration adds columns.
     private static final String SIGNUP_COLUMNS = "id, owner_issuer, owner_subject, status, account_name, " +
             "account_code, organization_alias, requested_tenant_id, url_slug, country_code, languages, time_zone, " +
-            "financial_year_policy, accepted_terms_version, tenant_metadata, version, created_at, updated_at";
+            "financial_year_policy, accepted_terms_version, tenant_metadata, version, created_at, updated_at, founder_name, founder_email, founder_email_verified";
     private static final String OPERATION_COLUMNS = "id, signup_id, status, current_step, completed_steps, " +
-            "error_code, error_message, attempt, created_at, updated_at";
+            "error_code, error_message, attempt, created_at, updated_at, restart_no, record_progress, founder_digit_uuid, lifecycle_decision, lifecycle_restart_no, lifecycle_published_at, organization_ensure_started";
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -93,6 +93,12 @@ public class OnboardingRepository {
     }
 
     public boolean identifierAvailable(String type, String value, UUID signupId) {
+        if ("ORGANIZATION_NAME".equals(type)) {
+            Integer reserved = jdbcTemplate.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace_name n " +
+                            "WHERE normalized_name=? AND NOT EXISTS (SELECT 1 FROM eg_pgr_onboarding_signup s WHERE s.id=? AND s.requested_tenant_id=n.tenant_id)",
+                    Integer.class, value, signupId == null ? new UUID(0,0) : signupId);
+            if (reserved != null && reserved > 0) return false;
+        }
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM eg_pgr_onboarding_identifier " +
                         "WHERE identifier_type = ? AND normalized_value = ? AND status <> 'RELEASED' AND signup_id <> ?",
@@ -102,11 +108,18 @@ public class OnboardingRepository {
 
     public void reserveIdentifier(String type, String value, UUID signupId, long now) {
         try {
+            if ("ORGANIZATION_NAME".equals(type)) {
+                int reserved = jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_workspace_name(normalized_name,tenant_id) " +
+                                "SELECT ?,requested_tenant_id FROM eg_pgr_onboarding_signup WHERE id=? " +
+                                "ON CONFLICT(normalized_name) DO UPDATE SET tenant_id=EXCLUDED.tenant_id " +
+                                "WHERE eg_pgr_onboarding_workspace_name.tenant_id=EXCLUDED.tenant_id", value,signupId);
+                if (reserved != 1) throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", "Organization name is already reserved");
+            }
             int changed = jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_identifier " +
                             "(identifier_type, normalized_value, signup_id, status, reserved_at) " +
                             "VALUES (?, ?, ?, 'RESERVED', ?) " +
-                            "ON CONFLICT (identifier_type, normalized_value) DO UPDATE SET status = 'RESERVED' " +
-                            "WHERE eg_pgr_onboarding_identifier.signup_id = EXCLUDED.signup_id",
+                            "ON CONFLICT (identifier_type, normalized_value) DO UPDATE SET status = 'RESERVED', signup_id = EXCLUDED.signup_id " +
+                            "WHERE eg_pgr_onboarding_identifier.signup_id = EXCLUDED.signup_id OR eg_pgr_onboarding_identifier.status = 'RELEASED'",
                     type, value, signupId, now);
             if (changed != 1) {
                 throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", type + " is already reserved");
@@ -139,12 +152,22 @@ public class OnboardingRepository {
         jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET status = 'PROVISIONING', version = version + 1, " +
                 "updated_at = ? WHERE id = ? AND status = 'DRAFT'", now, operation.getSignupId());
         int changed = jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET status = 'PENDING', " +
-                        "error_code = NULL, error_message = NULL, attempt = attempt + 1, " +
-                        "idempotency_key = ?, updated_at = ? WHERE id = ? AND status = 'TERMINAL_FAILED'",
+                        "error_code = NULL, error_message = NULL, attempt = attempt + 1, restart_no = restart_no + 1, " +
+                        "completed_steps = '[]'::jsonb, record_progress = '{}'::jsonb, " +
+                        "lifecycle_decision = NULL, lifecycle_restart_no = NULL, lifecycle_decided_at = NULL, " +
+                        "lifecycle_published_at = NULL, lifecycle_publication_reason = NULL, lifecycle_next_publish_at = NULL, lifecycle_publish_attempts = 0, " +
+                        "idempotency_key = ?, updated_at = ? WHERE id = ? AND status = 'TERMINAL_FAILED' " +
+                        "AND (lifecycle_decision IS NULL OR lifecycle_published_at IS NOT NULL)",
                 idempotencyKey, now, operation.getId());
         if (changed != 1) {
             throw new CustomException("ONBOARDING_OPERATION_NOT_RETRYABLE", "The operation is not retryable");
         }
+        operation.setRestartNo(operation.getRestartNo() + 1);
+        operation.setCompletedSteps(new java.util.ArrayList<>());
+        operation.setRecordProgress(new java.util.LinkedHashMap<>());
+        operation.setLifecycleDecision(null);
+        operation.setLifecycleRestartNo(null);
+        operation.setLifecyclePublishedAt(null);
         operation.setStatus("PENDING");
         operation.setErrorCode(null);
         operation.setErrorMessage(null);
@@ -212,9 +235,15 @@ public class OnboardingRepository {
                                    String currentStep, String errorCode, String errorMessage, long now) {
         int changed = jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET status = ?, " +
                         "completed_steps = ?::jsonb, current_step = ?, error_code = ?, error_message = ?, " +
+                        "lifecycle_published_at = CASE WHEN ? = 'FAILED' AND NOT organization_ensure_started THEN ? ELSE NULL END, " +
+                        "lifecycle_publication_reason = CASE WHEN ? = 'FAILED' AND NOT organization_ensure_started THEN 'NO_IDENTITY_SIDE_EFFECTS' ELSE NULL END, " +
+                        "lifecycle_decision = ?, lifecycle_restart_no = CASE WHEN ?::varchar IS NULL THEN NULL ELSE restart_no END, " +
+                        "lifecycle_decided_at = ?, lifecycle_next_publish_at = ?, " +
                         "lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = ? " +
-                        "WHERE id = ? AND status = 'RUNNING' AND lease_token = ?",
-                status, json(completedSteps), currentStep, errorCode, errorMessage, now, operationId, leaseToken);
+                        "WHERE id = ? AND status = 'RUNNING' AND lease_token = ? AND lease_expires_at > ?",
+                status, json(completedSteps), currentStep, errorCode, errorMessage,
+                decision(status), now, decision(status), decision(status), decision(status), decision(status) == null ? null : now,
+                decision(status) == null ? null : now, now, operationId, leaseToken, now);
         return changed == 1;
     }
 
@@ -232,12 +261,64 @@ public class OnboardingRepository {
                 "WHERE id = ?", signupStatus, now, signupId);
         jdbcTemplate.update("UPDATE eg_pgr_onboarding_identifier SET status = ? WHERE signup_id = ?",
                 identifierStatus, signupId);
+        if ("ACTIVE".equals(signupStatus)) {
+            jdbcTemplate.update("WITH created AS (INSERT INTO eg_pgr_onboarding_workspace(tenant_id,status,steps,version,seed_version,updated_at,updated_by) " +
+                            "SELECT requested_tenant_id,'NOT_STARTED',?::jsonb,1,'1',?,owner_subject FROM eg_pgr_onboarding_signup WHERE id=? " +
+                            "ON CONFLICT DO NOTHING RETURNING tenant_id) " +
+                            "INSERT INTO eg_pgr_onboarding_workspace_event(id,tenant_id,event_type,version,details,created_at,created_by) " +
+                            "SELECT ?,tenant_id,'CREATED',1,'{}'::jsonb,?,'pgr-onboarding' FROM created",
+                    json(WorkspaceRepository.initialSteps("NOT_STARTED",now,"pgr-onboarding")),now,signupId,UUID.randomUUID(),now);
+        }
+    }
+
+    public void snapshotFounder(UUID signupId, OnboardingPrincipal principal) {
+        jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET founder_name = ?, founder_email = ?, " +
+                        "founder_email_verified = ? WHERE id = ? AND status = 'DRAFT'",
+                principal.getName(), principal.isEmailVerified() ? principal.getEmail() : null,
+                principal.isEmailVerified(), signupId);
+    }
+
+    /** Every checkpoint is fenced, including the intent before a remote write. */
+    public boolean checkpoint(OnboardingOperation operation, UUID token, long now) {
+        return jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET record_progress = ?::jsonb, " +
+                        "completed_steps = ?::jsonb, current_step = ?, founder_digit_uuid = ?, " +
+                        "organization_ensure_started = organization_ensure_started OR ?, " +
+                        "lease_expires_at = ?, updated_at = ? WHERE id = ? AND restart_no = ? " +
+                        "AND status = 'RUNNING' AND lease_token = ? AND lease_expires_at > ?",
+                json(operation.getRecordProgress()), json(operation.getCompletedSteps()), operation.getCurrentStep(),
+                operation.getFounderDigitUuid(), operation.isOrganizationEnsureStarted(), now + 120000, now, operation.getId(), operation.getRestartNo(), token, now) == 1;
+    }
+
+    public List<OnboardingOperation> pendingPublications(long now) {
+        return jdbcTemplate.query("SELECT " + OPERATION_COLUMNS + " FROM eg_pgr_onboarding_operation " +
+                "WHERE lifecycle_decision IS NOT NULL AND lifecycle_published_at IS NULL " +
+                "AND lifecycle_next_publish_at <= ? ORDER BY lifecycle_next_publish_at LIMIT 20 FOR UPDATE SKIP LOCKED",
+                operationMapper(), now);
+    }
+
+    public boolean acknowledgePublication(OnboardingOperation operation, long now) {
+        return jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET lifecycle_published_at = ? " +
+                        "WHERE id = ? AND restart_no = ? AND lifecycle_decision = ? AND lifecycle_published_at IS NULL",
+                now, operation.getId(), operation.getLifecycleRestartNo(), operation.getLifecycleDecision()) == 1;
+    }
+
+    public void deferPublication(OnboardingOperation operation, long now) {
+        jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET lifecycle_publish_attempts = lifecycle_publish_attempts + 1, " +
+                        "lifecycle_next_publish_at = ? + LEAST(300000, 1000 * power(2, LEAST(lifecycle_publish_attempts, 8))) " +
+                        "WHERE id = ? AND restart_no = ? AND lifecycle_published_at IS NULL",
+                now, operation.getId(), operation.getLifecycleRestartNo());
+    }
+
+    private String decision(String status) {
+        return "SUCCEEDED".equals(status) ? "ACTIVE" : "TERMINAL_FAILED".equals(status) ? "FAILED" : null;
     }
 
     private RowMapper<OnboardingSignup> signupMapper() {
         return (rs, rowNum) -> OnboardingSignup.builder()
                 .id(uuid(rs, "id")).ownerIssuer(rs.getString("owner_issuer"))
-                .ownerSubject(rs.getString("owner_subject")).status(rs.getString("status"))
+                .ownerSubject(rs.getString("owner_subject"))
+                .founderName(rs.getString("founder_name")).founderEmail(rs.getString("founder_email"))
+                .founderEmailVerified(rs.getBoolean("founder_email_verified")).status(rs.getString("status"))
                 .accountName(rs.getString("account_name")).accountCode(rs.getString("account_code"))
                 .organizationAlias(rs.getString("organization_alias"))
                 .requestedTenantId(rs.getString("requested_tenant_id")).urlSlug(rs.getString("url_slug"))
@@ -253,7 +334,12 @@ public class OnboardingRepository {
                 .id(uuid(rs, "id")).signupId(uuid(rs, "signup_id")).status(rs.getString("status"))
                 .currentStep(rs.getString("current_step")).completedSteps(strings(rs.getString("completed_steps")))
                 .errorCode(rs.getString("error_code")).errorMessage(rs.getString("error_message"))
-                .attempt(rs.getInt("attempt")).createdAt(rs.getLong("created_at"))
+                .attempt(rs.getInt("attempt")).restartNo(rs.getInt("restart_no"))
+                .organizationEnsureStarted(rs.getBoolean("organization_ensure_started"))
+                .recordProgress(map(rs.getString("record_progress"))).founderDigitUuid(rs.getString("founder_digit_uuid"))
+                .lifecycleDecision(rs.getString("lifecycle_decision"))
+                .lifecycleRestartNo((Integer) rs.getObject("lifecycle_restart_no"))
+                .lifecyclePublishedAt((Long) rs.getObject("lifecycle_published_at")).createdAt(rs.getLong("created_at"))
                 .updatedAt(rs.getLong("updated_at")).build();
     }
 

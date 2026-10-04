@@ -3,6 +3,7 @@ package org.egov.pgr.onboarding;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -72,7 +73,9 @@ public class OnboardingIdentifierService {
     }
 
     public String normalizeOrganizationName(String value) {
-        return value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        return Normalizer.normalize(Normalizer.normalize(value, Normalizer.Form.NFC)
+                .replaceAll("[\\u0009-\\u000D\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]+", " ")
+                .trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFC);
     }
 
     private String normalize(String type, String value, String field) {

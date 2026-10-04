@@ -1,0 +1,39 @@
+PGR port source verification — 2026-10-04
+Full suite at c8b18b4c3 source: 536 run, 530 passed, 6 skipped, 0 failures/errors.
+Command: JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home backend/pgr-services/src/test/fixtures/run-onboarding-recovery.sh --full
+Actual BFF/Redis/PostgreSQL recovery included. Keycloak/DIGIT are HTTP fixtures; session introspector mocked.
+Follow-up OnboardingStepsTest after owner seed merge and asynchronous-projection fix: 7 run, 0 failures/errors/skips.
+Live founder DIGIT/Kong no403: pending 8c gate (root apr_fd351ab1); worker removal remains blocked.
+
+.artifacts/onboarding/pgr-final-test.log: SHA256 c780fd57c6d5281b595a132fcced010440b63db4b221a03ae0f379c64155d642
+.artifacts/onboarding/core-recovery-test.log: SHA256 6131bc3ec104a438285581b72179bee7ff845f1f35c648e9c1611945bf50df68
+.artifacts/onboarding/steps-test.log: SHA256 39d8379348d8979039373859622f7ad14e5b5735ed70bc8b368d199a1ee3e3b0
+.artifacts/onboarding/transport-test.log: SHA256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+OnboardingStepsTest {'tests': '7', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  asynchronousBoundaryWriteIsNotCheckpointedUntilVisible
+  foreignTenantCollisionFailsBeforeEncryptionOrFounder
+  founderValidationIsCorrectableAndDuplicateProjectionIsRetried
+  retryUpdatesOwnedTenantNameAndStateInfoAndIncludesOnlyVerifiedEmail
+  completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy
+  foundationTransportFailureIsRetryableAndMissingFounderNeverReplaced
+  duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup
+
+OnboardingPostgresTest {'tests': '6', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  realSubmitEndpointReopensFailedBoundFounderWithSameAndChangedSlug
+  historicalEnsureCannotUseNoIdentitySideEffectsBypass
+  terminalBeforeAnyEnsureSettlesPublicationAndRestartKeepsFounder
+  expiredOrReplacedLeaseCannotCheckpointOrFinish
+  actualBffBoundFounderRestartCollisionAndCrashBeforeAcknowledgement
+  signupWorkspaceAndDecisionRollbackTogetherThenCommitTogether
+
+OnboardingRecoveryTest {'tests': '5', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  crashAtEveryStepResumesWithoutRepeatingCompletedSteps
+  perRecordIntentSurvivesCrashAndCompletionIsFenced
+  uncertainEnsureIsRecoveredBeforeFailedPublicationAndReplayedUntilAck
+  lostLeaseCannotWriteOrFinish
+  staleLifecycleIsAcknowledgedWithoutRetry
+
+OnboardingProvisionerClientTest {'tests': '2', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  onlyFixedCacheBustAcceptsSuccessfulEmptyBody
+  errorEnvelopePreservesDuplicateClassificationAndServerFailuresRetry

@@ -469,7 +469,9 @@ export interface OrganizationMapping {
 
 function asMapping(organization: OrganizationRepresentation): OrganizationMapping | null {
   const tenantId = mappedTenant(organization);
-  if (!organization.id || !organization.alias || organization.enabled === false || !tenantId) {
+  const lifecycle = attribute(organization, "digit.lifecycle");
+  if (!organization.id || !organization.alias || organization.enabled === false || !tenantId ||
+      (lifecycle !== null && lifecycle !== "ACTIVE")) {
     return null;
   }
   return {

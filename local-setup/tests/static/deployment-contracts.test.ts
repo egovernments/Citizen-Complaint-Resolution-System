@@ -110,6 +110,7 @@ describe('ansible playbook-deploy.yml', () => {
       'keycloak_citizen_client_secret',
       'identity_control_plane_token',
       'identity_session_introspection_token',
+      'identity_onboarding_token',
       'pgr_onboarding_worker_token',
       'identity_citizen_otp_secret',
     ];

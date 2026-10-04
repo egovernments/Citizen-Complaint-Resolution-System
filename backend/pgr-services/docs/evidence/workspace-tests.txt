@@ -1,0 +1,72 @@
+Workspace source validation: 2026-10-04
+Source commit: 6674bab64; owner/seed merge: b2f6d4605
+
+Full suite command (one run, exit 0):
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home mvn -o -q -f backend/pgr-services/pom.xml -Donboarding.test.jdbc=jdbc:postgresql://127.0.0.1:16432/onboarding_test test
+Full suite: 548 tests, 0 failures, 0 errors, 6 skipped (existing RequestsApiControllerTest @Ignore).
+After full suite: added 2 owner-requested Flyway tests; reran only WorkspacePostgresTest, exit 0, 12 passed, 0 skipped.
+Review follow-up: added workspace-controller DataAccessException -> 503 WORKSPACE_DEPENDENCY_UNAVAILABLE and 2 route tests.
+Only WorkspaceRouteTest rerun per owner instruction; combined full suite belongs to owner after integration.
+
+Fixture: PostgreSQL 16.15, random schema per test; local HTTP DIGIT/BFF fixtures, no live services.
+Flyway 9.22.3 project dependency executes dollar-quoted migration, reapplies as no-op, and rolls back ownership collision.
+Live fresh-founder department/boundary/branding no403: pending 8c gate (root apr_fd351ab1).
+
+Canonical seed inspection: invitation id=default, unique id, integer 1..2160, exactly one 336-hour default; all 3 workspace grants exactly ACCOUNT_ADMIN.
+Canonical seed SHA256: 39f5dcd8c5d6a6f5870083d181c5ffe6763add35fd83893487d40120cee2d231
+Invitation invalid/valid value checks executed by seed owner: digit-mcp/docs/validation/platform-baseline.md (PR64).
+
+Logs (local worktree):
+.artifacts/workspace/pgr-full-suite.log SHA256 ca592d45f593b168a3dcff845e0bad2585a770c98936c4d5bb248a2df0445eaf
+.artifacts/workspace/flyway-focused.log SHA256 cae7f898bd1f15d21c725d54b5d9bfbf90979e6ef78b837465ab078c4555e646
+
+Executed workspace cases (latest focused reports):
+org.egov.pgr.onboarding.WorkspaceGatewayTest tests=3 failures=0 errors=0 skipped=0
+  PASS publisherWritesAuthoritativeMdmsEveryLocaleAndAcceptsEmptyCacheBust
+  PASS nameCheckUsesDedicatedBearerAndExactBatchWire
+  PASS occupiedLegacyNameAndUnreadableResultsFailClosed
+org.egov.pgr.onboarding.WorkspaceNameNormalizationTest tests=1 failures=0 errors=0 skipped=0
+  PASS signupAndRenameShareIdempotentUnicodeKeys
+org.egov.pgr.onboarding.WorkspacePostgresTest tests=12 failures=0 errors=0 skipped=0
+  PASS signupReservationWinsConcurrentRenameWithoutTheft
+  PASS canonicalCollisionAbortsWithoutPartialNormalizationOrOwnershipChanges
+  PASS staleCompletionCannotRetireNewReservationsOrOverwriteNewName
+  PASS partialPublicationKeepsBothNamesAndResumesWithoutRepeatingAcknowledgedWrites
+  PASS crossTableOwnershipCollisionRollsBackUnderFlyway
+  PASS renameAndSetupAtSameVersionCommitExactlyOnce
+  PASS productionFlywayParserExecutesDollarQuotedMigrationTransactionally
+  PASS releasedIdentifierCollisionAlsoAbortsWithoutDeletingHistory
+  PASS normalizationMigrationPreservesOwnersHistoryAndMatchesJavaForOldKeys
+  PASS activationIsAtomicIdempotentAndAudited
+  PASS renameReservationWinsConcurrentSignupWithoutTheft
+  PASS simultaneousFirstLegacyRenamesSerializeAndStayUngated
+org.egov.pgr.onboarding.WorkspaceRouteTest tests=6 failures=0 errors=0 skipped=0
+  PASS allRoutesRejectForgedCallerRoleAndCrossTenantAdmin
+  PASS probesExcludePlatformPrerequisitesAndInactiveRows
+  PASS normalDigitTokenReturnsLegacyWithoutProbesAndFreshlyChecksEachRequest
+  PASS absentTokenAndDisabledUserAreUnauthorized
+  PASS unreadableProbeReturns503InsteadOfFalseReadiness
+  PASS unreadableBffNameCheckReturns503WithoutRenameWrites
+org.egov.pgr.onboarding.WorkspaceServiceTest tests=9 failures=0 errors=0 skipped=0
+  PASS partialRenameRetriesOnlyUnacknowledgedWrites
+  PASS renameReplayPrecedesVersionConflictAndReturnsCurrentState
+  PASS unchangedAuthoritativeNameSkipsExternalSelfCollision
+  PASS legacySearchDoesNotWriteOrProbe
+  PASS overallDoneRequiresEveryStepDoneOrBrandingSkipped
+  PASS newRenameCapturesAllLanguagesAndHoldsBothNames
+  PASS staleVersionCannotWriteOrProbe
+  PASS localConflictPrecedesBffAndOccupiedLegacyNameCannotReserve
+  PASS doneRequiresProbeAndOnlyBrandingCanSkip
+
+Review follow-up command (exit 0):
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home mvn -o -q -f backend/pgr-services/pom.xml -Dtest=WorkspaceRouteTest test
+WorkspaceRouteTest: 8 tests, 0 failures, 0 errors, 0 skipped.
+  PASS allRoutesRejectForgedCallerRoleAndCrossTenantAdmin
+  PASS probesExcludePlatformPrerequisitesAndInactiveRows
+  PASS normalDigitTokenReturnsLegacyWithoutProbesAndFreshlyChecksEachRequest
+  PASS absentTokenAndDisabledUserAreUnauthorized
+  PASS unreadableLocalReservationReturns503WithoutRenameWrites
+  PASS unreadableWorkspaceRowReturns503BeforeNameChecksOrRenameWrites
+  PASS unreadableProbeReturns503InsteadOfFalseReadiness
+  PASS unreadableBffNameCheckReturns503WithoutRenameWrites
+.artifacts/workspace/database-route-focused.log SHA256 9aab0916b3a3360ed8f807b0be87722e6e556f8e50c6b753df4ffa137db36819

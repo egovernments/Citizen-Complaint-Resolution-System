@@ -1819,12 +1819,17 @@ services:
       # pgr-services only EMITS a thin event per transition; routing, recipients, language and
       # rendering are novu-bridge's job now, so the locale / user-preference settings that used
       # to live here moved to the bridge (NOVU_BRIDGE_DEFAULT_LOCALE, NOVU_BRIDGE_PREFERENCE_HOST).
-      # Tenant-admin onboarding (#1999) authenticates through the identity BFF's
-      # session-introspection endpoint. Reuse the BFF's introspection-only
-      # credential by default; either value can still be overridden explicitly.
+      # PGR owns provisioning. Its dedicated BFF credential also authenticates
+      # pre-provisioning session introspection; it is not the operator token.
       PGR_ONBOARDING_IDENTITY_BFF_URL: ${PGR_ONBOARDING_IDENTITY_BFF_URL:-http://identity-bff:3000}
-      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-${IDENTITY_SESSION_INTROSPECTION_TOKEN:-}}
-      # Provisioning-worker lease API credential (internal network only).
+      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}
+      PGR_ONBOARDING_RUNNER_ENABLED: ${PGR_ONBOARDING_RUNNER_ENABLED:-false}
+      DIGIT_PROVISIONER_USERNAME: ${PGR_DIGIT_PROVISIONER_USERNAME:-}
+      DIGIT_PROVISIONER_PASSWORD: ${PGR_DIGIT_PROVISIONER_PASSWORD:-}
+      DIGIT_PROVISIONER_TENANT_ID: ${PGR_DIGIT_PROVISIONER_TENANT_ID:-}
+      DIGIT_OAUTH_CLIENT_ID: ${PGR_DIGIT_OAUTH_CLIENT_ID:-egov-user-client}
+      DIGIT_OAUTH_CLIENT_SECRET: ${PGR_DIGIT_OAUTH_CLIENT_SECRET:-}
+      # Retained only until the old external worker controller is retired.
       PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
@@ -2409,6 +2414,10 @@ services:
       CRS_ENVIRONMENT: self-hosted
       CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
       CRS_API_URL: http://kong:8000
+      # Direct bootstrap also requires explicit MCP_PLATFORM_BOOTSTRAP_DIRECT=true
+      # in a deployment override and live state-root admin token verification.
+      # Leave the flag unset here: ordinary bootstrap uses Kong by default.
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
       CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
       CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}
       CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
@@ -3214,6 +3223,7 @@ services:
       IDENTITY_COOKIE_SAME_SITE: ${IDENTITY_COOKIE_SAME_SITE:-Lax}
       IDENTITY_CONTROL_PLANE_TOKEN: ${IDENTITY_CONTROL_PLANE_TOKEN:-dev-only-change-me}
       IDENTITY_SESSION_INTROSPECTION_TOKEN: ${IDENTITY_SESSION_INTROSPECTION_TOKEN:-dev-only-change-me}
+      IDENTITY_ONBOARDING_TOKEN: ${IDENTITY_ONBOARDING_TOKEN:-}
       IDENTITY_RECONCILE_ON_STARTUP: ${IDENTITY_RECONCILE_ON_STARTUP:-true}
       IDENTITY_RECONCILIATION_INTERVAL_SECONDS: ${IDENTITY_RECONCILIATION_INTERVAL_SECONDS:-900}
       IDENTITY_ORGANIZATION_ADMIN_ROLES: TENANT_ADMIN
@@ -3231,20 +3241,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       CACHE_PREFIX: digit-identity
-      ONBOARDING_WORKER_ENABLED: ${IDENTITY_ONBOARDING_WORKER_ENABLED:-false}
-      PGR_ONBOARDING_WORKER_URL: http://pgr-services:8080/pgr-services
-      PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
-      ONBOARDING_TENANT_ADMIN_GROUP: tenant-admins
-      ONBOARDING_TENANT_ADMIN_ROLES: TENANT_ADMIN,GRO,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER
-      DIGIT_PROVISIONER_USERNAME: ${IDENTITY_DIGIT_PROVISIONER_USERNAME:-}
-      DIGIT_PROVISIONER_PASSWORD: ${IDENTITY_DIGIT_PROVISIONER_PASSWORD:-}
-      DIGIT_PROVISIONER_TENANT_ID: ${IDENTITY_DIGIT_PROVISIONER_TENANT_ID:-}
-      DIGIT_MDMS_CREATE_URL: http://kong:8000/mdms-v2/v2/_create
       DIGIT_MDMS_V2_SEARCH_URL: http://kong:8000/mdms-v2/v2/_search
       DIGIT_MDMS_SCHEMA_SEARCH_URL: http://kong:8000/mdms-v2/schema/v1/_search
-      DIGIT_MDMS_SCHEMA_CREATE_URL: http://kong:8000/mdms-v2/schema/v1/_create
-      DIGIT_FOUNDATION_SOURCE_TENANT: ${IDENTITY_FOUNDATION_SOURCE_TENANT:-pg}
-      DIGIT_ENC_GENERATE_KEY_URL: http://egov-enc-service:1234/egov-enc-service/crypto/v1/_generatekey
       # Public login branding for the digit-employee Keycloak
       # theme (#2167). The BFF's default
       # (gateway:8080) does not exist in this stack, and a failed lookup only

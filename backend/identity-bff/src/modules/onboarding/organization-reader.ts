@@ -1,13 +1,14 @@
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import { OnboardingError } from "./errors.js";
-import { organizationAttribute, type OnboardingOrganization } from "./primitives.js";
+import { operationAuthority, organizationAttribute, type OnboardingOrganization } from "./primitives.js";
 
 /** Raw reads deliberately include disabled, FAILED and PROVISIONING records. */
 export async function onboardingAdminRequest(path: string, init: RequestInit = {}, accepted?: number[]): Promise<Response> {
   try {
     const response = await fetch(`${config.keycloakAdminUrl}/admin/realms/${encodeURIComponent(config.keycloakOrganizationRealm)}${path}`, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(config.digitTimeoutMs),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${await getAdminToken()}`, ...init.headers },
     });
     if (accepted ? accepted.includes(response.status) : response.ok) return response;
@@ -45,7 +46,8 @@ export async function listOrganizationTenants(): Promise<string[]> {
 }
 
 export async function readOrganizationByTenant(tenantId: string): Promise<RawTenantOrganization | null> {
-  const candidates = (await readOnboardingOrganizations()).filter((org) =>
+  const organizations = await readOnboardingOrganizations();
+  const candidates = organizations.filter((org) =>
     organizationAttribute(org, "rootTenantId") === tenantId && !organizationAttribute(org, "supersededBy"));
   if (!candidates.length) return null;
   // A crash may leave the supersession marker unpublished. Select the highest
@@ -54,11 +56,9 @@ export async function readOrganizationByTenant(tenantId: string): Promise<RawTen
   if (candidates.length > 1 && (owners.size !== 1 || owners.has(undefined))) {
     throw new OnboardingError("IDENTITY_UNAVAILABLE", "Ambiguous Organization ownership for tenant");
   }
-  candidates.sort((a, b) => Number(organizationAttribute(b, "restartNo") ?? -1) - Number(organizationAttribute(a, "restartNo") ?? -1));
-  if (candidates.length > 1 && organizationAttribute(candidates[0], "restartNo") === organizationAttribute(candidates[1], "restartNo")) {
-    throw new OnboardingError("IDENTITY_UNAVAILABLE", "Ambiguous Organization attempt for tenant");
-  }
-  const org = candidates[0];
+  const owner = organizationAttribute(candidates[0], "operationId");
+  const org = owner ? operationAuthority(organizations, owner).org! : candidates[0];
+  if (organizationAttribute(org, "rootTenantId") !== tenantId) return null;
   const lifecycle = organizationAttribute(org, "lifecycle");
   if (lifecycle !== undefined && !["PROVISIONING", "ACTIVE", "FAILED"].includes(lifecycle)) {
     throw new OnboardingError("IDENTITY_UNAVAILABLE", "Invalid Organization lifecycle");
