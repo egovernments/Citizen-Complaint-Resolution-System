@@ -176,6 +176,13 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     });
   });
 
+  app.post("/user/_details", (req, res) => {
+    const token = tokens.get(String(req.query.access_token || ""));
+    const account = token && token.expiresAt > Date.now() ? accounts.get(token.uuid) : undefined;
+    if (!account) return res.status(401).json({ error: "Invalid token" });
+    return res.json(publicAccount(account));
+  });
+
   app.post("/user/_search", (req, res) => {
     if (!requireAdmin(req, res)) return;
     const tenantId = citizenTenant(req.body.tenantId, req.body.userType);
