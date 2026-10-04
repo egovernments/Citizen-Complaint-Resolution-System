@@ -14,6 +14,7 @@ export default defineConfig({
       "tests/unit/config.test.ts",
       "tests/unit/surfaces.test.ts",
       "tests/unit/login-message-keys.test.ts",
+      "tests/unit/person-lease.test.ts",
       "tests/e2e/identity-bff.test.ts",
       "tests/e2e/onboarding-worker.test.ts",
     ],
