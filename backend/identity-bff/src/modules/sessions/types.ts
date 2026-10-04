@@ -2,6 +2,7 @@ import type { KeycloakClaims } from "../authentication/types.js";
 import type { BoundTenant, IdentitySurface } from "../authentication/surfaces.js";
 
 export interface SelectedIdentityContext {
+  digitUuid?: string;
   organizationId: string;
   organizationAlias: string;
   tenantId: string;
@@ -9,6 +10,12 @@ export interface SelectedIdentityContext {
 }
 
 export interface IdentitySession {
+  schemaVersion?: 2;
+  revocationGeneration?: number;
+  kcSessionId?: string;
+  phoneRef?: string;
+  createdAt?: number;
+  lastSeenAt?: number;
   claims: KeycloakClaims;
   /** OIDC client that created this session; absent on older sessions. */
   oidcClientId?: string;
