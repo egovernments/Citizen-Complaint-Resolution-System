@@ -32,6 +32,67 @@ describe('default-data-handler tenant template', () => {
   });
 });
 
+// #2179. Under pipefail, a consumer that stops reading early SIGPIPEs the writer and
+// the pipeline reports 141 even though the consumer got what it needed. The Kong CORS
+// check aborted ~half of naipepea's deploys this way. Scans every ansible YAML file
+// (playbooks and included task files), not just playbook-deploy.yml.
+describe('ansible: pipefail tasks never pipe into a consumer that stops reading early', () => {
+  const ANSIBLE_DIR = path.join(REPO_ROOT, 'local-setup/ansible');
+  const yamlFiles = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) return yamlFiles(p);
+      return /\.ya?ml$/.test(e.name) ? [p] : [];
+    });
+  // A single `|` (never `||`) into: grep with -q or -m among its flags (or --quiet /
+  // --silent / --max-count), head, a sed script that quits, or an awk whose script exits.
+  const EARLY_EXIT =
+    /(?<!\|)\|(?!\|)\s*(?:grep\b[^|\n]*?(?:\s-[A-Za-z]*[qm][A-Za-z0-9]*\b|\s--(?:quiet|silent|max-count)\b)|head\b|sed\b[^|\n]*?(?:\bq\b|;q|q['"])|awk\b[^|\n]*?\bexit\b)/;
+  const offenders = (text: string) =>
+    text
+      .split(/\n(?=\s*- name: )/)
+      .filter((t) => /set -[a-z]*o pipefail/.test(t) && EARLY_EXIT.test(t))
+      .map((t) => t.trim().split('\n')[0]);
+
+  test('no ansible YAML file has one', () => {
+    const files = yamlFiles(ANSIBLE_DIR);
+    expect(files.some((f) => f.endsWith(`${path.sep}tasks${path.sep}pg-storage-guard.yml`))).toBe(true);
+    const found = files.flatMap((f) =>
+      offenders(fs.readFileSync(f, 'utf8')).map((name) => `${path.relative(REPO_ROOT, f)}: ${name}`)
+    );
+    expect(found).toEqual([]);
+  });
+
+  test('the detector catches every early-exit form and ignores || and pipefail-free tasks', () => {
+    const task = (body: string, pipefail = true) =>
+      `- name: t\n  shell: |\n${pipefail ? '    set -o pipefail\n' : ''}    ${body}\n`;
+    for (const bad of [
+      'docker ps | grep -q x',
+      "x | grep -qE '^x$'",
+      'x | grep -Fxq y',
+      'x | grep -m1 y',
+      'x | grep --quiet y',
+      'find . | head -1',
+      'x | head -n1',
+      "x | sed -n '1p;q'",
+      "x | awk -F: '{exit}'",
+      'x | awk "{exit}"',
+    ]) {
+      expect([bad, offenders(task(bad))]).toEqual([bad, ['- name: t']]);
+    }
+    for (const ok of [
+      'test -f x || grep -q pat file',
+      'x | grep -E y',
+      "x | awk '/m/{f=1} f{f=0}'",
+      'x | sort | uniq',
+      'grep -q pat file',
+    ]) {
+      expect([ok, offenders(task(ok))]).toEqual([ok, []]);
+    }
+    expect(offenders(task('x | grep -q y', false))).toEqual([]);
+  });
+});
+
 describe('ansible playbook-deploy.yml', () => {
   const playbook = read('local-setup/ansible/playbook-deploy.yml');
 
@@ -259,6 +320,150 @@ describe('ansible.cfg — executable has a matching shell plugin (#2111)', () =>
     expect(fs.existsSync(path.join(pluginDir, `${name}.py`))).toBe(true);
   });
 });
+
+describe('one-tag deploys (#1729)', () => {
+  // `./deploy.sh <tenant> --image-tag=<tag>` moves every image listed in
+  // group_vars ccrs_image_catalog to <tag>. An image the deploy runs but the
+  // catalog misses would silently stay on its old default under a deploy
+  // everyone believes is on the new tag — the manual per-service edit this
+  // flow replaced, just invisible. These pin the three places that must agree.
+  const groupVars = read('local-setup/ansible/inventory/group_vars/digit.yml');
+  const envTemplate = read('local-setup/ansible/templates/digit.env.j2');
+  const deploySh = read('local-setup/ansible/deploy.sh');
+  // The compose files the playbook passes to every `docker compose` call.
+  const deployedCompose = [
+    'local-setup/docker-compose.egov-digit.yaml',
+    'local-setup/docker-compose.fast-path.yml',
+    'local-setup/docker-compose.migrations.yml',
+    'local-setup/docker-compose.monitoring.yml',
+    'local-setup/docker-compose.matomo.yml',
+  ].map((f) => [f, read(f)] as const);
+
+  const catalog = [...groupVars.matchAll(/^  - \{image: ([\w-]+), env: (\w+), var: (\w+)/gm)]
+    .map(([, image, env, v]) => ({ image, env, var: v }));
+  const ciImages = new Set(
+    [...read('build/build-config.yml').matchAll(/image-name:\s*"?([\w.-]+)"?/g)].map((m) => m[1])
+  );
+
+  test('the catalog parses and names only images CI publishes under one tag', () => {
+    expect(catalog.length).toBeGreaterThanOrEqual(12);
+    for (const { image } of catalog) expect(ciImages).toContain(image);
+  });
+
+  test('every catalog image is parameterised in a deployed compose file', () => {
+    for (const { image, env } of catalog) {
+      const pattern = new RegExp(`image: \\$\\{${env}:-egovio/${image}:[^}]+\\}`);
+      const hits = deployedCompose.filter(([, body]) => pattern.test(body));
+      expect({ image, found: hits.length > 0 }).toEqual({ image, found: true });
+    }
+  });
+
+  test('no CI-built image in a deployed compose file escapes the catalog', () => {
+    const catalogued = new Set(catalog.map((c) => c.image));
+    const escaped: string[] = [];
+    for (const [file, body] of deployedCompose) {
+      for (const m of body.matchAll(/^\s*image:\s*(.+)$/gm)) {
+        const ref = m[1].trim();
+        const bare = ref.match(/^egovio\/([\w.-]+):/);
+        const wrapped = ref.match(/^\$\{(\w+):-egovio\/([\w.-]+):/);
+        if (bare && ciImages.has(bare[1])) escaped.push(`${file}: ${ref} (hardcoded)`);
+        if (wrapped && ciImages.has(wrapped[2]) && !catalogued.has(wrapped[2])) {
+          escaped.push(`${file}: ${ref} (not in ccrs_image_catalog)`);
+        }
+      }
+    }
+    expect(escaped).toEqual([]);
+  });
+
+  test('catalog `profiles` match the compose profiles each image runs under', () => {
+    // The registry check skips an image whose profiles are all off (Vinoth
+    // review on #2166). A catalog entry claiming a profile compose does not
+    // gate would skip a check for an image that IS pulled; one missing a
+    // profile would block deploys on an image that is never pulled.
+    const composeProfiles = new Map<string, { gated: Set<string>; ungated: boolean }>();
+    for (const [, body] of deployedCompose) {
+      const blocks = body.split(/^(?=  [\w.-]+:\s*$)/m);
+      for (const block of blocks) {
+        const env = block.match(/^ {4}image:\s*\$\{(\w+):-/m)?.[1];
+        if (!env) continue;
+        const listed = block.match(/^ {4}profiles:\s*\[([^\]]*)\]/m)?.[1];
+        const entry = composeProfiles.get(env) ?? { gated: new Set<string>(), ungated: false };
+        if (listed === undefined) entry.ungated = true;
+        else listed.split(',').map((p) => p.trim().replace(/"/g, '')).forEach((p) => entry.gated.add(p));
+        composeProfiles.set(env, entry);
+      }
+    }
+    const entries = [...groupVars.matchAll(/^  - \{image: ([\w-]+), env: (\w+),([^}]*)\}/gm)];
+    expect(entries).toHaveLength(catalog.length);
+    for (const [, image, env, rest] of entries) {
+      const declared = (rest.match(/profiles: \[([^\]]*)\]/)?.[1] ?? '')
+        .split(',').map((p) => p.trim()).filter(Boolean).sort();
+      const inCompose = composeProfiles.get(env);
+      const expected = !inCompose || inCompose.ungated ? [] : [...inCompose.gated].sort();
+      expect({ image, profiles: declared }).toEqual({ image, profiles: expected });
+    }
+  });
+
+  test('digit.env.j2 writes every catalog env var from the resolved plan, once', () => {
+    expect(envTemplate).toContain('{% for e in ccrs_image_catalog %}');
+    expect(envTemplate).toContain('{{ e.env }}={{ ccrs_image_env[e.env] }}');
+    // A second hand-written line would be a duplicate .env key (last one wins)
+    // and could quietly undo the tag.
+    for (const { env } of catalog) expect(envTemplate).not.toMatch(new RegExp(`^${env}=`, 'm'));
+  });
+
+  test('deploy.sh forwards --image-tag / --image-tag-services as extra vars', () => {
+    expect(deploySh).toMatch(/--image-tag=\*\)/);
+    expect(deploySh).toMatch(/--image-tag-services=\*\)/);
+    expect(deploySh).toContain('\\"image_tag\\": \\"${image_tag}\\"');
+    // Only what was given: an always-sent `image_tag_services: []` outranked
+    // and widened a scope stored in host_vars (Vinoth review on #2166).
+    expect(deploySh).not.toContain('\\"image_tag_services\\": []');
+    // CCRS_-scoped env names: a bare IMAGE_TAG exported by a CI docker step
+    // re-tagged every image of a plain deploy.
+    expect(deploySh).toContain('${CCRS_IMAGE_TAG:-}');
+    expect(deploySh).toContain('${CCRS_IMAGE_TAG_SERVICES:-}');
+    expect(deploySh).not.toMatch(/\$\{IMAGE_TAG(_SERVICES)?:-/);
+  });
+
+  test('no tracked tenant overlay hard-codes an image the tag should move', () => {
+    // The playbook layers docker-compose.<tenant>.yml LAST, so a literal
+    // `image:` there on a catalog service beats .env: the plan would say
+    // <tag> while compose ran something else (Vinoth review on #2166). The
+    // deploy warns for untracked overlays at runtime; tracked ones must not
+    // do it at all. A tenant overlay is one whose name has a host_vars example.
+    const serviceEnv = new Map<string, string>();
+    const catalogEnvs = new Set(catalog.map((c) => c.env));
+    for (const [, body] of deployedCompose) {
+      for (const block of body.split(/^(?=  [\w.-]+:\s*$)/m)) {
+        const name = block.match(/^  ([\w.-]+):\s*$/m)?.[1];
+        const env = block.match(/^ {4}image:\s*\$\{(\w+):-/m)?.[1];
+        if (name && env && catalogEnvs.has(env)) serviceEnv.set(name, env);
+      }
+    }
+    expect(serviceEnv.get('pgr-services')).toBe('PGR_SERVICES_IMAGE');
+    const hostVarsDir = path.join(REPO_ROOT, 'local-setup/ansible/inventory/host_vars');
+    const tenants = fs.readdirSync(hostVarsDir)
+      .map((f) => f.match(/^([\w-]+)\.yml\.example$/)?.[1])
+      .filter((t): t is string => !!t);
+    const overlays = tenants
+      .map((t) => `local-setup/docker-compose.${t}.yml`)
+      .filter((f) => fs.existsSync(path.join(REPO_ROOT, f)));
+    expect(overlays.length).toBeGreaterThan(0);
+    const hardCoded: string[] = [];
+    for (const f of overlays) {
+      for (const block of read(f).split(/^(?=  [\w.-]+:\s*$)/m)) {
+        const name = block.match(/^  ([\w.-]+):\s*$/m)?.[1];
+        const image = block.match(/^ {4}image:\s*(\S+)/m)?.[1];
+        if (name && image && serviceEnv.has(name) && !image.startsWith('${')) {
+          hardCoded.push(`${f}: ${name} -> ${image} (use \${${serviceEnv.get(name)}})`);
+        }
+      }
+    }
+    expect(hardCoded).toEqual([]);
+  });
+});
+
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
@@ -694,9 +899,13 @@ describe('notification stack images come from one build', () => {
     return m ? m[1] : null;
   };
 
+  // Each override is written to .env by the one-tag image catalog (#1729): its env var
+  // must be a catalog entry, and digit.env.j2 must render every catalog entry.
+  const catalog = read('local-setup/ansible/inventory/group_vars/digit.yml');
   test.each(images)('%#: %s defaults to the shared NOTIFICATION_STACK_TAG', (file, override, image) => {
     expect(composeDefault(file, override, image)).not.toBeNull();
-    expect(env).toMatch(new RegExp(`^${override}=\\{\\{ `, 'm'));
+    expect(catalog).toMatch(new RegExp(`\\{image: [\\w-]+, env: ${override}, var: \\w+`));
+    expect(env).toContain('{{ e.env }}={{ ccrs_image_env[e.env] }}');
   });
 
   // The release step (build/NIGHTLY-BUILDS.md) swaps the stopgap rolling default for an

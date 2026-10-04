@@ -2790,7 +2790,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/digit-config-service:2.12-5137119
+    image: ${DIGIT_CONFIG_SERVICE_IMAGE:-egovio/digit-config-service:2.12-5137119}
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2848,7 +2848,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/digit-user-preferences-service:2.12-5137119
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_IMAGE:-egovio/digit-user-preferences-service:2.12-5137119}
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
