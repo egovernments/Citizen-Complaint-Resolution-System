@@ -15,6 +15,7 @@ beforeAll(async () => {
     cachePrefix: `identity-contract-${process.pid}`,
     identityAllowedOrigins: [TRUSTED],
     identityControlPlaneToken: "contract-control-plane",
+    identityOnboardingToken: "contract-onboarding",
     identitySessionIntrospectionToken: "contract-introspection",
   };
   for (const key of Object.keys(overrides)) saved[key] = (config as any)[key];
@@ -170,9 +171,10 @@ describe("internal routes: bearer auth", () => {
   it.each(internal)("$method $path answers CONTROL_PLANE_NOT_CONFIGURED without its token", async (route) => {
     const tokens = {
       identityControlPlaneToken: config.identityControlPlaneToken,
+      identityOnboardingToken: config.identityOnboardingToken,
       identitySessionIntrospectionToken: config.identitySessionIntrospectionToken,
     };
-    Object.assign(config as any, { identityControlPlaneToken: "", identitySessionIntrospectionToken: "" });
+    Object.assign(config as any, { identityControlPlaneToken: "", identityOnboardingToken: "", identitySessionIntrospectionToken: "" });
     try {
       const response = await fetch(`${base}${route.path}`, {
         method: route.method,

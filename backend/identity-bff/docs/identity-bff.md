@@ -133,12 +133,12 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/workspace-members/_updateEmail` | session | planned | 9 |
 | POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
 | POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
-| POST | `/internal/identity/v1/sessions/_introspect` | introspection | changing | 11 |
-| POST | `/internal/identity/v1/identifiers/_check` | introspection | changing | 11 |
-| POST | `/internal/identity/v1/organizations/_ensure` | workload | changing | 11 |
-| POST | `/internal/identity/v1/organizations/_lifecycle` | workload | planned | 11 |
-| POST | `/internal/identity/v1/memberships/_ensure` | workload | changing | 11, 14 |
-| POST | `/internal/identity/v1/bindings/_ensure` | workload | planned | 8, 11 |
+| POST | `/internal/identity/v1/sessions/_introspect` | introspection | live | 11 |
+| POST | `/internal/identity/v1/identifiers/_check` | introspection | live | 11 |
+| POST | `/internal/identity/v1/organizations/_ensure` | workload | live | 11 |
+| POST | `/internal/identity/v1/organizations/_lifecycle` | workload | live | 11 |
+| POST | `/internal/identity/v1/memberships/_ensure` | workload | live | 11, 14 |
+| POST | `/internal/identity/v1/bindings/_ensure` | workload | live | 8, 11 |
 | POST | `/internal/identity/v1/reconciliation/_run` | operator | changing | 12 |
 | POST | `/internal/identity/v1/account-links/_link` | operator | changing | 14 |
 | POST | `/internal/identity/v1/account-links/_unlink` | operator | changing | 14 |
@@ -744,6 +744,7 @@ A pending binding past `expiresAt` counts as `removed` everywhere, even before a
 | `digit.lifecycle` | `PROVISIONING` \| `ACTIVE` \| `FAILED` | **Absent = `ACTIVE`** |
 | `digit.lifecycleRestartNo` | integer, as a string | The `restartNo` the lifecycle was set at, so a repeated `_lifecycle` call is recognized |
 | `digit.supersededBy` | Organization id | On a `FAILED` Organization replaced after a slug change |
+| `digit.replacementPending` | single JSON value `{restartNo,operationHash,tenantId,slug,name}` | Durable changed-slug attempt, written before changing the old Organization and cleared after supersession finishes (§9.3) |
 | `digit.accountCode`, `digit.fallbackTenantIds` | as today | Read-only legacy; not written by new code |
 
 - The Organization `name` mirrors MDMS `tenant.tenants.name` (D21). The BFF updates it on rename (reconcile).
@@ -932,6 +933,36 @@ Reference implementation and tests: `src/modules/control-plane/operation-hash.ts
 
 - `memberships/_ensure` and `bindings/_ensure` run in any lifecycle state for the current `restartNo`.
 - A terminal restart keeps the same founder (D25/B9). `bindings/_ensure` with the same key and a different uuid is `BINDING_CONFLICT`. PGR searches HRMS for the founder before `_create`, so a retry reuses the uuid.
+
+#### Changed-slug crash recovery
+
+Before renaming or marking the previous Organization `FAILED`, `_ensure` writes
+`digit.replacementPending` on it with the normalized target payload, canonical
+hash and higher restart number. The marker is durable in Keycloak, independent
+of Redis lock loss. Its restart number is part of the operation's high-water
+mark: every lower-attempt mutation returns `ATTEMPT_STALE`. Repeating the pending
+attempt with a different hash returns `OPERATION_CONFLICT`.
+
+The pending tenant and slug remain reserved against other operations. `_ensure`
+replays the old Organization's failure and tenant-member revocation before
+creating the replacement. A matching pending `_lifecycle FAILED` can settle a
+permanent create failure on the staging Organization: it stores
+`digit.lifecycleRestartNo`, replays tenant-member revocation on every call, and
+retains the pending high-water mark. After this terminal decision, `_ensure`
+with the same restart and hash returns `LIFECYCLE_CONFLICT`; a changed hash
+remains `OPERATION_CONFLICT`. A higher restart may resume with either the
+original or a changed slug. `ACTIVE`, membership and binding calls for
+the pending attempt return `OPERATION_NOT_FOUND` until its replacement
+Organization exists. Once created,
+the higher-attempt Organization is authoritative even if the old marker has not
+yet been cleared. A retry finishes `digit.supersededBy` and removes the marker;
+it does not revoke a replacement that has since become `ACTIVE`.
+
+Pending restart numbers must exceed their source Organization's restart number,
+and the stored normalized fields must match the pending canonical hash. Multiple
+pending markers, duplicate actual restart numbers, corrupt metadata or a marker
+that disagrees with its created replacement fail closed with
+`IDENTITY_UNAVAILABLE` before any mutation.
 
 ### 9.4 Lifecycle publication (PGR side, for lane D)
 

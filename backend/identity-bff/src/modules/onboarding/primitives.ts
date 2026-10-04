@@ -30,19 +30,71 @@ const restartOf = (org: OnboardingOrganization) => Number(organizationAttribute(
 const lifecycleOf = (org: OnboardingOrganization) => organizationAttribute(org, "lifecycle") ?? "ACTIVE";
 const operationOf = (org: OnboardingOrganization) => organizationAttribute(org, "operationId");
 const slugOf = (org: OnboardingOrganization) => organizationAttribute(org, "urlSlug") ?? org.alias;
+function failedName(org: OnboardingOrganization): string {
+  const suffix = ` [failed ${org.id.slice(0, 8)}]`;
+  return org.name.endsWith(suffix) ? org.name : `${org.name}${suffix}`;
+}
 
 function view(org: OnboardingOrganization) {
   return { id: org.id, alias: org.alias, urlSlug: slugOf(org), tenantId: tenantOf(org),
     name: org.name, lifecycle: lifecycleOf(org), operationId: operationOf(org), restartNo: restartOf(org) };
 }
 
-function current(organizations: OnboardingOrganization[], attempt: Attempt) {
-  return organizations.filter((org) => operationOf(org) === attempt.operationId)
-    .sort((a, b) => restartOf(b) - restartOf(a))[0];
+export interface ReplacementPending extends OrganizationEnsurePayload { restartNo: number; operationHash: string }
+
+export function replacementPending(org: OnboardingOrganization): ReplacementPending | undefined {
+  const values = org.attributes?.["digit.replacementPending"];
+  if (values === undefined) return undefined;
+  try {
+    if (values.length !== 1) throw new Error();
+    const pending = JSON.parse(values[0]) as ReplacementPending;
+    if (!pending || !Number.isSafeInteger(restartOf(org)) || !Number.isSafeInteger(pending.restartNo) || pending.restartNo <= restartOf(org) ||
+        typeof pending.tenantId !== "string" || !pending.tenantId ||
+        typeof pending.slug !== "string" || !pending.slug || typeof pending.name !== "string" || !pending.name ||
+        pending.operationHash !== organizationOperationHash(pending)) throw new Error();
+    const normalized = normalizeOrganizationPayload(pending);
+    if (normalized.tenantId !== pending.tenantId || normalized.slug !== pending.slug || normalized.name !== pending.name) throw new Error();
+    return pending;
+  } catch {
+    throw new OnboardingError("IDENTITY_UNAVAILABLE", "The pending replacement is invalid");
+  }
 }
 
-function requireAttempt(org: OnboardingOrganization | undefined, attempt: Attempt) {
-  if (org && attempt.restartNo < restartOf(org)) {
+/** Shared with raw readers: actual records and the durable in-flight attempt form one authority. */
+export function operationAuthority(organizations: OnboardingOrganization[], operationId: string) {
+  const owned = organizations.filter((org) => operationOf(org) === operationId);
+  const restarts = new Set<number>();
+  const pendingRecords: Array<{ owner: OnboardingOrganization; value: ReplacementPending }> = [];
+  for (const org of owned) {
+    const restart = organizationAttribute(org, "restartNo");
+    if (!restart || !/^(0|[1-9]\d*)$/.test(restart) || !Number.isSafeInteger(Number(restart)) ||
+        org.attributes?.["digit.restartNo"]?.length !== 1 ||
+        org.attributes?.["digit.operationId"]?.length !== 1 ||
+        !/^[a-f0-9]{64}$/.test(organizationAttribute(org, "operationHash") ?? "") ||
+        !["PROVISIONING", "ACTIVE", "FAILED"].includes(organizationAttribute(org, "lifecycle") ?? "") ||
+        !org.id || !tenantOf(org) || !slugOf(org) || restarts.has(Number(restart))) {
+      throw new OnboardingError("IDENTITY_UNAVAILABLE", "The onboarding attempt authority is invalid or ambiguous");
+    }
+    restarts.add(Number(restart));
+    const pending = replacementPending(org);
+    if (pending) pendingRecords.push({ owner: org, value: pending });
+  }
+  if (pendingRecords.length > 1) throw new OnboardingError("IDENTITY_UNAVAILABLE", "Multiple replacements are pending for the operation");
+  const org = owned.sort((a, b) => restartOf(b) - restartOf(a))[0];
+  const pending = pendingRecords[0];
+  if (pending && org && pending.value.restartNo <= restartOf(org)) {
+    const replacement = owned.find((candidate) => restartOf(candidate) === pending.value.restartNo);
+    if (!replacement || organizationAttribute(replacement, "operationHash") !== pending.value.operationHash ||
+        tenantOf(replacement) !== pending.value.tenantId || slugOf(replacement) !== pending.value.slug) {
+      throw new OnboardingError("IDENTITY_UNAVAILABLE", "The pending replacement does not match its Organization");
+    }
+  }
+  return { org, pending, restartNo: Math.max(org ? restartOf(org) : -1, pending?.value.restartNo ?? -1) };
+}
+
+function requireAttempt(authority: ReturnType<typeof operationAuthority>, attempt: Attempt) {
+  const { org } = authority;
+  if (attempt.restartNo < authority.restartNo) {
     throw new OnboardingError("ATTEMPT_STALE", "A newer onboarding attempt exists");
   }
   if (!org || attempt.restartNo > restartOf(org)) {
@@ -59,13 +111,14 @@ export class OnboardingPrimitives {
     const hash = organizationOperationHash(payload);
     return withOnboardingLock("op", input.operationId, async (operationFence) => {
       const initial = await this.dependencies.organizations();
-      const previous = current(initial, input);
-      if (previous && input.restartNo < restartOf(previous)) {
+      const authority = operationAuthority(initial, input.operationId);
+      const previous = authority.org;
+      if (input.restartNo < authority.restartNo) {
         throw new OnboardingError("ATTEMPT_STALE", "A newer onboarding attempt exists");
       }
       // Lock both old and new identifiers in deterministic order when a restart changes them.
-      const tenants = [...new Set([payload.tenantId, ...(previous ? [tenantOf(previous)] : [])])].sort();
-      const slugs = [...new Set([payload.slug, ...(previous ? [slugOf(previous)] : [])])].sort();
+      const tenants = [...new Set([payload.tenantId, ...(previous ? [tenantOf(previous)] : []), ...(authority.pending ? [authority.pending.value.tenantId] : [])])].sort();
+      const slugs = [...new Set([payload.slug, ...(previous ? [slugOf(previous)] : []), ...(authority.pending ? [authority.pending.value.slug] : [])])].sort();
       const locks = [...tenants.map((id) => ({ family: "tenant" as const, id })),
         ...slugs.map((id) => ({ family: "slug" as const, id }))];
       const run = (index: number, fence: OnboardingFence): Promise<{ organization: ReturnType<typeof view>; created: boolean }> => {
@@ -81,7 +134,17 @@ export class OnboardingPrimitives {
 
   private async ensureLocked(input: Attempt, payload: OrganizationEnsurePayload, hash: string, fence: OnboardingFence) {
     const organizations = await this.dependencies.organizations();
-    const previous = current(organizations, input);
+    const authority = operationAuthority(organizations, input.operationId);
+    const previous = authority.org;
+    if (input.restartNo < authority.restartNo) throw new OnboardingError("ATTEMPT_STALE", "A newer onboarding attempt exists");
+    if (authority.pending?.value.restartNo === input.restartNo && authority.pending.value.operationHash !== hash) {
+      throw new OnboardingError("OPERATION_CONFLICT", "The pending attempt payload has changed");
+    }
+    if (authority.pending?.value.restartNo === input.restartNo && previous && input.restartNo > restartOf(previous) &&
+        lifecycleOf(authority.pending.owner) === "FAILED" &&
+        organizationAttribute(authority.pending.owner, "lifecycleRestartNo") === String(input.restartNo)) {
+      throw new OnboardingError("LIFECYCLE_CONFLICT", "The pending attempt has failed; advance restartNo before ensuring again");
+    }
     if (previous && input.restartNo === restartOf(previous)) {
       if (organizationAttribute(previous, "operationHash") !== hash) {
         throw new OnboardingError("OPERATION_CONFLICT", "The attempt payload has changed");
@@ -94,8 +157,9 @@ export class OnboardingPrimitives {
     }
     for (const org of organizations) {
       if (operationOf(org) === input.operationId) continue;
-      if (tenantOf(org) === payload.tenantId) throw new OnboardingError("TENANT_TAKEN", "The tenant belongs to another operation");
-      if (slugOf(org) === payload.slug || org.alias === payload.slug) throw new OnboardingError("SLUG_TAKEN", "The slug belongs to another operation");
+      const pending = replacementPending(org);
+      if (tenantOf(org) === payload.tenantId || pending?.tenantId === payload.tenantId) throw new OnboardingError("TENANT_TAKEN", "The tenant belongs to another operation");
+      if (slugOf(org) === payload.slug || org.alias === payload.slug || pending?.slug === payload.slug) throw new OnboardingError("SLUG_TAKEN", "The slug belongs to another operation");
     }
     if (!await this.dependencies.tenantExists(payload.tenantId)) {
       throw new OnboardingError("TENANT_FOUNDATION_MISSING", "The DIGIT tenant foundation does not exist yet");
@@ -105,17 +169,29 @@ export class OnboardingPrimitives {
       "digit.rootTenantId": [payload.tenantId], "digit.urlSlug": [payload.slug],
       "digit.operationId": [input.operationId], "digit.restartNo": [String(input.restartNo)],
       "digit.operationHash": [hash], "digit.lifecycle": ["PROVISIONING"],
+      "digit.lifecycleRestartNo": [String(input.restartNo)],
     };
     delete attributes["digit.supersededBy"];
+    delete attributes["digit.replacementPending"];
     const changedSlug = previous && slugOf(previous) !== payload.slug;
     // Keycloak enforces unique Organization names. Free the name before create;
     // an interrupted create is resumed from this still-owned FAILED record.
     if (changedSlug) {
+      // Finish an already-created replacement's old marker before staging its next restart.
+      if (authority.pending && authority.pending.value.restartNo <= restartOf(previous)) {
+        await this.supersedeOlder(organizations, previous, fence);
+      }
+      const pending: ReplacementPending = { ...payload, restartNo: input.restartNo, operationHash: hash };
+      const staged = { ...previous, attributes: { ...previous.attributes, "digit.replacementPending": [JSON.stringify(pending)] } };
+      await fence.assertHeld();
+      await this.dependencies.update(staged);
       await fence.assertHeld();
       await this.dependencies.update({ ...previous,
-        name: `${previous.name.split(" [superseded:")[0]} [superseded:${previous.id}]`,
-        attributes: { ...previous.attributes, "digit.lifecycle": ["FAILED"] } });
+        name: failedName(previous),
+        attributes: { ...staged.attributes, "digit.lifecycle": ["FAILED"], "digit.lifecycleRestartNo": [String(restartOf(previous))] } });
       this.dependencies.invalidate();
+      await fence.assertHeld();
+      await this.dependencies.revoke(tenantOf(previous));
     }
     await fence.assertHeld();
     let org: OnboardingOrganization;
@@ -134,25 +210,34 @@ export class OnboardingPrimitives {
   private async supersedeOlder(organizations: OnboardingOrganization[], latest: OnboardingOrganization, fence: OnboardingFence) {
     for (const org of organizations) {
       if (org.id === latest.id || operationOf(org) !== operationOf(latest)) continue;
-      if (organizationAttribute(org, "supersededBy") === latest.id && lifecycleOf(org) === "FAILED") continue;
+      if (organizationAttribute(org, "supersededBy") === latest.id && lifecycleOf(org) === "FAILED" && !org.attributes?.["digit.replacementPending"]) continue;
+      const attributes: Record<string, string[]> = { ...org.attributes, "digit.lifecycle": ["FAILED"], "digit.lifecycleRestartNo": [String(restartOf(org))], "digit.supersededBy": [latest.id] };
+      delete attributes["digit.replacementPending"];
       await fence.assertHeld();
       await this.dependencies.update({ ...org,
-        name: `${org.name.split(" [superseded:")[0]} [superseded:${org.id}]`,
-        attributes: { ...org.attributes, "digit.lifecycle": ["FAILED"], "digit.supersededBy": [latest.id] } });
+        name: failedName(org),
+        attributes });
       this.dependencies.invalidate();
     }
   }
 
   lifecycle(input: Attempt & { state: "ACTIVE" | "FAILED" }) {
     return withOnboardingLock("op", input.operationId, async (fence) => {
-      const org = requireAttempt(current(await this.dependencies.organizations(), input), input);
+      const authority = operationAuthority(await this.dependencies.organizations(), input.operationId);
+      // A replacement can fail permanently after staging but before create.
+      // Record that terminal decision on its staging record without inventing
+      // an Organization for the pending restart or dropping its high-water mark.
+      const pendingFailure = input.state === "FAILED" && authority.pending &&
+        authority.restartNo === input.restartNo && input.restartNo > restartOf(authority.org!) &&
+        authority.pending.value.restartNo === input.restartNo;
+      const org = pendingFailure ? authority.pending!.owner : requireAttempt(authority, input);
       const lifecycle = lifecycleOf(org);
       if (lifecycle !== "PROVISIONING" && lifecycle !== input.state) {
         throw new OnboardingError("LIFECYCLE_CONFLICT", "The lifecycle decision cannot change");
       }
-      if (lifecycle !== input.state) {
+      if (lifecycle !== input.state || organizationAttribute(org, "lifecycleRestartNo") !== String(input.restartNo)) {
         await fence.assertHeld();
-        org.attributes = { ...org.attributes, "digit.lifecycle": [input.state] };
+        org.attributes = { ...org.attributes, "digit.lifecycle": [input.state], "digit.lifecycleRestartNo": [String(input.restartNo)] };
         await this.dependencies.update(org);
         this.dependencies.invalidate();
       }
@@ -168,7 +253,7 @@ export class OnboardingPrimitives {
 
   private founder<T>(input: FounderAttempt, apply: (org: OnboardingOrganization, fence: OnboardingFence) => Promise<T>) {
     return withOnboardingLock("op", input.operationId, async (fence) => {
-      const org = requireAttempt(current(await this.dependencies.organizations(), input), input);
+      const org = requireAttempt(operationAuthority(await this.dependencies.organizations(), input.operationId), input);
       if (tenantOf(org) !== input.tenantId) throw new OnboardingError("OPERATION_NOT_FOUND", "The operation does not own this tenant");
       if (!await this.dependencies.identityExists(input.subject)) throw new OnboardingError("IDENTITY_NOT_FOUND", "The founder identity was not found");
       await fence.assertHeld();
