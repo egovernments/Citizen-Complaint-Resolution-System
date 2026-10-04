@@ -130,6 +130,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/workspace-members/_link` | session | planned | 8, 9 |
 | GET | `/identity/v1/workspace-members` | session | planned | 9 |
 | POST | `/identity/v1/workspace-members/_remove` | session | planned | 9, 10 |
+| POST | `/identity/v1/workspace-members/_updateEmail` | session | planned | 9 |
 | POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
 | POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | changing | 11 |
@@ -438,7 +439,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 
 200 {members: [{subject, email, name, digitUuid, state: "active" | "pending", invitationVersion, boundAt?, expiresAt?, missing?: true}]}
 ```
 
-- It lists `pending` and `active` bindings, found with the `digit.boundUuids` exact search on the `<tenantId>|` prefix. Each binding is re-read from `digit.bindings`.
+- It lists `pending` and `active` bindings (an expired invitation counts as removed and is left out). Keycloak's attribute search only matches whole values, so the BFF pages through the realm's users, keeps those with a `digit.boundUuids` value starting `<tenantId>|`, and reads each binding from `digit.bindings`. This costs one pass over the realm's users; the member list is an infrequent admin read.
 - `missing: true` marks a DIGIT account that has disappeared (design §4).
 - Errors: `INVALID_REQUEST` 400; `SESSION_REQUIRED` / `SESSION_REVOKED` 401; `ADMIN_REQUIRED` 403; 503.
 
@@ -459,11 +460,12 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. The configurator calls it right afte
 #### 3.3.9 `POST /identity/v1/workspace-invitations/_accept` (item 9)
 
 ```
+?surface=configurator|employee   (optional; default configurator)
 {tenantId, invitationVersion: integer}
 200 {binding: {tenantId, digitUuid, state: "active", boundAt}}
 ```
 
-- Bound to the signed-in person, on any staff surface (D25/B2).
+- Bound to the signed-in person, on any staff surface (D25/B2). The optional `surface` query picks which surface's session cookie is read, so digit-ui can accept with the employee session. A citizen surface → 400 `UNSUPPORTED_SURFACE`.
 - The binding must be `pending`, unexpired, and at that version. Otherwise → 409 `INVITATION_STALE`, which also covers "no invitation at all", so invitations can't be enumerated.
 - On success, under person → uuid: grant membership, make the binding `active`, set the derived credential, and mirror.
 - A repeat on an already-`active` binding at the same version returns `200`.
@@ -472,12 +474,29 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. The configurator calls it right afte
 #### 3.3.10 `POST /identity/v1/account/providers/_unlink` (item 4)
 
 ```
+?surface=<surface>   (optional; default configurator)
 {alias}
 200 {providers: [{alias}]}
 ```
 
+- The optional `surface` query picks which surface's session cookie is read. The surface must support self-service for the person's credential; otherwise → 400 `UNSUPPORTED_SURFACE`.
+
 - The caller's own account, under the person lease. It reads the person's **primary** methods fresh: password, linked providers, and the verified phone for citizens. TOTP doesn't count.
 - Removing the last one → 409 `LAST_SIGNIN_METHOD`. An alias that isn't linked → 404 `PROVIDER_NOT_LINKED`.
+
+#### 3.3.11 `POST /identity/v1/workspace-members/_updateEmail` (item 9, D18)
+
+Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has lost access to their old address.
+
+```
+{tenantId, digitUuid, email}
+202 {status: "verification_sent"}
+```
+
+- The target must have an `active` binding at `tenantId`; otherwise → 404 `DIGIT_ACCOUNT_NOT_FOUND`.
+- Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
+- DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
+- An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
 
 ### 3.4 Internal: PGR onboarding
 

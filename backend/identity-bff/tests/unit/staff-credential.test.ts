@@ -182,11 +182,11 @@ describe("derived staff credentials", () => {
     expect(fake.stats.passwordUpdates).toBe(writes);
     expect(mirror).not.toHaveBeenCalled();
     config.identityStaffCredentialMode = "rotate";
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await getRedis().del(`${config.cachePrefix}:identity:token:${account.tenantId}:${account.uuid}`);
     await managedUserLogin(identity, sessionId);
     expect(fake.stats.passwordUpdates).toBe(writes + 1);
     config.identityStaffCredentialMode = "derived";
-    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    await getRedis().del(`${config.cachePrefix}:identity:token:${account.tenantId}:${account.uuid}`);
     await managedUserLogin(identity, sessionId);
     expect(fake.stats.passwordUpdates).toBe(writes + 2);
     expect(account.passwordHash).toBe(hash(derivedStaffPassword(key, account.uuid, "pg")));

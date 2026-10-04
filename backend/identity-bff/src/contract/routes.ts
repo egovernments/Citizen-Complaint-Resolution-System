@@ -113,10 +113,17 @@ export const ROUTES: RouteContract[] = [
   { method: "POST", path: "/identity/v1/workspace-members/_remove", auth: "session", state: "planned", items: [9, 10],
     codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "SELF_REMOVAL_FORBIDDEN", "BINDING_BUSY", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
+  { method: "POST", path: "/identity/v1/workspace-members/_updateEmail", auth: "session", state: "planned", items: [9],
+    codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "DIGIT_ACCOUNT_NOT_FOUND", "IDENTITY_EMAIL_CHANGED", "IDENTITY_BUSY",
+      "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
+  // `?surface=` (optional, default configurator) picks the session cookie; staff surfaces only.
   { method: "POST", path: "/identity/v1/workspace-invitations/_accept", auth: "session", state: "planned", items: [9],
-    codes: [...BROWSER_WRITE, "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY", "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
+    codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY",
+      "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
+  // `?surface=` (optional, default configurator) picks the session cookie.
   { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "planned", items: [4],
-    codes: [...BROWSER_WRITE, "PROVIDER_NOT_LINKED", "LAST_SIGNIN_METHOD", "IDENTITY_BUSY", "IDENTITY_UNAVAILABLE"] },
+    codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "PROVIDER_NOT_LINKED", "LAST_SIGNIN_METHOD", "IDENTITY_BUSY",
+      "IDENTITY_UNAVAILABLE"] },
 
   // Internal: PGR onboarding (workload)
   { method: "POST", path: "/internal/identity/v1/sessions/_introspect", auth: "introspection", state: "changing", items: [11],
