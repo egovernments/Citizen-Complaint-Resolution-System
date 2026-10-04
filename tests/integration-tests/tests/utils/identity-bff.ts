@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type APIResponse, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type APIResponse, type Page, type Request, type Response } from '@playwright/test';
 
 export type Surface = 'configurator' | 'employee' | 'citizen';
 export interface DigitContext {
@@ -50,29 +50,60 @@ export function authorizeUrl(baseURL: string, surface: Surface, method = 'passwo
   return `${baseURL}/identity/v1/authorize?${params}`;
 }
 
-/** Credentials go only to the hosted Keycloak form; the BFF receives the callback cookie. */
+/** Organizations can split username and password across two stock Keycloak pages. */
+export async function enterHostedUsername(page: Page, value: string): Promise<void> {
+  const username = page.locator('#username');
+  await expect(username).toBeVisible();
+  await username.fill(value);
+  if (!await page.locator('#password').isVisible()) {
+    await page.locator('#kc-login, button[type="submit"]').first().click();
+  }
+  await expect(page.locator('#password')).toBeVisible();
+}
+
+/** Credentials go only to the hosted form. The landing app owns one-use auth results. */
 export async function hostedSignIn(page: Page, config: {
   baseURL: string; surface: Surface; username: string; password: string;
 }): Promise<void> {
-  await page.goto(authorizeUrl(config.baseURL, config.surface));
-  const username = page.locator('#username');
-  await expect(username).toBeVisible();
-  await username.fill(config.username);
-  await page.locator('#password').fill(config.password);
-  await page.locator('#kc-login, button[type="submit"]').first().click();
-  await page.waitForURL(url => url.origin === new URL(config.baseURL).origin &&
-    (url.pathname.startsWith('/configurator/') || url.pathname.includes('/digit-ui/')), { timeout: 30_000 });
-  const authResult = new URL(page.url()).searchParams.get('authResult');
-  if (authResult) {
-    const result = await identityJson<{ status: string; code?: string }>(
-      await page.request.get(`${config.baseURL}/identity/v1/auth-results/${encodeURIComponent(authResult)}`),
+  const origin = new URL(config.baseURL).origin;
+  let resultId: string | null = null;
+  let observedResult: Promise<{ httpStatus: number; body: { status?: string } | null }> | undefined;
+  const navigation = (request: Request) => {
+    if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) return;
+    const url = new URL(request.url());
+    if (url.origin === origin && url.searchParams.has('authResult')) resultId = url.searchParams.get('authResult');
+  };
+  const response = (event: Response) => {
+    const url = new URL(event.url());
+    if (resultId && url.origin === origin && url.pathname === `/identity/v1/auth-results/${encodeURIComponent(resultId)}`) {
+      // Observe the application's fetch without issuing a competing GETDEL read.
+      observedResult = event.json().catch(() => null).then(body => ({ httpStatus: event.status(), body }));
+    }
+  };
+  page.on('request', navigation);
+  page.on('response', response);
+  try {
+    await page.goto(authorizeUrl(config.baseURL, config.surface));
+    await enterHostedUsername(page, config.username);
+    await page.locator('#password').fill(config.password);
+    await page.locator('#kc-login, button[type="submit"]').first().click();
+    await page.waitForURL(url => url.origin === origin &&
+      (url.pathname.startsWith('/configurator/') || url.pathname.includes('/digit-ui/')), { timeout: 30_000 });
+    if (resultId) {
+      await expect.poll(() => observedResult !== undefined, { message: 'Landing app must consume the one-use auth result', timeout: 30_000 }).toBe(true);
+      const result = await observedResult!;
+      if (result.httpStatus !== 200 || result.body?.status !== 'complete') {
+        throw new Error('Hosted sign-in was rejected by the BFF');
+      }
+    }
+    const session = await identityJson<{ authenticated: boolean }>(
+      await page.request.get(`${config.baseURL}/identity/v1/session?surface=${config.surface}`),
     );
-    if (result.status === 'failed') throw new Error('Hosted sign-in was rejected by the BFF');
+    if (session.authenticated !== true) throw new Error('Hosted sign-in did not establish a BFF session');
+  } finally {
+    page.off('request', navigation);
+    page.off('response', response);
   }
-  const session = await identityJson<{ authenticated: boolean }>(
-    await page.request.get(`${config.baseURL}/identity/v1/session?surface=${config.surface}`),
-  );
-  if (session.authenticated !== true) throw new Error('Hosted sign-in did not establish a BFF session');
 }
 
 export async function selectContext(request: APIRequestContext, baseURL: string, surface: Surface, tenantId: string) {

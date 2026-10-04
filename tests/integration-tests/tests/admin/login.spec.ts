@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_USER } from '../utils/env';
+import { enterHostedUsername } from '../utils/identity-bff';
 import { detectConfiguratorLogin } from '../utils/configurator-auth';
 
 // Replaces the three legacy/form-conditional cases without conditional skips.
@@ -18,6 +20,7 @@ test.describe('Configurator hosted sign-in', () => {
     // The original autofill guarantee now applies at the hosted credential form.
     await expect(page.locator('#username')).toBeVisible();
     await expect(page.locator('#username')).toHaveValue('');
+    await enterHostedUsername(page, ADMIN_USER);
     await expect(page.locator('#password')).toHaveValue('');
     await expect(page.locator('#password')).toHaveAttribute('autocomplete', 'current-password');
     await expect(page.locator('#tenantCode')).toHaveCount(0);
@@ -33,6 +36,7 @@ test.describe('Configurator hosted sign-in', () => {
     expect(params.get('method')).toBe('password');
     expect(params.get('intent')).toBe('signin');
     expect(params.get('tenantSlug')).toBeNull();
-    await expect(page.locator('#password')).toBeVisible();
+    await expect(page.locator('#username')).toBeVisible();
+    await expect(page.locator('#username')).toHaveValue('');
   });
 });
