@@ -6,13 +6,13 @@ import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 import { resetDigitAdminToken } from "../../src/modules/managed-accounts/digit-admin-session.js";
 import { passwordLogin } from "../../src/modules/managed-accounts/digit-user-client.js";
 import { activateStaffCredential, findLiveStaffToken, staffLogin } from "../../src/modules/accounts/credential-service.js";
-import { credentialPorts } from "../../src/modules/accounts/credential-ports.js";
 import { derivedStaffPassword } from "../../src/modules/accounts/credential.js";
 import { LeaseLostError, withPersonLease, type PersonLease } from "../../src/modules/accounts/person-lease.js";
 
 const fake = createFakeDigitUser({ tenants: ["pg"] });
 const key = Buffer.alloc(32, 0xab);
-const mirror = vi.fn(async () => {});
+const { mirror } = vi.hoisted(() => ({ mirror: vi.fn(async () => {}) }));
+vi.mock("../../src/modules/sync/mirror.js", () => ({ mirrorPerson: mirror }));
 let sequence = 0;
 let account: ReturnType<typeof fake.addAccount>;
 const ref = () => ({ tenantId: account.tenantId, uuid: account.uuid, userName: account.userName, keyVersion: 1 });
@@ -27,7 +27,6 @@ beforeAll(async () => {
     digitAdminUsername: "CREDENTIAL-ADMIN", digitAdminPassword: "Test2@Admin", digitAdminTenantId: "pg",
     identityCredentialKeys: new Map([[1, key]]), identityCredentialKeyCurrent: 1,
   });
-  credentialPorts.mirrorPerson = mirror;
   initCache(`redis://${process.env.REDIS_HOST || "localhost"}:${process.env.REDIS_PORT || "16385"}`);
   fake.addAccount({ userName: "CREDENTIAL-ADMIN", name: "Admin", mobileNumber: "700000000", emailId: null,
     tenantId: "pg", type: "EMPLOYEE", active: true, identificationMark: null,

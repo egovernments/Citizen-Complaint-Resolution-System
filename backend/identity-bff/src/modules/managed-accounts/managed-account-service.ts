@@ -1,3 +1,4 @@
+import { requireCurrentSession } from "../sessions/session-store.js";
 import { currentPersonLease, withPersonLease } from "../accounts/person-lease.js";
 import { staffCredentialMode, staffLogin } from "../accounts/credential-service.js";
 import { request } from "../organizations/organization-service.js";
@@ -512,9 +513,13 @@ export async function managedUserLogin(
   verifiedMobileNumber?: string,
   verifiedCountryCode?: string,
 ): Promise<DigitLogin> {
-  if (identity.userType === MANAGED_USER_TYPE && staffCredentialMode() === "derived" &&
-      !currentPersonLease()) {
-    return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber));
+  if (identity.userType === MANAGED_USER_TYPE && staffCredentialMode() === "derived") {
+    const lease = currentPersonLease();
+    if (!lease) {
+      return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber));
+    }
+    if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
+    await requireCurrentSession(lease, sessionId);
   }
   const ref = sessionTokenRef(sessionId);
   if (identity.linkedUuid) {

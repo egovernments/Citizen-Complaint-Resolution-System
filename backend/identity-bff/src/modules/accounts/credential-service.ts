@@ -3,7 +3,7 @@ import { oneTimePassword } from "../managed-accounts/managed-account-service.js"
 import { DigitLoginRejectedError, passwordLogin, revokeToken, type DigitLogin } from "../managed-accounts/digit-user-client.js";
 import { derivedStaffPassword } from "./credential.js";
 import { StaffLoginError } from "./credential-errors.js";
-import { credentialPorts } from "./credential-ports.js";
+import { mirrorPerson } from "../sync/mirror.js";
 import { writeDigitIdentifiers } from "./digit-writer.js";
 import type { PersonLease } from "./person-lease.js";
 
@@ -61,7 +61,7 @@ async function login(account: StaffAccountRef, password: string, lease?: PersonL
 async function mirror(account: StaffAccountRef, lease: PersonLease, keyVersion: number): Promise<void> {
   await lease.assertHeld();
   try {
-    await credentialPorts.mirrorPerson(lease.subject, {
+    await mirrorPerson(lease.subject, {
       credential: { tenantId: account.tenantId, keyVersion, setAt: Date.now() },
     });
   } catch {
