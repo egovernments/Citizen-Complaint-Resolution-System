@@ -420,7 +420,7 @@ digit_ui_bundle_image: >-
 #
 # Precedence, most specific first:
 #   1. a per-image pin in host_vars (`pgr_services_image:` …) or a local build
-#      (`build_mcp:` / `build_otp_publisher:`) — the tag is NOT applied to that
+#      (`build_mcp:`) — the tag is NOT applied to that
 #      image, and the deploy prints which ones it skipped. An unpinned `-db`
 #      image whose service is pinned off the tag stays on its compose-file
 #      default (with a warning) rather than run newer migrations under it;
@@ -466,7 +466,6 @@ ccrs_image_catalog:
   - {image: pgr-services-db, env: PGR_SERVICES_DB_IMAGE, var: pgr_services_db_image, follows: pgr-services}
   - {image: novu-bridge, env: NOVU_BRIDGE_IMAGE, var: novu_bridge_image, profiles: [notifications]}
   - {image: novu-bridge-db, env: NOVU_BRIDGE_DB_IMAGE, var: novu_bridge_db_image, follows: novu-bridge, profiles: [notifications]}
-  - {image: novu-bridge-endpoint, env: NOVU_BRIDGE_ENDPOINT_IMAGE, var: novu_bridge_endpoint_image, profiles: [notifications]}
   - {image: digit-config-service, env: DIGIT_CONFIG_SERVICE_IMAGE, var: digit_config_service_image, profiles: [notifications]}
   - {image: digit-config-service-db, env: DIGIT_CONFIG_SERVICE_DB_IMAGE, var: digit_config_service_db_image,
      follows: digit-config-service, profiles: [notifications]}
@@ -476,7 +475,6 @@ ccrs_image_catalog:
   - {image: digit-ui-esbuild, env: DIGIT_UI_IMAGE, var: digit_ui_image}
   - {image: configurator, env: CONFIGURATOR_IMAGE, var: configurator_image}
   - {image: digit-mcp, env: MCP_IMAGE, var: mcp_image, profiles: [mcp, mcp-readonly]}
-  - {image: otp-publisher, env: OTP_PUBLISHER_IMAGE, var: otp_publisher_image, profiles: [notifications]}
   # Organization-aware identity tier; identity-keycloak is Keycloak plus the magic-link provider.
   - {image: identity-bff, env: IDENTITY_BFF_IMAGE, var: identity_bff_image, profiles: [keycloak]}
   - {image: identity-keycloak, env: IDENTITY_KEYCLOAK_IMAGE, var: identity_keycloak_image, profiles: [keycloak]}

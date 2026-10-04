@@ -12,7 +12,7 @@
 # end-to-end on WSL2 Ubuntu 24.04, 2026-07-29.
 #
 # THE ONLY FUNCTIONAL DELTA IS NOVU. The notifications profile
-# (novu-mongo/api/worker/ws/dashboard/bridge + otp-publisher, ~1.5-2 GB
+# (novu-mongo/api/worker/ws/dashboard/bridge, ~1.5-2 GB
 # resident) is the one piece that risks freezing a 12 GB VM. Everything else is
 # identical to full: core services, PGR, the employee UI, the citizen SPA at
 # /citizen/, the configurator at /configurator/, MCP (so the wizard's tenant
@@ -218,11 +218,10 @@ enable_integration_tests_runner: false
 
 # ────────── Optional services ──────────
 
-# Real OTP delivery: egov-otp + user-otp + egov-notification-sms.
-# Values: true | false. False (here) means Kong mocks /user-otp/* with a canned
-# 200, so citizen login works with the fixed OTP 123456 and no SMS infra.
-# Turning it on for production also needs the mock removed from kong.yml and a
-# real SMS_PROVIDER_CLASS wired up — it defaults to Console, which only logs.
+# Real OTP delivery: egov-otp + user-otp generate/validate; novu-bridge sends the SMS,
+# so it REQUIRES enable_novu: true — which slim keeps off. Leave false here.
+# False means Kong mocks /user-otp/* with a canned 200, so citizen login works
+# with the fixed OTP 123456 and no SMS infra.
 enable_otp_services: false
 
 # Elasticsearch + egov-indexer + inbox-v2. Values: true | false.
@@ -243,10 +242,6 @@ build_mcp: true
 # Build the employee SPA bundle on this box. Values: true | false.
 # False here because digit_ui_mode is `container` — the image already has it.
 build_digit_ui: false
-
-# Build the OTP publisher image on this box. Values: true | false.
-# Slim: the notifications path is off, so there is nothing to publish to.
-build_otp_publisher: false
 
 # Let the deploy continue when tenant bootstrap steps fail. Values: true | false.
 # True is right for a local box booting from the dump, where some bootstrap
