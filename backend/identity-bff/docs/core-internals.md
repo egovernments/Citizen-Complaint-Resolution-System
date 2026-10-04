@@ -215,6 +215,37 @@ export function revokeTenantMembers(tenantId: string, reason: "ORGANIZATION_DISA
 export function cachedToken(lease: PersonLease, account: { tenantId: string; uuid: string }): Promise<DigitLogin | null>;
 ```
 
+### Session and logout API for surf-bff (owner: core-revocation)
+
+```ts
+// sessions/session-store.ts
+export class SessionRevokedError extends Error {}   // 401 SESSION_REVOKED
+export function requireCurrentSession(lease: PersonLease, sessionId: string): Promise<IdentitySession>;
+export function listPersonSessions(subject: string): Promise<Array<{
+  sessionId: string; surface: IdentitySurface; oidcClientId?: string;
+  createdAt?: number; lastSeenAt?: number; kcSessionId?: string;
+}>>;
+
+// revocation/index.ts
+/** logout {scope}: ends BFF sessions and Keycloak sessions; revokes DIGIT tokens no remaining session holds. */
+export function logoutSessions(subject: string, scope: "current" | "others" | "all", currentSessionId: string): Promise<void>;
+/** Phone change: end this person's sessions carrying oldPhoneRef, except keepSessionId. */
+export function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void>;
+```
+
+### Identifier write-through for surf-bff (owner: core-sync)
+
+```ts
+// sync/identifiers.ts
+/** Fresh-read the person's verified email/phone in Keycloak and write them to every bound DIGIT account (and the citizen account). Never clears. */
+export function propagateIdentifiers(subject: string): Promise<{ written: number; unchanged: number; skipped: number }>;
+```
+
+### Readiness (for `/readyz`, wired by surf-bff)
+
+`revocation/poller.ts`: `getPollerReadiness(): Promise<{status: "ok"|"down"|"disabled"; lagSeconds: number|null}>`, `startKeycloakEventPoller(): () => void`.
+`sync/reconcile.ts`: `getReconcileReadiness(): Promise<{status: "ok"|"down"|"disabled"; intervalSeconds: number; lagSeconds: number|null}>`, `startReconcile(): () => void`, `requestReconcileNow(reason: string): Promise<void>`.
+
 ## 6. `_select` order (who writes what)
 
 Inside `withPersonLease(sub)`: re-read session and compare generation
