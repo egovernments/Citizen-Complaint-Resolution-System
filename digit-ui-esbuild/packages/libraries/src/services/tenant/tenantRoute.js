@@ -1,3 +1,5 @@
+import { defaultTenantContextStorage, withTenantContextCache } from "./tenantContextCache";
+
 const TENANT_SLUG = /^[a-z0-9-]{2,63}$/;
 const RESERVED_SLUGS = new Set([
   "api",
@@ -38,7 +40,7 @@ export function parseTenantRoute(pathname) {
   };
 }
 
-export async function resolveTenantRoute(pathname, fetchImpl) {
+export async function resolveTenantRoute(pathname, fetchImpl, storage = defaultTenantContextStorage()) {
   const route = parseTenantRoute(pathname);
   if (!route) {
     const parts = String(pathname || "").split("/").filter(Boolean);
@@ -51,10 +53,27 @@ export async function resolveTenantRoute(pathname, fetchImpl) {
   }
   const request = fetchImpl || (typeof window !== "undefined" ? window.fetch.bind(window) : null);
   if (!request) throw new Error("Tenant routing requires a fetch implementation.");
-  const response = await request(
-    `/identity/v1/tenant-contexts/${encodeURIComponent(route.urlSlug)}`,
-    { credentials: "include", headers: { Accept: "application/json" } },
+  const tenant = await withTenantContextCache(
+    route.urlSlug,
+    () => fetchTenantContext(route.urlSlug, request),
+    storage,
   );
+  return Object.freeze({ ...route, ...tenant });
+}
+
+async function fetchTenantContext(urlSlug, request) {
+  let response;
+  try {
+    response = await request(
+      `/identity/v1/tenant-contexts/${encodeURIComponent(urlSlug)}`,
+      { credentials: "include", headers: { Accept: "application/json" } },
+    );
+  } catch (cause) {
+    const error = new Error("Tenant configuration is temporarily unavailable.");
+    error.networkError = true;
+    error.cause = cause;
+    throw error;
+  }
   if (!response.ok) {
     const error = new Error(
       response.status === 404
@@ -73,14 +92,16 @@ export async function resolveTenantRoute(pathname, fetchImpl) {
   const hierarchyIsConsistent = tenant?.parentTenantId === null
     ? tenant?.tenantId === tenant?.rootTenantId
     : tenant?.tenantId !== tenant?.rootTenantId;
-  if (!tenant || tenant.urlSlug !== route.urlSlug || !tenant.tenantId ||
+  if (!tenant || tenant.urlSlug !== urlSlug || !tenant.tenantId ||
       !tenant.rootTenantId || !parentIsValid || !fallbacksAreValid ||
       !hierarchyIsConsistent) {
     const error = new Error("Tenant configuration could not be verified.");
     error.status = 502;
+    // The BFF answered, but with a bad mapping: not an outage, so no cache.
+    error.verificationFailed = true;
     throw error;
   }
-  return Object.freeze({ ...route, ...tenant });
+  return tenant;
 }
 
 export function tenantContext() {
