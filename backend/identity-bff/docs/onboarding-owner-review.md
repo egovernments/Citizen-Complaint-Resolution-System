@@ -1,6 +1,12 @@
 # Onboarding integration review
 
-Owner: onboarding-owner. Review checkpoint: 2026-10-04.
+Owner: onboarding-owner. Final cutover checkpoint: 2026-10-05.
+
+Root live gate passed on `e41e23d44`; owner released and merged worker removal
+PR76 at `8bcf254f4`. Final owner BFF: 659 passed, 11 skipped, two todo;
+PGR: 574 passed, six skipped; typecheck passed; static deployment: 121 passed.
+See `backend/identity-bff/docs/evidence/onboarding-cutover-owner.txt` for commands, hashes and limits.
+The earlier source-integration checkpoint below is retained as history.
 
 Core base `94ae613eb` merged at `91cd26feb`; final owner PGR run: 554 passed,
 six skipped; BFF: 589 passed, 11 skipped, eight todo; typecheck passed.
@@ -52,17 +58,22 @@ six skipped; BFF: 589 passed, 11 skipped, eight todo; typecheck passed.
   security and caller compatibility evidence. Two extra phone-safety assertions
   fail unchanged on develop, confirmed by root; neither was skipped or modified.
 
-## Remaining cutover gate
+## Completed cutover gate
 
-Root decision `apr_fd351ab1f3f5428e94af70e95b991021` transfers the real
-fresh-founder department/boundary/branding no-403 check to the root-owned 8c
-dev-box integration from `identity/completion-base`: **pending 8c gate**.
-Local recovery uses production BFF code, real Redis/PostgreSQL and HTTP
-Keycloak/DIGIT fixtures with a mocked session introspector. It does not prove
-live Kong authorization. No lane deployment is authorized.
+Root's `8c-gate-report-3.md` records the live pass on `e41e23d44`: fresh founder
+SUCCEEDED in 180 seconds after 22 automatic retries, without manual retry or
+DB edits; department, boundary and branding calls passed with a BFF-minted
+token. Email was present/verified at submit and present in HRMS. Root's decision
+`msg_b38cd95abe9e47c18168aa6ca2bceb1b` and owner release
+`msg_0fe74d4feb22426e94511026a08c11e2` cleared worker deletion.
 
-BFF worker removal remains held until root reports that pass and the owner
-releases the prepared removal task. Source integration and fixture evidence
-are available for root integration; parent completion and original BFF/PGR
-acceptance are not claimed. Skipped/todo tests are not verified. PR53 remains
-a draft into `identity/completion-base`; the PGR runner stays off by default.
+Removal PR76 deletes the old BFF worker, tenant-foundation writes, provisioner
+token cache/credentials and startup/configuration hooks. Production primitives,
+core providers, read-only readiness and sign-in resilience are retained. PGR
+source and tests are unchanged by removal. The six deleted legacy tests have
+executed replacements listed in `onboarding-worker-removal.md`.
+
+Owner reran full BFF and PGR suites, including production-BFF recovery, and the
+static deployment suites. Skipped/todo tests are not verified. Removal is ready
+for root review in a draft PR into `identity/completion-base`; this lane did not
+deploy it. Root owns release/deployment.

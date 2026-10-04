@@ -1,0 +1,43 @@
+Final onboarding cutover owner validation — 2026-10-05 IST
+Base e41e23d44; tested owner source8bcf254f4 (leaf removal d5df380a3 / PR76).
+
+Root live gate evidence: 8c-gate-report-3.md in shared identity walkthrough.
+SHA256 7a3460b71177fb361f16aa79b505c5ae92e98a1d9c9943ca557c8c8982610769.
+Root reported fresh founder SUCCEEDED180s/22automatic retries/no manual retry or DB edits,
+verified email at submit/in HRMS, and founder no403 with BFF-minted token.
+Root release msg_b38cd95abe9e47c18168aa6ca2bceb1b;
+owner leaf release msg_0fe74d4feb22426e94511026a08c11e2.
+The live gate preceded removal; no lane deployment has been performed.
+
+Executed owner commands/results:
+backend/identity-bff: REDIS_HOST=127.0.0.1 REDIS_PORT=16382 npx vitest run
+Exit0:52files passed,3skipped;659tests passed,11skipped,2todo.
+backend/identity-bff: npx tsc --noEmit
+Exit0.
+
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home backend/pgr-services/src/test/fixtures/run-onboarding-recovery.sh --full
+Exit0:580tests run,574passed,6existing RequestsApiControllerTest skips,0failures/errors.
+All14 OnboardingPostgresTest cases execute, including production BFF/core routes and real Redis.
+PostgreSQL16 local16432; existing Redis16382; isolated schemas/prefixes.
+Keycloak/DIGIT are HTTP fixtures and recovery session introspection is mocked.
+
+local-setup/tests: npx jest --runInBand static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts static/mcp-baseline-packaging.test.ts
+Initial run:120passed/1failed due to missing PyYAML in shell Python.
+Onboarding contracts5/5 and packaging5/5 passed in that run.
+Reran only deployment-contracts.test.ts with PATH including existing .artifacts/onboarding/venv/bin:
+111/111passed, exit0. Combined final static result121/121passed.
+No repository code/test change was needed for the Python prerequisite.
+
+Source review: no obsolete worker/provisioner runtime references in BFF src/tests/deploy.
+PGR source/tests byte-identical to tested rootbasee41e23d44; no PGR tests removed.
+Six legacy BFF worker scenarios mapped to executed replacements in onboarding-worker-removal.md.
+Sign-in resilience test retained/extended to assert authmethods and Keycloak redirect without PGR calls.
+Core startup, identity primitives and read-only readiness preserved.
+Skipped/todo cases are not verified. No test failure suppressed or skipped for this removal.
+
+Owner log hashes:
+.artifacts/onboarding-cutover/bff-full.log SHA256 f2968e13f2256d0edc6216c8d01445508cbf1327aea07ef99941415266a123e3
+.artifacts/onboarding-cutover/bff-typecheck.log SHA256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+.artifacts/onboarding-cutover/pgr-full.log SHA256 047dbbbee3e5425ab6442b37fcde927aa98d4800165b667573315b2db9e34967
+.artifacts/onboarding-cutover/deployment.log SHA256 500f889e3a779de33ac8bb66476abfe4ba1739bad14c4f36b9eb4adda0877fdb
+.artifacts/onboarding-cutover/deployment-contracts-retry.log SHA256 2a024bf199fd70f3c808e58758a7dced3f0b514bbfb6a7f42c7a6b48623dbbd1
