@@ -1,0 +1,89 @@
+8c gate-fix owner integration — 2026-10-05 IST
+Source tested: 3473b5a9c; base a92e9256f.
+Merged seed PR71 (original364c8c8f9), workspace PR68 (original16a5da18c), PGR PR75 (31a45f00f).
+
+Command:
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home backend/pgr-services/src/test/fixtures/run-onboarding-recovery.sh --full
+Exit0: 579 tests run, 573 passed, 6 existing RequestsApiControllerTest skips, 0 failures/errors.
+Includes compile, actual PostgreSQL16 on16432, production BFF HTTP routes/core providers and Redis16382.
+Keycloak/DIGIT remain HTTP fixtures, browser introspection mocked in production-BFF recovery fixture.
+New email mapping tests separately use actual IdentitySessionClient over local HTTP fixtures.
+One combined owner full suite; no deployment. Skips are not verified.
+Log .artifacts/onboarding-8c/owner-pgr-full.log SHA256 055052266a77193dea98dd982083cf3bb19a731cb9ee74a2f57cf737fa8cbeab
+
+Executed acceptance cases:
+org.egov.pgr.onboarding.OnboardingPostgresTest {'tests': '14', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS onlyNewDurableRecordOrStepCompletionResetsRetryBudget
+  PASS realSubmitEndpointReopensFailedBoundFounderWithSameAndChangedSlug
+  PASS historicalEnsureCannotUseNoIdentitySideEffectsBypass
+  PASS delayedMdmsProjectionAutomaticallyCompletesBeyondOneRetryBudget
+  PASS trustedVerifiedEmailFlowsThroughHttpControllerDatabaseAndHrms
+  PASS concurrentAutomaticClaimsHaveOneLeaseWinner
+  PASS terminalBeforeAnyEnsureSettlesPublicationAndRestartKeepsFounder
+  PASS retryBackoffIsDueBoundedAndManualRecoveryKeepsAttemptIdentity
+  PASS expiredOrReplacedLeaseCannotCheckpointOrFinish
+  PASS workerWinningClaimPreventsRetryFromChangingItsFounderSnapshot
+  PASS actualBffBoundFounderRestartCollisionAndCrashBeforeAcknowledgement
+  PASS signupWorkspaceAndDecisionRollbackTogetherThenCommitTogether
+  PASS retryRefreshesTrustedFounderEmailBeforeHrmsWithoutReplacingIdentity
+  PASS retryableFailureBecomesClaimableWithoutManualRetry
+org.egov.pgr.onboarding.OnboardingStepsTest {'tests': '14', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS foreignOrInactiveBoundaryEntriesDoNotProvePrerequisites
+  PASS asynchronousBoundaryWriteIsNotCheckpointedUntilVisible
+  PASS kenyaFallbackUsesCanonicalRuleAndConfiguredOtherCountryRemainsSupported
+  PASS foreignTenantCollisionFailsBeforeEncryptionOrFounder
+  PASS countryAbsenceUsesCanonicalDefaultsOnlyInTargetTenant
+  PASS founderValidationIsCorrectableAndDuplicateProjectionIsRetried
+  PASS retryUpdatesOwnedTenantNameAndStateInfoAndIncludesOnlyVerifiedEmail
+  PASS countryTransportFailureNeverUsesCanonicalFallback
+  PASS completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy
+  PASS foundationTransportFailureIsRetryableAndMissingFounderNeverReplaced
+  PASS nullBoundaryResultsCreateValidEntityAndEmptyWrapperDoesNotCountAsRelationship
+  PASS duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup
+  PASS unsupportedCountryIsExplicitAndAmbiguousConfiguredRulesFailClosed
+  PASS configuredCountryRuleIsPreservedAndMalformedRuleNeverFallsBack
+org.egov.pgr.onboarding.OnboardingWorkerServiceTest {'tests': '9', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS anUnclassifiedTerminalFailureStillQuarantinesTheSignup
+  PASS configuredDefaultMakesUnsupportedCountryCorrectable
+  PASS claimReturnsNothingWhenNoOperationIsPending
+  PASS claimReturnsTheLeasedOperationWithItsSignup
+  PASS terminalFailureFailsTheSignupAndQuarantinesIdentifiers
+  PASS aUserCorrectableTerminalFailureHandsTheDraftBackInsteadOfLockingOut
+  PASS aWorkerThatLostItsLeaseCannotSettleTheOperation
+  PASS retryableFailureKeepsTheSignupProvisioning
+  PASS completeActivatesTheSignupAndConsumesIdentifiers
+org.egov.pgr.onboarding.WorkspaceGatewayTest {'tests': '6', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS publisherWritesAuthoritativeMdmsEveryLocaleAndAcceptsEmptyCacheBust
+  PASS nameCheckUsesDedicatedBearerAndExactBatchWire
+  PASS occupiedLegacyNameAndUnreadableResultsFailClosed
+  PASS workspaceSearchSuppliesPaginationToStrictHrms
+  PASS paginatedProbeStillExcludesFounderAndInactiveEmployees
+  PASS paginatedHrmsFailureStillReturnsDependencyUnavailable
+org.egov.pgr.onboarding.WorkspacePostgresTest {'tests': '12', 'failures': '0', 'errors': '0', 'skipped': '0'}
+  PASS signupReservationWinsConcurrentRenameWithoutTheft
+  PASS canonicalCollisionAbortsWithoutPartialNormalizationOrOwnershipChanges
+  PASS staleCompletionCannotRetireNewReservationsOrOverwriteNewName
+  PASS partialPublicationKeepsBothNamesAndResumesWithoutRepeatingAcknowledgedWrites
+  PASS crossTableOwnershipCollisionRollsBackUnderFlyway
+  PASS renameAndSetupAtSameVersionCommitExactlyOnce
+  PASS productionFlywayParserExecutesDollarQuotedMigrationTransactionally
+  PASS releasedIdentifierCollisionAlsoAbortsWithoutDeletingHistory
+  PASS normalizationMigrationPreservesOwnersHistoryAndMatchesJavaForOldKeys
+  PASS activationIsAtomicIdempotentAndAudited
+  PASS renameReservationWinsConcurrentSignupWithoutTheft
+  PASS simultaneousFirstLegacyRenamesSerializeAndStayUngated
+
+Owner source review:
+- All seed role/action references resolve before use; exact ThemeConfig gateway grants are ACCOUNT_ADMIN only.
+- Seed18 baseline/caller and2 packaging tests, build/typecheck and actual JAR/Docker canonical byte matches reviewed from leaf evidence. Canonical SHA25665388a889e29c27c1ec9c51c1bf580a4ce5f4a7507d67bd67008f508207de916, 25schemas984records.
+- Workspace offset failing-before/passing-after logs independently hash-checked;14 affected tests reviewed before merge.
+- New migration adds retry_count/next_retry_at; production Flyway normalization+retry migration application/no-op and collision rollback pass.
+- Retry claims use existing row locks/lease tokens. Backoff1s exponential capped60s;12 consecutive no-progress failures pause automatic retry while staying RETRYABLE_FAILED with no FAILED lifecycle publication. Newly durable DONE/step completion resets budget; STARTED/no-op does not. Manual retry remains possible; restartNo/founder identity preserved.
+- Country fallback is only after successful absence of configured active rules; invalid/ambiguous/unreadable masters fail closed. IN/KE canonical only, other countries require valid configured rules. COUNTRY_NOT_SUPPORTED default now resolves from actual application.properties as correctable.
+- Boundary null searches, empty wrappers and required Point[0,0] geometry covered; explicit foreign/inactive records don't prove prerequisites.
+- All founder/workspace HRMS searches include explicit pagination.
+
+Email and live gate limits:
+Initially verified email mapping from HTTP introspection through controller/PostgreSQL to HRMS passes; stale manual retry snapshot was reproduced and fixed with locks. Submit, terminal resubmit and manual retry refresh from trusted browser-session introspection. Automatic retries retain stored snapshot; the worker has no browser cookie. No cookie persistence or new identity API.
+Root's initial live null-email report is not reproduced or explained; root will capture email presence/verified flag at submit in the next8c run. No initial-live root-cause fix is claimed.
+Root owns real fresh-founder READY without manual retry and department/boundary/branding no403 acceptance. BFF worker deletion remains held until that gate passes.
