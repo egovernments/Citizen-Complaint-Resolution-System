@@ -161,6 +161,7 @@ describe("identity BFF", () => {
       `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/bomet-county`,
     );
     expect(resolved.status).toBe(200);
+    expect(resolved.headers.get("cache-control")).toBe("public, max-age=60, stale-while-revalidate=300");
     expect(await resolved.json()).toEqual({
       tenant: {
         urlSlug: "bomet-county",
@@ -172,9 +173,9 @@ describe("identity BFF", () => {
       },
     });
 
-    expect((await fetch(
-      `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/missing-county`,
-    )).status).toBe(404);
+    const missing = await fetch(`http://localhost:${getAppPort()}/identity/v1/tenant-contexts/missing-county`);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("cache-control")).toBe("no-store");
     expect((await fetch(
       `http://localhost:${getAppPort()}/identity/v1/tenant-contexts/a-123`,
     )).status).toBe(404);
@@ -368,7 +369,6 @@ describe("identity BFF", () => {
       { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
       { id: "google", labelKey: "IDENTITY_METHOD_GOOGLE", label: "Google", type: "idp", idpHint: "google", intents: ["signin", "signup"] },
       { id: "github", labelKey: "IDENTITY_METHOD_GITHUB", label: "github", type: "idp", idpHint: "github", intents: ["signin", "signup"] },
-      { id: "magic_link", labelKey: "IDENTITY_METHOD_MAGIC_LINK", type: "magic_link", intents: ["signup"] },
     ] });
     const initialAdminReads = await (
       await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)
@@ -1488,7 +1488,7 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     ]);
     expect(await methods("surface=citizen&intent=signup")).toEqual([]);
     expect((await methods("")).map((method: { id: string }) => method.id))
-      .toEqual(["password", "google", "github", "magic_link"]);
+      .toEqual(["password", "google", "github"]);
     expect((await fetch(`${app()}/identity/v1/auth-methods?surface=admin`)).status).toBe(400);
   });
 
