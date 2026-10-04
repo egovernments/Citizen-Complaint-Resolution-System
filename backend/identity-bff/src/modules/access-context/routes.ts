@@ -28,7 +28,7 @@ import {
   readTenantMappingForTenant,
 } from "../organizations/organization-service.js";
 import type { TenantOption } from "./tenant-directory.js";
-import { resolvePublicTenantRoute } from "./tenant-route.js";
+import { isLiveTenantRoute, resolvePublicTenantRoute } from "./tenant-route.js";
 import { resolveTenantOption, resolveTenantOptions } from "./tenant-options.js";
 import { AccountLinkError, EMPLOYEE_USER_TYPE, linkedIdentityFor } from "../account-links/account-links.js";
 
@@ -78,11 +78,14 @@ function digitFailure(error: unknown, response: express.Response, message: strin
     console.warn(`${message}: DIGIT roles are not installed for this tenant`);
     return send(response, "TENANT_ROLES_MISSING", "This tenant is not ready for sign-in yet");
   }
-  if (error instanceof DigitUnavailableError || error instanceof IdentityAdminError) {
+  if (error instanceof DigitUnavailableError ||
+      (error instanceof IdentityAdminError && error.status >= 500)) {
     // Keycloak Admin or DIGIT unreachable: a retryable 503, never a bare 500.
     console.warn(`${message}:`, error.message);
     return send(response, error instanceof IdentityAdminError ? "IDENTITY_UNAVAILABLE" : "DIGIT_UNAVAILABLE", message);
   }
+  // Anything else, including a Keycloak 400/404/409 (a misconfiguration, not
+  // an outage), is not worth retrying and stays a 500.
   throw error;
 }
 
@@ -102,10 +105,6 @@ export function registerAccessContextRoutes(app: express.Application): void {
       }
       return response.json({ tenant });
     } catch (error) {
-      if (error instanceof IdentityAdminError) {
-        console.warn("Tenant route resolution failed:", error.message);
-        return response.status(503).json({ error: "Tenant routes are temporarily unavailable" });
-      }
       return digitFailure(error, response, "Tenant routes are temporarily unavailable");
     }
   }));
@@ -232,7 +231,10 @@ export function registerAccessContextRoutes(app: express.Application): void {
     }
 
     try {
-      if (!await isActiveDigitTenant(boundTenant.tenantId)) {
+      // Like employee `_select`, re-read the tenant's Organization (or group)
+      // live: disabling or unmapping it stops citizen sign-in at once, not
+      // when the session expires.
+      if (!await isLiveTenantRoute(boundTenant) || !await isActiveDigitTenant(boundTenant.tenantId)) {
         return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
       }
       const rule = await mobileValidationForRoute({
@@ -265,7 +267,9 @@ export function registerAccessContextRoutes(app: express.Application): void {
         name: claims.name?.trim() || "Citizen",
         ...phone,
       });
-      const login = await managedUserLogin(identity, current.sessionId, phone.mobileNumber);
+      const login = await managedUserLogin(
+        identity, current.sessionId, phone.mobileNumber, phone.countryCode,
+      );
       // egov-user issues every CITIZEN token at the state root, so the token
       // tenant is the bound tenant's citizen tenant (`identity.tenantId`),
       // never the city itself. Fail closed on anything else: another user

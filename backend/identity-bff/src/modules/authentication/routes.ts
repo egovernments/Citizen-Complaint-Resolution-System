@@ -7,7 +7,7 @@ import {
   IdentityAdminError,
 } from "../organizations/organization-service.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { resolvePublicTenantRoute } from "../access-context/tenant-route.js";
+import { boundTenantOf, resolvePublicTenantRoute } from "../access-context/tenant-route.js";
 import {
   attemptSurface,
   clearedLoginCookie,
@@ -207,12 +207,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
         throw error;
       }
       if (!tenant) return response.status(404).json({ error: "Tenant route is not available" });
-      boundTenant = {
-        urlSlug: tenant.urlSlug,
-        tenantId: tenant.tenantId,
-        rootTenantId: tenant.rootTenantId,
-        name: tenant.name,
-      };
+      boundTenant = boundTenantOf(tenant);
       const prefix = surfaceReturnPrefix(surface, tenant.urlSlug);
       const requested = request.query.returnTo === undefined
         ? prefix

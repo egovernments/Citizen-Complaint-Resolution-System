@@ -11,10 +11,11 @@ import {
   getIdentitySession,
   identitySessionSurface,
   saveIdentitySession,
+  SessionRevokedError,
   sessionIdFromCookie,
   touchIdentitySession,
 } from "./session-store.js";
-import { identityUserEnabled } from "../organizations/organization-service.js";
+import { phoneIdentityStillValid } from "../organizations/organization-service.js";
 
 const PHONE_OTP_IDENTITY_CHECK_MS = 60_000;
 import type { IdentitySession } from "./types.js";
@@ -42,11 +43,11 @@ export async function currentSession(
     if (!session || session.sessionExpiresAt <= Date.now()) return null;
     if (session.authMethod === "phone_otp") {
       // No Keycloak token to refresh, so the Keycloak user is re-checked
-      // directly: disabling or deleting it ends the session within a minute.
+      // directly: disabling, deleting, or changing its verified phone ends the session within a minute.
       if (Date.now() - (session.identityCheckedAt || 0) > PHONE_OTP_IDENTITY_CHECK_MS) {
         let enabled = true;
         try {
-          enabled = await identityUserEnabled(session.claims.sub);
+          enabled = await phoneIdentityStillValid(session.claims.sub, session.claims.phone_number || "");
         } catch (error) {
           // A Keycloak blip must not sign every OTP citizen out; retry next time.
           console.warn("Phone OTP session identity check failed:", (error as Error).message);
@@ -100,6 +101,7 @@ export async function currentSession(
       return session ? { sessionId, session } : null;
     } catch (error) {
       console.warn("Identity session refresh failed:", (error as Error).message);
+      if (error instanceof SessionRevokedError) return null;
       if (error instanceof InvalidGrantError) {
         await deleteIdentitySession(sessionId);
         return null;

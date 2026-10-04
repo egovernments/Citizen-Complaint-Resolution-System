@@ -6,7 +6,7 @@ import { createIdentitySession, deleteIdentitySession, getIdentitySession, perso
 import { currentSession } from "../../src/modules/sessions/current-session.js";
 import * as oidc from "../../src/modules/authentication/oidc.js";
 
-vi.mock("../../src/modules/authentication/oidc.js", () => ({ refreshIdentityTokens: vi.fn(), verifyIdentityAccessToken: vi.fn() }));
+vi.mock("../../src/modules/authentication/oidc.js", async original => ({ ...await original<typeof import("../../src/modules/authentication/oidc.js")>(), refreshIdentityTokens: vi.fn(), verifyIdentityAccessToken: vi.fn() }));
 const tokens = { accessToken: "test-access", refreshToken: "test-refresh", accessExpiresIn: 600, refreshExpiresIn: 3600 };
 const claims = { sub: "test-person", email: "test@example.invalid", sid: "kc-session" };
 const prefix = `session-revocation-${process.pid}`;

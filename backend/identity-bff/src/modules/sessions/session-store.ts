@@ -373,7 +373,11 @@ export async function createPhoneOtpSession(input: {
   return { sessionId, maxAge };
 }
 
-/** Rewrites a session record without changing its expiry. */
+/**
+ * Rewrites a session record without changing its expiry. Only an existing
+ * record is rewritten (`XX`): a logout that deleted it meanwhile must not be
+ * undone by a record with no expiry.
+ */
 export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<void> {
   await withPersonLease(session.claims.sub, async (lease) => {
     const fresh = await requireCurrentSession(lease, sessionId);

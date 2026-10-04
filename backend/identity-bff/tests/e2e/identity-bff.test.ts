@@ -13,9 +13,11 @@ import {
   citizenTokenMinter,
   setCitizenTokenMinter,
 } from "../../src/modules/managed-accounts/citizen-token-minter.js";
+import { createHash } from "node:crypto";
 import {
   createIdentitySession,
   saveSelectedIdentityContext,
+  touchIdentitySession,
 } from "../../src/modules/sessions/session-store.js";
 import { resetIdentityMethodCatalog } from "../../src/modules/authentication/methods.js";
 import {
@@ -35,6 +37,8 @@ import {
   clearTenantMappingCache,
   keycloakPhoneIsAdminControlled,
   readTenantMappingForTenant,
+  readTenantMappingForUrlSlug,
+  recordManagedTenant,
   resetPhoneTrustCache,
   updateCitizenRegistrationValues,
 } from "../../src/modules/organizations/organization-service.js";
@@ -1934,6 +1938,24 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect((await fetch(`${app()}/identity/v1/tenant-contexts/bomet-county`)).status).toBe(200);
       expect((await fetch(`${app()}/identity/v1/tenant-contexts/dupe-slug`)).status).toBe(404);
       expect(warn.mock.calls.some(([line]) => String(line).includes("colliding mapping"))).toBe(true);
+      // Dupe B also claims ke.nakuru, so the Nakuru mapping is dropped too. Its
+      // managed accounts must survive reconciliation: a missing mapping is
+      // "unknown", not "nobody is a member".
+      const nakuru = [...digit.accounts.values()].filter((account) =>
+        account.tenantId === "ke.nakuru" && account.userName.startsWith("kcbff-") && account.active);
+      expect(nakuru.length).toBeGreaterThan(0);
+      expect(await readTenantMappingForTenant("ke.nakuru")).toBeNull();
+      const reconciled = await fetch(`${app()}/internal/identity/v1/reconciliation/_run`, {
+        method: "POST",
+        headers: { Authorization: "Bearer test-control-plane", "Content-Type": "application/json" },
+        body: "{}",
+      });
+      expect(reconciled.status).toBe(200);
+      const result = await reconciled.json();
+      expect(result.deactivated).toBe(0);
+      expect(result.failures.some((failure: { subject: string; error: string }) =>
+        failure.subject.endsWith("@ke.nakuru") && failure.error.includes("collides"))).toBe(true);
+      expect(nakuru.every((account) => digit.accounts.get(account.uuid)!.active)).toBe(true);
     } finally {
       warn.mockRestore();
       await kcUpdate("/organizations/org-dupe-a", { enabled: false });
@@ -1968,6 +1990,60 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     }
   });
 
+  it("finds an Organization another replica created, without waiting for the directory cache", async () => {
+    // Warm this replica's directory, then create the Organization behind its
+    // back, as signup on another replica would.
+    expect(await readTenantMappingForUrlSlug("bomet-county")).not.toBeNull();
+    await kcAdmin("/organizations", {
+      id: "org-fresh-id", alias: "fresh", name: "Fresh County", enabled: true,
+      attributes: { "digit.rootTenantId": ["ke.fresh"], "digit.urlSlug": ["fresh-county"] },
+    });
+    try {
+      expect(await readTenantMappingForUrlSlug("fresh-county"))
+        .toMatchObject({ organizationId: "org-fresh-id", tenantId: "ke.fresh" });
+      expect(await readTenantMappingForTenant("ke.fresh"))
+        .toMatchObject({ organizationId: "org-fresh-id", urlSlug: "fresh-county" });
+      expect(await readTenantMappingForUrlSlug("never-created")).toBeNull();
+    } finally {
+      await kcUpdate("/organizations/org-fresh-id", { enabled: false });
+      clearTenantMappingCache();
+    }
+  });
+
+  it("stops citizen sign-in as soon as the bound Organization is disabled, cache or not", async () => {
+    const cookie = await signIn("citizen");
+    expect((await citizenSelect(cookie)).status).toBe(200);
+    // No cache clear: the directory still holds the mapping, and the session
+    // still holds a cached DIGIT token.
+    await kcUpdate("/organizations/org-bomet-id", { enabled: false });
+    try {
+      expect((await citizenSelect(cookie)).status).toBe(403);
+    } finally {
+      await kcUpdate("/organizations/org-bomet-id", { enabled: true });
+      clearTenantMappingCache();
+    }
+    expect((await citizenSelect(cookie)).status).toBe(200);
+  });
+
+  it("records a managed tenant without replaying the stale user representation", async () => {
+    const created = await kcAdmin("/users", {
+      id: "managed-put-1", username: "managed.put", email: "m1@example.test",
+      firstName: "Kipchoge", enabled: true, attributes: { "digit.managedTenants": ["ke.bomet"] },
+    });
+    expect(created.status).toBe(201);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      await recordManagedTenant("managed-put-1", "ke.kisumu");
+      const put = fetchSpy.mock.calls.find(([, init]) => init?.method === "PUT");
+      const body = JSON.parse(String(put?.[1]?.body));
+      // No `enabled`: an admin disable between the GET and the PUT must stick.
+      expect(Object.keys(body).sort()).toEqual(["attributes", "email", "firstName"]);
+      expect(body.attributes["digit.managedTenants"]).toEqual(["ke.bomet", "ke.kisumu"]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("lets a citizen who verified a new number keep signing in", async () => {
     expect((await citizenSelect(await signIn("citizen"))).status).toBe(200);
     const identity = citizenIdentity(config.keycloakIssuer, "citizen-user-1", "ke.bomet");
@@ -1976,6 +2052,15 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect(moved.status).toBe(200);
     const account = [...digit.accounts.values()].find((candidate) => candidate.userName === identity.username)!;
     expect(account.mobileNumber).toBe("712345679");
+    expect(account.countryCode).toBe("+254");
+
+    // The number is changed in DIGIT behind the BFF's back. The comparison is
+    // with what DIGIT stores, not with what the BFF last wrote, so the next
+    // mint writes the verified number back instead of failing the OTP grant.
+    digit.accounts.get(account.uuid)!.mobileNumber = "712345670";
+    await getRedis().del(`${config.cachePrefix}:digit-user-token:${identity.key}`);
+    expect((await citizenSelect(await signIn("citizen", "newphone"))).status).toBe(200);
+    expect(digit.accounts.get(account.uuid)!.mobileNumber).toBe("712345679");
   });
 
   describe("citizen phone OTP sign-in (#2189)", () => {
@@ -2179,11 +2264,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     it("limits resends per phone and per IP", async () => {
       Object.assign(config as any, { identityCitizenOtpResendSeconds: 60 });
       try {
-        expect((await send("799000301")).status).toBe(202);
-        const tooSoon = await send("799000301");
+        expect((await send("799000301", "203.0.113.80")).status).toBe(202);
+        const tooSoon = await send("799000301", "203.0.113.80");
         expect(tooSoon.status).toBe(429);
         expect(await tooSoon.json()).toMatchObject({ code: "OTP_RESEND_TOO_SOON" });
         expect(Number(tooSoon.headers.get("retry-after"))).toBeGreaterThan(0);
+        // The cooldown is per caller: someone else asking for a code to this
+        // number does not hold its owner back.
+        expect((await send("799000301", "203.0.113.81")).status).toBe(202);
       } finally {
         (config as any).identityCitizenOtpResendSeconds = 0;
       }
@@ -2207,6 +2295,23 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       } finally {
         (config as any).identityCitizenOtpIpSendLimit = otpConfig.identityCitizenOtpIpSendLimit;
       }
+    });
+
+    it("keeps only the newest code for a number usable", async () => {
+      const first = await (await send("799000310")).json();
+      const firstCode = lastCode();
+      const second = await (await send("799000310")).json();
+      const secondCode = lastCode();
+      const old = await verify(first.challengeId, firstCode);
+      expect([old.status, (await old.json()).code]).toEqual([400, "OTP_EXPIRED"]);
+      // A send that fails to deliver does not take the current code away.
+      failDelivery = true;
+      try {
+        expect((await send("799000310")).status).toBe(503);
+      } finally {
+        failDelivery = false;
+      }
+      expect((await verify(second.challengeId, secondCode)).status).toBe(200);
     });
 
     it("expires a challenge after too many wrong codes, but never locks the number's owner out", async () => {
@@ -2333,6 +2438,132 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       const stored = JSON.parse((await getRedis().get(key))!);
       await getRedis().set(key, JSON.stringify({ ...stored, identityCheckedAt: 0 }), "KEEPTTL");
       expect((await session()).status).toBe(401);
+    });
+
+    const ageIdentityCheck = async (cookie: string) => {
+      const key = `${config.cachePrefix}:identity:session:${cookie.split("=")[1]}`;
+      const stored = JSON.parse((await getRedis().get(key))!);
+      await getRedis().set(key, JSON.stringify({ ...stored, identityCheckedAt: 0 }), "KEEPTTL");
+      return key;
+    };
+
+    it("ends a phone OTP session once its user no longer holds the number as verified", async () => {
+      const { challengeId } = await (await send("799000520")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const session = () => fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+      const { user } = await (await session()).json();
+      await kcUpdate(`/users/${user.id}`, {
+        attributes: { phoneNumber: ["+254799000520"], phoneNumberVerified: ["false"] },
+      });
+      await ageIdentityCheck(cookie);
+      expect((await session()).status).toBe(401);
+    });
+
+    it("keeps a phone OTP session through a failed identity check, and checks again next time", async () => {
+      const { challengeId } = await (await send("799000521")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const session = () => fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } });
+      const { user } = await (await session()).json();
+      const key = await ageIdentityCheck(cookie);
+      await fetch(`${config.keycloakAdminUrl}/__test/faults`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "GET", path: `/users/${user.id}`, status: 503, count: 1 }),
+      });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        expect((await session()).status).toBe(200);
+      } finally {
+        warn.mockRestore();
+      }
+      // The failed check does not count as a pass.
+      expect(JSON.parse((await getRedis().get(key))!).identityCheckedAt).toBe(0);
+      await kcUpdate(`/users/${user.id}`, { enabled: false });
+      expect((await session()).status).toBe(401);
+    });
+
+    it("never recreates a session that was deleted while it was being rewritten", async () => {
+      const { challengeId } = await (await send("799000522")).json();
+      const cookie = cookieFrom(await verify(challengeId, lastCode()), "digit_identity_session_citizen")!;
+      const sessionId = cookie.split("=")[1];
+      const key = `${config.cachePrefix}:identity:session:${sessionId}`;
+      const stored = JSON.parse((await getRedis().get(key))!);
+      await getRedis().del(key);
+      await expect(touchIdentitySession(sessionId, stored)).rejects.toMatchObject({ code: "SESSION_REVOKED" });
+      expect(await getRedis().exists(key)).toBe(0);
+    });
+
+    it("signs in a new owner of a number whose phone username an earlier owner still holds", async () => {
+      const phone = "+254799000523";
+      const username = `phone-${createHash("sha256").update(phone).digest("hex").slice(0, 24)}`;
+      // The earlier owner moved to another number but keeps the username.
+      await kcAdmin("/users", {
+        id: "earlier-owner-523", username, enabled: true,
+        attributes: { phoneNumber: ["+254799000599"], phoneNumberVerified: ["true"] },
+      });
+      const { challengeId } = await (await send("799000523")).json();
+      const ok = await verify(challengeId, lastCode());
+      expect(ok.status).toBe(200);
+      const cookie = cookieFrom(ok, "digit_identity_session_citizen")!;
+      const { user } = await (await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: cookie } })).json();
+      expect(user.id).not.toBe("earlier-owner-523");
+      const created = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${user.id}`,
+      )).json();
+      expect(created.username).toBe(`${username}-1`);
+      // The same number signs in to the same user again.
+      const again = await (await send("799000523")).json();
+      const second = cookieFrom(await verify(again.challengeId, lastCode()), "digit_identity_session_citizen")!;
+      expect((await (await fetch(`${app()}/identity/v1/session?surface=citizen`, { headers: { Cookie: second } })).json()).user.id)
+        .toBe(user.id);
+    });
+
+    it("does not charge the IP budget for a resend refused by the cooldown", async () => {
+      Object.assign(config as any, { identityCitizenOtpResendSeconds: 60, identityCitizenOtpIpSendLimit: 2 });
+      try {
+        const ip = "203.0.113.77";
+        expect((await send("799000524", ip)).status).toBe(202);
+        for (let press = 0; press < 3; press += 1) {
+          expect((await (await send("799000524", ip)).json()).code).toBe("OTP_RESEND_TOO_SOON");
+        }
+        // Only the one real send counted against this address.
+        expect((await send("799000525", ip)).status).toBe(202);
+      } finally {
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0, identityCitizenOtpIpSendLimit: otpConfig.identityCitizenOtpIpSendLimit,
+        });
+      }
+    });
+
+    it("sends nothing when Redis fails to store the challenge", async () => {
+      const count = sent.length;
+      const redis = getRedis();
+      const chain = {
+        hset() { return chain; },
+        expire() { return chain; },
+        async exec() { return [[new Error("OOM command not allowed"), null], [null, 0]]; },
+      };
+      const spy = vi.spyOn(redis, "multi").mockImplementationOnce(() => chain as any);
+      try {
+        expect((await send("799000526")).status).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(sent.length).toBe(count);
+    });
+
+    it("stops already-sent codes when phone_otp is switched off", async () => {
+      const { challengeId } = await (await send("799000527")).json();
+      const code = lastCode();
+      (config as any).identityCitizenOtpSecret = "";
+      resetIdentityMethodCatalog();
+      try {
+        const refused = await verify(challengeId, code);
+        expect([refused.status, (await refused.json()).code]).toEqual([400, "PHONE_OTP_DISABLED"]);
+      } finally {
+        (config as any).identityCitizenOtpSecret = otpConfig.identityCitizenOtpSecret;
+        resetIdentityMethodCatalog();
+      }
+      expect((await verify(challengeId, code)).status).toBe(200);
     });
 
     it("ignores a fixed code that is not six digits", async () => {
