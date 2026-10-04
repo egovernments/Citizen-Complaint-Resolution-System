@@ -1038,7 +1038,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the full findings and samples are in `d
 | `IDENTITY_POLLER_MAX_LAG_SECONDS` | Readiness threshold for the event poller |
 | `IDENTITY_RECONCILIATION_INTERVAL_SECONDS` | Unchanged (default 300); reported by `/readyz` |
 
-Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worker variables, the role allowlist, and the `admin/admin` Keycloak fallback.
+The onboarding portion of item 14 removes the BFF worker, tenant-foundation writes, `DIGIT_PROVISIONER_*`, worker settings, and their startup hook after the PGR cutover gate passed. `DIGIT_FOUNDATION_SOURCE_TENANT` remains a read-only readiness setting. The role allowlist and Keycloak fallback belong to the remaining item 14/15 cleanup.
 
 ## 12. Operations
 

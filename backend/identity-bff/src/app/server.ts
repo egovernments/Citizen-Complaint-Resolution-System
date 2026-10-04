@@ -4,7 +4,6 @@ import { config } from "../infrastructure/config.js";
 import { createIdentityApp } from "./create-app.js";
 import { initJwks } from "../modules/authentication/token-verifier.js";
 import { startReconcile } from "../modules/sync/reconcile.js";
-import { startOnboardingWorker } from "../modules/onboarding/worker.js";
 import { warnAboutInsecureOtpModes } from "../modules/citizen-otp/otp-sender.js";
 import { backfillTenantRoutes } from "../modules/tenant-routes/backfill.js";
 
@@ -23,8 +22,6 @@ const server = app.listen(config.port, () => {
       .then((result) => console.log("Tenant route backfill:", JSON.stringify(result)))
       .catch((error) => console.error("Tenant route backfill failed:", (error as Error).message));
   }
-  // Optional; failures to reach PGR are logged and never affect sign-in.
-  startOnboardingWorker();
 });
 
 process.on("SIGTERM", () => {

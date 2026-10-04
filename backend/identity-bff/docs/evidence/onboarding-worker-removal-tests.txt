@@ -1,0 +1,29 @@
+BFF onboarding worker removal — 2026-10-05
+Base: e41e23d44 (root 8c gate passed; owner explicitly released deletion).
+
+Affected checks:
+REDIS_PORT=16389 npx vitest run tests/e2e/onboarding-signin-resilience.test.ts tests/e2e/onboarding-bindings.integration.test.ts tests/unit/onboarding-primitives.test.ts tests/unit/readiness-dependencies.test.ts tests/unit/managed-digit-users.test.ts
+5 files, 60 tests passed; exit 0.
+After extending the retained resilience test to assert the authorize redirect:
+REDIS_PORT=16389 npx vitest run tests/e2e/onboarding-signin-resilience.test.ts
+1 file, 1 test passed; exit 0.
+
+Final full run (once): REDIS_PORT=16389 npx vitest run
+Test Files 52 passed | 3 skipped (55)
+Tests 659 passed | 11 skipped | 2 todo (672)
+Exit 0.
+Final npx tsc --noEmit: exit 0.
+
+No obsolete onboarding worker/provisioner imports or runtime settings remain
+in BFF src/tests/deploy. PGR files/tests unchanged by this removal.
+Read-only readiness source setting and core startup services are preserved.
+Skipped/todo tests are not verified. No deployment was performed.
+
+Local log SHA256:
+backend/identity-bff/artifacts/onboarding/worker-removal-focused.log: a615bff8bcbf7c290cbb2ae261aea045f6825bd08e99466dd5bb68350a4e74be
+backend/identity-bff/artifacts/onboarding/worker-removal-signin.log: ad6942a68d2537f15c454420968a4562551cd27463f21b08139b0ab267e58d2b
+backend/identity-bff/artifacts/onboarding/worker-removal-full.log: 087ac4f81d31b3896ba0ebfebbca49f31a0de4eea5c6ec25e215c92d1a534884
+backend/identity-bff/artifacts/onboarding/worker-removal-typecheck.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+Root gate report: 8c-gate-report-3.md; SHA256 7a3460b71177fb361f16aa79b505c5ae92e98a1d9c9943ca557c8c8982610769
+Owner release: msg_0fe74d4feb22426e94511026a08c11e2.

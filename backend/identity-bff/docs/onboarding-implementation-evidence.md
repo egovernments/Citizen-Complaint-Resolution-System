@@ -2,10 +2,12 @@
 
 The production app registers all six onboarding primitives with the dedicated
 workload credential, real core binding store and real revocation publisher.
-Item 11 remains in progress only for the coordinated worker removal. The
-existing BFF worker and all six worker tests remain in place.
+The BFF worker, tenant-foundation writer, provisioner credential/config and
+startup hook are now removed after the owner released the root 8c gate on
+2026-10-05. Production primitives and core providers are preserved. See
+[the executed replacement map and cutover evidence](onboarding-worker-removal.md).
 
-## Validation
+## Initial production integration validation
 
 After merging owner `6fc1daa3c`, core `2743ddf82`, and isolated inventory provider
 `86242e4ee710a4e746185e501c3227c7052d25da`, the production integration changes
@@ -20,7 +22,7 @@ were tested on 2026-10-04:
 
 Skipped real-Keycloak checks and remaining contract todos are not claimed as
 verified. Tests use real Redis and real core services against HTTP Keycloak and
-DIGIT fixtures. These results do not establish completion of the PGR cutover.
+DIGIT fixtures. These historical results precede the separately recorded worker cutover.
 
 ## New executed coverage
 
@@ -48,25 +50,10 @@ in `identity-bff.md` §9.3. The raw reader fails closed on corrupt or ambiguous
 attempt authority. `onboarding-tenant-inventory.test.ts` tests pagination and
 inclusion of disabled, failed, provisioning and superseded tenant mappings.
 
-## Worker test replacement agreement
+## Worker cutover
 
-The bridge agreement with `onb-pgr` is on thread `onboarding-switch-over`.
-No worker test is deleted until its replacement is executed and the owner
-coordinates the same-PR switch-over.
-
-| Existing worker case | Replacement owner |
-|---|---|
-| Tenant prerequisites precede account creation; same operation resumes | PGR foundation/baseline/founder step tests |
-| Fresh signup cannot adopt an existing DIGIT tenant | PGR tenant reservation/foundation tests |
-| Fresh signup cannot adopt another Organization | BFF operation ownership/race tests, already executed |
-| Founder account creation fails terminally | PGR HRMS founder tests |
-| Tenant foundation failure is retryable | PGR foundation retry tests |
-| Sign-in continues when PGR is unavailable | BFF retained resilience coverage during worker removal |
-
-## Remaining work
-
-After PGR replacement readiness, remove the BFF worker, tenant foundation,
-provisioner credential/config and startup hook in a separate coordinated commit.
-Retain sign-in resilience coverage, attach the final executed replacement map,
-and rerun the complete BFF suite and typecheck. Owner controls deployment files;
-PGR owns its worker and replacement test evidence.
+All six removed worker scenarios are mapped to executed PGR/BFF replacements in
+[onboarding-worker-removal.md](onboarding-worker-removal.md). The new retained
+BFF sign-in test checks authentication methods and the Keycloak authorization
+redirect while PGR requests fail. Read-only readiness, the core event poller,
+reconciliation, production primitives and PGR replacement tests are preserved.
