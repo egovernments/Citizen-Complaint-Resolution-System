@@ -63,6 +63,17 @@ the box does hold a live database, see
 | `domain` | If needs to be deployed on a domain name vs localhost. Also, set `tls_enabled:true` in this case | | 
 | `bootstrap_user` | Admin Username (defaults to ADMIN) | | 
 | `bootstrap_password` | Admin Password (defaults to eGov@123) | |
+| `enable_overpass` | Runs a self-hosted Overpass service for fetching OSM boundary polygons. Leave off to use the public Overpass API. | `false` |
+| `enable_novu` | Starts the Novu notification stack used for SMS, email, and WhatsApp delivery. Provider credentials and Novu setup are still required. | `false` |
+| `pgr_notification_config_driven` | Makes PGR read notification routing and templates from MDMS instead of using the legacy hard-coded flow. Requires Novu and the notification MDMS masters. | `false` |
+| `novu_bridge_channel` | Selects the bridge's default dispatch channel. Supported values are `sms`, `whatsapp`, and `email`. | `sms` |
+| `novu_bridge_channels_enabled` | Comma-separated list of channels the Novu bridge is allowed to deliver. Only list channels whose providers are configured. | `"SMS,EMAIL"` |
+| `novu_bridge_sms_provider` | Selects an optional non-Twilio provider for ordinary SMS: `ozeki` or `smscountry`. Leave blank to use Twilio SMS. | `""` |
+| `enable_keycloak` | Starts Keycloak and the token-exchange service for single sign-on. This alone does not switch the portals away from DIGIT OTP login. | `false` |
+| `auth_provider` | Selects the shared authentication path: `keycloak` enables Keycloak SSO; blank keeps the default DIGIT OTP flow. | `""` |
+| `citizen_auth_provider` | Overrides the authentication provider for the citizen portal only. Leave blank to inherit `auth_provider`, or use `digit` to keep citizen OTP login. | `digit` |
+| `hrms_dev_mode` | Lets employee-creation requests supply a known password for onboarding. Turn it off after onboarding so HRMS generates passwords normally. | `false` |
+| `enable_matomo` | Starts the self-hosted Matomo analytics services. Set `nginx_features.matomo: true` as well and configure the portal analytics provider to collect visits. | `false` |
 
 
 ## Start Deployment
