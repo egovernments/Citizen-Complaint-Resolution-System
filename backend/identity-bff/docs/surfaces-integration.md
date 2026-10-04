@@ -88,6 +88,11 @@ the real-dependency cases; mocked tests do not satisfy those cases.
   a newer Workspace.version.
 - Invitation expiry uses `identity.invitationPolicy`, record `default`,
   `invitationExpiryHours` 1..2160, default 336.
+- Root decision on approval `apr_2a08b76cd6b041a8b7958fb3d8f67999` defers
+  notification to the old email address. No custom Keycloak extension is
+  authorized for it. D18 still requires verification of the new address,
+  propagation to DIGIT only after verification, and the admin email path.
+  Record the old-address notice as deferred rather than a failed D18 gate.
 
 Only root merges the owner PR into completion-base. This branch does not
 authorize deployment or removal of the final legacy login paths before the
