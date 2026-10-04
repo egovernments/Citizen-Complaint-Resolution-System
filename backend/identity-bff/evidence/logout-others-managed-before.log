@@ -1,0 +1,33 @@
+
+ RUN  v5.0.1 /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-bff/backend/identity-bff
+
+ ❯ tests/e2e/identity-bff.test.ts (78 tests | 1 failed | 76 skipped) 205ms
+   ❯ digit-ui employee and citizen surfaces (#2167) (58)
+     × preserves a managed rotate token after public logout-others (alias: true) 52ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/e2e/identity-bff.test.ts > digit-ui employee and citizen surfaces (#2167) > preserves a managed rotate token after public logout-others (alias: true)
+AssertionError: expected 401 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 401
+
+ ❯ tests/e2e/identity-bff.test.ts:1740:40
+    1738|       expect((await fetch(`${app()}/identity/v1/session?surface=employ…
+    1739|       // Validate the original token before any new selection could mi…
+    1740|       expect((await details()).status).toBe(200);
+       |                                        ^
+    1741|       expect(digit.stats.logouts).toBe(logouts);
+    1742|       expect(await getRedis().smembers(tokenHoldersKey(account))).toEq…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 76 skipped (78)
+   Start at  00:19:22
+   Duration  1.31s (transform 48%, tests 26%, import 18%, setup 8%, worker 1%)

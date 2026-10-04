@@ -3,6 +3,9 @@ import { mirrorPerson } from "../../src/modules/sync/mirror.js";
 import * as syncMirror from "../../src/modules/sync/mirror.js";
 import * as sessionStore from "../../src/modules/sessions/session-store.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
+import { staffAccess } from "../../src/modules/bindings/predicate.js";
+import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
+import { holdToken, recordToken } from "../../src/modules/revocation/index.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -13,8 +16,10 @@ import { getRedis } from "../../src/infrastructure/redis.js";
 import {
   citizenIdentity,
   linkedIdentity,
+  managedIdentity,
   managedAccountsKey,
   managedUserLogin,
+  sessionTokenRef,
 } from "../../src/modules/managed-accounts/managed-account-service.js";
 import {
   citizenTokenMinter,
@@ -1663,6 +1668,90 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect((await fetch(`${app()}/identity/v1/session?surface=employee`, {
       headers: { Cookie: cookie },
     })).status).toBe(401);
+  });
+
+  it.each([false, true])("preserves a managed rotate token after public logout-others (alias: %s)", async (alias) => {
+    const subject = `managed-logout-${alias}`;
+    const tenantId = "ke.bomet";
+    const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
+    expect((await kcAdmin("/users", { id: subject, username: subject, enabled: true })).status).toBe(201);
+    await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: subject });
+    const account = digit.addAccount({
+      userName: identity.username, name: "Managed employee", mobileNumber: "0712345000", emailId: null,
+      tenantId, type: "EMPLOYEE", active: true, identificationMark: identity.marker,
+      roles: [{ code: "EMPLOYEE", tenantId }], password: "Initial@123",
+    });
+    // No binding is seeded: this must take the binding-else-managed transition path.
+    expect(await staffAccess(subject, tenantId)).toEqual({ allowed: true, via: "managed" });
+    const makeSession = async (device: string) => {
+      const { sessionId } = await createIdentitySession({ accessToken: "test-session", accessExpiresIn: 3600 },
+        { sub: subject, sid: `${subject}-${device}` }, config.keycloakEmployeeClientId,
+        { surface: "employee", boundTenant: { urlSlug: "bomet-county", tenantId, rootTenantId: tenantId, name: "Bomet" } });
+      return { sessionId, cookie: `digit_identity_session_employee=${sessionId}` };
+    };
+    const current = await makeSession("current");
+    const other = await makeSession("other");
+    const select = (cookie: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+      method: "POST", headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", tenantId }),
+    });
+    const logout = (scope: "others" | "all") => fetch(`${app()}/identity/v1/logout`, {
+      method: "POST", headers: { Cookie: current.cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", scope }),
+    });
+    const previousMode = config.identityStaffCredentialMode;
+    config.identityStaffCredentialMode = "rotate";
+    try {
+      const rotations = digit.stats.passwordUpdates;
+      const first = await select(current.cookie);
+      expect(first.status).toBe(200);
+      const selected = await first.json();
+      expect(selected.UserRequest).toMatchObject({ userName: identity.username, uuid: account.uuid, tenantId });
+      expect(selected.UserRequest.userName).toMatch(/^kcbff-/);
+      expect(digit.stats.passwordUpdates).toBe(rotations + 1);
+      const second = await select(other.cookie);
+      expect(second.status).toBe(200);
+      expect((await second.json()).access_token === selected.access_token).toBe(true);
+      expect(digit.stats.passwordUpdates).toBe(rotations + 1);
+      // Observe registration by the real managed login and public selection paths.
+      expect((await getRedis().smembers(tokenHoldersKey(account))).sort()).toEqual(
+        [sessionTokenRef(current.sessionId), sessionTokenRef(other.sessionId)].sort());
+      const aliasRef = { tenantId: "legacy-tenant-alias", uuid: account.uuid };
+      if (alias) {
+        // An additional inventory alias is a separate regression variant, not
+        // an assertion that the live gate had this Redis state.
+        await withPersonLease(subject, async lease => {
+          await recordToken(lease, aliasRef, { accessToken: selected.access_token,
+            expiresAt: Date.now() + 3600_000, user: { ...selected.UserRequest, ...aliasRef } }, "staff");
+          await holdToken(lease, aliasRef, other.sessionId);
+        });
+      }
+      const details = () => fetch(`${config.digitUserServiceUrl}/_details?access_token=${encodeURIComponent(selected.access_token)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      });
+      expect((await details()).status).toBe(200);
+      const logouts = digit.stats.logouts;
+      expect((await logout("others")).status).toBe(204);
+      expect(await getIdentitySession(other.sessionId)).toBeNull();
+      expect(await getIdentitySession(current.sessionId)).not.toBeNull();
+      expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: current.cookie } })).status).toBe(200);
+      expect((await fetch(`${app()}/identity/v1/session?surface=employee`, { headers: { Cookie: other.cookie } })).status).toBe(401);
+      // Validate the original token before any new selection could mint a replacement.
+      expect((await details()).status).toBe(200);
+      expect(digit.stats.logouts).toBe(logouts);
+      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(current.sessionId)]);
+      if (alias) expect(await getRedis().get(tokenKey(aliasRef))).toBeNull();
+      const adminLog = await (await fetch(`${config.keycloakAdminUrl}/__test/admin-log`)).json();
+      const ended = `DELETE /admin/realms/${config.keycloakOrganizationRealm}/sessions/${subject}-`;
+      expect(adminLog).toContain(`${ended}other`);
+      expect(adminLog).not.toContain(`${ended}current`);
+      expect((await logout("all")).status).toBe(204);
+      expect(await getIdentitySession(current.sessionId)).toBeNull();
+      expect((await details()).status).toBe(401);
+      expect(digit.stats.logouts).toBe(logouts + 1);
+    } finally {
+      config.identityStaffCredentialMode = previousMode;
+    }
   });
 
   it("creates a CitizenRegistration and a DIGIT CITIZEN token for the bound tenant", async () => {

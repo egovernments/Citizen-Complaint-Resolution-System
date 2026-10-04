@@ -1,0 +1,37 @@
+Employee hosted privacy consent regression
+Date: 2026-10-05 (Asia/Kolkata)
+Task: task_e64ebfbdddbc4909819065e473c339a3
+Base: identity/completion-base69f9af553 integrated, then owner05a6b4061.
+Tested source: b7656ba3f2e5512825e6a29335a027fc20af0796.
+
+The employee theme Login.tsx requires username, password and consent even
+without configured policy text. Privacy.tsx exposes #privacy-component-check;
+digit.css keeps it interactive with opacity0 and an18px hit target.
+The helper checks that specific checkbox when present, asserts checked, then
+submits normally. It does not force the button, change form state via JavaScript,
+or check unrelated boxes. Missing consent controls remain supported.
+
+Regression mirrors the theme markup and submit gating with local browser/HTTP
+doubles. It first fills both credentials and asserts unchecked consent and disabled
+Login. On a fresh helper sign-in it records checked consent, untouched unrelated
+checkbox, a single app-consumed auth result and successful employee context select.
+Existing9 combined/split, session and auth-result browser cases remain intact.
+
+Commands run from tests/integration-tests, sequentially, concurrency1:
+1. Before helper fix, source05a6b4061 plus new regression:
+   PLAYWRIGHT_BROWSERS_PATH="$PWD/.identity-browsers" npx tsx --test --test-concurrency=1 --test-name-pattern='employee consent' tests/identity-unit/hosted-fixture.test.ts
+   Exit1:1failed, timeout clicking disabled Login. consent-before.txt.
+2. After helper fix:
+   PLAYWRIGHT_BROWSERS_PATH="$PWD/.identity-browsers" npx tsx --test --test-concurrency=1 tests/identity-unit/hosted-fixture.test.ts
+   Exit0:10passed,0failed/skipped. consent-focused.txt.
+3. Full local helper suite at tested source above, once before PR:
+   PLAYWRIGHT_BROWSERS_PATH="$PWD/.identity-browsers" npx tsx --test --test-concurrency=1 tests/identity-unit/*.test.ts
+   Exit0:25passed,0failed/skipped. consent-suite.txt.
+4. npx tsc --noEmit
+   Exit0, no diagnostics. consent-typecheck.txt.
+5. git diff identity/lane-e --check
+   Exit0.
+
+Only tests/integration-tests changed. No real Keycloak/DIGIT/OTP gate was rerun.
+Root owns the8c redeployment and employee persona rerun; these local double
+results do not claim that real deployment gate passed.

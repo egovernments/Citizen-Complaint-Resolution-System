@@ -345,7 +345,7 @@ Query: `surface`; `include=account` (optional).
 Body or query `{surface, scope?: "current" | "others" | "all"}`, default `current` → **`204`**, and clears the cookie for `current` and `all`.
 
 - `current`: ends this session and its Keycloak session, and revokes this session's DIGIT token claim.
-- `others`: ends every **other** BFF and Keycloak session of the person, and revokes their DIGIT tokens.
+- `others`: ends every **other** BFF and Keycloak session of the person. It skips DIGIT logout for accounts whose token is held by the current session; tokens used only by the ended sessions are revoked. See the shared-token limitation in §8.
 - `all`: both, and raises the person's revocation generation (§6).
 - Failed DIGIT logouts go on the revocation retry set. They never fail the request.
 - Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `UNTRUSTED_ORIGIN` 403. A missing session is still `204`.
@@ -888,6 +888,20 @@ Reference implementation and unit tests: `src/modules/accounts/credential.ts`, `
 | K1 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `ke` | `306cd3b8552cb8c4116c6341d9cce98ef2db5a5fa0d58c12bfd6feda038eeaee` | `%@uYT8MwZkS$J4q` |
 | K2 | `3f2a9c1e-7b4d-4e2a-9f10-5c6d7e8f9a0b` | `pg` | `06b4508a015652bf1c412cb091ae877e10b21c8106843a6599a55347d1d83be1` | `@rQXAhqy6Tz6R5b` |
 | K2 | `a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d` | `bomet-county` | `0287838160bbdc66bd28d6ab0cc510988ed30454819aef0e32c079d8c4cd2a12` | `rQuGP8HDAhM2c@E` |
+
+### Shared DIGIT tokens and scoped logout
+
+egov-user can return the same live access token for repeated grants of one
+account. The BFF cannot revoke only the copies held by other consumers of that
+token. `logout {scope: "others"}` therefore preserves every current-session-held
+account token while ending the other BFF/Keycloak sessions. Other consumers who
+already possess that shared DIGIT token can use it until expiry or a later
+account-wide revocation (including logout-all), including consumers that obtained
+the same token directly from egov-user outside the BFF. Tokens belonging only to ended
+sessions are still revoked. This limitation also applies when staff use the
+derived credential; deterministic credentials do not create per-session DIGIT
+tokens. Logout-current releases its claim and preserves tokens with remaining
+holders; logout-all ends all claims and revokes the shared token.
 
 ## 9. Onboarding: payload hash, `restartNo` and lifecycle
 

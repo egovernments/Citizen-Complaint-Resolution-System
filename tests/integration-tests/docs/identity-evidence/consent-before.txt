@@ -1,0 +1,42 @@
+TAP version 13
+# Subtest: employee consent gates Login and hosted helper checks only the required consent
+not ok 1 - employee consent gates Login and hosted helper checks only the required consent
+  ---
+  duration_ms: 3526.411958
+  location: '/Users/kanavdwevedi/repositories/egov/_wt/identity-surf-tests/tests/integration-tests/tests/identity-unit/hosted-fixture.test.ts:28:4282'
+  failureType: 'testCodeFailure'
+  error: |-
+    locator.click: Timeout 3000ms exceeded.
+    Call log:
+      - waiting for locator('#kc-login, button[type="submit"]').first()
+        - locator resolved to <button disabled id="kc-login" type="submit">Log in</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 100ms
+        6 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 500ms
+    
+  code: 'ERR_TEST_FAILURE'
+  name: 'TimeoutError'
+  stack: |-
+    hostedSignIn (/Users/kanavdwevedi/repositories/egov/_wt/identity-surf-tests/tests/integration-tests/tests/utils/identity-bff.ts:89:68)
+    async <anonymous> (/Users/kanavdwevedi/repositories/egov/_wt/identity-surf-tests/tests/integration-tests/tests/identity-unit/hosted-fixture.test.ts:165:3)
+    async fixture (/Users/kanavdwevedi/repositories/egov/_wt/identity-surf-tests/tests/integration-tests/tests/identity-unit/hosted-fixture.test.ts:91:5)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4065.315334

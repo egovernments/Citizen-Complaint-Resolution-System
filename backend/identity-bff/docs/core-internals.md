@@ -269,7 +269,9 @@ export function listPersonSessions(subject: string): Promise<Array<{
 }>>;
 
 // revocation/index.ts
-/** logout {scope}: ends BFF sessions and Keycloak sessions; revokes DIGIT tokens no remaining session holds. */
+/** logout {scope}: ends BFF/Keycloak sessions; others must preserve current-held account tokens.
+ * Snapshot current-held accounts/tokens before logout; protect token values across duplicate inventory refs.
+ * Shared DIGIT tokens cannot be revoked per consumer (identity-bff.md §8). */
 export function logoutSessions(subject: string, scope: "current" | "others" | "all", currentSessionId: string): Promise<void>;
 /** Phone change: end this person's sessions carrying oldPhoneRef, except keepSessionId. */
 export function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void>;

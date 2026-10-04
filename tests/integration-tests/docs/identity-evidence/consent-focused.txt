@@ -1,0 +1,60 @@
+TAP version 13
+# Subtest: hosted browser combined username and password establishes the cookie used by context selection
+ok 1 - hosted browser combined username and password establishes the cookie used by context selection
+  ---
+  duration_ms: 261.762292
+  ...
+# Subtest: combined username and password: fresh fields and password autocomplete are asserted on their actual pages
+ok 2 - combined username and password: fresh fields and password autocomplete are asserted on their actual pages
+  ---
+  duration_ms: 60.520792
+  ...
+# Subtest: combined username and password: app consumes one-use result after removing the URL parameter
+ok 3 - combined username and password: app consumes one-use result after removing the URL parameter
+  ---
+  duration_ms: 245.252958
+  ...
+# Subtest: combined username and password: app-consumed failure rejects even when an older session is valid
+ok 4 - combined username and password: app-consumed failure rejects even when an older session is valid
+  ---
+  duration_ms: 250.035166
+  ...
+# Subtest: hosted browser split username then password establishes the cookie used by context selection
+ok 5 - hosted browser split username then password establishes the cookie used by context selection
+  ---
+  duration_ms: 203.70475
+  ...
+# Subtest: split username then password: fresh fields and password autocomplete are asserted on their actual pages
+ok 6 - split username then password: fresh fields and password autocomplete are asserted on their actual pages
+  ---
+  duration_ms: 119.10025
+  ...
+# Subtest: split username then password: app consumes one-use result after removing the URL parameter
+ok 7 - split username then password: app consumes one-use result after removing the URL parameter
+  ---
+  duration_ms: 305.445958
+  ...
+# Subtest: split username then password: app-consumed failure rejects even when an older session is valid
+ok 8 - split username then password: app-consumed failure rejects even when an older session is valid
+  ---
+  duration_ms: 302.514541
+  ...
+# Subtest: successful landing without an authenticated session is rejected
+ok 9 - successful landing without an authenticated session is rejected
+  ---
+  duration_ms: 140.891458
+  ...
+# Subtest: employee consent gates Login and hosted helper checks only the required consent
+ok 10 - employee consent gates Login and hosted helper checks only the required consent
+  ---
+  duration_ms: 285.638792
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2532.286875

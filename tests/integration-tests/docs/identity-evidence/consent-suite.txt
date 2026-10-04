@@ -1,0 +1,135 @@
+TAP version 13
+# Subtest: OTP challenge verification carries the HttpOnly cookie to citizen _select
+ok 1 - OTP challenge verification carries the HttpOnly cookie to citizen _select
+  ---
+  duration_ms: 36.793042
+  ...
+# Subtest: OTP _send failure stops without native registration/password fallback
+ok 2 - OTP _send failure stops without native registration/password fallback
+  ---
+  duration_ms: 5.746791
+  ...
+# Subtest: OTP _verify failure stops without native registration/password fallback
+ok 3 - OTP _verify failure stops without native registration/password fallback
+  ---
+  duration_ms: 4.967583
+  ...
+# Subtest: rejects wrong tenant in a successful _select response
+ok 4 - rejects wrong tenant in a successful _select response
+  ---
+  duration_ms: 4.60025
+  ...
+# Subtest: rejects wrong persona in a successful _select response
+ok 5 - rejects wrong persona in a successful _select response
+  ---
+  duration_ms: 5.081208
+  ...
+# Subtest: rejects refresh token in a successful _select response
+ok 6 - rejects refresh token in a successful _select response
+  ---
+  duration_ms: 4.206292
+  ...
+# Subtest: rejects expired token in a successful _select response
+ok 7 - rejects expired token in a successful _select response
+  ---
+  duration_ms: 3.994125
+  ...
+# Subtest: employee context selection sends surface and exact tenant without deriving a parent
+ok 8 - employee context selection sends surface and exact tenant without deriving a parent
+  ---
+  duration_ms: 1.65275
+  ...
+# Subtest: fixed-code fixtures require explicit configuration
+ok 9 - fixed-code fixtures require explicit configuration
+  ---
+  duration_ms: 0.220416
+  ...
+# Subtest: authorize is tenant bound for employee and citizen, tenantless for configurator
+ok 10 - authorize is tenant bound for employee and citizen, tenantless for configurator
+  ---
+  duration_ms: 0.467541
+  ...
+# Subtest: failure reporting never echoes a response body
+ok 11 - failure reporting never echoes a response body
+  ---
+  duration_ms: 0.105083
+  ...
+# Subtest: shared citizen fixture respects one BFF resend cooldown without a native fallback
+ok 12 - shared citizen fixture respects one BFF resend cooldown without a native fallback
+  ---
+  duration_ms: 57.938541
+  ...
+# Subtest: hosted browser combined username and password establishes the cookie used by context selection
+ok 13 - hosted browser combined username and password establishes the cookie used by context selection
+  ---
+  duration_ms: 241.056
+  ...
+# Subtest: combined username and password: fresh fields and password autocomplete are asserted on their actual pages
+ok 14 - combined username and password: fresh fields and password autocomplete are asserted on their actual pages
+  ---
+  duration_ms: 80.832709
+  ...
+# Subtest: combined username and password: app consumes one-use result after removing the URL parameter
+ok 15 - combined username and password: app consumes one-use result after removing the URL parameter
+  ---
+  duration_ms: 237.238667
+  ...
+# Subtest: combined username and password: app-consumed failure rejects even when an older session is valid
+ok 16 - combined username and password: app-consumed failure rejects even when an older session is valid
+  ---
+  duration_ms: 232.462833
+  ...
+# Subtest: hosted browser split username then password establishes the cookie used by context selection
+ok 17 - hosted browser split username then password establishes the cookie used by context selection
+  ---
+  duration_ms: 193.108166
+  ...
+# Subtest: split username then password: fresh fields and password autocomplete are asserted on their actual pages
+ok 18 - split username then password: fresh fields and password autocomplete are asserted on their actual pages
+  ---
+  duration_ms: 103.322666
+  ...
+# Subtest: split username then password: app consumes one-use result after removing the URL parameter
+ok 19 - split username then password: app consumes one-use result after removing the URL parameter
+  ---
+  duration_ms: 308.521166
+  ...
+# Subtest: split username then password: app-consumed failure rejects even when an older session is valid
+ok 20 - split username then password: app-consumed failure rejects even when an older session is valid
+  ---
+  duration_ms: 316.613542
+  ...
+# Subtest: successful landing without an authenticated session is rejected
+ok 21 - successful landing without an authenticated session is rejected
+  ---
+  duration_ms: 137.7935
+  ...
+# Subtest: employee consent gates Login and hosted helper checks only the required consent
+ok 22 - employee consent gates Login and hosted helper checks only the required consent
+  ---
+  duration_ms: 287.698583
+  ...
+# Subtest: receiver accepts the exact sender contract without challengeId
+ok 23 - receiver accepts the exact sender contract without challengeId
+  ---
+  duration_ms: 23.067458
+  ...
+# Subtest: stale, wrong-tenant, expired and reassigned challenge reads fail closed
+ok 24 - stale, wrong-tenant, expired and reassigned challenge reads fail closed
+  ---
+  duration_ms: 8.077167
+  ...
+# Subtest: missing receipt or correlation window never returns a code
+ok 25 - missing receipt or correlation window never returns a code
+  ---
+  duration_ms: 5.811667
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 25
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3117.933625

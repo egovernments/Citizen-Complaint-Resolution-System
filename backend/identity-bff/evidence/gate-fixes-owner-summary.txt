@@ -1,0 +1,29 @@
+Owner review of gate fixes (task_c56270f6bcfc4b69932d0fd0233401a5)
+
+Base: a92e9256f. Final integration merge:543c1849b.
+Consent: PR70, sourceb7656ba3f, evidencedc16a1963; rebased owner296fffbe6.
+Logout: PR72, tested source55ea8649c, final evidence6c0bee0e8.
+
+Owner reviewed consent control against actual Login.tsx/Privacy.tsx, original
+disabled-button regression, unchanged combined/split flows and one-use result
+handling. Inspected25 helper/10 browser passes and clean TypeScript evidence:
+tests/integration-tests/docs/identity-evidence/consent-verification.txt.
+
+Owner reviewed person-lease snapshot, account/token alias protection, retained
+inventory and holder behavior, other-only revocation, no protected logout retry,
+unchanged current/all paths and section8 shared-token limitation (including
+external consumers). Managed public regression explicitly checks no binding,
+via=managed, first rotate, two selections sharing token and both actual holders,
+current session200/other401, original DIGIT token200 before reselection, only
+other Keycloak DELETE, and subsequent logoutall invalidation. Inspected baseline
+alias failure401 plus120 affected/661 full passes,11 skipped,2 todo, clean tsc.
+Evidence: logout-others-summary.txt and its focused/full/before/tsc logs.
+
+Merge was conflict-free. Compared final BFF src/tests to6c0bee0e8 and integration
+tests to296fffbe6: both identical. Reused pinned tested-tree evidence rather than
+rerunning unchanged suites. git diff --check passed.
+
+The ordinary managed two-session scenario already passed before this fix.
+The injected duplicate-inventory alias reproduces the symptom and now passes;
+it does not establish the exact live8c cause. Root must rerun the employee and
+logout gates on8c; no deployment or live acceptance is claimed here.
