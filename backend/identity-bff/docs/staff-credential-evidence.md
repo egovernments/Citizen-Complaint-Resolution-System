@@ -1,5 +1,11 @@
 # Derived staff credential: item 7
 
+Gate correction: the later 8c run proved stock egov-user requires roles on
+updates. The writer now copies freshly read roles unchanged; the fake requires
+at least one role code. See `staff-credential-roles-gate-evidence.md` for the
+regression and current validation. The original role-omission assumption below
+is superseded by that gate result.
+
 The staff credential service uses the frozen `derivedStaffPassword` implementation.
 `activateStaffCredential` writes the current key's credential, signs in, logs out
 the returned native token once, then mirrors the version. `staffLogin` repairs
@@ -24,7 +30,7 @@ password or logging out. Revocation uses only the recorded key and never repairs
 - The existing managed/linked rotate path is unchanged except for omitting DOB
   from linked updates (`yyyy-MM-dd` search values are invalid in the update DTO;
   omission preserves the stored DOB). The new `staffLogin` rotate helper uses
-  the safe writer, so it additionally omits roles/active/locks, re-reads the
+  the safe writer, so it additionally omits active/locks and preserves roles, re-reads the
   account, classifies refusals and fences the mint. Those differences apply to
   the new helper, not the retained managed rotate branch.
 - Derived managed login takes the person lease outside the legacy account lease,
@@ -34,7 +40,7 @@ password or logging out. Revocation uses only the recorded key and never repairs
 ## Safe writer and limits
 
 `writeDigitIdentifiers` searches the account itself and applies the documented
-field map. It preserves fresh HRMS fields, omits DOB/active/roles/locks, accepts
+field map. It preserves fresh HRMS fields, omits DOB/active/locks and preserves roles, accepts
 already-normalized phone/country values, and never clears an identifier. Masked
 copied fields return `skipped-masked`; credential activation exposes
 `DIGIT_PII_MASKED`. Stored-field validation errors expose `DIGIT_ACCOUNT_INVALID`.
@@ -53,8 +59,8 @@ From `backend/identity-bff`, Redis at `127.0.0.1:16385`:
 - `REDIS_PORT=16385 npx vitest run`: 328 passed, 3 skipped, 14 todo.
   The skipped cases are the existing real-Keycloak fixture; this item exercised
   the stateful local egov-user fake, not a live egov-user deployment. No tests were
-  removed. The fake now matches omitted-role update and optional-type search
-  semantics needed by the writer.
+  removed. That run used a permissive fake for omitted roles; the later gate correction
+  restores stock egov-user validation. Optional-type search remains supported.
 
 Key tests (all executed):
 
@@ -66,8 +72,7 @@ Key tests (all executed):
   revocation never repairs/probes retired keys; current-key rollover; derived →
   rotate → derived; managed login reads the recorded version and rejects revoked
   sessions; lost lease after mint revokes the minted token.
-- `digit-writer.test.ts`: fresh HRMS name/gender/email preserved; DOB/roles/active/
-  locks omitted; masked copied fields skipped; verified identifiers replace
+- `digit-writer.test.ts`: fresh HRMS name/gender/email preserved; DOB/active/locks omitted and fresh roles preserved; masked copied fields skipped; verified identifiers replace
   masked email; no identifier clears; citizen uuid search; typed validation.
 - `staff-credential-config.test.ts`: default mode, retained keys/current version,
   invalid/short/duplicate key configuration rejected without exposing key data.
