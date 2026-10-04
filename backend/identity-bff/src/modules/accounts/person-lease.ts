@@ -27,7 +27,7 @@ const RETRY_MS = 100;
 /** The person is busy in another request; routes answer 503 with Retry-After. */
 export class LeaseBusyError extends Error {
   readonly status = 503;
-  readonly code = "PERSON_BUSY";
+  readonly code = "IDENTITY_BUSY";
   constructor(message = "This account is busy; retry") {
     super(message);
   }
@@ -36,7 +36,7 @@ export class LeaseBusyError extends Error {
 /** The lease expired or moved while held. Abort and return nothing. */
 export class LeaseLostError extends Error {
   readonly status = 503;
-  readonly code = "PERSON_BUSY";
+  readonly code = "IDENTITY_BUSY";
   constructor(message = "The account lease was lost; retry") {
     super(message);
   }
@@ -60,7 +60,7 @@ const FENCED_SET = [
 ].join("\n");
 
 export const personLeaseKey = (subject: string) =>
-  `${config.cachePrefix}:identity:person-lease:${subject}`;
+  `${config.cachePrefix}:identity:subject-lease:${subject}`;
 
 const held = new AsyncLocalStorage<PersonLease>();
 

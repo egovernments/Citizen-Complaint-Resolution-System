@@ -34,8 +34,8 @@ binding transition for that person. It replaces the attribute lease
 (`managed-account-service.ts`).
 
 ```ts
-export class LeaseBusyError extends Error {}   // 503 PERSON_BUSY; wait timed out
-export class LeaseLostError extends Error {}   // 503 PERSON_BUSY; renewal failed; revoke anything minted, return nothing
+export class LeaseBusyError extends Error {}   // 503 IDENTITY_BUSY; wait timed out
+export class LeaseLostError extends Error {}   // 503 IDENTITY_BUSY; renewal failed; revoke anything minted, return nothing
 
 export interface PersonLease {
   readonly subject: string;
@@ -56,7 +56,7 @@ export function withPersonLease<T>(
 export function currentPersonLease(): PersonLease | null;
 ```
 
-- Key `{prefix}:identity:person-lease:{sub}`, `SET NX PX 30000`, renewed every
+- Key `{prefix}:identity:subject-lease:{sub}`, `SET NX PX 30000`, renewed every
   10 s with Lua `if get==token then pexpire`. Released with compare-and-delete.
 - **Pass the lease down** (contract §2.5). As a safety net only, a nested `withPersonLease` for the **same** subject in the same
   async chain (AsyncLocalStorage) reuses the held lease. Nesting a **different**
@@ -65,7 +65,7 @@ export function currentPersonLease(): PersonLease | null;
 - **Lock order:** operation → tenant → slug → **person** → phone → uuid. Short
   locks below the person lease are taken only inside it.
 - `withUuidLock(tenantId, uuid, fn)` in `accounts/uuid-lock.ts`: key
-  `{prefix}:identity:uuid-lock:{tenantId}:{uuid}`, 30 s, NX; throws if called
+  `{prefix}:identity:uuid-lock:{tenantId}:{uuid}`, 30 s, wait ≤ 15 s, NX; throws if called
   outside a person lease; a timed-out wait is `BindingBusyError` (503 `BINDING_BUSY`).
 
 ## 2. The access predicate (§3, D10) — `bindings/predicate.ts`

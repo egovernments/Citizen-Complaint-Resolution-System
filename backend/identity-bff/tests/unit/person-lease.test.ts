@@ -43,7 +43,7 @@ describe("person lease", () => {
     const sub = subject();
     await getRedis().set(personLeaseKey(sub), "someone-else", "PX", 5_000);
     await expect(withPersonLease(sub, async () => "never", { waitMs: 200 }))
-      .rejects.toSatisfy((error) => error instanceof LeaseBusyError && error.code === "PERSON_BUSY");
+      .rejects.toSatisfy((error) => error instanceof LeaseBusyError && error.code === "IDENTITY_BUSY");
   });
 
   it("releases on success and on error", async () => {

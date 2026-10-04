@@ -11,7 +11,7 @@ import { currentPersonLease } from "./person-lease.js";
  */
 
 export const UUID_LOCK_TTL_MS = 30_000;
-const WAIT_MS = 5_000;
+const WAIT_MS = 15_000;
 /** The uuid lock wait timed out (503 BINDING_BUSY). */
 export class BindingBusyError extends Error {
   readonly status = 503;
