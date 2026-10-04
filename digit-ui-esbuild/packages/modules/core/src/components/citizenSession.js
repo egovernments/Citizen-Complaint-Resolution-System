@@ -14,4 +14,3 @@ export const setCitizenDetail = (userObject, token, tenantId) => {
   localStorage.setItem("user-info", JSON.stringify(userObject));
   localStorage.setItem("Citizen.user-info", JSON.stringify(userObject));
 };
-

@@ -23,4 +23,3 @@ export function identityMessage(code) {
     message: MESSAGES[code] || "This account request could not be completed. Please try again.",
   };
 }
-
