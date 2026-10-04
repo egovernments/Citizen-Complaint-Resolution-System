@@ -525,6 +525,7 @@ It takes no person lease, so it never answers `IDENTITY_BUSY`.
 ```
 
 - `type` is one of `ORGANIZATION_NAME`, `ORGANIZATION_ALIAS`, `URL_SLUG`, `ACCOUNT_CODE`, `TENANT_ID`.
+- Organization names compare using NFC, trimmed/collapsed whitespace, English-locale lowercase, then NFC again. The final NFC keeps lowercase expansions canonically equivalent; the response echoes the trimmed input value.
 - The single form `{type, value}` → `{type, value, available}` is still accepted until PGR ships the batched call.
 - The check is advisory. Real uniqueness comes from the slug and tenant locks in `organizations/_ensure`.
 
