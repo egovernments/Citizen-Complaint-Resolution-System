@@ -2,6 +2,9 @@
 
 Owner: onboarding-owner. Review checkpoint: 2026-10-04.
 
+Core base `94ae613eb` merged at `91cd26feb`; final owner PGR run: 554 passed,
+six skipped; BFF: 589 passed, 11 skipped, eight todo; typecheck passed.
+
 ## Integrated source
 
 - BFF primitives PR45 (`b4a5c60bb`) uses production core binding/revocation
@@ -13,7 +16,8 @@ Owner: onboarding-owner. Review checkpoint: 2026-10-04.
   creation is checkpointed only when visible, and duplicate uncertain writes
   remain retryable. The BFF specialist independently accepted the production
   BFF fixture and PostgreSQL recovery cases.
-- Workspace/rename PR66 (`52aa93b1c`) is merged at `9743c9523`. Review covered
+- Workspace/rename PR66 (`52aa93b1c`) is merged at `9743c9523`, followed by
+  `a6029e035` mapping local database failures to the agreed retryable 503. Review covered
   atomic activation/audit, concurrent signup/rename reservations, optimistic
   versions, legacy open behavior, durable publication, stale completion, live
   caller authorization and accurate probes. Real Flyway migration tests verify
