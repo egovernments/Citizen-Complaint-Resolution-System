@@ -45,7 +45,8 @@
     "engram": "tsx engram-agent.ts",
     "prepublishOnly": "npm run build",
     "prebuild": "node scripts/stage-platform-baseline.mjs",
-    "test:platform-baseline": "tsx --test test-platform-baseline.ts"
+    "test:platform-baseline": "tsx --test test-platform-baseline.ts",
+    "test:platform-packaging": "node --test scripts/platform-baseline-packaging.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "latest",
