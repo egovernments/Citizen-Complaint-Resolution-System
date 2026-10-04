@@ -18,7 +18,7 @@ readonly ADMIN_CLIENT=digit-identity-admin
 readonly ROLE_CLIENT=digit-ui
 readonly FIRST_BROKER_FLOW=digit-first-broker-login
 # The Keycloakify login theme shipped in the Keycloak image
-# (keycloak/theme-src, built by keycloak/Dockerfile.magic-link). Selected per
+# (keycloak/theme-src, built by keycloak/Dockerfile). Selected per
 # client rather than on the shared realm.
 readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-configurator-blue}
 # digit-ui sign-in surfaces (CCRS #2167). Each has its own client. The
@@ -28,6 +28,25 @@ readonly LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-configurator-blue}
 # (digit-citizen) comes back with the first Keycloak sign-in method for citizens.
 readonly EMPLOYEE_LOGIN_THEME=${KEYCLOAK_EMPLOYEE_LOGIN_THEME:-digit-employee}
 readonly EMPLOYEE_FLOW=digit-employee-browser
+# The declared realm state (design §12): events, self-service actions, name
+# fields, identity-provider sync mode, the employee one-time-code step and the
+# admin service account's roles. Ansible copies it next to this script.
+readonly REALM_CONFIG=${KEYCLOAK_REALM_CONFIG:-$(dirname "$0")/realm.json}
+jq -e . "$REALM_CONFIG" >/dev/null || {
+  printf 'cannot read the declared realm config %s\n' "$REALM_CONFIG" >&2
+  exit 1
+}
+readonly EMPLOYEE_OTP_FLOW=$(jq -r '.employeeFlow.otpSubFlow' "$REALM_CONFIG")
+readonly EMPLOYEE_OTP_REQUIREMENT=$(jq -r '.employeeFlow.otpRequirement' "$REALM_CONFIG")
+readonly IDP_SYNC_MODE=$(jq -r '.identityProviders.syncMode' "$REALM_CONFIG")
+# How long Keycloak keeps user and admin events. The BFF reads them to revoke
+# DIGIT tokens, so this must outlast the longest outage a box may have.
+readonly EVENTS_EXPIRATION=${KEYCLOAK_EVENTS_EXPIRATION_SECONDS:-$(jq -r '.events.eventsExpiration' "$REALM_CONFIG")}
+case "$EVENTS_EXPIRATION" in
+  '' | *[!0-9]* | 0)
+    printf 'KEYCLOAK_EVENTS_EXPIRATION_SECONDS must be a positive number of seconds\n' >&2
+    exit 1 ;;
+esac
 # Realm-level theme names this deployment set itself and may therefore clear.
 # `digit` is the name earlier revisions used before the theme was renamed.
 readonly OWNED_REALM_THEMES="$LOGIN_THEME digit $EMPLOYEE_LOGIN_THEME digit-citizen"
@@ -98,6 +117,12 @@ docker exec \
   "$KEYCLOAK_CONTAINER" sh -c \
   '/opt/keycloak/bin/kcadm.sh config credentials --config '"$KC_CONFIG"' --server http://127.0.0.1:8180 --realm master --user "$KCADM_USERNAME" --password "$KCADM_PASSWORD" >/dev/null'
 
+# Writes the JSON on stdin to an Admin API path in the realm.
+kc_put() {
+  docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+    update "$1" -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
+}
+
 client_uuid() {
   kc get clients -r "$REALM" -q "clientId=$1" --fields id,clientId |
     jq -r --arg id "$1" '.[] | select(.clientId == $id) | .id' | head -1
@@ -137,13 +162,13 @@ ensure_social_provider() {
   if kc get "identity-provider/instances/$alias" -r "$REALM" >/dev/null 2>&1; then
     kc update "identity-provider/instances/$alias" -r "$REALM" \
       -s enabled=true -s "displayName=$display_name" -s trustEmail=false -s storeToken=false \
-      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   else
     kc create identity-provider/instances -r "$REALM" \
       -s "alias=$alias" -s "providerId=$provider" -s "displayName=$display_name" -s enabled=true \
       -s trustEmail=false -s storeToken=false \
-      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" \
       -s "config.clientId=$client_id" -s "config.clientSecret=$client_secret" >/dev/null
   fi
 }
@@ -195,6 +220,22 @@ ensure_execution() {
       --config "$KC_CONFIG" >/dev/null
 }
 
+# Adds a sub-flow named `alias` to `parent` once and pins its requirement.
+ensure_sub_flow() {
+  local parent=$1 alias=$2 requirement=$3 description=$4 execution
+  execution=$(kc get "authentication/flows/$parent/executions" -r "$REALM" |
+    jq -c --arg alias "$alias" '.[] | select(.authenticationFlow == true and .displayName == $alias)' | head -1)
+  if [ -z "$execution" ]; then
+    kc create "authentication/flows/$parent/executions/flow" -r "$REALM" \
+      -s "alias=$alias" -s type=basic-flow -s provider=registration-page-form \
+      -s "description=$description" >/dev/null
+    execution=$(kc get "authentication/flows/$parent/executions" -r "$REALM" |
+      jq -c --arg alias "$alias" '.[] | select(.authenticationFlow == true and .displayName == $alias)' | head -1)
+  fi
+  printf '%s' "$execution" | jq --arg requirement "$requirement" '.requirement = $requirement' |
+    kc_put "authentication/flows/$parent/executions"
+}
+
 # The digit-ui flows deliberately have no auth-cookie step: an existing
 # Keycloak SSO session (e.g. from the Configurator) must not sign someone in to
 # another surface without that surface's own credential.
@@ -206,10 +247,21 @@ remove_cookie_executions() {
   done
 }
 
+# Password, then a one-time code for people who have set one up (design §12),
+# with the steps realm.json declares. `conditional-user-configured` is true only
+# when the person has a credential for one of the sub-flow's other steps, so
+# enrolling TOTP turns the code on at their next sign-in and removing it turns
+# it off.
 configure_employee_flow() {
   ensure_top_level_flow "$EMPLOYEE_FLOW" 'digit-ui employee sign-in: username and password'
   remove_cookie_executions "$EMPLOYEE_FLOW"
   ensure_execution "$EMPLOYEE_FLOW" auth-username-password-form REQUIRED
+  ensure_sub_flow "$EMPLOYEE_FLOW" "$EMPLOYEE_OTP_FLOW" "$EMPLOYEE_OTP_REQUIREMENT" \
+    'One-time code for employees who have set one up'
+  local step
+  for step in $(jq -r '.employeeFlow.otpSteps | to_entries[] | "\(.key)=\(.value)"' "$REALM_CONFIG"); do
+    ensure_execution "$EMPLOYEE_OTP_FLOW" "${step%%=*}" "${step#*=}"
+  done
 }
 
 # One confidential authorization-code client per digit-ui surface. The BFF is
@@ -259,11 +311,73 @@ configure_digit_ui_client() {
 # Keeps every attribute an admin can see (ADMIN_EDIT, instead of silently
 # dropping unmanaged attributes). Written as JSON because kcadm cannot set the
 # dotted `unmanagedAttributePolicy` key.
+# The name fields follow realm.json: DIGIT owns names, so people cannot edit
+# them here, and lastName is not required. `"required": null` there removes the
+# requirement; a missing key leaves Keycloak's.
 configure_user_profile() {
   kc get users/profile -r "$REALM" |
     jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' |
-    docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-      update users/profile -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null
+    jq --argjson declared "$(jq -c '.userProfile.attributes' "$REALM_CONFIG")" '
+      .attributes |= map(
+        . as $attribute | $declared[$attribute.name] as $wanted |
+        if $wanted == null then .
+        else
+          (if $wanted | has("permissions") then .permissions = $wanted.permissions else . end) |
+          (if $wanted | has("required") | not then .
+           elif $wanted.required == null then del(.required)
+           else .required = $wanted.required end)
+        end)' |
+    kc_put users/profile
+}
+
+# User and admin events with the declared types and retention. Listeners an
+# operator added are kept.
+configure_events() {
+  kc get events/config -r "$REALM" |
+    jq --argjson declared "$(jq -c '.events | with_entries(select(.key | startswith("$") | not))' "$REALM_CONFIG")" \
+      --argjson expiration "$EVENTS_EXPIRATION" '
+      . + ($declared | del(.eventsListeners)) |
+      .eventsExpiration = $expiration |
+      .eventsListeners = ((.eventsListeners // []) + $declared.eventsListeners | unique)' |
+    kc_put events/config
+  kc update "realms/$REALM" -s "attributes.adminEventsExpiration=$EVENTS_EXPIRATION" >/dev/null
+}
+
+# The self-service actions people start through the BFF (design §8), enabled
+# and configured as declared.
+configure_required_actions() {
+  local registered alias
+  registered=$(kc get authentication/required-actions -r "$REALM" | jq -c '[.[].alias]')
+  for alias in $(jq -r '.requiredActions | keys[] | select(startswith("$") | not)' "$REALM_CONFIG"); do
+    if ! printf '%s' "$registered" | jq -e --arg alias "$alias" 'index($alias) != null' >/dev/null; then
+      kc create authentication/register-required-action -r "$REALM" \
+        -s "providerId=$alias" -s "name=$alias" >/dev/null
+    fi
+    kc update "authentication/required-actions/$alias" -r "$REALM" -s enabled=true >/dev/null
+    if jq -e --arg alias "$alias" '.requiredActions[$alias] | length > 0' "$REALM_CONFIG" >/dev/null; then
+      kc get "authentication/required-actions/$alias/config" -r "$REALM" |
+        jq --argjson declared "$(jq -c --arg alias "$alias" '.requiredActions[$alias]' "$REALM_CONFIG")" \
+          '.config = ((.config // {}) + $declared)' |
+        kc_put "authentication/required-actions/$alias/config"
+    fi
+  done
+}
+
+# Identity providers fill a person's name and email once, at first sign-in,
+# and never overwrite them (D19). Pinned on every provider and every provider
+# mapper, including ones an operator adds later (design §9), which also get the
+# same account-linking flow as Google and GitHub.
+configure_identity_provider_sync() {
+  local alias mapper_id
+  for alias in $(kc get identity-provider/instances -r "$REALM" | jq -r '.[].alias'); do
+    kc update "identity-provider/instances/$alias" -r "$REALM" \
+      -s "firstBrokerLoginFlowAlias=$FIRST_BROKER_FLOW" -s "config.syncMode=$IDP_SYNC_MODE" >/dev/null
+    for mapper_id in $(kc get "identity-provider/instances/$alias/mappers" -r "$REALM" | jq -r '.[].id'); do
+      kc get "identity-provider/instances/$alias/mappers/$mapper_id" -r "$REALM" |
+        jq --arg mode "$IDP_SYNC_MODE" '.config.syncMode = $mode' |
+        kc_put "identity-provider/instances/$alias/mappers/$mapper_id"
+    done
+  done
 }
 
 configure_first_broker_login() {
@@ -383,6 +497,8 @@ for owned_theme in $OWNED_REALM_THEMES; do
   fi
 done
 configure_smtp
+configure_events
+configure_required_actions
 
 # Organization-group client roles are published under this client and filtered
 # by the DIGIT projection allowlist. It is a role container, not a login client.
@@ -470,16 +586,17 @@ ensure_social_provider google google \
   "${KEYCLOAK_GOOGLE_CLIENT_ID:-}" "${KEYCLOAK_GOOGLE_CLIENT_SECRET:-}"
 ensure_social_provider github github \
   "${KEYCLOAK_GITHUB_CLIENT_ID:-}" "${KEYCLOAK_GITHUB_CLIENT_SECRET:-}"
+configure_identity_provider_sync
 
 admin_uuid=$(ensure_client "$ADMIN_CLIENT" "$KEYCLOAK_ADMIN_CLIENT_SECRET" true)
 service_user=$(kc get "clients/$admin_uuid/service-account-user" -r "$REALM" | jq -r '.id')
 management_uuid=$(client_uuid realm-management)
+# view-events lets the BFF read the event store configured above.
 kc get "clients/$management_uuid/roles" -r "$REALM" |
-  jq '[.[] | select(.name == "manage-organizations" or .name == "query-organizations" or
-                    .name == "view-organizations" or .name == "manage-users" or
-                    .name == "query-users" or .name == "view-users" or
-                    .name == "query-clients" or .name == "view-clients" or
-                    .name == "view-identity-providers")]' |
+  jq --argjson wanted "$(jq -c '.adminServiceAccount.realmManagementRoles' "$REALM_CONFIG")" '
+    [.[] | select(.name as $name | $wanted | index($name))] |
+    if length == ($wanted | length) then .
+    else error("realm-management is missing a role the BFF needs") end' |
   docker exec -i "$KEYCLOAK_CONTAINER" /opt/keycloak/bin/kcadm.sh \
     create "users/$service_user/role-mappings/clients/$management_uuid" \
     -r "$REALM" -f - --config "$KC_CONFIG" >/dev/null

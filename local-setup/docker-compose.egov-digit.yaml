@@ -3114,7 +3114,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    # Built from backend/identity-bff/keycloak/Dockerfile.magic-link. It pins
+    # Built from keycloak/Dockerfile. It pins
     # Keycloak 26.7.3 and adds the email magic-link provider. Override with the
     # upstream image only when magic-link authentication is disabled.
     image: ${IDENTITY_KEYCLOAK_IMAGE:-egovio/identity-keycloak:nightly-develop}

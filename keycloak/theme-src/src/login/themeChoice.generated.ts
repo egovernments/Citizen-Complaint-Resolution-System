@@ -1,5 +1,5 @@
 // GENERATED FILE — do not edit. Source: configurator/src/themes/index.ts.
-// Regenerate with `npm run tokens` from backend/identity-bff/keycloak/theme-src.
+// Regenerate with `npm run tokens` from keycloak/theme-src.
 
 /** Where the Configurator keeps the preset someone picked. */
 export const THEME_STORAGE_KEY = "digit-theme-choice";

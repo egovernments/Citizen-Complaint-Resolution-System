@@ -83,4 +83,4 @@ public; the Admin API and `/internal/identity/v1` remain private.
 - [Complete API and operations guide](identity-bff.md)
 - [Deployment and integration setup](../../../docs/setup/deployment/identity-bff.md)
 - [Environment reference](../deploy/digit-compose/identity-bff.env.example)
-- [Keycloak provisioning script](../deploy/digit-compose/configure-keycloak.sh)
+- [Keycloak provisioning script](../../../keycloak/configure-keycloak.sh)

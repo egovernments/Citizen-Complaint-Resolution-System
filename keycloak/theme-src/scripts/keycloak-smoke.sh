@@ -8,9 +8,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-identity_dir=$(cd ../.. && pwd)
-repo_root=$(cd ../../../.. && pwd)
-theme_dir=backend/identity-bff/keycloak/theme-src
+keycloak_dir=$(cd .. && pwd)
+repo_root=$(cd ../.. && pwd)
+theme_dir=keycloak/theme-src
 
 image=${IDENTITY_KEYCLOAK_IMAGE:-identity-keycloak:smoke}
 network=digit-theme-smoke-$$
@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-    docker build -f "$identity_dir/keycloak/Dockerfile.magic-link" -t "$image" "$identity_dir"
+    docker build -f "$keycloak_dir/Dockerfile" -t "$image" "$keycloak_dir"
 fi
 
 docker network create "$network" >/dev/null

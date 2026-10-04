@@ -15,7 +15,7 @@ import {
  */
 function themeStaticKeys(): string[] {
   const source = readFileSync(fileURLToPath(new URL(
-    "../../keycloak/theme-src/src/digit/branding/strings.ts", import.meta.url,
+    "../../../../keycloak/theme-src/src/digit/branding/strings.ts", import.meta.url,
   )), "utf8");
   const block = /export const LOGIN_MESSAGE_FALLBACKS = \{([\s\S]*?)\n\} as const;/.exec(source);
   expect(block, "LOGIN_MESSAGE_FALLBACKS block not found in theme strings.ts").not.toBeNull();

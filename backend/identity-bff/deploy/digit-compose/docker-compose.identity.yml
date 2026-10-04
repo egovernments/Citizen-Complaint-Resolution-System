@@ -6,7 +6,7 @@
 #
 #   IDENTITY_BFF_IMAGE    identity BFF image built from this repository
 #   KEYCLOAK_IMAGE        Keycloak image with the magic-link provider and themes
-#                         (keycloak/Dockerfile.magic-link), pinned by tag
+#                         (keycloak/Dockerfile at the repo root), pinned by tag
 #   KEYCLOAK_PUBLIC_URL   public Keycloak base, e.g. https://example.org/auth
 #   IDENTITY_ENV_DIR      directory holding the env files below
 #
@@ -15,7 +15,7 @@
 services:
   keycloak:
     # Same default as local-setup (build/build-config.yml publishes
-    # keycloak/Dockerfile.magic-link as identity-keycloak).
+    # keycloak/Dockerfile at the repo root as identity-keycloak).
     # Required, like IDENTITY_BFF_IMAGE: a moving default (nightly) would let
     # Keycloak and its themes drift between hosts on every pull.
     image: ${KEYCLOAK_IMAGE:?set KEYCLOAK_IMAGE}

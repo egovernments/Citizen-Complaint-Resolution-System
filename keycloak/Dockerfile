@@ -10,7 +10,7 @@ RUN wget -q \
       -O /keycloak-magic-link.jar \
     && echo "${MAGIC_LINK_SHA256}  /keycloak-magic-link.jar" | sha256sum -c -
 
-# The Keycloakify login theme (keycloak/theme-src). Built here rather than
+# The Keycloakify login theme (theme-src). Built here rather than
 # committed so the jar in the image always matches the reviewed sources.
 # Keycloakify packages the jar with Maven, hence the JDK in this stage; none of
 # it reaches the runtime image.
@@ -19,9 +19,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends maven \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /theme
-COPY keycloak/theme-src/package.json keycloak/theme-src/package-lock.json ./
+COPY theme-src/package.json theme-src/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY keycloak/theme-src/ ./
+COPY theme-src/ ./
 RUN npm run build-keycloak-theme \
     && test -f dist_keycloak/configurator-blue-login-theme.jar
 

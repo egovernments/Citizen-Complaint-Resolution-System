@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE — do not edit.
  * Source: configurator/src/themes/index.ts, every preset; the default is
- * "cms-blue". Regenerate with `npm run tokens` from backend/identity-bff/keycloak/theme-src.
+ * "cms-blue". Regenerate with `npm run tokens` from keycloak/theme-src.
  */
 :root {
     --background: 220 33% 98%;

@@ -160,7 +160,7 @@ The Keycloak-owned screens in the sign-in journey — password entry,
 invalid-credential errors, password setup/reset, email verification,
 account-linking conflicts, expired sessions and generic errors — render in the
 `configurator-blue` login theme, a Keycloakify build of the Configurator's auth
-shell (`backend/identity-bff/keycloak/theme-src`, CCRS #2108). It is built into
+shell (`keycloak/theme-src`, CCRS #2108). It is built into
 the `identity-keycloak` image, so the custom image is what a deployment needs
 for a coherent password journey, not only for magic link.
 

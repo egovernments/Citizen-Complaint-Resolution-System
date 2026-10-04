@@ -22,7 +22,7 @@ const BRAND_FILES: Record<string, string> = {
  * fallback.
  */
 function serveConfiguratorBrand(): Plugin {
-    const brandDir = resolve(projectDir, "../../../../configurator/public/brand");
+    const brandDir = resolve(projectDir, "../../configurator/public/brand");
     return {
         name: "digit-serve-configurator-brand",
         apply: "serve",
@@ -53,7 +53,7 @@ export default defineConfig({
             // implementation in src/login/KcPage.tsx.
             themeName: ["configurator-blue", "digit-employee"],
             accountThemeImplementation: "none",
-            // The deployed Keycloak is 26.7.3 (keycloak/Dockerfile.magic-link).
+            // The deployed Keycloak is 26.7.3 (keycloak/Dockerfile).
             // Emitting only the modern jar keeps one artifact to reason about
             // and turns an unexpected Keycloak downgrade into a missing-theme
             // failure rather than a silently mismatched FreeMarker contract.

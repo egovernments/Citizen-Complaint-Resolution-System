@@ -191,7 +191,7 @@ one-use action returns through the configured application link.
 
 The hosted Keycloak password screen keeps the configured Google and GitHub
 choices visible after a generic invalid-credential error. It wears the
-`configurator-blue` login theme (`keycloak/theme-src`, CCRS #2108), a Keycloakify
+`configurator-blue` login theme (top-level `keycloak/theme-src`, CCRS #2108), a Keycloakify
 build of the Configurator's auth shell that covers every screen in this journey
 and links back to the OIDC client's configured base URL for non-enumerating
 password help. An OAuth-first user can therefore switch to the provider that

@@ -1,0 +1,90 @@
+{
+  "$comment": "Declared state of the shared Organizations realm (design §12). configure-keycloak.sh applies every section on each run; a setting listed here is reset if someone changes it by hand. Clients, secrets and URLs are per-box and stay in the script.",
+  "events": {
+    "$comment": "The BFF reads these back through the Admin API to notice sign-outs, credential changes, disables and deletes (design §6). Retention must outlast the longest outage we tolerate, or a missed event is gone before the BFF catches up; KEYCLOAK_EVENTS_EXPIRATION_SECONDS overrides it per box.",
+    "$userEvents": "Keycloak 26 stores sessionId and clientId on every user event; the BFF matches a self-service password change by them (B3), so nothing here strips them.",
+    "$adminEvents": "Admin events cover every resource type, including ORGANIZATION_MEMBERSHIP, and adminEventsDetailsEnabled stores the representation (the user, for a membership change).",
+    "eventsEnabled": true,
+    "eventsListeners": ["jboss-logging"],
+    "eventsExpiration": 1209600,
+    "adminEventsEnabled": true,
+    "adminEventsDetailsEnabled": true,
+    "enabledEventTypes": [
+      "LOGIN",
+      "LOGIN_ERROR",
+      "LOGOUT",
+      "LOGOUT_ERROR",
+      "CODE_TO_TOKEN",
+      "REFRESH_TOKEN",
+      "USER_SESSION_DELETED",
+      "UPDATE_PASSWORD",
+      "UPDATE_CREDENTIAL",
+      "REMOVE_CREDENTIAL",
+      "UPDATE_TOTP",
+      "REMOVE_TOTP",
+      "RESET_PASSWORD",
+      "SEND_RESET_PASSWORD",
+      "EXECUTE_ACTIONS",
+      "VERIFY_EMAIL",
+      "SEND_VERIFY_EMAIL",
+      "UPDATE_EMAIL",
+      "UPDATE_PROFILE",
+      "DELETE_ACCOUNT",
+      "FEDERATED_IDENTITY_LINK",
+      "REMOVE_FEDERATED_IDENTITY",
+      "IDENTITY_PROVIDER_LINK_ACCOUNT",
+      "IDENTITY_PROVIDER_FIRST_LOGIN",
+      "USER_DISABLED_BY_PERMANENT_LOCKOUT",
+      "USER_DISABLED_BY_TEMPORARY_LOCKOUT"
+    ]
+  },
+  "requiredActions": {
+    "$comment": "Self-service actions a person starts through /authorize?action= (design §8), each enabled with the config given (an empty object keeps Keycloak's defaults). Which client may start which action is a client attribute. UPDATE_EMAIL always verifies the new address before it is saved (D18).",
+    "UPDATE_PASSWORD": {},
+    "CONFIGURE_TOTP": {},
+    "delete_credential": {},
+    "UPDATE_EMAIL": { "verifyEmail": "true" },
+    "idp_link": {},
+    "VERIFY_EMAIL": {}
+  },
+  "userProfile": {
+    "$comment": "DIGIT owns names (D3, D17): the BFF writes the whole name into firstName and leaves lastName empty, so lastName is not required. People cannot edit either name in Keycloak. firstName keeps Keycloak's default requirement: Keycloak does not demand a field the person may not edit, so a nameless account still signs in (checked by tests/live-check.py). \"required\": null removes the requirement; a missing key leaves it as it is.",
+    "attributes": {
+      "firstName": {
+        "permissions": { "view": ["admin", "user"], "edit": ["admin"] }
+      },
+      "lastName": {
+        "permissions": { "view": ["admin", "user"], "edit": ["admin"] },
+        "required": null
+      }
+    }
+  },
+  "identityProviders": {
+    "$comment": "IMPORT: name and email are filled once at first sign-in and never overwritten (D19). Applied to every provider and every provider mapper.",
+    "syncMode": "IMPORT"
+  },
+  "employeeFlow": {
+    "$comment": "Password, then a one-time code only for people who have set one up (conditional OTP). Enrolling TOTP therefore turns on the second step at the next employee sign-in. Staff SSO policy is changed here (design §9): REQUIRED makes every employee set up and use a code.",
+    "otpSubFlow": "digit-employee-otp",
+    "otpRequirement": "CONDITIONAL",
+    "otpSteps": {
+      "conditional-user-configured": "REQUIRED",
+      "auth-otp-form": "REQUIRED"
+    }
+  },
+  "adminServiceAccount": {
+    "$comment": "realm-management roles for the BFF's admin client. view-events lets it read the event store above.",
+    "realmManagementRoles": [
+      "manage-organizations",
+      "query-organizations",
+      "view-organizations",
+      "manage-users",
+      "query-users",
+      "view-users",
+      "query-clients",
+      "view-clients",
+      "view-identity-providers",
+      "view-events"
+    ]
+  }
+}

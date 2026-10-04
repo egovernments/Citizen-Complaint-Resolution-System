@@ -47,7 +47,7 @@ stock Keycloak appearance.
   the Configurator's origin, so it reads that pick before the first paint and
   wears the same preset as the Configurator's sign-in screen. The generated
   files are committed so the theme builds without reaching outside
-  `backend/identity-bff`; `npm test` regenerates them and fails on drift.
+  `keycloak/`; `npm test` regenerates them and fails on drift.
 - **Layout and primitives** — `src/login/Template.tsx` is a port of the
   Configurator's `AuthShell`, and `src/login/styles/theme.css` restates only the
   utility values the auth screens use, each annotated with the Tailwind class it
@@ -106,9 +106,9 @@ stands alone.
 ## Deployment
 
 The theme is built into the Keycloak image by
-`backend/identity-bff/keycloak/Dockerfile.magic-link` and lands as
+`keycloak/Dockerfile` and lands as
 `/opt/keycloak/providers/configurator-blue-login-theme.jar`. It is selected **per client**
-by `deploy/digit-compose/configure-keycloak.sh` (`attributes.login_theme`) on
+by `keycloak/configure-keycloak.sh` (`attributes.login_theme`) on
 the identity BFF and magic-link clients; the shared realm's `loginTheme` is left
 empty so unrelated clients keep their own.
 
@@ -125,7 +125,7 @@ theme environment variables:
 `vite.config.ts` pins `keycloakVersionTargets` to `all-other-versions` only,
 matching the image's Keycloak 26.7.3. When Keycloak is upgraded:
 
-1. bump `KEYCLOAK_VERSION` in `keycloak/Dockerfile.magic-link`;
+1. bump `KEYCLOAK_VERSION` in `keycloak/Dockerfile`;
 2. `npx keycloakify eject-page` any page whose FreeMarker contract changed, or
    re-check the overridden pages against the new `keycloak.v2` sources;
 3. run `npm test` and `npm run screenshots`;

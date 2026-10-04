@@ -131,7 +131,7 @@ Read the code in this order:
 
 The `keycloak` Compose profile starts:
 
-- `identity-keycloak`, built from `keycloak/Dockerfile.magic-link`, which pins
+- `identity-keycloak`, built from the repository's top-level `keycloak/Dockerfile`, which pins
   Keycloak 26.7.3 and the Phase Two magic-link provider;
 - `identity-bff`, built from this folder; and
 - the existing dedicated Keycloak Postgres container.
@@ -143,7 +143,7 @@ not silently fall back to the legacy direct egov-user password form. Older
 Configurator images remain deployable without the identity profile, so the
 shared playbook does not impose this requirement on every historical image.
 
-Ansible runs `deploy/digit-compose/configure-keycloak.sh` after Keycloak is
+Ansible runs `keycloak/configure-keycloak.sh` (top level) after Keycloak is
 healthy. The script idempotently enables Organizations and reconciles the BFF,
 magic-link resource client, admin, role, Google, and GitHub configuration. Kong publishes only
 `/identity/v1`; `/internal/identity/v1` remains private.

@@ -10,7 +10,7 @@
  * wear the same preset as the Configurator's sign-in screen before it.
  *
  * The generated files are committed so the theme stays independently buildable
- * (the Docker build never reaches outside `backend/identity-bff`). `npm test`
+ * (the Docker build never reaches outside `keycloak/`). `npm test`
  * regenerates them in memory and fails on drift (tests/tokens.test.ts), which
  * is what keeps the commit honest after someone edits a preset.
  */
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectDir = resolve(here, "..");
-const repoRoot = resolve(projectDir, "../../../..");
+const repoRoot = resolve(projectDir, "../..");
 /** The palette the page wears when nothing has been picked. */
 export const DEFAULT_PRESET = "cms-blue";
 export const THEMES_MODULE = join(repoRoot, "configurator/src/themes/index.ts");
@@ -78,7 +78,7 @@ export function renderTokensCss(themes) {
         "/*",
         " * GENERATED FILE — do not edit.",
         " * Source: configurator/src/themes/index.ts, every preset; the default is",
-        ` * "${DEFAULT_PRESET}". Regenerate with \`npm run tokens\` from backend/identity-bff/keycloak/theme-src.`,
+        ` * "${DEFAULT_PRESET}". Regenerate with \`npm run tokens\` from keycloak/theme-src.`,
         " */",
         block(":root", fallback.variables),
         "",
@@ -89,7 +89,7 @@ export function renderTokensCss(themes) {
 export function renderChoiceModule({ themes, storageKey }) {
     return [
         "// GENERATED FILE — do not edit. Source: configurator/src/themes/index.ts.",
-        "// Regenerate with `npm run tokens` from backend/identity-bff/keycloak/theme-src.",
+        "// Regenerate with `npm run tokens` from keycloak/theme-src.",
         "",
         "/** Where the Configurator keeps the preset someone picked. */",
         `export const THEME_STORAGE_KEY = ${JSON.stringify(storageKey)};`,

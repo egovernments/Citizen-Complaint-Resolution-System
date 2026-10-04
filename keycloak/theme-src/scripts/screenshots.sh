@@ -12,8 +12,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-repo_root=$(cd ../../../.. && pwd)
-theme_dir=backend/identity-bff/keycloak/theme-src
+repo_root=$(cd ../.. && pwd)
+theme_dir=keycloak/theme-src
 image="mcr.microsoft.com/playwright:v$(node -p "require('./scripts/playwright-version.cjs')")-noble"
 
 exec docker run --rm --init --platform linux/amd64 \
