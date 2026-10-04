@@ -89,7 +89,7 @@ async function ownersOf(tenantId: string, uuid: string): Promise<string[]> {
 
 /**
  * Read-only tenant inventory from the fetched Keycloak user snapshots.
- * Expired indexed invitations are returned with their effective removed state;
+ * Expired indexed invitations are excluded by their effective removed state;
  * readers must not acquire another person's lease merely to expire them.
  * This infrequent administrative read costs O(realm users): Keycloak exact q
  * cannot search a tenant prefix. Pages contain 100 users, processed serially.
@@ -102,7 +102,7 @@ export async function bindingsFor(tenantId: string): Promise<Array<{ subject: st
     for (const user of users) {
       if (!user.id || !user.attributes?.["digit.boundUuids"]?.some((v) => v.startsWith(`${tenantId}|`))) continue;
       for (const binding of bindingsFromUser(user).map((b) => effectiveBinding(b))) {
-        if (binding.tenantId === tenantId) result.push({ subject: user.id, binding });
+        if (binding.tenantId === tenantId && binding.state !== "removed") result.push({ subject: user.id, binding });
       }
     }
     if (users.length < 100) return result;
