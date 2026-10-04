@@ -189,7 +189,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
       (!Array.isArray(uuid) || uuid.includes(account.uuid)) &&
       (mobileNumber === undefined || account.mobileNumber === mobileNumber) &&
       account.tenantId === tenantId &&
-      account.type === req.body.userType && account.active === (req.body.active !== false));
+      (req.body.userType === undefined || account.type === req.body.userType) && account.active === (req.body.active !== false));
     return res.json({ user: matches.map(publicAccount).map((user) => maskSearchMobileNumbers && user.mobileNumber
       ? { ...user, mobileNumber: `******${user.mobileNumber.slice(-4)}` }
       : user) });
@@ -235,7 +235,6 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     const user = req.body.user;
     const account = accounts.get(user.uuid);
     if (!account) return res.status(400).json({ error: "not found" });
-    if (!user.roles?.length) return res.status(400).json({ error: "roles required" });
     if (user.password) {
       if (!POLICY.test(user.password)) return res.status(400).json({ error: "INVALID_PWD_PATTERN" });
       receivedPasswords.push(user.password);
@@ -246,7 +245,7 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     Object.assign(account, {
       name: user.name, mobileNumber: user.mobileNumber ?? account.mobileNumber, emailId: user.emailId,
       countryCode: user.countryCode ?? account.countryCode,
-      active: user.active ?? account.active, identificationMark: user.identificationMark, roles: user.roles,
+      active: user.active ?? account.active, identificationMark: user.identificationMark, roles: user.roles?.length ? user.roles : account.roles,
       // Like egov-user's UserRepository.update: absent means cleared.
       pan: user.pan ?? null, gender: user.gender ?? null,
     });
