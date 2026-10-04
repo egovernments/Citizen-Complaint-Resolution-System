@@ -1131,13 +1131,12 @@ export async function phoneIdentityStillValid(userId: string, phoneNumber: strin
   return user.enabled !== false && verifiedPhoneOwner(user, phoneNumber);
 }
 
-/** How many usernames past the first a recycled number may move on to. */
-
 /**
  * The Keycloak user who owns a phone number the caller has just proved with a
  * citizen OTP (#2189): the one user whose VERIFIED phone matches, or a new
  * user created with that number marked verified. An unverified match is never
  * taken over. Two verified owners, or a disabled owner, fail closed.
+ * Caller holds a person lease followed by the normalized phone lock.
  */
 export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<PhoneIdentityUser> {
   const owners = await findVerifiedPhoneUsers(phoneNumber);

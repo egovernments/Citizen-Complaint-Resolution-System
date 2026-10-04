@@ -1,7 +1,8 @@
 import type express from "express";
 import { currentSession } from "../sessions/current-session.js";
 import { withPersonLease } from "../accounts/person-lease.js";
-import { IdentityUnavailableError } from "../authentication/oidc.js";
+import { propagateIdentifiers } from "../sync/identifiers.js";
+import { endPhoneSessions } from "../revocation/index.js";
 import { assertPhoneAvailable, completePhoneProof, phoneSignIn, PhoneProofError, type PhoneEffects } from "./phone-service.js";
 import { withPhoneLock } from "./phone-lock.js";
 import { asyncRoute } from "../../app/async-route.js";
@@ -98,7 +99,7 @@ async function requestContext(request: express.Request, response: express.Respon
   return { purpose: purpose as OtpPurpose, current, route };
 }
 
-export function registerCitizenOtpRoutes(app: express.Application, phoneEffects?: PhoneEffects): void {
+export function registerCitizenOtpRoutes(app: express.Application, phoneEffects: PhoneEffects = { endPhoneSessions, propagateIdentifiers }): void {
   /**
    * Sends a sign-in code to a mobile number valid for the route tenant. The
    * answer does not depend on whether the number has an account.
@@ -285,7 +286,6 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects?
     let session;
     try {
       if (current) {
-        if (!phoneEffects) throw new IdentityUnavailableError("Phone identifier propagation is unavailable");
         await completePhoneProof(challenge, current.sessionId, phoneEffects);
         await deleteChallenge(challenge.id);
         return response.json({ phoneNumber: challenge.phoneNumber, phoneNumberVerified: true });
