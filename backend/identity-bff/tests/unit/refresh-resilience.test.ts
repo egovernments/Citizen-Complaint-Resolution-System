@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { currentSession } from "../../src/modules/sessions/current-session.js";
 import { InvalidGrantError, IdentityUnavailableError, refreshIdentityTokens } from "../../src/modules/authentication/oidc.js";
 import { getIdentitySession, deleteIdentitySession } from "../../src/modules/sessions/session-store.js";
-vi.mock("../../src/modules/accounts/person-lease.js", () => ({ withPersonLease: async (_sub: string, operation: () => Promise<unknown>) => operation() }));
+vi.mock("../../src/modules/accounts/person-lease.js", async original => ({ ...await original<typeof import("../../src/modules/accounts/person-lease.js")>(), withPersonLease: async (_sub: string, operation: () => Promise<unknown>) => operation() }));
 vi.mock("../../src/modules/authentication/oidc.js", async original => ({ ...await original<typeof import("../../src/modules/authentication/oidc.js")>(), refreshIdentityTokens: vi.fn() }));
 vi.mock("../../src/modules/sessions/session-store.js", async original => ({ ...await original<typeof import("../../src/modules/sessions/session-store.js")>(), getIdentitySession: vi.fn(), deleteIdentitySession: vi.fn() }));
 afterEach(() => vi.resetAllMocks());

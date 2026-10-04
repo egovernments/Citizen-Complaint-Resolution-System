@@ -33,6 +33,7 @@ export interface LoginAttempt {
   returnTo: string;
   requiresLoginCookie: boolean;
   identityProfileDraft?: IdentityProfileDraft;
+  accountAction?: { sid: string; sub: string; action: string };
   /** Absent on attempts created before #2167, which were all configurator. */
   surface?: IdentitySurface;
   /** Resolved before the redirect; required for employee/citizen attempts. */
@@ -124,6 +125,7 @@ export async function createLoginAttempt(input: {
   returnTo: string;
   requiresLoginCookie?: boolean;
   identityProfileDraft?: IdentityProfileDraft;
+  accountAction?: { sid: string; sub: string; action: string };
   surface?: IdentitySurface;
   boundTenant?: BoundTenant;
 }): Promise<{

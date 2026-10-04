@@ -489,6 +489,13 @@ export function createKcAdminMock() {
       : res.status(404).json({ error: "User not found" });
   });
 
+  app.delete("/admin/realms/:realm/users/:userId/federated-identity/:alias", (req, res) => {
+    const user = getOrCreateRealm(req.params.realm).users.find(candidate => candidate.id === req.params.userId);
+    if (!user) return res.status(404).end();
+    user.federatedIdentities = (user.federatedIdentities || []).filter(item => item.identityProvider !== req.params.alias);
+    return res.status(204).end();
+  });
+
   app.get("/admin/realms/:realm/users/:userId/federated-identity", (req, res) => {
     const realm = getOrCreateRealm(req.params.realm);
     const user = realm.users.find((candidate) => candidate.id === req.params.userId);

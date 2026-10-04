@@ -46,6 +46,9 @@ export interface IdentityAuthMethod {
 export type IdentityAuthIntent = "signin" | "signup";
 
 export type IdentityAuthResultCode =
+  | "ACTION_COMPLETE"
+  | "ACTION_CANCELLED"
+  | "ACTION_FAILED"
   | "AUTH_CANCELLED"
   | "AUTH_ATTEMPT_EXPIRED"
   | "IDENTITY_PROVIDER_UNAVAILABLE"
@@ -60,6 +63,6 @@ export type IdentityAuthResultCode =
 export interface IdentityAuthResult {
   status: "failed" | "complete";
   code: IdentityAuthResultCode;
-  message: string;
+  message?: string;
   actions: Array<"TRY_AGAIN" | "TRY_EXISTING_METHOD" | "SETUP_PASSWORD">;
 }

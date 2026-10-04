@@ -115,7 +115,7 @@ export const ROUTES: RouteContract[] = [
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
   { method: "POST", path: "/identity/v1/workspace-invitations/_accept", auth: "session", state: "planned", items: [9],
     codes: [...BROWSER_WRITE, "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY", "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
-  { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "planned", items: [4],
+  { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "changing", items: [4],
     codes: [...BROWSER_WRITE, "PROVIDER_NOT_LINKED", "LAST_SIGNIN_METHOD", "IDENTITY_BUSY", "IDENTITY_UNAVAILABLE"] },
 
   // Internal: PGR onboarding (workload)

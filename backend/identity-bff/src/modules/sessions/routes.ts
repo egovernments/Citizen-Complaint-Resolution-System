@@ -1,4 +1,6 @@
 import type express from "express";
+import { accountMetadata, unlinkProvider } from "../authentication/account-service.js";
+import { privateRef } from "../citizen-otp/otp-store.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
@@ -15,18 +17,25 @@ import {
   getIdentitySession,
   getSelectedIdentityContext,
   identitySessionSurface,
+  listPersonSessions,
   sessionIdFromCookie,
 } from "./session-store.js";
 
 export function registerSessionRoutes(app: express.Application): void {
   app.get("/identity/v1/session", asyncRoute(async (request, response) => {
     const surface = parseSurface(request.query.surface);
-    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface" });
+    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     const current = await currentSession(request.headers.cookie, surface);
-    if (!current) return response.status(401).json({ authenticated: false });
+    if (!current) return response.status(401).json({ authenticated: false, code: "SESSION_REQUIRED", error: "A signed-in session is required" });
     const { claims, boundTenant } = current.session;
     const context = await getSelectedIdentityContext(current.sessionId);
+    const account = request.query.include === "account" ? await accountMetadata(current.session, surface) : undefined;
+    const sessions = account ? (await listPersonSessions(claims.sub)).map(session => ({
+      id: privateRef("session", session.sessionId), current: session.sessionId === current.sessionId,
+      surface: session.surface, createdAt: session.createdAt, lastSeenAt: session.lastSeenAt,
+    })) : undefined;
     return response.json({
+      ...(account && { account, sessions }),
       authenticated: true,
       user: {
         id: claims.sub,
@@ -56,12 +65,24 @@ export function registerSessionRoutes(app: express.Application): void {
     });
   }));
 
+  app.post("/identity/v1/account/providers/_unlink", asyncRoute(async (request, response) => {
+    if (!hasTrustedWriteOrigin(request)) return response.status(403).json({ code: "UNTRUSTED_ORIGIN", error: "Untrusted request origin" });
+    const surface = parseSurface(request.body?.surface ?? request.query.surface);
+    if (!surface) return response.status(400).json({ code: "UNSUPPORTED_SURFACE", error: "Unsupported sign-in surface" });
+    const alias = request.body?.alias;
+    if (typeof alias !== "string" || !/^[A-Za-z0-9._-]+$/.test(alias)) return response.status(400).json({ code: "INVALID_REQUEST", error: "A provider alias is required" });
+    const current = await currentSession(request.headers.cookie, surface);
+    if (!current) return response.status(401).json({ code: "SESSION_REQUIRED", error: "A signed-in session is required" });
+    const providers = await unlinkProvider(current.session.claims.sub, current.sessionId, surface, alias);
+    return response.json({ providers });
+  }));
+
   app.post("/identity/v1/logout", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
       return response.status(403).json({ error: "Untrusted request origin" });
     }
     const surface = parseSurface(request.body?.surface ?? request.query.surface);
-    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface" });
+    if (!surface) return response.status(400).json({ error: "Unsupported sign-in surface", code: "UNSUPPORTED_SURFACE" });
     const sessionId = sessionIdFromCookie(request.headers.cookie, surface);
     if (sessionId) {
       const stored = await getIdentitySession(sessionId);

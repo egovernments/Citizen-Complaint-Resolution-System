@@ -1,4 +1,4 @@
-import { withPersonLease } from "../accounts/person-lease.js";
+import { withPersonLease, LeaseBusyError, LeaseLostError } from "../accounts/person-lease.js";
 import { config } from "../../infrastructure/config.js";
 import {
   refreshIdentityTokens,
@@ -106,6 +106,7 @@ export async function currentSession(
     } catch (error) {
       console.warn("Identity session refresh failed:", (error as Error).message);
       if (error instanceof SessionRevokedError) return null;
+      if (error instanceof LeaseBusyError || error instanceof LeaseLostError) throw error;
       if (error instanceof InvalidGrantError) {
         await deleteIdentitySession(sessionId);
         return null;

@@ -131,7 +131,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | GET | `/identity/v1/workspace-members` | session | planned | 9 |
 | POST | `/identity/v1/workspace-members/_remove` | session | planned | 9, 10 |
 | POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
-| POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
+| POST | `/identity/v1/account/providers/_unlink` | session | changing | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | changing | 11 |
 | POST | `/internal/identity/v1/identifiers/_check` | introspection | changing | 11 |
 | POST | `/internal/identity/v1/organizations/_ensure` | workload | changing | 11 |
