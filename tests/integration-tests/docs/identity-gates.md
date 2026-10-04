@@ -17,10 +17,12 @@ Executed commands, source commit and outcomes: [verification.txt](identity-evide
   case order; the checker fails if any original file loses cases.
 - Discovery uses `--list`. Its reporter labels cases `skipped`; that is
   discovery metadata, not an executed pass rate or an execution skip.
-- [helper-tests.txt](identity-evidence/helper-tests.txt): **16 passed**, including one browser form double and isolated HTTP doubles
+- [helper-tests.txt](identity-evidence/helper-tests.txt): **24 passed**, including nine browser fixture cases and isolated HTTP doubles
   exercise cookie transfer, challenge payloads, fail-closed behavior, wrong
   tenants/personas, no refresh token, expiry, and the test OTP inbox. These do
-  **not** execute real Keycloak, Redis, egov-user or egov-otp.
+  **not** execute real Keycloak, Redis, egov-user or egov-otp. The browser cases
+  cover combined and split hosted forms, fresh credential fields, application-owned
+  one-use auth-result consumption, and rejection despite an older valid session.
 - [typecheck.txt](identity-evidence/typecheck.txt): `npx tsc --noEmit`, exit 0.
   The baseline had TS7053 in dashboard-harness.ts:266; the only fix adds a
   `Record<string,string>` return type to the empty-header fallback. Baseline
@@ -74,10 +76,10 @@ Sibling results are pinned to their commits; they were not rerun by surf-tests.
 | Second-factor removal | surf-keycloak / surf-bff | stock required action and `delete_credential` | E3: real KC delete_credential removal and next-sign-in passed; BFF app gate pending |
 | Provider link and unlink | surf-keycloak / surf-bff | `idp_link` and `_unlink`; `keycloak/kc-api.spec.ts` provider entry | E3: real KC idp_link passed; E1 mocked unlink, full BFF flow pending |
 | Concurrent provider unlinks / last primary method | surf-bff | account/person lease tests | E1 mocked coverage; real gate pending |
-| Two persons claim one phone | surf-phone | phone lease/change suite | Pending phone implementation evidence |
-| Tenant mobile rule rejects phone change | surf-phone / surf-digitui | citizen OTP `purpose=change_phone` | Pending |
-| Old session races phone change | surf-phone / core revocation via owner | phone lease and session invalidation | Pending |
-| Released phone claimed by another person | surf-phone | citizen phone resolution | Pending |
+| Two persons claim one phone | surf-phone | phone lease/change suite | E6 real Redis with KC/DIGIT doubles; root gate pending |
+| Tenant mobile rule rejects phone change | surf-phone / surf-digitui | citizen OTP `purpose=change_phone` | E6 mocked phone validation; root gate pending |
+| Old session races phone change | surf-phone / core revocation via owner | phone lease and session invalidation | E6 competing old-session changes covered with doubles; root gate pending |
+| Released phone claimed by another person | surf-phone | citizen phone resolution | E6 released-number coverage with doubles; root gate pending |
 | No citizen given name → national mobile number | surf-tests / surf-phone | `citizen/citizen-registration.spec.ts` | Root run pending |
 | Legacy ambiguous citizen match, then admin resolution | surf-bff / surf-tests | retained internal citizen link/unlink/list routes | Pending; no substitute “any 4xx” assertion |
 | Rename shown in Keycloak, sign-in picker and digit-ui | surf-configurator / core sync / surf-digitui | configurator rename; tenant-route cache tests | E2 source includes fresh-answer cache replacement; end-to-end pending |
@@ -130,29 +132,38 @@ coverage from one generic “configuration works” test.
   image smoke 1/1, theme 57/57 and screenshots 26/26. The real checks cover
   TOTP enrollment/enforcement/removal, UPDATE_PASSWORD, verified-before-save
   UPDATE_EMAIL, VERIFY_EMAIL, idp_link, IMPORT behavior, event shapes and the
-  named realm configuration-only changes. They do not run BFF/DIGIT/egov-otp.
+  named realm configuration-only changes. Owner verified and merged PR50 at
+  `49fd676ba`. They do not run BFF/DIGIT/egov-otp.
 
 Root decisions: `msg_9bc5a98780e645c8bb7dc1b121cac2b4` moves full real runs to
 identity-root on the 8c gate environment; leaves do not connect to it.
 `msg_0aa88af6978f4a0aa83e40a235f64fb9` approves the isolated OTP inbox contract.
 See [identity-runbook.md](identity-runbook.md) for exact root run commands.
 
-- **E4** draft PR [58](https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/pull/58),
-  `git:4771ca1cd:digit-ui-esbuild/test-evidence/phase2-verification.txt` and
-  `phase2-suite.txt`, inspected by surf-tests. Tested source
-  `7d703071f3f14f1c0a2bccfb5fa5e706a207cd4f`: 251 passed, zero skipped; build
-  and 16 alias checks passed. Includes account actions, scoped logout retry,
-  explicit invite acceptance, phone change, read-only identifiers, dashboard
-  expiry re-select, identity-outage retention and tenant cache fallback.
-  Uses frontend HTTP fixtures/component doubles; no real KC/Redis/DIGIT/OTP
-  gate is closed by this result.
+- **E4** owner-verified PR [58](https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/pull/58),
+  merged at `6b8097841`. Corrected evidence:
+  `git:66eb372aa:digit-ui-esbuild/test-evidence/phone-race-verification.txt`
+  and `phone-race-suite.txt`, inspected by surf-tests. Tested source
+  `f0ca40f1687bd72c7354aa3b6ddab98b56d18166`: **262 passed**, zero skipped;
+  affected interactions **18 passed** and build passed; prior 16 alias checks reused.
+  The ownership guard and deferred-response tests close the previous logout/account-switch
+  review finding. Includes account actions, scoped logout retry, invite acceptance,
+  read-only identifiers, dashboard expiry re-select, identity-outage retention,
+  and tenant cache fallback. Frontend HTTP fixtures/component doubles only;
+  no real KC/Redis/DIGIT/OTP gate is closed by this result.
 
-- **E4 review limitation:** owner rejected the phase-2 handoff after finding a
-  ChangePhone logout/account-switch race (`msg_f77364e572564e2494a62975fd7eef31`).
-  The 251 passing tests remain historical evidence; they do not prove that
-  race fixed or establish acceptance. Corrected leaf evidence is pending.
 - **E5** `4763e73adc01fba2d2aa881f266d222393d3d786:artifacts/configurator/README.md`,
   inspected: affected tests 103/103, typecheck/build pass; full suite 576 pass
   plus one unchanged postal parity baseline failure under the recorded root
   exception. Member/invitation/account/rename/expiry tests use client doubles.
-  Full backend propagation and publication remain pending gates.
+  Owner verified and merged PR59 at `68d35e02f`. Full backend propagation and
+  publication remain pending gates.
+
+- **E6** PR [63](https://github.com/KDwevedi/Citizen-Complaint-Resolution-System/pull/63),
+  `git:aa89930ce6785a351a1093c08445376cba8320e6:backend/identity-bff/docs/phone-proof-evidence.md`,
+  inspected: **432 passed / 5 skipped / 15 todo**, TypeScript clean. Real Redis,
+  HTTP Keycloak/DIGIT/MDMS doubles and in-memory OTP delivery. Covers competing
+  phone claims and old sessions, released phone reuse, bootstrap lease release,
+  late ownership conflict, DIGIT propagation retry with the same UUID, tenant
+  phone validation and national-number default name. Owner verification pending;
+  core citizen-entry combined gate and real-system phone gates remain pending.

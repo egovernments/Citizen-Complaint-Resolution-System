@@ -1,7 +1,8 @@
 Item18 test migration verification
 Date: 2026-10-04
-Tested source commit: f255cb1f4ebf0bfddfa6228b111f3d53e1e4df56
-Implementation commit: 6c0d8753a; owner merge b7c727ade preserved.
+Tested source commit: 5a2cc1f45118c62b782faf04b38a11efbdb26d6d
+Implementation commits: 6c0d8753a + review correction 2acbe1b3d.
+Owner history through 30af43d4e merged without rewriting history.
 Baseline inventory: 171e5fe1a.
 
 Executed from tests/integration-tests (low concurrency):
@@ -9,8 +10,11 @@ Executed from tests/integration-tests (low concurrency):
    Exit0, no diagnostics (typecheck.txt). Baseline TS7053 preserved in baseline-typecheck.txt;
    fixed by typing the empty response-header fallback without changing behavior.
 2. PLAYWRIGHT_BROWSERS_PATH="$PWD/.identity-browsers" npx tsx --test --test-concurrency=1 tests/identity-unit/*.test.ts
-   Exit0;16 passed,0 failed,0 skipped. helper-tests.txt.
-   Includes Chromium147 headless-shell1217 hosted-form double plus local HTTP doubles.
+   Exit0;24 passed,0 failed,0 skipped. helper-tests.txt.
+   Includes Chromium147 headless-shell1217 hosted-form doubles (9 browser cases) plus local HTTP doubles.
+   Combined/split forms, fresh fields, single app-owned auth-result consumption,
+   failed result with older valid session, and authoritative session check covered.
+   Targeted nine-case iteration also passed (hosted-fixture.txt).
    No real Keycloak/DIGIT/Redis/egov-otp integration claim.
 3. npx playwright test --config playwright.identity.config.ts
    Exit0;8 skipped,0 passed because real gate environment was not supplied.
@@ -22,17 +26,19 @@ Executed from tests/integration-tests (low concurrency):
 6. python3 scripts/identity-inventory.py
    Exit0;per-file count preservation and one-for-one replacement mapping.
    counts.txt/replacement-map.json. Baseline and final pass rates are unknown, not100%.
-7. git diff 171e5fe1a --check
+7. git diff identity/lane-e --check
    Exit0.
 
 Reused sibling evidence (not rerun):
 - Keycloak09e479139:24/24 real26.7.3 realm checks. Independently queried CI run37214279799:
   completed/success, head09e4791393cf290102a01f21337ce9c97d864e53.
   Curated exact cases from c5583f3e4:keycloak/evidence/live-check-summary.log copied to keycloak-dry-run.txt.
-- Frontend4771ca1cd:251 passing fixtures are historical; owner rejected handoff for
-  ChangePhone logout/account-switch race. Corrected evidence still pending.
+- Frontend66eb372aa: corrected phone-race evidence inspected;262 passes/18 affected
+  interactions/build clean; prior16 alias checks reused. Owner verified/merged6b8097841.
 - Configurator4763e73ad:103 affected passes;576 full passes+1 unchanged baseline failure
-  under recorded root exception. Backend integration still pending.
+  under recorded root exception. Owner verified/merged68d35e02f; real integration pending.
+- Phoneaa89930ce:432 passes/5 skipped/15 todo; real Redis and KC/DIGIT doubles.
+  Evidence inspected; owner review and core citizen-entry combined gate pending.
 
 Full deployment pass-rate comparison and real persona/O2 runs are pending gate run.
 Root decision msg_9bc5a98780e645c8bb7dc1b121cac2b4 authorizes compile+missing-env skips
