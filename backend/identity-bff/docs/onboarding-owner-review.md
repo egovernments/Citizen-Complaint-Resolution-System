@@ -28,9 +28,15 @@ This records integration requirements, not a completion claim.
   failed; the completed rerun used a healthy dedicated Redis instance.
 - Draft fork PR #46 initially commits only the agreed PGR workspace/rename
   contract at `b0f7b3777`; implementation is staged at `0f8bc2c77` and remains
-  in progress. Review requires corrections to FAILED publication after ensure
-  collision and atomic shared signup/rename name reservations. Real transport,
-  fresh-founder Kong access and executed worker replacements remain gates.
+  in progress. The leaf reports the FAILED publication correction in that
+  commit; owner confirmed signup and rename now reserve the same name table.
+  Executed collision/replay and concurrent reservation evidence remain gates,
+  alongside transport, fresh-founder Kong access and worker replacements.
+- Root's direct-MDMS security amendment is documented in
+  `onboarding-deployment-cutover.md`: MCP defaults to gateway routing, with
+  explicit opt-in and live state-root admin verification for direct writes.
+  Deployment flag-default check passes; MCP implementation and denial tests
+  remain with the leaf.
 - Preserve raw reader commit `6c2e0d98c`: core has consumed the identical
   commit. Further integration uses merges and additive fixes.
 
