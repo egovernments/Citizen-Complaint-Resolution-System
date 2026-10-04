@@ -1,0 +1,9 @@
+
+ RUN  v5.0.1 /Users/kanavdwevedi/repositories/egov/_wt/identity-lane-e/backend/identity-bff
+
+
+ Test Files  1 passed (1)
+      Tests  76 passed (76)
+   Start at  22:00:57
+   Duration  3.13s (tests 85%, transform 9%, import 4%, setup 2%)
+

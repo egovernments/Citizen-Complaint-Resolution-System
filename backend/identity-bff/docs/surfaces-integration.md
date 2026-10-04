@@ -6,7 +6,7 @@ evidence from accepted implementation. The completion gate is still open.
 ## Integrated
 
 - Owner branch includes the frozen contract and root fixes through base
-  `75b157446`, including the source-level mock JWKS port fallback.
+  `94ae613eb`, including the reviewed core providers and citizen account entries.
 - The earlier digit-ui slug-cache change is included through `7cc754440`.
   Its original verification is carried by the handoff; this review has not
   rerun that suite.
@@ -33,12 +33,21 @@ evidence from accepted implementation. The completion gate is still open.
   discovery counts remain 278/88 (289/90 with local-only cases). Eight explicit
   missing-environment skips do not close the root-owned real-system gate.
 
-## Work in progress
+- BFF PR 52 (`4582d5b29`) and phone PR 63 (`aa89930ce`) are reviewed and
+  merged at `080dae354`. The BFF runtime/tests initially matched the tested
+  leaf exactly. Core base `94ae613eb` was then merged at `6d32d6988`, keeping
+  core citizen entries, issuance cleanup and predicate ordering alongside the
+  registry context kinds, moved mobile validation and national-name fallback.
+  `8d43cedcc` removes a newly imported test reference to the deleted branding
+  cache; all core regression assertions are preserved. Final owner validation
+  is recorded in `../evidence/owner-integration-summary.txt`.
+
+## Integration state
 
 | Owner | Scope | Integration state |
 | --- | --- | --- |
-| surf-bff | Items 1–4, 15 | Self-service/logout slices committed; readiness awaits reviewed core providers |
-| surf-phone | Item 13 | PR 63 at `aa89930ce` reviewed; integration awaits current BFF prerequisites and combined-tree verification |
+| surf-bff | Items 1–4, 15 | PR 52 reviewed and merged; core readiness providers integrated |
+| surf-phone | Item 13 | PR 63 at `aa89930ce` reviewed and merged through PR 52 |
 | surf-keycloak | Realm configuration, extraction, public branding | PR 50 reviewed and merged; scoped evidence accepted |
 | surf-configurator | Members, invites, account actions, workspace settings | PR 59 reviewed and merged; scoped frontend evidence accepted |
 | surf-digitui | Phase 2 account actions, phone, invites, logout | Corrected PR 58 reviewed and merged; scoped frontend evidence accepted |
@@ -85,7 +94,7 @@ the real-dependency cases; mocked tests do not satisfy those cases.
 
 - Refresh lease classification correction is present at `417557d50`:
   currentSession rethrows busy/lost errors and the HTTP handler maps them to
-  IDENTITY_BUSY with Retry-After. Final integrated evidence remains pending.
+  IDENTITY_BUSY with Retry-After. The combined suite covers this correction.
 - Whichever owner lands second must preserve both the surfaces registry
   context-kind checks and core's `_select` predicate/ordering rewrite.
 - Core removes the obsolete full-directory subject sync rather than
@@ -105,12 +114,14 @@ the real-dependency cases; mocked tests do not satisfy those cases.
 - Scoped logout, phone-session invalidation, identifier propagation and
   readiness consume core APIs from `docs/core-internals.md`; no duplicate
   implementation is permitted. Identifier propagation is consumed; poller
-  provider `0d2af5878` is available and reconcile remains awaited. Core replaces the old reconcile
-  scheduler; surf-bff starts/stops the poller exactly once, including retries.
+  provider `0d2af5878` and reconcile `9bf112ec6` are integrated. Core replaces
+  the old reconcile scheduler; surf-bff starts/stops the poller exactly once,
+  including retries.
 - Core bindings `1fae11312` supplies member/admin-email/invitation routes and
-  the new `_select`. Core also owns adding frozen citizen digit.accounts
-  entries at selection, needed for subsequent phone propagation; surf-phone
-  tests its effects against those entries without duplicating the writer.
+  the new `_select`. Core adds frozen citizen digit.accounts entries before issuance at selection,
+  needed for subsequent phone propagation. The imported regression verifies
+  a new citizen entry and changed phone reaching the same mock DIGIT account;
+  this remains mock-dependent evidence, not a live-system result.
 - Root settled D18: core-bindings provides session-authenticated
   `POST /identity/v1/workspace-members/_updateEmail {tenantId,digitUuid,email}`.
   It requires live tenant ACCOUNT_ADMIN and an ACTIVE target binding; sets
