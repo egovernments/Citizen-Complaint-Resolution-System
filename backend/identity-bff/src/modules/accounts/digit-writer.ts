@@ -25,14 +25,22 @@ export interface DigitWriteResult {
 }
 
 // UserRepository.update writes these values as sent, including null/absent.
-// Everything else is deliberately omitted (especially DOB, roles and locks).
+// Stock egov-user also requires roles on update: copy the fresh array unchanged.
+// Everything else is deliberately omitted (especially DOB, active and locks).
 const COPIED_FIELDS = [
-  "id", "uuid", "tenantId", "userName", "name", "gender", "emailId",
+  "id", "uuid", "tenantId", "userName", "name", "gender", "emailId", "roles",
   "altContactNumber", "alternatemobilenumber", "pan", "aadhaarNumber",
   "salutation", "signature", "identificationMark", "locale", "fatherOrHusbandName",
   "relationship", "photo", "permanentAddress", "permanentCity", "permanentPinCode",
   "correspondenceAddress", "correspondenceCity", "correspondencePinCode",
 ] as const;
+
+/** Copied role metadata follows the same masked-value rule as profile fields. */
+function containsMaskedValue(value: unknown): boolean {
+  if (typeof value === "string") return /\*{2,}/.test(value);
+  if (value && typeof value === "object") return Object.values(value).some(containsMaskedValue);
+  return false;
+}
 
 /**
  * Fresh read, explicit field map, then update. A concurrent HRMS edit after
@@ -64,7 +72,7 @@ export async function writeDigitIdentifiers(
     const user = Object.fromEntries(COPIED_FIELDS.filter((field) => field in raw)
       .map((field) => [field, raw[field]]));
     Object.assign(user, Object.fromEntries(supplied));
-    if (Object.values(user).some((value) => typeof value === "string" && /\*{2,}/.test(value))) {
+    if (containsMaskedValue(user)) {
       return { status: "skipped-masked", account };
     }
     await currentPersonLease()?.assertHeld();

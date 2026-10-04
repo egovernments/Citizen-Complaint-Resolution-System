@@ -26,14 +26,30 @@ beforeEach(() => {
 });
 
 describe("safe DIGIT writer", () => {
-  it("preserves the fresh HRMS name, gender and email; omits DOB, roles, active and locks", async () => {
+  it("preserves fresh HRMS fields and roles; omits DOB, active and locks", async () => {
     expect((await writeDigitIdentifiers(ref, { password: "test-only-password" })).status).toBe("written");
     expect(api.search).toHaveBeenCalledWith("admin-test-token", { ...ref, uuid: [ref.uuid], active: true });
     const body = api.update.mock.calls[0][1];
     expect(body).toMatchObject({ name: "HRMS Updated Name", gender: "FEMALE", emailId: "hrms@example.org",
-      permanentAddress: "Street", permanentCity: "City", permanentPinCode: "12345" });
-    for (const key of ["dob", "active", "roles", "accountLocked", "accountLockedDate", "pwdExpiryDate",
+      permanentAddress: "Street", permanentCity: "City", permanentPinCode: "12345", roles: fresh().roles });
+    for (const key of ["dob", "active", "accountLocked", "accountLockedDate", "pwdExpiryDate",
       "lastModifiedDate", "mobileNumber", "countryCode", "type", "ignored"]) expect(body).not.toHaveProperty(key);
+  });
+  it("copies fresh roles unchanged and ignores caller attempts to change them", async () => {
+    const roles = [
+      { code: "EMPLOYEE", name: "Employee", tenantId: "pg" },
+      { code: "GRO", name: "HRMS Updated Role", tenantId: "pg.city" },
+    ];
+    api.search.mockResolvedValue([{ ...fresh(), roles }]);
+    const staleRef = { ...ref, roles: [{ code: "OLD_ROLE", tenantId: "pg" }] };
+    const changes = { emailId: "verified@example.org", roles: [{ code: "SUPERUSER", tenantId: "pg" }] };
+    await writeDigitIdentifiers(staleRef, changes);
+    expect(api.update.mock.calls[0][1].roles).toEqual(roles);
+  });
+  it.each(["code", "name", "tenantId"])("skips masked copied role %s without writing", async (field) => {
+    api.search.mockResolvedValue([{ ...fresh(), roles: [{ ...fresh().roles[0], [field]: "***masked***" }] }]);
+    expect((await writeDigitIdentifiers(ref, { password: "test-only-password" })).status).toBe("skipped-masked");
+    expect(api.update).not.toHaveBeenCalled();
   });
   it.each(["name", "gender", "emailId", "pan", "fatherOrHusbandName", "photo", "permanentCity"])(
     "skips a masked copied %s without writing", async (field) => {
