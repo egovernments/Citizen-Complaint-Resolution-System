@@ -1,3 +1,9 @@
+import AccountPage from '@/identity/AccountPage';
+import MembersPage from '@/identity/MembersPage';
+import WorkspacePage from '@/identity/WorkspacePage';
+import { logout as identityLogout } from '@/api/onboarding';
+import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
+import { toast } from '@/hooks/use-toast';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
 import OnboardingLayout from './onboarding/OnboardingLayout';
@@ -82,12 +88,12 @@ interface AppState {
 interface AppContextType {
   state: AppState;
   login: (user: AppState['user'], env: string, tenant: string, mode: AppMode) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   setMode: (mode: AppMode) => void;
   /** Point subsequent onboarding writes/reads at a child tenant. Called by
    *  Phase 1 after `tenant.tenants` create succeeds. */
   setTargetTenant: (code: string) => void;
-  completePhase: (phase: number) => void;
+  completePhase: (phase: number, skip?: boolean) => Promise<boolean>;
   goToPhase: (phase: number) => void;
   addUndo: (action: string, description: string) => void;
   undo: () => void;
@@ -420,7 +426,8 @@ function App() {
     trackEvent('target_tenant_set', { targetTenant: code });
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await identityLogout();
     trackEvent('logout', { tenant: state.tenant });
     // Storage, both API clients and the cached providers. Shared with the
     // signup flow so there is one definition of what a DIGIT sign-out clears.
@@ -428,16 +435,19 @@ function App() {
     setState(s => ({ ...s, isAuthenticated: false, user: null, mode: 'onboarding', currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
   };
 
-  const completePhase = (phase: number) => {
-    setState(s => ({
-      ...s,
-      completedPhases: [...new Set([...s.completedPhases, phase])],
-      currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length),
-    }));
-    const step = ONBOARDING_STEPS.find((candidate) => candidate.number === phase);
-    trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
-    if (finishesOnboarding(phase, state.completedPhases)) {
-      trackEvent('onboarding_complete', { tenant: state.tenant });
+  const completePhase = async (phase: number, skip = false): Promise<boolean> => {
+    try {
+      const latest = await searchWorkspace(state.tenant);
+      const updated = await updateWorkspace(state.tenant, WORKSPACE_STEPS[phase - 1], skip ? 'SKIPPED' : 'DONE', latest.Workspace.version);
+      const completedPhases = completedSteps(updated.Workspace);
+      setState(s => ({ ...s, completedPhases, currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length) }));
+      const step = ONBOARDING_STEPS.find(candidate => candidate.number === phase);
+      trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
+      if (finishesOnboarding(phase, state.completedPhases)) trackEvent('onboarding_complete', { tenant: state.tenant });
+      return true;
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Could not complete setup step', description: error instanceof Error ? error.message : 'Reload and retry.' });
+      return false;
     }
   };
 
@@ -526,6 +536,9 @@ function App() {
         <PageViewTracker />
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Routes>
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/members" element={state.isAuthenticated ? <MembersPage /> : <Navigate to="/login" />} />
+          <Route path="/workspace-settings" element={state.isAuthenticated ? <WorkspacePage /> : <Navigate to="/login" />} />
           <Route path="/login" element={<LoginPage />} />
           {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
               nobody has an account yet, so it sits outside the auth gate. */}

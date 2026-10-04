@@ -151,6 +151,6 @@ describe('configurator sign in', () => {
     fireEvent.click(await screen.findByRole('button', { name: /bomet county/i }));
 
     await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('ke.bomet'));
-    expect(localSession.installDigitContext).toHaveBeenCalledWith(context, signedIn.user);
+    expect(localSession.installDigitContext).toHaveBeenCalledWith(context, signedIn.user, [1, 2, 3, 4, 5]);
   });
 });

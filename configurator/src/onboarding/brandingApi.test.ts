@@ -48,6 +48,7 @@ const branding = (over: Partial<Branding> = {}): Branding => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  search.mockImplementation(async (_tenant, schema) => schema === 'tenant.tenants' ? [tenantRecord] : []);
   update.mockImplementation(async (rec, data) => ({ ...rec, data }));
   create.mockImplementation(async (tenantId, schemaCode, uniqueIdentifier, data) =>
     record({ tenantId, schemaCode, uniqueIdentifier, data }),
@@ -86,20 +87,10 @@ describe('matchBrandTheme', () => {
 });
 
 describe('saveBranding', () => {
-  it('renames the tenant, relabels it, and creates the first theme record', async () => {
-    const saved = await saveBranding(branding(), { name: '  Acme Council ', logo: null, theme: cmsBlue });
-
-    expect(update).toHaveBeenCalledWith(tenantRecord, expect.objectContaining({ name: 'Acme Council' }));
-    expect(upsertMessages).toHaveBeenCalledWith('acme', 'en_IN', [
-      { code: 'TENANT_TENANTS_acme', message: 'Acme Council' },
-    ]);
-    expect(create).toHaveBeenCalledWith(
-      'acme',
-      'common-masters.ThemeConfig',
-      'themeconfig',
-      expect.objectContaining({ code: 'themeconfig', name: 'CMS Blue', version: cmsBlue.version, colors: cmsBlue.colors }),
-    );
-    expect(saved.themeId).toBe('cms-blue');
+  it('requires the PGR rename flow and never writes the name directly', async () => {
+    await expect(saveBranding(branding(), { name: 'Acme Council', logo: null, theme: cmsBlue })).rejects.toThrow('Workspace settings');
+    expect(update).not.toHaveBeenCalled();
+    expect(upsertMessages).not.toHaveBeenCalled();
   });
 
   it('points the logo at a lasting filestore link, not a signed one', async () => {
@@ -110,7 +101,7 @@ describe('saveBranding', () => {
 
     const link = 'https://digit.example/filestore/v1/files/id?tenantId=acme&fileStoreId=file-1';
     expect(update).toHaveBeenCalledWith(tenantRecord, expect.objectContaining({ logoId: link, imageId: 'file-1' }));
-    expect(saved.logoUrl).toBe(link);
+    expect(saved.logoUrl).toBeNull(); // Re-read is authoritative; the mocked MDMS search still returns the old record.
     // The name did not change, so its label is left alone
     expect(upsertMessages).not.toHaveBeenCalled();
   });
@@ -156,13 +147,13 @@ describe('saveBranding when only the theme fails', () => {
     create.mockRejectedValueOnce(new Error('Schema definition against which data is being created is not found'));
     const file = new File(['x'], 'logo.png', { type: 'image/png' });
 
-    const failure = await saveBranding(branding(), { name: 'Acme', logo: { kind: 'upload', file }, theme: cmsBlue }).catch(
+    const failure = await saveBranding(branding(), { name: 'acme', logo: { kind: 'upload', file }, theme: cmsBlue }).catch(
       (err) => err,
     );
 
     expect(failure).toBeInstanceOf(ThemeSaveError);
-    expect(failure.saved.name).toBe('Acme');
-    expect(failure.saved.logoUrl).toBe('https://digit.example/filestore/v1/files/id?tenantId=acme&fileStoreId=file-2');
+    expect(failure.saved.name).toBe('acme');
+    expect(failure.saved.logoUrl).toBeNull(); // The returned search record wins over the write echo.
     expect(failure.saved.themeId).toBeNull();
   });
 });

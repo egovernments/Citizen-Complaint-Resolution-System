@@ -126,8 +126,8 @@ export default function ComplaintsStep() {
 
   const departmentName = useMemo(() => new Map(departments.map((choice) => [choice.code, choice.name])), [departments]);
 
-  const finish = () => {
-    completePhase(STEP.number);
+  const finish = async () => {
+    if (!await completePhase(STEP.number)) return;
     setMode('management');
     navigate('/manage');
   };
@@ -148,7 +148,7 @@ export default function ComplaintsStep() {
       });
       writeDraft(tenant, null);
       toast({ title: `${filable} complaint ${filable === 1 ? 'category is' : 'categories are'} ready` });
-      finish();
+      await finish();
     } catch (err) {
       reportStepError('complaints', 'save', err, tenant);
       setSaveError(describeSaveError(err, 'Saving your complaint categories failed. Try again.'));

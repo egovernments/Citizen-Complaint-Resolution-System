@@ -1,3 +1,5 @@
+import { deactivateAndRemove, requiredEmail, type MemberEmployee } from '@/identity/memberActions';
+import { apiClient } from '@/api/client';
 import { boundaryService, hrmsService, localizationService, mdmsService } from '@/api';
 import type { Employee } from '@/api/types';
 import { listMasters, recordDepartments, recordName } from '../departments/mastersApi';
@@ -141,7 +143,7 @@ export async function addEmployee(tenantId: string, input: NewEmployee, options:
     name: input.name.trim(),
     userName,
     mobileNumber: input.mobileNumber,
-    emailId: input.emailId?.trim() || undefined,
+    emailId: requiredEmail(input.emailId),
     // buildEmployee makes the first the current assignment and the rest history.
     department: input.departments.join(','),
     designation: input.designation,
@@ -160,12 +162,16 @@ export async function addEmployee(tenantId: string, input: NewEmployee, options:
 
 /** Deactivate, as management's delete does: HRMS keeps the record, marked inactive. */
 export async function removeEmployee(employee: Employee): Promise<void> {
-  const deactivated = {
-    ...employee,
-    isActive: false,
-    deactivationDetails: [{ reasonForDeactivation: 'OTHERS', effectiveFrom: Date.now() }],
-  } as Employee;
-  await hrmsService.updateEmployee(deactivated);
+  await deactivateAndRemove(
+    async () => {
+      const rows = await hrmsService.searchEmployees(employee.tenantId, { codes: [employee.code] });
+      const fresh = rows.find(row => row.uuid === employee.uuid || row.code === employee.code);
+      if (!fresh) throw new Error('Employee no longer exists in HRMS.');
+      return fresh as unknown as MemberEmployee;
+    },
+    row => hrmsService.updateEmployee(row as unknown as Employee),
+    apiClient.getAuth().user?.uuid,
+  );
 }
 
 export function currentAssignment(employee: Employee) {

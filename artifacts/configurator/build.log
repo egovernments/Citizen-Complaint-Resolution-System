@@ -1,0 +1,24 @@
+
+> digit-configurator@0.0.0 build
+> tsc -b && vite build
+
+vite v7.3.2 building client environment for production...
+<script src="/configurator/telemetry-config.js"> in "/index.html" can't be bundled without type="module" attribute
+transforming...
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 3774 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                             1.56 kB │ gzip:   0.80 kB
+dist/assets/digit-mark-bw-HuqU7ODr.png      5.47 kB
+dist/assets/digit-mark-wsOx4TAK.png         9.20 kB
+dist/assets/index-CXhCltgX.css             91.09 kB │ gzip:  19.96 kB
+dist/assets/index-C0QKTuDF.js           3,106.33 kB │ gzip: 976.88 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.19s

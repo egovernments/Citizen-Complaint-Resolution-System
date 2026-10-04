@@ -9,6 +9,7 @@ import {
   establishIdentityBffSession,
   identityBffSurfaceBase,
   restrictIdentityBffDestination,
+  IdentityAccount,
 } from "@egovernments/digit-ui-libraries";
 
 import Header from "./Header";
@@ -34,6 +35,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
   const location = useLocation();
   const [status, setStatus] = useState("checking");
   const [message, setMessage] = useState("");
+  const [invitation, setInvitation] = useState(null);
   const tenant = window.__digitTenantContext;
   const destination = restrictIdentityBffDestination(
     location.state?.from || new URLSearchParams(location.search).get("from"),
@@ -74,6 +76,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
       return;
     }
     if (result.status !== "authenticated") {
+      setInvitation(result.invitation || null);
       setStatus(result.status);
       setMessage(result.messageKey ? tr(result.messageKey, result.message) : "");
       return;
@@ -90,18 +93,30 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
         setMessage(unavailable());
       });
 
+  const acceptInvitation = () => retry(async () => {
+    setStatus("checking");
+    try {
+      await IdentityAccount.acceptIdentityInvitation({ tenant, invitation, fetchImpl: window.fetch.bind(window) });
+      await establishSession();
+    } catch (error) {
+      const failure = IdentityAccount.identityMessage(error.code);
+      setStatus("error");
+      setMessage(tr(failure.messageKey, failure.message));
+    }
+  });
+
   useEffect(() => {
     retry(establishSession);
     // Tenant context is immutable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry };
+  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation };
 };
 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
-  const { tenant, status, message, tr, beginSignIn, establishSession, retry } = signIn;
+  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation } = signIn;
   return (
     <Shell>
       <V2Card
@@ -138,18 +153,23 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
             {tr("CORE_IDENTITY_SIGN_OUT_HINT", "Sign out if you need to use a different account.")}
           </p>
         ) : null}
+        {status === "pending-invitation" && invitation && (
+          <V2Button type="button" width="full" onClick={acceptInvitation}>
+            {tr("CORE_IDENTITY_ACCEPT_INVITATION", "Accept invitation")}
+          </V2Button>
+        )}
         <V2Button
           type="button"
           width="full"
           onClick={
-            status === "forbidden"
-              ? Digit.UserService.logout
+            status === "forbidden" || status === "pending-invitation"
+              ? () => retry(() => Digit.UserService.logout())
               : status === "error"
                 ? () => retry(establishSession)
                 : () => retry(onSignIn || beginSignIn)
           }
         >
-          {status === "forbidden"
+          {status === "forbidden" || status === "pending-invitation"
             ? tr("CORE_IDENTITY_SIGN_OUT", "Sign out")
             : status === "error"
               ? tr("CORE_IDENTITY_TRY_AGAIN", "Try again")

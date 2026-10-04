@@ -122,8 +122,8 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
     toggleSidebar(false);
     setShowDialog(true);
   };
-  const handleOnSubmit = () => {
-    Digit.UserService.logout();
+  const handleOnSubmit = async () => {
+    await Digit.UserService.logout();
     setShowDialog(false);
     window.location.href = `/${window?.contextPath}/citizen/login`;
   };
