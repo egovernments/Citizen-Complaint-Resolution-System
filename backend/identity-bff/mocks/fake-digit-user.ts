@@ -242,6 +242,12 @@ export function createFakeDigitUser(options: { tenants: string[]; validateRoles?
     const user = req.body.user;
     const account = accounts.get(user.uuid);
     if (!account) return res.status(400).json({ error: "not found" });
+    // Stock UserService.updateWithoutOtpValidation still calls validateUserRoles.
+    // Keeping stored roles on omission in the fake hid the 8c staff-login failure.
+    if (!Array.isArray(user.roles) || !user.roles.some((role: Role) =>
+      typeof role?.code === "string" && role.code.trim().length > 0)) {
+      return res.status(400).json({ error: "AtleastOneRoleCodeException" });
+    }
     if (user.password) {
       if (!POLICY.test(user.password)) return res.status(400).json({ error: "INVALID_PWD_PATTERN" });
       receivedPasswords.push(user.password);

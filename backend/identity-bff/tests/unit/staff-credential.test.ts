@@ -3,10 +3,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
-import { resetDigitAdminToken } from "../../src/modules/managed-accounts/digit-admin-session.js";
+import { resetDigitAdminToken, withDigitAdmin } from "../../src/modules/managed-accounts/digit-admin-session.js";
 import { createIdentitySession, deleteIdentitySession } from "../../src/modules/sessions/session-store.js";
 import { linkedIdentity, managedUserLogin } from "../../src/modules/managed-accounts/managed-account-service.js";
-import { passwordLogin } from "../../src/modules/managed-accounts/digit-user-client.js";
+import { passwordLogin, updateIdentifiers } from "../../src/modules/managed-accounts/digit-user-client.js";
 import { activateStaffCredential, findLiveStaffToken, staffLogin } from "../../src/modules/accounts/credential-service.js";
 import { derivedStaffPassword } from "../../src/modules/accounts/credential.js";
 import { LeaseLostError, withPersonLease, type PersonLease } from "../../src/modules/accounts/person-lease.js";
@@ -52,6 +52,31 @@ afterAll(async () => {
 });
 
 describe("derived staff credentials", () => {
+  it.each(["derived", "rotate"] as const)("8c gate: %s login preserves fresh roles required by egov-user", async (mode) => {
+    config.identityStaffCredentialMode = mode;
+    const stale = { ...ref(), roles: [{ code: "STALE_ROLE", tenantId: "pg" }] };
+    // Model an HRMS role change before the writer's search. Do not derive or
+    // filter roles from a stale caller snapshot or from BFF role allowlists.
+    account.roles = [
+      { code: "EMPLOYEE", name: "Employee", tenantId: "pg" },
+      { code: "GRO", name: "Grievance Officer", tenantId: "pg.city" },
+    ];
+    const freshRoles = structuredClone(account.roles);
+    const writes = fake.stats.passwordUpdates;
+    const login = await run((lease) => staffLogin(stale, lease));
+    expect(login.accessToken).toBeTruthy();
+    expect(fake.stats.passwordUpdates - writes).toBe(1);
+    expect(account.roles).toEqual(freshRoles);
+    expect(login.user.roles).toEqual(freshRoles);
+  });
+  it.each([undefined, [], [{ code: "", tenantId: "pg" }]])(
+    "8c contract: egov-user rejects an identifier update without a role code (%j)", async (roles) => {
+      const writes = fake.stats.passwordUpdates;
+      await expect(withDigitAdmin((token) => updateIdentifiers(token, {
+        ...ref(), name: account.name, password: nativePassword, roles,
+      }))).rejects.toMatchObject({ status: 400 });
+      expect(fake.stats.passwordUpdates).toBe(writes);
+    });
   it("activation logs out the existing native token once before issuing a fresh token", async () => {
     const native = await passwordLogin({ username: account.userName, tenantId: "pg", userType: "EMPLOYEE", password: nativePassword });
     const logouts = fake.stats.logouts;
