@@ -262,9 +262,16 @@ const tokenKey = (identity: ManagedIdentity) =>
 /** Session refs still relying on this identity's cached token. */
 const tokenHoldersKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-user-token-holders:${identity.key}`;
-/** The mobile number this BFF last wrote to a citizen account (searches may mask it). */
+/**
+ * The `countryCode mobileNumber` this BFF last wrote to a citizen account.
+ * Used only when egov-user masks the stored number in search results. It
+ * expires, so a number changed outside the BFF is written back within a day.
+ */
 const citizenMobileKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-citizen-mobile:${identity.key}`;
+const CITIZEN_MOBILE_HINT_SECONDS = 86_400;
+const citizenMobileHint = (countryCode: string | null | undefined, mobileNumber: string) =>
+  `${countryCode?.trim() || ""} ${mobileNumber.trim()}`;
 const leaseKey = (identity: ManagedIdentity) =>
   `${config.cachePrefix}:digit-user-lease:${identity.key}`;
 /** Hash of `${subject}|${tenantId}` -> issuer for every account this BFF provisioned. */
@@ -451,7 +458,11 @@ export async function ensureManagedAccount(
       // mint a token no logout could ever revoke. The first
       // /contexts/_select rotates the password and logs in for its session.
       if (citizen && profile.mobileNumber) {
-        await getRedis().set(citizenMobileKey(identity), profile.mobileNumber.trim());
+        await getRedis().set(
+          citizenMobileKey(identity),
+          citizenMobileHint(profile.countryCode, profile.mobileNumber),
+          "EX", CITIZEN_MOBILE_HINT_SECONDS,
+        );
       }
       // Citizen accounts stay out of the Organization-driven inventory, which
       // would otherwise deactivate them for having no membership; their
@@ -493,6 +504,7 @@ export async function managedUserLogin(
   identity: ManagedIdentity,
   sessionId: string,
   verifiedMobileNumber?: string,
+  verifiedCountryCode?: string,
 ): Promise<DigitLogin> {
   const ref = sessionTokenRef(sessionId);
   if (identity.linkedUuid) {
@@ -520,24 +532,39 @@ export async function managedUserLogin(
       const account = identity.linkedUuid
         ? await findLinkedAccount(adminToken, identity)
         : await findAccount(adminToken, identity);
-      if (!account || !account.active) {
+      if (!account) {
         throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
+      }
+      if (!account.active) {
+        throw new ManagedAccountError("The DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
       }
       let login: DigitLogin;
       if (identity.userType === CITIZEN_USER_TYPE) {
         // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
         if (!verifiedMobileNumber) {
-          throw new ManagedAccountError("A verified phone number is required", 403);
+          throw new ManagedAccountError("A verified phone number is required", 403, "PHONE_NOT_VERIFIED");
         }
         // egov-user checks the OTP against the STORED mobile number, so a
         // citizen who verified a new number first has it written through.
-        if (await getRedis().get(citizenMobileKey(identity)) !== verifiedMobileNumber) {
+        // Compare with what DIGIT stores; only when the search masks it, fall
+        // back to the number this BFF last wrote.
+        const stored = account.mobileNumber?.trim() || "";
+        const hint = citizenMobileHint(verifiedCountryCode, verifiedMobileNumber);
+        const differs = stored && !stored.includes("*")
+          ? stored !== verifiedMobileNumber ||
+            (!!verifiedCountryCode && (account.countryCode?.trim() || "") !== verifiedCountryCode)
+          : await getRedis().get(citizenMobileKey(identity)) !== hint;
+        if (differs) {
+          const changes = {
+            mobileNumber: verifiedMobileNumber,
+            ...(verifiedCountryCode && { countryCode: verifiedCountryCode }),
+          };
           if (identity.linkedUuid) {
-            await writeLinkedAccount(adminToken, account, { mobileNumber: verifiedMobileNumber });
+            await writeLinkedAccount(adminToken, account, changes);
           } else {
-            await updateAccount(adminToken, { ...editable(account), mobileNumber: verifiedMobileNumber });
+            await updateAccount(adminToken, { ...editable(account), ...changes });
           }
-          await getRedis().set(citizenMobileKey(identity), verifiedMobileNumber);
+          await getRedis().set(citizenMobileKey(identity), hint, "EX", CITIZEN_MOBILE_HINT_SECONDS);
         }
         login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
       } else {
