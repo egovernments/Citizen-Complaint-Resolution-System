@@ -6,7 +6,11 @@ evidence from accepted implementation. The completion gate is still open.
 ## Integrated
 
 - Owner branch includes the frozen contract and root fixes through base
-  `94ae613eb`, including the reviewed core providers and citizen account entries.
+  `87558f103`, including reviewed core providers, citizen account entries and
+  onboarding. Owner merge `cd10bb4df` retains `/livez` probes and both domains
+  of deployment configuration. Final combined validation: 648 BFF passes,
+  11 skips, 2 TODOs; clean tsc; all 121 affected static deployment contracts
+  pass. See `../evidence/owner-onboarding-summary.txt`.
 - The earlier digit-ui slug-cache change is included through `7cc754440`.
   Its original verification is carried by the handoff; this review has not
   rerun that suite.

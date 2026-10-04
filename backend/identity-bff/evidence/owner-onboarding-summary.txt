@@ -1,0 +1,24 @@
+Surfaces merged second after onboarding
+
+Tested source: cd10bb4df (owner2873fcb23 + root onboarding base87558f103).
+The merge keeps both BFF probes at /livez and all onboarding deployment
+contracts. Conflicts resolved by retaining live onboarding route states and
+changing provider unlink, removing obsolete BFF bootstrap environment keys,
+and preserving the reviewed Keycloak move of public branding out of BFF.
+
+REDIS_PORT=16390 node backend/identity-bff/node_modules/vitest/vitest.mjs run --root backend/identity-bff
+Exit0: 51 files passed,3 skipped;648 tests passed,11 skipped,2 todo.
+Log: owner-onboarding-full.log.
+
+node backend/identity-bff/node_modules/typescript/bin/tsc --noEmit -p backend/identity-bff/tsconfig.json
+Exit0,no diagnostics. Log: owner-onboarding-tsc.log.
+
+From local-setup/tests:
+PATH="/tmp/identity-surf-bff-static-checks/bin:$PATH" node node_modules/jest/bin/jest.js static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts static/mcp-baseline-packaging.test.ts --runInBand
+Exit0: 3 suites,121 tests passed. Log: owner-onboarding-deployment.log.
+The pre-existing isolated Python venv supplies PyYAML for static checks.
+
+git diff --check: exit0.
+No live stack/deployment/worker deletion performed. Mock-dependent BFF tests
+remain distinct from pending root-owned real persona/O2 and founder no-403
+gates; the legacy worker deletion remains deferred until the latter passes.
