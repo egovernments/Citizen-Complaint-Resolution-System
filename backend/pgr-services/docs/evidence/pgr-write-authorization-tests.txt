@@ -1,0 +1,48 @@
+PGR signup write authorization: executed source evidence
+Base: identity/completion-base8152e6c6f. Provider implementation d2f368a25.
+Owner gateway/seed changes6c0c7dbf6 and406e7d261 consumed; seed SHA2564480a9374295f902b770aced529d19be637a92282b7ecaab5790d38710996bf1.
+No Workspace source edits, no deployment, no live credentials/host requests.
+
+All Maven commands use JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home and mvn -o -q -f backend/pgr-services/pom.xml.
+
+Before: -Dtest=OnboardingProvisionerClientTest#genericInternalPostCannotWriteWithoutSignupAuthorization+genericInternalCacheBustCannotBypassWorkspaceAuthorization test
+2 tests, 2 failures: old generic client dispatched HRMS writes and direct cache-bust without signup authorization.
+
+Affected: -Dtest=OnboardingProvisionerClientTest,OnboardingStepsTest,OnboardingPostgresTest,OnboardingRecoveryTest,OnboardingRepositoryTest -Donboarding.test.jdbc=jdbc:postgresql://127.0.0.1:16432/onboarding_test test
+49 run,48 passed,0 failures/errors,1 skipped optional actual BFF fixture (no onboarding.test.bff).
+Classes: transport11; Steps15; PostgreSQL15 (14 passed,1skip); Recovery5; Repository3.
+
+Transport expansion: -Dtest=OnboardingProvisionerClientTest test
+13/13 pass after canonical-schema/update-action restrictions and positive action matrix.
+Final after owner seed correction: same command,14/14 pass.
+entireCanonicalBaselineIsAcceptedOnlyForTheLeasedTargetTenant sends25 schemas+984 records through actual HTTP transport and verifies1009 writes matched1009 fresh _details calls. This uses local HTTP fixtures and a mocked lease repository; the separate PostgreSQL suite verifies the actual lease query.
+
+Security case mapping:
+- everyRequiredRootRoleIsCheckedFromLiveDetailsNotCachedLogin: missing each required role denied, privileged cached login claims ignored, SUPERUSER alone denied.
+- rolesFromAnotherTenantAndInactiveOrMalformedIdentityFailClosed: foreign root roles; missing uuid/active/roles/type/tenantId/userName; inactive or different identity denied before write.
+- validWritesUseFreshProfileAndRevocationStopsTheNextWrite: live profile used, role removal and revoked token stop subsequent writes despite cached successful login.
+- unavailableAndUnreadableAuthorityNeverWrites:503 and malformed details fail closed.
+- operationScopeAndExactActionAreRequiredBeforeAuthorization: no scope, wrong step/action/query and target mismatch rejected before auth/write.
+- nestedTenantMismatchAndDifferentFounderCannotEscapeScope: foreign nested HRMS role tenant and wrong founder code rejected.
+- expiredLeaseAndLeaseLostDuringAuthBothStopWrites: lease checked before and after live auth.
+- mdmsWritesAreRestrictedToSignupSchemasAndRefreshActions: unknown schema/create and non-refresh update denied.
+- legitimateSignupActionsPassThroughLiveAuthorization: schema, tenant record, key, baseline record, StateInfo refresh, localization, hierarchy/entity/relationship and founder writes accepted only after live auth.
+- explicitReadIsSeparateAndCannotReachWritePaths: search API has no write authority; required empty JSON still rejected.
+- errorEnvelopePreservesDuplicateClassificationAndServerFailuresRetry: unchanged duplicate/retry classification.
+- PostgreSQL signupWriteScopeUsesPersistedTenantStepRestartAndCurrentLease: forged in-memory target/step/restart, wrong token, expired/replaced lease, non-PROVISIONING signup cannot grant scope.
+- Existing PostgreSQL HTTP founder flow updated with fresh trusted provisioner _details fixture, preserving verified email and stable identity assertions.
+- Existing ordered steps, delayed projection retries, terminal/restart and crash recovery remain covered.
+
+HRMS role source: canonical action1750 /egov-hrms/employees/_create grants HRMS_ADMIN and SUPERUSER. Policy requires dedicated HRMS_ADMIN plus MDMS_ADMIN/ACCOUNT_ADMIN/LOC_ADMIN at exact configured state root; no broad-role substitute.
+
+Shared contract agreed on bridge thread onboarding-write-authorization. Workspace owns current-caller Kong writes; read(service,path,body) and OnboardingSteps.records are read-only. Temporary deprecated post is read-only and bustLocalizationCache always denies, retained to compile separate leaf branches until owner combines them. Old successful internal cache-bust test is intentionally replaced by denial coverage; permitted cache-bust transport belongs to WorkspaceWriteClient tests.
+
+Full PGR suite reserved for owner's combined integration. No claim of deployed revocation or live DIGIT authorization.
+
+Local log SHA256:
+security-affected.log: e91f72891874a3a5295f12bba659626d4e94ff6389d5611bafd9adf56b6d5d1e
+security-baseline-after.log: 39d8379348d8979039373859622f7ad14e5b5735ed70bc8b368d199a1ee3e3b0
+security-before.log: 50bf7164afa97dc5049ffc13db6d467f4a6b4d86becb52001783606a555467d3
+security-client-after.log: 39d8379348d8979039373859622f7ad14e5b5735ed70bc8b368d199a1ee3e3b0
+security-client-final.log: 39d8379348d8979039373859622f7ad14e5b5735ed70bc8b368d199a1ee3e3b0
+security-compile.log: b09d6f06ad3374ddc936853b81f33dfe06ba026469e772bf844216d7de2b5ec8

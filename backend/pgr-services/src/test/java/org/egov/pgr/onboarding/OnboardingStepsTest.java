@@ -24,8 +24,9 @@ public class OnboardingStepsTest {
         OnboardingRepository repository=mock(OnboardingRepository.class);when(repository.checkpoint(any(),any(),anyLong())).thenReturn(true);
         progress=new OnboardingProgress(repository,op,UUID.randomUUID());
         rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","mobileNumberRegex","^[6-9][0-9]{9}$","default",true))));
-        when(client.post(anyString(),anyString(),anyMap())).thenAnswer(call->{
-            String service=call.getArgument(0),path=call.getArgument(1);Map<String,Object> body=call.getArgument(2);
+        org.mockito.stubbing.Answer<JsonNode> api=call->{
+            int offset=call.getMethod().getName().equals("write")?1:0;
+            String service=call.getArgument(offset),path=call.getArgument(offset+1);Map<String,Object> body=call.getArgument(offset+2);
             if(service.equals("mdms")) {
                 if(path.contains("schema/v1/_search")) {Map<String,Object> criteria=(Map<String,Object>)body.get("SchemaDefCriteria");String code=((List<String>)criteria.get("codes")).get(0);return mapper.valueToTree(Map.of("SchemaDefinitions",schemas.contains(code)?List.of(Map.of("code",code)):List.of()));}
                 if(path.contains("schema/v1/_create")) {String code=(String)((Map<?,?>)body.get("SchemaDefinition")).get("code");schemas.add(code);writes.add("schema:"+code);return mapper.createObjectNode();}
@@ -46,7 +47,9 @@ public class OnboardingStepsTest {
             writes.add(service+":"+path);
             if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("tenantId","newtown","hierarchyType","ADMIN","boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
-        });
+        };
+        when(client.read(anyString(),anyString(),anyMap())).thenAnswer(api);
+        when(client.write(any(),anyString(),anyString(),anyMap())).thenAnswer(api);
     }
     private void prerequisites(){steps.perform("TENANT_FOUNDATION",signup,op,progress);steps.perform("PLATFORM_BASELINE",signup,op,progress);}
     @Test public void completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy(){
@@ -57,15 +60,15 @@ public class OnboardingStepsTest {
         assertEquals("New Town",rows.get("newtown|tenant.tenants|newtown").path("data").path("name").asText());
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
-        verify(client,times(2)).post(eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
-        verify(client).post(eq("mdms"),anyString(),argThat(b->b.toString().contains("tenantId=in")&&b.toString().contains("MobileNumberValidation")));
-        var order=inOrder(client);order.verify(client).post(eq("hrms"),contains("_search"),anyMap());order.verify(client).post(eq("hrms"),contains("_create"),anyMap());
-        steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).post(eq("hrms"),contains("_create"),anyMap());
+        verify(client,times(2)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
+        verify(client).read(eq("mdms"),anyString(),argThat(b->b.toString().contains("tenantId=in")&&b.toString().contains("MobileNumberValidation")));
+        var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
+        steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
     @Test public void foreignTenantCollisionFailsBeforeEncryptionOrFounder(){
         rows.put("newtown|tenant.tenants|newtown",mapper.valueToTree(Map.of("data",Map.of("code","newtown"))));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));assertEquals("TENANT_TAKEN",failure.getCode());assertFalse(failure.isRetryable());
-        verify(client,never()).post(eq("enc"),anyString(),anyMap());verify(client,never()).post(eq("hrms"),anyString(),anyMap());
+        verify(client,never()).write(any(),eq("enc"),anyString(),anyMap());verify(client,never()).write(any(),eq("hrms"),anyString(),anyMap());
     }
     @Test public void founderValidationIsCorrectableAndDuplicateProjectionIsRetried(){
         prerequisites();createFailure=new OnboardingFailure("INVALID_MOBILE",false);
@@ -80,21 +83,21 @@ public class OnboardingStepsTest {
         assertEquals("Corrected Town",rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("name").asText());assertEquals("unverified@example.test",createdUser.get("emailId"));
     }
     @Test public void foundationTransportFailureIsRetryableAndMissingFounderNeverReplaced(){
-        when(client.post(eq("enc"),anyString(),anyMap())).thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
+        when(client.write(any(),eq("enc"),anyString(),anyMap())).thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
         assertTrue(assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress)).isRetryable());
         op.setFounderDigitUuid("prior-uuid");assertEquals("FOUNDER_NOT_FOUND",assertThrows(OnboardingFailure.class,()->steps.perform("FOUNDER_HRMS",signup,op,progress)).getCode());
-        verify(client,never()).post(eq("hrms"),contains("_create"),anyMap());
+        verify(client,never()).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
     @Test public void asynchronousBoundaryWriteIsNotCheckpointedUntilVisible() throws Exception {
         String path="/boundary-service/boundary-hierarchy-definition/_search";
-        when(client.post(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}"));
+        when(client.read(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}"));
         assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
         assertEquals("STARTED",op.getRecordProgress().get("boundary-hierarchy"));
         prerequisites();assertEquals("DONE",op.getRecordProgress().get("boundary-hierarchy"));
-        verify(client,times(1)).post(eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_create"),anyMap());
+        verify(client,times(1)).write(any(),eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_create"),anyMap());
     }
     @Test public void duplicateSchemaFromUncertainPriorWriteRetriesInsteadOfAbandoningSignup(){
-        when(client.post(eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
+        when(client.write(any(),eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));
         assertTrue(failure.isRetryable());assertEquals("STARTED",op.getRecordProgress().get("schema:tenant.tenants"));
     }
@@ -117,8 +120,9 @@ public class OnboardingStepsTest {
     }
     @Test public void nullBoundaryResultsCreateValidEntityAndEmptyWrapperDoesNotCountAsRelationship() throws Exception {
         final boolean[] made={false,false,false};
-        when(client.post(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
-            String path=call.getArgument(1);Map<String,Object> body=call.getArgument(2);
+        org.mockito.stubbing.Answer<JsonNode> boundary=call->{
+            int offset=call.getMethod().getName().equals("write")?1:0;
+            String path=call.getArgument(offset+1);Map<String,Object> body=call.getArgument(offset+2);
             if(path.contains("boundary-hierarchy-definition")) {
                 if(path.contains("_create")){made[0]=true;return mapper.createObjectNode();}
                 return mapper.readTree(made[0]?"{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}":"{\"BoundaryHierarchy\":null}");
@@ -129,7 +133,9 @@ public class OnboardingStepsTest {
             }
             if(path.contains("_create")) {JsonNode geometry=mapper.valueToTree(body).path("Boundary").path(0).path("geometry");assertEquals("Point",geometry.path("type").asText());assertEquals(mapper.valueToTree(List.of(0,0)),geometry.path("coordinates"));made[1]=true;return mapper.createObjectNode();}
             return mapper.readTree(made[1]?"{\"Boundary\":[{\"code\":\"newtown\"}]}":"{\"Boundary\":null}");
-        });
+        };
+        when(client.read(eq("boundary"),anyString(),anyMap())).thenAnswer(boundary);
+        when(client.write(any(),eq("boundary"),anyString(),anyMap())).thenAnswer(boundary);
         prerequisites();assertTrue(made[0]);assertTrue(made[1]);assertTrue(made[2]);
         assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
@@ -138,7 +144,7 @@ public class OnboardingStepsTest {
     // must be recognised without re-creating it.
     @Test public void existingRelationshipIsFoundByQueryCriteriaWithNullHierarchyType() throws Exception {
         final boolean[] created={false};
-        when(client.post(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
+        when(client.read(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
             String path=call.getArgument(1);
             if(path.contains("boundary-hierarchy-definition")) return mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}");
             if(path.contains("boundary-relationships")) {
@@ -152,6 +158,7 @@ public class OnboardingStepsTest {
         });
         prerequisites();
         assertFalse(created[0]);
+        verify(client,never()).write(any(),eq("boundary"),eq("/boundary-service/boundary-relationships/_create"),anyMap());
         assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
     @Test public void kenyaFallbackUsesCanonicalRuleAndConfiguredOtherCountryRemainsSupported() {
@@ -163,7 +170,7 @@ public class OnboardingStepsTest {
         steps.perform("PLATFORM_BASELINE",signup,op,progress);assertTrue(rows.containsKey("newtown|common-masters.MobileNumberValidation|+251"));
     }
     @Test public void countryTransportFailureNeverUsesCanonicalFallback() {
-        when(client.post(eq("mdms"),contains("/v2/_search"),argThat(body->body.toString().contains("tenantId=in"))))
+        when(client.read(eq("mdms"),contains("/v2/_search"),argThat(body->body.toString().contains("tenantId=in"))))
                 .thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
         assertEquals("PROVISIONING_UNAVAILABLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
         assertFalse(rows.containsKey("newtown|common-masters.MobileNumberValidation|+91"));assertEquals("STARTED",op.getRecordProgress().get("mobile"));
@@ -174,7 +181,7 @@ public class OnboardingStepsTest {
             for(String invalid:List.of("foreign","inactive")) {
                 op.getRecordProgress().clear();
                 Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","ADMIN","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
-                when(client.post(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
+                when(client.read(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
                         "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","ADMIN")),
                         "Boundary",field.equals("Boundary")?List.of(entry):List.of(Map.of("code","newtown")),
                         "TenantBoundary",field.equals("TenantBoundary")?List.of(entry):List.of(Map.of("boundary",List.of(Map.of("code","newtown","boundaryType","ROOT")))))));
