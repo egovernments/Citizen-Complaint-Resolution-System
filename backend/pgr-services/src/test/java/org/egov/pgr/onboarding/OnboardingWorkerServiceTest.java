@@ -143,4 +143,15 @@ public class OnboardingWorkerServiceTest {
         verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), anyLong());
         verify(repository, never()).reopenSignup(any(), anyLong());
     }
+    @Test public void configuredDefaultMakesUnsupportedCountryCorrectable() throws Exception {
+        var properties=new java.util.Properties();
+        try(var input=new org.springframework.core.io.ClassPathResource("application.properties").getInputStream()) {properties.load(input);}
+        String codes=new org.springframework.mock.env.MockEnvironment().resolveRequiredPlaceholders(properties.getProperty("pgr.onboarding.user-correctable-error-codes"));
+        service=new OnboardingWorkerService(repository,codes);
+        when(repository.findOperation(operationId)).thenReturn(Optional.of(OnboardingOperation.builder().id(operationId).signupId(signupId).status("RUNNING").build()));
+        when(repository.finishOperation(eq(operationId),eq(leaseToken),eq("TERMINAL_FAILED"),any(),any(),any(),any(),anyLong())).thenReturn(true);
+        service.fail(operationId,leaseToken,false,"COUNTRY_NOT_SUPPORTED","country","PLATFORM_BASELINE",Collections.emptyList());
+        verify(repository).reopenSignup(eq(signupId),anyLong());verify(repository,never()).settleSignup(any(),any(),any(),anyLong());
+    }
+
 }

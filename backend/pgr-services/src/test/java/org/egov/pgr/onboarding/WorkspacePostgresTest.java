@@ -243,7 +243,7 @@ public class WorkspacePostgresTest {
         jdbc.update("INSERT INTO eg_pgr_onboarding_workspace_name VALUES (?,?)","cafe\u0301\u00a0council","example");
         var flyway=org.flywaydb.core.Flyway.configure().dataSource(source).defaultSchema(schema)
                 .baselineOnMigrate(true).baselineVersion("20261004010000").locations("classpath:db/migration/main").load();
-        assertEquals(1,flyway.migrate().migrationsExecuted);
+        assertEquals(2,flyway.migrate().migrationsExecuted);
         assertEquals("café council",jdbc.queryForObject("SELECT normalized_name FROM eg_pgr_onboarding_workspace_name",String.class));
         assertEquals(0,flyway.migrate().migrationsExecuted);
     }

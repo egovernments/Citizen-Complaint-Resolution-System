@@ -28,7 +28,7 @@ public class OnboardingWorkerService {
     private final Set<String> userCorrectableErrors;
 
     public OnboardingWorkerService(OnboardingRepository repository,
-                                   @Value("${pgr.onboarding.user-correctable-error-codes:TENANT_ADMIN_ACCOUNT_REJECTED}")
+                                   @Value("${pgr.onboarding.user-correctable-error-codes:TENANT_ADMIN_ACCOUNT_REJECTED,COUNTRY_NOT_SUPPORTED}")
                                    String userCorrectableErrors) {
         this.repository = repository;
         this.userCorrectableErrors = Arrays.stream(userCorrectableErrors.split(","))
