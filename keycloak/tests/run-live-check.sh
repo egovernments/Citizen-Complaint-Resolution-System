@@ -70,4 +70,4 @@ export KEYCLOAK_EVENTS_EXPIRATION_SECONDS=${KEYCLOAK_EVENTS_EXPIRATION_SECONDS:-
 
 KC_URL=http://127.0.0.1:$kc_port MAILPIT_URL=http://127.0.0.1:$mail_port \
   KEYCLOAK_CONFIGURE="$keycloak_dir/configure-keycloak.sh" \
-  python3 "$keycloak_dir/tests/live-check.py" "$@"
+  python3 -u "$keycloak_dir/tests/live-check.py" "$@"

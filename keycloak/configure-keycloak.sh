@@ -9,6 +9,16 @@
 set -euo pipefail
 
 readonly IDENTITY_ENV_DIR=${IDENTITY_ENV_DIR:-/opt/digit}
+# Standalone installs keep these values in identity-bff.env. Ansible deployments
+# pass them as task-scoped environment variables so no second secrets file has
+# to be maintained beside the Compose .env.
+if [ -f "$IDENTITY_ENV_DIR/identity-bff.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$IDENTITY_ENV_DIR/identity-bff.env"
+  set +a
+fi
+
 readonly KEYCLOAK_CONTAINER=${KEYCLOAK_CONTAINER:-keycloak}
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config
 readonly BFF_CLIENT=digit-identity-bff
@@ -53,15 +63,6 @@ esac
 # `digit` is the name earlier revisions used before the theme was renamed.
 readonly OWNED_REALM_THEMES="$LOGIN_THEME digit $EMPLOYEE_LOGIN_THEME digit-citizen"
 
-# Standalone installs keep these values in identity-bff.env. Ansible deployments
-# pass them as task-scoped environment variables so no second secrets file has
-# to be maintained beside the Compose .env.
-if [ -f "$IDENTITY_ENV_DIR/identity-bff.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . "$IDENTITY_ENV_DIR/identity-bff.env"
-  set +a
-fi
 readonly REALM=${KEYCLOAK_ORGANIZATION_REALM:?set KEYCLOAK_ORGANIZATION_REALM}
 readonly SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-external}
 readonly MAGIC_LINK_CLIENT=${KEYCLOAK_MAGIC_LINK_CLIENT_ID:-digit-identity-bff-magic-link}
@@ -260,7 +261,12 @@ configure_employee_flow() {
   ensure_execution "$EMPLOYEE_FLOW" auth-username-password-form REQUIRED
   ensure_sub_flow "$EMPLOYEE_FLOW" "$EMPLOYEE_OTP_FLOW" "$EMPLOYEE_OTP_REQUIREMENT" \
     'One-time code for employees who have set one up'
-  local step
+  local step stale_id
+  for stale_id in $(kc get "authentication/flows/$EMPLOYEE_OTP_FLOW/executions" -r "$REALM" |
+    jq -r --argjson declared "$(jq -c '.employeeFlow.otpSteps | keys' "$REALM_CONFIG")" \
+      '.[] | select(.providerId != null) | select(.providerId as $p | $declared | index($p) == null) | .id'); do
+    kc delete "authentication/executions/$stale_id" -r "$REALM" >/dev/null
+  done
   for step in $(jq -r '.employeeFlow.otpSteps | to_entries[] | "\(.key)=\(.value)"' "$REALM_CONFIG"); do
     ensure_execution "$EMPLOYEE_OTP_FLOW" "${step%%=*}" "${step#*=}"
   done
