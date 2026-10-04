@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { withRedisLease } from "../../infrastructure/lease.js";
 import { audit } from "../citizen-otp/audit.js";
 import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
 import { searchAccounts, type DigitAccount } from "../managed-accounts/digit-user-client.js";
@@ -8,6 +7,7 @@ import {
   CITIZEN_USER_TYPE,
   citizenIdentity,
   dropLinkedLogin,
+  findLiveLinkedAccount,
   findManagedAccount,
   isBffManagedAccount,
   linkedIdentity,
@@ -77,30 +77,17 @@ export async function linkedIdentityFor(
 }
 
 /** One writer per DIGIT account, so two subjects cannot both claim it. */
-async function withAccountLease<T>(digitUuid: string, operation: () => Promise<T>): Promise<T> {
-  const key = `${config.cachePrefix}:account-link-lease:${digitUuid}`;
-  const value = randomUUID();
-  const deadline = Date.now() + config.digitUserLeaseWaitMs;
-  while (await getRedis().set(key, value, "EX", config.digitUserLeaseSeconds, "NX") !== "OK") {
-    if (Date.now() >= deadline) throw new AccountLinkError("The account is being linked; retry", 503, "ACCOUNT_LINK_BUSY");
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  try {
-    return await operation();
-  } finally {
-    await getRedis().eval(
-      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-      1, key, value,
-    );
-  }
+function withAccountLease<T>(digitUuid: string, operation: () => Promise<T>): Promise<T> {
+  return withRedisLease(
+    `${config.cachePrefix}:account-link-lease:${digitUuid}`,
+    { ttlSeconds: config.digitUserLeaseSeconds, waitMs: config.digitUserLeaseWaitMs, pollMs: 150 },
+    () => new AccountLinkError("The account is being linked; retry", 503, "ACCOUNT_LINK_BUSY"),
+    operation,
+  );
 }
 
-async function liveAccount(link: AccountLink): Promise<DigitAccount | null> {
-  const accounts = await withDigitAdmin((adminToken) => searchAccounts(adminToken, {
-    uuid: [link.digitUuid], tenantId: link.tenantId, userType: link.userType, active: true,
-  }));
-  return accounts.find((account) => account.uuid === link.digitUuid && account.active &&
-    account.type === link.userType && account.tenantId === link.tenantId) || null;
+function liveAccount(link: AccountLink): Promise<DigitAccount | null> {
+  return withDigitAdmin((adminToken) => findLiveLinkedAccount(adminToken, link));
 }
 
 /** Finds an existing DIGIT employee by username for an admin import. */
@@ -136,16 +123,25 @@ export async function createAccountLink(input: AccountLink & {
     if (owners.some((owner) => owner !== input.subject)) {
       return refuse("The DIGIT account is linked to someone else", 409, "DIGIT_ACCOUNT_LINKED_ELSEWHERE");
     }
-    const { links, blocks } = await linksOf(input.subject);
+    const { blocks } = await linksOf(input.subject);
     if (owners.includes(input.subject)) return { status: "ALREADY_LINKED" as const, account };
-    if (links.some((existing) => existing.userType === link.userType && existing.tenantId === link.tenantId)) {
-      return refuse("This person already has a linked account at the tenant", 409, "SUBJECT_ALREADY_LINKED");
-    }
     if (input.method === "VERIFIED_PHONE" && blocks.some((blocked) => encodeLink(blocked) === value)) {
       return refuse("An administrator removed this link", 409, "CITIZEN_ACCOUNT_LINK_BLOCKED");
     }
-    await updateAccountLinkValues(input.subject, (values) =>
-      values.includes(value) ? null : [...values, value].sort());
+    // The one-link-per-tenant check runs on the values read inside the
+    // subject's attribute lease, together with the write. Two links of the
+    // same subject to different DIGIT accounts hold different uuid leases,
+    // so checking before the write would let both through.
+    let taken = false;
+    await updateAccountLinkValues(input.subject, (values) => {
+      if (values.includes(value)) return null;
+      taken = values.some((existing) => {
+        const parsed = parseLink(existing);
+        return parsed?.userType === link.userType && parsed.tenantId === link.tenantId;
+      });
+      return taken ? null : [...values, value].sort();
+    });
+    if (taken) return refuse("This person already has a linked account at the tenant", 409, "SUBJECT_ALREADY_LINKED");
     // An admin link is the explicit override of an earlier block.
     if (input.method === "ADMIN") {
       await updateAccountLinkBlockValues(input.subject, (values) =>

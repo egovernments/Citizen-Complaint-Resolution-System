@@ -28,6 +28,16 @@ export interface CitizenOtpAuditRecord {
   detail?: string;
 }
 
+/**
+ * The stdout `audit` tag per event family. OTP events keep the tag #2189
+ * shipped, so log filters and alerts on it keep matching.
+ */
+function auditTag(event: CitizenOtpAuditEvent): string {
+  if (event.startsWith("ACCOUNT_LINK_")) return "identity.account_link";
+  if (event === "TENANT_ROUTE_BACKFILL") return "identity.tenant_route";
+  return "identity.citizen_otp";
+}
+
 export function auditStreamKey(): string {
   return `${config.cachePrefix}:identity:audit`;
 }
@@ -40,7 +50,7 @@ export function auditStreamKey(): string {
  */
 export async function audit(record: CitizenOtpAuditRecord): Promise<void> {
   const entry = { at: new Date().toISOString(), ...record };
-  console.info(JSON.stringify({ audit: "identity", ...entry }));
+  console.info(JSON.stringify({ audit: auditTag(record.event), ...entry }));
   const fields = Object.entries(entry).flatMap(([key, value]) =>
     value === undefined ? [] : [key, String(value)]);
   try {

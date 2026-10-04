@@ -28,7 +28,7 @@ import {
   warnAboutInsecureOtpModes,
   type OtpMessage,
 } from "../../src/modules/citizen-otp/otp-sender.js";
-import { auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
+import { audit, auditStreamKey } from "../../src/modules/citizen-otp/audit.js";
 import { syncSubjectTenant } from "../../src/modules/reconciliation/subject-sync.js";
 import { desiredRolesForSubjectTenant } from "../../src/modules/reconciliation/reconciliation-service.js";
 import {
@@ -2797,6 +2797,40 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       });
       expect((await relinked.json()).results[0].status).toBe("LINKED");
       expect((await (await citizenSelect(await signIn("citizen", "legacyb"))).json()).UserRequest.uuid).toBe(b.uuid);
+    });
+
+    it("never gives one person two citizen links at a tenant, even from concurrent requests", async () => {
+      const one = legacy({ userName: "799000901", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000901", roles: ["CITIZEN"] });
+      const two = legacy({ userName: "799000902", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000902", roles: ["CITIZEN"] });
+      await kcAdmin("/users", { id: "race-subject", username: "race.subject", enabled: true });
+      const link = (digitUserUuid: string) => cp("account-links/_link", {
+        links: [{ subject: "race-subject", userType: "CITIZEN", tenantId: "ke", digitUserUuid }],
+      });
+      // Different DIGIT accounts hold different uuid leases, so only the
+      // subject's own lease can keep these two apart.
+      const responses = await Promise.all([link(one.uuid), link(two.uuid)]);
+      const codes = await Promise.all(responses.map(async (response) => {
+        const [result] = (await response.json()).results;
+        return result.code || result.status;
+      }));
+      expect(codes.sort()).toEqual(["LINKED", "SUBJECT_ALREADY_LINKED"]);
+      expect((await (await cp("account-links?subject=race-subject")).json()).links).toHaveLength(1);
+    });
+
+    it("tags OTP audit lines as #2189 shipped them, and links and routes separately", async () => {
+      const info = vi.spyOn(console, "info").mockImplementation(() => {});
+      try {
+        await audit({ event: "OTP_SEND", outcome: "SUCCESS" });
+        await audit({
+          event: "ACCOUNT_LINK_CREATE", outcome: "SUCCESS", subject: "audit-tag-test",
+          digitUserUuid: "audit-tag-test", method: "ADMIN", actor: "test",
+        });
+        await audit({ event: "TENANT_ROUTE_BACKFILL", outcome: "SUCCESS" });
+        expect(info.mock.calls.map(([line]) => JSON.parse(String(line)).audit))
+          .toEqual(["identity.citizen_otp", "identity.account_link", "identity.tenant_route"]);
+      } finally {
+        info.mockRestore();
+      }
     });
 
     it("audits every link, refusal and unlink with its method and actor", async () => {

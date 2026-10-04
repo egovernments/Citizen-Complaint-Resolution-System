@@ -1,4 +1,5 @@
-import { createHash, randomInt, randomUUID } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
+import { withRedisLease } from "../../infrastructure/lease.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { withDigitAdmin } from "./digit-admin-session.js";
@@ -102,13 +103,25 @@ export function isBffManagedAccount(account: DigitAccount): boolean {
     (account.identificationMark || "").startsWith("keycloak-bff:");
 }
 
-/** The linked account, only while it is still active with its type and tenant. */
-async function findLinkedAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
+/**
+ * The linked DIGIT account, only while it is still active with its type and
+ * tenant. The one liveness rule for both linking and signing in.
+ */
+export async function findLiveLinkedAccount(
+  adminToken: string,
+  link: { digitUuid: string; tenantId: string; userType: string },
+): Promise<DigitAccount | null> {
   const accounts = await searchAccounts(adminToken, {
-    uuid: [identity.linkedUuid!], tenantId: identity.tenantId, userType: identity.userType, active: true,
+    uuid: [link.digitUuid], tenantId: link.tenantId, userType: link.userType, active: true,
   });
-  return accounts.find((account) => account.uuid === identity.linkedUuid && account.active &&
-    account.type === identity.userType && account.tenantId === identity.tenantId) || null;
+  return accounts.find((account) => account.uuid === link.digitUuid && account.active &&
+    account.type === link.userType && account.tenantId === link.tenantId) || null;
+}
+
+function findLinkedAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
+  return findLiveLinkedAccount(adminToken, {
+    digitUuid: identity.linkedUuid!, tenantId: identity.tenantId, userType: identity.userType,
+  });
 }
 
 const linkedIdentitiesKey = (issuer: string, subject: string) =>
@@ -278,25 +291,13 @@ const leaseKey = (identity: ManagedIdentity) =>
 export const managedAccountsKey = () => `${config.cachePrefix}:digit-managed-accounts`;
 const indexField = (identity: ManagedIdentity) => `${identity.subject}|${identity.tenantId}`;
 
-async function withUserLease<T>(identity: ManagedIdentity, operation: () => Promise<T>): Promise<T> {
-  const value = randomUUID();
-  const deadline = Date.now() + config.digitUserLeaseWaitMs;
-  while ((await getRedis().set(
-    leaseKey(identity), value, "EX", config.digitUserLeaseSeconds, "NX",
-  )) !== "OK") {
-    if (Date.now() >= deadline) {
-      throw new DigitUnavailableError("DIGIT account is busy; retry");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  try {
-    return await operation();
-  } finally {
-    await getRedis().eval(
-      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-      1, leaseKey(identity), value,
-    );
-  }
+function withUserLease<T>(identity: ManagedIdentity, operation: () => Promise<T>): Promise<T> {
+  return withRedisLease(
+    leaseKey(identity),
+    { ttlSeconds: config.digitUserLeaseSeconds, waitMs: config.digitUserLeaseWaitMs, pollMs: 150 },
+    () => new DigitUnavailableError("DIGIT account is busy; retry"),
+    operation,
+  );
 }
 
 async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
