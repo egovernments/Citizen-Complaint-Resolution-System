@@ -8,13 +8,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { invitationPolicy, renameWorkspace, saveInvitationPolicy, searchWorkspace, type RenameRequest, type WorkspaceView } from './workspace';
+import { invitationPolicy, renameWorkspace, saveInvitationPolicy, searchWorkspace, type Rename, type RenameRequest, type WorkspaceView } from './workspace';
 
 function restoreRequest(key: string, tenantId: string): RenameRequest | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(key) || 'null');
-    return value?.tenantId === tenantId && typeof value.name === 'string' && Number.isInteger(value.version) ? value : null;
+    return value?.tenantId === tenantId && typeof value.name === 'string' && Number.isSafeInteger(value.version) && value.version >= 0
+      ? { tenantId, name: value.name, version: value.version } : null;
   } catch { return null; }
+}
+
+function replayRequest(operation: Rename, tenantId: string): RenameRequest | null {
+  // Accepted Rename.version is immutable request_version + 1, even after setup edits.
+  return operation.tenantId === tenantId && Number.isSafeInteger(operation.version) && operation.version > 0
+    ? { tenantId, name: operation.name, version: operation.version - 1 } : null;
 }
 
 export default function WorkspacePage() {
@@ -40,6 +47,12 @@ export default function WorkspacePage() {
   const canEditPolicy = state.user?.roles.includes('MDMS_ADMIN');
 
   useEffect(() => {
+    request.current = restoreRequest(requestKey, tenantId);
+    acceptedId.current = null;
+    setRetry(!!request.current); setView(null); setName('');
+  }, [requestKey, tenantId]);
+
+  useEffect(() => {
     if (!canAdmin) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -48,7 +61,15 @@ export default function WorkspacePage() {
         const next = await searchWorkspace(tenantId);
         if (!live) return;
         setView(next);
-        if (next.Rename?.status === 'PENDING') timer = setTimeout(refresh, 2000);
+        if (next.Rename?.status === 'PENDING') {
+          const original = replayRequest(next.Rename, tenantId);
+          if (!request.current && original) {
+            request.current = original; acceptedId.current = next.Rename.id;
+            try { sessionStorage.setItem(requestKey, JSON.stringify(original)); } catch { /* memory still works */ }
+          }
+          setRetry(!!request.current);
+          timer = setTimeout(refresh, 2000);
+        }
         else if (next.Rename?.status === 'DONE') {
           // Rename.version is historical; only Workspace.version drives new writes.
           setNotice(`Workspace name updated to ${next.Rename.name}.`);
@@ -66,7 +87,7 @@ export default function WorkspacePage() {
     return () => { live = false; clearTimeout(timer); };
     // Logo is display metadata, not a reason to restart polling.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, canAdmin, poll]);
+  }, [tenantId, requestKey, canAdmin, poll]);
   useEffect(() => {
     if (!canEditPolicy) return;
     let live = true;
@@ -86,13 +107,15 @@ export default function WorkspacePage() {
       acceptedId.current = operation.id;
       if (operation.status === 'DONE') clearRequest();
       setView(value => value ? { ...value, Rename: operation } : value);
-      setRetry(false); setPoll(value => value + 1);
-      setNotice(operation.status === 'PENDING' ? 'Name change accepted. Waiting for publication…' : `Workspace name updated to ${operation.name}.`);
+      setRetry(operation.status === 'PENDING'); setPoll(value => value + 1);
+      setNotice(operation.status === 'PENDING' ? 'Name change is pending. Select Retry name change to continue.' : `Workspace name updated to ${operation.name}.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not request name change.');
-      // Deterministic refusals did not accept this request. Network/503 failures
-      // may have committed; retain the original body for an exact replay.
-      const rejected = e instanceof ApiClientError && [400, 401, 403, 409].includes(e.statusCode);
+      // A token can expire/be denied after acceptance or a partial write. Keep
+      // the original request for explicit replay using a fresh login's token.
+      const authFailure = e instanceof ApiClientError && [401, 403].includes(e.statusCode);
+      if (authFailure) setError('Sign in again with workspace administrator access, then retry this name change.');
+      const rejected = e instanceof ApiClientError && [400, 409].includes(e.statusCode);
       if (rejected) { clearRequest(); setPoll(value => value + 1); }
       else setRetry(true);
     } finally { setBusy(false); }
@@ -106,7 +129,7 @@ export default function WorkspacePage() {
       <p>Current name: {org.name}</p>
       <Input id="workspace-name" value={name} placeholder={org.name} disabled={busy || retry || view?.Rename?.status === 'PENDING'} onChange={e => setName(e.target.value)} />
       <Button disabled={busy || !view || (!retry && (!name.trim() || view.Rename?.status === 'PENDING'))} onClick={() => void rename()}>{retry ? 'Retry name change' : 'Change workspace name'}</Button>
-      {view?.Rename?.status === 'PENDING' && <p role="status">Publishing {view.Rename.name}…{view.Rename.lastErrorCode ? ' Publication is delayed; it will retry automatically.' : ''}</p>}
+      {view?.Rename?.status === 'PENDING' && <p role="status">Name change to {view.Rename.name} is pending. Select Retry name change to continue with your current sign-in.</p>}
     </section>}
     {canEditPolicy && <form className="flex flex-col gap-3" onSubmit={async event => {
       event.preventDefault(); setBusy(true); setError(null);

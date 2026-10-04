@@ -2,9 +2,10 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { apiClient } from '@/api/client';
 import { mdmsService } from '@/api/services/mdms';
 import { completedSteps, renameWorkspace, searchWorkspace, updateWorkspace, saveInvitationPolicy, validateExpiry, WORKSPACE_STEPS, type Workspace } from './workspace';
-vi.mock('@/api/client', () => ({ apiClient: { post: vi.fn(), buildRequestInfo: () => ({ authToken: 'digit-token' }) } }));
+const session = vi.hoisted(() => ({ token: 'digit-token' }));
+vi.mock('@/api/client', () => ({ apiClient: { post: vi.fn(), buildRequestInfo: () => ({ authToken: session.token }) } }));
 vi.mock('@/api/services/mdms', () => ({ mdmsService: { searchRecords: vi.fn(), update: vi.fn() } }));
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => { vi.resetAllMocks(); session.token = 'digit-token'; });
 it('uses direct PGR and the DIGIT RequestInfo token for workspace reads', async () => {
   vi.mocked(apiClient.post).mockResolvedValue({ Workspace: {} });
   await searchWorkspace('acme');
@@ -38,4 +39,15 @@ it('updates only the tenant-owned default MDMS policy and preserves record metad
   vi.mocked(mdmsService.searchRecords).mockResolvedValue([{ ...row, tenantId: 'parent' }, row]);
   await saveInvitationPolicy('acme', 1);
   expect(mdmsService.update).toHaveBeenCalledWith(row, { id: 'default', invitationExpiryHours: 1 });
+});
+
+it('uses the fresh session token while replaying the same persisted rename body', async () => {
+  const original = { tenantId: 'acme', name: 'New Name', version: 3 };
+  vi.mocked(apiClient.post).mockResolvedValue({ Rename: { id: 'r', status: 'PENDING' } });
+  await renameWorkspace(original);
+  session.token = 'fresh-login-token';
+  await renameWorkspace(original);
+  expect(vi.mocked(apiClient.post).mock.calls[0][1]).toEqual({ ...original, RequestInfo: { authToken: 'digit-token' } });
+  expect(vi.mocked(apiClient.post).mock.calls[1][1]).toEqual({ ...original, RequestInfo: { authToken: 'fresh-login-token' } });
+  expect(original).toEqual({ tenantId: 'acme', name: 'New Name', version: 3 });
 });

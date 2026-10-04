@@ -69,7 +69,7 @@ public class WorkspaceGatewayTest {
                             default -> List.of();
                         });
                     }
-                    case "/egov-mdms-service/v2/_update/tenant.tenants" -> {
+                    case "/mdms-v2/v2/_update/tenant.tenants" -> {
                         tenantName=((Map<?,?>)((Map<?,?>)request.get("Mdms")).get("data")).get("name").toString();response=Map.of("ok",true);
                     }
                     case "/localization/messages/v1/_upsert" -> {
@@ -86,13 +86,13 @@ public class WorkspaceGatewayTest {
             exchange.close();
         });server.start();
         String host="http://127.0.0.1:"+server.getAddress().getPort();
-        var env=new MockEnvironment().withProperty("egov.user.host",host).withProperty("egov.mdms.host",host).withProperty("egov.localization.host",host).withProperty("egov.hrms.host",host).withProperty("egov.boundary.host",host)
+        var env=new MockEnvironment().withProperty("egov.user.host",host).withProperty("egov.mdms.host",host).withProperty("egov.localization.host",host).withProperty("egov.hrms.host",host).withProperty("egov.boundary.host",host).withProperty("egov.gateway.host",host)
                 .withProperty("pgr.onboarding.identity-bff.url",host).withProperty("pgr.onboarding.identity-bff.token","onboarding-token")
                 .withProperty("pgr.onboarding.provisioner.username","test").withProperty("pgr.onboarding.provisioner.password","test")
                 .withProperty("pgr.onboarding.provisioner.tenant-id","platform");
         client=new OnboardingProvisionerClient(new RestTemplate(),mapper,env);
         var steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
-        gateway=new WorkspaceGateway(new RestTemplate(),env,client,steps,mapper);
+        gateway=new WorkspaceGateway(new RestTemplate(),env,client,steps,mapper,new WorkspaceWriteClient(new RestTemplate(),env));
     }
     @After public void stop(){if(server!=null)server.stop(0);}
 
@@ -115,16 +115,17 @@ public class WorkspaceGatewayTest {
     }
     @Test public void publisherWritesAuthoritativeMdmsEveryLocaleAndAcceptsEmptyCacheBust() {
         var repository=mock(WorkspaceRepository.class);
-        when(repository.pendingRenames()).thenReturn(List.of("example"));
+        when(repository.find("example",true)).thenReturn(Optional.of(Map.of("tenantId","example")));
         var rename=new LinkedHashMap<String,Object>(Map.of("id",UUID.randomUUID().toString(),"tenantId","example","name","New Name","version",2L,
                 "languages",gateway.languages("example"),"progress",new ArrayList<String>(),"status","PENDING"));
-        when(repository.rename("example",null)).thenReturn(Optional.of(rename));
-        new WorkspaceRenamePublisher(repository,gateway).publishPending();
+        when(repository.rename("example",1L)).thenReturn(Optional.of(rename));
+        new WorkspaceRenamePublisher(repository,gateway).publish(Map.of("tenantId","example","version",1L,"RequestInfo",Map.of("authToken","caller-token")));
         assertEquals("New Name",tenantName);assertEquals(Map.of("en_IN","New Name","hi_IN","New Name"),labels);assertTrue(cacheBusted);
         verify(repository).finishRename(rename);verify(repository,never()).retryRename(any(),any());
         for(Map<String,Object> request:requests) {
             assertFalse(request.get("path").toString().contains("identity"));
-            assertEquals("internal-token",((Map<?,?>)((Map<?,?>)request.get("body")).get("RequestInfo")).get("authToken"));
+            String expected=request.get("path").toString().endsWith("/_search")?"internal-token":"caller-token";
+            assertEquals(expected,((Map<?,?>)((Map<?,?>)request.get("body")).get("RequestInfo")).get("authToken"));
             if(request.get("path").equals("/localization/messages/v1/_upsert")) {
                 Map<?,?> body=(Map<?,?>)request.get("body");assertEquals("example",body.get("tenantId"));
                 assertEquals("TENANT_TENANTS_EXAMPLE",((Map<?,?>)((List<?>)body.get("messages")).get(0)).get("code"));
@@ -133,7 +134,7 @@ public class WorkspaceGatewayTest {
     }
     @Test public void workspaceSearchSuppliesPaginationToStrictHrms() throws Exception {
         // The fixture first proves the previous URL fails without offset.
-        assertThrows(OnboardingFailure.class,()->client.post("hrms","/egov-hrms/employees/_search?tenantId=example&limit=1000",Map.of()));
+        assertThrows(OnboardingFailure.class,()->client.read("hrms","/egov-hrms/employees/_search?tenantId=example&limit=1000",Map.of()));
         workspaceSearch().andExpect(status().isOk()).andExpect(jsonPath("$.Probes.EMPLOYEES").value(true));
         Map<String,Object> hrms=requests.stream().filter(r->r.get("path").equals("/egov-hrms/employees/_search")).reduce((a,b)->b).orElseThrow();
         var query=UriComponentsBuilder.fromUriString("http://hrms/?"+hrms.get("query")).build().getQueryParams();
@@ -151,7 +152,7 @@ public class WorkspaceGatewayTest {
     private org.springframework.test.web.servlet.ResultActions workspaceSearch() throws Exception {
         var repository=mock(WorkspaceRepository.class);
         when(repository.find("example",false)).thenReturn(Optional.of(Map.of("tenantId","example","legacy",false,"status","NOT_STARTED","version",1L)));
-        var mvc=MockMvcBuilders.standaloneSetup(new WorkspaceApiController(new WorkspaceService(repository,gateway,new OnboardingIdentifierService()))).build();
+        var mvc=MockMvcBuilders.standaloneSetup(new WorkspaceApiController(new WorkspaceService(repository,gateway,new OnboardingIdentifierService()),new WorkspaceRenamePublisher(repository,gateway))).build();
         return mvc.perform(post("/v2/onboarding/workspaces/_search").contentType("application/json")
                 .content("{\"tenantId\":\"example\",\"RequestInfo\":{\"authToken\":\"normal-token\"}}"));
     }

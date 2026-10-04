@@ -75,7 +75,7 @@ public class WorkspaceService {
     private Map<String,Object> response(Map<String,Object> row,Map<String,Boolean> probes,Map<String,Object> rename){
         Map<String,Object> result=new LinkedHashMap<>();result.put("Workspace",row);result.put("Probes",probes);result.put("Rename",publicRename(rename));return result;
     }
-    private Map<String,Object> publicRename(Map<String,Object> rename){
+    public static Map<String,Object> publicRename(Map<String,Object> rename){
         if(rename==null)return null;Map<String,Object> result=new LinkedHashMap<>();
         for(String key:List.of("id","tenantId","name","version","status","updatedAt","lastErrorCode"))if(rename.containsKey(key))result.put(key,rename.get(key));return result;
     }
