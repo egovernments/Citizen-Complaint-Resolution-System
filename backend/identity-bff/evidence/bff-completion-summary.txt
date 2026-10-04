@@ -1,16 +1,20 @@
 BFF items 1-4 and 15: implementation handoff
 
 Phone item 13 transferred to surf-phone by root/owner decision.
-This branch retains its prerequisite phone commits; surf-phone owns subsequent
-phone changes and PR63. No claim of independent phone verification here.
+Final phone PR63 (aa89930ce) is merged at bc44c9f23 at owner request.
+Affected phone/HTTP tests passed 70/70 after merging with current core.
+Phone behavior is implemented by surf-phone; this is combined integration evidence.
 
-Executed after integrating core 9bf112ec6 and surfaces 49fd676ba:
+Executed after integrating core 9bf112ec6, surfaces 49fd676ba and phone aa89930ce:
 REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff
-47 files passed, 3 skipped; 553 tests passed, 11 skipped, 4 todo.
+47 files passed, 3 skipped; 557 tests passed, 11 skipped, 4 todo.
 Log: evidence/bff-final-full.log. File concurrency is disabled.
 
 npx --prefix backend/identity-bff tsc --noEmit -p backend/identity-bff/tsconfig.json
 Exit 0, no diagnostics. Log: evidence/bff-final-tsc.log.
+
+Deployment contracts: 111/111 passed, serial Jest (local-setup/tests).
+Command/result and Python prerequisite note: deployment-contract-summary.txt.
 
 git diff --check
 Exit 0.
