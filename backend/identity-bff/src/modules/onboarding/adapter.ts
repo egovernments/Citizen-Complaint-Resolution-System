@@ -87,8 +87,17 @@ export function createOnboardingDependencies(core: CoreOnboardingDependencies): 
       return core.withPersonLease(input.subject, async (lease) => {
         await operationFence.assertHeld();
         await lease.assertHeld();
-        const { binding, created } = await core.ensureActive({ subject: input.subject, tenantId: input.tenantId, uuid: input.digitUuid,
-          actor: { kind: "workload", operationId: input.operationId, restartNo: input.restartNo } });
+        let result: Awaited<ReturnType<CoreOnboardingDependencies["ensureActive"]>>;
+        try {
+          result = await core.ensureActive({ subject: input.subject, tenantId: input.tenantId, uuid: input.digitUuid,
+            actor: { kind: "workload", operationId: input.operationId, restartNo: input.restartNo } });
+        } catch (error) {
+          if (error && typeof error === "object" && "code" in error && error.code === "BINDING_REMOVED") {
+            throw new OnboardingError("BINDING_CONFLICT", "The founder binding was removed and cannot be restored by onboarding");
+          }
+          throw error;
+        }
+        const { binding, created } = result;
         return { binding: { subject: input.subject, tenantId: binding.tenantId, digitUuid: binding.uuid, state: binding.state, boundAt: binding.boundAt }, created };
       });
     },

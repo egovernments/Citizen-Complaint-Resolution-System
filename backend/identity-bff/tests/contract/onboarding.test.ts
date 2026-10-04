@@ -118,4 +118,17 @@ describe("onboarding HTTP contract", () => {
     vi.mocked(dependencies.primitives.binding).mockRejectedValue(new OnboardingError("IDENTITY_BUSY", "Busy"));
     await expectContractError(await post(routes[5].path, { operationId: "operation", restartNo: 0, subject: "founder", tenantId: "tenant", digitUuid: "uuid" }), routes[5], "IDENTITY_BUSY");
   });
+  it("keeps live introspection dependency failures distinct from session absence", async () => {
+    vi.mocked(currentSession).mockResolvedValue({ sessionId: "session", session: { claims: { sub: "founder" } } } as any);
+    vi.mocked(dependencies.identity).mockRejectedValue(new OnboardingError("IDENTITY_UNAVAILABLE", "Keycloak is unavailable"));
+    await expectContractError(await post(routes[0].path), routes[0], "IDENTITY_UNAVAILABLE");
+  });
+  it.each([
+    [2, "ensure"], [3, "lifecycle"], [4, "membership"],
+  ] as const)("returns retryable lock contention for mutation %s", async (index, method) => {
+    vi.mocked(dependencies.primitives[method]).mockRejectedValue(new OnboardingError("IDENTITY_BUSY", "The operation lease was lost"));
+    await expectContractError(await post(routes[index].path, {
+      operationId: "operation", restartNo: 0, tenantId: "tenant", slug: "workspace", name: "Workspace", state: "ACTIVE", subject: "founder",
+    }), routes[index], "IDENTITY_BUSY");
+  });
 });
