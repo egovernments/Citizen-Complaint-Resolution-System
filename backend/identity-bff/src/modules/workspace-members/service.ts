@@ -199,7 +199,12 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
     const active = bindings.find((b) => b.tenantId === tenantId && b.uuid === digitUuid && b.state === "active");
     if (!active) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "The binding is no longer active");
     const denied = () => new BindingError("ADMIN_EMAIL_CHANGE_NOT_ALLOWED", "Use self-service UPDATE_EMAIL or operator global recovery");
-    if (actor === subject || bindings.some((b) => b.tenantId !== tenantId && b.state === "active")) throw denied();
+    // Any live claim elsewhere blocks a tenant admin from redirecting the global
+    // recovery email: an active binding, or an unexpired pending invitation that
+    // the new address could accept (security review 2).
+    const liveElsewhere = (b: (typeof bindings)[number]) => b.tenantId !== tenantId && (b.state === "active"
+      || (b.state === "pending" && (!b.expiresAt || Number(b.expiresAt) > Date.now())));
+    if (actor === subject || bindings.some(liveElsewhere)) throw denied();
     // Re-read live authority under the lease: email is a global recovery identifier.
     const caller = await requireAccountAdmin(actor, tenantId);
     const target = await readDigitAccount(tenantId, digitUuid);
