@@ -1,0 +1,17 @@
+Revision tested: 09734da57
+Date: 2026-10-04
+Dependencies: Redis 7 at 127.0.0.1:16383; mocked Keycloak and DIGIT/MDMS.
+
+Command: REDIS_PORT=16383 npx vitest run --maxWorkers=1
+Exit: 0
+Test Files  37 passed | 1 skipped (38)
+      Tests  432 passed | 5 skipped | 15 todo (452)
+   Start at  21:42:28
+   Duration  16.86s (tests 63%, setup 18%, import 9%, transform 9%, worker 1%)
+
+Command: npx tsc --noEmit
+Exit: 0 (no diagnostics)
+
+Earlier affected run, before shared mobile-validation relocation:
+REDIS_PORT=16383 npx vitest run tests/e2e/phone-proof.test.ts tests/e2e/identity-bff.test.ts -t "phone ownership and proof|citizen phone OTP sign-in" --maxWorkers=1
+Exit: 0; 32 passed, 38 excluded by name filter.

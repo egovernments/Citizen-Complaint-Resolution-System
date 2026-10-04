@@ -298,6 +298,9 @@ export function registerCitizenOtpRoutes(app: express.Application, phoneEffects:
       if (refused) await deleteChallenge(challenge.id);
       else await releaseChallenge(challenge.id);
       if (error instanceof PhoneProofError) return response.status(error.status).json({ code: error.code, error: error.message });
+      if (error instanceof DigitUnavailableError) {
+        return response.status(503).json({ code: "IDENTITY_UNAVAILABLE", error: "Phone verification is temporarily unavailable" });
+      }
       if (!(error instanceof IdentityAdminError)) throw error;
       const disabled = error.status === 403;
       console.warn("Citizen OTP identity resolution failed:", error.message);
