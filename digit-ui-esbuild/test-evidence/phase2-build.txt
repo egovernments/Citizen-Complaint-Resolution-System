@@ -338,7 +338,7 @@ Done in 287ms.
   build/public-dashboard.css       85.5kb
   build/marker-icon-2V3QKKVC.png    1.4kb
   build/layers-2x-TBM42ERR.png      1.2kb
-  build/layers-55W3Q4RM.png         696b 
+  build/layers-55W3Q4RM.png         696b
 
 ⚡ Done in 920ms
 

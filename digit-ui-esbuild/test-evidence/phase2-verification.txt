@@ -12,6 +12,7 @@ Executed from digit-ui-esbuild:
    Exit 0. Both frontend bundles generated. Full output: phase2-build.txt.
    20 warnings from untouched files (duplicate keys and direct eval).
    Generated vendor CSS was restored; build output is not committed.
+   Evidence text normalizes trailing output whitespace.
 3. npm run check-aliases
    Exit 0. 16 aliases checked, 0 broken. Full output: phase2-aliases.txt.
 4. git diff 171e5fe1a --check
