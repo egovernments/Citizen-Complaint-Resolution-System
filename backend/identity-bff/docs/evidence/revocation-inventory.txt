@@ -1,0 +1,36 @@
+Item 10, inventory/revocation provider (PR A), 2026-10-04
+
+Executed from backend/identity-bff, Redis port 16387:
+- npx tsc --noEmit: passed.
+- REDIS_PORT=16387 npx vitest run: 381 passed, 3 skipped (real Keycloak),
+  14 existing todo, 0 failed (before final bindingsFor/docs-only rebase).
+- tests/unit/revocation.test.ts: 21 behavioral cases; rerun after rebase.
+- Existing managed-digit-users + staff-credential integration: 26 passed.
+
+New behavior covered: actual-expiry inventory and holders, external cache
+revocation, validation dependency failure, lease-loss cleanup after mint,
+disable/delete/logout-all/credential-change, re-login after revocation,
+binding removal scope, membership/role/inactive/missing account scope,
+durable token and subject retries, fallback after mint-record crash,
+citizen/locked/deleted-user inventory-loss limits, password initiator
+exemption, shared-token scoped logout, phone-session endings, sequential
+and repeatable tenant fanout, and _select generation rejection.
+
+Session guards landed separately in PR #41. Poller event ingestion,
+retention gaps, deletion audit and readiness are follow-up PR B.
+
+Production integration:
+- cachedLogin -> cachedToken (egov-user /_details validation).
+- cacheLogin -> recordToken + holdToken.
+- holdCachedLogin -> holdToken.
+- dropCachedLogin/dropLinkedLogin -> retry-backed token revoke + forgetToken.
+- releaseCachedLogin/releaseLinkedLogins -> new inventory holders + retry revoke.
+- revokeManagedUserLogins/revokeCitizenLogin and existing logout/citizen unlink
+  retain exported signatures and use these helpers.
+- No production digit-user-token, digit-linked-identities, or old user lease
+  keys remain in managed-account-service.ts.
+
+Limits remain those in contract §6/7: after inventory loss, citizen tokens,
+locked/inactive staff tokens, and tokens for concurrently deleted Keycloak
+users cannot be recovered. Derived fallback never repairs credentials.
+Raw test logs are not committed.

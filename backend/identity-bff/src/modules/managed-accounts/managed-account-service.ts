@@ -1,9 +1,11 @@
+import { cachedToken, recordToken, holdToken, readToken, forgetToken, revokeInventoriedToken, personTokensKey, tokenHoldersKey, parseAccountId, type AccountRef } from "../revocation/inventory.js";
+import { privateRef } from "../citizen-otp/otp-store.js";
 import { accountEntries } from "../sync/state.js";
 import { requireCurrentSession } from "../sessions/session-store.js";
 import { currentPersonLease, withPersonLease } from "../accounts/person-lease.js";
 import { staffCredentialMode, staffLogin } from "../accounts/credential-service.js";
 import { request } from "../organizations/organization-service.js";
-import { createHash, randomInt, randomUUID } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { withDigitAdmin } from "./digit-admin-session.js";
@@ -116,36 +118,25 @@ async function findLinkedAccount(adminToken: string, identity: ManagedIdentity):
     account.type === identity.userType && account.tenantId === identity.tenantId) || null;
 }
 
-const linkedIdentitiesKey = (issuer: string, subject: string) =>
-  `${config.cachePrefix}:digit-linked-identities:${createHash("sha256").update(`${issuer}\n${subject}`).digest("hex")}`;
-
-async function recordLinkedIdentity(identity: ManagedIdentity): Promise<void> {
-  const key = linkedIdentitiesKey(identity.issuer, identity.subject);
-  await getRedis().sadd(key, JSON.stringify({
-    userType: identity.userType, tenantId: identity.tenantId, digitUuid: identity.linkedUuid,
-  }));
-  await getRedis().expire(key, config.identitySessionTtlSeconds);
-}
-
-/** Releases this session's claim on the subject's linked-account tokens. */
+/** Logout inventory includes linked and managed accounts, including citizens. */
 async function releaseLinkedLogins(
-  issuer: string,
-  subject: string,
-  sessionId: string,
+  _issuer: string, subject: string, sessionId: string,
   include: (link: { userType: ManagedUserType; tenantId: string }) => boolean,
 ): Promise<void> {
-  const ref = sessionTokenRef(sessionId);
-  for (const raw of await getRedis().smembers(linkedIdentitiesKey(issuer, subject))) {
-    let link: { userType: ManagedUserType; tenantId: string; digitUuid: string };
-    try {
-      link = JSON.parse(raw);
-    } catch {
-      continue;
+  await withPersonLease(subject, async lease => {
+    for (const id of await getRedis().smembers(personTokensKey(subject))) {
+      const account = parseAccountId(id);
+      const token = await readToken(account);
+      if (!token || token.subject !== subject) continue;
+      const userType = token.kind === "citizen" ? CITIZEN_USER_TYPE : MANAGED_USER_TYPE;
+      if (!include({ userType, tenantId: account.tenantId })) continue;
+      await lease.assertHeld();
+      if (!await getRedis().srem(tokenHoldersKey(account), sessionTokenRef(sessionId))) continue;
+      if (await getRedis().scard(tokenHoldersKey(account))) continue;
+      await revokeInventoriedToken(account, token, "LOGOUT");
+      await forgetToken(lease, account, token.accessToken);
     }
-    if (!include(link)) continue;
-    const identity = linkedIdentity(issuer, subject, link);
-    await withUserLease(identity, () => releaseCachedLogin(identity, ref));
-  }
+  });
 }
 
 /**
@@ -262,14 +253,8 @@ export function oneTimePassword(length = config.digitPasswordLength): string {
  * The session id itself never becomes a Redis key: it is the bearer of the
  * browser session, so it is hashed the same way an opaque credential would be.
  */
-export const sessionTokenRef = (sessionId: string) =>
-  createHash("sha256").update(sessionId).digest("hex").slice(0, 32);
+export const sessionTokenRef = (sessionId: string) => privateRef("session", sessionId);
 
-const tokenKey = (identity: ManagedIdentity) =>
-  `${config.cachePrefix}:digit-user-token:${identity.key}`;
-/** Session refs still relying on this identity's cached token. */
-const tokenHoldersKey = (identity: ManagedIdentity) =>
-  `${config.cachePrefix}:digit-user-token-holders:${identity.key}`;
 /**
  * The `countryCode mobileNumber` this BFF last wrote to a citizen account.
  * Used only when egov-user masks the stored number in search results. It
@@ -280,31 +265,12 @@ const citizenMobileKey = (identity: ManagedIdentity) =>
 const CITIZEN_MOBILE_HINT_SECONDS = 86_400;
 const citizenMobileHint = (countryCode: string | null | undefined, mobileNumber: string) =>
   `${countryCode?.trim() || ""} ${mobileNumber.trim()}`;
-const leaseKey = (identity: ManagedIdentity) =>
-  `${config.cachePrefix}:digit-user-lease:${identity.key}`;
 /** Hash of `${subject}|${tenantId}` -> issuer for every account this BFF provisioned. */
 export const managedAccountsKey = () => `${config.cachePrefix}:digit-managed-accounts`;
 const indexField = (identity: ManagedIdentity) => `${identity.subject}|${identity.tenantId}`;
 
 async function withUserLease<T>(identity: ManagedIdentity, operation: () => Promise<T>): Promise<T> {
-  const value = randomUUID();
-  const deadline = Date.now() + config.digitUserLeaseWaitMs;
-  while ((await getRedis().set(
-    leaseKey(identity), value, "EX", config.digitUserLeaseSeconds, "NX",
-  )) !== "OK") {
-    if (Date.now() >= deadline) {
-      throw new DigitUnavailableError("DIGIT account is busy; retry");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  try {
-    return await operation();
-  } finally {
-    await getRedis().eval(
-      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-      1, leaseKey(identity), value,
-    );
-  }
+  return withPersonLease(identity.subject, operation);
 }
 
 async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
@@ -357,59 +323,71 @@ function editable(account: DigitAccount): DigitAccountInput {
   };
 }
 
+async function inventoriedAccounts(identity: ManagedIdentity): Promise<AccountRef[]> {
+  const matches: AccountRef[] = [];
+  for (const id of await getRedis().smembers(personTokensKey(identity.subject))) {
+    const ref = parseAccountId(id);
+    if (ref.tenantId !== identity.tenantId || (identity.linkedUuid && ref.uuid !== identity.linkedUuid)) continue;
+    const token = await readToken(ref);
+    if (token?.subject === identity.subject && token.kind === (identity.userType === CITIZEN_USER_TYPE ? "citizen" : "staff")) matches.push(ref);
+  }
+  return matches;
+}
+
 async function cachedLogin(identity: ManagedIdentity): Promise<DigitLogin | null> {
-  const raw = await getRedis().get(tokenKey(identity));
-  if (!raw) return null;
-  try {
-    const login = JSON.parse(raw) as DigitLogin;
-    return login.expiresAt - config.digitTokenRefreshSkewSeconds * 1000 > Date.now() ? login : null;
-  } catch {
+  return withPersonLease(identity.subject, async lease => {
+    for (const account of await inventoriedAccounts(identity)) {
+      const cached = await cachedToken(lease, account);
+      if (cached) return cached;
+    }
     return null;
-  }
+  });
 }
-
-/** Records that `ref` is now relying on the cached token. */
-async function holdCachedLogin(identity: ManagedIdentity, ref: string): Promise<void> {
-  await getRedis().sadd(tokenHoldersKey(identity), ref);
-  await getRedis().expire(tokenHoldersKey(identity), config.identitySessionTtlSeconds);
+async function holdCachedLogin(identity: ManagedIdentity, sessionId: string): Promise<void> {
+  await withPersonLease(identity.subject, async lease => {
+    for (const account of await inventoriedAccounts(identity)) await holdToken(lease, account, sessionId);
+  });
 }
-
-async function cacheLogin(
-  identity: ManagedIdentity,
-  ref: string,
-  login: DigitLogin,
-): Promise<void> {
-  const ttl = Math.floor((login.expiresAt - Date.now()) / 1000) - config.digitTokenRefreshSkewSeconds;
-  if (ttl <= 0) return;
-  await getRedis().set(tokenKey(identity), JSON.stringify(login), "EX", ttl);
-  // A new token starts a new holder set: whoever was holding the previous one
-  // re-registers the next time they read the cache.
-  await getRedis().del(tokenHoldersKey(identity));
-  await holdCachedLogin(identity, ref);
+async function cacheLogin(identity: ManagedIdentity, sessionId: string, login: DigitLogin): Promise<void> {
+  await withPersonLease(identity.subject, async lease => {
+    const uuid = login.user.uuid;
+    if (typeof uuid !== "string" || !uuid) {
+      await revokeToken(login.accessToken);
+      throw new DigitUnavailableError("DIGIT login returned no account uuid");
+    }
+    const account = { tenantId: identity.tenantId, uuid };
+    await recordToken(lease, account, login, identity.userType === CITIZEN_USER_TYPE ? "citizen" : "staff");
+    try { await holdToken(lease, account, sessionId); }
+    catch (error) {
+      await revokeInventoriedToken(account, { ...login, subject: identity.subject, mintedAt: Date.now(), kind: identity.userType === CITIZEN_USER_TYPE ? "citizen" : "staff" }, "SESSION_REVOKED");
+      await forgetToken(lease, account, login.accessToken);
+      throw error;
+    }
+  });
 }
-
-/** Revokes and forgets the cached token of this identity, for every session. */
 async function dropCachedLogin(identity: ManagedIdentity): Promise<void> {
-  const raw = await getRedis().getdel(tokenKey(identity));
-  await getRedis().del(tokenHoldersKey(identity));
-  if (!raw) return;
-  try {
-    await revokeToken((JSON.parse(raw) as DigitLogin).accessToken);
-  } catch (error) {
-    console.warn("DIGIT token revocation failed:", (error as Error).message);
-  }
+  await withPersonLease(identity.subject, async lease => {
+    for (const account of await inventoriedAccounts(identity)) {
+      const token = await readToken(account);
+      if (!token) continue;
+      await lease.assertHeld();
+      await revokeInventoriedToken(account, token, "ROLE_CHANGED");
+      await forgetToken(lease, account, token.accessToken);
+    }
+  });
 }
-
-/**
- * Releases one session's claim on the cached token and revokes it only when
- * that was the last claim. A session that never reached this tenant releases
- * nothing, so it cannot cut another session off.
- */
 async function releaseCachedLogin(identity: ManagedIdentity, ref: string): Promise<void> {
-  const removed = await getRedis().srem(tokenHoldersKey(identity), ref);
-  if (removed === 0) return;
-  if (await getRedis().scard(tokenHoldersKey(identity)) > 0) return;
-  await dropCachedLogin(identity);
+  await withPersonLease(identity.subject, async lease => {
+    for (const account of await inventoriedAccounts(identity)) {
+      await lease.assertHeld();
+      if (!await getRedis().srem(tokenHoldersKey(account), ref)) continue;
+      if (await getRedis().scard(tokenHoldersKey(account))) continue;
+      const token = await readToken(account);
+      if (!token) continue;
+      await revokeInventoriedToken(account, token, "LOGOUT");
+      await forgetToken(lease, account, token.accessToken);
+    }
+  });
 }
 
 export interface EnsureResult {
@@ -514,7 +492,7 @@ export async function managedUserLogin(
   verifiedMobileNumber?: string,
   verifiedCountryCode?: string,
 ): Promise<DigitLogin> {
-  if (identity.userType === MANAGED_USER_TYPE && staffCredentialMode() === "derived") {
+  {
     const lease = currentPersonLease();
     if (!lease) {
       return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber, verifiedCountryCode));
@@ -522,7 +500,6 @@ export async function managedUserLogin(
     if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
     await requireCurrentSession(lease, sessionId);
   }
-  const ref = sessionTokenRef(sessionId);
   if (identity.linkedUuid) {
     // Every sign-in re-checks a linked account, cached token or not: a
     // deactivation in HRMS or egov-user must end access at the next _select.
@@ -531,17 +508,16 @@ export async function managedUserLogin(
       await withUserLease(identity, () => dropCachedLogin(identity));
       throw new ManagedAccountError("The linked DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
     }
-    await recordLinkedIdentity(identity);
   }
   const cached = await cachedLogin(identity);
   if (cached) {
-    await holdCachedLogin(identity, ref);
+    await holdCachedLogin(identity, sessionId);
     return cached;
   }
   return withUserLease(identity, async () => {
     const again = await cachedLogin(identity);
     if (again) {
-      await holdCachedLogin(identity, ref);
+      await holdCachedLogin(identity, sessionId);
       return again;
     }
     return withDigitAdmin(async (adminToken) => {
@@ -607,7 +583,7 @@ export async function managedUserLogin(
           username: account.userName, password, tenantId: account.tenantId, userType: identity.userType,
         });
       }
-      await cacheLogin(identity, ref, login);
+      await cacheLogin(identity, sessionId, login);
       return login;
     });
   });
