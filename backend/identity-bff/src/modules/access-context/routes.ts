@@ -10,7 +10,7 @@ import {
   managedUserLogin,
 } from "../managed-accounts/managed-account-service.js";
 import type { DigitLogin } from "../managed-accounts/digit-user-client.js";
-import { parseSurface } from "../authentication/surfaces.js";
+import { parseSurface, surfaceContextKind, surfaceConfig } from "../authentication/surfaces.js";
 import { mobileValidationForRoute } from "../branding/tenant-branding.js";
 import {
   CitizenContextError,
@@ -131,7 +131,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
       return send(response, "UNTRUSTED_ORIGIN", "Untrusted request origin");
     }
     const surface = parseSurface(request.body?.surface ?? request.query.surface);
-    if (!surface || surface === "citizen") {
+    if (!surface || surfaceContextKind(surface) === "citizen") {
       return send(response, "UNSUPPORTED_SURFACE", "Unsupported sign-in surface");
     }
     const current = await currentSession(request.headers.cookie, surface);
@@ -144,7 +144,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
     if (!tenantId) return send(response, "INVALID_REQUEST", "tenantId is required");
     // An employee session is bound to the tenant of the route it signed in
     // on; it can never select another tenant, whatever its memberships.
-    if (surface === "employee" && current.session.boundTenant?.tenantId !== tenantId) {
+    if (surfaceContextKind(surface) === "employee" && current.session.boundTenant?.tenantId !== tenantId) {
       return send(response, "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
     }
 
@@ -153,7 +153,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
       // An existing DIGIT employee linked by an admin (#2167) signs in to that
       // account as it is: its own uuid, roles and history, re-checked active
       // on every _select. The link itself authorizes the bound tenant.
-      const linked = surface === "employee"
+      const linked = surfaceContextKind(surface) === "employee"
         ? await linkedIdentityFor(subject, EMPLOYEE_USER_TYPE, tenantId)
         : null;
       if (linked) {
@@ -172,7 +172,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
       // membership is what authorizes the switch.
       const selected = await resolveTenantOption(subject, tenantId);
       if (!selected) {
-        return surface === "employee"
+        return surfaceContextKind(surface) === "employee"
           ? send(response, "EMPLOYEE_ACCOUNT_NOT_LINKED", "Tenant context is not available")
           : send(response, "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
       }
@@ -212,16 +212,17 @@ export function registerAccessContextRoutes(app: express.Application): void {
       return send(response, "UNTRUSTED_ORIGIN", "Untrusted request origin");
     }
     const requestedSurface = request.body?.surface ?? request.query.surface;
-    if (requestedSurface !== undefined && requestedSurface !== "citizen") {
+    const surface = parseSurface(requestedSurface ?? "citizen");
+    if (!surface || surfaceContextKind(surface) !== "citizen") {
       return send(response, "UNSUPPORTED_SURFACE", "Unsupported sign-in surface");
     }
-    const current = await currentSession(request.headers.cookie, "citizen");
+    const current = await currentSession(request.headers.cookie, surface);
     if (!current) {
       return send(response, "SESSION_REQUIRED", "Invalid or missing identity session");
     }
     const { claims, boundTenant } = current.session;
-    if (!boundTenant || claims.azp !== config.keycloakCitizenClientId ||
-        current.session.oidcClientId !== config.keycloakCitizenClientId) {
+    if (!boundTenant || claims.azp !== surfaceConfig(surface).clientId ||
+        current.session.oidcClientId !== surfaceConfig(surface).clientId) {
       return send(response, "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");
     }
     // A DIGIT citizen account is keyed by a verified mobile number. How a
