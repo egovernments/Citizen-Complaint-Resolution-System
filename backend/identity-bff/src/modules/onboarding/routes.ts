@@ -61,7 +61,7 @@ function founder(body: Record<string, unknown>) {
   return { ...attempt(body), subject: string(body.subject, "subject"), tenantId: string(body.tenantId, "tenantId") };
 }
 function identifiers(body: Record<string, unknown>): Identifier[] {
-  const items = body.identifiers ?? [body];
+  const items = body.identifiers === undefined ? [body] : body.identifiers;
   if (!Array.isArray(items) || items.length < 1 || items.length > 20) {
     throw new OnboardingError("INVALID_REQUEST", "identifiers must contain 1 to 20 items");
   }

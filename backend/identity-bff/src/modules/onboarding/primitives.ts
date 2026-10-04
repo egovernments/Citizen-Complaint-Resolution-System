@@ -140,6 +140,11 @@ export class OnboardingPrimitives {
     if (authority.pending?.value.restartNo === input.restartNo && authority.pending.value.operationHash !== hash) {
       throw new OnboardingError("OPERATION_CONFLICT", "The pending attempt payload has changed");
     }
+    if (authority.pending?.value.restartNo === input.restartNo && previous && input.restartNo > restartOf(previous) &&
+        lifecycleOf(authority.pending.owner) === "FAILED" &&
+        organizationAttribute(authority.pending.owner, "lifecycleRestartNo") === String(input.restartNo)) {
+      throw new OnboardingError("LIFECYCLE_CONFLICT", "The pending attempt has failed; advance restartNo before ensuring again");
+    }
     if (previous && input.restartNo === restartOf(previous)) {
       if (organizationAttribute(previous, "operationHash") !== hash) {
         throw new OnboardingError("OPERATION_CONFLICT", "The attempt payload has changed");
@@ -218,12 +223,19 @@ export class OnboardingPrimitives {
 
   lifecycle(input: Attempt & { state: "ACTIVE" | "FAILED" }) {
     return withOnboardingLock("op", input.operationId, async (fence) => {
-      const org = requireAttempt(operationAuthority(await this.dependencies.organizations(), input.operationId), input);
+      const authority = operationAuthority(await this.dependencies.organizations(), input.operationId);
+      // A replacement can fail permanently after staging but before create.
+      // Record that terminal decision on its staging record without inventing
+      // an Organization for the pending restart or dropping its high-water mark.
+      const pendingFailure = input.state === "FAILED" && authority.pending &&
+        authority.restartNo === input.restartNo && input.restartNo > restartOf(authority.org!) &&
+        authority.pending.value.restartNo === input.restartNo;
+      const org = pendingFailure ? authority.pending!.owner : requireAttempt(authority, input);
       const lifecycle = lifecycleOf(org);
       if (lifecycle !== "PROVISIONING" && lifecycle !== input.state) {
         throw new OnboardingError("LIFECYCLE_CONFLICT", "The lifecycle decision cannot change");
       }
-      if (lifecycle !== input.state) {
+      if (lifecycle !== input.state || organizationAttribute(org, "lifecycleRestartNo") !== String(input.restartNo)) {
         await fence.assertHeld();
         org.attributes = { ...org.attributes, "digit.lifecycle": [input.state], "digit.lifecycleRestartNo": [String(input.restartNo)] };
         await this.dependencies.update(org);

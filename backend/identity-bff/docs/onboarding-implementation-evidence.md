@@ -1,24 +1,26 @@
-# Onboarding primitives: staged implementation evidence
+# Onboarding primitives: implementation evidence
 
-Item 11 remains in progress. This branch contains the attempt service, raw
-Organization reader, HTTP route module, core adapter and lifecycle visibility
-filter. The new route module is not yet registered in the production app.
-The existing BFF worker and its tests remain in place.
+The production app registers all six onboarding primitives with the dedicated
+workload credential, real core binding store and real revocation publisher.
+Item 11 remains in progress only for the coordinated worker removal. The
+existing BFF worker and all six worker tests remain in place.
 
 ## Validation
 
-After merging owner branch `identity/lane-d` at `128da0b06`, tested tree
-`d99cd6012`:
+After merging owner `6fc1daa3c`, core `2743ddf82`, and isolated inventory provider
+`86242e4ee710a4e746185e501c3227c7052d25da`, the production integration changes
+were tested on 2026-10-04:
 
-- `REDIS_PORT=16389 npx vitest run`: 23 files passed, one skipped;
-  316 tests passed, two skipped, 12 todo. Exit 0.
+- `REDIS_PORT=16389 npx vitest run`: 36 files passed, one skipped;
+  467 tests passed, five skipped, 13 todo. Exit 0.
 - `npx tsc --noEmit`: exit 0.
-- Local logs: `artifacts/onboarding/owner-merge-full-tests.log` and
-  `artifacts/onboarding/owner-merge-typecheck.log`.
+- Committed result: `docs/evidence/onboarding-production-tests.txt`.
+- Local full logs: `artifacts/onboarding/production-full-tests.log` and
+  `artifacts/onboarding/production-typecheck.log`.
 
-The skipped real-Keycloak tests and remaining contract todos are not claimed
-as verified. These results do not establish production route integration or
-completion of the PGR cutover.
+Skipped real-Keycloak checks and remaining contract todos are not claimed as
+verified. Tests use real Redis and real core services against HTTP Keycloak and
+DIGIT fixtures. These results do not establish completion of the PGR cutover.
 
 ## New executed coverage
 
@@ -30,8 +32,21 @@ completion of the PGR cutover.
 | `tests/unit/onboarding-adapter.test.ts` | Real shared person lease around membership/binding adapter; workload actor signature; no credential writes by adapter; removed-binding error mapping; repeated revocation publication; cache invalidation; live emailVerified; single Organization scan per identifier batch |
 | `tests/contract/onboarding.test.ts` | Isolated real Express routes; dedicated bearer auth; temporary read credential; malformed requests; response shapes; shared error envelope; busy Retry-After; introspection outage distinguished from missing session |
 
-Binding store and revocation publisher are test doubles in the adapter suite.
-They must be replaced with the actual core providers for integration acceptance.
+The adapter unit suite uses controlled core ports. The separate
+`tests/e2e/onboarding-bindings.integration.test.ts` executes the production
+provider wiring: real core store, writer, authority, person/UUID leases and
+revocation publisher. It checks same-UUID reuse, different-UUID conflict,
+concurrent UUID ownership, removed-binding rejection, deferred credentials,
+and FAILED session revocation including publication repair on repeats.
+
+`tests/unit/onboarding-primitives.test.ts` additionally executes durable
+replacement staging at five interruption boundaries, permanent create collision,
+pending FAILED settlement, revocation publication retry, unchanged terminal
+ensure rejection, changed-payload conflict, higher-restart recovery with original
+and changed slugs, and lower-attempt fences. The approved decisions are recorded
+in `identity-bff.md` §9.3. The raw reader fails closed on corrupt or ambiguous
+attempt authority. `onboarding-tenant-inventory.test.ts` tests pagination and
+inclusion of disabled, failed, provisioning and superseded tenant mappings.
 
 ## Worker test replacement agreement
 
@@ -50,13 +65,8 @@ coordinates the same-PR switch-over.
 
 ## Remaining work
 
-1. Integrate core `bindings/store.ts` `ensureActive` and
-   `revocation/index.ts` `revokeTenantMembers`; these providers are absent from
-   the current owner branch.
-2. Register the prepared routes, replace the old control-plane handlers and
-   auth, flip their contract states, and migrate old route fixtures/tests.
-3. Run binding uniqueness/deferred-credential and lifecycle revocation
-   integration checks against the real core providers.
-4. After PGR replacement readiness, remove the BFF worker, tenant foundation,
-   provisioner credential/config and startup hook in a separate coordinated
-   commit; supply the final executed replacement map.
+After PGR replacement readiness, remove the BFF worker, tenant foundation,
+provisioner credential/config and startup hook in a separate coordinated commit.
+Retain sign-in resilience coverage, attach the final executed replacement map,
+and rerun the complete BFF suite and typecheck. Owner controls deployment files;
+PGR owns its worker and replacement test evidence.

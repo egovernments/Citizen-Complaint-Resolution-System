@@ -127,6 +127,37 @@ describe("onboarding primitives with Redis locks", () => {
     expect(deps.revoke).toHaveBeenLastCalledWith(input.tenantId);
   });
 
+  it.each(["workspace-one", "newer-slug"])("settles a permanent replacement-create collision, fences it and resumes at higher restart with %s", async (nextSlug) => {
+    const first = await service.ensure(input);
+    const create = vi.mocked(deps.create).getMockImplementation()!;
+    vi.mocked(deps.create).mockRejectedValue(Object.assign(new Error("Name collision"), { code: "SLUG_TAKEN" }));
+    const pending = { ...input, restartNo: 1, slug: "new-slug" };
+    await expect(service.ensure(pending)).rejects.toMatchObject({ code: "SLUG_TAKEN" });
+    vi.mocked(deps.revoke).mockRejectedValueOnce(new Error("publication interrupted"));
+    await expect(service.lifecycle({ ...pending, state: "FAILED" })).rejects.toThrow("publication interrupted");
+    expect(records.get(first.organization.id)?.attributes).toMatchObject({
+      "digit.lifecycle": ["FAILED"], "digit.lifecycleRestartNo": ["1"],
+      "digit.restartNo": ["0"], "digit.replacementPending": [expect.any(String)],
+    });
+    const settled = await service.lifecycle({ ...pending, state: "FAILED" });
+    expect(settled.organization).toMatchObject({ id: first.organization.id, lifecycle: "FAILED", restartNo: 1 });
+    expect(await service.lifecycle({ ...pending, state: "FAILED" })).toEqual(settled);
+    expect(deps.revoke).toHaveBeenCalledTimes(4);
+    await expect(service.ensure(pending)).rejects.toMatchObject({ code: "LIFECYCLE_CONFLICT" });
+    await expect(service.ensure({ ...pending, name: "Changed" })).rejects.toMatchObject({ code: "OPERATION_CONFLICT" });
+    for (const call of [() => service.ensure(input), () => service.lifecycle({ ...input, state: "FAILED" }),
+      () => service.membership(founder), () => service.binding(founder)]) {
+      await expect(call()).rejects.toMatchObject({ code: "ATTEMPT_STALE" });
+    }
+    for (const call of [() => service.lifecycle({ ...pending, state: "ACTIVE" }),
+      () => service.membership({ ...founder, restartNo: 1 }), () => service.binding({ ...founder, restartNo: 1 })]) {
+      await expect(call()).rejects.toMatchObject({ code: "OPERATION_NOT_FOUND" });
+    }
+    vi.mocked(deps.create).mockImplementation(create);
+    expect(await service.ensure({ ...pending, restartNo: 2, slug: nextSlug })).toMatchObject({ organization: { lifecycle: "PROVISIONING", restartNo: 2 } });
+    expect(records.get(first.organization.id)?.attributes?.["digit.replacementPending"]).toBeUndefined();
+  });
+
   it("validates ownership and founder existence before membership or binding", async () => {
     await service.ensure(input);
     await expect(service.membership({ ...founder, tenantId: "other" })).rejects.toMatchObject({ code: "OPERATION_NOT_FOUND" });
@@ -195,7 +226,7 @@ describe("onboarding primitives with Redis locks", () => {
       () => service.membership(founder), () => service.binding(founder)]) {
       await expect(call()).rejects.toMatchObject({ code: "ATTEMPT_STALE" });
     }
-    for (const call of [() => service.lifecycle({ ...next, state: "FAILED" }),
+    for (const call of [() => service.lifecycle({ ...next, state: "ACTIVE" }),
       () => service.membership({ ...founder, restartNo: 1 }), () => service.binding({ ...founder, restartNo: 1 })]) {
       await expect(call()).rejects.toMatchObject({ code: "OPERATION_NOT_FOUND" });
     }

@@ -133,12 +133,12 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/workspace-members/_updateEmail` | session | planned | 9 |
 | POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
 | POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
-| POST | `/internal/identity/v1/sessions/_introspect` | introspection | changing | 11 |
-| POST | `/internal/identity/v1/identifiers/_check` | introspection | changing | 11 |
-| POST | `/internal/identity/v1/organizations/_ensure` | workload | changing | 11 |
-| POST | `/internal/identity/v1/organizations/_lifecycle` | workload | planned | 11 |
-| POST | `/internal/identity/v1/memberships/_ensure` | workload | changing | 11, 14 |
-| POST | `/internal/identity/v1/bindings/_ensure` | workload | planned | 8, 11 |
+| POST | `/internal/identity/v1/sessions/_introspect` | introspection | live | 11 |
+| POST | `/internal/identity/v1/identifiers/_check` | introspection | live | 11 |
+| POST | `/internal/identity/v1/organizations/_ensure` | workload | live | 11 |
+| POST | `/internal/identity/v1/organizations/_lifecycle` | workload | live | 11 |
+| POST | `/internal/identity/v1/memberships/_ensure` | workload | live | 11, 14 |
+| POST | `/internal/identity/v1/bindings/_ensure` | workload | live | 8, 11 |
 | POST | `/internal/identity/v1/reconciliation/_run` | operator | changing | 12 |
 | POST | `/internal/identity/v1/account-links/_link` | operator | changing | 14 |
 | POST | `/internal/identity/v1/account-links/_unlink` | operator | changing | 14 |
@@ -945,8 +945,15 @@ attempt with a different hash returns `OPERATION_CONFLICT`.
 
 The pending tenant and slug remain reserved against other operations. `_ensure`
 replays the old Organization's failure and tenant-member revocation before
-creating the replacement. Other primitives for the pending attempt return
-`OPERATION_NOT_FOUND` until its replacement Organization exists. Once created,
+creating the replacement. A matching pending `_lifecycle FAILED` can settle a
+permanent create failure on the staging Organization: it stores
+`digit.lifecycleRestartNo`, replays tenant-member revocation on every call, and
+retains the pending high-water mark. After this terminal decision, `_ensure`
+with the same restart and hash returns `LIFECYCLE_CONFLICT`; a changed hash
+remains `OPERATION_CONFLICT`. A higher restart may resume with either the
+original or a changed slug. `ACTIVE`, membership and binding calls for
+the pending attempt return `OPERATION_NOT_FOUND` until its replacement
+Organization exists. Once created,
 the higher-attempt Organization is authoritative even if the old marker has not
 yet been cleared. A retry finishes `digit.supersededBy` and removes the marker;
 it does not revoke a replacement that has since become `ACTIVE`.

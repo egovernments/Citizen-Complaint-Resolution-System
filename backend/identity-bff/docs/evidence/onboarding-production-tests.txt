@@ -1,0 +1,14 @@
+2026-10-04 production onboarding integration (before coordinated worker removal)
+Dependencies merged: owner 6fc1daa3c, core 2743ddf82, raw inventory 86242e4ee710a4e746185e501c3227c7052d25da
+Original provider 6c2e0d98c preserved in ancestry.
+
+$ REDIS_PORT=16389 npx vitest run
+Test Files  36 passed | 1 skipped (37)
+Tests       467 passed | 5 skipped | 13 todo (485)
+Exit 0
+
+$ npx tsc --noEmit
+Exit 0
+
+Real Redis; real core binding and revocation services; HTTP Keycloak/DIGIT fixtures.
+Skipped tests and todo cases are not verified.

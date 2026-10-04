@@ -84,7 +84,7 @@ describe("onboarding HTTP contract", () => {
     const response = await post(routes[1].path, { identifiers });
     expect(await response.json()).toEqual({ results: [{ ...identifiers[0], available: true }, { ...identifiers[1], available: false }] });
     expect(await (await post(routes[1].path, identifiers[0])).json()).toEqual({ ...identifiers[0], available: true });
-    for (const invalid of [[], Array(21).fill(identifiers[0]), [{ type: "UNKNOWN", value: "x" }], [null]]) {
+    for (const invalid of [null, [], Array(21).fill(identifiers[0]), [{ type: "UNKNOWN", value: "x" }], [null]]) {
       await expectContractError(await post(routes[1].path, { identifiers: invalid }), routes[1], "INVALID_REQUEST");
     }
   });

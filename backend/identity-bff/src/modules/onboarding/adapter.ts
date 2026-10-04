@@ -41,7 +41,10 @@ export async function checkOnboardingIdentifiers(identifiers: Identifier[]) {
       return organizationAttribute(org, "rootTenantId") === value;
     });
     if (available && type === "TENANT_ID") {
-      if (!tenants.has(value)) tenants.set(value, await isActiveDigitTenant(value));
+      if (!tenants.has(value)) {
+        try { tenants.set(value, await isActiveDigitTenant(value)); }
+        catch { throw new OnboardingError("IDENTITY_UNAVAILABLE", "Identifier availability could not be checked"); }
+      }
       available = !tenants.get(value);
     }
     results.push({ ...identifier, available });

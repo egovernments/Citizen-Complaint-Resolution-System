@@ -108,4 +108,11 @@ describe("onboarding core adapter with the shared person lease", () => {
     expect(requests.filter((request) => request.path.endsWith("/organizations"))).toHaveLength(1);
     expect(requests.filter((request) => request.path === "/search")).toHaveLength(1);
   });
+  it("reports failed MDMS availability checks with the identifiers contract error", async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => url === config.digitMdmsSearchUrl
+      ? new Response(null, { status: 503 }) : original(url, init));
+    await expect(checkOnboardingIdentifiers([{ type: "TENANT_ID", value: "tenant" }]))
+      .rejects.toMatchObject({ code: "IDENTITY_UNAVAILABLE", status: 503 });
+  });
 });
