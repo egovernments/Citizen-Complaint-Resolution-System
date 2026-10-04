@@ -1,0 +1,16 @@
+
+ RUN  v4.1.5 /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-configurator/configurator
+
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+
+ Test Files  12 passed (12)
+      Tests  103 passed (103)
+   Start at  21:21:48
+   Duration  8.77s (transform 420ms, setup 430ms, import 986ms, tests 2.68s, environment 3.16s)

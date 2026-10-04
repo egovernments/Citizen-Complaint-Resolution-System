@@ -146,7 +146,7 @@ export function EmployeeDialog({
     if (!name.trim()) next.name = 'Enter their full name.';
     if (!mobile.trim()) next.mobile = 'Enter their mobile number.';
     else if (!options.mobilePattern.test(mobile.trim())) next.mobile = 'That number doesn’t match this workspace’s mobile format.';
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email, or leave it empty.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'Enter a valid email to invite this employee.';
     if (!departments.length) next.departments = 'Choose at least one department.';
     if (!designation) next.designation = 'Choose a designation.';
     if (!jurisdictions.length) next.jurisdictions = 'Choose where they can act.';
