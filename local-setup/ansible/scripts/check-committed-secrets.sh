@@ -49,6 +49,7 @@ SECRET_KEYS = {
   "keycloak_admin_password","keycloak_db_password","keycloak_google_client_secret",
   "keycloak_github_client_secret","identity_digit_admin_password",
   "identity_digit_provisioner_password","identity_smtp_password",
+  "pgr_digit_provisioner_password","pgr_digit_oauth_client_secret",
   "token_exchange_system_password","bootstrap_password","grafana_admin_password",
   "novu_jwt_secret","novu_store_encryption_key","novu_secret_key","novu_mongo_password",
   # basic-auth passwords introduced by the security rework, and secrets this
