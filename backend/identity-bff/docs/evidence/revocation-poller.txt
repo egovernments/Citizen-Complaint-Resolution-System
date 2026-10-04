@@ -1,0 +1,53 @@
+Item 10, event poller and retry workers (PR B), 2026-10-04
+
+Executed from backend/identity-bff on Redis 16387:
+- npx tsc --noEmit: passed.
+- REDIS_PORT=16387 npx vitest run: 415 passed, 7 opt-in real-Keycloak
+  cases skipped, 15 existing todo, 0 failed.
+- Bootstrap review: revocation.test.ts + keycloak-poller.test.ts: 39/39 passed.
+- Fallback review: revocation.test.ts: 25/25 passed (4 added cases).
+- REDIS_PORT=16387 node tests/fixtures/keycloak/run.mjs
+  tests/e2e/keycloak-poller.real.test.ts: 2/2 passed against stock 26.7.3.
+
+Acceptance mapping (tests/unit/keycloak-poller.test.ts unless noted):
+- steady-state revocation (revocation.test.ts): person/account 'fallback false
+  cleans up new inventory and sessions without grants on steady passes';
+  person/account 'fallback false survives a durable job retry'. These verify
+  cleanup, repeated empty passes, newly minted inventory, the default true
+  behavior and the persisted false option after failure.
+- first deployment: 'missing checkpoints bootstrap at now without revocation
+  or historical replay, including the next overlap'. Fenced bootstrap logs
+  its start time and retains startedAt as the overlap lower bound.
+- bootstrap fencing: 'lease loss prevents missing-checkpoint bootstrap'.
+- disable/logout/credential during _select: each '* during _select revokes
+  the recorded mint after its lease finishes' (3 cases).
+- during refresh: each '* racing session refresh leaves no recreated session'
+  (3 cases); prior session-revocation.test.ts also checks deletion mid-refresh.
+- retention gap: 'checkpoint outside retention conservatively revokes known
+  sessions and tokens'.
+- duplicate/out-of-order: 'dedupes (time,id), processes late out-of-order
+  events, and overlaps windows'.
+- effects before checkpoint: 'does not advance past an unrecorded effect;
+  a retry replays it', plus 'lease loss after an effect leaves it unseen'.
+- deletion audit: 'writes deletion audit before scheduling revocation';
+  real test 'audits a real user deletion before queued token revocation'.
+- self password exception/admin reset: 'self password change matches code_id
+  + clientId, ignores the UPDATE_PASSWORD twin'; mismatched-client test.
+- readiness: 'readiness reports missing checkpoints, lag, and successful
+  empty polls'. /readyz route wiring belongs to surf-bff.
+- retry scheduling: 'the next scheduled worker tick completes a previously
+  failed revocation'. Worker runs independently of event polling failures.
+- unmapped Organization delete: 'unmapped Organization deletion waits for a
+  durable reconcile request before checkpoint'. Forced-pass account effects
+  belong to core-sync.
+- actual Admin API events: real test consumes disable, logout-all and password
+  reset; re-enable permits a new BFF login. No custom Keycloak extensions.
+
+startKeycloakEventPoller() starts polling plus an independent revocation retry
+schedule. Its returned function stops both schedules. surf-bff should call it
+once; it does not also need to call startRevocationWorkers(). No server.ts edit.
+
+Ports are removed; account parsing uses sync/state.ts accountEntries.
+The event mapper keeps no event representations or secrets in Redis/logs.
+Deletion audit stores only subject, event id, type and timestamp.
+Raw execution logs are not committed.

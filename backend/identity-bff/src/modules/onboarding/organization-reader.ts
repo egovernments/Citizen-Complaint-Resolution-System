@@ -36,6 +36,14 @@ export interface RawTenantOrganization {
   enabled: boolean;
 }
 
+/** Inventory for sync/revocation; visibility filtering must never hide a tenant here. */
+export async function listOrganizationTenants(): Promise<string[]> {
+  return [...new Set((await readOnboardingOrganizations()).flatMap((org) => {
+    const tenantId = organizationAttribute(org, "rootTenantId");
+    return tenantId ? [tenantId] : [];
+  }))].sort();
+}
+
 export async function readOrganizationByTenant(tenantId: string): Promise<RawTenantOrganization | null> {
   const candidates = (await readOnboardingOrganizations()).filter((org) =>
     organizationAttribute(org, "rootTenantId") === tenantId && !organizationAttribute(org, "supersededBy"));
