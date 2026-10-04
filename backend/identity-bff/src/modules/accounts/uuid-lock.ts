@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
-import { currentPersonLease, LeaseBusyError } from "./person-lease.js";
+import { currentPersonLease } from "./person-lease.js";
 
 /**
  * Short lock on one DIGIT account while a binding to it is created, accepted
@@ -12,6 +12,15 @@ import { currentPersonLease, LeaseBusyError } from "./person-lease.js";
 
 export const UUID_LOCK_TTL_MS = 30_000;
 const WAIT_MS = 5_000;
+/** The uuid lock wait timed out (503 BINDING_BUSY). */
+export class BindingBusyError extends Error {
+  readonly status = 503;
+  readonly code = "BINDING_BUSY";
+  constructor(message = "This DIGIT account is busy; retry") {
+    super(message);
+  }
+}
+
 const RELEASE = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
 export const uuidLockKey = (tenantId: string, uuid: string) =>
@@ -28,7 +37,7 @@ export async function withUuidLock<T>(
   const token = randomUUID();
   const deadline = Date.now() + (options.waitMs ?? WAIT_MS);
   while (await getRedis().set(key, token, "PX", UUID_LOCK_TTL_MS, "NX") !== "OK") {
-    if (Date.now() >= deadline) throw new LeaseBusyError("This DIGIT account is busy; retry");
+    if (Date.now() >= deadline) throw new BindingBusyError();
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   try {

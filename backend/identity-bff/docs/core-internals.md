@@ -34,8 +34,8 @@ binding transition for that person. It replaces the attribute lease
 (`managed-account-service.ts`).
 
 ```ts
-export class LeaseBusyError extends Error {}   // 503; wait timed out
-export class LeaseLostError extends Error {}   // renewal failed; abort, don't return results
+export class LeaseBusyError extends Error {}   // 503 PERSON_BUSY; wait timed out
+export class LeaseLostError extends Error {}   // 503 PERSON_BUSY; renewal failed; revoke anything minted, return nothing
 
 export interface PersonLease {
   readonly subject: string;
@@ -56,9 +56,9 @@ export function withPersonLease<T>(
 export function currentPersonLease(): PersonLease | null;
 ```
 
-- Key `{prefix}:identity:subject-lease:{sub}`, `SET NX PX 30000`, renewed every
+- Key `{prefix}:identity:person-lease:{sub}`, `SET NX PX 30000`, renewed every
   10 s with Lua `if get==token then pexpire`. Released with compare-and-delete.
-- **Re-entry:** a nested `withPersonLease` for the **same** subject in the same
+- **Pass the lease down** (contract §2.5). As a safety net only, a nested `withPersonLease` for the **same** subject in the same
   async chain (AsyncLocalStorage) reuses the held lease. Nesting a **different**
   subject throws: code that touches several people (Organization disable,
   reconcile) takes each person's lease in turn, never two at once.
@@ -66,7 +66,7 @@ export function currentPersonLease(): PersonLease | null;
   locks below the person lease are taken only inside it.
 - `withUuidLock(tenantId, uuid, fn)` in `accounts/uuid-lock.ts`: key
   `{prefix}:identity:uuid-lock:{tenantId}:{uuid}`, 30 s, NX; throws if called
-  outside a person lease.
+  outside a person lease; a timed-out wait is `BindingBusyError` (503 `BINDING_BUSY`).
 
 ## 2. The access predicate (§3, D10) — `bindings/predicate.ts`
 
@@ -88,7 +88,7 @@ export function citizenAccess(subject: string): Promise<{ allowed: boolean; deni
 ```
 
 - The predicate does not check DIGIT `active`; callers that have the DIGIT
-  account check it next (discovery shows `ACCOUNT_INACTIVE`; `_select` refuses).
+  account check it next (discovery shows `DIGIT_ACCOUNT_INACTIVE`; `_select` refuses).
 - `bindings/store.ts` exports `readBindings(subject)`, `bindingsFor(tenantId)`
   (search via `digit.boundUuids`) and the transitions `ensureActive`,
   `createPending`, `accept`, `remove`. All transitions run inside the person
@@ -111,9 +111,10 @@ export function ensureActive(input: {
 
 `ensureActive` rules:
 - same key, same uuid, already `active` → `{created: false}`, no write;
-- same key, different uuid, or uuid bound to another person → `BindingConflictError`;
-- same key, `removed` → `BindingConflictError` (a removed binding is never
-  resurrected; only an explicit browser re-invite makes it `pending` again);
+- same key, different uuid → `BindingConflictError` (409 `BINDING_CONFLICT`);
+- uuid bound to another person → 409 `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
+- same key, `removed` → 409 `BINDING_REMOVED` (never resurrected; only a
+  browser `_link` with `reinvite: true` makes it `pending` again);
 - the workload actor skips the browser actor rules and does **not** set the
   credential: the founder's credential is set at their first `_select` (B8).
   Browser and migration actors leave credential activation to the caller.
@@ -130,6 +131,7 @@ export interface StaffAccountRef { tenantId: string; uuid: string; userName: str
 export function activateStaffCredential(account: StaffAccountRef, lease: PersonLease): Promise<{ keyVersion: number }>;
 
 /** Mint a DIGIT token for an active binding. Derived mode: sign in; on INVALID_CREDENTIALS repair once per lease, never on locked/inactive. Rotate mode: today's per-login rotation. */
+// ACCOUNT_INACTIVE above is the internal reason; the wire code is DIGIT_ACCOUNT_INACTIVE (contract B5).
 export function staffLogin(account: StaffAccountRef, lease: PersonLease): Promise<DigitLogin & { keyVersion?: number }>;
 
 /** Revocation fallback: sign in with the derived credential to find the live token. Never repairs, never reactivates. null = not grant-eligible. */
