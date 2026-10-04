@@ -107,6 +107,9 @@ export function authorizationUrl(
   return url.toString();
 }
 
+export class InvalidGrantError extends Error {}
+export class IdentityUnavailableError extends Error {}
+
 async function tokenRequest(params: URLSearchParams, clientId: string): Promise<IdentityTokenSet> {
   const client = oidcClient(clientId);
   params.set("client_id", client.clientId);
@@ -118,7 +121,11 @@ async function tokenRequest(params: URLSearchParams, clientId: string): Promise<
     body: params.toString(),
   });
   if (!response.ok) {
-    throw new Error(`Keycloak token request failed: ${response.status}`);
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.status === 400 && body?.error === "invalid_grant") {
+      throw new InvalidGrantError("Keycloak rejected the grant");
+    }
+    throw new IdentityUnavailableError("Keycloak token endpoint unavailable");
   }
 
   const body = await response.json() as Record<string, unknown>;

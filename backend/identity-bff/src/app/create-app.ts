@@ -1,4 +1,5 @@
 import express from "express";
+import { IdentityUnavailableError } from "../modules/authentication/oidc.js";
 import { surfaceRegistry } from "../modules/authentication/surfaces.js";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
@@ -52,5 +53,11 @@ export function createIdentityApp(): express.Application {
   registerBrandingRoutes(app);
   registerOrganizationRoutes(app);
   registerControlPlaneRoutes(app);
+  app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (error instanceof IdentityUnavailableError) {
+      return res.status(503).json({ code: "IDENTITY_UNAVAILABLE", error: "Identity service is temporarily unavailable" });
+    }
+    next(error);
+  });
   return app;
 }

@@ -2,6 +2,8 @@ import { withPersonLease } from "../accounts/person-lease.js";
 import { config } from "../../infrastructure/config.js";
 import {
   refreshIdentityTokens,
+  InvalidGrantError,
+  IdentityUnavailableError,
   verifyIdentityAccessToken,
 } from "../authentication/oidc.js";
 import {
@@ -48,6 +50,7 @@ export async function currentSession(
         } catch (error) {
           // A Keycloak blip must not sign every OTP citizen out; retry next time.
           console.warn("Phone OTP session identity check failed:", (error as Error).message);
+          return { sessionId, session };
         }
         if (!enabled) {
           await deleteIdentitySession(sessionId);
@@ -97,8 +100,11 @@ export async function currentSession(
       return session ? { sessionId, session } : null;
     } catch (error) {
       console.warn("Identity session refresh failed:", (error as Error).message);
-      await deleteIdentitySession(sessionId);
-      return null;
+      if (error instanceof InvalidGrantError) {
+        await deleteIdentitySession(sessionId);
+        return null;
+      }
+      throw new IdentityUnavailableError("Identity service is temporarily unavailable");
     }
   });
 }
