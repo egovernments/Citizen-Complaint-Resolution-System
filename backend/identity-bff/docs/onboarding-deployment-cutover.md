@@ -61,9 +61,14 @@ Manual `mcp-build.sh` callers pass the canonical resource as argument six
 callers first run the staging script from the monorepo.
 
 Only the writable `digit-mcp` service receives the internal `EGOV_MDMS_HOST`.
-Its bootstrap requires an authenticated platform administrator before direct
-MDMS requests; ordinary MCP tools keep using Kong. The readonly MCP service
-does not receive this internal host.
+Direct bootstrap is off by default: neither Compose service sets
+`MCP_PLATFORM_BOOTSTRAP_DIRECT`. Without an explicit `true` override bootstrap
+uses Kong and must not access the internal host. Direct bootstrap must verify
+the caller's DIGIT token with `/user/_details` and require a live `SUPERUSER`
+or `MDMS_ADMIN` role at the state root before MDMS writes; cached identity or
+tool arguments are insufficient. The readonly MCP service does not receive
+the internal host. Leaf regression tests must cover unauthenticated,
+non-admin and forged claims, plus absence of direct requests with the flag off.
 
 ## Validation
 
