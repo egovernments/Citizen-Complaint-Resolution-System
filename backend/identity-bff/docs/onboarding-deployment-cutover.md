@@ -42,20 +42,41 @@ the PGR runner and BFF worker removal together, with the provisioner and
 onboarding credentials configured. Leaving it false means no provisioning
 worker runs; this is not a successful signup cutover.
 
+## MCP baseline packaging
+
+The PGR resource `backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json`
+is the canonical versioned seed. MCP's dependency-free
+`digit-mcp/scripts/stage-platform-baseline.mjs` generates its untracked
+`data/platform-baseline-v1.json` and build/runtime copies. The MCP Docker
+context remains `digit-mcp/`; the image uses the staged bytes and never
+reads a repository at runtime.
+
+Both `spa-build.yml` and `build-images.yml` stage the resource automatically
+before building MCP. Ansible copies it from the controller for vendored and
+cloned builds, then `mcp-build.sh` refreshes `data/` after checkout and before
+Docker runs. The opt-in `mcp-publish` path also stages it before building.
+A missing canonical resource fails preparation instead of reusing stale data.
+Manual `mcp-build.sh` callers pass the canonical resource as argument six
+(argument five is the platform or an empty string). Direct `docker build`
+callers first run the staging script from the monorepo.
+
 ## Validation
 
-Run the existing static deployment suite and the onboarding wiring suite:
+Run the deployment and seed packaging suites:
 
 ```sh
 cd local-setup/tests
-npx jest --runInBand static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts
+npx jest --runInBand static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts static/mcp-baseline-packaging.test.ts
 ```
 
 The existing preflight check requires PyYAML in the Python interpreter on
 PATH. Tests check shared token wiring, PGR-only provisioner access, removal
 of BFF worker settings, internal service hosts, stored-secret preservation,
 independent token generation, and secret-scanner coverage of new keys.
+Packaging checks execute the build wrapper with local Git/Docker stubs to
+verify fresh-clone and vendored paths, stale-seed replacement and missing-seed
+failure. They do not build or publish an image.
 
-Rerun both suites after integrating surf-keycloak's shared deployment-file
+Rerun the suites after integrating surf-keycloak's shared deployment-file
 changes. These checks do not replace the local-stack onboarding acceptance
 test or the root-owned deployment gate.

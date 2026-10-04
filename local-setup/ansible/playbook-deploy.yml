@@ -2316,6 +2316,24 @@
     # /root/DIGIT-MCP on the controller:
     #
     #   ansible-playbook ... --tags mcp-publish
+    - name: "MCP publish — ensure generated data directory"
+      ansible.builtin.file:
+        path: /root/DIGIT-MCP/data
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
+    - name: "MCP publish — stage canonical PGR platform baseline"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: /root/DIGIT-MCP/data/platform-baseline-v1.json
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      tags: ['mcp-publish', 'never']
+
     - name: Build + push digit-mcp image to VPC registry
       shell: |
         set -e
@@ -2377,6 +2395,15 @@
         - enable_mcp | default(false)
         - build_mcp | default(false)
 
+    - name: "MCP build — copy canonical PGR platform baseline to target"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json"
+        dest: "{{ digit_dir }}/.build/platform-baseline-v1.json"
+        mode: "0644"
+      when:
+        - enable_mcp | default(false)
+        - build_mcp | default(false)
+
     - name: "MCP build — sync vendored digit-mcp source to target"
       synchronize:
         src: "{{ playbook_dir }}/../../digit-mcp/"
@@ -2390,13 +2417,16 @@
         - (mcp_repo_url | default('-')) == '-'
 
     - name: "Build digit-mcp image locally (when build_mcp)"
-      ansible.builtin.command: >-
-        bash {{ digit_dir }}/.build/mcp-build.sh
-        "{{ mcp_repo }}"
-        "{{ mcp_repo_url | default('-') }}"
-        "{{ mcp_ref | default('') }}"
-        "{{ mcp_image }}"
-        "{{ docker_default_platform | default('') }}"
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ digit_dir }}/.build/mcp-build.sh"
+          - "{{ mcp_repo }}"
+          - "{{ mcp_repo_url | default('-') }}"
+          - "{{ mcp_ref | default('') }}"
+          - "{{ mcp_image }}"
+          - "{{ docker_default_platform | default('') }}"
+          - "{{ digit_dir }}/.build/platform-baseline-v1.json"
       register: mcp_build_run
       changed_when: true
       when:
