@@ -604,20 +604,26 @@ export function isValidAccountCode(code: string): boolean {
   return /^[A-Z0-9-]{2,32}$/.test(code);
 }
 
+const ACCOUNT_CODE_MAX = 32;
+
 /**
- * "Bomet County Government" + KE -> "KE-BCG". Initials of the first three
- * words, prefixed by the country, matching the lovable reference.
+ * "Bomet County Government" + KE -> "KE-BOMET-COUNTY-GOVERNMENT". Every word of
+ * the name counts, so adding or editing any part of it changes the code. Too
+ * long a name is cut at a word boundary to stay inside the 32-character limit.
  */
 export function deriveAccountCode(name: string, countryCode: string): string {
-  const initials = name
+  const words = name
     .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((word) => word[0])
-    .join('')
-    .replace(/[^A-Za-z0-9]/g, '')
-    .toUpperCase();
-  if (!initials) return '';
-  return countryCode ? `${countryCode.toUpperCase()}-${initials}` : initials;
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!words) return '';
+  const prefix = countryCode ? `${countryCode.toUpperCase()}-` : '';
+  const room = ACCOUNT_CODE_MAX - prefix.length;
+  let body = words;
+  if (body.length > room) {
+    const cut = body.slice(0, room + 1).lastIndexOf('-');
+    body = cut > 0 ? body.slice(0, cut) : body.slice(0, room);
+  }
+  return `${prefix}${body}`;
 }

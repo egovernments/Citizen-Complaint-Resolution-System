@@ -155,7 +155,7 @@ describe('wizard', () => {
     fireEvent.change(await screen.findByLabelText(/account name/i), {
       target: { value: 'Bomet County Government' },
     });
-    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('BCG'));
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('BOMET-COUNTY-GOVERNMENT'));
   });
 
   it('re-prefixes the code once a country is chosen', async () => {
@@ -163,7 +163,7 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
-    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BCG'));
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY-GOVERNMENT'));
   });
 
   it('derives the slug without promising an address for it', async () => {
@@ -257,6 +257,40 @@ describe('wizard', () => {
     render(<SignupPage />);
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
     expect(api.createSignup).not.toHaveBeenCalled();
+  });
+
+  const resumedDraft = (accountCode: string) => ({
+    id: 'signup-1',
+    status: 'DRAFT',
+    accountName: 'Bomet County',
+    accountCode,
+    urlSlug: 'bomet-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    timeZone: 'Africa/Nairobi',
+    financialYearPolicy: 'JUL_JUN',
+    tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
+  });
+
+  it('keeps deriving a resumed code that was never edited by hand', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumedDraft('KE-BOMET-COUNTY') as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY-GOVERNMENT'));
+  });
+
+  it('never overwrites a resumed code the operator typed', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumedDraft('KE-BOMET') as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County Government'));
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET');
   });
 });
 
