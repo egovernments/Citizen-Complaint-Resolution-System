@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 import { test, expect, Page } from "@playwright/test";
 import { loginViaApi } from "../utils/auth";
 import { BASE_URL, TENANT, EMPLOYEE_TENANT, EMPLOYEE_USER, EMPLOYEE_PASS } from "../utils/env";
@@ -170,7 +171,7 @@ async function selectReopen(page: Page) {
     { info: tokenResponse.UserRequest ?? {}, token: tokenResponse.access_token }
   );
 
-  await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${COMPLAINT_ID}`);
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${COMPLAINT_ID}`);
   await page.waitForLoadState("networkidle");
 
   // Label is localisation-driven; an env without the key seeded renders the raw key.

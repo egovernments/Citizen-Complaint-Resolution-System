@@ -1,3 +1,4 @@
+import { getDigitToken } from '../utils/auth';
 /**
  * Admin — employee create on the form's selected tenant (CCRS #459 + #471 + #476).
  *
@@ -249,15 +250,9 @@ Steps:
     ).toHaveCount(0, { timeout: 8_000 });
 
     // ============ #459 — server-side tenant correctness ============
-    const tokenResp = await page.request.post(`${BASE_URL}/user/oauth/token`, {
-      headers: {
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      data: `username=${ADMIN_USER}&password=${encodeURIComponent(ADMIN_PASS)}&grant_type=password&scope=read&tenantId=${ROOT_TENANT}&userType=EMPLOYEE`,
-    });
-    expect(tokenResp.ok()).toBeTruthy();
-    const token = (await tokenResp.json()).access_token as string;
+    const context = await getDigitToken({ tenant: ROOT_TENANT, username: ADMIN_USER, password: ADMIN_PASS });
+    expect(Boolean(context.access_token)).toBe(true);
+    const token = context.access_token;
     const hrmsResp = await page.request.post(
       `${BASE_URL}/egov-hrms/employees/_search?tenantId=${targetTenant}&codes=${empCode}`,
       {
