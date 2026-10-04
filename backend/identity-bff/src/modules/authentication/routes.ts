@@ -1,5 +1,6 @@
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
+import { errorBody } from "../../contract/error-codes.js";
 import { config } from "../../infrastructure/config.js";
 import {
   applyVerifiedSignupIdentityProfile,
@@ -41,7 +42,7 @@ import type {
   IdentityAuthResult,
   IdentityAuthResultCode,
 } from "./types.js";
-import { safeIdentityReturnTo, withAuthResult } from "./redirects.js";
+import { safeIdentityReturnTo, tenantBoundReturnTo, withAuthResult } from "./redirects.js";
 
 function requestedIntent(value: unknown): IdentityAuthIntent | null {
   return value === "signin" || value === "signup" ? value : null;
@@ -49,18 +50,6 @@ function requestedIntent(value: unknown): IdentityAuthIntent | null {
 
 /** BCP 47-ish `ui_locales`, forwarded to Keycloak for display only. */
 const UI_LOCALES = /^[A-Za-z]{2,3}([_-][A-Za-z0-9]{2,8})*( [A-Za-z]{2,3}([_-][A-Za-z0-9]{2,8})*)*$/;
-
-/**
- * Relative destinations under the surface's own tenant route. Normalization
- * (dot segments, percent-encoding) happens first, so `/slug/digit-ui/employee/../x`
- * cannot escape the prefix.
- */
-function tenantBoundReturnTo(value: unknown, prefix: string): string | null {
-  const safe = safeIdentityReturnTo(value);
-  if (!safe || !safe.startsWith("/") || safe.startsWith("//")) return null;
-  const path = new URL(safe, "http://identity.invalid").pathname;
-  return path.startsWith(prefix) ? safe : null;
-}
 
 /**
  * Relative paths stay on the BFF's public origin. Absolute development URLs
@@ -409,7 +398,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     const id = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id;
     const authResult = await consumeAuthResult(id);
     if (!authResult) {
-      return response.status(404).json({ error: "Authentication result expired or was already read" });
+      return response.status(404).json(errorBody("AUTH_RESULT_NOT_FOUND", "Authentication result expired or was already read"));
     }
     return response.json(authResult);
   }));

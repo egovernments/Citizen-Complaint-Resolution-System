@@ -38,6 +38,7 @@ import {
   resetPhoneTrustCache,
   updateCitizenRegistrationValues,
 } from "../../src/modules/organizations/organization-service.js";
+import { contractRoute, expectContractError } from "../contract/harness.js";
 import {
   getIdentityAppPort as getAppPort,
   startIdentityTestApp as startTestApp,
@@ -1479,6 +1480,63 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     expect((await fetch(`${app()}/identity/v1/auth-methods?surface=admin`)).status).toBe(400);
   });
 
+  it("sends an employee's password-setup email through the employee client and returns to that tenant (item 5)", async () => {
+    await kcAdmin("/users", {
+      id: "employee-setup-user", username: "employee.setup@example.com", email: "employee.setup@example.com",
+      firstName: "Employee", lastName: "Setup", enabled: true, emailVerified: true,
+      credentials: [{ id: "password-employee-setup", type: "password" }],
+    });
+    const route = contractRoute("POST", "/identity/v1/password/setup-requests");
+    const requestSetup = (body: Record<string, unknown>) => fetch(`${app()}/identity/v1/password/setup-requests`, {
+      method: "POST",
+      headers: { Origin: "http://localhost:3000", "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.31" },
+      body: JSON.stringify({ email: "employee.setup@example.com", ...body }),
+    });
+
+    await expectContractError(await requestSetup({ surface: "admin" }), route, "UNSUPPORTED_SURFACE");
+    await expectContractError(await requestSetup({ surface: "employee" }), route, "INVALID_REQUEST");
+    await expectContractError(await requestSetup({ surface: "employee", tenantSlug: "missing-county" }), route, "TENANT_ROUTE_NOT_FOUND");
+    for (const returnTo of ["/bomet-county/digit-ui/citizen/", "/configurator/", "/bomet-county/digit-ui/employee/../citizen/"]) {
+      await expectContractError(
+        await requestSetup({ surface: "employee", tenantSlug: "bomet-county", returnTo }), route, "UNSUPPORTED_RETURN_TO");
+    }
+
+    const accepted = await requestSetup({
+      surface: "employee", tenantSlug: "bomet-county", returnTo: "/bomet-county/digit-ui/employee/login",
+    });
+    expect(accepted.status).toBe(202);
+    let user: any;
+    await expect.poll(async () => {
+      user = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/employee-setup-user`,
+      )).json();
+      return user.activationEmails;
+    }).toBe(1);
+    // The employee client's theme renders the Keycloak action pages.
+    expect(user.lastActionClientId).toBe("digit-ui-employee");
+
+    expect((await kcUpdate("/users/employee-setup-user", {
+      credentials: [{ id: "password-employee-setup-2", type: "password" }],
+    })).status).toBe(204);
+    const completion = new URL(user.lastActionRedirectUri);
+    const complete = await fetch(`${app()}${completion.pathname}`, { redirect: "manual" });
+    expect(complete.status).toBe(303);
+    const location = new URL(complete.headers.get("location")!, "http://localhost");
+    expect(location.pathname).toBe("/bomet-county/digit-ui/employee/login");
+    const result = await fetch(`${app()}/identity/v1/auth-results/${encodeURIComponent(location.searchParams.get("authResult")!)}`);
+    expect(await result.json()).toMatchObject({ status: "complete", code: "PASSWORD_SETUP_COMPLETE" });
+
+    // Without a surface the configurator client is used, as before.
+    expect((await requestSetup({ returnTo: "/client/login" })).status).toBe(202);
+    await expect.poll(async () => {
+      user = await (await fetch(
+        `${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/employee-setup-user`,
+      )).json();
+      return user.activationEmails;
+    }).toBe(2);
+    expect(user.lastActionClientId).toBe("digit-identity-bff");
+  });
+
   it("binds employee/citizen authorization to the route tenant", async () => {
     const authorize = (query: string) =>
       fetch(`${app()}/identity/v1/authorize?${query}`, { redirect: "manual" });
@@ -2476,6 +2534,24 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(await unlinked.json()).toEqual({ removed: true });
       expect((await (await employeeSelect(cookie)).json()).code).toBe("EMPLOYEE_ACCOUNT_NOT_LINKED");
       expect(digit.accounts.get(account.uuid)!.active).toBe(true);
+    });
+
+    it("answers ACCOUNT_LOCKED for a locked account, without touching its password (item 6)", async () => {
+      const account = legacy({ userName: "EMP-LEGACY-LOCK", tenantId: "ke.bomet", type: "EMPLOYEE", mobileNumber: "700000109", roles: ["EMPLOYEE"] });
+      const cookie = await signIn("employee", "unlinked");
+      const linked = await cp("account-links/_link", {
+        links: [{ email: "legacy.employee@example.com", tenantId: "ke.bomet", digitUserName: "EMP-LEGACY-LOCK" }],
+      });
+      expect((await linked.json()).results[0].status).toBe("LINKED");
+
+      digit.accounts.get(account.uuid)!.accountLocked = true;
+      const locked = await employeeSelect(cookie);
+      const body = await expectContractError(locked, contractRoute("POST", "/identity/v1/contexts/_select"), "ACCOUNT_LOCKED");
+      expect(body.error).toBe("This account is locked");
+
+      digit.accounts.get(account.uuid)!.accountLocked = false;
+      expect((await employeeSelect(cookie)).status).toBe(200);
+      await cp("account-links/_unlink", { subject: "identity-user-unlinked", tenantId: "ke.bomet", digitUserUuid: account.uuid });
     });
 
     it("refuses links that are unproven or already owned, item by item", async () => {

@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
+import { errorBody } from "../../contract/error-codes.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import { withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
@@ -105,7 +106,7 @@ async function processSignupMagicLink(input: {
 export function registerMagicLinkRoutes(app: express.Application): void {
   app.post("/identity/v1/authentication/magic-link-requests", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
-      return response.status(403).json({ error: "Untrusted request origin" });
+      return response.status(403).json(errorBody("UNTRUSTED_ORIGIN", "Untrusted request origin"));
     }
 
     const email = normalizedEmail(request.body?.email);
@@ -115,10 +116,10 @@ export function registerMagicLinkRoutes(app: express.Application): void {
       ? null
       : safeIdentityReturnTo(request.body.returnTo);
     if (!email || !firstName || !lastName) {
-      return response.status(400).json({ error: "First name, last name, and a valid email are required" });
+      return response.status(400).json(errorBody("INVALID_REQUEST", "First name, last name, and a valid email are required"));
     }
     if (request.body?.returnTo !== undefined && !requestedReturnTo) {
-      return response.status(400).json({ error: "Unsupported return destination" });
+      return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
     }
     const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
 
@@ -128,10 +129,10 @@ export function registerMagicLinkRoutes(app: express.Application): void {
         .find((method) => method.type === "magic_link");
     } catch (error) {
       console.warn("Signup method lookup failed", { error: (error as Error).message });
-      return response.status(503).json({ error: "Email sign-up is temporarily unavailable" });
+      return response.status(503).json(errorBody("SIGNIN_METHODS_UNAVAILABLE", "Email sign-up is temporarily unavailable"));
     }
     if (!magicMethod) {
-      return response.status(503).json({ error: "Email sign-up is temporarily unavailable" });
+      return response.status(503).json(errorBody("SIGNUP_UNAVAILABLE", "Email sign-up is temporarily unavailable"));
     }
 
     const prefix = `${config.cachePrefix}:identity:magic-link-signup-limit`;

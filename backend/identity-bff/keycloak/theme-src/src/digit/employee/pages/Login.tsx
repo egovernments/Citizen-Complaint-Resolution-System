@@ -63,6 +63,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
             <ForgotPassword
                 {...props}
                 returnTo={employeeReturnTo(slug)}
+                tenantSlug={slug}
                 onBack={() => setForgot(false)}
             />
         );
@@ -156,6 +157,7 @@ export default function Login(props: DigitPageProps<Extract<KcContext, { pageId:
 function ForgotPassword(
     props: DigitPageProps<Extract<KcContext, { pageId: "login.ftl" }>> & {
         returnTo?: string;
+        tenantSlug?: string;
         onBack: () => void;
     }
 ) {
@@ -186,7 +188,9 @@ function ForgotPassword(
                     void requestPasswordSetup({
                         baseUrl: kcContext.properties.DIGIT_IDENTITY_BFF_BASE_URL,
                         email,
-                        returnTo: props.returnTo
+                        returnTo: props.returnTo,
+                        surface: "employee",
+                        tenantSlug: props.tenantSlug
                     }).then(ok =>
                         setState(ok ? "sent" : "failed")
                     );

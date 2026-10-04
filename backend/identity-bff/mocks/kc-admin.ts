@@ -477,6 +477,7 @@ export function createKcAdminMock() {
     user.requiredActions = [...new Set([...(user.requiredActions || []), ...req.body])];
     user.activationEmails = (user.activationEmails || 0) + 1;
     user.lastActionRedirectUri = redirectUri;
+    user.lastActionClientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
     return res.status(204).end();
   });
 
