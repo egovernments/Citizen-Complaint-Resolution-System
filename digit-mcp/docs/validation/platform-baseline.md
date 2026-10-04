@@ -24,8 +24,8 @@ Commands below run from the repository root unless prefixed with a directory. Ra
 | `cd digit-mcp && npx tsx test-master-localizations.ts` | 19 passed | `final-localizations.log` |
 | `npm run test:security --prefix digit-mcp` | 79 passed | `final-security-policy.log` |
 | `npm run test:security:http --prefix digit-mcp` | 34 passed against local stub service | `final-security-http.log` |
-| `npm run test:safety --prefix digit-mcp` | 60 passed, 2 existing failures: tests 2.3/2.4 demand rejection of 9/11 digit phones, while existing validation accepts 6–15 digits | `final-safety.log` |
+| `npm run test:safety --prefix digit-mcp` | 60 passed, 2 failures in unchanged phone checks: tests 2.3/2.4 demand rejection of 9/11 digit phones, while existing validation accepts 6–15 digits | `final-safety.log` |
 
-The last safety failures were escalated to onboarding-owner for the phone owner; `src/utils/validation.ts` and `test-agent-safety.ts` are unchanged from base `4674d8991`. No phone contract changes were made in this lane.
+These phone failures were not independently reproduced on the base revision. They were escalated to onboarding-owner for the phone owner; `src/utils/validation.ts` and `test-agent-safety.ts` are unchanged from base `4674d8991`. No phone contract changes were made in this lane.
 
 Offline CI gates ran once before the draft PR. Live `test:full`/OpenAPI integration suites need a configured DIGIT deployment and were not run. Java packaging checks do not claim a PGR full-suite run. No deployment or end-to-end signup is claimed. The monorepo MCP CI now watches canonical-seed changes and runs baseline and npm/standalone packaging gates after its build.
