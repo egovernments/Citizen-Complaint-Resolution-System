@@ -93,6 +93,12 @@ public class OnboardingRepository {
     }
 
     public boolean identifierAvailable(String type, String value, UUID signupId) {
+        if ("ORGANIZATION_NAME".equals(type)) {
+            Integer reserved = jdbcTemplate.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace_name n " +
+                            "WHERE normalized_name=? AND NOT EXISTS (SELECT 1 FROM eg_pgr_onboarding_signup s WHERE s.id=? AND s.requested_tenant_id=n.tenant_id)",
+                    Integer.class, value, signupId == null ? new UUID(0,0) : signupId);
+            if (reserved != null && reserved > 0) return false;
+        }
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM eg_pgr_onboarding_identifier " +
                         "WHERE identifier_type = ? AND normalized_value = ? AND status <> 'RELEASED' AND signup_id <> ?",
@@ -256,9 +262,12 @@ public class OnboardingRepository {
         jdbcTemplate.update("UPDATE eg_pgr_onboarding_identifier SET status = ? WHERE signup_id = ?",
                 identifierStatus, signupId);
         if ("ACTIVE".equals(signupStatus)) {
-            jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_workspace(tenant_id,status,steps,version,seed_version,updated_at,updated_by) " +
+            jdbcTemplate.update("WITH created AS (INSERT INTO eg_pgr_onboarding_workspace(tenant_id,status,steps,version,seed_version,updated_at,updated_by) " +
                             "SELECT requested_tenant_id,'NOT_STARTED',?::jsonb,1,'1',?,owner_subject FROM eg_pgr_onboarding_signup WHERE id=? " +
-                            "ON CONFLICT DO NOTHING",json(WorkspaceRepository.initialSteps("NOT_STARTED",now,"pgr-onboarding")),now,signupId);
+                            "ON CONFLICT DO NOTHING RETURNING tenant_id) " +
+                            "INSERT INTO eg_pgr_onboarding_workspace_event(id,tenant_id,event_type,version,details,created_at,created_by) " +
+                            "SELECT ?,tenant_id,'CREATED',1,'{}'::jsonb,?,'pgr-onboarding' FROM created",
+                    json(WorkspaceRepository.initialSteps("NOT_STARTED",now,"pgr-onboarding")),now,signupId,UUID.randomUUID(),now);
         }
     }
 
