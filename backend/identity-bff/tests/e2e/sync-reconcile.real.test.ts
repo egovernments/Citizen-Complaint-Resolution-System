@@ -7,6 +7,7 @@ import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { runReconcile } from "../../src/modules/sync/reconcile.js";
 import { recordToken, readToken } from "../../src/modules/revocation/inventory.js";
 import * as digitClient from "../../src/modules/managed-accounts/digit-user-client.js";
+import * as credentials from "../../src/modules/accounts/credential-service.js";
 import { keycloakTestClient } from "../fixtures/keycloak/client.js";
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), active: vi.fn(), name: vi.fn(), propagate: vi.fn() }));
@@ -60,6 +61,7 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak reconciliation", 
     mocks.name.mockResolvedValue(tenantId);
     mocks.propagate.mockResolvedValue({ written: 0, unchanged: 0, skipped: 0 });
     vi.spyOn(digitClient, "revokeToken").mockResolvedValue();
+    vi.spyOn(credentials, "findLiveStaffToken").mockResolvedValue(null);
     await withPersonLease(subject, lease => recordToken(lease, { tenantId, uuid },
       { accessToken: "real-kc-fixture-digit-token", expiresAt: Date.now() + 3600000, user: {} }, "staff"));
   });
@@ -89,6 +91,11 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak reconciliation", 
     expect(digitClient.revokeToken).toHaveBeenCalledWith("real-kc-fixture-digit-token");
     const user = await (await client.request(`/users/${subject}`)).json();
     expect(JSON.parse(user.attributes["digit.bindings"][0]).bindings[0].state).toBe("active");
+    vi.mocked(credentials.findLiveStaffToken).mockClear();
+    vi.mocked(digitClient.revokeToken).mockClear();
+    expect((await runReconcile()).failures).toEqual([]);
+    expect(credentials.findLiveStaffToken).not.toHaveBeenCalled();
+    expect(digitClient.revokeToken).not.toHaveBeenCalled();
   });
   it("revokes removed membership without recreating it or changing the binding", async () => {
     await client.request(`/organizations/${organizationId}/members/${subject}`, "DELETE");
@@ -97,5 +104,10 @@ describe.skipIf(!process.env.KEYCLOAK_TEST_URL)("real Keycloak reconciliation", 
     await expect(client.request(`/organizations/${organizationId}/members/${subject}`)).rejects.toThrow("404");
     const user = await (await client.request(`/users/${subject}`)).json();
     expect(JSON.parse(user.attributes["digit.bindings"][0]).bindings[0].state).toBe("active");
+    vi.mocked(credentials.findLiveStaffToken).mockClear();
+    vi.mocked(digitClient.revokeToken).mockClear();
+    expect((await runReconcile()).failures).toEqual([]);
+    expect(credentials.findLiveStaffToken).not.toHaveBeenCalled();
+    expect(digitClient.revokeToken).not.toHaveBeenCalled();
   });
 });

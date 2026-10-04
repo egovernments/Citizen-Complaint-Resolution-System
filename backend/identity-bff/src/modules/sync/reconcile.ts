@@ -63,7 +63,10 @@ const codeOf = (error: unknown) => {
 /**
  * Reconcile never grants membership, restores a binding, or writes DIGIT active.
  * Fingerprints skip only mirror PUTs: access and identifier checks always run.
- * Tenant fan-out runs outside person leases; each provider takes one person at
+ * DIGIT transitions use credential fallback; unchanged denial and Keycloak
+ * disable/membership checks revoke inventory and sessions only. The event poller
+ * owns Keycloak transition fallback. Tenant fan-out runs only when the observed
+ * tenant state changes, outside person leases; each provider takes one person at
  * a time. A failed pass retains its durable forced request for the next run.
  */
 export async function runReconcile(): Promise<ReconcileResult> {
@@ -89,7 +92,7 @@ export async function runReconcile(): Promise<ReconcileResult> {
     const force = observedGeneration > Number(stats.completedGeneration || 0);
     const tenants = new Map<string, Promise<Awaited<ReturnType<typeof readOrganizationByTenant>>>>();
     const tenantActivity = new Map<string, boolean>();
-    const tenantFanout = new Map<string, "ORGANIZATION_DISABLED" | "TENANT_INACTIVE">();
+    const tenantStates = new Map<string, "active" | "ORGANIZATION_DISABLED" | "TENANT_INACTIVE">();
     const inspectTenant = (tenantId: string) => {
       if (!tenants.has(tenantId)) tenants.set(tenantId, (async () => {
         await assertHeld();
@@ -98,10 +101,10 @@ export async function runReconcile(): Promise<ReconcileResult> {
         const active = await isActiveDigitTenant(tenantId, { fresh: true });
         tenantActivity.set(tenantId, active);
         if (!organization.enabled || organization.lifecycle === "FAILED") {
-          tenantFanout.set(tenantId, "ORGANIZATION_DISABLED");
+          tenantStates.set(tenantId, "ORGANIZATION_DISABLED");
         } else if (!active) {
-          tenantFanout.set(tenantId, "TENANT_INACTIVE");
-        }
+          tenantStates.set(tenantId, "TENANT_INACTIVE");
+        } else tenantStates.set(tenantId, "active");
         return organization;
       })());
       return tenants.get(tenantId)!;
@@ -139,27 +142,27 @@ export async function runReconcile(): Promise<ReconcileResult> {
               // The store persists pending expiry under the established lock order.
               const bindings = await readBindings(subject);
               const snapshot = await readMirrorSnapshot(subject);
-              const revoke = async (account: { tenantId: string; uuid: string }, reason: Parameters<typeof revokeAccount>[2]) => {
+              const revoke = async (account: { tenantId: string; uuid: string }, reason: Parameters<typeof revokeAccount>[2], fallback = false) => {
                 await assertHeld();
                 await lease.assertHeld();
-                await revokeAccount(subject, account, reason);
+                await revokeAccount(subject, account, reason, { fallback });
                 result.revoked++;
               };
               if (snapshot.user.enabled === false) {
-                await revokePerson(subject, "KEYCLOAK_DISABLED");
+                await revokePerson(subject, "KEYCLOAK_DISABLED", { fallback: false });
                 result.revoked++;
               }
               for (const prior of snapshot.previous.filter(entry => entry.kind === "staff")) {
                 if (!bindings.some(binding => binding.state === "active" && binding.tenantId === prior.tenantId && binding.uuid === prior.uuid)) {
-                  await revoke(prior, "BINDING_REMOVED");
+                  await revoke(prior, "BINDING_REMOVED", true);
                 }
               }
               for (const entry of snapshot.entries) {
                 const previous = snapshot.previous.find(prior => prior.uuid === entry.uuid && prior.tenantId === entry.tenantId);
-                if (entry.missing) await revoke(entry, "DIGIT_ACCOUNT_MISSING");
-                else if (!entry.active) await revoke(entry, "DIGIT_INACTIVE");
+                if (entry.missing) await revoke(entry, "DIGIT_ACCOUNT_MISSING", !!previous && !previous.missing);
+                else if (!entry.active) await revoke(entry, "DIGIT_INACTIVE", previous?.active === true);
                 else if (previous && canonical([...previous.roles].sort((a,b) => canonical(a).localeCompare(canonical(b)))) !==
-                    canonical([...entry.roles].sort((a,b) => canonical(a).localeCompare(canonical(b))))) await revoke(entry, "ROLE_CHANGED");
+                    canonical([...entry.roles].sort((a,b) => canonical(a).localeCompare(canonical(b))))) await revoke(entry, "ROLE_CHANGED", true);
                 if (entry.kind !== "staff") continue;
                 const organization = await inspectTenant(entry.tenantId);
                 if (!organization || !await isOrganizationMember(organization.id, subject)) {
@@ -184,9 +187,19 @@ export async function runReconcile(): Promise<ReconcileResult> {
       }));
       if (page.length < PAGE_SIZE) break;
     }
-    for (const [tenantId, reason] of tenantFanout) {
-      try { await assertHeld(); await revokeTenantMembers(tenantId, reason); }
-      catch (error) { result.failures.push({ subject: `tenant:${tenantId}`, code: codeOf(error) }); }
+    for (const [tenantId, state] of tenantStates) {
+      const field = `tenant:${tenantId}`;
+      if (stats[field] === state) continue;
+      try {
+        await assertHeld();
+        if (state !== "active") await revokeTenantMembers(tenantId, state);
+        // A failed fan-out must retain the old observation so the next pass retries.
+        const recorded = await redis.eval([
+          "if redis.call('get',KEYS[1]) ~= ARGV[1] then return 0 end",
+          "redis.call('hset',KEYS[2],ARGV[2],ARGV[3]); return 1",
+        ].join("\n"), 2, reconcileLeaseKey(), reconcileStatsKey(), token, field, state);
+        if (recorded !== 1) throw new LeaseLostError("Reconcile lease lost before tenant checkpoint");
+      } catch (error) { result.failures.push({ subject: `tenant:${tenantId}`, code: codeOf(error) }); }
     }
     await assertHeld();
     const completed = await redis.eval([

@@ -4,6 +4,8 @@ import { initCache, closeCache, getRedis } from "../../src/infrastructure/redis.
 import { currentPersonLease, withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { recordToken, readToken } from "../../src/modules/revocation/inventory.js";
 import * as digitClient from "../../src/modules/managed-accounts/digit-user-client.js";
+import * as credentials from "../../src/modules/accounts/credential-service.js";
+import { bindingsFor } from "../../src/modules/bindings/store.js";
 import { runReconcile, startReconcile, getReconcileReadiness, requestReconcileNow, reconcileStatsKey, reconcileLeaseKey } from "../../src/modules/sync/reconcile.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), read: vi.fn(), bindings: vi.fn(), organization: vi.fn(),
@@ -54,6 +56,7 @@ beforeEach(async () => {
       return new Response(null, { status: 204 });
     }
     if (path.startsWith("/users?")) return new Response(JSON.stringify([{ id: "person" }]));
+    if (path.startsWith("/organizations/org/members")) return new Response(JSON.stringify([{ id: "person" }]));
     if (path.startsWith("/organizations/")) return new Response(JSON.stringify({ ...organization, domains: [], attributes: { "digit.lifecycle": ["ACTIVE"] } }));
     return new Response(JSON.stringify(user));
   });
@@ -69,6 +72,92 @@ beforeEach(async () => {
 });
 
 describe("reconciliation", () => {
+  async function useRealRevocation() {
+    const real = await vi.importActual<typeof import("../../src/modules/revocation/index.js")>("../../src/modules/revocation/index.js");
+    mocks.revoke.mockImplementation(real.revokeAccount);
+    mocks.person.mockImplementation(real.revokePerson);
+    mocks.tenant.mockImplementation(real.revokeTenantMembers);
+    vi.mocked(bindingsFor).mockResolvedValue([]);
+    const recover = vi.spyOn(credentials, "findLiveStaffToken").mockResolvedValue({
+      accessToken: "recovered-token", expiresAt: Date.now() + 3600000, user: {},
+    });
+    const logout = vi.spyOn(digitClient, "revokeToken").mockResolvedValue();
+    return { recover, logout };
+  }
+  function deny(condition: string) {
+    if (condition === "disabled") user.enabled = false;
+    if (condition === "inactive") account.active = false;
+    if (condition === "missing") account = null;
+    if (condition === "nonmember") mocks.member.mockResolvedValue(false);
+    if (condition === "FAILED") organization.lifecycle = "FAILED";
+  }
+  it.each(["disabled", "inactive", "missing", "nonmember", "FAILED"])(
+    "a second %s pass performs no password grant or token logout", async condition => {
+      const { recover, logout } = await useRealRevocation();
+      deny(condition);
+      const ref = { tenantId: "tenant", uuid: "staff" };
+      await withPersonLease("person", lease => recordToken(lease, ref,
+        { accessToken: "first-token", expiresAt: Date.now() + 3600000, user: {} }, "staff"));
+      expect((await runReconcile()).failures).toEqual([]);
+      expect(logout).toHaveBeenCalledWith("first-token");
+      recover.mockClear(); logout.mockClear(); mocks.tenant.mockClear();
+      expect((await runReconcile()).failures).toEqual([]);
+      expect(recover).not.toHaveBeenCalled();
+      expect(logout).not.toHaveBeenCalled();
+      expect(mocks.tenant).not.toHaveBeenCalled();
+    });
+  it.each(["disabled", "inactive", "nonmember", "FAILED"])(
+    "a new live token in steady %s state is revoked without a password grant", async condition => {
+      const { recover, logout } = await useRealRevocation();
+      deny(condition);
+      await runReconcile();
+      recover.mockClear(); logout.mockClear();
+      const ref = { tenantId: "tenant", uuid: "staff" };
+      await withPersonLease("person", lease => recordToken(lease, ref,
+        { accessToken: "new-token", expiresAt: Date.now() + 3600000, user: {} }, "staff"));
+      expect((await runReconcile()).failures).toEqual([]);
+      expect(await readToken(ref)).toBeNull();
+      expect(logout).toHaveBeenCalledExactlyOnceWith("new-token");
+      expect(recover).not.toHaveBeenCalled();
+    });
+  it("recovers and revokes a token once on an active-to-inactive transition", async () => {
+    const { recover, logout } = await useRealRevocation();
+    account.active = false;
+    expect((await runReconcile()).failures).toEqual([]);
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalledExactlyOnceWith("recovered-token");
+    recover.mockClear(); logout.mockClear();
+    await runReconcile();
+    expect(recover).not.toHaveBeenCalled();
+    expect(logout).not.toHaveBeenCalled();
+  });
+  it("retries a failed transition before advancing the account mirror", async () => {
+    account.active = false;
+    mocks.revoke.mockRejectedValueOnce(new Error("unavailable"));
+    expect((await runReconcile()).failures).toHaveLength(1);
+    expect(JSON.parse(user.attributes["digit.accounts"][0]).entries[0].active).toBe(true);
+    mocks.revoke.mockClear();
+    await runReconcile();
+    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.anything(), "DIGIT_INACTIVE", { fallback: true });
+  });
+  it("checkpoints tenant state only after successful fan-out and detects recovery then failure again", async () => {
+    organization.lifecycle = "FAILED";
+    mocks.tenant.mockRejectedValueOnce(new Error("unavailable"));
+    expect((await runReconcile()).failures).toHaveLength(1);
+    expect(await getRedis().hget(reconcileStatsKey(), "tenant:tenant")).toBeNull();
+    await runReconcile();
+    expect(await getRedis().hget(reconcileStatsKey(), "tenant:tenant")).toBe("ORGANIZATION_DISABLED");
+    mocks.tenant.mockClear();
+    await runReconcile();
+    expect(mocks.tenant).not.toHaveBeenCalled();
+    organization.lifecycle = "ACTIVE";
+    await runReconcile();
+    expect(await getRedis().hget(reconcileStatsKey(), "tenant:tenant")).toBe("active");
+    organization.lifecycle = "FAILED";
+    await runReconcile();
+    expect(mocks.tenant).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["deactivation", "role-change"])("%s removes the actual Redis token inventory through the real revocation provider", async change => {
     const real = await vi.importActual<typeof import("../../src/modules/revocation/index.js")>("../../src/modules/revocation/index.js");
     mocks.revoke.mockImplementation(real.revokeAccount);
@@ -113,7 +202,7 @@ describe("reconciliation", () => {
     account.active = false;
     const stop = startReconcile();
     try {
-      await vi.waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith("person", expect.anything(), "DIGIT_INACTIVE"),
+      await vi.waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith("person", expect.anything(), "DIGIT_INACTIVE", { fallback: true }),
         { timeout: 3000, interval: 10 });
       stop();
       await vi.waitFor(async () => expect(await getRedis().get(reconcileLeaseKey())).toBeNull());
@@ -141,7 +230,7 @@ describe("reconciliation", () => {
     account.active = false;
     const result = await runReconcile();
     expect(result.failures).toEqual([]);
-    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "DIGIT_INACTIVE");
+    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "DIGIT_INACTIVE", { fallback: true });
     expect(JSON.parse(user.attributes["digit.accounts"][0]).entries[0].active).toBe(false);
     mocks.revoke.mockClear();
     account.active = true;
@@ -152,13 +241,13 @@ describe("reconciliation", () => {
   it("revokes a changed role snapshot before replacing the mirror", async () => {
     account.roles = [{ code: "SUPERVISOR", tenantId: "tenant" }];
     await runReconcile();
-    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "ROLE_CHANGED");
+    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "ROLE_CHANGED", { fallback: true });
   });
   it("marks missing accounts and revokes without deleting bindings", async () => {
     const original = user.attributes["digit.bindings"];
     account = null;
     await runReconcile();
-    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "DIGIT_ACCOUNT_MISSING");
+    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "DIGIT_ACCOUNT_MISSING", { fallback: true });
     expect(user.attributes["digit.bindings"]).toEqual(original);
     expect(JSON.parse(user.attributes["digit.accounts"][0]).entries[0].missing).toBe(true);
   });
@@ -179,7 +268,7 @@ describe("reconciliation", () => {
     mocks.organization.mockResolvedValue(null);
     await requestReconcileNow("organization-deleted");
     await runReconcile();
-    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "MEMBERSHIP_REMOVED");
+    expect(mocks.revoke).toHaveBeenCalledWith("person", expect.objectContaining({ uuid: "staff" }), "MEMBERSHIP_REMOVED", { fallback: false });
     expect(await getRedis().hget(reconcileStatsKey(), "completedGeneration")).toBe("1");
     expect(puts.every(item => item.path.startsWith("/users/") || item.path.startsWith("/organizations/"))).toBe(true);
   });
