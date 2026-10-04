@@ -1,3 +1,4 @@
+import { registerWorkspaceMemberRoutes } from "../modules/workspace-members/routes.js";
 import express from "express";
 import { AccountActionError } from "../modules/authentication/account-service.js";
 import { SessionRevokedError } from "../modules/sessions/session-store.js";
@@ -52,6 +53,7 @@ export function createIdentityApp(): express.Application {
   registerPasswordSetupRoutes(app);
   registerCitizenOtpRoutes(app);
   registerSessionRoutes(app);
+  registerWorkspaceMemberRoutes(app);
   registerAccessContextRoutes(app);
   registerOrganizationRoutes(app);
   registerControlPlaneRoutes(app);

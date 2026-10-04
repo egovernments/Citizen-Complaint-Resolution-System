@@ -1,3 +1,4 @@
+import { pendingInvitationsFor } from "../bindings/invitations.js";
 import type express from "express";
 import { accountMetadata, unlinkProvider } from "../authentication/account-service.js";
 import { privateRef } from "../citizen-otp/otp-store.js";
@@ -33,6 +34,7 @@ export function registerSessionRoutes(app: express.Application): void {
     return response.json({
       ...(account && { account, sessions }),
       authenticated: true,
+      pendingInvitations: surfaceContextKind(surface) === "citizen" ? [] : await pendingInvitationsFor(claims.sub),
       user: {
         id: claims.sub,
         email: claims.email,

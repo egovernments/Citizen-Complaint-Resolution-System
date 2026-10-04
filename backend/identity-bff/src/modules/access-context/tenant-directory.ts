@@ -12,6 +12,7 @@ import { DigitUnavailableError, type DigitAccount } from "../managed-accounts/di
 import type { KeycloakClaims } from "../authentication/types.js";
 
 export interface TenantOption {
+  code?: "DIGIT_ACCOUNT_INACTIVE";
   organizationId: string;
   organizationAlias: string;
   tenantId: string;
@@ -132,16 +133,17 @@ export function tenantOption(
   membership: OrganizationMembership,
   account: DigitAccount | null,
 ): TenantOption | null {
-  if (!account?.active) return null;
+  if (!account) return null;
   const roles = [...new Set(account.roles
     .filter((role) => role.tenantId === membership.tenantId)
     .map((role) => role.code))].sort();
-  return roles.length ? {
+  return roles.length || !account.active ? {
     organizationId: membership.organizationId,
     organizationAlias: membership.alias,
     tenantId: membership.tenantId,
     name: membership.name,
     roles,
+    ...(!account.active && { code: "DIGIT_ACCOUNT_INACTIVE" as const }),
   } : null;
 }
 

@@ -7,7 +7,7 @@ import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 const mocks = vi.hoisted(() => ({ request: vi.fn(), write: vi.fn(), mobile: vi.fn() }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({ request: mocks.request }));
 vi.mock("../../src/modules/accounts/digit-writer.js", () => ({ writeDigitIdentifiers: mocks.write }));
-vi.mock("../../src/modules/branding/tenant-branding.js", () => ({ mobileValidationForRoute: mocks.mobile }));
+vi.mock("../../src/modules/citizen-otp/mobile-validation.js", () => ({ mobileValidationForRoute: mocks.mobile }));
 let user: any;
 beforeAll(() => {
   Object.assign(config, { cachePrefix: `identifiers-${process.pid}` });
