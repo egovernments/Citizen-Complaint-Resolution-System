@@ -1,10 +1,10 @@
 # PGR onboarding deployment configuration
 
-These changes stage the PGR provisioning cutover in the onboarding owner PR.
-Root decision `apr_fd351ab1` transfers live fresh-founder authorization to
-the 8c dev box. Source is ready for that integration; BFF worker removal stays
-held until root reports the pass and the owner releases it. This lane does not
-deploy. Status: **pending 8c gate**.
+PGR owns provisioning. Root's live 8c gate passed on `e41e23d44`, including
+fresh-founder automatic completion, verified email and department/boundary/
+branding access using a BFF-minted token. Root then authorized removal of the
+old BFF worker, tenant-foundation and provisioner write path. Source removal
+and owner validation are complete; this lane does not deploy.
 
 ## Credential ownership
 
@@ -40,10 +40,11 @@ Kong, so a new tenant can receive its initial role-action grants. Business
 acceptance tests still use the founder's normal token through Kong.
 
 `pgr_onboarding_runner_enabled` renders `PGR_ONBOARDING_RUNNER_ENABLED`.
-It defaults to false. The deployment owner must enable it when deploying
-the PGR runner and BFF worker removal together, with the provisioner and
-onboarding credentials configured. Leaving it false means no provisioning
-worker runs; this is not a successful signup cutover.
+It defaults to false. The deployment owner must enable the PGR runner with
+the provisioner and onboarding credentials configured when releasing this
+cutover. The root-tested 8c configuration already has the PGR runner enabled.
+Leaving it false means no provisioning worker runs. The BFF worker has been
+removed from source and cannot serve as a fallback.
 
 ## MCP baseline packaging
 

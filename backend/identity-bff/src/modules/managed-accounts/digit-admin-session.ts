@@ -67,30 +67,11 @@ const admin = credentialTokenCache(() => ({
   userType: config.digitAdminUserType,
 }));
 
-const provisioner = credentialTokenCache(() => ({
-  label: "tenant provisioner",
-  username: config.digitProvisionerUsername,
-  password: config.digitProvisionerPassword,
-  tenantId: config.digitProvisionerTenantId,
-  userType: config.digitAdminUserType,
-}));
-
 /** Managed-account lifecycle only (ACCOUNT_ADMIN). Never for business calls. */
 export function withDigitAdmin<T>(operation: (token: string) => Promise<T>): Promise<T> {
   return admin.run(operation);
 }
 
-/** Onboarding tenant-foundation writes only (MDMS_ADMIN). */
-export function withDigitProvisioner<T>(operation: (token: string) => Promise<T>): Promise<T> {
-  return provisioner.run(operation);
-}
-
-export function digitProvisionerConfigured(): boolean {
-  return Boolean(config.digitProvisionerUsername && config.digitProvisionerPassword &&
-    config.digitProvisionerTenantId && config.digitMdmsCreateUrl);
-}
-
 export function resetDigitAdminToken(): void {
   admin.reset();
-  provisioner.reset();
 }
