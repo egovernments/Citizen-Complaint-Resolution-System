@@ -36,3 +36,17 @@ internal notification endpoint. `IDENTITY_OTP_SENDER_TIMEOUT_MS` defaults to
 maps to `OTP_CHANNEL_UNAVAILABLE`. Failed delivery drops the challenge and
 refunds the send reservation. `log` remains a development option;
 `IDENTITY_CITIZEN_OTP_SENDER` is retained as a fallback environment alias.
+
+Account actions come from the surface client's `digit.auth.account.actions`
+allowlist. `GET /session?surface=<key>&include=account` adds safe credential,
+provider and session metadata. Actions are bound to the initiating subject and
+session; removing a provider retains at least one primary sign-in method.
+`POST /logout` accepts `scope: current|others|all`; `others` retains the caller's
+cookie and session.
+
+`GET /readyz` reports Redis, JWKS, Keycloak Admin, authenticated DIGIT user and
+MDMS checks, each configured surface catalogue, event-poller lag and reconcile
+lag/interval. All checks run, even when another dependency fails; unconfigured
+surface clients report `disabled`. `GET /livez` checks process liveness.
+The old `/healthz` route is removed. Successful public tenant-context responses
+use `public, max-age=60, stale-while-revalidate=300`; failures remain `no-store`.
