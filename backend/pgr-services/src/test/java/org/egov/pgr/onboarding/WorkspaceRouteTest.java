@@ -88,4 +88,25 @@ public class WorkspaceRouteTest {
         verify(repository,never()).reserveName(any(),any());verify(repository,never()).beginRename(any(),any(),any(),any(),anyLong(),anyList(),any());
     }
 
+    @Test public void unreadableLocalReservationReturns503WithoutRenameWrites() throws Exception {
+        when(repository.find("example",true)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","version",0L))));
+        when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"name\":\"Old Name\"}}]"));
+        when(repository.nameAvailable("example","new name")).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
+        assertDatabaseFailureWithoutRenameWrites();
+        verifyNoInteractions(client);
+    }
+    @Test public void unreadableWorkspaceRowReturns503BeforeNameChecksOrRenameWrites() throws Exception {
+        when(repository.find("example",true)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
+        assertDatabaseFailureWithoutRenameWrites();
+        verify(repository,never()).nameAvailable(any(),any());verifyNoInteractions(client,mdms);
+    }
+    private void assertDatabaseFailureWithoutRenameWrites() throws Exception {
+        mvc.perform(post("/v2/onboarding/workspaces/_rename").contentType("application/json").content(request()))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.Errors[0].message").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"));
+        verify(repository,never()).reserveName(any(),any());verify(repository,never()).update(any(),anyLong(),any());
+        verify(repository,never()).beginRename(any(),any(),any(),any(),anyLong(),anyList(),any());
+        verify(repository,never()).event(any(),any(),anyLong(),any(),any());
+    }
+
 }

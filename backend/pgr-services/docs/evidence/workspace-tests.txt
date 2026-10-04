@@ -5,7 +5,8 @@ Full suite command (one run, exit 0):
 JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home mvn -o -q -f backend/pgr-services/pom.xml -Donboarding.test.jdbc=jdbc:postgresql://127.0.0.1:16432/onboarding_test test
 Full suite: 548 tests, 0 failures, 0 errors, 6 skipped (existing RequestsApiControllerTest @Ignore).
 After full suite: added 2 owner-requested Flyway tests; reran only WorkspacePostgresTest, exit 0, 12 passed, 0 skipped.
-No production source changes after full suite.
+Review follow-up: added workspace-controller DataAccessException -> 503 WORKSPACE_DEPENDENCY_UNAVAILABLE and 2 route tests.
+Only WorkspaceRouteTest rerun per owner instruction; combined full suite belongs to owner after integration.
 
 Fixture: PostgreSQL 16.15, random schema per test; local HTTP DIGIT/BFF fixtures, no live services.
 Flyway 9.22.3 project dependency executes dollar-quoted migration, reapplies as no-op, and rolls back ownership collision.
@@ -56,3 +57,16 @@ org.egov.pgr.onboarding.WorkspaceServiceTest tests=9 failures=0 errors=0 skipped
   PASS staleVersionCannotWriteOrProbe
   PASS localConflictPrecedesBffAndOccupiedLegacyNameCannotReserve
   PASS doneRequiresProbeAndOnlyBrandingCanSkip
+
+Review follow-up command (exit 0):
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home mvn -o -q -f backend/pgr-services/pom.xml -Dtest=WorkspaceRouteTest test
+WorkspaceRouteTest: 8 tests, 0 failures, 0 errors, 0 skipped.
+  PASS allRoutesRejectForgedCallerRoleAndCrossTenantAdmin
+  PASS probesExcludePlatformPrerequisitesAndInactiveRows
+  PASS normalDigitTokenReturnsLegacyWithoutProbesAndFreshlyChecksEachRequest
+  PASS absentTokenAndDisabledUserAreUnauthorized
+  PASS unreadableLocalReservationReturns503WithoutRenameWrites
+  PASS unreadableWorkspaceRowReturns503BeforeNameChecksOrRenameWrites
+  PASS unreadableProbeReturns503InsteadOfFalseReadiness
+  PASS unreadableBffNameCheckReturns503WithoutRenameWrites
+.artifacts/workspace/database-route-focused.log SHA256 9aab0916b3a3360ed8f807b0be87722e6e556f8e50c6b753df4ffa137db36819
