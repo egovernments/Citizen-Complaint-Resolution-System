@@ -3,7 +3,8 @@ import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import {
   listManagedIdentityAccounts,
-  listTenantMappings,
+  listTenantDirectory,
+  type TenantMapping,
   readTenantMappingForTenant,
   readOrganizationGroupReconciliation,
   readOrganizationReconciliation,
@@ -39,10 +40,13 @@ function allowlisted(roles: string[]): string[] {
 export async function desiredRolesBySubject(): Promise<{
   organizations: number;
   bySubject: Map<string, DesiredRoles>;
+  /** Tenant ids (lower case) whose mapping collided: their desired roles are unknown. */
+  collidedTenantIds: Set<string>;
 }> {
   const bySubject = new Map<string, DesiredRoles>();
   let organizations = 0;
-  for (const mapping of await listTenantMappings()) {
+  const directory = await listTenantDirectory();
+  for (const mapping of directory.mappings as TenantMapping[]) {
     if (!await isActiveDigitTenant(mapping.tenantId)) continue;
     const state = mapping.mappingType === "organization-group"
       ? await readOrganizationGroupReconciliation(mapping, config.digitRoleClientId)
@@ -55,7 +59,7 @@ export async function desiredRolesBySubject(): Promise<{
       bySubject.set(subject, desired);
     }
   }
-  return { organizations, bySubject };
+  return { organizations, bySubject, collidedTenantIds: directory.collidedTenantIds };
 }
 
 /**
@@ -117,7 +121,7 @@ export async function runIdentityReconciliation(): Promise<IdentityReconciliatio
   if (!result.acquired) return result;
 
   try {
-    const { organizations, bySubject } = await desiredRolesBySubject();
+    const { organizations, bySubject, collidedTenantIds } = await desiredRolesBySubject();
     result.organizations = organizations;
     const pairs = new Map<string, { subject: string; tenantId: string }>();
     for (const [subject, desired] of bySubject) {
@@ -134,6 +138,16 @@ export async function runIdentityReconciliation(): Promise<IdentityReconciliatio
     result.subjects = new Set([...pairs.values()].map((pair) => pair.subject)).size;
     result.accounts = pairs.size;
     for (const { subject, tenantId } of pairs.values()) {
+      // A tenant whose slug or tenant id collides is missing from the
+      // directory, which would read as "nobody is a member" and deactivate
+      // every account there. Leave it alone until the collision is fixed.
+      if (collidedTenantIds.has(tenantId.toLowerCase())) {
+        result.failures.push({
+          subject: `${subject}@${tenantId}`,
+          error: "Tenant mapping collides with another Organization; skipped",
+        });
+        continue;
+      }
       const roles = bySubject.get(subject)?.get(tenantId) ?? null;
       try {
         const outcome = await ensureManagedAccount(
