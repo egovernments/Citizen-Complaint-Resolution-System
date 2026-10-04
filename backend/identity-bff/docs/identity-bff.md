@@ -896,7 +896,8 @@ account. The BFF cannot revoke only the copies held by other consumers of that
 token. `logout {scope: "others"}` therefore preserves every current-session-held
 account token while ending the other BFF/Keycloak sessions. Other consumers who
 already possess that shared DIGIT token can use it until expiry or a later
-account-wide revocation (including logout-all). Tokens belonging only to ended
+account-wide revocation (including logout-all), including consumers that obtained
+the same token directly from egov-user outside the BFF. Tokens belonging only to ended
 sessions are still revoked. This limitation also applies when staff use the
 derived credential; deterministic credentials do not create per-session DIGIT
 tokens. Logout-current releases its claim and preserves tokens with remaining
