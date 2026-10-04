@@ -110,7 +110,7 @@ describe("binding transitions with real person and uuid locks", () => {
     user.attributes!["digit.bindings"] = [JSON.stringify(doc)];
     db.puts.length = 0;
     const inventory = await withPersonLease("admin", () => bindingsFor("pg"));
-    expect(inventory).toMatchObject([{ subject: "invitee", binding: { state: "removed", removedBy: { kind: "expiry" } } }]);
+    expect(inventory).toEqual([]);
     expect(db.puts).toHaveLength(0);
     expect(JSON.parse(user.attributes!["digit.bindings"][0]).bindings[0].state).toBe("pending");
   });
