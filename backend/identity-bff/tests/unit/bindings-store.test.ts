@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { closeCache, initCache } from "../../src/infrastructure/redis.js";
+import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { config } from "../../src/infrastructure/config.js";
 import type { BindingUser } from "../../src/modules/bindings/types.js";
-const db = vi.hoisted(() => ({ users: new Map<string, BindingUser>(), puts: [] as BindingUser[] }));
+const db = vi.hoisted(() => ({ users: new Map<string, BindingUser>(), puts: [] as BindingUser[], beforeOwnersReturn: null as (() => Promise<void>) | null }));
 vi.mock("../../src/modules/organizations/organization-service.js", () => ({
   request: vi.fn(async (path: string, init?: RequestInit) => {
     const url = new URL(path, "http://keycloak");
@@ -10,6 +10,7 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => ({
       const query = url.searchParams.get("q");
       let users = [...db.users.values()];
       if (query) users = users.filter((u) => u.attributes?.["digit.boundUuids"]?.includes(query.slice("digit.boundUuids:".length)));
+      if (query && db.beforeOwnersReturn) await db.beforeOwnersReturn();
       const first = Number(url.searchParams.get("first") || 0);
       return Response.json(users.slice(first, first + Number(url.searchParams.get("max") || 100)));
     }
@@ -34,7 +35,7 @@ beforeAll(() => {
 });
 afterAll(() => closeCache());
 beforeEach(() => {
-  db.users.clear(); db.puts.length = 0;
+  db.users.clear(); db.puts.length = 0; db.beforeOwnersReturn = null;
   for (const id of ["invitee", "other"]) db.users.set(id, { id, enabled: true, email: `${id}@example.test`, attributes: { unrelated: ["keep"] } });
 });
 describe("binding transitions with real person and uuid locks", () => {
@@ -45,6 +46,14 @@ describe("binding transitions with real person and uuid locks", () => {
     expect(db.puts[0].attributes?.["digit.boundUuids"]).toEqual([`pg|${uuid}`]);
     expect(db.puts[0].attributes?.unrelated).toEqual(["keep"]);
     expect(db.puts[0]).not.toHaveProperty("enabled");
+  });
+  it("does not write after losing the uuid lock", async () => {
+    const key = `${config.cachePrefix}:identity:uuid-lock:pg:${uuid}`;
+    db.beforeOwnersReturn = async () => { await getRedis().set(key, "new-owner", "PX", 5000); };
+    try {
+      await expect(ensureActive(input())).rejects.toMatchObject({ code: "IDENTITY_BUSY" });
+      expect(db.puts).toHaveLength(0);
+    } finally { await getRedis().del(key); }
   });
   it("rejects a different uuid at the same key", async () => {
     await ensureActive(input());

@@ -62,8 +62,9 @@ export async function readBindings(subject: string): Promise<Binding[]> {
     const fresh = bindingsFromUser(await readBindingUser(subject));
     for (const b of fresh) {
       if (effectiveBinding(b).state === b.state) continue;
-      await withUuidLock(b.tenantId, b.uuid, async () => {
+      await withUuidLock(b.tenantId, b.uuid, async (lock) => {
         await lease.assertHeld();
+        await lock.assertHeld();
         await writeBinding(subject, effectiveBinding(b));
       });
     }
@@ -109,7 +110,7 @@ export async function bindingsFor(tenantId: string): Promise<Array<{ subject: st
 type BindingInput = { subject: string; tenantId: string; uuid: string; actor: BindingActor };
 
 async function create(input: BindingInput, pending?: { expiresAt: number; reinvite?: boolean }): Promise<{ binding: Binding; created: boolean }> {
-  return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async () => {
+  return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
     await validateBinding(input);
     const previous = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId);
     const old = previous && effectiveBinding(previous);
@@ -132,6 +133,7 @@ async function create(input: BindingInput, pending?: { expiresAt: number; reinvi
       ...(pending ? { expiresAt: pending.expiresAt } : { boundAt: now }),
     };
     await lease.assertHeld();
+    await lock.assertHeld();
     await writeBinding(input.subject, binding);
     return { binding, created: true };
   }));
@@ -152,7 +154,7 @@ export async function accept(input: { subject: string; tenantId: string; invitat
     if (!existing || existing.state === "removed" || existing.invitationVersion !== input.invitationVersion) {
       throw new BindingError("INVITATION_STALE", "The invitation is no longer current");
     }
-    return withUuidLock(existing.tenantId, existing.uuid, async () => {
+    return withUuidLock(existing.tenantId, existing.uuid, async (lock) => {
       if (existing.state === "active") return existing;
       if ((await ownersOf(existing.tenantId, existing.uuid)).some((sub) => sub !== input.subject)) {
         throw new BindingError("INVITATION_STALE", "The invitation no longer owns the account");
@@ -161,6 +163,7 @@ export async function accept(input: { subject: string; tenantId: string; invitat
       const { expiresAt: _expiry, ...rest } = existing;
       const binding: Binding = { ...rest, state: "active", acceptedAt: Date.now(), boundAt: Date.now() };
       await lease.assertHeld();
+      await lock.assertHeld();
       await writeBinding(input.subject, binding);
       return binding;
     });
@@ -168,11 +171,12 @@ export async function accept(input: { subject: string; tenantId: string; invitat
 }
 
 export async function remove(input: { subject: string; tenantId: string; uuid: string; removedBy: NonNullable<Binding["removedBy"]> }): Promise<{ removed: boolean; binding?: Binding }> {
-  return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async () => {
+  return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
     const old = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId && b.uuid === input.uuid);
     if (!old || old.state === "removed") return { removed: false, binding: old };
     const binding: Binding = { ...old, state: "removed", removedAt: Date.now(), removedBy: input.removedBy };
     await lease.assertHeld();
+    await lock.assertHeld();
     await writeBinding(input.subject, binding);
     return { removed: true, binding };
   }));
