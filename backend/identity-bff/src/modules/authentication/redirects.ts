@@ -19,6 +19,18 @@ export function safeIdentityReturnTo(value: unknown): string | null {
   }
 }
 
+/**
+ * Relative destinations under the surface's own tenant route. Normalization
+ * (dot segments, percent-encoding) happens first, so `/slug/digit-ui/employee/../x`
+ * cannot escape the prefix.
+ */
+export function tenantBoundReturnTo(value: unknown, prefix: string): string | null {
+  const safe = safeIdentityReturnTo(value);
+  if (!safe || !safe.startsWith("/") || safe.startsWith("//")) return null;
+  const path = new URL(safe, "http://identity.invalid").pathname;
+  return path.startsWith(prefix) ? safe : null;
+}
+
 export function withAuthResult(destination: string, id: string): string {
   if (destination.startsWith("/") && !destination.startsWith("//")) {
     const relative = new URL(destination, "http://identity.invalid");
