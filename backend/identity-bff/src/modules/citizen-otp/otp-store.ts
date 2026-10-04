@@ -10,9 +10,14 @@ import type { BoundTenant } from "../authentication/surfaces.js";
  * cannot be brute-forced offline. Phone-keyed buckets use the same keyed hash,
  * never the number itself.
  *
- * Guessing is bounded per challenge (IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS) and by
- * the per-phone and per-IP send limits. There is deliberately no lockout per
- * phone number: anyone who knows a number could use one to lock its owner out.
+ * Guessing is bounded per challenge (IDENTITY_CITIZEN_OTP_MAX_ATTEMPTS), by
+ * one live challenge per number (a new code replaces the previous one), and
+ * by the per-phone and per-IP send limits. Wrong codes never lock a number:
+ * anyone who knows it could use that to lock its owner out. The resend
+ * cooldown is per number AND caller IP for the same reason. The hourly
+ * per-phone send cap is the one deliberate exception: it bounds SMS cost and
+ * total guesses per number (send limit × attempts), so a determined caller
+ * can still use up a number's sends for the window.
  */
 
 const PREFIX = () => `${config.cachePrefix}:identity:citizen-otp`;
@@ -31,7 +36,9 @@ function codeHash(challengeId: string, code: string): string {
 }
 
 const challengeKey = (id: string) => `${PREFIX()}:challenge:${id}`;
-const cooldownKey = (phoneRef: string) => `${PREFIX()}:cooldown:${phoneRef}`;
+const cooldownKey = (phoneRef: string, ipRef: string) => `${PREFIX()}:cooldown:${phoneRef}:${ipRef}`;
+/** The newest delivered challenge for a number; only that one is usable. */
+const latestKey = (phoneRef: string) => `${PREFIX()}:latest:${phoneRef}`;
 const phoneSendsKey = (phoneRef: string) => `${PREFIX()}:sends:phone:${phoneRef}`;
 const ipSendsKey = (ipRef: string) => `${PREFIX()}:sends:ip:${ipRef}`;
 
@@ -63,18 +70,18 @@ export async function reserveSend(phoneNumber: string, ip: string): Promise<Send
   const window = config.identityCitizenOtpSendWindowSeconds;
   const cooldown = config.identityCitizenOtpResendSeconds > 0;
   const inCooldown = async () => {
-    const ttl = await getRedis().ttl(cooldownKey(phoneRef));
+    const ttl = await getRedis().ttl(cooldownKey(phoneRef, ipRef));
     return { allowed: false as const, reason: "COOLDOWN" as const, retryAfter: Math.max(1, ttl) };
   };
   // The cooldown is checked first, so pressing "resend" too early costs
   // nothing from the IP budget that others behind the same address share.
-  if (cooldown && await getRedis().exists(cooldownKey(phoneRef))) return inCooldown();
+  if (cooldown && await getRedis().exists(cooldownKey(phoneRef, ipRef))) return inCooldown();
   const ipSends = await countInWindow(ipSendsKey(ipRef), window);
   if (ipSends.count > config.identityCitizenOtpIpSendLimit) {
     return { allowed: false, reason: "IP_LIMIT", retryAfter: Math.max(1, ipSends.ttl) };
   }
   if (cooldown && !await getRedis().set(
-    cooldownKey(phoneRef), "1", "EX", config.identityCitizenOtpResendSeconds, "NX",
+    cooldownKey(phoneRef, ipRef), "1", "EX", config.identityCitizenOtpResendSeconds, "NX",
   )) {
     // Lost a race with another send for the same number.
     await uncount(ipSendsKey(ipRef));
@@ -91,7 +98,7 @@ export async function reserveSend(phoneNumber: string, ip: string): Promise<Send
 export async function refundSend(reservation: SendReservation): Promise<void> {
   await uncount(phoneSendsKey(reservation.phoneRef));
   await uncount(ipSendsKey(reservation.ipRef));
-  if (reservation.cooldown) await getRedis().del(cooldownKey(reservation.phoneRef));
+  if (reservation.cooldown) await getRedis().del(cooldownKey(reservation.phoneRef, reservation.ipRef));
 }
 
 /** A new six-digit code for a new challenge. The code itself is never stored. */
@@ -119,6 +126,22 @@ export async function createChallenge(
     throw new Error("The OTP challenge could not be stored");
   }
   return { challenge: { id, phoneNumber, tenant }, code };
+}
+
+/**
+ * Makes `challenge` the number's only usable code once it has been
+ * delivered: the previous challenge, if any, is deleted in the same step.
+ */
+const REPLACE_LATEST = `local previous = redis.call('GET', KEYS[1])
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+  if previous and previous ~= ARGV[1] then redis.call('DEL', ARGV[3] .. previous) end
+  return 0`;
+
+export async function replacePreviousChallenge(challenge: OtpChallenge): Promise<void> {
+  await getRedis().eval(
+    REPLACE_LATEST, 1, latestKey(privateRef("phone", challenge.phoneNumber)),
+    challenge.id, config.identityCitizenOtpTtlSeconds, challengeKey(""),
+  );
 }
 
 export async function deleteChallenge(id: string): Promise<void> {

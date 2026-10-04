@@ -26,6 +26,7 @@ import {
   readChallenge,
   refundSend,
   releaseChallenge,
+  replacePreviousChallenge,
   reserveSend,
 } from "./otp-store.js";
 
@@ -157,6 +158,9 @@ export function registerCitizenOtpRoutes(app: express.Application): void {
         // Fixed-code mode (development): the challenge stays usable undelivered.
         reason = "FIXED_CODE_ONLY";
       }
+      // Only now that a code went out does it replace the previous one, so a
+      // failed send never takes away a code the citizen already has.
+      await replacePreviousChallenge(challenge);
       await audit({ ...base, challengeId: challenge.id, outcome: "SUCCESS", ...(reason && { reason }) });
       return response.status(202).json({
         challengeId: challenge.id,

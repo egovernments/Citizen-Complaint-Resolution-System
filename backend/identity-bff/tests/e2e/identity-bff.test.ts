@@ -2175,11 +2175,14 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
     it("limits resends per phone and per IP", async () => {
       Object.assign(config as any, { identityCitizenOtpResendSeconds: 60 });
       try {
-        expect((await send("799000301")).status).toBe(202);
-        const tooSoon = await send("799000301");
+        expect((await send("799000301", "203.0.113.80")).status).toBe(202);
+        const tooSoon = await send("799000301", "203.0.113.80");
         expect(tooSoon.status).toBe(429);
         expect(await tooSoon.json()).toMatchObject({ code: "OTP_RESEND_TOO_SOON" });
         expect(Number(tooSoon.headers.get("retry-after"))).toBeGreaterThan(0);
+        // The cooldown is per caller: someone else asking for a code to this
+        // number does not hold its owner back.
+        expect((await send("799000301", "203.0.113.81")).status).toBe(202);
       } finally {
         (config as any).identityCitizenOtpResendSeconds = 0;
       }
@@ -2203,6 +2206,23 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       } finally {
         (config as any).identityCitizenOtpIpSendLimit = otpConfig.identityCitizenOtpIpSendLimit;
       }
+    });
+
+    it("keeps only the newest code for a number usable", async () => {
+      const first = await (await send("799000310")).json();
+      const firstCode = lastCode();
+      const second = await (await send("799000310")).json();
+      const secondCode = lastCode();
+      const old = await verify(first.challengeId, firstCode);
+      expect([old.status, (await old.json()).code]).toEqual([400, "OTP_EXPIRED"]);
+      // A send that fails to deliver does not take the current code away.
+      failDelivery = true;
+      try {
+        expect((await send("799000310")).status).toBe(503);
+      } finally {
+        failDelivery = false;
+      }
+      expect((await verify(second.challengeId, secondCode)).status).toBe(200);
     });
 
     it("expires a challenge after too many wrong codes, but never locks the number's owner out", async () => {
