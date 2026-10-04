@@ -26,6 +26,6 @@ Commands below run from the repository root unless prefixed with a directory. Ra
 | `npm run test:security:http --prefix digit-mcp` | 34 passed against local stub service | `final-security-http.log` |
 | `npm run test:safety --prefix digit-mcp` | 60 passed, 2 failures in unchanged phone checks: tests 2.3/2.4 demand rejection of 9/11 digit phones, while existing validation accepts 6–15 digits | `final-safety.log` |
 
-These phone failures were not independently reproduced on the base revision. They were escalated to onboarding-owner for the phone owner; `src/utils/validation.ts` and `test-agent-safety.ts` are unchanged from base `4674d8991`. No phone contract changes were made in this lane.
+Identity-root classified both phone assertions as "baseline failure, unchanged (validator and test identical to develop)", relayed by onboarding-owner in bridge message `msg_532a02d916f24c8a96009ca6f137a76d`. This leaf did not rerun the baseline suite. Neither phone file was changed or skipped; no phone contract changes were made in this lane.
 
 Offline CI gates ran once before the draft PR. Live `test:full`/OpenAPI integration suites need a configured DIGIT deployment and were not run. Java packaging checks do not claim a PGR full-suite run. No deployment or end-to-end signup is claimed. The monorepo MCP CI now watches canonical-seed changes and runs baseline and npm/standalone packaging gates after its build.
