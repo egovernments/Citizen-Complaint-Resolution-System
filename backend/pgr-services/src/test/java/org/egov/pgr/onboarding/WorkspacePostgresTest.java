@@ -153,17 +153,17 @@ public class WorkspacePostgresTest {
         var signup = signup("example");
         tx.execute(s -> { onboarding.reserveIdentifier("ORGANIZATION_NAME", "old example", signup.getId(), 1L); return null; }); activate(signup);
         service.rename(rename("example", "New Name", 1));
-        doThrow(new OnboardingFailure("LOCALIZATION_DOWN", true)).doNothing().when(gateway).renameLocale("example", "New Name", "hi_IN");
-        var publisher = transactional(new WorkspaceRenamePublisher(repository, gateway)); publisher.publishPending();
+        doThrow(new OnboardingFailure("LOCALIZATION_DOWN", true)).doNothing().when(gateway).renameLocale(eq("example"), eq("New Name"), eq("hi_IN"), any());
+        var publisher = transactional(new WorkspaceRenamePublisher(repository, gateway)); assertThrows(ResponseStatusException.class,()->publisher.publish(rename("example","New Name",1)));
         var partial = repository.rename("example", null).orElseThrow();
         assertEquals(List.of("MDMS", "LOCALE:en_IN"), partial.get("progress")); assertEquals("PENDING", partial.get("status")); assertEquals("LOCALIZATION_DOWN", partial.get("lastErrorCode"));
         assertFalse(onboarding.identifierAvailable("ORGANIZATION_NAME", "old example", null)); assertFalse(onboarding.identifierAvailable("ORGANIZATION_NAME", "new name", null));
         assertEquals("WORKSPACE_RENAME_PENDING", assertThrows(ResponseStatusException.class, () -> service.rename(rename("example", "Third", 2))).getReason());
         service.update(update("example", 2));
-        jdbc.update("UPDATE eg_pgr_onboarding_workspace_rename SET next_attempt_at=0"); publisher.publishPending();
+        publisher.publish(rename("example","New Name",1));
         var done = repository.rename("example", null).orElseThrow(); assertEquals("DONE", done.get("status")); assertFalse(done.containsKey("lastErrorCode"));
-        verify(gateway, times(1)).renameMdms("example", "New Name"); verify(gateway, times(1)).renameLocale("example", "New Name", "en_IN");
-        verify(gateway, times(2)).renameLocale("example", "New Name", "hi_IN"); verify(gateway).bustCache();
+        verify(gateway, times(1)).renameMdms(eq("example"), eq("New Name"), any()); verify(gateway, times(1)).renameLocale(eq("example"), eq("New Name"), eq("en_IN"), any());
+        verify(gateway, times(2)).renameLocale(eq("example"), eq("New Name"), eq("hi_IN"), any()); verify(gateway).bustCache(eq("example"), any());
         assertTrue(onboarding.identifierAvailable("ORGANIZATION_NAME", "old example", null)); assertFalse(onboarding.identifierAvailable("ORGANIZATION_NAME", "new name", null));
         assertEquals("New Name", onboarding.findSignup(signup.getId()).orElseThrow().getAccountName());
         assertEquals(3L, repository.find("example", false).orElseThrow().get("version"));
@@ -175,14 +175,14 @@ public class WorkspacePostgresTest {
         var signup = signup("example"); activate(signup);
         service.rename(rename("example", "First", 1));
         var old = repository.rename("example", null).orElseThrow();
-        transactional(new WorkspaceRenamePublisher(repository, gateway)).publishPending();
+        transactional(new WorkspaceRenamePublisher(repository, gateway)).publish(rename("example","First",1));
         when(gateway.tenant("example")).thenReturn(mapper.valueToTree(Map.of("data", Map.of("name", "First"))));
         service.rename(rename("example", "Second", 2));
         tx.execute(s -> { repository.finishRename(old); return null; });
         assertEquals(2, count("eg_pgr_onboarding_workspace_name"));
         assertEquals("PENDING", repository.rename("example", null).orElseThrow().get("status"));
         assertEquals(1, (int) jdbc.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace_event WHERE event_type='RENAME_DONE'", Integer.class));
-        transactional(new WorkspaceRenamePublisher(repository, gateway)).publishPending();
+        transactional(new WorkspaceRenamePublisher(repository, gateway)).publish(rename("example","Second",2));
         tx.execute(s -> { repository.finishRename(old); return null; });
         assertEquals("Second", onboarding.findSignup(signup.getId()).orElseThrow().getAccountName());
         assertEquals("second", jdbc.queryForObject("SELECT normalized_name FROM eg_pgr_onboarding_workspace_name", String.class));
@@ -259,6 +259,43 @@ public class WorkspacePostgresTest {
         assertEquals("other",jdbc.queryForObject("SELECT tenant_id FROM eg_pgr_onboarding_workspace_name WHERE normalized_name='café'",String.class));
         assertEquals("third",jdbc.queryForObject("SELECT tenant_id FROM eg_pgr_onboarding_workspace_name WHERE normalized_name=?",String.class,"north\u00a0office"));
         assertEquals(0,(int)jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE version='20261004020000'",Integer.class));
+    }
+
+    @Test public void authenticatedRouteResumesPartialRenameWithFreshTokenAndNeverPersistsTokens() throws Exception {
+        activate(signup("example"));
+        var publisher=transactional(new WorkspaceRenamePublisher(repository,gateway));
+        var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                new org.egov.pgr.web.controllers.WorkspaceApiController(service,publisher)).build();
+        doAnswer(call->{
+            Map<?,?> request=call.getArgument(3);String token=((Map<?,?>)request.get("RequestInfo")).get("authToken").toString();
+            if(token.equals("expired-after-mdms"))throw new ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED,"WORKSPACE_AUTH_REQUIRED");
+            assertEquals("fresh-caller-token",token);return null;
+        }).when(gateway).renameLocale(eq("example"),eq("New Name"),eq("hi_IN"),any());
+        var request=new LinkedHashMap<>(rename("example","New Name",1));
+        request.put("RequestInfo",Map.of("authToken","expired-after-mdms"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v2/onboarding/workspaces/_rename")
+                .contentType("application/json").content(mapper.writeValueAsString(request)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+        assertEquals(List.of("MDMS","LOCALE:en_IN"),repository.rename("example",1L).orElseThrow().get("progress"));
+        assertEquals(2,count("eg_pgr_onboarding_workspace_name"));
+        service.update(update("example",2)); // Setup has advanced version; replay must still use the original 1.
+        clearInvocations(gateway);
+        service.search(Map.of("tenantId","example","RequestInfo",Map.of("authToken","fresh-caller-token")));
+        verify(gateway,never()).renameMdms(any(),any(),any());verify(gateway,never()).renameLocale(any(),any(),any(),any());verify(gateway,never()).bustCache(any(),any());
+        request.put("RequestInfo",Map.of("authToken","fresh-caller-token"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v2/onboarding/workspaces/_rename")
+                .contentType("application/json").content(mapper.writeValueAsString(request)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isAccepted())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.Rename.status").value("DONE"));
+        verify(gateway,never()).renameMdms(any(),any(),any());verify(gateway,never()).renameLocale(eq("example"),eq("New Name"),eq("en_IN"),any());
+        verify(gateway).renameLocale(eq("example"),eq("New Name"),eq("hi_IN"),argThat(r->"fresh-caller-token".equals(((Map<?,?>)r.get("RequestInfo")).get("authToken"))));
+        verify(gateway).bustCache(eq("example"),argThat(r->"fresh-caller-token".equals(((Map<?,?>)r.get("RequestInfo")).get("authToken"))));
+        assertEquals(1,count("eg_pgr_onboarding_workspace_rename"));assertEquals(3L,repository.find("example",false).orElseThrow().get("version"));
+        for(String table:List.of("eg_pgr_onboarding_workspace","eg_pgr_onboarding_workspace_rename","eg_pgr_onboarding_workspace_event","eg_pgr_onboarding_workspace_name")) {
+            String stored=jdbc.queryForList("SELECT row_to_json(t)::text FROM "+table+" t",String.class).toString();
+            assertFalse(stored.contains("expired-after-mdms"));assertFalse(stored.contains("fresh-caller-token"));assertFalse(stored.contains("authToken"));
+        }
+        for(var method:WorkspaceRenamePublisher.class.getDeclaredMethods())assertNull(method.getAnnotation(org.springframework.scheduling.annotation.Scheduled.class));
     }
 
 }

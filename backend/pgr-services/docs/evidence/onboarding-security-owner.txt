@@ -1,0 +1,59 @@
+Combined PGR signup/workspace authorization evidence — 2026-10-05 IST
+
+Base: identity/completion-base 8152e6c6f. Reviewed and merged PR79 (29abdb178)
+and PR80 (6c0cb42a5); merge retained final canonical-baseline transport test.
+Temporary provider post/cache compatibility methods removed after integration.
+Their denial regressions now exercise the explicit read API; no coverage removed.
+
+Owner execution (JDK17):
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home backend/pgr-services/src/test/fixtures/run-onboarding-recovery.sh --full
+Exit0: 599 tests,593 passed,6 existing skips,0 failures/errors.
+Includes15 OnboardingPostgresTest (actual BFF/Redis fixture, all passed),
+13 WorkspacePostgresTest (all passed),14 provider transport and5 workspace transport.
+Fixture uses isolated local PostgreSQL schema/Redis prefix; no deployment.
+
+Skipped tests:
+- org.egov.pgr.web.controllers.RequestsApiControllerTest#requestsUpdatePostFailure
+- org.egov.pgr.web.controllers.RequestsApiControllerTest#requestsCreatePostSuccess
+- org.egov.pgr.web.controllers.RequestsApiControllerTest#requestsCreatePostFailure
+- org.egov.pgr.web.controllers.RequestsApiControllerTest#requestsSearchPostSuccess
+- org.egov.pgr.web.controllers.RequestsApiControllerTest#requestsUpdatePostSuccess
+- org.egov.pgr.web.controllers.RequestsApiControllerTest#requestsSearchPostFailure
+
+Owner deployment/packaging:
+PATH=<owner .artifacts/onboarding/venv/bin>:$PATH npx jest --runInBand static/deployment-contracts.test.ts static/onboarding-deployment-contracts.test.ts static/mcp-baseline-packaging.test.ts
+Initial130 cases:124 pass,6 fail because local Jinja2 was absent. Installed Jinja2
+in existing untracked test venv, then reran only deployment-contracts:119/119 pass.
+Other suites already passed11/11. Final total130 pass, no source change for prerequisite.
+
+Independent leaf evidence reviewed against actual Surefire/UI logs and SHA256:
+workspace-write-authorization-tests.txt:41 backend pass including13 PostgreSQL;
+Configurator21 pass; data-provider declaration build and Configurator tsc -b exit0.
+pgr-write-authorization-tests.txt: fresh authorization, scope/lease, action allowlist,
+canonical1009 writes with1009 fresh checks; prior optional BFF skip now covered above.
+
+Owner seed/config checks previously executed on same source:
+MCP build (tsc) passed, baseline19 pass, packaging2 pass; see
+digit-mcp/docs/validation/baseline-tenant-scope.md. Canonical SHA256:
+4480a9374295f902b770aced529d19be637a92282b7ecaab5790d38710996bf1.
+
+Authorization/recovery reviewed:
+- Every signup direct write requires fresh active configured EMPLOYEE with all four
+  state-root roles MDMS_ADMIN/ACCOUNT_ADMIN/LOC_ADMIN/HRMS_ADMIN and persisted
+  target tenant/step/restart/live lease checked before and after authorization.
+- Workspace writes use three fixed Kong routes/current caller token; no persisted
+  token, provisioner fallback, background publisher or role-grant expansion.
+- PostgreSQL transaction proxies prove401 after partial publication commits
+  checkpoints/reservations; explicit fresh-token retry completes the original
+  request despite later setup version. Search polling performs no writes.
+- Configurator retains original retry name/version across reload and401/403.
+
+Limits: deterministic local Kong/user HTTP stubs; no deployed Kong/live role test.
+Root must verify provisioner four-role prerequisite and deployed caller authorization.
+No BFF runtime source changed; existing BFF full suite not repeated for this patch.
+
+Local raw log SHA256:
+owner-full-pgr.log:3076f8ee0345d2440f4e91de36ddca37849629adba87d4b3b0ad5c41fee50470
+owner-static.log:e679a6013b4dd356d93fb46b2ac18cd9bf74f89f50587a81f1b52ea07901a8c6
+owner-static-retry.log:ea44d213095d0a7b0c52d24c4b5ec69714f3408fc10863be50aca2630fc8491d
+Logs in .artifacts/onboarding-security; git diff --check passed.

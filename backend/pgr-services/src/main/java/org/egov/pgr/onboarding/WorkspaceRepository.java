@@ -71,9 +71,6 @@ public class WorkspaceRepository {
                 id,tenant,name,normalized,oldName,version,version+1,json(languages),now,actor,now);
         return rename(tenant,version).orElseThrow();
     }
-    public List<String> pendingRenames() {
-        return jdbc.queryForList("SELECT tenant_id FROM eg_pgr_onboarding_workspace_rename WHERE status='PENDING' AND next_attempt_at<=? ORDER BY next_attempt_at LIMIT 20 FOR UPDATE SKIP LOCKED",String.class,System.currentTimeMillis());
-    }
     public void renameCheckpoint(Map<String,Object> rename,List<String> progress) {
         jdbc.update("UPDATE eg_pgr_onboarding_workspace_rename SET progress=?::jsonb,updated_at=?,last_error_code=NULL WHERE id=? AND status='PENDING'",
                 json(progress),System.currentTimeMillis(),UUID.fromString(rename.get("id").toString()));

@@ -222,6 +222,18 @@ public class OnboardingRepository {
                 workerId, leaseToken, leaseExpiresAt, now, now, now));
     }
 
+    /** Trusted DB ownership and lease fence for direct signup writes; caller DTOs cannot grant scope. */
+    public boolean authorizesSignupWrite(UUID operationId, UUID signupId, int restartNo, UUID token,
+                                        String tenant, String step, long now) {
+        Integer count = jdbcTemplate.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_operation o " +
+                        "JOIN eg_pgr_onboarding_signup s ON s.id=o.signup_id " +
+                        "WHERE o.id=? AND o.signup_id=? AND o.restart_no=? AND o.status='RUNNING' " +
+                        "AND o.lease_token=? AND o.lease_expires_at>? AND o.current_step=? " +
+                        "AND s.status='PROVISIONING' AND s.requested_tenant_id=?",
+                Integer.class, operationId, signupId, restartNo, token, now, step, tenant);
+        return count != null && count == 1;
+    }
+
     public Optional<OnboardingOperation> findOperation(UUID id) {
         return first(jdbcTemplate.query(
                 "SELECT " + OPERATION_COLUMNS + " FROM eg_pgr_onboarding_operation WHERE id = ?", operationMapper(), id));
