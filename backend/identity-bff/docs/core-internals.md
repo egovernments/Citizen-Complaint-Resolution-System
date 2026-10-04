@@ -162,8 +162,12 @@ export function staffCredentialMode(): "rotate" | "derived";   // IDENTITY_STAFF
   `active`, roles, locks; skip the write if a written-as-sent field is masked;
   a validation reject is `DIGIT_VALIDATION`). core-sync uses it for email and
   phone write-through.
-- `digit-user-client.passwordLogin` keeps the OAuth error body and throws
-  `StaffLoginError` with the typed reason.
+- Login refusals come from item 6: `digit-user-client.passwordLogin` throws
+  `DigitLoginRejectedError {reason: invalid_credentials | locked | inactive | unknown}`.
+  The credential service maps it (no re-parsing): `invalid_credentials` → one
+  repair; `locked` → `ACCOUNT_LOCKED`; `inactive` → `DIGIT_ACCOUNT_INACTIVE`;
+  anything else → `DEPENDENCY`. `StaffLoginError` is the credential service's
+  own error carrying that mapped reason.
 - The keyVersion goes into the `digit.accounts` staff entry by calling the
   mirror (§4) with `{ credential: { keyVersion, setAt } }`.
 
