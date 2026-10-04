@@ -38,6 +38,13 @@ describe('PGR onboarding cutover deployment contract', () => {
     expect(setting(pgr, 'PGR_ONBOARDING_RUNNER_ENABLED')).toBe('${PGR_ONBOARDING_RUNNER_ENABLED:-false}');
   });
 
+  test('workspace writes have a separate Kong origin with no implicit internal fallback', () => {
+    expect(setting(pgr, 'EGOV_GATEWAY_HOST')).toBe('http://kong:8000');
+    const properties = read('backend/pgr-services/src/main/resources/application.properties');
+    expect(properties).toContain('egov.gateway.host=${EGOV_GATEWAY_HOST:}');
+    expect(setting(pgr, 'EGOV_GATEWAY_HOST')).not.toBe(setting(pgr, 'EGOV_MDMS_HOST'));
+  });
+
   test('new tenant bootstrap reaches internal APIs without target-tenant gateway RBAC', () => {
     const hosts: Record<string, string> = {
       MDMS: 'egov-mdms-service:8094', HRMS: 'egov-hrms:8092',
