@@ -1775,6 +1775,8 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: egov-pgr-services
       SERVER_PORT: 8080
+      # Workspace writes use the caller's token through Kong RBAC.
+      EGOV_GATEWAY_HOST: http://kong:8000
       EGOV_IDGEN_HOST: http://egov-idgen:8088/
       EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
