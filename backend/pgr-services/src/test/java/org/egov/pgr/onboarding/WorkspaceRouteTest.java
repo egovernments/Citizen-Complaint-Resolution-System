@@ -61,15 +61,31 @@ public class WorkspaceRouteTest {
     @Test public void probesExcludePlatformPrerequisitesAndInactiveRows() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
         when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"imageId\":null}}]"));
-        when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"data\":{\"code\":\"ONBOARDING_ADMIN\"}},{\"isActive\":false,\"data\":{\"code\":\"WATER\"}}]"));
+        when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"parent\",\"data\":{\"code\":\"INHERITED\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"ONBOARDING_ADMIN\"}},{\"isActive\":false,\"data\":{\"code\":\"WATER\"}}]"));
         when(client.post(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"example\"}]}"));
         when(client.post(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"FOUNDER_1\"}]}"));
         assertTrue(gateway.probes("example").values().stream().noneMatch(Boolean.TRUE::equals));
         when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"imageId\":\"logo\"}}]"));
-        when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"data\":{\"code\":\"WATER\",\"active\":true}}]"));
-        when(mdms.records("example","RAINMAKER-PGR.ComplaintHierarchy",null)).thenReturn(mapper.readTree("[{\"data\":{\"department\":\"WATER\",\"slaHours\":24}}]"));
+        when(mdms.records("example","common-masters.Department",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}]"));
+        when(mdms.records("example","RAINMAKER-PGR.ComplaintHierarchy",null)).thenReturn(mapper.readTree("[{\"tenantId\":\"example\",\"data\":{\"department\":\"WATER\",\"slaHours\":24}}]"));
         when(client.post(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"Boundary\":[{\"code\":\"WARD_1\"}]}"));
         when(client.post(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"EMP_1\",\"user\":{\"active\":true}}]}"));
         assertTrue(gateway.probes("example").values().stream().allMatch(Boolean.TRUE::equals));
     }
+    @Test public void unreadableProbeReturns503InsteadOfFalseReadiness() throws Exception {
+        when(repository.find("example",false)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","legacy",false))));
+        when(mdms.records("example","tenant.tenants","example")).thenThrow(new OnboardingFailure("MDMS_DOWN",true));
+        mvc.perform(post("/v2/onboarding/workspaces/_search").contentType("application/json").content(request()))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"));
+    }
+    @Test public void unreadableBffNameCheckReturns503WithoutRenameWrites() throws Exception {
+        when(repository.find("example",true)).thenReturn(Optional.of(new LinkedHashMap<>(Map.of("tenantId","example","version",0L))));
+        when(repository.nameAvailable("example","new name")).thenReturn(true);
+        when(mdms.records("example","tenant.tenants","example")).thenReturn(mapper.readTree("[{\"data\":{\"name\":\"Old Name\"}}]"));
+        when(client.identity(eq("identifiers/_check"),any())).thenThrow(new OnboardingFailure("IDENTITY_UNAVAILABLE",true));
+        mvc.perform(post("/v2/onboarding/workspaces/_rename").contentType("application/json").content(request()))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.Errors[0].code").value("WORKSPACE_DEPENDENCY_UNAVAILABLE"));
+        verify(repository,never()).reserveName(any(),any());verify(repository,never()).beginRename(any(),any(),any(),any(),anyLong(),anyList(),any());
+    }
+
 }

@@ -47,18 +47,18 @@ public class WorkspaceGateway {
         JsonNode tenantRecord=tenant(tenant);
         probes.put("BRANDING",!tenantRecord.path("data").path("imageId").asText("").isBlank());
         boolean department=false;
-        for(JsonNode row:mdms.records(tenant,"common-masters.Department",null)) if(active(row) && !"ONBOARDING_ADMIN".equals(row.path("data").path("code").asText())) department=true;
+        for(JsonNode row:mdms.records(tenant,"common-masters.Department",null)) if(ownedActive(row,tenant) && !row.path("data").path("code").asText().isBlank() && !"ONBOARDING_ADMIN".equals(row.path("data").path("code").asText())) department=true;
         probes.put("DEPARTMENTS",department);
         boolean complaint=false;
-        for(JsonNode row:mdms.records(tenant,"RAINMAKER-PGR.ComplaintHierarchy",null)) if(active(row) && (row.path("data").hasNonNull("department")||row.path("data").hasNonNull("slaHours"))) complaint=true;
+        for(JsonNode row:mdms.records(tenant,"RAINMAKER-PGR.ComplaintHierarchy",null)) if(ownedActive(row,tenant) && (!row.path("data").path("department").asText("").isBlank()||row.path("data").path("slaHours").asDouble(0)>0)) complaint=true;
         probes.put("COMPLAINT_TYPES",complaint);
         JsonNode boundaries=client.post("boundary","/boundary-service/boundary/_search?tenantId="+tenant+"&limit=1000",Map.of()).path("Boundary");
         requireArray(boundaries); boolean geography=false;
-        for(JsonNode boundary:boundaries) if(!tenant.equals(boundary.path("code").asText()) && boundary.path("isActive").asBoolean(true))geography=true;
+        for(JsonNode boundary:boundaries) if(!boundary.path("code").asText().isBlank() && !tenant.equals(boundary.path("code").asText()) && boundary.path("isActive").asBoolean(true))geography=true;
         probes.put("GEOGRAPHY",geography);
         JsonNode employees=client.post("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&limit=1000",Map.of()).path("Employees");
         requireArray(employees);boolean employee=false;
-        for(JsonNode row:employees) if(!row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))employee=true;
+        for(JsonNode row:employees) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))employee=true;
         probes.put("EMPLOYEES",employee);
         return probes;
     }
@@ -77,6 +77,15 @@ public class WorkspaceGateway {
         if(locales.isEmpty())throw new OnboardingFailure("TENANT_LANGUAGES_MISSING",true);
         return locales;
     }
+    public void requireNameAvailable(String normalized) {
+        JsonNode response=client.identity("identifiers/_check",Map.of("identifiers",List.of(Map.of("type","ORGANIZATION_NAME","value",normalized))));
+        JsonNode results=response==null?mapper.nullNode():response.path("results");
+        if(!results.isArray() || results.size()!=1) fail(HttpStatus.SERVICE_UNAVAILABLE,"WORKSPACE_DEPENDENCY_UNAVAILABLE");
+        JsonNode result=results.get(0);
+        if(!"ORGANIZATION_NAME".equals(result.path("type").asText()) || !normalized.equals(result.path("value").asText()) || !result.path("available").isBoolean())
+            fail(HttpStatus.SERVICE_UNAVAILABLE,"WORKSPACE_DEPENDENCY_UNAVAILABLE");
+        if(!result.path("available").asBoolean()) WorkspaceRepository.conflict("WORKSPACE_NAME_TAKEN");
+    }
     public void renameMdms(String tenant,String name) {
         var record=mapper.convertValue(tenant(tenant),new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String,Object>>(){});
         @SuppressWarnings("unchecked") var data=(Map<String,Object>)record.get("data");
@@ -88,7 +97,8 @@ public class WorkspaceGateway {
         client.post("localization","/localization/messages/v1/_upsert",Map.of("tenantId",tenant,"messages",List.of(Map.of(
                 "code","TENANT_TENANTS_"+tenant.toUpperCase(Locale.ROOT),"message",name,"locale",locale,"module","rainmaker-common"))));
     }
-    public void bustCache(){client.post("localization","/localization/messages/cache-bust",Map.of());}
+    public void bustCache(){client.bustLocalizationCache();}
+    private boolean ownedActive(JsonNode row,String tenant){return tenant.equals(row.path("tenantId").asText()) && active(row);}
     private boolean active(JsonNode row){return row.path("isActive").asBoolean(true)&&row.path("data").path("active").asBoolean(true);}
     private void requireArray(JsonNode rows){if(!rows.isArray())throw new OnboardingFailure("WORKSPACE_INVALID_DEPENDENCY_RESPONSE",true);}
     public static void fail(HttpStatus status,String code){throw new ResponseStatusException(status,code);}

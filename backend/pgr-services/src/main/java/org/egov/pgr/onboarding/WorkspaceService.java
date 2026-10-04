@@ -27,6 +27,7 @@ public class WorkspaceService {
         Map<String,Object> row=repository.find(tenant,true).orElse(null);
         if(row==null){if(version!=0)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");return response(tenant,null);}
         if(((Number)row.get("version")).longValue()!=version)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");
+        if(Boolean.TRUE.equals(row.get("legacy")))return response(row,null,repository.rename(tenant,null).orElse(null));
         Map<String,Boolean> probes=gateway.probes(tenant);
         if("DONE".equals(state)&&!Boolean.TRUE.equals(probes.get(step))) WorkspaceRepository.conflict("WORKSPACE_PROBE_INCOMPLETE");
         Map<String,Object> steps=(Map<String,Object>)row.get("steps");
@@ -43,6 +44,7 @@ public class WorkspaceService {
         String tenant=tenant(request),actor=gateway.requireAdmin(tenant,request),name=text(request,"name").replaceAll("\\s+"," ");
         if(name.length()>200)WorkspaceGateway.fail(HttpStatus.BAD_REQUEST,"WORKSPACE_INVALID_NAME");
         long version=version(request);String normalized=identifiers.normalizeOrganizationName(name);
+        if(normalized.isBlank())WorkspaceGateway.fail(HttpStatus.BAD_REQUEST,"WORKSPACE_INVALID_NAME");
         repository.materializeLegacy(tenant); // insert-or-ignore serializes two first renames of a legacy tenant
         Map<String,Object> workspace=repository.find(tenant,true).orElseThrow();
         Optional<Map<String,Object>> replay=repository.rename(tenant,version);
@@ -53,6 +55,8 @@ public class WorkspaceService {
         if(((Number)workspace.get("version")).longValue()!=version)WorkspaceRepository.conflict("WORKSPACE_VERSION_CONFLICT");
         if(repository.rename(tenant,null).filter(r->"PENDING".equals(r.get("status"))).isPresent())WorkspaceRepository.conflict("WORKSPACE_RENAME_PENDING");
         String oldName=identifiers.normalizeOrganizationName(gateway.tenant(tenant).path("data").path("name").asText());
+        if(!repository.nameAvailable(tenant,normalized))WorkspaceRepository.conflict("WORKSPACE_NAME_TAKEN");
+        if(!normalized.equals(oldName))gateway.requireNameAvailable(normalized);
         List<String> locales=gateway.languages(tenant);
         repository.reserveName(tenant,oldName);repository.reserveName(tenant,normalized);
         repository.update(workspace,version,actor);
@@ -66,7 +70,7 @@ public class WorkspaceService {
             row.put("version",0L);row.put("seedVersion",null);row.put("updatedAt",null);row.put("updatedBy",null);row.put("legacy",true);
             return response(row,null,null);
         }
-        return response(row,gateway.probes(tenant),repository.rename(tenant,null).orElse(null));
+        return response(row,Boolean.TRUE.equals(row.get("legacy"))?null:gateway.probes(tenant),repository.rename(tenant,null).orElse(null));
     }
     private Map<String,Object> response(Map<String,Object> row,Map<String,Boolean> probes,Map<String,Object> rename){
         Map<String,Object> result=new LinkedHashMap<>();result.put("Workspace",row);result.put("Probes",probes);result.put("Rename",publicRename(rename));return result;
