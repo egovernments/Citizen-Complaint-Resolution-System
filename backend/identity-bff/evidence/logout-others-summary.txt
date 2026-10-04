@@ -1,0 +1,49 @@
+Shared DIGIT token preservation for logout scope=others
+Source tested: a22b65f07 (base: identity/completion-base69f9af553)
+Task: task_36a3f61c33814e998119686124e65d18
+
+Observed real gate symptom: 8c-gate-report.md reported that logout-others
+kept the current BFF session but invalidated its shared DIGIT access token.
+The report did not record the Redis inventory/holder topology.
+
+Reproduction boundary:
+- Accurate same-account/same-token holders already pass on base69f9af553.
+- A plausible variant fails there: an additional tenant-alias inventory entry
+  for the same UUID/token is held only by an ended session. Revoking through
+  that entry invalidates the token still held by the current session.
+- This proves the variant, NOT the cause of the 8c observation. Owner approved
+  scoped protection for this variant on the identity-gate-fixes bridge thread.
+- Before code change, the two new regression cases yielded 1 pass / 1 fail.
+  Failed case: logout others keeps current shared token (duplicate inventory).
+  No live token/cookie values are included in this evidence.
+
+Implemented:
+- Snapshot current-session-held accounts and token values under the person
+  lease before ending the other BFF/Keycloak sessions.
+- Preserve current holder/inventory; skip external logout and retry enqueue
+  for any protected token, including duplicate inventory aliases.
+- Forget an unheld duplicate alias record after ending its other sessions.
+- Other-only tokens still revoke. Current/all use their existing behavior.
+- Frozen contract section8 documents that other consumers of a retained shared
+  token can continue until expiry/account-wide revocation. Logout section3.3.2
+  and core-internals API comment match this limitation.
+
+Executed (serial test files, real Redis16390, local provider doubles):
+REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff tests/unit/revocation.test.ts tests/e2e/self-service.test.ts
+42 tests passed. Log: logout-others-focused.log.
+
+REDIS_PORT=16390 npx --prefix backend/identity-bff vitest run --root backend/identity-bff
+650 passed, 11 skipped, 2 todo; 51 files passed, 3 skipped.
+Log: logout-others-full.log.
+
+npx --prefix backend/identity-bff tsc --noEmit -p backend/identity-bff/tsconfig.json
+Exit 0, no diagnostics. Log: logout-others-tsc.log.
+
+Regression assertions include current DIGIT token validation after logout,
+other BFF/Keycloak session termination, unrelated account revocation, retained
+holder/inventory, duplicate cleanup, repeated logout, delayed Keycloak logout
+processing, empty retry queue, and subsequent logout-all revocation. Existing
+current/shared-token behavior remains covered.
+
+No deployment or live dependency rerun. Root owns redeploy and the 8c gate;
+its sanitized holder/selection trace was still pending at implementation handoff.
