@@ -58,6 +58,7 @@ export interface DigitAccount {
   type: string;
   active: boolean;
   identificationMark?: string | null;
+  accountLocked?: boolean;
   roles: DigitRole[];
 }
 
@@ -185,7 +186,7 @@ export async function searchAccounts(
   authToken: string,
   criteria: {
     tenantId: string;
-    userType: string;
+    userType?: string;
     active: boolean;
     userName?: string;
     uuid?: string[];
@@ -207,7 +208,7 @@ export async function searchAccounts(
 async function writeAccount(
   path: string,
   authToken: string,
-  user: DigitAccountInput,
+  user: DigitAccountInput | DigitIdentifierUpdate,
   operation: string,
 ): Promise<DigitAccount> {
   const response = await send(path, {
@@ -225,6 +226,14 @@ async function writeAccount(
 
 export function createAccount(authToken: string, user: DigitAccountInput): Promise<DigitAccount> {
   return writeAccount("/users/_createnovalidate", authToken, user, "user create");
+}
+
+/** Explicit payload for the safe identifier writer. */
+export type DigitIdentifierUpdate = Pick<DigitAccount, "uuid" | "tenantId" | "userName" | "name"> &
+  { id?: number; password?: string; [field: string]: unknown };
+
+export function updateIdentifiers(authToken: string, user: DigitIdentifierUpdate): Promise<DigitAccount> {
+  return writeAccount("/users/_updatenovalidate", authToken, user, "identifier update");
 }
 
 export function updateAccount(authToken: string, user: DigitAccountInput): Promise<DigitAccount> {
