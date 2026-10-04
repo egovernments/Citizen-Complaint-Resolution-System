@@ -44,7 +44,7 @@ public class OnboardingStepsTest {
                 createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");employees.add(mapper.valueToTree(Map.of("user",createdUser)));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
             }
             writes.add(service+":"+path);
-            if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("code","root")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("code","newtown"))));
+            if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("tenantId","newtown","hierarchyType","ADMIN","boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
         });
     }
@@ -97,5 +97,40 @@ public class OnboardingStepsTest {
         when(client.post(eq("mdms"),eq("/egov-mdms-service/schema/v1/_create"),anyMap())).thenThrow(new OnboardingFailure("SCHEMA_ALREADY_EXISTS",false));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));
         assertTrue(failure.isRetryable());assertEquals("STARTED",op.getRecordProgress().get("schema:tenant.tenants"));
+    }
+    @Test public void countryAbsenceUsesCanonicalDefaultsOnlyInTargetTenant() {
+        rows.clear();prerequisites();
+        assertEquals("^[6-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
+        assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
+    }
+    @Test public void configuredCountryRuleIsPreservedAndMalformedRuleNeverFallsBack() {
+        rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","mobileNumberRegex","^[7-9][0-9]{9}$","default",true))));
+        prerequisites();assertEquals("^[7-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
+        op.getRecordProgress().remove("mobile");
+        rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","default",true))));
+        assertEquals("COUNTRY_MOBILE_RULE_INVALID",assertThrows(OnboardingFailure.class,()->steps.perform("PLATFORM_BASELINE",signup,op,progress)).getCode());
+    }
+    @Test public void unsupportedCountryIsExplicitAndAmbiguousConfiguredRulesFailClosed() {
+        signup.setCountryCode("ZZ");assertEquals("COUNTRY_NOT_SUPPORTED",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+        signup.setCountryCode("IN");rows.put("in|common-masters.MobileNumberValidation|second",rows.get("in|common-masters.MobileNumberValidation|+91"));
+        assertEquals("COUNTRY_MOBILE_RULE_AMBIGUOUS",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+    }
+    @Test public void nullBoundaryResultsCreateValidEntityAndEmptyWrapperDoesNotCountAsRelationship() throws Exception {
+        final boolean[] made={false,false,false};
+        when(client.post(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
+            String path=call.getArgument(1);Map<String,Object> body=call.getArgument(2);
+            if(path.contains("boundary-hierarchy-definition")) {
+                if(path.contains("_create")){made[0]=true;return mapper.createObjectNode();}
+                return mapper.readTree(made[0]?"{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}":"{\"BoundaryHierarchy\":null}");
+            }
+            if(path.contains("boundary-relationships")) {
+                if(path.contains("_create")){made[2]=true;return mapper.createObjectNode();}
+                return mapper.readTree(made[2]?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}":"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[]}]}");
+            }
+            if(path.contains("_create")) {JsonNode geometry=mapper.valueToTree(body).path("Boundary").path(0).path("geometry");assertEquals("Polygon",geometry.path("type").asText());assertEquals(5,geometry.path("coordinates").path(0).size());made[1]=true;return mapper.createObjectNode();}
+            return mapper.readTree(made[1]?"{\"Boundary\":[{\"code\":\"newtown\"}]}":"{\"Boundary\":null}");
+        });
+        prerequisites();assertTrue(made[0]);assertTrue(made[1]);assertTrue(made[2]);
+        assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
 }

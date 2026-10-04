@@ -174,7 +174,13 @@ public class OnboardingService {
         OnboardingOperation operation = repository.findOwnedOperation(
                         id, principal.getIssuer(), principal.getSubject())
                 .orElseThrow(() -> new CustomException("ONBOARDING_OPERATION_NOT_FOUND", "Operation was not found"));
-        return repository.retry(operation, System.currentTimeMillis());
+        // Same lock order as submit: signup, then operation. A worker claim that won
+        // first makes retry fail without changing the snapshot used by that worker.
+        repository.findOwnedSignupForUpdate(operation.getSignupId(), principal.getIssuer(), principal.getSubject())
+                .orElseThrow(() -> new CustomException("ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found"));
+        OnboardingOperation retried = repository.retry(operation, System.currentTimeMillis());
+        repository.snapshotFounder(operation.getSignupId(), principal);
+        return retried;
     }
 
     private OnboardingSignup ownedSignup(UUID id, OnboardingPrincipal principal) {

@@ -37,7 +37,7 @@ public class OnboardingPostgresTest {
         jdbc=new JdbcTemplate(source);repository=new OnboardingRepository(jdbc,mapper);
         var migrations=new ResourceDatabasePopulator();
         for(String name:List.of("V20260914000000__create_onboarding_tables.sql","V20260914120000__add_onboarding_operation_lease.sql",
-                "V20260918000000__onboarding_create_idempotency_per_subject.sql","V20261004000000__onboarding_restart_and_publication.sql","V20261004010000__onboarding_workspace.sql"))migrations.addScript(new ClassPathResource("db/migration/main/"+name));
+                "V20260918000000__onboarding_create_idempotency_per_subject.sql","V20261004000000__onboarding_restart_and_publication.sql","V20261004010000__onboarding_workspace.sql","V20261005000000__onboarding_automatic_retry.sql"))migrations.addScript(new ClassPathResource("db/migration/main/"+name));
         migrations.execute(source);
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).ownerIssuer("issuer").ownerSubject("founder").status("DRAFT").accountName("Example")
                 .accountCode("EXAMPLE").urlSlug("example").organizationAlias("example").requestedTenantId("example").countryCode("IN")
@@ -163,4 +163,101 @@ public class OnboardingPostgresTest {
         var state=http.postForObject(base+"/__fixture/state",Map.of("subject",subject),com.fasterxml.jackson.databind.JsonNode.class);
         assertEquals(1,state.path("bindings").size());assertEquals(uuid,state.path("bindings").path(0).path("uuid").asText());
     }
+    @Test public void retryableFailureBecomesClaimableWithoutManualRetry() {
+        submit();long now=System.currentTimeMillis();
+        var lease=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();
+        assertTrue(repository.finishOperation(lease.getOperation().getId(),lease.getLeaseToken(),"RETRYABLE_FAILED",List.of(),"PLATFORM_BASELINE","MDMS_RECORD_NOT_VISIBLE","wait",now));
+        assertTrue(repository.claimOperation("automatic",UUID.randomUUID(),now+240000,now+120000).isPresent());
+    }
+    private int retryCount(UUID id) { return jdbc.queryForObject("SELECT retry_count FROM eg_pgr_onboarding_operation WHERE id=?",Integer.class,id); }
+    private Long retryAt(UUID id) { return jdbc.queryForObject("SELECT next_retry_at FROM eg_pgr_onboarding_operation WHERE id=?",Long.class,id); }
+    private void failRetry(OnboardingLease lease,long now) {
+        var op=lease.getOperation();assertTrue(repository.finishOperation(op.getId(),lease.getLeaseToken(),"RETRYABLE_FAILED",op.getCompletedSteps(),"PLATFORM_BASELINE","MDMS_RECORD_NOT_VISIBLE","wait",now));
+    }
+    @Test public void retryBackoffIsDueBoundedAndManualRecoveryKeepsAttemptIdentity() {
+        var original=submit();long now=System.currentTimeMillis();
+        for(int failure=1;failure<=12;failure++) {
+            var lease=repository.claimOperation("worker",UUID.randomUUID(),now+120000,now).orElseThrow();
+            assertEquals(original.getId(),lease.getOperation().getId());assertEquals(0,lease.getOperation().getRestartNo());
+            assertEquals(failure,lease.getOperation().getAttempt());failRetry(lease,now);assertEquals(failure,retryCount(original.getId()));
+            if(failure<12) {
+                long due=now+Math.min(60000,1000L << Math.min(failure-1,6));assertEquals(Long.valueOf(due),retryAt(original.getId()));
+                assertTrue(repository.claimOperation("early",UUID.randomUUID(),due+120000,due-1).isEmpty());now=due;
+            }
+        }
+        assertNull(retryAt(original.getId()));assertTrue(repository.claimOperation("late",UUID.randomUUID(),now+1000000,now+900000).isEmpty());
+        var exhausted=repository.findOperation(original.getId()).orElseThrow();assertEquals("RETRYABLE_FAILED",exhausted.getStatus());
+        assertNull(exhausted.getLifecycleDecision());assertEquals("PROVISIONING",repository.findSignup(signup.getId()).orElseThrow().getStatus());
+        repository.retry(exhausted,now);assertEquals(0,retryCount(original.getId()));
+        var manual=repository.claimOperation("manual",UUID.randomUUID(),now+120000,now).orElseThrow();assertEquals(13,manual.getOperation().getAttempt());assertEquals(0,manual.getOperation().getRestartNo());
+    }
+    @Test public void onlyNewDurableRecordOrStepCompletionResetsRetryBudget() {
+        var original=submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);
+        now+=1000;var second=repository.claimOperation("second",UUID.randomUUID(),now+120000,now).orElseThrow();var op=second.getOperation();
+        repository.checkpoint(op,second.getLeaseToken(),now);assertEquals(1,retryCount(op.getId()));
+        op.getRecordProgress().put("first","STARTED");repository.checkpoint(op,second.getLeaseToken(),now);assertEquals(1,retryCount(op.getId()));
+        op.getRecordProgress().put("first","DONE");repository.checkpoint(op,second.getLeaseToken(),now);assertEquals(0,retryCount(op.getId()));
+        failRetry(second,now);now+=1000;var third=repository.claimOperation("third",UUID.randomUUID(),now+120000,now).orElseThrow();op=third.getOperation();
+        repository.checkpoint(op,third.getLeaseToken(),now);assertEquals(1,retryCount(op.getId()));
+        op.getRecordProgress().put("second","STARTED");repository.checkpoint(op,third.getLeaseToken(),now);assertEquals(1,retryCount(op.getId()));
+        op.getCompletedSteps().add("TENANT_FOUNDATION");repository.checkpoint(op,third.getLeaseToken(),now);assertEquals(0,retryCount(op.getId()));
+        failRetry(third,now);assertEquals(Long.valueOf(now+1000),retryAt(original.getId()));
+    }
+    @Test public void concurrentAutomaticClaimsHaveOneLeaseWinner() throws Exception {
+        submit();long now=System.currentTimeMillis();var first=repository.claimOperation("first",UUID.randomUUID(),now+120000,now).orElseThrow();failRetry(first,now);
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);var start=new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.concurrent.Callable<Optional<OnboardingLease>> attempt=()->{start.await();return repository.claimOperation("racer",UUID.randomUUID(),now+121000,now+1000);};
+            var a=pool.submit(attempt);var b=pool.submit(attempt);start.countDown();var left=a.get();var right=b.get();assertNotEquals(left.isPresent(),right.isPresent());
+            assertFalse(repository.checkpoint(first.getOperation(),first.getLeaseToken(),now+1000));
+        } finally {pool.shutdownNow();}
+    }
+
+    @Test public void trustedVerifiedEmailFlowsThroughHttpControllerDatabaseAndHrms() throws Exception { founderEmailFlow(true); }
+    @Test public void retryRefreshesTrustedFounderEmailBeforeHrmsWithoutReplacingIdentity() throws Exception { founderEmailFlow(false); }
+    private void founderEmailFlow(boolean initiallyVerified) throws Exception {
+        var verified=new java.util.concurrent.atomic.AtomicBoolean(initiallyVerified);
+        var email=new java.util.concurrent.atomic.AtomicReference<>("trusted@example.test");
+        var employee=new java.util.concurrent.atomic.AtomicReference<com.fasterxml.jackson.databind.JsonNode>();
+        var cookie=new java.util.concurrent.atomic.AtomicReference<String>();var authorization=new java.util.concurrent.atomic.AtomicReference<String>();
+        var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/",exchange->{
+            Object response;String path=exchange.getRequestURI().getPath();
+            if(path.endsWith("/_introspect")) {
+                cookie.set(exchange.getRequestHeaders().getFirst("Cookie"));authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                response=Map.of("identity",Map.of("issuer","issuer","subject","founder","name","Trusted Founder","email",email.get(),"emailVerified",verified.get()));
+            } else if(path.endsWith("/_check")) response=Map.of("available",true);
+            else if(path.endsWith("/oauth/token")) response=Map.of("access_token","fixture-token","UserRequest",Map.of("uuid","provisioner"));
+            else if(path.endsWith("/_create")) {
+                var created=mapper.readTree(exchange.getRequestBody()).path("Employees").path(0).deepCopy();
+                ((com.fasterxml.jackson.databind.node.ObjectNode)created.path("user")).put("uuid","stable-founder");employee.set(created);response=Map.of("Employees",List.of(created));
+            } else response=Map.of("Employees",employee.get()==null?List.of():List.of(employee.get()));
+            byte[] bytes=mapper.writeValueAsBytes(response);exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+        });server.start();
+        try {
+            String base="http://127.0.0.1:"+server.getAddress().getPort();var http=new org.springframework.web.client.RestTemplate();
+            var auth=new IdentitySessionClient(http,base,"fixture-workload-token");var service=transactional(new OnboardingService(repository,new OnboardingIdentifierService()));
+            var mvc=MockMvcBuilders.standaloneSetup(new OnboardingApiController(auth,new OnboardingIdentifierService(),service)).build();
+            String submitBody=mapper.writeValueAsString(Map.of("Signup",Map.of("id",signup.getId().toString(),"founderEmail","forged@example.test","founderEmailVerified",true)));
+            mvc.perform(post("/v2/onboarding/signups/_submit").header("Cookie","identity=fixture").header("Idempotency-Key","email-submit").contentType("application/json").content(submitBody)).andExpect(status().isAccepted());
+            assertEquals("identity=fixture",cookie.get());assertEquals("Bearer fixture-workload-token",authorization.get());
+            var snapshot=repository.findSignup(signup.getId()).orElseThrow();assertEquals(initiallyVerified,snapshot.isFounderEmailVerified());assertEquals(initiallyVerified?email.get():null,snapshot.getFounderEmail());
+            var operation=repository.findOperationBySignup(signup.getId()).orElseThrow();
+            if(!initiallyVerified) {
+                var lease=claim();failRetry(lease,System.currentTimeMillis());verified.set(true);
+                mvc.perform(post("/v2/onboarding/operations/_retry").header("Cookie","identity=fixture").contentType("application/json").content(mapper.writeValueAsString(Map.of("Operation",Map.of("id",operation.getId().toString(),"founderEmail","forged@example.test"))))).andExpect(status().isAccepted());
+                snapshot=repository.findSignup(signup.getId()).orElseThrow();assertTrue(snapshot.isFounderEmailVerified());assertEquals(email.get(),snapshot.getFounderEmail());
+            }
+            var env=new org.springframework.mock.env.MockEnvironment().withProperty("egov.user.host",base).withProperty("egov.hrms.host",base)
+                    .withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only").withProperty("pgr.onboarding.provisioner.tenant-id","pg");
+            var steps=new OnboardingSteps(new OnboardingProvisionerClient(http,mapper,env),new PlatformBaseline(mapper),mapper);
+            var lease=claim();steps.perform("FOUNDER_HRMS",snapshot,lease.getOperation(),new OnboardingProgress(repository,lease.getOperation(),lease.getLeaseToken()));
+            assertEquals("trusted@example.test",employee.get().path("user").path("emailId").asText());assertFalse(employee.get().path("user").has("password"));
+            failRetry(lease,System.currentTimeMillis());verified.set(false);email.set("unverified-change@example.test");
+            mvc.perform(post("/v2/onboarding/operations/_retry").header("Cookie","identity=fixture").contentType("application/json").content(mapper.writeValueAsString(Map.of("Operation",Map.of("id",operation.getId().toString()))))).andExpect(status().isAccepted());
+            var same=repository.findOperation(operation.getId()).orElseThrow();assertEquals("stable-founder",same.getFounderDigitUuid());assertEquals(0,same.getRestartNo());
+            var refreshed=repository.findSignup(signup.getId()).orElseThrow();assertFalse(refreshed.isFounderEmailVerified());assertNull(refreshed.getFounderEmail());
+        } finally {server.stop(0);}
+    }
+
 }

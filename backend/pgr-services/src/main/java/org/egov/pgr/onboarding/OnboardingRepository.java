@@ -153,7 +153,7 @@ public class OnboardingRepository {
                 "updated_at = ? WHERE id = ? AND status = 'DRAFT'", now, operation.getSignupId());
         int changed = jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET status = 'PENDING', " +
                         "error_code = NULL, error_message = NULL, attempt = attempt + 1, restart_no = restart_no + 1, " +
-                        "completed_steps = '[]'::jsonb, record_progress = '{}'::jsonb, " +
+                        "completed_steps = '[]'::jsonb, record_progress = '{}'::jsonb, retry_count = 0, next_retry_at = NULL, " +
                         "lifecycle_decision = NULL, lifecycle_restart_no = NULL, lifecycle_decided_at = NULL, " +
                         "lifecycle_published_at = NULL, lifecycle_publication_reason = NULL, lifecycle_next_publish_at = NULL, lifecycle_publish_attempts = 0, " +
                         "idempotency_key = ?, updated_at = ? WHERE id = ? AND status = 'TERMINAL_FAILED' " +
@@ -191,7 +191,7 @@ public class OnboardingRepository {
 
     public OnboardingOperation retry(OnboardingOperation operation, long now) {
         int changed = jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET status = 'PENDING', " +
-                        "error_code = NULL, error_message = NULL, attempt = attempt + 1, updated_at = ? " +
+                        "error_code = NULL, error_message = NULL, attempt = attempt + 1, retry_count = 0, next_retry_at = NULL, updated_at = ? " +
                         "WHERE id = ? AND status = 'RETRYABLE_FAILED'",
                 now, operation.getId());
         if (changed != 1) {
@@ -207,17 +207,19 @@ public class OnboardingRepository {
 
     // ---- worker lease -------------------------------------------------------
 
-    /** Claims the oldest PENDING operation, or a RUNNING one whose lease expired. */
+    /** Claims pending work, due bounded retries, or an expired lease, under one row lock. */
     public Optional<OnboardingLease> claimOperation(String workerId, UUID leaseToken, long leaseExpiresAt, long now) {
         return first(jdbcTemplate.query("UPDATE eg_pgr_onboarding_operation SET status = 'RUNNING', " +
+                        "attempt = attempt + CASE WHEN status = 'RETRYABLE_FAILED' THEN 1 ELSE 0 END, next_retry_at = NULL, " +
                         "lease_owner = ?, lease_token = ?, lease_expires_at = ?, updated_at = ? " +
                         "WHERE id = (SELECT id FROM eg_pgr_onboarding_operation " +
                         "WHERE status = 'PENDING' OR (status = 'RUNNING' AND lease_expires_at < ?) " +
+                        "OR (status = 'RETRYABLE_FAILED' AND retry_count < 12 AND next_retry_at <= ?) " +
                         "ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING " + OPERATION_COLUMNS +
                         ", lease_token, lease_expires_at",
                 (rs, rowNum) -> new OnboardingLease(operationMapper().mapRow(rs, rowNum),
                         uuid(rs, "lease_token"), rs.getLong("lease_expires_at")),
-                workerId, leaseToken, leaseExpiresAt, now, now));
+                workerId, leaseToken, leaseExpiresAt, now, now, now));
     }
 
     public Optional<OnboardingOperation> findOperation(UUID id) {
@@ -239,11 +241,14 @@ public class OnboardingRepository {
                         "lifecycle_publication_reason = CASE WHEN ? = 'FAILED' AND NOT organization_ensure_started THEN 'NO_IDENTITY_SIDE_EFFECTS' ELSE NULL END, " +
                         "lifecycle_decision = ?, lifecycle_restart_no = CASE WHEN ?::varchar IS NULL THEN NULL ELSE restart_no END, " +
                         "lifecycle_decided_at = ?, lifecycle_next_publish_at = ?, " +
+                        "retry_count = CASE WHEN ? = 'RETRYABLE_FAILED' THEN retry_count + 1 ELSE retry_count END, " +
+                        "next_retry_at = CASE WHEN ? = 'RETRYABLE_FAILED' AND retry_count + 1 < 12 " +
+                        "THEN ? + LEAST(60000, 1000 * power(2, LEAST(retry_count, 6)))::bigint ELSE NULL END, " +
                         "lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = ? " +
                         "WHERE id = ? AND status = 'RUNNING' AND lease_token = ? AND lease_expires_at > ?",
                 status, json(completedSteps), currentStep, errorCode, errorMessage,
                 decision(status), now, decision(status), decision(status), decision(status), decision(status) == null ? null : now,
-                decision(status) == null ? null : now, now, operationId, leaseToken, now);
+                decision(status) == null ? null : now, status, status, now, now, operationId, leaseToken, now);
         return changed == 1;
     }
 
@@ -271,11 +276,12 @@ public class OnboardingRepository {
         }
     }
 
+    /** Caller locks the signup; retries also hold the operation update lock before refreshing. */
     public void snapshotFounder(UUID signupId, OnboardingPrincipal principal) {
+        boolean verified = principal.isEmailVerified() && principal.getEmail() != null && !principal.getEmail().isBlank();
         jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET founder_name = ?, founder_email = ?, " +
-                        "founder_email_verified = ? WHERE id = ? AND status = 'DRAFT'",
-                principal.getName(), principal.isEmailVerified() ? principal.getEmail() : null,
-                principal.isEmailVerified(), signupId);
+                        "founder_email_verified = ? WHERE id = ? AND status IN ('DRAFT', 'PROVISIONING')",
+                principal.getName(), verified ? principal.getEmail() : null, verified, signupId);
     }
 
     /** Every checkpoint is fenced, including the intent before a remote write. */
@@ -283,10 +289,15 @@ public class OnboardingRepository {
         return jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET record_progress = ?::jsonb, " +
                         "completed_steps = ?::jsonb, current_step = ?, founder_digit_uuid = ?, " +
                         "organization_ensure_started = organization_ensure_started OR ?, " +
+                        "retry_count = CASE WHEN EXISTS (SELECT 1 FROM jsonb_each_text(?::jsonb) n " +
+                        "WHERE n.value = 'DONE' AND (record_progress->>n.key) IS DISTINCT FROM 'DONE') " +
+                        "OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(?::jsonb) n(value) " +
+                        "WHERE NOT (completed_steps @> jsonb_build_array(n.value))) THEN 0 ELSE retry_count END, " +
                         "lease_expires_at = ?, updated_at = ? WHERE id = ? AND restart_no = ? " +
                         "AND status = 'RUNNING' AND lease_token = ? AND lease_expires_at > ?",
                 json(operation.getRecordProgress()), json(operation.getCompletedSteps()), operation.getCurrentStep(),
-                operation.getFounderDigitUuid(), operation.isOrganizationEnsureStarted(), now + 120000, now, operation.getId(), operation.getRestartNo(), token, now) == 1;
+                operation.getFounderDigitUuid(), operation.isOrganizationEnsureStarted(), json(operation.getRecordProgress()),
+                json(operation.getCompletedSteps()), now + 120000, now, operation.getId(), operation.getRestartNo(), token, now) == 1;
     }
 
     public List<OnboardingOperation> pendingPublications(long now) {
