@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
+import { currentPersonLease, personLeaseKey, withPersonLease, LeaseLostError, type PersonLease } from "../accounts/person-lease.js";
+import { privateRef } from "../citizen-otp/otp-store.js";
 import { config } from "../../infrastructure/config.js";
 import { getRedis } from "../../infrastructure/redis.js";
 import type { IdentityTokenSet, KeycloakClaims } from "../authentication/types.js";
@@ -31,6 +33,7 @@ export interface LoginAttempt {
   returnTo: string;
   requiresLoginCookie: boolean;
   identityProfileDraft?: IdentityProfileDraft;
+  accountAction?: { sid: string; sub: string; action: string };
   /** Absent on attempts created before #2167, which were all configurator. */
   surface?: IdentitySurface;
   /** Resolved before the redirect; required for employee/citizen attempts. */
@@ -51,7 +54,7 @@ function loginKey(state: string): string {
   return `${config.cachePrefix}:identity:login:${state}`;
 }
 
-function sessionKey(sessionId: string): string {
+export function sessionKey(sessionId: string): string {
   return `${config.cachePrefix}:identity:session:${sessionId}`;
 }
 
@@ -63,8 +66,56 @@ function passwordSetupKey(id: string): string {
   return `${config.cachePrefix}:identity:password-setup:${id}`;
 }
 
-function contextKey(sessionId: string): string {
+export function contextKey(sessionId: string): string {
   return `${config.cachePrefix}:identity:context:${sessionId}`;
+}
+
+export const revocationGenerationKey = (subject: string) => `${config.cachePrefix}:identity:revgen:${subject}`;
+export const personSessionsKey = (subject: string) => `${config.cachePrefix}:identity:person-sessions:${subject}`;
+
+export class SessionRevokedError extends Error {
+  readonly status = 401;
+  readonly code = "SESSION_REVOKED";
+  constructor() { super("This session has ended; sign in again"); }
+}
+
+export async function requireCurrentSession(lease: PersonLease, sessionId: string): Promise<IdentitySession> {
+  await lease.assertHeld();
+  const session = await getIdentitySession(sessionId);
+  if (!session || session.claims.sub !== lease.subject || session.sessionExpiresAt <= Date.now()) throw new SessionRevokedError();
+  return session;
+}
+
+// Fence, generation check, update-only write and session index are one Redis effect.
+const WRITE_SESSION = `
+if redis.call('get', KEYS[1]) ~= ARGV[1] then return -1 end
+if tonumber(redis.call('get', KEYS[3]) or '0') ~= tonumber(ARGV[3]) then return 0 end
+if ARGV[5] == 'NX' then
+  if redis.call('exists', KEYS[2]) == 1 then return 0 end
+else
+  local raw = redis.call('get', KEYS[2])
+  if not raw then return 0 end
+  local previous = cjson.decode(raw)
+  if tonumber(previous.revocationGeneration or 0) ~= tonumber(ARGV[3]) then return 0 end
+end
+local result
+if ARGV[4] == 'KEEP' then
+  result = redis.call('set', KEYS[2], ARGV[2], 'XX', 'KEEPTTL')
+else
+  result = redis.call('set', KEYS[2], ARGV[2], ARGV[5], 'PXAT', ARGV[4])
+end
+if not result then return 0 end
+redis.call('sadd', KEYS[4], ARGV[6])
+local ttl = redis.call('pttl', KEYS[2])
+if redis.call('pttl', KEYS[4]) < ttl then redis.call('pexpire', KEYS[4], ttl) end
+return 1`;
+
+async function writeSessionRecord(lease: PersonLease, sessionId: string, session: IdentitySession, expiry: number | "KEEP", mode: "NX" | "XX"): Promise<void> {
+  const result = await getRedis().eval(WRITE_SESSION, 4, personLeaseKey(lease.subject), sessionKey(sessionId),
+    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), lease.token,
+    JSON.stringify(session), session.revocationGeneration ?? 0, expiry, mode, sessionId);
+  if (result === -1) throw new LeaseLostError();
+  if (result !== 1) throw new SessionRevokedError();
 }
 
 export async function createLoginAttempt(input: {
@@ -74,6 +125,7 @@ export async function createLoginAttempt(input: {
   returnTo: string;
   requiresLoginCookie?: boolean;
   identityProfileDraft?: IdentityProfileDraft;
+  accountAction?: { sid: string; sub: string; action: string };
   surface?: IdentitySurface;
   boundTenant?: BoundTenant;
 }): Promise<{
@@ -232,13 +284,13 @@ export async function createIdentitySession(
 ): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
   const maxAge = sessionTtl(tokens);
-  await saveIdentitySession(
-    sessionId, tokens, claims, maxAge, oidcClientId, undefined, binding,
+  await writeIdentitySession(
+    sessionId, tokens, claims, maxAge, oidcClientId, undefined, binding, true,
   );
   return { sessionId, maxAge };
 }
 
-export async function saveIdentitySession(
+async function writeIdentitySession(
   sessionId: string,
   tokens: IdentityTokenSet,
   claims: KeycloakClaims,
@@ -246,34 +298,48 @@ export async function saveIdentitySession(
   oidcClientId?: string,
   sessionExpiresAt = Date.now() + ttl * 1000,
   binding: SessionBinding = {},
+  create = false,
 ): Promise<void> {
-  if (binding.surface && !validBinding(binding.surface, binding.boundTenant)) {
-    throw new Error("Invalid identity session surface binding");
-  }
-  const now = Date.now();
-  const session: IdentitySession = {
-    claims,
-    ...(oidcClientId && { oidcClientId }),
-    // Configurator sessions stay byte-for-byte what they were before #2167.
-    ...(binding.surface && binding.surface !== DEFAULT_SURFACE && {
-      surface: binding.surface,
-      boundTenant: binding.boundTenant,
-    }),
-    ...(binding.authMethod && { authMethod: binding.authMethod, identityCheckedAt: now }),
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    accessExpiresAt: now + tokens.accessExpiresIn * 1000,
-    refreshExpiresAt: tokens.refreshExpiresIn
-      ? now + tokens.refreshExpiresIn * 1000
-      : undefined,
-    sessionExpiresAt,
-  };
-  await getRedis().set(
-    sessionKey(sessionId),
-    JSON.stringify(session),
-    "EX",
-    ttl,
-  );
+  return withPersonLease(claims.sub, async (lease) => {
+    const previous = create ? null : await requireCurrentSession(lease, sessionId);
+    if (binding.surface && !validBinding(binding.surface, binding.boundTenant)) {
+      throw new Error("Invalid identity session surface binding");
+    }
+    const now = Date.now();
+    const session: IdentitySession = {
+      claims,
+      schemaVersion: 2,
+      revocationGeneration: previous?.revocationGeneration ?? Number(await getRedis().get(revocationGenerationKey(claims.sub)) || 0),
+      createdAt: previous?.createdAt ?? now,
+      lastSeenAt: now,
+      kcSessionId: (claims as KeycloakClaims & { sid?: string }).sid ?? previous?.kcSessionId,
+      ...(claims.phone_number && { phoneRef: privateRef("phone", claims.phone_number) }),
+      ...(oidcClientId && { oidcClientId }),
+      // Configurator is the default surface and needs no tenant binding.
+      ...(binding.surface && binding.surface !== DEFAULT_SURFACE && {
+        surface: binding.surface,
+        boundTenant: binding.boundTenant,
+      }),
+      ...(binding.authMethod && { authMethod: binding.authMethod, identityCheckedAt: now }),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      accessExpiresAt: now + tokens.accessExpiresIn * 1000,
+      refreshExpiresAt: tokens.refreshExpiresIn
+        ? now + tokens.refreshExpiresIn * 1000
+        : undefined,
+      sessionExpiresAt,
+    };
+    await writeSessionRecord(lease, sessionId, session, Math.min(sessionExpiresAt, now + ttl * 1000), create ? "NX" : "XX");
+  });
+}
+
+/** Refresh is update-only. Only createIdentitySession/createPhoneOtpSession create records. */
+export async function saveIdentitySession(
+  sessionId: string, tokens: IdentityTokenSet, claims: KeycloakClaims,
+  ttl = sessionTtl(tokens), oidcClientId?: string,
+  sessionExpiresAt = Date.now() + ttl * 1000, binding: SessionBinding = {},
+): Promise<void> {
+  return writeIdentitySession(sessionId, tokens, claims, ttl, oidcClientId, sessionExpiresAt, binding);
 }
 
 /**
@@ -289,7 +355,7 @@ export async function createPhoneOtpSession(input: {
 }): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
   const maxAge = config.identitySessionTtlSeconds;
-  await saveIdentitySession(
+  await writeIdentitySession(
     sessionId,
     { accessToken: "", accessExpiresIn: maxAge },
     {
@@ -304,17 +370,29 @@ export async function createPhoneOtpSession(input: {
     config.keycloakCitizenClientId,
     undefined,
     { surface: "citizen", boundTenant: input.boundTenant, authMethod: "phone_otp" },
+    true,
   );
   return { sessionId, maxAge };
 }
 
 /**
- * Rewrites a session record without changing its expiry. Only an existing
- * record is rewritten (`XX`): a logout that deleted it meanwhile must not be
- * undone by a record with no expiry.
+ * Rewrites a session record without changing its expiry. Only an existing,
+ * unrevoked record is rewritten (`XX`): a logout or revocation that ended it
+ * meanwhile is never undone. Returns false, without throwing, when the
+ * session has ended, so the caller can treat it as signed out.
  */
-export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<void> {
-  await getRedis().set(sessionKey(sessionId), JSON.stringify(session), "KEEPTTL", "XX");
+export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<boolean> {
+  return withPersonLease(session.claims.sub, async (lease) => {
+    try {
+      const fresh = await requireCurrentSession(lease, sessionId);
+      if ((fresh.revocationGeneration ?? 0) !== (session.revocationGeneration ?? 0)) return false;
+      await writeSessionRecord(lease, sessionId, { ...session, lastSeenAt: Date.now() }, "KEEP", "XX");
+      return true;
+    } catch (error) {
+      if (error instanceof SessionRevokedError) return false;
+      throw error;
+    }
+  });
 }
 
 export async function getIdentitySession(
@@ -326,10 +404,30 @@ export async function getIdentitySession(
     const session = JSON.parse(raw) as IdentitySession;
     if (session.surface !== undefined &&
         !validBinding(session.surface, session.boundTenant)) return null;
+    const generation = Number(await getRedis().get(revocationGenerationKey(session.claims.sub)) || 0);
+    if ((session.revocationGeneration ?? 0) !== generation) return null;
     return session;
   } catch {
     return null;
   }
+}
+
+/** Public session metadata only; expired/revoked index entries are pruned. */
+export async function listPersonSessions(subject: string): Promise<Array<{
+  sessionId: string; surface: IdentitySurface; oidcClientId?: string;
+  createdAt?: number; lastSeenAt?: number; kcSessionId?: string;
+}>> {
+  const sessions = [];
+  for (const sessionId of await getRedis().smembers(personSessionsKey(subject))) {
+    const session = await getIdentitySession(sessionId);
+    if (!session || session.claims.sub !== subject || session.sessionExpiresAt <= Date.now()) {
+      await getRedis().srem(personSessionsKey(subject), sessionId);
+      continue;
+    }
+    sessions.push({ sessionId, surface: identitySessionSurface(session), oidcClientId: session.oidcClientId,
+      createdAt: session.createdAt, lastSeenAt: session.lastSeenAt, kcSessionId: session.kcSessionId });
+  }
+  return sessions;
 }
 
 export function identitySessionSurface(session: IdentitySession): IdentitySurface {
@@ -337,12 +435,17 @@ export function identitySessionSurface(session: IdentitySession): IdentitySurfac
 }
 
 export async function deleteIdentitySession(sessionId: string): Promise<void> {
-  await getRedis().del(sessionKey(sessionId), contextKey(sessionId));
+  const raw = await getRedis().get(sessionKey(sessionId));
+  const subject = raw ? (JSON.parse(raw) as IdentitySession).claims.sub : undefined;
+  const transaction = getRedis().multi().del(sessionKey(sessionId), contextKey(sessionId));
+  if (subject) transaction.srem(personSessionsKey(subject), sessionId);
+  await transaction.exec();
 }
 
 export async function getSelectedIdentityContext(
   sessionId: string,
 ): Promise<SelectedIdentityContext | null> {
+  if (!await getIdentitySession(sessionId)) return null;
   const raw = await getRedis().get(contextKey(sessionId));
   if (!raw) return null;
   try {
@@ -356,15 +459,22 @@ export async function saveSelectedIdentityContext(
   sessionId: string,
   context: SelectedIdentityContext,
 ): Promise<boolean> {
-  const ttl = await getRedis().ttl(sessionKey(sessionId));
-  if (ttl <= 0) return false;
-  await getRedis().set(
-    contextKey(sessionId),
-    JSON.stringify(context),
-    "EX",
-    ttl,
-  );
-  return true;
+  const lease = currentPersonLease();
+  const session = await getIdentitySession(sessionId);
+  if (!session || (lease && lease.subject !== session.claims.sub)) return false;
+  if (!lease) return withPersonLease(session.claims.sub, () => saveSelectedIdentityContext(sessionId, context));
+  const result = await getRedis().eval(`
+    if redis.call('get', KEYS[1]) ~= ARGV[1] then return -1 end
+    local raw = redis.call('get', KEYS[2])
+    if not raw then redis.call('del', KEYS[4]); return 0 end
+    local session = cjson.decode(raw)
+    if tonumber(session.revocationGeneration or 0) ~= tonumber(redis.call('get', KEYS[3]) or '0') then return 0 end
+    local ttl = redis.call('pttl', KEYS[2])
+    if ttl <= 0 then return 0 end
+    redis.call('set', KEYS[4], ARGV[2], 'PX', ttl)
+    return 1`, 4, personLeaseKey(lease.subject), sessionKey(sessionId), revocationGenerationKey(lease.subject), contextKey(sessionId), lease.token, JSON.stringify(context));
+  if (result === -1) throw new LeaseLostError();
+  return result === 1;
 }
 
 function cookieValue(cookieHeader: string | undefined, cookieName: string): string | null {

@@ -1,0 +1,14 @@
+Deployment contract verification after both BFF probes changed to /livez.
+
+Working directory: local-setup/tests
+Command: PATH="/tmp/identity-surf-bff-static-checks/bin:$PATH" node node_modules/jest/bin/jest.js static/deployment-contracts.test.ts --runInBand
+The isolated Python venv uses system site packages to provide PyYAML.
+An initial run lacked PyYAML in its subprocess; this rerun passed.
+No deployment or running-stack mutation was performed.
+
+
+Test Suites: 1 passed, 1 total
+Tests:       111 passed, 111 total
+Snapshots:   0 total
+Time:        1.239 s, estimated 2 s
+Ran all test suites matching /static\/deployment-contracts.test.ts/i.

@@ -5,6 +5,7 @@ import {
   parseSurface,
   sessionCookieName,
   surfaceReturnPrefix,
+  surfaceRegistry,
 } from "../../src/modules/authentication/surfaces.js";
 import {
   authorizationUrl,
@@ -45,6 +46,17 @@ describe("sign-in surfaces", () => {
     expect(isTenantBoundSurface("configurator")).toBe(false);
     expect(isTenantBoundSurface("citizen")).toBe(true);
     expect(surfaceReturnPrefix("employee", "bomet-county")).toBe("/bomet-county/digit-ui/employee/");
+  });
+
+  it("rejects unsafe registry entries and colliding cookies at startup", () => {
+    for (const override of [
+      { "../bad": {} }, { employee: { contextKind: "unknown" } },
+      { employee: { cookieName: "digit_identity_session_login" } },
+      { employee: { cookieName: "bad;cookie" } }, { employee: { prompt: "bad" } },
+    ]) {
+      config.identitySurfacesJson = JSON.stringify(override);
+      expect(() => surfaceRegistry()).toThrow();
+    }
   });
 
   it("keeps the configurator cookie and gives each surface its own cookies", () => {

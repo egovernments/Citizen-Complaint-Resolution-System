@@ -51,7 +51,6 @@ const BROWSER_WRITE: HttpErrorCode[] = ["UNTRUSTED_ORIGIN", "INVALID_REQUEST", "
 export const ROUTES: RouteContract[] = [
   // Probes
   { method: "GET", path: "/livez", auth: "none", state: "live", items: [], codes: [] },
-  { method: "GET", path: "/healthz", auth: "none", state: "deleted-later", items: [15], codes: [] },
   { method: "GET", path: "/readyz", auth: "none", state: "changing", items: [15], codes: [] },
 
   // Browser, anonymous
@@ -101,20 +100,27 @@ export const ROUTES: RouteContract[] = [
       "IDENTITY_UNAVAILABLE", "IDENTITY_BUSY"] },
   { method: "POST", path: "/identity/v1/organization-members/_invite", auth: "session", state: "deleted-later", items: [14],
     codes: [...BROWSER_WRITE] },
-  { method: "POST", path: "/identity/v1/workspace-members/_link", auth: "session", state: "planned", items: [8, 9],
+  { method: "POST", path: "/identity/v1/workspace-members/_link", auth: "session", state: "live", items: [8, 9],
     codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "WORKSPACE_TENANT_REQUIRED", "SELF_BINDING_FORBIDDEN",
       "ROLE_ESCALATION_FORBIDDEN", "DIGIT_ACCOUNT_NOT_FOUND", "DIGIT_ACCOUNT_LINKED_ELSEWHERE", "DIGIT_ACCOUNT_MANAGED",
       "BINDING_CONFLICT", "BINDING_REMOVED", "IDENTITY_EMAIL_CHANGED", "BINDING_BUSY", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
-  { method: "GET", path: "/identity/v1/workspace-members", auth: "session", state: "planned", items: [9],
+  { method: "GET", path: "/identity/v1/workspace-members", auth: "session", state: "live", items: [9],
     codes: ["INVALID_REQUEST", "SESSION_REQUIRED", "SESSION_REVOKED", "ADMIN_REQUIRED", "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
-  { method: "POST", path: "/identity/v1/workspace-members/_remove", auth: "session", state: "planned", items: [9, 10],
+  { method: "POST", path: "/identity/v1/workspace-members/_remove", auth: "session", state: "live", items: [9, 10],
     codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "SELF_REMOVAL_FORBIDDEN", "BINDING_BUSY", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
-  { method: "POST", path: "/identity/v1/workspace-invitations/_accept", auth: "session", state: "planned", items: [9],
-    codes: [...BROWSER_WRITE, "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY", "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
-  { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "planned", items: [4],
-    codes: [...BROWSER_WRITE, "PROVIDER_NOT_LINKED", "LAST_SIGNIN_METHOD", "IDENTITY_BUSY", "IDENTITY_UNAVAILABLE"] },
+  { method: "POST", path: "/identity/v1/workspace-members/_updateEmail", auth: "session", state: "live", items: [9],
+    codes: [...BROWSER_WRITE, "ADMIN_REQUIRED", "DIGIT_ACCOUNT_NOT_FOUND", "IDENTITY_EMAIL_CHANGED", "IDENTITY_BUSY",
+      "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
+  // `?surface=` (optional, default configurator) picks the session cookie; staff surfaces only.
+  { method: "POST", path: "/identity/v1/workspace-invitations/_accept", auth: "session", state: "live", items: [9],
+    codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY",
+      "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
+  // `?surface=` (optional, default configurator) picks the session cookie.
+  { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "changing", items: [4],
+    codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "PROVIDER_NOT_LINKED", "LAST_SIGNIN_METHOD", "IDENTITY_BUSY",
+      "IDENTITY_UNAVAILABLE"] },
 
   // Internal: PGR onboarding (workload)
   { method: "POST", path: "/internal/identity/v1/sessions/_introspect", auth: "introspection", state: "changing", items: [11],
@@ -134,7 +140,7 @@ export const ROUTES: RouteContract[] = [
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
 
   // Internal: operator
-  { method: "POST", path: "/internal/identity/v1/reconciliation/_run", auth: "operator", state: "changing", items: [12],
+  { method: "POST", path: "/internal/identity/v1/reconciliation/_run", auth: "operator", state: "live", items: [12],
     codes: ["WORKLOAD_UNAUTHORIZED", "CONTROL_PLANE_NOT_CONFIGURED"] },
   { method: "POST", path: "/internal/identity/v1/account-links/_link", auth: "operator", state: "changing", items: [14],
     codes: [...WORKLOAD_AUTH],

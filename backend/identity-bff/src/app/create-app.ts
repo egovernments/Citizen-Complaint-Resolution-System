@@ -1,4 +1,11 @@
+import { registerWorkspaceMemberRoutes } from "../modules/workspace-members/routes.js";
 import express from "express";
+import { AccountActionError } from "../modules/authentication/account-service.js";
+import { SessionRevokedError } from "../modules/sessions/session-store.js";
+import { IdentityAdminError } from "../modules/organizations/organization-service.js";
+import { LeaseBusyError, LeaseLostError } from "../modules/accounts/person-lease.js";
+import { IdentityUnavailableError } from "../modules/authentication/oidc.js";
+import { surfaceRegistry } from "../modules/authentication/surfaces.js";
 import { config } from "../infrastructure/config.js";
 import { registerControlPlaneRoutes } from "../modules/control-plane/routes.js";
 import { registerAccessContextRoutes } from "../modules/access-context/routes.js";
@@ -16,6 +23,7 @@ import { registerCitizenOtpRoutes } from "../modules/citizen-otp/routes.js";
  * dependencies.
  */
 export function createIdentityApp(): express.Application {
+  surfaceRegistry(); // Fail startup on unsafe or incomplete surface configuration.
   const app = express();
   if (config.identityTrustProxyHops > 0) {
     app.set("trust proxy", config.identityTrustProxyHops);
@@ -45,8 +53,20 @@ export function createIdentityApp(): express.Application {
   registerPasswordSetupRoutes(app);
   registerCitizenOtpRoutes(app);
   registerSessionRoutes(app);
+  registerWorkspaceMemberRoutes(app);
   registerAccessContextRoutes(app);
   registerOrganizationRoutes(app);
   registerControlPlaneRoutes(app);
+  app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (error instanceof AccountActionError || error instanceof LeaseBusyError || error instanceof LeaseLostError) {
+      if (error instanceof LeaseBusyError || error instanceof LeaseLostError) res.setHeader("Retry-After", "1");
+      return res.status(error.status).json({ code: error.code, error: error.message });
+    }
+    if (error instanceof SessionRevokedError) return res.status(401).json({ code: "SESSION_REVOKED", error: "This session has ended" });
+    if (error instanceof IdentityUnavailableError || error instanceof IdentityAdminError) {
+      return res.status(503).json({ code: "IDENTITY_UNAVAILABLE", error: "Identity service is temporarily unavailable" });
+    }
+    next(error);
+  });
   return app;
 }

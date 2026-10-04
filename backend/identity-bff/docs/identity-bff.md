@@ -94,6 +94,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
   - `SET NX PX 30000`, renewed every 10 s; a caller waits at most 15 s, then gets 503 `IDENTITY_BUSY` with `Retry-After`.
   - Re-entry for the **same** person within one async chain is allowed. Taking a **different** person's lease while holding one throws.
   - The uuid lock and the phone lock are taken only **inside** a person lease.
+  - Anonymous phone bootstrap first makes an advisory ownership lookup. With no owner it takes a prospective random-subject lease, then the normalized phone lock, and checks ownership again. If still unowned, it creates an opaque Keycloak user through the plain Admin API; it does not call actual-person writers, mirrors or revocation under the prospective lease. It releases both locks, then takes the actual owner's person lease and phone lock, checks ownership fresh, and creates the session. If an owner appeared, it releases both locks and retries under that owner instead. Distinct-person leases are never nested (accepted item 13 ruling).
 - Writes made under the person lease are **fenced**: a Lua script checks that the lease token still matches before it writes. A lease lost mid-request answers 503 `IDENTITY_BUSY`, and a token minted under the lost lease is revoked before the error is returned.
 - Key names are in §7.
 
@@ -108,7 +109,6 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | Method | Path | Auth | State | Items |
 |---|---|---|---|---|
 | GET | `/livez` | none | live | — |
-| GET | `/healthz` | none | deleted-later | 15 |
 | GET | `/readyz` | none | changing | 15 |
 | GET | `/identity/v1/auth-methods` | none | changing | 1, 2 |
 | GET | `/identity/v1/authorize` | none (session for `action`) | changing | 1, 4 |
@@ -126,18 +126,19 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/identity/v1/contexts/_select` | session | changing | 7, 8, 10, 12 |
 | POST | `/identity/v1/contexts/citizen/_select` | session | changing | 10, 12, 13 |
 | POST | `/identity/v1/organization-members/_invite` | session | deleted-later | 14 |
-| POST | `/identity/v1/workspace-members/_link` | session | planned | 8, 9 |
-| GET | `/identity/v1/workspace-members` | session | planned | 9 |
-| POST | `/identity/v1/workspace-members/_remove` | session | planned | 9, 10 |
-| POST | `/identity/v1/workspace-invitations/_accept` | session | planned | 9 |
-| POST | `/identity/v1/account/providers/_unlink` | session | planned | 4 |
+| POST | `/identity/v1/workspace-members/_link` | session | live | 8, 9 |
+| GET | `/identity/v1/workspace-members` | session | live | 9 |
+| POST | `/identity/v1/workspace-members/_remove` | session | live | 9, 10 |
+| POST | `/identity/v1/workspace-members/_updateEmail` | session | live | 9 |
+| POST | `/identity/v1/workspace-invitations/_accept` | session | live | 9 |
+| POST | `/identity/v1/account/providers/_unlink` | session | changing | 4 |
 | POST | `/internal/identity/v1/sessions/_introspect` | introspection | changing | 11 |
 | POST | `/internal/identity/v1/identifiers/_check` | introspection | changing | 11 |
 | POST | `/internal/identity/v1/organizations/_ensure` | workload | changing | 11 |
 | POST | `/internal/identity/v1/organizations/_lifecycle` | workload | planned | 11 |
 | POST | `/internal/identity/v1/memberships/_ensure` | workload | changing | 11, 14 |
 | POST | `/internal/identity/v1/bindings/_ensure` | workload | planned | 8, 11 |
-| POST | `/internal/identity/v1/reconciliation/_run` | operator | changing | 12 |
+| POST | `/internal/identity/v1/reconciliation/_run` | operator | live | 12 |
 | POST | `/internal/identity/v1/account-links/_link` | operator | changing | 14 |
 | POST | `/internal/identity/v1/account-links/_unlink` | operator | changing | 14 |
 | GET | `/internal/identity/v1/account-links` | operator | changing | 14 |
@@ -173,7 +174,7 @@ Check = "ok" | "down" | "disabled"
 - Poller lag above `IDENTITY_POLLER_MAX_LAG_SECONDS` makes the poller check `down`. A reconcile lag above twice the interval makes the reconcile check `down`.
 - PGR is never a readiness dependency.
 
-**`GET /healthz`** keeps today's `{status, redis}` until item 15 deletes it.
+`GET /healthz` was removed by item 15. Use `/livez` for process liveness and `/readyz` for dependencies.
 
 ### 3.2 Browser, anonymous
 
@@ -437,7 +438,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 
 200 {members: [{subject, email, name, digitUuid, state: "active" | "pending", invitationVersion, boundAt?, expiresAt?, missing?: true}]}
 ```
 
-- It lists `pending` and `active` bindings, found with the `digit.boundUuids` exact search on the `<tenantId>|` prefix. Each binding is re-read from `digit.bindings`.
+- It lists `pending` and `active` bindings (an expired invitation counts as removed and is left out). Keycloak's attribute search only matches whole values, so the BFF pages through the realm's users, keeps those with a `digit.boundUuids` value starting `<tenantId>|`, and reads each binding from `digit.bindings`. This costs one pass over the realm's users; the member list is an infrequent admin read.
 - `missing: true` marks a DIGIT account that has disappeared (design §4).
 - Errors: `INVALID_REQUEST` 400; `SESSION_REQUIRED` / `SESSION_REVOKED` 401; `ADMIN_REQUIRED` 403; 503.
 
@@ -458,11 +459,12 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. The configurator calls it right afte
 #### 3.3.9 `POST /identity/v1/workspace-invitations/_accept` (item 9)
 
 ```
+?surface=configurator|employee   (optional; default configurator)
 {tenantId, invitationVersion: integer}
 200 {binding: {tenantId, digitUuid, state: "active", boundAt}}
 ```
 
-- Bound to the signed-in person, on any staff surface (D25/B2).
+- Bound to the signed-in person, on any staff surface (D25/B2). The optional `surface` query picks which surface's session cookie is read, so digit-ui can accept with the employee session. A citizen surface → 400 `UNSUPPORTED_SURFACE`.
 - The binding must be `pending`, unexpired, and at that version. Otherwise → 409 `INVITATION_STALE`, which also covers "no invitation at all", so invitations can't be enumerated.
 - On success, under person → uuid: grant membership, make the binding `active`, set the derived credential, and mirror.
 - A repeat on an already-`active` binding at the same version returns `200`.
@@ -471,12 +473,30 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. The configurator calls it right afte
 #### 3.3.10 `POST /identity/v1/account/providers/_unlink` (item 4)
 
 ```
+?surface=<surface>   (optional; default configurator)
 {alias}
 200 {providers: [{alias}]}
 ```
 
+- The optional `surface` query picks which surface's session cookie is read. The surface must support self-service for the person's credential; otherwise → 400 `UNSUPPORTED_SURFACE`.
+
 - The caller's own account, under the person lease. It reads the person's **primary** methods fresh: password, linked providers, and the verified phone for citizens. TOTP doesn't count.
 - Removing the last one → 409 `LAST_SIGNIN_METHOD`. An alias that isn't linked → 404 `PROVIDER_NOT_LINKED`.
+
+#### 3.3.11 `POST /identity/v1/workspace-members/_updateEmail` (item 9, D18)
+
+Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has lost access to their old address.
+
+```
+{tenantId, digitUuid, email}
+202 {status: "verification_sent"}
+```
+
+- The target must have an `active` binding at `tenantId`; otherwise → 404 `DIGIT_ACCOUNT_NOT_FOUND`.
+- Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
+- DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
+- An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
+- **Deferred (root, D18 scope):** notifying the old address about an email change, here or through self-service `UPDATE_EMAIL`, is not built in v1. Stock Keycloak doesn't send it, and custom Keycloak extensions are not allowed. Verification of the new address and "DIGIT only after verification" are unchanged and required.
 
 ### 3.4 Internal: PGR onboarding
 

@@ -1,0 +1,8 @@
+
+ RUN  v5.0.1 /Users/kanavdwevedi/repositories/egov/_wt/identity-surf-bff/backend/identity-bff
+
+
+ Test Files  2 passed (2)
+      Tests  70 passed (70)
+   Start at  21:50:38
+   Duration  3.59s (tests 82%, transform 10%, import 5%, setup 3%)

@@ -48,6 +48,14 @@ afterAll(async () => {
 beforeEach(async () => {
   run += 1;
   fake.setTokenTtlSeconds(604800);
+  for (const suffix of ["a", "phone", "laptop", "never-selected"]) {
+    const sessionId = session(suffix);
+    await getRedis().set(`${config.cachePrefix}:identity:session:${sessionId}`, JSON.stringify({
+      schemaVersion: 2, revocationGeneration: 0, claims: { sub: subject(), email: "test@example.invalid" },
+      accessToken: "test-kc", accessExpiresAt: Date.now() + 600_000, sessionExpiresAt: Date.now() + 600_000,
+    }), "EX", 600);
+    await getRedis().sadd(`${config.cachePrefix}:identity:person-sessions:${subject()}`, sessionId);
+  }
   await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,10 +68,9 @@ beforeEach(async () => {
 
 const subject = () => `subject-${run}`;
 const session = (suffix = "a") => `session-${run}-${suffix}`;
-const tokenKey = (identity: { key: string }) =>
-  `${config.cachePrefix}:digit-user-token:${identity.key}`;
-const holdersKey = (identity: { key: string }) =>
-  `${config.cachePrefix}:digit-user-token-holders:${identity.key}`;
+const tokenKey = (identity: { tenantId: string; username: string }) =>
+  `${config.cachePrefix}:identity:token:${identity.tenantId}:${[...fake.accounts.values()].find(account => account.userName === identity.username)?.uuid}`;
+const holdersKey = (identity: { tenantId: string; username: string }) => tokenKey(identity).replace(":token:", ":token-holders:");
 const profile = {
   name: "Tenant Admin", emailId: "tenant-admin@example.org",
   mobileNumber: "712345678", countryCode: "+254",

@@ -1,46 +1,63 @@
 import { config } from "../../infrastructure/config.js";
 
-/**
- * The browser application a sign-in belongs to (#2167).
- *
- * - `configurator`: the existing Organization-based admin journey. It is the
- *   default whenever a request carries no `surface`, so every pre-#2167 caller
- *   keeps its behaviour, cookie and Keycloak client.
- * - `employee` / `citizen`: digit-ui under `/{tenantSlug}/digit-ui/{surface}/`.
- *   The tenant is resolved from that route before the Keycloak redirect and
- *   bound to the login attempt and session; it is never chosen afterwards.
- */
-export type IdentitySurface = "configurator" | "employee" | "citizen";
-
+/** A configured browser surface; its context kind selects existing behavior. */
+export type IdentitySurface = string;
+export type SurfaceContextKind = "configurator" | "employee" | "citizen";
+export interface SurfaceConfig {
+  contextKind: SurfaceContextKind;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  cookieName: string;
+  prompt?: string;
+}
 export const DEFAULT_SURFACE: IdentitySurface = "configurator";
 
-/** `undefined` means the default surface; any other unknown value is rejected. */
+export function surfaceRegistry(): Record<string, SurfaceConfig> {
+  const registry: Record<string, SurfaceConfig> = {
+    configurator: { contextKind: "configurator", clientId: config.keycloakBffClientId, clientSecret: config.keycloakBffClientSecret, scope: config.identityScope, cookieName: config.identityCookieName },
+    employee: { contextKind: "employee", clientId: config.keycloakEmployeeClientId, clientSecret: config.keycloakEmployeeClientSecret, scope: config.identityEmployeeScope, cookieName: config.identityEmployeeCookieName, prompt: "login" },
+    citizen: { contextKind: "citizen", clientId: config.keycloakCitizenClientId, clientSecret: config.keycloakCitizenClientSecret, scope: config.identityCitizenScope, cookieName: config.identityCitizenCookieName, prompt: "login" },
+  };
+  const overrides: unknown = config.identitySurfacesJson ? JSON.parse(config.identitySurfacesJson) : {};
+  if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) throw new Error("IDENTITY_SURFACES_JSON must be an object");
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!/^[a-z][a-z0-9_-]*$/.test(key) || !value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid surface registry entry");
+    registry[key] = { ...(Object.hasOwn(registry, key) ? registry[key] : {}), ...value } as SurfaceConfig;
+  }
+  const cookies = new Set<string>();
+  const clients = new Set<string>();
+  for (const value of Object.values(registry)) {
+    if (!["configurator", "employee", "citizen"].includes(value.contextKind) ||
+        ![value.clientId, value.scope, value.cookieName].every(v => typeof v === "string" && v.length > 0) ||
+        typeof value.clientSecret !== "string" || !/^[A-Za-z0-9_-]+$/.test(value.cookieName) ||
+        (value.prompt !== undefined && !["", "none", "login", "consent", "select_account"].includes(value.prompt))) throw new Error("Invalid surface registry configuration");
+    if (cookies.has(value.cookieName) || cookies.has(`${value.cookieName}_login`)) throw new Error("Surface cookies must be distinct");
+    if (clients.has(value.clientId)) throw new Error("Surface clients must be distinct");
+    cookies.add(value.cookieName); cookies.add(`${value.cookieName}_login`); clients.add(value.clientId);
+  }
+  return registry;
+}
+
+export function surfaceConfig(surface: IdentitySurface): SurfaceConfig {
+  const registry = surfaceRegistry();
+  if (!Object.hasOwn(registry, surface)) throw new Error("Unknown identity surface");
+  return registry[surface];
+}
+export function surfaceContextKind(surface: IdentitySurface): SurfaceContextKind {
+  return surfaceConfig(surface).contextKind;
+}
 export function parseSurface(value: unknown): IdentitySurface | null {
   if (value === undefined) return DEFAULT_SURFACE;
-  return value === "configurator" || value === "employee" || value === "citizen"
-    ? value
-    : null;
+  return typeof value === "string" && Object.hasOwn(surfaceRegistry(), value) ? value : null;
 }
-
-/** Surfaces whose sign-in is bound to one route-resolved tenant. */
-export function isTenantBoundSurface(
-  surface: IdentitySurface,
-): surface is "employee" | "citizen" {
-  return surface !== "configurator";
+export function isTenantBoundSurface(surface: IdentitySurface): boolean {
+  return surfaceContextKind(surface) !== "configurator";
 }
-
-/** The opaque browser-session cookie for a surface. */
 export function sessionCookieName(surface: IdentitySurface): string {
-  if (surface === "employee") return config.identityEmployeeCookieName;
-  if (surface === "citizen") return config.identityCitizenCookieName;
-  return config.identityCookieName;
+  return surfaceConfig(surface).cookieName;
 }
-
-/**
- * The only destinations a tenant-bound surface may return to. Built from the
- * resolved slug, never from the returnTo value itself.
- */
-export function surfaceReturnPrefix(surface: "employee" | "citizen", urlSlug: string): string {
+export function surfaceReturnPrefix(surface: IdentitySurface, urlSlug: string): string {
   return `/${urlSlug}/digit-ui/${surface}/`;
 }
 

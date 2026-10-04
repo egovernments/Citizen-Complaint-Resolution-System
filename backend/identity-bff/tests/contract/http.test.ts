@@ -185,3 +185,28 @@ describe("internal routes: bearer auth", () => {
     }
   });
 });
+
+describe("browser account boundaries", () => {
+  it("rejects unsupported method selectors with contract errors", async () => {
+    const route = contractRoute("GET", "/identity/v1/auth-methods");
+    await expectContractError(await fetch(`${base}${route.path}?surface=unknown-surface`), route, "UNSUPPORTED_SURFACE");
+    await expectContractError(await fetch(`${base}${route.path}?intent=invalid`), route, "UNSUPPORTED_INTENT");
+  });
+  it("requires a session for account actions and metadata", async () => {
+    const authorize = contractRoute("GET", "/identity/v1/authorize");
+    await expectContractError(await fetch(`${base}${authorize.path}?action=UPDATE_PASSWORD`), authorize, "SESSION_REQUIRED");
+    const session = contractRoute("GET", "/identity/v1/session");
+    await expectContractError(await fetch(`${base}${session.path}?include=account`), session, "SESSION_REQUIRED");
+  });
+  it("protects provider unlink with origin and session checks", async () => {
+    const route = contractRoute("POST", "/identity/v1/account/providers/_unlink");
+    await expectContractError(await post(route.path, { alias: "google" }, { Origin: "https://evil.example" }), route, "UNTRUSTED_ORIGIN");
+    await expectContractError(await post(route.path, { alias: "google" }), route, "SESSION_REQUIRED");
+  });
+  it("validates logout scopes before clearing the session cookie", async () => {
+    const route = contractRoute("POST", "/identity/v1/logout");
+    const response = await post(route.path, { scope: "everyone" });
+    await expectContractError(response, route, "INVALID_REQUEST");
+    expect(response.headers.has("set-cookie")).toBe(false);
+  });
+});
