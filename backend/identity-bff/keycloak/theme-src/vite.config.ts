@@ -47,7 +47,11 @@ export default defineConfig({
         react(),
         serveConfiguratorBrand(),
         keycloakify({
-            themeName: "configurator-blue",
+            // One jar, two login themes. configurator-blue is the
+            // Configurator's; digit-employee is the legacy digit-ui employee
+            // login page (#2167). kcContext.themeName picks the
+            // implementation in src/login/KcPage.tsx.
+            themeName: ["configurator-blue", "digit-employee"],
             accountThemeImplementation: "none",
             // The deployed Keycloak is 26.7.3 (keycloak/Dockerfile.magic-link).
             // Emitting only the modern jar keeps one artifact to reason about
@@ -62,7 +66,10 @@ export default defineConfig({
             // new brand host does not need a theme rebuild.
             environmentVariables: [
                 { name: "DIGIT_BRAND_BASE_URL", default: "/configurator/brand" },
-                { name: "DIGIT_APP_NAME", default: "DIGIT Complaint Management" }
+                { name: "DIGIT_APP_NAME", default: "DIGIT Complaint Management" },
+                // digit-employee: where the identity BFF's
+                // public branding endpoint lives. Empty means same origin.
+                { name: "DIGIT_IDENTITY_BFF_BASE_URL", default: "" }
             ]
         })
     ]
