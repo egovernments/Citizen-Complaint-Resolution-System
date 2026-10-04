@@ -8,6 +8,9 @@ interface BootstrapOptions {
   api?: typeof digitApi;
   fetcher?: typeof fetch;
   mdmsHost?: string;
+  userHost?: string;
+  direct?: boolean;
+  stateTenant?: string;
 }
 
 /** Versioned platform bootstrap; workspace business masters are populated by workspace setup. */
@@ -22,10 +25,31 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   const target = String(args.target_tenant);
   const source = String(args.source_tenant || api.getEnvironmentInfo().stateTenantId);
   const seed = loadPlatformSeed();
-  const host = (options.mdmsHost ?? process.env.EGOV_MDMS_HOST ?? '').replace(/\/$/, '');
-  if (!host && !args.user_only) throw new Error('EGOV_MDMS_HOST is required for internal platform bootstrap');
+  const direct = options.direct ?? process.env.MCP_PLATFORM_BOOTSTRAP_DIRECT === 'true';
+  const host = direct ? (options.mdmsHost ?? process.env.EGOV_MDMS_HOST ?? '').replace(/\/$/, '') : '';
+  if (direct && !host) throw new Error('EGOV_MDMS_HOST is required for internal platform bootstrap');
   if (host && !/^https?:\/\/[^?#]+$/.test(host)) throw new Error('EGOV_MDMS_HOST must be a service URL');
   const fetcher = options.fetcher ?? fetch;
+  let verifiedUser = auth.user;
+  if (direct) {
+    // These are server configuration, never the caller's configurable environment
+    // or claimed userInfo. Verify with the trusted egov-user origin on every call.
+    const userHost = (options.userHost ?? process.env.EGOV_USER_HOST ?? '').replace(/\/$/, '');
+    if (!/^https?:\/\/[^?#]+$/.test(userHost)) throw new Error('EGOV_USER_HOST is required for direct platform bootstrap');
+    if (!auth.token) throw new Error('Direct platform bootstrap requires a verified state administrator');
+    const response = await fetcher(`${userHost}/user/_details?access_token=${encodeURIComponent(auth.token)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ RequestInfo: { authToken: auth.token } }), signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error('Direct platform bootstrap requires a verified state administrator');
+    const details = await response.json();
+    verifiedUser = details.UserRequest ?? details;
+    const stateTenant = options.stateTenant ?? process.env.CRS_STATE_TENANT ?? 'pg';
+    if (!verifiedUser?.uuid || (verifiedUser as any).active === false || !verifiedUser.roles?.some(role =>
+      ['SUPERUSER', 'MDMS_ADMIN'].includes(role.code) && role.tenantId === stateTenant)) {
+      throw new Error('Direct platform bootstrap requires a verified state administrator');
+    }
+  }
   const results = {
     schemas: { copied: [] as string[], skipped: [] as string[], failed: [] as string[] },
     data: { copied: [] as string[], skipped: [] as string[], failed: [] as string[] },
@@ -33,9 +57,18 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     warnings: [] as string[],
   };
   async function post(path: string, body: Record<string, unknown>): Promise<Record<string, any>> {
+    if (!direct) {
+      // Default transport retains normal Kong authorization and endpoint mapping.
+      const b = body as Record<string, any>;
+      if (path.endsWith('/schema/v1/_search')) return { SchemaDefinitions: await api.mdmsSchemaSearch(target, b.SchemaDefCriteria.codes) };
+      if (path.endsWith('/schema/v1/_create')) return { SchemaDefinition: await api.mdmsSchemaCreate(target, b.SchemaDefinition.code, b.SchemaDefinition.description, b.SchemaDefinition.definition) };
+      if (path.endsWith('/v2/_search')) return { mdms: await api.mdmsV2SearchRaw(target, b.MdmsCriteria.schemaCode, b.MdmsCriteria) };
+      if (path.includes('/v2/_create/')) return { mdms: [await api.mdmsV2Create(target, b.Mdms.schemaCode, b.Mdms.uniqueIdentifier, b.Mdms.data)] };
+      throw new Error('Unsupported platform MDMS operation');
+    }
     const response = await fetcher(`${host}${path}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, RequestInfo: { apiId: 'digit-mcp-bootstrap', ts: Date.now(), authToken: api.getAuthInfo().token, userInfo: api.getAuthInfo().user } }), signal: AbortSignal.timeout(10000),
+      body: JSON.stringify({ ...body, RequestInfo: { apiId: 'digit-mcp-bootstrap', ts: Date.now(), authToken: auth.token, userInfo: verifiedUser } }), signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error(`Platform MDMS returned HTTP ${response.status}`);
     return await response.json() as Record<string, any>;
