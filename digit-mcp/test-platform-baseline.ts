@@ -11,19 +11,26 @@ function fixture(role = 'SUPERUSER') {
   const users: any[] = [], employees: any[] = [];
   let sourceReads = 0, writes = 0, directCalls = 0;
   let verified: any;
+  const search = (c: any) => [...rows.values()].filter(r => r.tenantId === c.tenantId && r.schemaCode === c.schemaCode
+    && (!c.uniqueIdentifiers || c.uniqueIdentifiers.includes(r.uniqueIdentifier)));
+  const update = (record: any, data: any) => {
+    const key = `${record.tenantId}|${record.schemaCode}/${record.uniqueIdentifier}`;
+    assert.ok(rows.has(key), `update of missing ${key}`); rows.set(key, { ...rows.get(key), data }); writes++;
+  };
   const user = { uuid: 'platform-admin', userName: 'admin', name: 'Admin', roles: [{ code: role, tenantId: 'in' }] };
   verified = user;
   const api = {
     getAuthInfo: () => ({ authenticated: true, token: 'test-only-token', user }),
     getEnvironmentInfo: () => ({ stateTenantId: 'in' }), getLoginPassword: () => 'test-only-password',
-    mdmsV2SearchRaw: async (tenant: string, code: string) => {
-      if (tenant !== 'in') return [...rows.values()].filter(r => r.schemaCode === code);
-      assert.equal(code, 'common-masters.MobileNumberValidation'); sourceReads++;
+    mdmsV2SearchRaw: async (tenant: string, code: string, criteria?: any) => {
+      if (tenant !== 'in' || code !== 'common-masters.MobileNumberValidation') return search({ ...criteria, tenantId: tenant, schemaCode: code });
+      sourceReads++;
       return [{ isActive: true, data: { countryCode: '+91', mobileNumberRegex: '^[6-9][0-9]{9}$', default: true } }];
     },
     mdmsSchemaSearch: async (_tenant: string, codes: string[]) => schemas.has(codes[0]) ? [schemas.get(codes[0])] : [],
     mdmsSchemaCreate: async (_tenant: string, code: string, _description: string, definition: any) => { schemas.set(code, definition); writes++; return definition; },
-    mdmsV2Create: async (_tenant: string, code: string, id: string, data: any) => { const row = { schemaCode: code, uniqueIdentifier: id, data }; rows.set(`${code}/${id}`, row); writes++; return row; },
+    mdmsV2Create: async (tenant: string, code: string, id: string, data: any) => { const row = { tenantId: tenant, schemaCode: code, uniqueIdentifier: id, data, isActive: true }; rows.set(`${tenant}|${code}/${id}`, row); writes++; return row; },
+    mdmsV2UpdateData: async (record: any, data: any) => { update(record, data); return record; },
     generateEncKey: async () => true,
     userSearch: async () => users,
     userCreate: async (value: any) => { users.push({ ...value, uuid: 'founder' }); },
@@ -43,10 +50,9 @@ function fixture(role = 'SUPERUSER') {
     let result: unknown;
     if (path.endsWith('/schema/v1/_search')) result = { SchemaDefinitions: schemas.has(body.SchemaDefCriteria.codes[0]) ? [schemas.get(body.SchemaDefCriteria.codes[0])] : [] };
     else if (path.endsWith('/schema/v1/_create')) { schemas.set(body.SchemaDefinition.code, body.SchemaDefinition); writes++; result = {}; }
-    else if (path.endsWith('/v2/_search')) {
-      const c = body.MdmsCriteria;
-      result = { mdms: [...rows.values()].filter(r => r.schemaCode === c.schemaCode && (!c.uniqueIdentifiers || c.uniqueIdentifiers.includes(r.uniqueIdentifier))) };
-    } else if (path.includes('/v2/_create/')) { const r = body.Mdms; rows.set(`${r.schemaCode}/${r.uniqueIdentifier}`, r); writes++; result = {}; }
+    else if (path.endsWith('/v2/_search')) result = { mdms: search(body.MdmsCriteria) };
+    else if (path.includes('/v2/_create/')) { const r = body.Mdms; rows.set(`${r.tenantId}|${r.schemaCode}/${r.uniqueIdentifier}`, r); writes++; result = {}; }
+    else if (path.includes('/v2/_update/')) { update(body.Mdms, body.Mdms.data); result = {}; }
     else throw new Error(`Unexpected route ${path}`);
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
@@ -58,11 +64,13 @@ function fixture(role = 'SUPERUSER') {
       const [, tenant, uniqueIdentifier, schemaCode, data] = params;
       if (sql.some(r => r.tenant === tenant && r.schemaCode === schemaCode && r.uniqueIdentifier === uniqueIdentifier)) return 0;
       sql.push({ tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), writesBefore: writes });
-      rows.set(`${schemaCode}/${uniqueIdentifier}`, { schemaCode, uniqueIdentifier, data: JSON.parse(data) });
+      rows.set(`${tenant}|${schemaCode}/${uniqueIdentifier}`, { tenantId: tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), isActive: true });
       return 1;
     },
   };
-  return { options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
+  /** A row by `schema/uid` at a tenant; the city target unless given. */
+  const row = (key: string, tenant = 'in.newtown') => rows.get(`${tenant}|${key}`);
+  return { row, options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
 }
 
 test('canonical baseline records satisfy schemas and exclude workspace business data', () => {
@@ -293,7 +301,7 @@ test('MCP defaults to the seeded country rule and reads source_tenant only on op
   configured.options.api.mdmsV2SearchRaw = async (tenant: string, code: string, ...rest: any[]) =>
     tenant === 'in' ? [{ isActive: true, data: override }] : search(tenant, code, ...rest);
   await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in' }, configured.options);
-  assert.deepEqual(configured.rows.get('common-masters.MobileNumberValidation/+254').data, override);
+  assert.deepEqual(configured.row('common-masters.MobileNumberValidation/+254').data, override);
 
   const missing = fixture();
   missing.options.api.mdmsV2SearchRaw = async () => [];
@@ -304,11 +312,11 @@ test('MCP defaults to the seeded country rule and reads source_tenant only on op
     const seeded = fixture();
     await bootstrapPlatform({ target_tenant: 'in.newtown', country }, seeded.options);
     assert.equal(seeded.reads(), 0, 'without source_tenant no live tenant is read');
-    assert.deepEqual(seeded.rows.get(`common-masters.MobileNumberValidation/${prefix}`).data, loadPlatformSeed().countryMobileRules[country]);
+    assert.deepEqual(seeded.row(`common-masters.MobileNumberValidation/${prefix}`).data, loadPlatformSeed().countryMobileRules[country]);
   }
   const byPrefix = fixture();
   await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_prefix: '+254' }, byPrefix.options);
-  assert.equal(byPrefix.reads(), 0); assert.equal(byPrefix.rows.get('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^[17][0-9]{8}$');
+  assert.equal(byPrefix.reads(), 0); assert.equal(byPrefix.row('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^[17][0-9]{8}$');
   const unknown = fixture();
   await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, unknown.options), /Country mobile rule is missing/);
   assert.equal(unknown.reads(), 0); assert.equal(unknown.writes(), 0);
@@ -316,7 +324,7 @@ test('MCP defaults to the seeded country rule and reads source_tenant only on op
   const explicit = fixture();
   await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'pg', user_validation: [override] }, explicit.options);
   assert.equal(explicit.reads(), 0);
-  assert.deepEqual(explicit.rows.get('common-masters.MobileNumberValidation/+254').data, override);
+  assert.deepEqual(explicit.row('common-masters.MobileNumberValidation/+254').data, override);
 });
 
 test('an empty mobile_prefix is treated as absent, as the deploy renders an unset countryCode (#2269 review item 3)', async () => {
@@ -329,11 +337,11 @@ test('an empty mobile_prefix is treated as absent, as the deploy renders an unse
   for (const [regex, prefix] of [['^[17][0-9]{8}$', '+254'], ['^5[0-9]{8}$', '+91']]) {
     const f = fixture();
     await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: regex, mobile_prefix: '' }, f.options);
-    assert.deepEqual(f.rows.get(`common-masters.MobileNumberValidation/${prefix}`).data, { countryCode: prefix, mobileNumberRegex: regex, default: true });
+    assert.deepEqual(f.row(`common-masters.MobileNumberValidation/${prefix}`).data, { countryCode: prefix, mobileNumberRegex: regex, default: true });
   }
   const empty = fixture();
   await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'KE', mobile_prefix: '', mobile_regex: '' }, empty.options);
-  assert.deepEqual(empty.rows.get('common-masters.MobileNumberValidation/+254').data, loadPlatformSeed().countryMobileRules.KE);
+  assert.deepEqual(empty.row('common-masters.MobileNumberValidation/+254').data, loadPlatformSeed().countryMobileRules.KE);
 });
 
 test('user_only merges administrator roles, clears a lockout and is idempotent (#2269 review item 2)', async () => {
@@ -444,4 +452,23 @@ test('gateway bootstrap seeds the role-action floor before its first write, once
   const userOnly = fixture();
   await bootstrapPlatform({ target_tenant: 'ke', country: 'KE', user_only: true }, { ...userOnly.options, direct: false });
   assert.equal(userOnly.sql.length, 0);
+});
+
+test('a city bootstrap lists the city under its root as Tenant.<city> and in the root modules (#2269 review item 1c)', async () => {
+  for (const direct of [true, false]) {
+    const f = fixture();
+    await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct });
+    await bootstrapPlatform({ target_tenant: 'ke.nairobi', country: 'KE' }, { ...f.options, direct });
+    const city = f.row('tenant.tenants/Tenant.ke.nairobi', 'ke');
+    assert.ok(city, `city record under the root (direct=${direct})`);
+    assert.equal(city.data.code, 'ke.nairobi'); assert.equal(city.data.parent, 'ke');
+    assert.equal(f.row('tenant.tenants/ke.nairobi', 'ke.nairobi'), undefined, 'no city-scoped tenant record');
+    assert.equal(f.row('tenant.tenants/ke', 'ke').data.code, 'ke');
+    for (const module of ['PGR', 'Dashboard']) {
+      assert.deepEqual(f.row(`tenant.citymodule/${module}`, 'ke').data.tenants.map((t: any) => t.code), ['ke', 'ke.nairobi'], module);
+    }
+    const writes = f.writes();
+    const replay = await bootstrapPlatform({ target_tenant: 'ke.nairobi', country: 'KE' }, { ...f.options, direct });
+    assert.equal(f.writes(), writes, 'a replay writes nothing'); assert.equal(replay.summary.data_copied, 0);
+  }
 });

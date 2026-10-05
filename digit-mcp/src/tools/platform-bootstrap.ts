@@ -96,8 +96,9 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       const b = body as Record<string, any>;
       if (path.endsWith('/schema/v1/_search')) return { SchemaDefinitions: await api.mdmsSchemaSearch(target, b.SchemaDefCriteria.codes) };
       if (path.endsWith('/schema/v1/_create')) return { SchemaDefinition: await api.mdmsSchemaCreate(target, b.SchemaDefinition.code, b.SchemaDefinition.description, b.SchemaDefinition.definition) };
-      if (path.endsWith('/v2/_search')) return { mdms: await api.mdmsV2SearchRaw(target, b.MdmsCriteria.schemaCode, b.MdmsCriteria) };
-      if (path.includes('/v2/_create/')) return { mdms: [await api.mdmsV2Create(target, b.Mdms.schemaCode, b.Mdms.uniqueIdentifier, b.Mdms.data)] };
+      if (path.endsWith('/v2/_search')) return { mdms: await api.mdmsV2SearchRaw(b.MdmsCriteria.tenantId, b.MdmsCriteria.schemaCode, b.MdmsCriteria) };
+      if (path.includes('/v2/_create/')) return { mdms: [await api.mdmsV2Create(b.Mdms.tenantId, b.Mdms.schemaCode, b.Mdms.uniqueIdentifier, b.Mdms.data)] };
+      if (path.includes('/v2/_update/')) return { mdms: [await api.mdmsV2UpdateData(b.Mdms, b.Mdms.data)] };
       throw new Error('Unsupported platform MDMS operation');
     }
     const response = await fetcher(`${host}${path}`, {
@@ -107,24 +108,27 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     if (!response.ok) throw new Error(`Platform MDMS returned HTTP ${response.status}`);
     return await response.json() as Record<string, any>;
   }
-  async function records(code: string, id?: string) {
+  type Row = { tenantId?: string; schemaCode?: string; uniqueIdentifier?: string; data: Record<string, unknown>; isActive?: boolean };
+  async function records(code: string, id?: string, tenant = target) {
     const response = await post('/egov-mdms-service/v2/_search', {
-      MdmsCriteria: { tenantId: target, schemaCode: code, ...(id && { uniqueIdentifiers: [id] }), limit: 1000 },
+      MdmsCriteria: { tenantId: tenant, schemaCode: code, ...(id && { uniqueIdentifiers: [id] }), limit: 1000 },
     });
     if (!Array.isArray(response.mdms)) throw new Error('Invalid MDMS response');
-    return response.mdms as { data: Record<string, unknown>; isActive?: boolean }[];
+    return response.mdms as Row[];
   }
-  async function record(code: string, id: string, data: Record<string, unknown>) {
-    const existing = await records(code, id);
+  /** Create-if-absent. `match` finds an existing row by content where the server derives the uid. */
+  async function record(code: string, id: string, data: Record<string, unknown>, tenant = target, match?: (row: Row) => boolean) {
+    const find = async () => match ? (await records(code, undefined, tenant)).filter(match) : await records(code, id, tenant);
+    const existing = await find();
     if (existing.length) {
       if (existing[0].isActive === false) throw new Error(`Inactive platform record ${code}/${id}`);
       results.data.skipped.push(`${code}/${id}`); return;
     }
     await post(`/egov-mdms-service/v2/_create/${code}`, {
-      Mdms: { tenantId: target, schemaCode: code, uniqueIdentifier: id, isActive: true, data },
+      Mdms: { tenantId: tenant, schemaCode: code, uniqueIdentifier: id, isActive: true, data },
     });
     // A successful write is not proof that the asynchronous MDMS projection is visible.
-    await visible(async () => (await records(code, id)).length > 0);
+    await visible(async () => (await find()).length > 0);
     results.data.copied.push(`${code}/${id}`);
   }
   async function visible(probe: () => Promise<boolean>) {
@@ -133,6 +137,20 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     throw new Error('Accepted platform record is not visible yet; retry bootstrap');
+  }
+  const cityRoot = target.includes('.') ? target.split('.')[0] : undefined;
+  async function registerCityModules() {
+    // digit-ui reads tenant.citymodule at the root, so the city joins each root module's
+    // tenants[]. mdms-v2 has no array append: read, modify, write; idempotent.
+    for (const row of await records('tenant.citymodule', undefined, cityRoot)) {
+      if (row.isActive === false || (row.tenantId && row.tenantId !== cityRoot)) continue;
+      const tenants = Array.isArray(row.data.tenants) ? row.data.tenants as { code?: string }[] : [];
+      if (tenants.some((entry) => entry?.code === target)) { results.data.skipped.push(`tenant.citymodule/${row.uniqueIdentifier} (${target})`); continue; }
+      await post(`/egov-mdms-service/v2/_update/tenant.citymodule`, { Mdms: { ...row, data: { ...row.data, tenants: [...tenants, { code: target }] } } });
+      await visible(async () => (await records('tenant.citymodule', row.uniqueIdentifier, cityRoot))
+        .some((r) => (r.data.tenants as { code?: string }[] | undefined)?.some((entry) => entry?.code === target)));
+      results.data.copied.push(`tenant.citymodule/${row.uniqueIdentifier} (${target})`);
+    }
   }
   let rules = args.user_validation as Record<string, unknown>[] | undefined;
   if (!rules) {
@@ -194,10 +212,19 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       await post('/egov-mdms-service/schema/v1/_create', { SchemaDefinition: { ...schema, tenantId: target, description: schema.code, isActive: true } });
       await visible(exists); results.schemas.copied.push(schema.code);
     }
-    await record('tenant.tenants', target, { code: target, name: target, type: 'CITY', domainUrl: '', imageId: null,
+    const tenantRecord = { code: target, name: target, type: 'CITY', domainUrl: '', imageId: null,
       emailId: '', address: '', contactNumber: '', OfficeTimings: { 'Mon - Fri': '' },
-      city: { code: target, name: target, districtName: '', districtTenantCode: target, ulbGrade: '' } });
+      city: { code: target, name: target, districtName: '', districtTenantCode: target, ulbGrade: '' } };
+    if (cityRoot) {
+      // A city's record lives in its root's tenant list as Tenant.<city>, where digit-ui,
+      // idgen and the escalation scheduler list cities (#2269 review item 1c).
+      await record('tenant.tenants', `Tenant.${target}`, { ...tenantRecord, parent: cityRoot }, cityRoot,
+        (row) => row.data?.code === target && (!row.tenantId || row.tenantId === cityRoot));
+    } else {
+      await record('tenant.tenants', target, tenantRecord);
+    }
     for (const row of seed.records) await record(row.schemaCode, row.uniqueIdentifier, substituteTenant(row.data, target));
+    if (cityRoot) await registerCityModules();
     for (const rule of rules) await record('common-masters.MobileNumberValidation', String(rule.countryCode), rule);
     // The seed carries no PG- complaint-ID prefix; derive it from the target (idgen reads only [..] tokens).
     await record('common-masters.IdFormat', 'pgr.servicerequestid', { idname: 'pgr.servicerequestid',
