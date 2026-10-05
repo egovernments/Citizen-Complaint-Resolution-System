@@ -825,7 +825,7 @@ public class AnalyticsService {
     /**
      * TENANT-CORPUS size of {@code complaint_facts} — how many fact rows exist for the
      * tenant subtree, using {@link AnalyticsPlanner#applyScope}'s tenant semantics
-     * (state level: {@code tenant_id LIKE 'ke%'}; city level: exact match). This is
+     * (state level: the tenant itself plus {@code tenant_id LIKE 'ke.%'}; city level: exact match). This is
      * deliberately NOT the caller's ABAC-visible subset: the dashboard uses it as the
      * {@code record_count_tier} tag, which must describe the tenant's data volume so
      * render-lag comparisons across personas share a denominator (#1110/R9-C9).
@@ -834,6 +834,9 @@ public class AnalyticsService {
      * (the single TTL shared by every analytics config cache; default 5 minutes);
      * errors return null (additive, never fails the /packs response) and are not cached.
      */
+    static final String STATE_RECORD_COUNT_SQL =
+            "SELECT count(*) FROM complaint_facts WHERE (tenant_id = ? OR tenant_id LIKE ?)";
+
     public Long recordCount(String tenantId, int stateLevelLen) {
         if (tenantId == null || tenantId.isEmpty()) return null;
         long now = recordCountClock.getAsLong();
@@ -843,8 +846,8 @@ public class AnalyticsService {
         boolean stateLevel = tenantId.split("\\.").length == stateLevelLen;
         try {
             Long count = stateLevel
-                    ? jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?",
-                                          Long.class, AnalyticsPlanner.escapeLikeLiteral(tenantId) + "%")
+                    ? jdbc.queryForObject(STATE_RECORD_COUNT_SQL,
+                                          Long.class, tenantId, AnalyticsPlanner.escapeLikeLiteral(tenantId) + ".%")
                     : jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?",
                                           Long.class, tenantId);
             if (count == null) return null;

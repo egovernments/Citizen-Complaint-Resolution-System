@@ -20,7 +20,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * #1110: pins /packs recordCount semantics — the tenant-CORPUS count on complaint_facts
- * with AnalyticsPlanner's tenant LIKE-prefix semantics (state level 'ke%' LIKE, city
+ * with AnalyticsPlanner's tenant subtree semantics (state level 'ke' or 'ke.%', city
  * exact), the 5-minute per-tenant cache (including expiry), and error -> null (never
  * cached, never thrown).
  */
@@ -43,15 +43,15 @@ public class AnalyticsServiceRecordCountTest {
     }
 
     @Test
-    public void stateLevelTenantUsesLikePrefix() {
-        when(jdbc.queryForObject(contains("LIKE"), eq(Long.class), eq("ke%"))).thenReturn(1234L);
+    public void stateLevelTenantCoversItsSubtreeButNotASiblingRoot() {
+        // a bare 'ke%' would also count every row of the unrelated root tenant 'kenya'
+        when(jdbc.queryForObject(eq(AnalyticsService.STATE_RECORD_COUNT_SQL), eq(Long.class), eq("ke"), eq("ke.%")))
+                .thenReturn(1234L);
 
         assertEquals(1234L, service.recordCount("ke", STATE_LEN));
 
         verify(jdbc).queryForObject(
-                eq("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?"),
-                eq(Long.class), eq("ke%"));
-        verify(jdbc, never()).queryForObject(contains("tenant_id = ?"), eq(Long.class), any());
+                eq(AnalyticsService.STATE_RECORD_COUNT_SQL), eq(Long.class), eq("ke"), eq("ke.%"));
     }
 
     @Test
@@ -63,41 +63,38 @@ public class AnalyticsServiceRecordCountTest {
         verify(jdbc).queryForObject(
                 eq("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?"),
                 eq(Long.class), eq("ke.bomet"));
-        verify(jdbc, never()).queryForObject(contains("LIKE"), eq(Long.class), any());
+        verify(jdbc, never()).queryForObject(contains("LIKE"), eq(Long.class), any(Object[].class));
     }
 
     @Test
     public void stateLevelRecordCountEscapesLikeMetacharacters() {
-        when(jdbc.queryForObject(contains("LIKE"), eq(Long.class), eq("ke\\%\\_\\\\root%")))
+        when(jdbc.queryForObject(eq(AnalyticsService.STATE_RECORD_COUNT_SQL), eq(Long.class),
+                eq("ke%_\\root"), eq("ke\\%\\_\\\\root.%")))
                 .thenReturn(9L);
 
         assertEquals(9L, service.recordCount("ke%_\\root", STATE_LEN));
-
-        verify(jdbc).queryForObject(
-                eq("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?"),
-                eq(Long.class), eq("ke\\%\\_\\\\root%"));
     }
 
     @Test
     public void secondCallWithinTtlServesFromCache() {
-        when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(10L);
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(10L);
 
         assertEquals(10L, service.recordCount("ke", STATE_LEN));
         clock.addAndGet(4 * 60_000L + 59_000L);   // 4m59s later — still inside the 5m TTL
         assertEquals(10L, service.recordCount("ke", STATE_LEN));
 
-        verify(jdbc, times(1)).queryForObject(anyString(), eq(Long.class), any());
+        verify(jdbc, times(1)).queryForObject(anyString(), eq(Long.class), any(Object[].class));
     }
 
     @Test
     public void cacheExpiresAfterFiveMinutes() {
-        when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(10L, 20L);
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(10L, 20L);
 
         assertEquals(10L, service.recordCount("ke", STATE_LEN));
         clock.addAndGet(5 * 60_000L + 1L);        // past the TTL
         assertEquals(20L, service.recordCount("ke", STATE_LEN));
 
-        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any());
+        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any(Object[].class));
     }
 
     @Test
@@ -108,7 +105,7 @@ public class AnalyticsServiceRecordCountTest {
         when(cfg.getAnalyticsConfigCacheTtlMs()).thenReturn(1_000L);
         service = new AnalyticsService(null, null, jdbc, null, null, null, new AnalyticsMetrics(), cfg);
         ReflectionTestUtils.setField(service, "recordCountClock", (LongSupplier) clock::get);
-        when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(10L, 20L);
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class))).thenReturn(10L, 20L);
 
         assertEquals(10L, service.recordCount("ke", STATE_LEN));
         clock.addAndGet(999L);                     // inside the configured 1s TTL
@@ -116,31 +113,31 @@ public class AnalyticsServiceRecordCountTest {
         clock.addAndGet(2L);                       // past it
         assertEquals(20L, service.recordCount("ke", STATE_LEN));
 
-        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any());
+        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any(Object[].class));
     }
 
     @Test
     public void cacheIsKeyedByTenant() {
-        when(jdbc.queryForObject(contains("LIKE"), eq(Long.class), eq("ke%"))).thenReturn(100L);
+        when(jdbc.queryForObject(eq(AnalyticsService.STATE_RECORD_COUNT_SQL), eq(Long.class), eq("ke"), eq("ke.%"))).thenReturn(100L);
         when(jdbc.queryForObject(contains("tenant_id = ?"), eq(Long.class), eq("ke.bomet"))).thenReturn(7L);
 
         assertEquals(100L, service.recordCount("ke", STATE_LEN));
         assertEquals(7L, service.recordCount("ke.bomet", STATE_LEN));
         assertEquals(100L, service.recordCount("ke", STATE_LEN));   // still cached
 
-        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any());
+        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any(Object[].class));
     }
 
     @Test
     public void errorReturnsNullAndIsNotCached() {
-        when(jdbc.queryForObject(anyString(), eq(Long.class), any()))
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any(Object[].class)))
                 .thenThrow(new DataAccessResourceFailureException("db down"))
                 .thenReturn(33L);
 
         assertNull(service.recordCount("ke", STATE_LEN));           // failure -> null, no throw
         assertEquals(33L, service.recordCount("ke", STATE_LEN));    // retried, not a cached null
 
-        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any());
+        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any(Object[].class));
     }
 
     @Test
