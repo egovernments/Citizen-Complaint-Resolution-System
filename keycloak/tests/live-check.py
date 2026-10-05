@@ -302,6 +302,27 @@ def _():
     return f"{len(bindings)} characters"
 
 
+@check("#2121 the sign-up marker and the undeclared phone attributes survive an admin write")
+def _():
+    # Keycloak answers 204 to a PUT whose attributes it drops, so only a read-back proves
+    # they are kept: digit.identityBffSignup is declared (above), while phoneNumber and
+    # phoneNumberVerified stay undeclared and rely on unmanagedAttributePolicy ADMIN_EDIT.
+    # Written as JSON with the BFF's own service account: kcadm can't set dotted keys.
+    declared = {a["name"] for a in admin("GET", "/users/profile")["attributes"]}
+    assert "digit.identityBffSignup" in declared, "the sign-up marker is not declared"
+    assert not {"phoneNumber", "phoneNumberVerified"} & declared, "declared: this would not test the policy"
+    token = service_token()
+    user_id = admin("POST", "/users", {"username": f"attr-{time.time_ns()}", "enabled": True}, token=token)
+    try:
+        user = admin("GET", f"/users/{user_id}", token=token)
+        written = {"digit.identityBffSignup": ["true"], "phoneNumber": ["+254700000001"], "phoneNumberVerified": ["true"]}
+        admin("PUT", f"/users/{user_id}", {**user, "attributes": {**user.get("attributes", {}), **written}}, token=token)
+        stored = admin("GET", f"/users/{user_id}", token=token).get("attributes", {})
+        assert {name: stored.get(name) for name in written} == written, stored
+    finally:
+        admin("DELETE", f"/users/{user_id}", token=token)
+
+
 @check("§12 identity providers and their mappers use IMPORT")
 def _():
     providers = admin("GET", "/identity-provider/instances")
