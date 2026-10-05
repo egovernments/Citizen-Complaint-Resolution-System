@@ -1,6 +1,4 @@
 import type { UserRepresentation } from "./keycloak-writer.js";
-import type { Binding } from "../bindings/types.js";
-export type { Binding } from "../bindings/types.js";
 
 export interface AccountEntry {
   kind: "staff" | "citizen";

@@ -4,8 +4,6 @@ import {
   isOrganizationGroupMember,
   isOrganizationMember,
   listTenantMappings,
-  readOrganizationMapping,
-  type OrganizationMapping,
   type TenantMapping,
 } from "../organizations/organization-service.js";
 import { DigitUnavailableError, type DigitAccount } from "../managed-accounts/digit-user-client.js";
@@ -24,18 +22,8 @@ export type OrganizationMembership = TenantMapping & {
   roles: string[];
 };
 
-const MAPPING_TTL_MS = 60_000;
 const TENANT_TTL_MS = 300_000;
-const mappings = new Map<string, { value: OrganizationMapping | null; expiresAt: number }>();
 const tenants = new Map<string, { value: Set<string>; names: Map<string, string>; expiresAt: number }>();
-
-async function cachedMapping(organizationId: string): Promise<OrganizationMapping | null> {
-  const hit = mappings.get(organizationId);
-  if (hit && hit.expiresAt > Date.now()) return hit.value;
-  const value = await readOrganizationMapping(organizationId);
-  mappings.set(organizationId, { value, expiresAt: Date.now() + MAPPING_TTL_MS });
-  return value;
-}
 
 /** Tenant codes present in DIGIT MDMS `tenant.tenants` for the tenant's root. */
 export async function isActiveDigitTenant(tenantId: string, options: { fresh?: boolean } = {}): Promise<boolean> {
@@ -86,12 +74,6 @@ async function rootTenants(root: string, fresh = false): Promise<{ value: Set<st
   return entry;
 }
 
-function allowlisted(roles: unknown): string[] {
-  if (!Array.isArray(roles)) return [];
-  return [...new Set(roles.filter((role): role is string =>
-    typeof role === "string" && config.digitManagedRoleAllowlist.includes(role)))].sort();
-}
-
 /** Live memberships for flows, such as onboarding, that mutate Organizations mid-session. */
 export async function liveMembershipsForSubject(subject: string): Promise<OrganizationMembership[]> {
   const memberships = await Promise.all((await listTenantMappings()).map(async (mapping) => {
@@ -127,6 +109,5 @@ export function tenantOption(
 
 export function clearTenantCaches(): void {
   clearTenantMappingCache();
-  mappings.clear();
   tenants.clear();
 }

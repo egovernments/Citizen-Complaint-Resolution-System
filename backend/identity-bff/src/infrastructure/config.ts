@@ -226,11 +226,6 @@ export const config = {
     process.env.ONBOARDING_TENANT_ADMIN_ROLES ||
       "TENANT_ADMIN,GRO,ACCOUNT_ADMIN,MDMS_ADMIN,LOC_ADMIN,SUPERUSER",
   ),
-  identityOrganizationAdminRoles: csv(
-    process.env.IDENTITY_ORGANIZATION_ADMIN_ROLES || "TENANT_ADMIN",
-  ),
-  identityOrganizationMemberGroup:
-    process.env.IDENTITY_ORGANIZATION_MEMBER_GROUP || "employees",
   digitManagedBaseRoles: csv(process.env.DIGIT_MANAGED_BASE_ROLES || "EMPLOYEE"),
   digitManagedRoleAllowlist: csv(
     process.env.DIGIT_MANAGED_ROLE_ALLOWLIST ||

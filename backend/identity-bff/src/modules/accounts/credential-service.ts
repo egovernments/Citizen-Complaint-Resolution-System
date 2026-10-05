@@ -7,7 +7,7 @@ import { mirrorPerson } from "../sync/mirror.js";
 import { writeDigitIdentifiers } from "./digit-writer.js";
 import type { PersonLease } from "./person-lease.js";
 
-export { StaffLoginError, type StaffLoginFailure } from "./credential-errors.js";
+export { StaffLoginError } from "./credential-errors.js";
 
 export interface StaffAccountRef {
   tenantId: string;
