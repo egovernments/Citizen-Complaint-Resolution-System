@@ -26,13 +26,15 @@ before(async () => {
       export { SignInFailureCard, useIdentityBffSignIn } from './packages/modules/core/src/components/IdentityBffSignIn';
       export { default as LogoutDialog } from './packages/modules/core/src/components/Dialog/LogoutDialog';
       export { default as Profile } from './packages/modules/core/src/pages/citizen/Home/UserProfile';
+      export { default as EmployeeLogin } from './packages/modules/core/src/pages/employee/IdentityBffEmployeeLogin';
+      export { default as CitizenLogin } from './packages/modules/core/src/pages/citizen/IdentityBffCitizenLogin';
     `, resolveDir: root, loader: "jsx" },
     bundle: true, platform: "node", format: "cjs", outfile: OUT, loader: { ".js": "jsx" },
     nodePaths: [path.join(root, "node_modules")],
     plugins: [{ name: "ui-boundaries", setup(build) {
       build.onResolve({ filter: /^react$|^react-test-renderer$|^react-dom$/ }, (args) => ({ path: require.resolve(args.path), external: true }));
       build.onResolve({ filter: /^@egovernments\/|^react-i18next$/ }, (args) => ({ path: args.path, namespace: "ui-double" }));
-      build.onResolve({ filter: /\/UploadDrawer$|\/ImageComponent$|^\.\/Header$/ }, () => ({ path: "empty", namespace: "ui-double" }));
+      build.onResolve({ filter: /\/UploadDrawer$|\/ImageComponent$|^\.\.?\/Header$|^\.\.\/Background$/ }, () => ({ path: "empty", namespace: "ui-double" }));
       build.onLoad({ filter: /.*/, namespace: "ui-double" }, (args) => {
         let contents;
         if (args.path.endsWith("digit-ui-libraries")) {
@@ -43,9 +45,13 @@ before(async () => {
             export { establishIdentityBffSession, buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
               surfaceBase as identityBffSurfaceBase, restrictDestination as restrictIdentityBffDestination,
               signOutIncomplete as identityBffSignOutIncomplete, clearSignOutIncomplete as clearIdentityBffSignOutIncomplete } from ${JSON.stringify(auth + "/identityBffLogin.js")};
+            export { computeMobileLengths, buildMobileErrorMessage, DEFAULT_MOBILE_PATTERN }
+              from ${JSON.stringify(path.join(root, "packages/libraries/src/constants/mobileValidation.js"))};
+            export const fetchCitizenSigninMethods = async () => ({ ok: false });
+            export const fillMessage = (value) => value;
             export const DEFAULT_MOBILE_PREFIX = '+254';`;
         } else if (args.path === "react-i18next") contents = `export const useTranslation = () => ({ t: (key, options) => options?.defaultValue || key });`;
-        else if (args.path === "empty") contents = `export default () => null;`;
+        else if (args.path === "empty") contents = `export default ({ children }) => children ?? null;`;
         else contents = `import React from 'react';
           const Box = ({children, ...props}) => <div {...props}>{children}</div>;
           export const Button = ({children, label, ...props}) => <button {...props}>{children || label}</button>;
@@ -337,3 +343,22 @@ test("logout dialog keeps a failed sign-out visible for retry", async () => {
   assert.equal(button(view, "CORE_LOGOUT_CONFIRM_ACTION").props.isDisabled, false);
   view.unmount();
 });
+
+// Medium 4 (Dhruv, #2271 review 2): a login page reached on a tenantless
+// /digit-ui/... URL (legacy ingress, preserved vhost, Kong /digit-ui) has no
+// route tenant. It used to throw a TypeError reading tenant.appBasePath.
+for (const [surface, page] of [["employee", "EmployeeLogin"], ["citizen", "CitizenLogin"]]) {
+  test(`tenantless ${surface} login asks for the organisation's link instead of crashing`, async () => {
+    const calls = [];
+    const state = browser(surface, async (url) => { calls.push(url); return json(500, {}); });
+    delete window.__digitTenantContext;
+    window.location.pathname = surface === "citizen" ? "/digit-ui/citizen/login" : "/digit-ui/employee/user/login";
+    const view = await render(ui[page], { t });
+    const shown = text(view.root);
+    assert.match(shown, /Choose your organisation/);
+    assert.match(shown, /your organisation's own link/);
+    assert.deepEqual(calls, [], "no Identity BFF call without a route tenant");
+    assert.equal(state.stored.redirect, undefined, "no sign-in redirect without a route tenant");
+    view.unmount();
+  });
+}

@@ -35,14 +35,20 @@ const cleanAuthResult = () => {
  */
 export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut }) => {
   const location = useLocation();
-  const [status, setStatus] = useState("checking");
+  const tenant = window.__digitTenantContext || null;
+  // A tenantless /digit-ui/... login page (legacy ingress, preserved vhost,
+  // the Kong /digit-ui route) has no route tenant to sign in to. Say so
+  // instead of starting a sign-in that has no tenant to bind.
+  const hasTenant = Boolean(tenant?.appBasePath);
+  const [status, setStatus] = useState(hasTenant ? "checking" : "no-tenant");
   const [message, setMessage] = useState("");
   const [invitation, setInvitation] = useState(null);
-  const tenant = window.__digitTenantContext;
-  const destination = restrictIdentityBffDestination(
-    location.state?.from || new URLSearchParams(location.search).get("from"),
-    identityBffSurfaceBase(tenant, surface),
-  );
+  const destination = hasTenant
+    ? restrictIdentityBffDestination(
+        location.state?.from || new URLSearchParams(location.search).get("from"),
+        identityBffSurfaceBase(tenant, surface),
+      )
+    : null;
   const tr = (key, fallback) => {
     const value = t(key);
     return value === key ? fallback : value;
@@ -123,7 +129,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
       setMessage(tr("CORE_IDENTITY_SIGNOUT_INCOMPLETE", "Sign-out may not have finished, so this browser can still be signed in. Try signing out again, or sign in to continue."));
       return;
     }
-    retry(establishSession);
+    if (hasTenant) retry(establishSession);
     // Tenant context is immutable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,6 +140,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
   const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut } = signIn;
+  if (status === "no-tenant") return <ChooseOrganisationCard tr={tr} Shell={Shell} />;
   return (
     <Shell>
       <V2Card
@@ -157,7 +164,7 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
             {tr("CORE_COMMON_LOGIN", "Sign in")}
           </h1>
           <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary, #505A5F)" }}>
-            {tenant.name}
+            {tenant?.name}
           </p>
         </header>
         {message ? (
@@ -203,3 +210,38 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
     </Shell>
   );
 };
+
+/**
+ * A login page reached without a /{slug}/digit-ui/ route. Sign-in is bound to
+ * a tenant, so the visitor needs their organisation's own link.
+ */
+const ChooseOrganisationCard = ({ tr, Shell }) => (
+  <Shell>
+    <V2Card
+      style={{
+        width: "100%",
+        maxWidth: "420px",
+        padding: "32px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        borderRadius: "14px",
+        border: "none",
+        boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <Header />
+      </div>
+      <h1 style={{ margin: 0, fontSize: "1.5rem", textAlign: "center", color: "var(--color-text-heading, #1D2433)" }}>
+        {tr("CORE_IDENTITY_CHOOSE_ORGANISATION", "Choose your organisation")}
+      </h1>
+      <p role="alert" style={{ margin: 0, color: "var(--color-text-secondary, #505A5F)", lineHeight: 1.5 }}>
+        {tr(
+          "CORE_IDENTITY_USE_ORGANISATION_LINK",
+          "Sign in from your organisation's own link. It looks like /your-organisation/digit-ui/. Ask your administrator if you do not have it.",
+        )}
+      </p>
+    </V2Card>
+  </Shell>
+);
