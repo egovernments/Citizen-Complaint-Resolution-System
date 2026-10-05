@@ -388,3 +388,44 @@ for (const [surface, page] of [["employee", "EmployeeLogin"], ["citizen", "Citiz
     view.unmount();
   });
 }
+
+test("pending invitation decline asks for confirmation, then leaves the person signed in without access", async () => {
+  const calls = [];
+  let stale = false;
+  browser("employee", async (url, init) => {
+    calls.push(url);
+    if (url.includes("_decline")) {
+      assert.deepEqual(JSON.parse(init.body), { tenantId: tenant.tenantId, invitationVersion: 8 });
+      return stale ? json(409, { code: "INVITATION_STALE" }) : json(200, { declined: true });
+    }
+    if (url.includes("/session")) return json(200, { authenticated: true, tenant, pendingInvitations: [{ tenantId: tenant.tenantId, invitationVersion: 8 }] });
+    return json(403, { code: "PENDING_INVITATION" });
+  });
+  const Shell = ({ children }) => ui.React.createElement("section", null, children);
+  const Login = () => {
+    const signIn = ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => assert.fail("declined invitation cannot sign in") });
+    return ui.React.createElement(ui.SignInFailureCard, { signIn, Shell });
+  };
+  let view = await render(Login);
+  await click(button(view, "Decline invitation"));
+  assert.equal(calls.some((url) => url.includes("_decline")), false);
+  await click(button(view, "Cancel"));
+  assert.ok(button(view, "Accept invitation"));
+  await click(button(view, "Decline invitation"));
+  assert.equal(button(view, "Accept invitation"), undefined);
+  await click(button(view, "Confirm decline"));
+  assert.ok(calls.includes("/identity/v1/workspace-invitations/_decline?surface=employee"));
+  assert.match(text(view.root.findByProps({ role: "alert" })), /declined the invitation/);
+  assert.equal(button(view, "Accept invitation"), undefined);
+  assert.equal(button(view, "Decline invitation"), undefined);
+  assert.ok(button(view, "Sign out"));
+  view.unmount();
+
+  stale = true;
+  view = await render(Login);
+  await click(button(view, "Decline invitation"));
+  await click(button(view, "Confirm decline"));
+  assert.match(text(view.root.findByProps({ role: "alert" })), /expired or changed/);
+  assert.ok(button(view, "Try again"));
+  view.unmount();
+});

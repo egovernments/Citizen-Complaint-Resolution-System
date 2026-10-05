@@ -1,11 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { __setFetchForTests, logout, session } from '@/api/onboarding';
-import { acceptInvitation, linkMember, members, removeMember, unlinkProvider, updateMemberEmail } from './api';
+import { acceptInvitation, declineInvitation, linkMember, members, removeMember, unlinkProvider, updateMemberEmail } from './api';
 afterEach(() => __setFetchForTests(null));
 it.each([
   ['link', () => linkMember('acme', 'u', 'e@example.org'), '/workspace-members/_link', { tenantId: 'acme', digitUuid: 'u', email: 'e@example.org' }],
   ['remove', () => removeMember('acme', 'u'), '/workspace-members/_remove', { tenantId: 'acme', digitUuid: 'u' }],
   ['accept', () => acceptInvitation({ tenantId: 'acme', invitationVersion: 3 }), '/workspace-invitations/_accept', { tenantId: 'acme', invitationVersion: 3 }],
+  ['decline', () => declineInvitation({ tenantId: 'acme', invitationVersion: 3 }), '/workspace-invitations/_decline', { tenantId: 'acme', invitationVersion: 3 }],
   ['email', () => updateMemberEmail('acme', 'u', 'new@example.org'), '/workspace-members/_updateEmail', { tenantId: 'acme', digitUuid: 'u', email: 'new@example.org' }],
   ['unlink', () => unlinkProvider('google'), '/account/providers/_unlink', { alias: 'google' }],
   ['logout', () => logout('others'), '/logout', { scope: 'others' }],
@@ -30,4 +31,5 @@ it('paginates the member list', async () => {
 it('preserves invitation stale and last-method errors for the UI', async () => {
   __setFetchForTests(async () => new Response('{"code":"INVITATION_STALE","error":"Invitation expired"}', { status: 409 }));
   await expect(acceptInvitation({ tenantId: 'acme', invitationVersion: 1 })).rejects.toMatchObject({ code: 'INVITATION_STALE', status: 409 });
+  await expect(declineInvitation({ tenantId: 'acme', invitationVersion: 1 })).rejects.toMatchObject({ code: 'INVITATION_STALE', status: 409 });
 });

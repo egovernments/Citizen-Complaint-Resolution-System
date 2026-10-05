@@ -203,7 +203,7 @@ export default function LoginPage() {
               </Button>
             ))}
           </div>
-          {invitations.length > 0 && <Invitations invitations={invitations} onAccepted={load} />}
+          {invitations.length > 0 && <Invitations invitations={invitations} onChanged={load} />}
           <Button
             variant="link"
             className="h-auto w-full p-0"
@@ -221,7 +221,7 @@ export default function LoginPage() {
     );
   }
 
-  if (phase === 'invitations') return <AuthShell><Invitations invitations={invitations} onAccepted={load} /></AuthShell>;
+  if (phase === 'invitations') return <AuthShell><Invitations invitations={invitations} onChanged={load} /></AuthShell>;
 
   if (phase === 'noAccess') {
     return (

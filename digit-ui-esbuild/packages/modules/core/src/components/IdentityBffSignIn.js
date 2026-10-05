@@ -121,6 +121,22 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     return retry(start || beginSignIn);
   };
 
+  // Declining removes this workspace's binding, so the person stays signed in
+  // with no access here: the same card as a 403 on the route tenant.
+  const declineInvitation = () => retry(async () => {
+    setStatus("checking");
+    try {
+      await IdentityAccount.declineIdentityInvitation({ tenant, invitation, fetchImpl: window.fetch.bind(window) });
+      setInvitation(null);
+      setStatus("forbidden");
+      setMessage(tr("CORE_IDENTITY_INVITATION_DECLINED", "You declined the invitation to this workspace."));
+    } catch (error) {
+      const failure = IdentityAccount.identityMessage(error.code);
+      setStatus("error");
+      setMessage(tr(failure.messageKey, failure.message));
+    }
+  });
+
   useEffect(() => {
     // A tenantless page keeps its choose-organisation card, whatever the flag says.
     if (!hasTenant) return;
@@ -136,12 +152,13 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut };
+  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation };
 };
 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
-  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut } = signIn;
+  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut, declineInvitation } = signIn;
+  const [confirmDecline, setConfirmDecline] = useState(false);
   if (status === "no-tenant") return <ChooseOrganisationCard tr={tr} Shell={Shell} />;
   return (
     <Shell>
@@ -179,10 +196,29 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
             {tr("CORE_IDENTITY_SIGN_OUT_HINT", "Sign out if you need to use a different account.")}
           </p>
         ) : null}
-        {status === "pending-invitation" && invitation && (
-          <V2Button type="button" width="full" onClick={acceptInvitation}>
-            {tr("CORE_IDENTITY_ACCEPT_INVITATION", "Accept invitation")}
-          </V2Button>
+        {status === "pending-invitation" && invitation && !confirmDecline && (
+          <>
+            <V2Button type="button" width="full" onClick={acceptInvitation}>
+              {tr("CORE_IDENTITY_ACCEPT_INVITATION", "Accept invitation")}
+            </V2Button>
+            <V2Button type="button" width="full" variation="secondary" onClick={() => setConfirmDecline(true)}>
+              {tr("CORE_IDENTITY_DECLINE_INVITATION", "Decline invitation")}
+            </V2Button>
+          </>
+        )}
+        {status === "pending-invitation" && invitation && confirmDecline && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ margin: 0, color: "var(--color-text-secondary, #505A5F)" }}>
+              {tr("CORE_IDENTITY_DECLINE_INVITATION_CONFIRM",
+                "Decline this invitation? Your administrator would need to invite you again.")}
+            </p>
+            <V2Button type="button" width="full" onClick={() => { setConfirmDecline(false); declineInvitation(); }}>
+              {tr("CORE_IDENTITY_CONFIRM_DECLINE", "Confirm decline")}
+            </V2Button>
+            <V2Button type="button" width="full" variation="secondary" onClick={() => setConfirmDecline(false)}>
+              {tr("CORE_COMMON_CANCEL", "Cancel")}
+            </V2Button>
+          </div>
         )}
         {status === "signout-incomplete" && (
           <V2Button type="button" width="full" variant="secondary" onClick={() => signInAfterIncompleteSignOut(onSignIn)}>
