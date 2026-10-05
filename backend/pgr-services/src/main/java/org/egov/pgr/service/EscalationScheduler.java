@@ -5,6 +5,7 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.onboarding.WorkspaceRepository;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.pgr.web.models.Service;
@@ -18,9 +19,11 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.egov.pgr.util.PGRConstants.ESCALATE;
 
@@ -33,6 +36,7 @@ public class EscalationScheduler {
     private final EscalationService escalationService;
     private final EscalationConfigurationService configurationService;
     private final PGRService pgrService;
+    private final WorkspaceRepository workspaces;
 
     @Value("${state.level.tenant.id:${egov.state.level.tenant.id:ke}}")
     private String stateLevelTenantId;
@@ -42,12 +46,14 @@ public class EscalationScheduler {
                                PGRRepository repository,
                                EscalationService escalationService,
                                EscalationConfigurationService configurationService,
-                               PGRService pgrService) {
+                               PGRService pgrService,
+                               WorkspaceRepository workspaces) {
         this.config = config;
         this.repository = repository;
         this.escalationService = escalationService;
         this.configurationService = configurationService;
         this.pgrService = pgrService;
+        this.workspaces = workspaces;
     }
 
     @Scheduled(fixedDelayString = "${pgr.escalation.interval.ms}")
@@ -56,29 +62,24 @@ public class EscalationScheduler {
             return;
         }
 
-        String tenantId = getStateLevelTenantId();
-        if (tenantId == null) {
-            log.warn("Cannot determine state-level tenant ID; skipping escalation scan");
+        Set<String> scanTenants = new LinkedHashSet<>(discoverStateTenants());
+        // Onboarded root tenants are not listed under the state tenant; their finished workspaces are.
+        try {
+            scanTenants.addAll(workspaces.doneTenantIds());
+        } catch (Exception e) {
+            log.error("Could not list onboarded workspace tenants; scanning state tenants only", e);
+        }
+        if (scanTenants.isEmpty()) {
+            log.warn("No tenants discovered; skipping escalation scan");
             return;
         }
 
-        log.info("Escalation scan started for tenant {}", tenantId);
-        RequestInfo systemRequestInfo = buildSystemRequestInfo(tenantId);
-
-        List<String> stateTenants = configurationService.resolveStateTenants(systemRequestInfo, tenantId);
-        if (stateTenants.isEmpty()) {
-            try {
-                stateTenants = repository.getComplaintTenantIds(tenantId);
-                log.warn("Tenant-master discovery failed; scanning complaint tenants {}", stateTenants);
-            } catch (Exception e) {
-                log.error("Both tenant-master and complaint-tenant discovery failed for {}; skipping scan",
-                        tenantId, e);
-                return;
-            }
-        }
+        log.info("Escalation scan started for tenants {}", scanTenants);
         Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache = new HashMap<>();
         ScanResult total = new ScanResult();
-        for (String scanTenant : stateTenants) {
+        for (String scanTenant : scanTenants) {
+            // workflow-v2 only honours a role whose tenantId matches (or prefixes) the complaint's tenant.
+            RequestInfo systemRequestInfo = buildSystemRequestInfo(scanTenant);
             try {
                 EscalationConfigurationService.ResolvedEscalationConfig policy =
                         policyFor(scanTenant, systemRequestInfo, policyCache);
@@ -198,6 +199,26 @@ public class EscalationScheduler {
             serviceRequestIdBefore = last.getServiceRequestId();
         }
         return result;
+    }
+
+    private List<String> discoverStateTenants() {
+        String tenantId = getStateLevelTenantId();
+        if (tenantId == null) {
+            log.warn("Cannot determine state-level tenant ID; scanning onboarded workspaces only");
+            return Collections.emptyList();
+        }
+        List<String> stateTenants = configurationService.resolveStateTenants(buildSystemRequestInfo(tenantId), tenantId);
+        if (!stateTenants.isEmpty()) {
+            return stateTenants;
+        }
+        try {
+            stateTenants = repository.getComplaintTenantIds(tenantId);
+            log.warn("Tenant-master discovery failed; scanning complaint tenants {}", stateTenants);
+            return stateTenants;
+        } catch (Exception e) {
+            log.error("Both tenant-master and complaint-tenant discovery failed for {}", tenantId, e);
+            return Collections.emptyList();
+        }
     }
 
     private EscalationConfigurationService.ResolvedEscalationConfig policyFor(
