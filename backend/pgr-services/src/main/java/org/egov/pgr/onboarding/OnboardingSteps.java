@@ -68,6 +68,8 @@ public class OnboardingSteps {
             data.put("onboardingOperationId", operation.getId().toString());
             data.put("type", "CITY"); data.put("domainUrl", ""); data.put("imageId", null);
             data.put("emailId", ""); data.put("address", ""); data.put("contactNumber", "");
+            // Signup choices are materialized on the authoritative tenant record (its schema allows extra fields).
+            data.put("timeZone", signup.getTimeZone()); data.put("financialYearPolicy", signup.getFinancialYearPolicy());
             data.put("OfficeTimings", Map.of("Mon - Fri", ""));
             data.put("city", Map.of("code", tenant, "name", signup.getAccountName(), "districtName", "",
                     "districtTenantCode", tenant, "ulbGrade", ""));
@@ -135,6 +137,9 @@ public class OnboardingSteps {
                 "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", List.of(Map.of(
                         "code", "TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT), "message", signup.getAccountName(),
                         "module", "rainmaker-common", "locale", locale(language, signup.getCountryCode()))))));
+        // The dashboard (digit-ui and KpiCatalogService) reads its zone from the tenant's own "default" record.
+        progress.record("dashboard-config", () -> ensureRecord(scope, tenant, "dss.DashboardConfig", "default",
+                Map.of("id", "default", "timeZone", signup.getTimeZone())));
         rootBoundary(scope, tenant, progress);
     }
 

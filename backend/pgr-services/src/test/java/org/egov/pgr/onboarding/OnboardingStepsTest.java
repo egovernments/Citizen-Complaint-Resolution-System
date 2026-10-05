@@ -18,7 +18,7 @@ public class OnboardingStepsTest {
     private OnboardingFailure createFailure;
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
-        signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN")
+        signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").accountName("New Town").accountCode("NEW-TOWN").urlSlug("newtown").countryCode("IN").timeZone("Asia/Kolkata").financialYearPolicy("APRIL_MARCH")
                 .languages(List.of("en","hi")).founderName("Founder").founderEmail("unverified@example.test").founderEmailVerified(false).createdAt(1L)
                 .tenantMetadata(Map.of("tenantAdmin",Map.of("mobileNumber","+91 98765-43210","countryCode","+91"))).build();
         op=OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signup.getId()).build();
@@ -91,6 +91,9 @@ public class OnboardingStepsTest {
         for(String key:List.of("RAINMAKER-PGR.MapConfig|DEFAULT","common-masters.ThemeConfig|themeconfig","common-masters.uiHomePage|all-services","RAINMAKER-PGR.RejectionReasons|DUPLICATE"))
             assertTrue(key,rows.containsKey("newtown|"+key));
         assertTrue(schemas.contains("RAINMAKER-PGR.EscalationConfig"));
+        assertEquals("Asia/Kolkata",rows.get("newtown|dss.DashboardConfig|default").path("data").path("timeZone").asText());
+        JsonNode tenantRecord=rows.get("newtown|tenant.tenants|newtown").path("data");
+        assertEquals("Asia/Kolkata",tenantRecord.path("timeZone").asText());assertEquals("APRIL_MARCH",tenantRecord.path("financialYearPolicy").asText());
         assertEquals("NEW-TOWN-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]",rows.get("newtown|common-masters.IdFormat|pgr.servicerequestid").path("data").path("format").asText());
         assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
     }
