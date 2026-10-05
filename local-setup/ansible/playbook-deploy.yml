@@ -1458,9 +1458,15 @@
 
     - name: Copy idempotent Identity Keycloak configurator
       copy:
-        src: ../../backend/identity-bff/deploy/digit-compose/configure-keycloak.sh
+        src: ../../keycloak/configure-keycloak.sh
         dest: "{{ digit_dir }}/configure-identity-keycloak.sh"
         mode: '0750'
+
+    - name: Copy the declared Identity Keycloak realm
+      copy:
+        src: ../../keycloak/realm.json
+        dest: "{{ digit_dir }}/identity-keycloak-realm.json"
+        mode: '0640'
 
     # Sourced by the "notification stack — remove the retired OTP senders" tasks: proves
     # novu-bridge has taken over the login-OTP topic before the old senders go (#2097).
@@ -3132,6 +3138,20 @@
           admin user's password in Keycloak to match).
       when: enable_keycloak | default(false)
 
+    - name: "Identity BFF — validate staff credential mode"
+      ansible.builtin.assert:
+        that:
+          - (identity_staff_credential_mode | default('rotate')) in ['rotate', 'derived']
+          - >-
+            (identity_staff_credential_mode | default('rotate')) != 'derived'
+            or ((bao_secrets_identity.json.data.data.identity_credential_keys | default('', true)) | length > 0
+                and (bao_secrets_identity.json.data.data.identity_credential_key_current | default(0) | int) > 0)
+        fail_msg: >-
+          identity_staff_credential_mode must be rotate or derived. Derived mode
+          also requires identity_credential_keys and identity_credential_key_current
+          in OpenBao; rotate mode requires neither.
+      when: enable_keycloak | default(false)
+
     # `or`, not `ternary`: Jinja evaluates every filter argument up front, so a
     # ternary would run the generator on every deploy and discard it whenever
     # OpenBao already holds a value. `or` short-circuits. See the longer note
@@ -3202,6 +3222,11 @@
           IDENTITY_CONTROL_PLANE_TOKEN={{ identity_secrets.identity_control_plane_token }}
           IDENTITY_SESSION_INTROSPECTION_TOKEN={{ identity_secrets.identity_session_introspection_token }}
           PGR_ONBOARDING_WORKER_TOKEN={{ identity_secrets.pgr_onboarding_worker_token }}
+          IDENTITY_CITIZEN_OTP_SECRET={{ bao_secrets_identity.json.data.data.identity_citizen_otp_secret | default('') }}
+          {% if (identity_staff_credential_mode | default('rotate')) == 'derived' %}
+          IDENTITY_CREDENTIAL_KEYS={{ bao_secrets_identity.json.data.data.identity_credential_keys }}
+          IDENTITY_CREDENTIAL_KEY_CURRENT={{ bao_secrets_identity.json.data.data.identity_credential_key_current }}
+          {% endif %}
           IDENTITY_DIGIT_ADMIN_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_admin_password | default(bao_secrets_identity.json.data.data.token_exchange_system_password | default('eGov@123')) }}
           IDENTITY_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.identity_digit_provisioner_password | default('') }}
         marker: "# {mark} KEYCLOAK SECRETS"
@@ -6342,6 +6367,8 @@
       ansible.builtin.command: "{{ digit_dir }}/configure-identity-keycloak.sh"
       environment:
         IDENTITY_ENV_DIR: "{{ digit_dir }}/identity"
+        KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"
+        KEYCLOAK_EVENTS_EXPIRATION_SECONDS: "{{ identity_keycloak_events_expiration_seconds | default('') }}"
         KEYCLOAK_ORGANIZATION_REALM: "{{ keycloak_organization_realm | default('digit') }}"
         KEYCLOAK_SSL_REQUIRED: "{{ 'external' if (tls_enabled | default(true)) else 'none' }}"
         # The same resolved values that went into .env, so Keycloak's clients

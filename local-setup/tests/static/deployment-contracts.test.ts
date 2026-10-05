@@ -1303,3 +1303,52 @@ describe('e2e notifications README code links', () => {
     expect(problems).toEqual([]);
   });
 });
+
+describe('standalone Identity BFF and Keycloak deployment contract', () => {
+  const service = (compose: string, name: string) => {
+    const start = compose.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = compose.slice(start + 1);
+    const end = rest.slice(1).search(/\n  [a-z0-9-]+:\n/);
+    return end < 0 ? rest : rest.slice(0, end + 1);
+  };
+
+  test('top-level Keycloak paths are used by build, CI, and Ansible', () => {
+    const build = read('build/build-config.yml');
+    expect(build).toContain('work-dir: "keycloak"');
+    expect(build).toContain('dockerfile: "keycloak/Dockerfile"');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain('src: ../../keycloak/configure-keycloak.sh');
+    expect(playbook).toContain('src: ../../keycloak/realm.json');
+    expect(playbook).toContain('KEYCLOAK_REALM_CONFIG: "{{ digit_dir }}/identity-keycloak-realm.json"');
+    expect(read('.github/workflows/keycloak-ci.yml')).toContain('- "keycloak/**"');
+    expect(read('.github/workflows/identity-bff-ci.yml')).not.toContain('backend/identity-bff/keycloak');
+  });
+
+  test('new settings are optional and the old onboarding worker remains wired', () => {
+    const env = read('local-setup/ansible/templates/digit.env.j2');
+    expect(env).toContain("IDENTITY_STAFF_CREDENTIAL_MODE={{ identity_staff_credential_mode | default('rotate') }}");
+    expect(env).toContain("IDENTITY_SURFACES_JSON={{ identity_surfaces_json | default('') }}");
+    expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if (identity_dev_fixed_otp | default(false)) else '') }}");
+    expect(env).toContain('IDENTITY_ONBOARDING_WORKER_ENABLED={{ identity_onboarding_worker_enabled | default(false) | lower }}');
+    const bff = service(read('local-setup/docker-compose.egov-digit.yaml'), 'identity-bff');
+    for (const setting of ['IDENTITY_SURFACES_JSON', 'IDENTITY_STAFF_CREDENTIAL_MODE',
+      'IDENTITY_CREDENTIAL_KEYS', 'IDENTITY_CREDENTIAL_KEY_CURRENT', 'IDENTITY_CITIZEN_OTP_SENDER',
+      'IDENTITY_POLLER_MAX_LAG_SECONDS', 'ONBOARDING_WORKER_ENABLED', 'PGR_ONBOARDING_WORKER_URL',
+      'PGR_ONBOARDING_WORKER_TOKEN', 'DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
+      expect(bff).toContain(`${setting}:`);
+    }
+    expect(read('local-setup/ansible/playbook-deploy.yml')).toContain("rotate mode requires neither");
+  });
+
+  test('fixed citizen OTP is off unless explicitly enabled in every compose path', () => {
+    const variable = 'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}';
+    for (const file of ['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml']) {
+      expect(service(read(file), 'egov-user')).toContain(variable);
+    }
+    const full = read('local-setup/docker-compose.egov-digit.yaml');
+    expect(service(full, 'egov-user')).toContain(variable);
+    expect(service(full, 'identity-bff')).toContain(variable);
+    expect(read('backend/identity-bff/deploy/digit-compose/docker-compose.identity.yml')).toContain(variable);
+  });
+});

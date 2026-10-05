@@ -398,7 +398,7 @@ describe("identity BFF", () => {
     );
     expect(methods.status).toBe(200);
     expect(await methods.json()).toEqual({ methods: [
-      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", label: "Email and password", type: "password", intents: ["signin"] },
       { id: "google", labelKey: "IDENTITY_METHOD_GOOGLE", label: "Google", type: "idp", idpHint: "google", intents: ["signin", "signup"] },
       { id: "github", labelKey: "IDENTITY_METHOD_GITHUB", label: "github", type: "idp", idpHint: "github", intents: ["signin", "signup"] },
     ] });
@@ -1355,11 +1355,11 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       return (await response.json()).methods;
     };
     expect(await methods("surface=employee")).toEqual([
-      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", label: "Email and password", type: "password", intents: ["signin"] },
     ]);
     expect(await methods("surface=employee&intent=signup")).toEqual([]);
     expect(await methods("surface=citizen")).toEqual([
-      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", type: "password", intents: ["signin"] },
+      { id: "password", labelKey: "IDENTITY_METHOD_PASSWORD", label: "Email and password", type: "password", intents: ["signin"] },
     ]);
     expect(await methods("surface=citizen&intent=signup")).toEqual([]);
     expect((await methods("")).map((method: { id: string }) => method.id))

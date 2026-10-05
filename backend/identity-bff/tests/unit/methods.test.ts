@@ -20,8 +20,8 @@ describe("method capability catalogue", () => {
   it("declares hosted methods without treating them as IdPs", async () => {
     vi.mocked(identityClient).mockResolvedValue(client("hosted:passkey,password"));
     expect(await enabledIdentityMethods("signin")).toEqual([
-      { id: "hosted:passkey", type: "hosted", labelKey: "IDENTITY_METHOD_HOSTED_PASSKEY", intents: ["signin"] },
-      { id: "password", type: "password", labelKey: "IDENTITY_METHOD_PASSWORD", intents: ["signin"] },
+      { id: "hosted:passkey", type: "hosted", labelKey: "IDENTITY_METHOD_HOSTED_PASSKEY", label: "passkey", intents: ["signin"] },
+      { id: "password", type: "password", labelKey: "IDENTITY_METHOD_PASSWORD", label: "Email and password", intents: ["signin"] },
     ]);
     expect(enabledIdentityProviders).not.toHaveBeenCalled();
   });

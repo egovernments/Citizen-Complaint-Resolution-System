@@ -128,11 +128,12 @@ export async function enabledIdentityMethods(
   return requested.flatMap((id): IdentityAuthMethod[] => {
     const intents = policy.get(id) || [];
     const labelKey = `IDENTITY_METHOD_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
-    if (id.startsWith("hosted:")) return [{ id, labelKey, type: "hosted", intents }];
+    if (id.startsWith("hosted:")) return [{ id, labelKey, label: id.slice("hosted:".length), type: "hosted", intents }];
     if (id === "password") {
       return [{
         id,
         labelKey,
+        label: "Email and password",
         type: "password",
         intents,
       }];
@@ -140,12 +141,12 @@ export async function enabledIdentityMethods(
     if (id === "phone_otp") {
       // Citizen only, and only when the BFF can hash and deliver a code.
       return surfaceContextKind(surface) === "citizen" && phoneOtpAvailable()
-        ? [{ id, labelKey, type: "phone_otp", intents }]
+        ? [{ id, labelKey, label: "Phone number", type: "phone_otp", intents }]
         : [];
     }
     if (id === "magic_link") {
       return surface === DEFAULT_SURFACE && magicLinkEnabled
-        ? [{ id, labelKey, type: "magic_link", intents }]
+        ? [{ id, labelKey, label: "Email me a sign-in link", type: "magic_link", intents }]
         : [];
     }
     const provider = providers.get(id);
