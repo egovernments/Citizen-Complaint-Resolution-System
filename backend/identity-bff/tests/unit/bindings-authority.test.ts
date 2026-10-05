@@ -90,6 +90,9 @@ describe("binding actor validation", () => {
     f.accounts.pop();
     await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.city" }], [{ code: "HRMS_ADMIN", tenantId: "pg.city.ward1" }])).resolves.toBeUndefined();
   });
+  it("a sub-tenant role does not cover its parent", async () => {
+    await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.citya" }], [{ code: "HRMS_ADMIN", tenantId: "pg" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+  });
   describe("the founder (SUPERUSER at the workspace) may grant any role within the workspace", () => {
     it.each([["HRMS_ADMIN", "pg.citya"], ["INTERNAL_MICROSERVICE_ROLE", "pg"], ["SYSTEM", "pg.citya.ward1"]])("links %s@%s", async (code, tenantId) => {
       await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code, tenantId }])).resolves.toBeUndefined();
