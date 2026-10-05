@@ -352,8 +352,8 @@ test('an empty mobile_prefix is treated as absent, as the deploy renders an unse
   const result = await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', user_only: true,
     mobile_regex: '^[6-9][0-9]{9}$', mobile_prefix: '' }, userOnly.options);
   assert.equal(result.admin_user_provisioned, true);
-  // Without a source rule an explicit regex resolves the seeded country, else the historical +91.
-  for (const [regex, prefix] of [['^[17][0-9]{8}$', '+254'], ['^5[0-9]{8}$', '+91']]) {
+  // Without a source rule an explicit regex resolves the seeded country with that regex.
+  for (const [regex, prefix] of [['^[17][0-9]{8}$', '+254'], ['^[6-9][0-9]{9}$', '+91']]) {
     const f = fixture();
     await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: regex, mobile_prefix: '' }, f.options);
     assert.deepEqual(f.row(`common-masters.MobileNumberValidation/${prefix}`).data, { countryCode: prefix, mobileNumberRegex: regex, default: true });
@@ -606,4 +606,28 @@ test('the tenant-name key is written only where the whole rainmaker-common modul
   assert.equal(name('ke', 'pt_BR'), true, 'the root holds the module');
   for (const locale of ['en_IN', 'fr_FR']) assert.equal(name('ke', locale), false, `the root lacks rainmaker-common in ${locale}`);
   assert.equal(result.summary.localizations_failed, 1, 'only the rejected row failed');
+});
+
+test('a regex without a prefix never defaults to +91 (#2269 round-3 item 6)', async () => {
+  // Unknown regex, no prefix: a clear error, and nothing written.
+  const unknown = fixture();
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: '^5[0-9]{8}$', mobile_prefix: '' }, unknown.options),
+    /matches no seeded country[\s\S]*mobile_prefix/);
+  assert.equal(unknown.writes(), 0);
+  // The deploy's user_only call reads the source tenant `in` (+91, the Indian regex) but sends the host's
+  // Kenyan regex without countryCode: the prefix follows the regex, not the source.
+  const kenya = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', mobile_regex: '^[17][0-9]{8}$', mobile_prefix: '' }, kenya.options);
+  assert.deepEqual(kenya.row('common-masters.MobileNumberValidation/+254').data, { countryCode: '+254', mobileNumberRegex: '^[17][0-9]{8}$', default: true });
+  assert.equal(kenya.row('common-masters.MobileNumberValidation/+91'), undefined);
+  const unseeded = fixture();
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', mobile_regex: '^0?[17][0-9]{8}$', mobile_prefix: '' }, unseeded.options),
+    /matches no seeded country/);
+  // An explicit prefix or country still decides.
+  const explicit = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: '^0?[17][0-9]{8}$', mobile_prefix: '+254' }, explicit.options);
+  assert.equal(explicit.row('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^0?[17][0-9]{8}$');
+  const country = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'KE', mobile_regex: '^0?[17][0-9]{8}$' }, country.options);
+  assert.equal(country.row('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^0?[17][0-9]{8}$');
 });

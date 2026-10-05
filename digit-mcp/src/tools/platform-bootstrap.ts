@@ -223,10 +223,16 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       : args.country ? seed.countryMobileRules[String(args.country).toUpperCase()]
         : Object.values(seed.countryMobileRules).find((rule) => rule.countryCode === prefix);
     if (!current && !regex) throw new Error('Country mobile rule is missing');
-    // An explicit regex without a prefix takes the seeded country with that regex, else the
-    // historical default (+91) that tenant_bootstrap used before the seed existed.
-    const countryCode = prefix || current?.countryCode
-      || Object.values(seed.countryMobileRules).find((rule) => rule.mobileNumberRegex === regex)?.countryCode || '+91';
+    // An explicit regex without a prefix takes the prefix of the rule it belongs to: the named country's,
+    // the source tenant's when the regex is the source's own, else the seeded country with that regex.
+    // Never a default: +91 beside another country's regex breaks every number (#2269 round-3 item 6).
+    const regexCountry = Object.values(seed.countryMobileRules).find((rule) => rule.mobileNumberRegex === regex);
+    const countryCode = prefix
+      || (!regex || args.country || regex === current?.mobileNumberRegex ? current?.countryCode : regexCountry?.countryCode);
+    if (!countryCode) {
+      throw new Error(`mobile_regex ${regex} matches no seeded country (${Object.keys(seed.countryMobileRules).join(', ')}): `
+        + 'pass mobile_prefix (the dialling code, e.g. +254) or country');
+    }
     rules = [{ countryCode, mobileNumberRegex: regex || current?.mobileNumberRegex, default: true }];
   }
   if (!Array.isArray(rules) || !rules.length || rules.some((rule) => typeof rule.countryCode !== 'string' || typeof rule.mobileNumberRegex !== 'string')) {
