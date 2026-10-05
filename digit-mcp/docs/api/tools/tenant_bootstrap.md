@@ -19,7 +19,7 @@ The country mobile rule comes from the seed's `countryMobileRules` (selected by 
 
 The default transport uses existing gateway APIs. Setting `EGOV_MDMS_HOST` alone does not enable direct calls.
 
-Through the gateway, egov-accesscontrol authorizes every MDMS write from the target tenant's own role-action rows, which a brand-new tenant does not have. Before its first write, gateway bootstrap therefore inserts the seed's `ACCESSCONTROL-ACTIONS-TEST` and `ACCESSCONTROL-ROLEACTIONS` rows straight into `eg_mdms_data` (the role-action floor, CCRS#1928). The floor is additive, runs only while the target has no role-action rows, and is reported as `summary.access_floor_seeded`. If the DIGIT database is unreachable, a warning is recorded and the first write then fails with the gateway's own 403.
+Through the gateway, egov-accesscontrol authorizes every MDMS write from the target tenant's own role-action rows, which a brand-new tenant does not have. Before its first write, gateway bootstrap therefore inserts the seed's `ACCESSCONTROL-ACTIONS-TEST` and `ACCESSCONTROL-ROLEACTIONS` rows straight into `eg_mdms_data` (the role-action floor, CCRS#1928). The floor runs on every bootstrap and is additive: it inserts only the rows the target lacks, matched by uniqueidentifier or by content (action id; role code and action id), so a tenant holding part of the set is topped up without duplicates. The count of inserted rows is `summary.access_floor_seeded`. If the DIGIT database is unreachable, a warning is recorded and the first write then fails with the gateway's own 403.
 
 An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIRECT=true`. This requires trusted server settings `EGOV_MDMS_HOST`, `EGOV_USER_HOST`, and the state root `CRS_STATE_TENANT` (default `pg`). Every direct bootstrap verifies the caller token live through trusted egov-user and requires an active user with `SUPERUSER` or `MDMS_ADMIN` scoped to that state root. Caller-supplied user claims or configurable API environments do not authorize direct access.
 
@@ -36,7 +36,7 @@ An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIREC
 | `mobile_length` | integer | Generated administrator mobile length; default 10. |
 | `admin_mobile` | string | Explicit administrator mobile number. |
 | `user_validation` | array | Explicit countryCode/mobileNumberRegex rules; supersedes mobile regex/prefix inputs. |
-| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration (re-encrypts mobile and password, clears `accountLocked`, adds missing roles). |
+| `user_only` | boolean | Skip seed and employee setup; create or update the administrator user after encryption-key registration (re-encrypts mobile and password, clears `accountLocked`, adds missing roles; never changes `active`, so a deactivated administrator stays deactivated). A created administrator is active. |
 | `pincode_allowlist` | array | Legacy compatibility input; ignored with a warning. Configure postal codes in the workspace. |
 | `dashboard_roles` | array | Legacy compatibility input; ignored with a warning. Configure dashboard access in the workspace. |
 

@@ -73,11 +73,15 @@ function fixture(role = 'SUPERUSER') {
   };
   // eg_mdms_data as seen by the role-action floor; rows it inserts become visible to MDMS reads.
   const sql: { tenant: string; schemaCode: string; uniqueIdentifier: string; data: any; writesBefore: number }[] = [];
+  // As the floor's INSERT: skipped on the same uniqueidentifier or the same content (action id;
+  // role code + action id), whatever uniqueidentifier the held row carries.
+  const sameContent = (schemaCode: string, a: any, b: any) => schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+    ? String(a.rolecode) === String(b.rolecode) && String(a.actionid) === String(b.actionid) : String(a.id) === String(b.id);
   const db = {
-    query: async (_text: string, params: any[]) => [{ count: String(sql.filter(r => r.tenant === params[0] && r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions').length) }],
     execute: async (_text: string, params: any[]) => {
       const [, tenant, uniqueIdentifier, schemaCode, data] = params;
-      if (sql.some(r => r.tenant === tenant && r.schemaCode === schemaCode && r.uniqueIdentifier === uniqueIdentifier)) return 0;
+      if (sql.some(r => r.tenant === tenant && r.schemaCode === schemaCode
+        && (r.uniqueIdentifier === uniqueIdentifier || sameContent(schemaCode, r.data, JSON.parse(data))))) return 0;
       sql.push({ tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), writesBefore: writes });
       rows.set(`${tenant}|${schemaCode}/${uniqueIdentifier}`, { tenantId: tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), isActive: true });
       return 1;
@@ -348,8 +352,8 @@ test('an empty mobile_prefix is treated as absent, as the deploy renders an unse
   const result = await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', user_only: true,
     mobile_regex: '^[6-9][0-9]{9}$', mobile_prefix: '' }, userOnly.options);
   assert.equal(result.admin_user_provisioned, true);
-  // Without a source rule an explicit regex resolves the seeded country, else the historical +91.
-  for (const [regex, prefix] of [['^[17][0-9]{8}$', '+254'], ['^5[0-9]{8}$', '+91']]) {
+  // Without a source rule an explicit regex resolves the seeded country with that regex.
+  for (const [regex, prefix] of [['^[17][0-9]{8}$', '+254'], ['^[6-9][0-9]{9}$', '+91']]) {
     const f = fixture();
     await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: regex, mobile_prefix: '' }, f.options);
     assert.deepEqual(f.row(`common-masters.MobileNumberValidation/${prefix}`).data, { countryCode: prefix, mobileNumberRegex: regex, default: true });
@@ -457,7 +461,7 @@ test('gateway bootstrap seeds the role-action floor before its first write, once
 
   const unreachable = fixture();
   const degraded = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...unreachable.options, direct: false,
-    db: { query: async () => { throw new Error('DIGIT database not available'); }, execute: async () => 0 } });
+    db: { execute: async () => { throw new Error('DIGIT database not available'); } } });
   assert.equal(degraded.summary.access_floor_seeded, 0);
   assert.ok(degraded.results.warnings.some((w: string) => w.includes('CCRS#1928')));
 
@@ -467,6 +471,25 @@ test('gateway bootstrap seeds the role-action floor before its first write, once
   const userOnly = fixture();
   await bootstrapPlatform({ target_tenant: 'ke', country: 'KE', user_only: true }, { ...userOnly.options, direct: false });
   assert.equal(userOnly.sql.length, 0);
+});
+
+test('the role-action floor tops up a tenant holding part of the set, without duplicating held rows (#2269 round-3 item 3)', async () => {
+  const seed = loadPlatformSeed();
+  const floor = seed.records.filter(r => ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions'].includes(r.schemaCode));
+  const f = fixture();
+  // An older bootstrap copied the first 500 rows under the source's hashed uniqueidentifiers.
+  floor.slice(0, 500).forEach((r, i) => f.sql.push({ tenant: 'ke', schemaCode: r.schemaCode, uniqueIdentifier: `hash-${i}`,
+    data: substituteTenant(r.data, 'ke'), writesBefore: 0 }));
+  const result = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct: false });
+  assert.equal(result.summary.access_floor_seeded, floor.length - 500, 'only the missing rows are inserted');
+  assert.equal(f.sql.length, floor.length);
+  const key = (r: any) => r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions' ? `${r.data.rolecode}.${r.data.actionid}` : `${r.data.id}`;
+  for (const schemaCode of ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions']) {
+    const held = f.sql.filter(r => r.schemaCode === schemaCode).map(key);
+    assert.equal(new Set(held).size, held.length, `no content duplicates in ${schemaCode}`);
+  }
+  const replay = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct: false });
+  assert.equal(replay.summary.access_floor_seeded, 0);
 });
 
 test('a city bootstrap lists the city under its root as Tenant.<city> and in the root modules (#2269 review item 1c)', async () => {
@@ -557,4 +580,69 @@ test('bootstrap copies the source tenant localization packs as before the seed (
   const partial = await bootstrapPlatform({ target_tenant: 'ke', source_tenant: 'pg', user_validation: [ke] }, poisoned.options);
   assert.equal(partial.success, false); assert.equal(partial.summary.localizations_failed, 1);
   assert.ok(poisoned.messages.get('ke|en_IN').some((m: any) => m.code === 'GOOD'));
+});
+
+test('the tenant-name key is written only where the whole rainmaker-common module is (#2269 round-3 item 5)', async () => {
+  const f = fixture(), upsert = f.options.api.localizationUpsert;
+  const msg = (code: string, message: string, module = 'rainmaker-common') => ({ code, message, module });
+  const ke = loadPlatformSeed().countryMobileRules.KE;
+  f.rows.set('pg|common-masters.StateInfo/pg', { tenantId: 'pg', schemaCode: 'common-masters.StateInfo', uniqueIdentifier: 'pg',
+    isActive: true, data: { languages: [{ value: 'en_IN' }, { value: 'fr_FR' }, { value: 'pt_BR' }] } });
+  await upsert('pg', 'en_IN', [msg('CS_COMMON_SUBMIT', 'Submit'), msg('CS_COMMON_BROKEN', 'x')]);
+  await upsert('pg', 'fr_FR', [msg('CS_HEADER', 'Plaintes', 'rainmaker-pgr')]); // no rainmaker-common in fr_FR
+  await upsert('pg', 'pt_BR', [msg('CS_COMMON_SUBMIT', 'Enviar')]);
+  // The root holds rainmaker-common in pt_BR only.
+  await upsert('ke', 'pt_BR', [msg('CS_COMMON_SUBMIT', 'Enviar')]);
+  // egov-localization rejects one rainmaker-common row in en_IN, so that module is incomplete there.
+  f.options.api.localizationUpsert = async (tenant: string, locale: string, values: any[]) => {
+    if (tenant === 'ke.nairobi' && values.some(v => v.code === 'CS_COMMON_BROKEN')) throw new Error('HTTP 400');
+    return upsert(tenant, locale, values);
+  };
+  const result = await bootstrapPlatform({ target_tenant: 'ke.nairobi', source_tenant: 'pg', user_validation: [ke] }, f.options);
+  const name = (tenant: string, locale: string) => (f.messages.get(`${tenant}|${locale}`) ?? []).some((m: any) => m.code === 'TENANT_TENANTS_KE_NAIROBI');
+  assert.equal(name('ke.nairobi', 'en_IN'), false, 'rainmaker-common copied only in part');
+  assert.equal(name('ke.nairobi', 'fr_FR'), false, 'no rainmaker-common copied');
+  assert.equal(name('ke.nairobi', 'pt_BR'), true);
+  assert.equal(name('ke', 'pt_BR'), true, 'the root holds the module');
+  for (const locale of ['en_IN', 'fr_FR']) assert.equal(name('ke', locale), false, `the root lacks rainmaker-common in ${locale}`);
+  assert.equal(result.summary.localizations_failed, 1, 'only the rejected row failed');
+});
+
+test('a regex without a prefix never defaults to +91 (#2269 round-3 item 6)', async () => {
+  // Unknown regex, no prefix: a clear error, and nothing written.
+  const unknown = fixture();
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: '^5[0-9]{8}$', mobile_prefix: '' }, unknown.options),
+    /matches no seeded country[\s\S]*mobile_prefix/);
+  assert.equal(unknown.writes(), 0);
+  // The deploy's user_only call reads the source tenant `in` (+91, the Indian regex) but sends the host's
+  // Kenyan regex without countryCode: the prefix follows the regex, not the source.
+  const kenya = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', mobile_regex: '^[17][0-9]{8}$', mobile_prefix: '' }, kenya.options);
+  assert.deepEqual(kenya.row('common-masters.MobileNumberValidation/+254').data, { countryCode: '+254', mobileNumberRegex: '^[17][0-9]{8}$', default: true });
+  assert.equal(kenya.row('common-masters.MobileNumberValidation/+91'), undefined);
+  const unseeded = fixture();
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', mobile_regex: '^0?[17][0-9]{8}$', mobile_prefix: '' }, unseeded.options),
+    /matches no seeded country/);
+  // An explicit prefix or country still decides.
+  const explicit = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: '^0?[17][0-9]{8}$', mobile_prefix: '+254' }, explicit.options);
+  assert.equal(explicit.row('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^0?[17][0-9]{8}$');
+  const country = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'KE', mobile_regex: '^0?[17][0-9]{8}$' }, country.options);
+  assert.equal(country.row('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^0?[17][0-9]{8}$');
+});
+
+test('user_only never reactivates a deactivated administrator (#2269 round-3 item 7)', async () => {
+  const f = fixture();
+  f.users.push({ uuid: 'founder', userName: 'admin', active: false, accountLocked: true, roles: [] });
+  const args = { target_tenant: 'in.newtown', source_tenant: 'in', user_only: true, mobile_regex: '^[6-9][0-9]{9}$', mobile_prefix: '' };
+  await bootstrapPlatform(args, f.options);
+  assert.equal(f.users[0].active, false, 'a deactivated ADMIN stays deactivated');
+  assert.equal(f.users[0].accountLocked, false, 'the lockout from credential drift is still cleared');
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options);
+  assert.equal(f.users[0].active, false, 'a full bootstrap does not reactivate it either');
+
+  const fresh = fixture();
+  await bootstrapPlatform(args, fresh.options);
+  assert.equal(fresh.users.length, 1); assert.equal(fresh.users[0].active, true, 'a created ADMIN is active');
 });

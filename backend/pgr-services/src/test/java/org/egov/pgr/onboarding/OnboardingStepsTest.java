@@ -56,6 +56,21 @@ public class OnboardingStepsTest {
         when(client.read(anyString(),anyString(),anyMap())).thenAnswer(api);
         when(client.write(any(),anyString(),anyString(),anyMap())).thenAnswer(api);
     }
+    /** #2269 round-3 item 1: a signup queued before submit refused reserved tenant ids fails terminally and writes nothing. */
+    @Test public void aQueuedSignupForAPlatformTenantFailsTerminallyBeforeAnyWrite() throws Exception {
+        var configured=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper,new OnboardingIdentifierService(List.of("ke")));
+        for(String tenant:List.of("default","ke")){
+            signup.setRequestedTenantId(tenant);
+            for(String step:OnboardingRunner.STEPS){
+                OnboardingFailure failure=assertThrows(tenant+" "+step,OnboardingFailure.class,()->configured.perform(step,signup,op,progress));
+                assertEquals("ONBOARDING_IDENTIFIER_TAKEN",failure.getCode());assertFalse(failure.isRetryable());
+            }
+        }
+        assertEquals(List.of(),writes);
+        verify(client,never()).write(any(),anyString(),anyString(),anyMap());
+        verify(client,never()).read(anyString(),anyString(),anyMap());
+        verify(client,never()).identity(anyString(),anyMap());
+    }
     private void prerequisites(){steps.perform("TENANT_FOUNDATION",signup,op,progress);steps.perform("PLATFORM_BASELINE",signup,op,progress);}
     @Test public void completePrerequisitesUseCountryRuleEveryLanguageAndVerifiedFounderPolicy(){
         prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);

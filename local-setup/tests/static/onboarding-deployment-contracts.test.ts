@@ -120,6 +120,12 @@ describe('PGR onboarding cutover deployment contract', () => {
     const verify = playbook.match(/- name: "onboarding provisioner — can sign in with the onboarding admin roles"[\s\S]*?(?=\n    - name: )/)?.[0];
     expect(verify).toContain("['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)");
     expect(verify).toContain('pgr_provisioner_login.status == 200');
+    // #2269 round-3 review item 2: a refused login after PGR ran with a wrong password may be
+    // egov-user's lockout; the message says so and gives both tables of the reset.
+    expect(verify).toContain('error_description');
+    expect(verify).toMatch(/LOCKOUT/);
+    expect(verify).toContain('UPDATE eg_user SET accountlocked=false');
+    expect(verify).toContain('eg_user_login_failed_attempts SET active=false');
     expect(playbook.indexOf('onboarding provisioner — settings are usable'))
       .toBeLessThan(playbook.indexOf('onboarding provisioner — ensure the account exists'));
   });

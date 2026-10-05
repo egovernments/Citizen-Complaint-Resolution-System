@@ -26,7 +26,6 @@ function hasWorkspaceRoot(trees: Record<string, unknown>[], tenant: string): boo
 const ACCESS_FLOOR_SCHEMAS = ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions'];
 
 interface FloorDb {
-  query<T extends Record<string, any>>(sql: string, params?: unknown[]): Promise<T[]>;
   execute(sql: string, params?: unknown[]): Promise<number>;
 }
 
@@ -182,20 +181,28 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       if (!messages.size) continue;
       const result = { locale, copied: 0, failed: 0 };
       const batch = [...messages.values()];
+      let nameModuleFailed = 0;
       for (let offset = 0; offset < batch.length; offset += 500) {
         const chunk = batch.slice(offset, offset + 500);
         try { await api.localizationUpsert(target, locale, chunk); result.copied += chunk.length; continue; } catch { /* isolate the bad row */ }
         for (const m of chunk) {
           try { await api.localizationUpsert(target, locale, [m]); result.copied++; } catch (error) {
             if (/duplicate|already exists|unique/i.test(error instanceof Error ? error.message : String(error))) result.copied++;
-            else result.failed++;
+            else { result.failed++; if (m.module === tenantName.module) nameModuleFailed++; }
           }
         }
       }
-      // The tenant name is branding an operator may have changed: create it only where absent.
+      // As PGR onboarding (OnboardingSteps.seedsTenantNameModule): a tenant gets its name key only in a
+      // locale where it holds the whole rainmaker-common module. A lone key would stop egov-localization
+      // falling back for that module, and the tenant would lose every other common label (#2257).
+      // The target qualifies when the module was copied in full; the city's root when it holds the
+      // module already. The tenant name is branding an operator may have changed: never overwritten.
+      const copiedNameModule = nameModuleFailed === 0 && batch.some((m) => m.module === tenantName.module && m.code !== tenantName.code);
       for (const tenant of cityRoot ? [target, cityRoot] : [target]) {
         try {
-          const held = await api.localizationSearch(tenant, locale, 'rainmaker-common');
+          if (tenant === target && !copiedNameModule) continue;
+          const held = await api.localizationSearch(tenant, locale, tenantName.module);
+          if (tenant !== target && !held.some((m) => !String(m.code).startsWith('TENANT_TENANTS_'))) continue;
           if (!held.some((m) => m.code === tenantName.code)) await api.localizationUpsert(tenant, locale, [tenantName]);
         } catch { result.failed++; }
       }
@@ -216,10 +223,16 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       : args.country ? seed.countryMobileRules[String(args.country).toUpperCase()]
         : Object.values(seed.countryMobileRules).find((rule) => rule.countryCode === prefix);
     if (!current && !regex) throw new Error('Country mobile rule is missing');
-    // An explicit regex without a prefix takes the seeded country with that regex, else the
-    // historical default (+91) that tenant_bootstrap used before the seed existed.
-    const countryCode = prefix || current?.countryCode
-      || Object.values(seed.countryMobileRules).find((rule) => rule.mobileNumberRegex === regex)?.countryCode || '+91';
+    // An explicit regex without a prefix takes the prefix of the rule it belongs to: the named country's,
+    // the source tenant's when the regex is the source's own, else the seeded country with that regex.
+    // Never a default: +91 beside another country's regex breaks every number (#2269 round-3 item 6).
+    const regexCountry = Object.values(seed.countryMobileRules).find((rule) => rule.mobileNumberRegex === regex);
+    const countryCode = prefix
+      || (!regex || args.country || regex === current?.mobileNumberRegex ? current?.countryCode : regexCountry?.countryCode);
+    if (!countryCode) {
+      throw new Error(`mobile_regex ${regex} matches no seeded country (${Object.keys(seed.countryMobileRules).join(', ')}): `
+        + 'pass mobile_prefix (the dialling code, e.g. +254) or country');
+    }
     rules = [{ countryCode, mobileNumberRegex: regex || current?.mobileNumberRegex, default: true }];
   }
   if (!Array.isArray(rules) || !rules.length || rules.some((rule) => typeof rule.countryCode !== 'string' || typeof rule.mobileNumberRegex !== 'string')) {
@@ -230,19 +243,23 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     // Gateway writes are authorized by egov-accesscontrol from the target's own role-action rows.
     // A brand-new tenant has none, and the only way to grant one is an MDMS write that itself
     // needs a grant, so the seed's actions and role-actions are inserted directly first (CCRS#1928).
-    // Additive and skipped once the target has any role-action. Non-fatal: if the database is
-    // unreachable, the first gateway write fails with the real 403 instead.
+    // Runs every time, so a tenant holding only part of the set (an older bootstrap copied 500 of
+    // 945) is topped up. Additive: a row is skipped when the tenant already has it, by
+    // uniqueidentifier or by content (action id; role code + action id), since rows from
+    // full-dump.sql or an older copy carry other uniqueidentifiers. Non-fatal: if the database
+    // is unreachable, the first gateway write fails with the real 403 instead.
     const db = options.db ?? digitDb;
     try {
       if (!options.db) await digitDb.initialize();
-      const [row] = await db.query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'`, [target]);
-      if (Number(row?.count ?? 0) > 0) return;
       const now = Date.now();
       for (const record of seed.records.filter((r) => ACCESS_FLOOR_SCHEMAS.includes(r.schemaCode))) {
         accessFloorSeeded += await db.execute(
           `INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-           VALUES ($1, $2, $3, $4, $5::jsonb, true, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $6, $6)
+           SELECT $1::text, $2::text, $3::text, $4::text, $5::jsonb, true, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $6::bigint, $6::bigint
+           WHERE NOT EXISTS (SELECT 1 FROM eg_mdms_data held WHERE held.tenantid = $2 AND held.schemacode = $4
+             AND CASE WHEN $4 = 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+               THEN held.data->>'rolecode' = $5::jsonb->>'rolecode' AND held.data->>'actionid' = $5::jsonb->>'actionid'
+               ELSE held.data->>'id' = $5::jsonb->>'id' END)
            ON CONFLICT (tenantid, schemacode, uniqueidentifier) DO NOTHING`,
           [randomUUID(), target, record.uniqueIdentifier, record.schemaCode, JSON.stringify(substituteTenant(record.data, target)), now]);
       }
@@ -315,9 +332,11 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     const missing = employeeRoles.filter((role) => !held.some((r) => r.code === role.code && r.tenantId === role.tenantId));
     if (args.user_only) {
       // Re-provisioning re-encrypts mobile/password under the now-active state key and is the
-      // recovery path after credential drift, so it also clears a lockout from failed logins.
+      // recovery path after credential drift, so it also clears a lockout from failed logins
+      // (44650d3b2). `active` is left as it is: an operator may have deactivated this ADMIN on
+      // purpose, and a deploy must not bring it back (#2269 round-3 item 7).
       await api.userUpdate({ ...existing[0], mobileNumber: adminMobile(), password: api.getLoginPassword() || options.defaultPassword(),
-        active: true, accountLocked: false, roles: [...held, ...missing] });
+        accountLocked: false, roles: [...held, ...missing] });
     } else if (missing.length) {
       await api.userUpdate({ ...existing[0], roles: [...held, ...missing] });
     }
