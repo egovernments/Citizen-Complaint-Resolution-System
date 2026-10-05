@@ -3,7 +3,10 @@ package org.egov.pgr.onboarding;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
+import java.nio.file.*;
 import java.util.*;
+import java.util.regex.*;
+import java.util.stream.*;
 import static org.junit.Assert.*;
 
 /** Kong authorizes the exact request URI, so every workspace-setup MDMS write needs a founder grant in the seed. */
@@ -60,5 +63,42 @@ public class PlatformBaselineGrantsTest {
             assertEquals(url, new TreeSet<>(List.of("ACCOUNT_ADMIN", "AUTO_ESCALATE", "CSR", "GRO", "PGR_LME", "SUPERUSER")),
                     roles.getOrDefault(url, Set.of()));
         assertEquals("/pgr-services/v2/request/inbox/_count", urls.get(4560L));
+    }
+
+    /**
+     * The management console runs as the founder. Every API path the configurator's code names
+     * must be open at Kong (AUTH_OPTIONAL or RBAC-exempt in local-setup/kong/kong.yml) or granted
+     * to a founder role in the seed, otherwise its screen shows AccessDeniedException on a new
+     * workspace (found live: /mdms-v2/v2/_count, /pgr-services/v2/request/_search).
+     */
+    private static final Map<String, String> NOT_FOUNDER_CALLS = Map.of(
+            "/mdms-v2/v2/_create", "prefix only; the real path appends the schema code (checked above)",
+            "/mdms-v2/v2/_update", "prefix only; the real path appends the schema code (checked above)",
+            "/localization/bulk", "no DIGIT service serves it on any tenant (no action row anywhere)");
+    private static final Pattern PATH = Pattern.compile("['\"`](/(?:user|mdms-v2|egov-[a-z-]+|boundary-service|localization|filestore|pgr-services|access|inbox)(?:/[A-Za-z0-9_.-]+)+)['\"`]");
+
+    @Test public void everyConfiguratorCallIsOpenAtKongOrGrantedToAFounderRole() throws Exception {
+        Path repo = Paths.get("").toAbsolutePath().getParent().getParent();
+        org.junit.Assume.assumeTrue("configurator sources not present", Files.isDirectory(repo.resolve("configurator/src")));
+        String kong = Files.readString(repo.resolve("local-setup/kong/kong.yml"));
+        Set<String> open = new HashSet<>(); Matcher m = Pattern.compile("\\[\"(/[^\"]+)\"\\]=true").matcher(kong); while (m.find()) open.add(m.group(1));
+        Matcher ex = Pattern.compile("p == \"(/[^\"]+)\"").matcher(kong.substring(kong.indexOf("local RBAC_EXEMPT"), kong.indexOf("local RBAC_EXEMPT") + 4000)); while (ex.find()) open.add(ex.group(1));
+        Set<String> called = new TreeSet<>();
+        for (String dir : List.of("configurator/src", "configurator/packages/data-provider/src"))
+            try (Stream<Path> files = Files.walk(repo.resolve(dir))) {
+                for (Path f : files.filter(f -> f.toString().matches(".*\\.(ts|tsx)$") && !f.toString().matches(".*(\\.test\\.|__tests__).*")).toList()) {
+                    Matcher c = PATH.matcher(Files.readString(f)); while (c.find()) called.add(c.group(1));
+                }
+            }
+        var seed = new PlatformBaseline(new ObjectMapper());
+        Set<String> founder = new HashSet<>(); seed.founderRoles().forEach(r -> founder.add(r.asText()));
+        Map<Long, String> urls = new HashMap<>(); Set<String> granted = new HashSet<>();
+        for (JsonNode row : seed.records()) if ("ACCESSCONTROL-ACTIONS-TEST.actions-test".equals(row.path("schemaCode").asText()))
+            urls.put(row.path("data").path("id").asLong(), row.path("data").path("url").asText());
+        for (JsonNode row : seed.records()) if ("ACCESSCONTROL-ROLEACTIONS.roleactions".equals(row.path("schemaCode").asText())
+                && founder.contains(row.path("data").path("rolecode").asText())) granted.add(urls.get(row.path("data").path("actionid").asLong()));
+        assertTrue("the scan found the configurator's calls", called.size() > 30);
+        List<String> denied = called.stream().filter(p -> !open.contains(p) && !granted.contains(p) && !NOT_FOUNDER_CALLS.containsKey(p)).toList();
+        assertEquals("configurator calls a founder would be refused at Kong", List.of(), denied);
     }
 }
