@@ -144,13 +144,13 @@ public class OnboardingProvisionerClient {
         } else if ("boundary".equals(service) && baseline) {
             if ("/boundary-service/boundary-hierarchy-definition/_create".equals(path)) {
                 payload = body.path("BoundaryHierarchy"); requireTenant(payload, tenant);
-                if (!"ADMIN".equals(payload.path("hierarchyType").asText())) denied();
+                if (!OnboardingSteps.WORKSPACE_HIERARCHY.equals(payload.path("hierarchyType").asText())) denied();
             } else if ("/boundary-service/boundary/_create".equals(path)) {
                 payload = only(body.path("Boundary")); requireTenant(payload, tenant);
                 if (!tenant.equals(payload.path("code").asText())) denied();
             } else if ("/boundary-service/boundary-relationships/_create".equals(path)) {
                 payload = body.path("BoundaryRelationship"); requireTenant(payload, tenant);
-                if (!tenant.equals(payload.path("code").asText()) || !"ADMIN".equals(payload.path("hierarchyType").asText()) || !"ROOT".equals(payload.path("boundaryType").asText())) denied();
+                if (!tenant.equals(payload.path("code").asText()) || !OnboardingSteps.WORKSPACE_HIERARCHY.equals(payload.path("hierarchyType").asText()) || !"ROOT".equals(payload.path("boundaryType").asText())) denied();
             } else denied();
         } else if ("workflow".equals(service) && baseline && "/egov-workflow-v2/egov-wf/businessservice/_create".equals(path)) {
             payload = only(body.path("BusinessServices")); requireTenant(payload, tenant);
