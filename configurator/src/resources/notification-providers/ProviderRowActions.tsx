@@ -196,7 +196,7 @@ function RotateDialog({
         </DialogHeader>
         <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
           {providerType ? (
-            <ProviderCredentialFields fields={fields} values={creds} onChange={(k, v) => setCreds((p) => ({ ...p, [k]: v }))} />
+            <ProviderCredentialFields type={providerType.type} fields={fields} values={creds} onChange={(k, v) => setCreds((p) => ({ ...p, [k]: v }))} />
           ) : (
             <p className="text-sm text-destructive">
               {t('app.providers.rotate_unknown_type', {
