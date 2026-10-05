@@ -28,6 +28,35 @@
 {% endif %}
 {{ indent }}add_header {{ 'Content-Security-Policy' if (nginx_csp_enforce | default(false)) else 'Content-Security-Policy-Report-Only' }} "{{ nginx_csp_policy | default("default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'") }}" always;
 {%- endmacro %}
+{#
+   ==================== Tenantless /digit-ui/ guard ====================
+   D26: the app's HTML routes are canonical only under /<tenant-slug>/digit-ui/.
+   A tenantless /digit-ui/<route> gets a 302 to digit_ui_default_tenant_slug when
+   one is configured, else 404.
+
+   Static assets are exempt. esbuild's PUBLIC_PATH is the absolute "/digit-ui/",
+   so every tenant page (index.html and public-dashboard.html alike) loads
+   /digit-ui/index.js, /digit-ui/vendor/*.css, /digit-ui/analytics.js, hashed
+   images and fonts from the tenantless prefix. 404ing those (or redirecting
+   each one) blanks the page. The exemption keys on the file extension, so
+   index.html and public-dashboard.html themselves stay behind the guard.
+
+   $request_uri is the ORIGINAL request line: a tenant route that the
+   /<slug>/digit-ui/ rewrite below sent here internally never matches.
+
+   This guard is routing hygiene, NOT a security boundary. `//digit-ui/...` and
+   percent-encoded spellings (`/%64igit-ui/...`) normalise to the same location
+   but do not match $request_uri, and the SPA, its assets and every API behind
+   it are public anyway. Authorization lives in Kong and the Identity BFF.
+#}
+{% macro tenantless_digit_ui_guard(indent='    ') %}
+{% set html_route = '^/digit-ui/(?![^?]*[.](?:js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)(?:[?]|$))' %}
+{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
+{{ indent }}if ($request_uri ~ "{{ html_route }}") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
+{% else %}
+{{ indent }}if ($request_uri ~ "{{ html_route }}") { return 404; }
+{% endif %}
+{%- endmacro %}
 server {
   server_name {{ domain }};
 
@@ -571,18 +600,19 @@ server {
   # Friendly URL for the PUBLIC (unauthenticated) dashboard. The page itself is
   # a second esbuild entry living in the same /digit-ui/ docroot as the employee
   # app (so hashed assets resolve against one publicPath), which means this only
-  # needs to be a redirect and works in BOTH digit_ui_mode branches below.
+  # needs to be an internal rewrite and works in every digit_ui_mode below.
   #
   # Its analytics read paths are explicitly auth-optional on Kong, so the page
   # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
   # gateway is deliberately not opened because it does not normalize spoofed
   # anonymous userInfo. The real data boundary remains server-side.
+  #
+  # The canonical URL is /<slug>/digit-ui/public-dashboard: the tenant rewrite
+  # below lands it here internally and it is served the page in place. Only a
+  # tenantless request is redirected to the default slug (or 404s).
   location = /digit-ui/public-dashboard {
-{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
-    return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/public-dashboard.html;
-{% else %}
-    return 404;
-{% endif %}
+{{ tenantless_digit_ui_guard('    ') }}
+    rewrite ^ /digit-ui/public-dashboard.html last;
   }
 
   # Backwards-compatible alias for the first public-dashboard preview. The
@@ -644,11 +674,7 @@ server {
 {% endif %}
   }
   location /digit-ui/ {
-{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
-    if ($request_uri ~ "^/digit-ui/") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
-{% else %}
-    if ($request_uri ~ "^/digit-ui/") { return 404; }
-{% endif %}
+{{ tenantless_digit_ui_guard('    ') }}
     alias /opt/digit-ui-esbuild/build/;
     try_files $uri $uri/ /digit-ui/index.html;
     sub_filter_once on;
@@ -745,11 +771,7 @@ server {
 {% endif %}
   }
   location /digit-ui/ {
-{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
-    if ($request_uri ~ "^/digit-ui/") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
-{% else %}
-    if ($request_uri ~ "^/digit-ui/") { return 404; }
-{% endif %}
+{{ tenantless_digit_ui_guard('    ') }}
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -812,11 +834,7 @@ server {
 {% endif %}
   }
   location /digit-ui/ {
-{% if digit_ui_default_tenant_slug | default('') | length > 0 %}
-    if ($request_uri ~ "^/digit-ui/") { return 302 /{{ digit_ui_default_tenant_slug }}$request_uri; }
-{% else %}
-    if ($request_uri ~ "^/digit-ui/") { return 404; }
-{% endif %}
+{{ tenantless_digit_ui_guard('    ') }}
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

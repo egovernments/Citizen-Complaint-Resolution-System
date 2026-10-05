@@ -1,0 +1,68 @@
+{{- /*
+D26: tenant pages live at /<slug>/digit-ui/... (tenant-ingress.yaml), but the
+esbuild bundle's PUBLIC_PATH is the absolute "/digit-ui/", so every tenant page
+(index.html and public-dashboard.html) loads its JS, CSS, vendor CSS, images,
+fonts, globalConfigs.js and analytics.js from the tenantless prefix. With the
+legacy /digit-ui ingress off, those requests must still reach this service or
+every page renders blank. Only files with a static-asset extension match, so
+tenantless HTML/app routes stay unrouted (or take the optional redirect in
+tenantless-redirect-ingress.yaml). Not a security boundary: the assets are
+public and authorization lives behind Kong and the Identity BFF.
+*/ -}}
+{{- if and .Values.ingress.enabled (not .Values.ingress.legacyPathEnabled) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "common.name" . }}-static-assets
+{{- if .Values.global.namespace }}
+  namespace: {{ .Values.global.namespace }}
+{{- else if .Values.ingress.namespace }}
+  namespace: {{ .Values.ingress.namespace }}
+{{- else }}
+  namespace: {{ .Values.namespace }}
+{{- end }}
+  {{- $annotations := dict "nginx.ingress.kubernetes.io/use-regex" "true" }}
+  {{- $annotations = merge $annotations (.Values.ingress.annotations | default dict) }}
+  {{- if .Values.ingress.waf.enabled }}
+  {{- $annotations = merge $annotations (.Values.ingress.waf.annotations | default dict) }}
+  {{- end }}
+  annotations:
+{{- toYaml $annotations | nindent 4 }}
+{{- if .Values.ingress.additionalAnnotations }}
+  {{- tpl .Values.ingress.additionalAnnotations . | nindent 4 }}
+{{- end }}
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+spec:
+  rules:
+{{- if .Values.ingress.host }}
+  {{- tpl .Values.ingress.host . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+  - host: {{ .Values.ingress.hostName }}
+{{- else }}
+  - host: {{ .Values.global.domain }}
+{{- end }}
+    http:
+      paths:
+        - path: /{{ .Values.ingress.context }}/.+\.(js|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: {{ .Values.ingress.serviceName | default (include "common.name" .) }}
+              port:
+                number: {{ .Values.ingress.servicePort | default .Values.httpPort }}
+{{- if ne .Values.global.setup "quickstart" }}
+  tls:
+{{- if .Values.ingress.tls }}
+  {{- tpl .Values.ingress.tls . | nindent 2 }}
+{{- else if .Values.ingress.hostName }}
+    - hosts:
+        - {{ .Values.ingress.hostName }}
+      secretName: {{ .Values.ingress.hostName }}-tls-certs
+{{- else }}
+    - hosts:
+        - {{ .Values.global.domain }}
+      secretName: {{ .Values.global.domain }}-tls-certs
+{{- end }}
+{{- end }}
+{{- end }}

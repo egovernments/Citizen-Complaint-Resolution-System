@@ -36,6 +36,14 @@ data:
         sub_filter '</head>' '<script src="/{{ .Values.ingress.context }}/globalConfigs.js"></script></head>';
       }
 
+      # The public dashboard is a second HTML entry beside index.html. Its
+      # canonical URL /<slug>/{{ .Values.ingress.context }}/public-dashboard
+      # arrives here rewritten by tenant-ingress.yaml; without this the
+      # try_files fallback would serve the employee app instead.
+      location = /{{ .Values.ingress.context }}/public-dashboard {
+        rewrite ^ /{{ .Values.ingress.context }}/public-dashboard.html last;
+      }
+
       # Served from a directory mount rather than a file mount into /var/web:
       # a ConfigMap update rewrites the underlying inode, which a single-file
       # subPath mount would not pick up without a pod restart.

@@ -1622,16 +1622,82 @@ describe('D26 legacy identity paths are retired', () => {
     expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/;');
     expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}$request_uri;');
     expect(nginx).toContain('return 302 /{{ digit_ui_default_tenant_slug }}/digit-ui/citizen/login;');
-    expect(nginx.match(/if \(\$request_uri ~ "\^\/digit-ui\/"\) \{ return 404; \}/g)).toHaveLength(3);
+    // static/container/HMR app locations plus the public-dashboard alias.
+    expect(nginx.match(/\{\{ tenantless_digit_ui_guard\('    '\) \}\}/g)).toHaveLength(4);
     expect(playbook).toContain('digit_ui_default_tenant_slug is match');
+  });
+
+  // Blocker (Dhruv, #2271 review 2): esbuild's PUBLIC_PATH is the absolute
+  // "/digit-ui/", so a tenant page loads its JS/CSS from the tenantless prefix.
+  // The tenantless guard must let every such asset through while still
+  // refusing tenantless HTML/app routes.
+  describe('tenantless guard exempts the bundle assets tenant pages load', () => {
+    const guardSource = nginx.match(/\{% set html_route = '([^']+)' %\}/);
+    const guard = new RegExp(guardSource ? guardSource[1] : '^$');
+    const helmAssets = read('devops/deploy-as-code/charts/urban/digit-ui/templates/static-assets-ingress.yaml');
+    const helmPath = helmAssets.match(/- path: \/\{\{ \.Values\.ingress\.context \}\}(\S+)/);
+    // ingress-nginx anchors the path with `^` and matches it case-insensitively.
+    const helmAsset = new RegExp(`^/digit-ui${helmPath ? helmPath[1] : '$^'}`, 'i');
+    const esbuild = read('digit-ui-esbuild/esbuild.build.js');
+    const shells = ['index.html', 'public-dashboard.html'].map((f) => read(`digit-ui-esbuild/public/${f}`));
+    const shellAssets = shells.flatMap((html) =>
+      [...html.matchAll(/(?:src|href)="(\/digit-ui\/[^"]+)"/g)].map((m) => m[1]));
+    const loadedAssets = [
+      ...shellAssets,
+      // generateHTML() injects these; analytics.js is fetched by index.html.
+      '/digit-ui/index.js', '/digit-ui/index.css',
+      '/digit-ui/public-dashboard.js', '/digit-ui/public-dashboard.css',
+      '/digit-ui/analytics.js', '/digit-ui/analytics.js?v=2',
+      '/digit-ui/brand/digit-footer.png', '/digit-ui/logo-AB12CD.svg', '/digit-ui/font-AB12CD.woff2',
+    ];
+
+    test('the bundle really is built against the absolute /digit-ui/ prefix', () => {
+      expect(guardSource).not.toBeNull();
+      expect(helmPath).not.toBeNull();
+      expect(esbuild).toContain('const PUBLIC_PATH = "/digit-ui/";');
+      expect(shellAssets).toEqual(expect.arrayContaining([
+        '/digit-ui/globalConfigs.js', '/digit-ui/vendor/digit-ui-css.css',
+      ]));
+    });
+
+    test.each(loadedAssets)('nginx and Helm serve %s on a tenant page', (asset) => {
+      expect(guard.test(asset)).toBe(false);
+      expect(helmAsset.test(asset.split('?')[0])).toBe(true);
+    });
+
+    test.each([
+      '/digit-ui/', '/digit-ui/citizen/login', '/digit-ui/employee/user/login',
+      '/digit-ui/index.html', '/digit-ui/public-dashboard', '/digit-ui/public-dashboard.html',
+      '/digit-ui/citizen/login?from=/x.js', '/digit-ui/employee/report.jsp',
+    ])('tenantless app route %s stays behind the guard', (route) => {
+      expect(guard.test(route)).toBe(true);
+      expect(helmAsset.test(route.split('?')[0])).toBe(false);
+    });
+
+    test('the tenant-scoped public dashboard is served in place, not redirected away', () => {
+      const location = nginx.slice(
+        nginx.indexOf('location = /digit-ui/public-dashboard {'),
+        nginx.indexOf('location = /dashboard {'),
+      );
+      expect(location).toContain('rewrite ^ /digit-ui/public-dashboard.html last;');
+      expect(location).not.toMatch(/^\s*return /m);
+      expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml'))
+        .toContain('rewrite ^ /{{ .Values.ingress.context }}/public-dashboard.html last;');
+    });
+
+    test('Helm routes the assets whenever the legacy ingress is off', () => {
+      expect(helmAssets).toContain('if and .Values.ingress.enabled (not .Values.ingress.legacyPathEnabled)');
+      expect(helmAssets).toContain('nginx.ingress.kubernetes.io/use-regex');
+    });
   });
 
   test('Helm publishes only tenant-scoped digit-ui routes by default', () => {
     expect(read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml')).toContain('legacyPathEnabled: false');
     expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/ingress.yaml'))
       .toContain('if .Values.ingress.legacyPathEnabled');
+    // ingress-nginx only accepts an absolute http(s) redirect target.
     expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/tenantless-redirect-ingress.yaml'))
-      .toContain('temporal-redirect: /{{ .Values.ingress.defaultTenantSlug }}$request_uri');
+      .toContain('temporal-redirect: {{ printf "%s://%s/%s$request_uri" $scheme $host .Values.ingress.defaultTenantSlug | quote }}');
     expect(read('devops/deploy-as-code/charts/core-services/configmaps/values.yaml'))
       .toContain('defaultTenantSlug: ""');
   });
