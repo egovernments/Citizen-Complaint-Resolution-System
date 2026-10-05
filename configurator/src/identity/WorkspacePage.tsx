@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { invitationPolicy, renameWorkspace, saveInvitationPolicy, searchWorkspace, type Rename, type RenameRequest, type WorkspaceView } from './workspace';
+import { invitationPolicy, isWorkspaceApiMissing, renameWorkspace, saveInvitationPolicy, searchWorkspace, type Rename, type RenameRequest, type WorkspaceView } from './workspace';
 
 function restoreRequest(key: string, tenantId: string): RenameRequest | null {
   try {
@@ -80,7 +80,8 @@ export default function WorkspacePage() {
           if (acceptedId.current === next.Rename.id) clearRequest();
         }
       } catch (e) {
-        if (live) { setError(e instanceof Error ? e.message : 'Could not load workspace.'); timer = setTimeout(refresh, 5000); }
+        if (live && isWorkspaceApiMissing(e)) setError('Workspace name changes are not available on this server yet (its pgr-services has no workspace API).');
+        else if (live) { setError(e instanceof Error ? e.message : 'Could not load workspace.'); timer = setTimeout(refresh, 5000); }
       }
     };
     void refresh();

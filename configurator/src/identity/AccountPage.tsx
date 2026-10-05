@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authMethods, logout, session, type AuthMethod, type Session } from '@/api/onboarding';
-import { clearLocalSession } from '@/lib/session';
+import { signOutThisDevice } from '@/lib/session';
 import { accountAction, unlinkProvider } from './api';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -25,8 +25,9 @@ export default function AccountPage() {
     finally { setBusy(false); }
   };
   const signOut = async (scope: 'others' | 'all') => {
-    await logout(scope);
-    if (scope === 'all') { clearLocalSession(); window.location.assign('/configurator/login'); }
+    if (scope === 'others') { await logout(scope); return; }
+    await signOutThisDevice(scope);
+    window.location.assign('/configurator/login');
   };
   const actions = current?.account?.actions ?? [];
   return <main className="mx-auto flex max-w-3xl flex-col gap-5 p-6">

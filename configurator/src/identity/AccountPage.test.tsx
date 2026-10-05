@@ -45,12 +45,22 @@ it('signs out everywhere and clears the local token after acknowledgement', asyn
   await waitFor(() => expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull());
   expect(logout).toHaveBeenCalledWith('all');
 });
-it('keeps the local token until logout is acknowledged', async () => {
-  let acknowledge!: () => void;
-  vi.mocked(logout).mockReturnValue(new Promise<void>((resolve) => { acknowledge = resolve; }));
+it('clears the local token before the BFF acknowledges sign-out everywhere', async () => {
+  vi.mocked(logout).mockReturnValue(new Promise<void>(() => undefined));
   page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
   await waitFor(() => expect(logout).toHaveBeenCalledWith('all'));
+  expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
+});
+it('still clears the local token when the BFF rejects sign-out', async () => {
+  vi.mocked(logout).mockRejectedValue(new Error('UNTRUSTED_ORIGIN'));
+  page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
+  await waitFor(() => expect(logout).toHaveBeenCalledWith('all'));
+  expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
+  expect(screen.queryByText('UNTRUSTED_ORIGIN')).not.toBeInTheDocument();
+});
+it('keeps this session when signing out other sessions fails', async () => {
+  vi.mocked(logout).mockRejectedValue(new Error('Sign-out failed'));
+  page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out other sessions' }));
+  expect(await screen.findByText('Sign-out failed')).toBeInTheDocument();
   expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toContain('test-digit-token');
-  acknowledge();
-  await waitFor(() => expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull());
 });

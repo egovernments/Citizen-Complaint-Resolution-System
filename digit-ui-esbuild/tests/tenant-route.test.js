@@ -29,6 +29,7 @@ const {
   getAuthProvider,
   isIdentityBffAuth,
   isValidTenantSlug,
+  RESERVED_TENANT_SLUGS,
   legacyMultiRootTenantEnabled,
   mdmsAppId,
   parseTenantRoute,
@@ -59,6 +60,19 @@ test("tenant slug validation rejects ambiguous and reserved route values", () =>
   assert.equal(isValidTenantSlug("a-123"), false);
   assert.equal(isValidTenantSlug("Bomet"), false);
   assert.equal(isValidTenantSlug("identity"), false);
+  for (const slug of ["citizen", "employee", "user", "pgr-services", "mdms-v2", "novu", "grafana", "keycloak", "filestore"]) {
+    assert.equal(isValidTenantSlug(slug), false, slug);
+  }
+  for (const slug of ["a1", "12", "-bomet", "b".repeat(64)]) assert.equal(isValidTenantSlug(slug), false, slug);
+  for (const slug of ["ke", "county-47", "b".repeat(63)]) assert.equal(isValidTenantSlug(slug), true, slug);
+});
+
+test("reserved slugs equal the identity-bff contract list (docs §2.4.1)", () => {
+  const doc = fs.readFileSync(path.join(__dirname, "../../backend/identity-bff/docs/identity-bff.md"), "utf8");
+  const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+  assert.ok(block, "identity-bff.md must keep the reserved-url-slugs block");
+  const documented = block[1].split("\n").map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line));
+  assert.deepEqual([...RESERVED_TENANT_SLUGS].sort(), documented.sort());
 });
 
 test("canonical employee routes use the Identity BFF without a global-config toggle", () => {

@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost';
+const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 const LOCAL_STACK = process.env.LOCAL_STACK === '1';
 const EXCLUDE_LOCAL_ONLY = LOCAL_STACK ? undefined : /@local-only/;
 

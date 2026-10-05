@@ -1,12 +1,29 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
-import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
+import { getAuthAdapter } from "../../auth/index";
+import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/authSurface";
 import { identityBffLogout, identityBffLogoutRedirect } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
 export const UserService = {
   authenticate: async (details) => {
+    // Legacy opt-in Keycloak (*_AUTH_PROVIDER=keycloak on /digit-ui). Removed
+    // together with KeycloakAuthAdapter in the legacy-removal PR.
+    if (isKeycloakAuth()) {
+      const adapter = getAuthAdapter();
+      const result = await adapter.login({
+        email: details.username,
+        password: details.password,
+        tenantId: details.tenantId,
+      });
+      return {
+        UserRequest: result.user,
+        access_token: result.token,
+        token_type: "bearer",
+      };
+    }
+
     const data = new URLSearchParams();
     Object.entries(details).forEach(([key, value]) => data.append(key, value));
     data.append("scope", "read");
@@ -57,15 +74,33 @@ export const UserService = {
       // same tenant's login page for that surface.
       const surface = tenantContext()?.surface || getAuthSurface();
       const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
-      await identityBffLogout({ surface, scope, fetchImpl: window.fetch.bind(window) });
-      if (scope !== "others") {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
+      const fetchImpl = window.fetch.bind(window);
+      // "others" keeps this session, so a failure is reported and nothing local changes.
+      if (scope === "others") {
+        await identityBffLogout({ surface, scope, fetchImpl });
+        return;
+      }
+      // Fail open: the DIGIT token lives in localStorage, so a BFF outage or an
+      // UNTRUSTED_ORIGIN 403 must not leave a shared device signed in. Clear local
+      // state first, then revoke the BFF session best-effort.
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      try {
+        await identityBffLogout({ surface, scope, fetchImpl });
+      } catch (e) {
+        // The BFF session cookie may outlive this; the local DIGIT session is gone.
+      } finally {
         window.location.replace(
           `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
         );
       }
       return;
+    }
+    // Legacy opt-in Keycloak: end the Keycloak session too, or check-sso signs
+    // the user straight back in. Removed with KeycloakAuthAdapter.
+    if (isKeycloakAuth()) {
+      const adapter = getAuthAdapter();
+      return adapter.logout();
     }
 
     // The session's own user decides where logout lands. `userType` is one

@@ -521,27 +521,135 @@ describe('tenant-scoped digit-ui routing', () => {
   const helmTenantIngress = read(
     'devops/deploy-as-code/charts/urban/digit-ui/templates/tenant-ingress.yaml'
   );
+  const imageNginx = read('digit-ui-esbuild/docker/nginx.conf');
 
-  test('Compose nginx keeps the public slug and rewrites only the internal UI mount', () => {
-    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block
-    // opener and reject the config (#2127).
-    expect(nginx).toContain('location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {');
+  // nginx `$1` → JS replacement for a match.
+  const substitute = (target: string, match: RegExpExecArray) =>
+    target.replace(/\$(\d)/g, (_, n) => match[Number(n)] ?? '');
+
+  // Compose: the two regex locations, in config order (nginx takes the first
+  // matching regex). Case-sensitive, as `location ~`.
+  const composeRoutes = [...nginx.matchAll(
+    /location ~ "(\^\/[^"]*digit-ui[^"]*)" \{\s*(?:return 302 (\S+);|rewrite "[^"]+" (\S+) last;)/g
+  )].map((m) => ({ re: new RegExp(m[1]), redirect: m[2], internal: m[3] }));
+  // Helm: ingress-nginx renders each path as `location ~* "^<path>"`
+  // (case-insensitive) and orders longer paths first.
+  const helmRoutes = [...helmTenantIngress.matchAll(/"path" "([^"]+)" "rewrite" "([^"]+)"/g)]
+    .map((m) => ({ path: m[1], re: new RegExp(`^${m[1]}`, 'i'), internal: m[2] }))
+    .sort((a, b) => b.path.length - a.path.length);
+  // The digit-ui image's nginx answers the internal tenant-root path.
+  const imageRedirects = [...imageNginx.matchAll(/location ~ "([^"]+)" \{[^}]*?return 302 (\S+);/g)]
+    .map((m) => ({ re: new RegExp(m[1]), redirect: m[2] }));
+
+  const compose = (uri: string) => {
+    for (const route of composeRoutes) {
+      const m = route.re.exec(uri);
+      if (m) return route.redirect ? { redirect: substitute(route.redirect, m) } : { internal: substitute(route.internal!, m) };
+    }
+    return null;
+  };
+  const helm = (uri: string) => {
+    for (const route of helmRoutes) {
+      const m = route.re.exec(uri);
+      if (!m) continue;
+      const internal = substitute(route.internal, m);
+      for (const image of imageRedirects) {
+        const r = image.re.exec(internal);
+        if (r) return { redirect: substitute(image.redirect, r) };
+      }
+      return { internal };
+    }
+    return null;
+  };
+
+  test('the configs parse into the expected routes', () => {
+    expect(composeRoutes).toHaveLength(2);
+    expect(helmRoutes).toHaveLength(2);
+    expect(imageRedirects).toHaveLength(1);
+    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block opener (#2127).
     expect(nginx).toContain('location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {');
-    expect(nginx).toContain(
-      'rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;'
-    );
+    // Without absolute_redirect off the image would send the ingress's http://pod-host.
+    expect(imageNginx).toMatch(/absolute_redirect off;\s*return 302/);
   });
 
-  test('Kubernetes ingress exposes the same tenant-prefixed contract', () => {
-    expect(helmTenantIngress).toContain(
-      'path: /([a-z0-9-]{2,63})/digit-ui(/|$)(.*)'
-    );
-    expect(helmTenantIngress).toContain(
-      '"nginx.ingress.kubernetes.io/rewrite-target" "/digit-ui/$3"'
-    );
-    expect(helmTenantIngress).toContain('.Values.ingress.annotations');
-    expect(helmTenantIngress).toContain('.Values.ingress.waf.annotations');
-    expect(helmTenantIngress).toContain('.Values.ingress.additionalAnnotations');
+  test.each([
+    ['/bomet-county/digit-ui', { redirect: '/bomet-county/digit-ui/' }],
+    ['/bomet-county/digit-ui/', { internal: '/digit-ui/' }],
+    ['/bomet-county/digit-ui/employee/pgr/inbox', { internal: '/digit-ui/employee/pgr/inbox' }],
+    ['/ke/digit-ui/citizen/login', { internal: '/digit-ui/citizen/login' }],
+    ['/digit-ui/employee', null],
+    ['/x/digit-ui/', null],
+    ['/bomet-county/digit-uix', null],
+  ])('Compose nginx and Kubernetes ingress agree on %s', (uri, expected) => {
+    expect(compose(uri)).toEqual(expected);
+    expect(helm(uri)).toEqual(expected);
+  });
+
+  test('case sensitivity differs and is documented in the chart', () => {
+    // ingress-nginx always matches regex paths with `~*`; Compose uses `~`.
+    // Both end on a not-found page because the SPA only accepts lower-case slugs.
+    expect(compose('/Bomet-County/digit-ui/')).toBeNull();
+    expect(helm('/Bomet-County/digit-ui/')).toEqual({ internal: '/digit-ui/' });
+    expect(helmTenantIngress).toMatch(/case-INsensitively/);
+  });
+
+  test('Kubernetes ingress keeps the chart annotations on both tenant ingresses', () => {
+    expect(helmTenantIngress).toContain('$root.Values.ingress.annotations');
+    expect(helmTenantIngress).toContain('$root.Values.ingress.waf.annotations');
+    expect(helmTenantIngress).toContain('$root.Values.ingress.additionalAnnotations');
+  });
+});
+
+describe('Keycloak realm proxy client address', () => {
+  // Deliberately NOT $proxy_add_x_forwarded_for: Keycloak takes the leftmost
+  // X-Forwarded-For entry, so appending would let a caller choose the IP that
+  // brute-force detection records. Behind an LB, use nginx realip instead.
+  test('/auth/realms/ sets X-Forwarded-For to the peer address', () => {
+    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+    const block = /location \^~ \/auth\/realms\/ \{([\s\S]*?)\n  \}/.exec(nginx);
+    expect(block).not.toBeNull();
+    expect(block![1]).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(block![1]).not.toContain('$proxy_add_x_forwarded_for');
+    expect(nginx).toMatch(/set_real_ip_from[\s\S]{0,200}location \^~ \/auth\/realms\//);
+  });
+});
+
+describe('reserved tenant URL slugs (identity-bff docs §2.4.1)', () => {
+  const doc = read('backend/identity-bff/docs/identity-bff.md');
+  const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+  const reserved = new Set(
+    (block?.[1] ?? '').split('\n').map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line))
+  );
+  const slugShaped = (segment: string) => /^[a-z0-9-]{2,63}$/.test(segment);
+
+  test('the contract doc carries the list', () => {
+    expect(block).not.toBeNull();
+    expect(reserved.size).toBeGreaterThan(10);
+  });
+
+  test('every top-level nginx location prefix is reserved', () => {
+    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+    const prefixes = [...nginx.matchAll(/^\s*location\s+(?:=|\^~)?\s*\/([A-Za-z0-9_.-]+)/gm)]
+      .map((m) => m[1]).filter(slugShaped);
+    expect(prefixes.length).toBeGreaterThan(10);
+    expect(prefixes.filter((p) => !reserved.has(p))).toEqual([]);
+  });
+
+  test('every top-level Kong route prefix is reserved', () => {
+    const kong = read('local-setup/kong/kong.yml');
+    const prefixes = [...kong.matchAll(/^\s*paths:\s*\n((?:\s*-\s*\S+\s*\n)+)/gm)]
+      .flatMap((m) => [...m[1].matchAll(/-\s*~?\^?\/([A-Za-z0-9_.-]+)/g)].map((p) => p[1]))
+      .filter(slugShaped);
+    expect(prefixes.length).toBeGreaterThan(10);
+    expect([...new Set(prefixes)].filter((p) => !reserved.has(p))).toEqual([]);
+  });
+
+  test('the SPA reserves exactly the documented list', () => {
+    const spa = read('digit-ui-esbuild/packages/libraries/src/services/tenant/tenantRoute.js');
+    const list = /RESERVED_TENANT_SLUGS = Object\.freeze\(\[([\s\S]*?)\]\)/.exec(spa);
+    expect(list).not.toBeNull();
+    const spaSlugs = [...list![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(spaSlugs).toEqual([...reserved].sort());
   });
 });
 
