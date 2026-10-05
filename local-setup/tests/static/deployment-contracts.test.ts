@@ -1888,10 +1888,15 @@ describe('D26 legacy identity paths are retired', () => {
     for (const example of fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.example') || f === '_example.yml')) {
       expect([example, /^login_tenant_allowlist:/m.test(read(`${dir}/${example}`))]).toEqual([example, false]);
     }
-    const reference = read(`${dir}/_example.yml`);
-    for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider', 'keycloak_client_id']) {
-      expect([key, new RegExp(`^#? ?${key}:`, 'm').test(reference)]).toEqual([key, false]);
+    // Every example, not just _example.yml (#2271 review 3: bomet and the
+    // localhost examples still set auth_provider and keycloak_client_id).
+    for (const example of fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.example') || f === '_example.yml')) {
+      const body = read(`${dir}/${example}`);
+      for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider', 'keycloak_client_id']) {
+        expect([example, key, new RegExp(`^\\s*#? ?${key}:`, 'm').test(body)]).toEqual([example, key, false]);
+      }
     }
+    const reference = read(`${dir}/_example.yml`);
     expect(reference).toContain('# Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider');
     // Nothing renders the allowlist into the UI config any more.
     expect(read('local-setup/ansible/templates/globalConfigs.js.j2')).not.toContain('login_tenant_allowlist');

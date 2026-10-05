@@ -307,13 +307,7 @@ novu_bridge_channel: "sms"
 # DIGIT OTP/password login pages are gone, and the deploy refuses `false`.
 enable_keycloak: true
 
-# Leave "". Sign-in goes through the Identity BFF whatever this says; the
-# deploy refuses `keycloak` here (the old browser-adapter path is gone).
-auth_provider: ""
-
-# OIDC public client id inside the per-tenant realm. The shipped realm template
-# defines `digit-ui`; change only if you forked the template.
-keycloak_client_id: "digit-ui"
+# auth_provider and keycloak_client_id are retired (D26): leave them unset.
 
 # Google federated login. Empty skips Google IdP wiring entirely.
 keycloak_google_client_id: ""
