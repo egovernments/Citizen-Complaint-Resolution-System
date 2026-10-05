@@ -9,7 +9,6 @@ import {
   type TenantMapping,
 } from "../organizations/organization-service.js";
 import { DigitUnavailableError, type DigitAccount } from "../managed-accounts/digit-user-client.js";
-import type { KeycloakClaims } from "../authentication/types.js";
 
 export interface TenantOption {
   code?: "DIGIT_ACCOUNT_INACTIVE";
@@ -91,27 +90,6 @@ function allowlisted(roles: unknown): string[] {
   if (!Array.isArray(roles)) return [];
   return [...new Set(roles.filter((role): role is string =>
     typeof role === "string" && config.digitManagedRoleAllowlist.includes(role)))].sort();
-}
-
-/**
- * Signed Organization memberships whose Organization is enabled, mapped to a
- * DIGIT tenant, and whose tenant exists in DIGIT.
- */
-export async function membershipsFromClaims(claims: KeycloakClaims): Promise<OrganizationMembership[]> {
-  const result: OrganizationMembership[] = [];
-  const seenTenants = new Set<string>();
-  for (const [alias, organization] of Object.entries(claims.organization || {})) {
-    if (!organization?.id) continue;
-    const mapping = await cachedMapping(organization.id);
-    if (!mapping || mapping.alias !== alias || !await isActiveDigitTenant(mapping.tenantId)) continue;
-    if (seenTenants.has(mapping.tenantId)) {
-      throw new DigitUnavailableError("More than one Organization maps to a DIGIT tenant");
-    }
-    seenTenants.add(mapping.tenantId);
-    const access = organization.resource_access?.[config.digitRoleClientId];
-    result.push({ ...mapping, roles: allowlisted(access?.roles) });
-  }
-  return result.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 /** Live memberships for flows, such as onboarding, that mutate Organizations mid-session. */

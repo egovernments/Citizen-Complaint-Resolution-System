@@ -1,5 +1,4 @@
 import type { UserRepresentation } from "./keycloak-writer.js";
-import { bindingsFromUser } from "../bindings/store.js";
 import type { Binding } from "../bindings/types.js";
 export type { Binding } from "../bindings/types.js";
 
@@ -43,10 +42,6 @@ export function accountEntries(user: UserRepresentation): AccountEntry[] {
     seen.add(key);
   }
   return value.entries;
-}
-
-export function activeBindings(user: UserRepresentation): Binding[] {
-  return bindingsFromUser(user).filter(binding => binding.state === "active");
 }
 
 export function canonical(value: unknown): string {

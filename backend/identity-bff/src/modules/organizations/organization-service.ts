@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
@@ -46,7 +46,6 @@ interface FederatedIdentityRepresentation {
 }
 
 const MANAGED_TENANTS_ATTRIBUTE = "digit.managedTenants";
-const BFF_INVITED_USER_ATTRIBUTE = "digit.identityBffInvited";
 const BFF_SIGNUP_USER_ATTRIBUTE = "digit.identityBffSignup";
 
 export async function managedTenantsFromIdentity(userId: string): Promise<string[]> {
@@ -260,14 +259,6 @@ export interface IdentityUserProfile {
   emailId?: string;
 }
 
-export interface InvitedIdentityUser {
-  id: string;
-  email: string;
-  name: string;
-  created: boolean;
-  activationRequired: boolean;
-}
-
 export interface OrganizationReconciliationState {
   organizationId: string;
   enabled: boolean;
@@ -405,41 +396,6 @@ function mappedTenant(organization: OrganizationRepresentation): string | null {
 function attribute(organization: OrganizationRepresentation, name: string): string | null {
   const values = organization.attributes?.[name];
   return Array.isArray(values) && values.length === 1 ? values[0] : null;
-}
-
-const normalizedName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en");
-
-/** Live collision check for identifiers persisted on Keycloak Organizations. */
-export async function organizationIdentifierAvailable(type: string, value: string): Promise<boolean> {
-  const organizations = await paged<OrganizationRepresentation>(
-    "/organizations?briefRepresentation=false",
-  );
-  const normalized = type === "ACCOUNT_CODE" ? value.trim().toUpperCase()
-    : type === "ORGANIZATION_NAME" ? normalizedName(value)
-      : value.trim().toLowerCase();
-  const organizationCollision = organizations.some((organization) => {
-    if (type === "ORGANIZATION_NAME") return normalizedName(organization.name || "") === normalized;
-    if (type === "ORGANIZATION_ALIAS") return organization.alias?.toLowerCase() === normalized;
-    if (type === "URL_SLUG") {
-      return organization.alias?.toLowerCase() === normalized ||
-        attribute(organization, "digit.urlSlug")?.toLowerCase() === normalized;
-    }
-    if (type === "ACCOUNT_CODE") return attribute(organization, "digit.accountCode")?.toUpperCase() === normalized;
-    if (type === "TENANT_ID") return mappedTenant(organization)?.toLowerCase() === normalized;
-    throw new IdentityAdminError("Unsupported identifier type", 400);
-  });
-  if (organizationCollision) return false;
-  if (type === "URL_SLUG") {
-    return (await organizationGroupCandidatesForAttribute(
-      organizations, "digit.urlSlug", value.trim().toLowerCase(),
-    )).length === 0;
-  }
-  if (type === "TENANT_ID") {
-    return (await organizationGroupCandidatesForAttribute(
-      organizations, "digit.tenantId", value.trim(),
-    )).length === 0;
-  }
-  return true;
 }
 
 async function organizationsForTenant(
@@ -1049,30 +1005,6 @@ export async function ensureMagicLinkSignupIdentity(input: {
   return { id: raced.id, created: false };
 }
 
-function invitedUser(user: UserRepresentation, email: string, created: boolean): InvitedIdentityUser {
-  if (!user.id || user.enabled === false || user.email?.toLowerCase() !== email) {
-    throw new IdentityAdminError("The Keycloak user is not available for invitation", 409);
-  }
-  const managedInvitation = user.attributes?.[BFF_INVITED_USER_ATTRIBUTE]?.includes("true") === true;
-  if (user.emailVerified !== true && !managedInvitation) {
-    throw new IdentityAdminError(
-      "An unverified Keycloak account already uses this email address",
-      409,
-    );
-  }
-  const name = [user.firstName, user.lastName]
-    .map((part) => part?.trim())
-    .filter(Boolean)
-    .join(" ") || user.username?.trim() || email;
-  return {
-    id: user.id,
-    email,
-    name,
-    created,
-    activationRequired: user.emailVerified !== true,
-  };
-}
-
 async function findIdentityUserByEmail(email: string): Promise<UserRepresentation | null> {
   const query = new URLSearchParams({ email, exact: "true", max: "2" });
   const response = await request(`/users?${query}`);
@@ -1267,46 +1199,6 @@ export async function sendPasswordSetupEmail(input: {
         : ["VERIFY_EMAIL", "UPDATE_PASSWORD"]),
     },
   );
-}
-
-/** Creates the passwordless Keycloak identity used by an employee invitation. */
-export async function ensureInvitedIdentityUser(input: {
-  email: string;
-  firstName: string;
-  lastName: string;
-}): Promise<InvitedIdentityUser> {
-  const email = input.email.trim().toLowerCase();
-  const existing = await findIdentityUserByEmail(email);
-  if (existing) return invitedUser(existing, email, false);
-
-  const response = await request("/users", {
-    method: "POST",
-    body: JSON.stringify({
-      username: email,
-      email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      enabled: true,
-      emailVerified: false,
-      requiredActions: ["VERIFY_EMAIL", "UPDATE_PASSWORD"],
-      attributes: { [BFF_INVITED_USER_ATTRIBUTE]: ["true"] },
-    }),
-  }, [201, 409]);
-  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
-  const created = response.status === 201;
-  const user = id
-    ? await request(`/users/${encodeURIComponent(id)}`).then((value) => value.json() as Promise<UserRepresentation>)
-    : await findIdentityUserByEmail(email);
-  if (!user) throw new IdentityAdminError("Keycloak did not identify the user it created");
-  return invitedUser(user, email, created);
-}
-
-/** Sends the one-use Keycloak link that verifies email and establishes a password. */
-export async function sendInvitedIdentityUserActivation(userId: string): Promise<void> {
-  await request(`/users/${encodeURIComponent(userId)}/execute-actions-email`, {
-    method: "PUT",
-    body: JSON.stringify(["VERIFY_EMAIL", "UPDATE_PASSWORD"]),
-  });
 }
 
 /** Live Keycloak check that the user is still a member of the Organization. */
