@@ -6,6 +6,7 @@ flow, and failure contract is in
 [`backend/identity-bff/docs/identity-bff.md`](../../../backend/identity-bff/docs/identity-bff.md).
 The concise component boundary and source-of-truth map is in the
 [`architecture one-pager`](../../../backend/identity-bff/docs/architecture.md).
+Kubernetes (Helm) deployments: see [helm-identity.md](helm-identity.md).
 
 ## Object mapping
 

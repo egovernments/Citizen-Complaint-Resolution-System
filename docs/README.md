@@ -18,7 +18,7 @@ your question; version-specific material lives only under `releases/`.
 - [`deployment/`](setup/deployment/) — [deployment modes](setup/deployment/modes.md),
   [CMS vs stock DIGIT](setup/deployment/cms-vs-stock-digit.md), sizing guides
   ([Africa](setup/deployment/decision-guide-africa.md), [India](setup/deployment/decision-guide-india.md)),
-  [identity BFF](setup/deployment/identity-bff.md), [Matomo](setup/deployment/matomo.md).
+  [identity BFF](setup/deployment/identity-bff.md) ([on Helm](setup/deployment/helm-identity.md)), [Matomo](setup/deployment/matomo.md).
   The current single-machine deployment guide is [releases/2.12/deployment](releases/2.12/deployment/README.md).
 - [`onboarding/`](setup/onboarding/README.md) — onboard a city and load its data, with example and sample sheets
 
