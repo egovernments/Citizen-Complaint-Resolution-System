@@ -195,6 +195,32 @@ export const mdmsService = {
     return this.create(tenantId, MDMS_SCHEMAS.MAP_CONFIG, MAP_CONFIG_KEY, data);
   },
 
+  /**
+   * Records the tenant's operational boundary hierarchy in
+   * CMS-BOUNDARY.HierarchySchema (the "CMS" row), which digit-ui, the dashboard
+   * and PGR read in place of the deployment-wide globalConfigs keys.
+   *
+   * Written only when no active CMS row is visible: a workspace's first
+   * hierarchy becomes PGR's, and a row the tenant (or, for a legacy city, its
+   * state) already has is never rewritten from here, since every complaint
+   * filed so far is addressed in it. Changing it is an explicit MDMS edit.
+   */
+  async ensureHierarchySchema(
+    tenantId: string,
+    hierarchy: { hierarchy: string; highestHierarchy: string; lowestHierarchy: string },
+  ): Promise<MdmsRecord | null> {
+    const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
+    const visible = rows.find(
+      (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',
+    );
+    if (visible) return null;
+    return this.create(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA, 'CMS.All', {
+      moduleName: 'CMS',
+      department: 'All',
+      ...hierarchy,
+    });
+  },
+
   /** Load the active DashboardConfig owned by the state root (never an inherited row). */
   async getDashboardConfig(tenantId: string): Promise<MdmsRecord | null> {
     const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.DASHBOARD_CONFIG);
