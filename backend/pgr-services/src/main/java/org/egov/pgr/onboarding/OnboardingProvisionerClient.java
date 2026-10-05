@@ -21,6 +21,7 @@ public class OnboardingProvisionerClient {
     private final ObjectMapper mapper;
     private final Environment env;
     private final Set<String> signupSchemas, signupWorkflows;
+    private final PlatformBaseline baselinePacks;
     private Map<String, Object> login;
     private long expiresAt;
 
@@ -33,9 +34,10 @@ public class OnboardingProvisionerClient {
         this.mapper = mapper;
         this.env = env;
         var schemas = new HashSet<String>(); var workflows = new HashSet<String>();
-        try { var seed = new PlatformBaseline(mapper); seed.schemas().forEach(schema -> schemas.add(schema.path("code").asText()));
-            seed.workflows().forEach(workflow -> workflows.add(workflow.path("businessService").asText())); }
+        try { baselinePacks = new PlatformBaseline(mapper); }
         catch (java.io.IOException e) { throw new IllegalStateException("Onboarding baseline unavailable", e); }
+        baselinePacks.schemas().forEach(schema -> schemas.add(schema.path("code").asText()));
+        baselinePacks.workflows().forEach(workflow -> workflows.add(workflow.path("businessService").asText()));
         this.signupSchemas = Set.copyOf(schemas); this.signupWorkflows = Set.copyOf(workflows);
     }
 
@@ -137,7 +139,8 @@ public class OnboardingProvisionerClient {
         } else if ("localization".equals(service) && baseline && "/localization/messages/v1/_upsert".equals(path)) {
             requireTenant(body, tenant);
             if (!body.path("messages").isArray() || body.path("messages").isEmpty()) denied();
-            for (JsonNode message : body.path("messages")) if (!("TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT)).equals(message.path("code").asText())) denied();
+            for (JsonNode message : body.path("messages")) if (!("TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT)).equals(message.path("code").asText())
+                    && !baselinePacks.isPackMessage(message)) denied(); // only the committed tenant-neutral packs, verbatim
         } else if ("boundary".equals(service) && baseline) {
             if ("/boundary-service/boundary-hierarchy-definition/_create".equals(path)) {
                 payload = body.path("BoundaryHierarchy"); requireTenant(payload, tenant);
