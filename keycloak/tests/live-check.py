@@ -351,8 +351,8 @@ def _():
         page = Browser().request(action, fields, stop_at=REDIRECT)
     user = admin("GET", f"/users/{STATE['emp']}")
     assert user["email"] == "emp-new@example.test" and user["emailVerified"], user
-    # Identity-root deferred old-address notification on 2026-10-04:
-    # apr_2a08b76cd6b041a8b7958fb3d8f67999. Stock Keycloak only verifies the new address.
+    # Notifying the old address is deferred (contract §3.3.11); stock Keycloak
+    # only verifies the new address.
     return "new address verified; old-address notification explicitly deferred"
 
 

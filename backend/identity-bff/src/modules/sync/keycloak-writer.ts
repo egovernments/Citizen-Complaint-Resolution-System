@@ -22,7 +22,7 @@ export class KeycloakConflictError extends Error {
 }
 
 /**
- * Authorship suppresses mirror reruns only (core-owner, core-sync-echo).
+ * Authorship suppresses mirror reruns only.
  * It must NEVER suppress security checks or verified-identifier propagation:
  * binding/phone writes use the same client. Their idempotent effects still run.
  */
