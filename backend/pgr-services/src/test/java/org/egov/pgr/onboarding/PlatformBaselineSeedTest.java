@@ -16,6 +16,22 @@ public class PlatformBaselineSeedTest {
     /** Recorded per workspace as seed_version; the JSON is the only place it is set. v1 workspaces exist, so it is past 1. */
     @Test public void seedVersionIsAnIntegerPastTheFirstRelease() { assertTrue(seed.versionNumber() >= 2); assertEquals(String.valueOf(seed.versionNumber()), seed.version()); }
 
+    /**
+     * Existing workspaces are upgraded (BaselineUpgrader) only when the seed's version rises, so a content change
+     * under an unchanged version never reaches them. v2 is still unreleased (it changed in place until #2269 merged);
+     * from then on, changing the seed means bumping "version" and recording both here.
+     */
+    private static final String VERSION = "2";
+    private static final String SHA256 = "3ad6eeb96e50bc7c493896bd76c18c3c6493191524ebc92483ffdccfa2020078";
+    @Test public void contentChangesComeWithAVersionBump() throws Exception {
+        byte[] bytes;
+        try (var in = PlatformBaselineSeedTest.class.getResourceAsStream("/onboarding/platform-baseline-v1.json")) { bytes = in.readAllBytes(); }
+        String sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        if (VERSION.equals(seed.version()))
+            assertEquals("platform-baseline-v1.json changed but \"version\" did not: bump it so existing workspaces get the change, then record the new version and SHA-256 here", SHA256, sha);
+        else fail("seed version is now " + seed.version() + ": record VERSION=\"" + seed.version() + "\" and SHA256=\"" + sha + "\" in this test");
+    }
+
     private Set<String> codes(String schema, String field) {
         Set<String> out = new HashSet<>();
         for (JsonNode row : seed.records()) if (schema.equals(row.path("schemaCode").asText())) out.add(row.path("data").path(field).asText());
