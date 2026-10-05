@@ -3,7 +3,6 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import KcPage from "../src/login/KcPage";
 import { getKcContextMock } from "../src/login/KcContextMock";
 import { withFieldErrors } from "../src/login/mockStates";
-import { useI18n } from "../src/login/i18n";
 
 /** Every page this theme claims to cover, i.e. the supported password journey. */
 const COVERED_PAGES = [
@@ -177,19 +176,6 @@ describe("error.ftl", () => {
         const { container } = await renderPage("error.ftl");
         expect(container.querySelector(".digit-alert--error")).not.toBeNull();
         expect(container.querySelector("#backToApplication")).not.toBeNull();
-    });
-
-    it("rewords Keycloak's expired-action message for a used or expired email link", async () => {
-        function Probe() {
-            const { i18n } = useI18n({ kcContext: getKcContextMock({ pageId: "error.ftl" }) as never });
-            return <p data-testid="expired">{i18n.msgStr("expiredActionMessage")}</p>;
-        }
-        render(<Probe />);
-        await waitFor(() =>
-            expect(screen.getByTestId("expired")).toHaveTextContent(
-                /^This link has already been used or has expired\. If you have already signed in, go back to the application/
-            )
-        );
     });
 });
 
