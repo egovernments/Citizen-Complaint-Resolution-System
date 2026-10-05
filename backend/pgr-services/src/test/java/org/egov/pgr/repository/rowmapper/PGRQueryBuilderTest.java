@@ -174,4 +174,54 @@ class PGRQueryBuilderTest {
         assertTrue(query.contains("1 = 0"));
         assertFalse(query.contains("ads.locality IN"));
     }
+
+    // Live repro: GRO (WATER, county) assigned a WT_WARD_B complaint to an LME scoped to
+    // WT_WARD_A; the LME's search returned nothing. The scope predicate must admit the caller's
+    // own-assigned complaints, OR'd only against the department/jurisdiction axes.
+    @Test
+    void ownAssignedComplaintsAreOrdIntoDepartmentAndJurisdictionScope() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("WATER"), List.of("WT_WARD_A"),
+                java.util.Set.of("PGR-ASSIGNED"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+        String flat = query.replaceAll("\\s+", " ");
+
+        // tenant stays ANDed outside the OR; dept AND jurisdiction are grouped, then OR own-assigned
+        assertTrue(flat.contains("AND ser.tenantId = ? AND ( ( 1 = 1 AND ser.additionaldetails->>'department' IN ( ? ) AND ads.locality IN ( ? ) ) OR ser.serviceRequestId IN ( ? ) )"),
+                flat);
+        assertTrue(preparedStmtList.contains("PGR-ASSIGNED"));
+        assertTrue(preparedStmtList.contains("WT_WARD_A"));
+        assertTrue(preparedStmtList.contains("WATER"));
+        // placeholders and bind values stay aligned
+        assertEquals(query.chars().filter(c -> c == '?').count(), preparedStmtList.size());
+    }
+
+    @Test
+    void withoutOwnAssignedTheScopeStillExcludesOutOfJurisdictionComplaints() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("WATER"), List.of("WT_WARD_A"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("ads.locality IN"));
+        assertFalse(query.contains(" OR ser.serviceRequestId IN"));
+    }
+
+    @Test
+    void ownAssignedNeverRelaxesCitizenOrUnrestrictedScopes() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        // No department/jurisdiction restriction => nothing to OR into; citizen-self stays ANDed.
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null,
+                java.util.Set.of("PGR-ASSIGNED"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("ser.accountId = ?"));
+        assertFalse(query.contains("ser.serviceRequestId IN"));
+        assertFalse(preparedStmtList.contains("PGR-ASSIGNED"));
+    }
 }

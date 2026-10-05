@@ -1,6 +1,7 @@
 package org.egov.pgr.policy;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Server-resolved ABAC scope for everything that reads complaints — a pure value object
@@ -19,6 +20,11 @@ import java.util.List;
  *                      assignments — exact-matched against a complaint's address locality on the
  *                      search path, and matched as a segment of the '|'-joined boundary_path on the
  *                      analytics grains, which is the same test against a different storage shape.
+ * - ownAssignedServiceRequestIds: complaints whose CURRENT workflow assignee is the caller, resolved
+ *                      server-side from workflow (never from the request). These are visible even
+ *                      when they fall outside the department/jurisdiction axes — an employee must
+ *                      always be able to see and act on what workflow has assigned to them. They
+ *                      never relax the tenant or citizen-self axes. Null/empty = no exception.
  */
 public final class PgrSearchScope {
     public final String tenantId;
@@ -26,14 +32,39 @@ public final class PgrSearchScope {
     public final String citizenUuid;              // nullable: set => restrict to this account
     public final List<String> departmentCodes;    // nullable/empty => no department restriction
     public final List<String> jurisdictionCodes;  // nullable/empty => no jurisdiction restriction
+    public final Set<String> ownAssignedServiceRequestIds; // nullable/empty => no own-assigned exception
 
     public PgrSearchScope(String tenantId, boolean tenantStateLevel, String citizenUuid,
                            List<String> departmentCodes, List<String> jurisdictionCodes) {
+        this(tenantId, tenantStateLevel, citizenUuid, departmentCodes, jurisdictionCodes, null);
+    }
+
+    public PgrSearchScope(String tenantId, boolean tenantStateLevel, String citizenUuid,
+                           List<String> departmentCodes, List<String> jurisdictionCodes,
+                           Set<String> ownAssignedServiceRequestIds) {
         this.tenantId = tenantId;
         this.tenantStateLevel = tenantStateLevel;
         this.citizenUuid = citizenUuid;
         this.departmentCodes = departmentCodes;
         this.jurisdictionCodes = jurisdictionCodes;
+        this.ownAssignedServiceRequestIds = ownAssignedServiceRequestIds;
+    }
+
+    /** True when the department or jurisdiction axis restricts this scope at all. */
+    public boolean restrictsDepartmentOrJurisdiction() {
+        return departmentCodes != null || jurisdictionCodes != null;
+    }
+
+    /** Copy of this scope that also admits the caller's currently-assigned complaints. */
+    public PgrSearchScope withOwnAssigned(Set<String> serviceRequestIds) {
+        return new PgrSearchScope(tenantId, tenantStateLevel, citizenUuid, departmentCodes, jurisdictionCodes,
+                serviceRequestIds);
+    }
+
+    /** Whether this complaint is one workflow currently assigns to the caller. */
+    public boolean isOwnAssigned(String serviceRequestId) {
+        return serviceRequestId != null && ownAssignedServiceRequestIds != null
+                && ownAssignedServiceRequestIds.contains(serviceRequestId);
     }
 
     /**

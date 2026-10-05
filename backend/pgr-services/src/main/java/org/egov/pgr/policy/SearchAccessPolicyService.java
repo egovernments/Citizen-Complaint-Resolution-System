@@ -128,6 +128,12 @@ public class SearchAccessPolicyService {
 
         List<ServiceWrapper> allowed = new ArrayList<>();
         for (ServiceWrapper wrapper : wrappers) {
+            // Mirrors Tier-1 (PGRQueryBuilder#applyScope): a complaint workflow currently assigns
+            // to the caller is always visible to them, whatever their department/jurisdiction.
+            if (scope.isOwnAssigned(wrapper.getService().getServiceRequestId())) {
+                allowed.add(wrapper);
+                continue;
+            }
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("user", userDoc);
             data.put("resource", inputBuilder.buildResourceDoc(wrapper.getService()));

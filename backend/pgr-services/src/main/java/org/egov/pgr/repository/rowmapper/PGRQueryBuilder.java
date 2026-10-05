@@ -283,8 +283,19 @@ public class PGRQueryBuilder {
         // instead of a true empty one for that case today, but this must independently enforce
         // deny-all (not silently drop the axis and return unrestricted rows) if that contract ever
         // regresses upstream (#1441 review).
+        if (!scope.restrictsDepartmentOrJurisdiction())
+            return;
+
+        // Department AND jurisdiction, OR'd with the caller's own currently-assigned complaints
+        // (resolved server-side from workflow, see PGRService). An employee must always be able
+        // to see what workflow assigned to them, even when a GRO routed it outside their
+        // department/jurisdiction. Tenant and citizen-self predicates above stay ANDed.
+        boolean ownAssigned = !CollectionUtils.isEmpty(scope.ownAssignedServiceRequestIds);
+        addClauseIfRequired(preparedStmtList, builder);
+        builder.append(" ( ( 1 = 1 ");
+
         if (scope.departmentCodes != null) {
-            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" AND");
             if (scope.departmentCodes.isEmpty()) {
                 builder.append(" 1 = 0 ");
             } else {
@@ -294,7 +305,7 @@ public class PGRQueryBuilder {
         }
 
         if (scope.jurisdictionCodes != null) {
-            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" AND");
             if (scope.jurisdictionCodes.isEmpty()) {
                 builder.append(" 1 = 0 ");
             } else {
@@ -302,6 +313,13 @@ public class PGRQueryBuilder {
                 addToPreparedStatement(preparedStmtList, scope.jurisdictionCodes);
             }
         }
+
+        builder.append(" ) ");
+        if (ownAssigned) {
+            builder.append(" OR ser.serviceRequestId IN (").append(createQuery(scope.ownAssignedServiceRequestIds)).append(")");
+            addToPreparedStatement(preparedStmtList, scope.ownAssignedServiceRequestIds);
+        }
+        builder.append(" ) ");
     }
 
 

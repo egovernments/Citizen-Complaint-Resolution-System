@@ -4,6 +4,7 @@ package org.egov.pgr.service;
 import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.User;
 import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.AccessPolicyRegistry;
@@ -171,7 +172,8 @@ public class PGRService {
             return new ArrayList<>();
 
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        PgrSearchScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        PgrSearchScope scope = withOwnAssigned(requestInfo, tenantIdForScope,
+                searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength()));
 
         if (criteria.getAssignee() != null) {
             String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
@@ -355,11 +357,37 @@ public class PGRService {
 
         criteria.setIsPlainSearch(false);
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        PgrSearchScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        PgrSearchScope scope = withOwnAssigned(requestInfo, tenantIdForScope,
+                searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength()));
         Integer count = repository.getCount(criteria, scope);
         return count;
     }
 
+
+    /**
+     * Adds the caller's currently-assigned complaints to a department/jurisdiction-restricted
+     * employee scope, so an employee can always find what workflow has assigned to them — e.g.
+     * a GRO routing a ward-B complaint to a ward-A LME. Resolved exactly like the "My" assignee
+     * filter (workflow process search by assignee). Never widens anything else: citizens,
+     * unrestricted scopes, and the tenant axis are untouched, and a workflow failure leaves the
+     * scope as it was (no exception, not a wider one).
+     */
+    private PgrSearchScope withOwnAssigned(RequestInfo requestInfo, String tenantId, PgrSearchScope scope) {
+        if (scope == null || scope == PgrSearchScope.UNRESTRICTED || scope.citizenUuid != null
+                || !scope.restrictsDepartmentOrJurisdiction())
+            return scope;
+        User user = requestInfo == null ? null : requestInfo.getUserInfo();
+        if (user == null || user.getUuid() == null || !"EMPLOYEE".equalsIgnoreCase(user.getType()))
+            return scope;
+        try {
+            Set<String> assigned = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, user.getUuid());
+            return CollectionUtils.isEmpty(assigned) ? scope : scope.withOwnAssigned(assigned);
+        } catch (Exception e) {
+            log.warn("PGRService: could not resolve own-assigned complaints for uuid={} tenant={} — searching without them: {}",
+                    user.getUuid(), tenantId, e.getMessage());
+            return scope;
+        }
+    }
 
     public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         validator.validatePlainSearch(criteria);

@@ -122,6 +122,25 @@ class SearchAccessPolicyServiceTest {
     }
 
     @Test
+    void ownAssignedComplaintOutsideJurisdictionIsKeptButOthersStillDenied() {
+        // Live repro: a GRO assigned a WT_WARD_B complaint to a WT_WARD_A LME. The LME must still
+        // see it; a different out-of-jurisdiction complaint stays hidden.
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, List.of("WATER"), List.of("WT_WARD_A"),
+                java.util.Set.of("PGR-ASSIGNED"));
+        RequestInfo requestInfo = requestInfo("lme-1", "EMPLOYEE");
+
+        ServiceWrapper assigned = wrapper("citizen-1", "WATER", "WT_WARD_B", TENANT_ID);
+        assigned.getService().setServiceRequestId("PGR-ASSIGNED");
+        ServiceWrapper other = wrapper("citizen-2", "WATER", "WT_WARD_B", TENANT_ID);
+        other.getService().setServiceRequestId("PGR-OTHER");
+
+        List<ServiceWrapper> result = service.enforce(requestInfo, TENANT_ID, scope, List.of(assigned, other));
+
+        assertEquals(1, result.size());
+        assertEquals("PGR-ASSIGNED", result.get(0).getService().getServiceRequestId());
+    }
+
+    @Test
     void employeeWithWrongJurisdictionIsDeniedRegardlessOfDepartment() {
         PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, null, List.of("WARD_5"));
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
