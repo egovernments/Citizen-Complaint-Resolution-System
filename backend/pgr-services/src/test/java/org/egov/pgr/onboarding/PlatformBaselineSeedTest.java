@@ -53,6 +53,18 @@ public class PlatformBaselineSeedTest {
             assertTrue(row.path("uniqueIdentifier").asText() + " has no action", actions.contains(row.path("data").path("actionid").asText()));
     }
 
+    // mdms-v2 validates with everit 1.5.1, which ignores "const" and "not" next to "type"; it applies
+    // "pattern" with java.util.regex find(), so a negative lookahead is what rejects the reserved name.
+    @Test public void hierarchySchemaRejectsTheReservedWorkspaceHierarchy() {
+        JsonNode hierarchy = null;
+        for (JsonNode s : seed.schemas()) if ("CMS-BOUNDARY.HierarchySchema".equals(s.path("code").asText()))
+            hierarchy = s.path("definition").path("properties").path("hierarchy");
+        assertNotNull("CMS-BOUNDARY.HierarchySchema not seeded", hierarchy);
+        Pattern pattern = Pattern.compile(hierarchy.path("pattern").asText());
+        assertFalse(pattern.matcher("WORKSPACE").find());
+        for (String ok : List.of("ADMIN", "REVENUE", "WORKSPACE_X", "MY_WORKSPACE")) assertTrue(ok, pattern.matcher(ok).find());
+    }
+
     @Test public void everyRecordHasASeededSchema() {
         Set<String> schemas = new HashSet<>(); seed.schemas().forEach(s -> schemas.add(s.path("code").asText()));
         for (JsonNode row : seed.records())
