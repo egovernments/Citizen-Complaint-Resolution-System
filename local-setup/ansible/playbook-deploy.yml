@@ -553,15 +553,13 @@
     # The legacy Keycloak UI login path is GONE as of #2088: the `/kc` Kong
     # route in front of token-exchange-svc, the per-tenant realm template and
     # its `digit-ui` public client were all removed in favour of the Identity
-    # BFF at `/identity/v1`. Both frontends still resolve `auth_provider:
-    # keycloak` to that old path — digit-ui-esbuild through
-    # globalConfigs.tokenExchangeUrl (`/kc`) and digit-ui-v2 through its
-    # baked VITE_TOKEN_EXCHANGE_URL (`/token-exchange`) plus a realm named
-    # after state_tenant_id — so a tenant that sets it now gets 404s at login
-    # instead of SSO. The frontend cutover is a separate change; until it
-    # lands, refuse the combination rather than ship a login that cannot work.
-    # (Dhruv review, #2088.)
-    - name: "preflight — Keycloak UI login is unavailable until the frontend cutover"
+    # BFF at `/identity/v1`. `auth_provider: keycloak` selected that old
+    # browser-adapter path, and D26 removed the frontend code that read it, so
+    # the key is retired: every sign-in goes through the Identity BFF whatever
+    # it says. A host_vars that still sets `keycloak` was written for the old
+    # path, so refuse it rather than let the operator think it does something.
+    # (Dhruv review, #2088; wording updated for #2271 review 3.)
+    - name: "preflight — refuse the retired auth_provider: keycloak"
       vars:
         _keycloak_login_surfaces: >-
           {{ {'auth_provider': auth_provider | default(''),
@@ -574,17 +572,15 @@
           host_vars for {{ inventory_hostname }} selects Keycloak login on:
           {{ _keycloak_login_surfaces | join(', ') }}
 
-          That path no longer exists. #2088 replaced it with the Identity BFF
-          (`/identity/v1`) and removed what the old auth-adapter called:
-            - the `/kc` Kong route in front of token-exchange-svc,
-            - the per-tenant Keycloak realm named after state_tenant_id,
-            - the `digit-ui` public client in that realm.
-          Deploying this would give every user a 404 at login.
+          That browser-adapter path no longer exists. #2088 replaced it with
+          the Identity BFF (`/identity/v1`) and removed what it called (the
+          `/kc` Kong route, the per-tenant realm named after state_tenant_id
+          and its `digit-ui` client); D26 removed the frontend code that read
+          these keys.
 
-          Leave these keys unset (or 'digit') until the frontend cutover lands.
-          `enable_keycloak: true` on its own is fine and is what stands up
-          Keycloak, the Identity BFF and `/identity/v1` — it does not require
-          flipping auth_provider.
+          Delete these keys (or set them to 'digit'). Every employee and
+          citizen sign-in already goes through Keycloak and the Identity BFF;
+          `enable_keycloak: true` is what stands them up.
       when: _keycloak_login_surfaces | length > 0
 
     # D26 removed every sign-in path that did not go through the Identity BFF:
@@ -606,7 +602,10 @@
           in host_vars/{{ inventory_hostname }}.yml, with keycloak_admin_password,
           keycloak_db_password and identity_digit_admin_password in
           bootstrap_secrets (or OpenBao). See the Keycloak section of
-          host_vars/_example.yml.
+          host_vars/_example.yml. With enable_novu, either Novu dashboard
+          works alongside it: nginx routes Keycloak's /auth/realms/ and
+          /auth/resources/ ahead of the stock dashboard's /auth/ paths, though
+          `build_novu_dashboard: true` remains the cleaner setup.
       when: not (enable_keycloak | default(false) | bool)
 
     - name: "preflight — refuse retired digit-ui-v2 citizen identity"

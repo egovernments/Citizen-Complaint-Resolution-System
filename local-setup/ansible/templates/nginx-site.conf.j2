@@ -450,8 +450,11 @@ server {
   #
   # ⚠ WORKAROUND. Proper fix: set `build_novu_dashboard: true` to build the
   # subpath-rebased image (build/novu-dashboard/Dockerfile); then this branch is
-  # replaced by the tidy one above. The stock branch ALSO hijacks the entire
-  # `/auth/` prefix, so it is unsafe to combine with Keycloak on the same domain.
+  # replaced by the tidy one above. The stock branch ALSO claims the `/auth/`
+  # prefix. With enable_keycloak, Keycloak's public paths (/auth/realms/ and
+  # /auth/resources/) are carved back out by `^~` locations further down, so
+  # the two coexist on one domain; everything else under /auth/ is the
+  # dashboard's (Kong denies the rest of Keycloak's surface anyway).
   location = /novu { return 302 /novu/; }
   location /novu/ {
     proxy_pass http://127.0.0.1:14000/novu/;
@@ -496,9 +499,10 @@ server {
   # route from Kong (e.g. the keycloak-route in kong.yml). Without
   # this proxy, hard-refreshes at /auth/* fall through to Kong's
   # /auth → keycloak upstream and 500 with a DNS resolve failure
-  # when keycloak isn't deployed. ⚠ This shadows ALL of /auth/, so do
-  # not enable the stock branch on a domain that also runs Keycloak —
-  # use build_novu_dashboard: true (rebased branch) there instead.
+  # when keycloak isn't deployed. With enable_keycloak, the `^~`
+  # /auth/realms/ and /auth/resources/ locations below are longer
+  # prefixes and win, so Keycloak's login pages, forms and theme assets
+  # never reach the dashboard (#2271 review 3).
   location /auth/ {
     proxy_pass http://127.0.0.1:14000;
     proxy_set_header Host $host;
@@ -638,14 +642,21 @@ server {
   }
 
 {% if enable_keycloak | default(false) %}
-  # Keycloak login/token endpoints (via Kong's /auth route). X-Forwarded-For is
-  # SET to the peer address, never appended: Keycloak (KC_PROXY_HEADERS=
-  # xforwarded) takes the LEFTMOST entry as the client IP, and Kong always
+  # Keycloak's public surface (via Kong's /auth route): /auth/realms/ is the
+  # OIDC endpoints, login/registration forms and account console;
+  # /auth/resources/ is the login theme's CSS, JS and images. Kong denies the
+  # rest (keycloak-admin-denied). Both are `^~` so they also beat the stock
+  # Novu dashboard's `location /auth/` above, which would otherwise serve the
+  # login page without its stylesheets and scripts.
+  #
+  # X-Forwarded-For is SET to the peer address, never appended: Keycloak
+  # (KC_PROXY_HEADERS=xforwarded) takes the LEFTMOST entry as the client IP, and Kong always
   # appends its own peer, so an appended client-supplied header would let a
   # caller pick the client IP Keycloak records (brute-force detection, events).
   # Behind a load balancer, give this server `set_real_ip_from <LB range>;` and
   # `real_ip_header X-Forwarded-For;` so $remote_addr is the client, not the LB.
-  location ^~ /auth/realms/ {
+{% for keycloak_path in ['/auth/realms/', '/auth/resources/'] %}
+  location ^~ {{ keycloak_path }} {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_kong_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -659,6 +670,7 @@ server {
     proxy_buffer_size 64k;
     proxy_buffers 8 64k;
   }
+{% endfor %}
 
 {% endif %}
 {% if digit_ui_mode == "static" %}

@@ -135,8 +135,9 @@ pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 
 # Build a subpath-rebased Novu dashboard image so the SPA serves cleanly
-# under /novu. REQUIRED here: Keycloak (enable_keycloak below) shares this
-# domain, and the stock dashboard's nginx workaround hijacks all of /auth/.
+# under /novu. Recommended: the stock dashboard's nginx workaround claims
+# root paths (/assets/, /auth/ ...) on the domain Keycloak also uses; nginx
+# keeps Keycloak's /auth/realms/ and /auth/resources/ ahead of it either way.
 build_novu_dashboard: true
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>

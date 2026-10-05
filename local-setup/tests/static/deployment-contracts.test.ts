@@ -168,8 +168,8 @@ describe('ansible playbook-deploy.yml', () => {
   });
 
   // #2088, Dhruv review finding 6. The `/kc` route, the per-tenant realm and
-  // its `digit-ui` client are gone, so `auth_provider: keycloak` is a 404 at
-  // login until the frontend cutover onto /identity/v1 lands.
+  // its `digit-ui` client are gone, and D26 removed the frontend code that read
+  // `auth_provider`, so a host_vars still saying `keycloak` is refused.
   test('refuses to deploy a frontend still pointed at the removed Keycloak login', () => {
     const start = playbook.indexOf('_keycloak_login_surfaces:');
     expect(start).toBeGreaterThan(-1);
@@ -657,13 +657,31 @@ describe('Keycloak realm proxy client address', () => {
   // Deliberately NOT $proxy_add_x_forwarded_for: Keycloak takes the leftmost
   // X-Forwarded-For entry, so appending would let a caller choose the IP that
   // brute-force detection records. Behind an LB, use nginx realip instead.
-  test('/auth/realms/ sets X-Forwarded-For to the peer address', () => {
-    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
-    const block = /location \^~ \/auth\/realms\/ \{([\s\S]*?)\n  \}/.exec(nginx);
-    expect(block).not.toBeNull();
-    expect(block![1]).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
-    expect(block![1]).not.toContain('$proxy_add_x_forwarded_for');
-    expect(nginx).toMatch(/set_real_ip_from[\s\S]{0,200}location \^~ \/auth\/realms\//);
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const loop = /\{% for keycloak_path in \[([^\]]+)\] %\}\n  location \^~ \{\{ keycloak_path \}\} \{([\s\S]*?)\n  \}\n\{% endfor %\}/.exec(nginx);
+
+  test('/auth/realms/ and /auth/resources/ set X-Forwarded-For to the peer address', () => {
+    expect(loop).not.toBeNull();
+    expect(loop![1]).toBe("'/auth/realms/', '/auth/resources/'");
+    expect(loop![2]).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(loop![2]).not.toContain('$proxy_add_x_forwarded_for');
+    expect(nginx).toMatch(/set_real_ip_from[\s\S]{0,200}\{% for keycloak_path in/);
+  });
+
+  // #2271 review 3, item 3: the stock Novu dashboard claims `location /auth/`,
+  // which caught Keycloak's theme assets at /auth/resources/ and broke the
+  // login page on any box that ran both. The Keycloak locations are longer
+  // `^~` prefixes, so nginx picks them over /auth/ (verified by rendering the
+  // template into nginx:alpine with stock Novu + Keycloak).
+  test('Keycloak public paths win over the stock Novu dashboard /auth/ catch-all', () => {
+    const stock = nginx.slice(nginx.indexOf('# Novu dashboard (SPA) — STOCK image.'));
+    expect(stock).toMatch(/\n  location \/auth\/ \{\n    proxy_pass http:\/\/127\.0\.0\.1:14000;/);
+    expect(nginx.indexOf('{% if enable_keycloak | default(false) %}\n  # Keycloak\'s public surface'))
+      .toBeGreaterThan(-1);
+    expect(nginx).not.toContain('unsafe to combine with Keycloak');
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).toContain("nginx routes Keycloak's /auth/realms/ and\n          /auth/resources/ ahead of the stock dashboard's /auth/ paths");
+    expect(playbook).not.toContain('until the frontend cutover');
   });
 });
 

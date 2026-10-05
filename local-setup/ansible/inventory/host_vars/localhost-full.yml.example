@@ -270,9 +270,9 @@ enable_novu: true
 notifications_adopt_defaults: true
 
 # Build a subpath-rebased Novu dashboard so the SPA serves cleanly under /novu.
-# Values: true | false. REQUIRED true when Keycloak shares the domain (it does
-# here), because the stock image's nginx workaround hijacks the whole /auth/
-# prefix.
+# Values: true | false. Recommended true: the stock image's nginx workaround
+# claims root paths (/assets/, /auth/ ...); nginx keeps Keycloak's
+# /auth/realms/ and /auth/resources/ ahead of it either way.
 build_novu_dashboard: true
 
 # Novu API key, copied from the dashboard after first sign-up. Empty (here)
