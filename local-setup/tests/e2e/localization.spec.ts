@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { appBase } from './utils/auth';
 
 test.describe('Login page localization', () => {
   test('loads localization messages and renders translated labels', async ({ page }) => {
@@ -19,7 +20,7 @@ test.describe('Login page localization', () => {
 
     // Navigate to the login page — don't wait for networkidle since
     // the DIGIT SPA shows a spinner while React boots and fetches data
-    await page.goto('/digit-ui/employee/user/login');
+    await page.goto(`${appBase()}/employee/user/login`);
 
     // Wait for the login form to render — this means the React app has
     // booted, fetched MDMS config, fetched localization, and rendered
@@ -90,7 +91,7 @@ test.describe('Login page localization', () => {
   });
 
   test('city dropdown shows translated tenant names', async ({ page }) => {
-    await page.goto('/digit-ui/employee/user/login');
+    await page.goto(`${appBase()}/employee/user/login`);
 
     // Wait for login form to render
     const loginForm = page.locator('form, [class*="login"], [class*="Login"]');
@@ -147,7 +148,7 @@ test.describe('Login page localization', () => {
   });
 
   test('login and verify internal page localization', async ({ page }) => {
-    await page.goto('/digit-ui/employee/user/login');
+    await page.goto(`${appBase()}/employee/user/login`);
 
     // Wait for login form to render
     const loginForm = page.locator('form, [class*="login"], [class*="Login"]');

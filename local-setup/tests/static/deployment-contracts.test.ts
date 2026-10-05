@@ -1920,6 +1920,31 @@ describe('D26 legacy identity paths are retired', () => {
     expect(read('local-setup/ansible/templates/globalConfigs.js.j2')).not.toContain('login_tenant_allowlist');
   });
 
+  // Low (Dhruv, #2271 review 3): ~38 Playwright navigations across the spec
+  // and page files still opened tenantless /digit-ui/<route> URLs, which D26
+  // turns into a 404 or a redirect to the deployment default. They go through
+  // appBase() (/<E2E_TENANT_SLUG>/digit-ui) now. The one tenantless URL left
+  // is the static globalConfigs.js that loginViaApi uses to set the origin.
+  test('Playwright specs navigate only to tenant-scoped digit-ui routes', () => {
+    const e2eDir = path.join(REPO_ROOT, 'local-setup/tests/e2e');
+    const files = (fs.readdirSync(e2eDir, { recursive: true }) as string[])
+      .filter((f) => f.endsWith('.ts') && !f.includes('node_modules'));
+    const tenantless: string[] = [];
+    let scoped = 0;
+    for (const file of files) {
+      const body = fs.readFileSync(path.join(e2eDir, file), 'utf8');
+      for (const m of body.matchAll(/goto\(\s*([`'"])([^`'"]*)/g)) {
+        if (m[2].includes('${appBase()}')) scoped += 1;
+        if (/^(?:\$\{[A-Za-z_.]+\})?\/digit-ui\//.test(m[2]) && !m[2].endsWith('/digit-ui/globalConfigs.js')) {
+          tenantless.push(`${file}: ${m[2]}`);
+        }
+      }
+      expect([file, /^const \w+ = '\/digit-ui\//m.test(body)]).toEqual([file, false]);
+    }
+    expect(tenantless).toEqual([]);
+    expect(scoped).toBeGreaterThanOrEqual(38);
+  });
+
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
     expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
     expect(playbook).toContain('D26 retired its fixed-OTP');

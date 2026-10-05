@@ -30,6 +30,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { appBase } from '../../utils/auth';
 
 // Visible text that looks like a raw localization key: uppercase
 // letter/digit run with at least one `.`/`_` separator. Matches
@@ -93,7 +94,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
     );
 
     await citizenOtpLogin(page);
-    await page.goto('/digit-ui/citizen/pgr/create-complaint/complaint-type');
+    await page.goto(`${appBase()}/citizen/pgr/create-complaint/complaint-type`);
 
     const nextBtn = page.getByRole('button', { name: /^next$/i });
 
@@ -239,7 +240,7 @@ test.describe.serial('Citizen complaint submit + view', () => {
     // reference must be retrievable from a clean session, not just the
     // one that submitted it.
     await citizenOtpLogin(page);
-    await page.goto('/digit-ui/citizen');
+    await page.goto(`${appBase()}/citizen`);
 
     // "My Complaints" on the V2 citizen home is a card / link / button
     // depending on the layout — match on accessible name, click

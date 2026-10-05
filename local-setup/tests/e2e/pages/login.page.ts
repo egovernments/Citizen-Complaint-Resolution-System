@@ -1,4 +1,5 @@
 import { type Page, type Locator } from '@playwright/test';
+import { appBase } from '../utils/auth';
 
 export class LoginPage {
   readonly page: Page;
@@ -17,7 +18,7 @@ export class LoginPage {
   }
 
   async goto() {
-    await this.page.goto('/digit-ui/employee/user/login', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    await this.page.goto(`${appBase()}/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   }
 
   async waitForReady() {
