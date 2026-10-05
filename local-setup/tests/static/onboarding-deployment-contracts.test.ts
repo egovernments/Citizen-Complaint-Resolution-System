@@ -38,6 +38,14 @@ describe('PGR onboarding cutover deployment contract', () => {
     expect(setting(pgr, 'PGR_ONBOARDING_RUNNER_ENABLED')).toBe('${PGR_ONBOARDING_RUNNER_ENABLED:-true}');
   });
 
+  test('the external worker lease API and its token are gone; only the in-process runner claims work', () => {
+    expect(pgr).not.toMatch(/^      PGR_ONBOARDING_WORKER_TOKEN:/m);
+    expect(read('backend/pgr-services/src/main/resources/application.properties')).not.toMatch(/pgr\.onboarding\.worker\.|PGR_ONBOARDING_WORKER_TOKEN/);
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    expect(playbook).not.toMatch(/pgr_onboarding_worker_token|PGR_ONBOARDING_WORKER_TOKEN/);
+    expect(fs.existsSync(path.join(root, 'backend/pgr-services/src/main/java/org/egov/pgr/web/controllers/OnboardingWorkerController.java'))).toBe(false);
+  });
+
   test('workspace writes have a separate Kong origin with no implicit internal fallback', () => {
     expect(setting(pgr, 'EGOV_GATEWAY_HOST')).toBe('http://kong:8000');
     const properties = read('backend/pgr-services/src/main/resources/application.properties');
