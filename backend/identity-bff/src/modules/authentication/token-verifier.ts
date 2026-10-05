@@ -97,6 +97,8 @@ export async function validateJwt(
         (verified.organization as KeycloakClaims["organization"]) || undefined,
       nonce: (verified.nonce as string) || undefined,
       azp: (verified.azp as string) || undefined,
+      // Keycloak's session id: matches events to BFF sessions (§10) and keys the kc-session index.
+      sid: typeof verified.sid === "string" && verified.sid ? verified.sid : undefined,
       realm,
     };
   } catch (err) {

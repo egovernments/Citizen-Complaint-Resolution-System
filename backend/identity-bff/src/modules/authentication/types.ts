@@ -13,6 +13,8 @@ export interface KeycloakClaims {
   organization?: Record<string, KeycloakOrganizationClaim>;
   nonce?: string;
   azp?: string;
+  /** Keycloak session id; stored as the session record's `kcSessionId` (§6, §10). */
+  sid?: string;
   realm?: string;
 }
 

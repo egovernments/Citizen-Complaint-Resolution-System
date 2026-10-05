@@ -280,7 +280,7 @@ export async function saveIdentitySession(
       revocationGeneration: previous?.revocationGeneration ?? Number(await getRedis().get(revocationGenerationKey(claims.sub)) || 0),
       createdAt: previous?.createdAt ?? now,
       lastSeenAt: now,
-      kcSessionId: (claims as KeycloakClaims & { sid?: string }).sid ?? previous?.kcSessionId,
+      kcSessionId: claims.sid ?? previous?.kcSessionId,
       ...(claims.phone_number && { phoneRef: privateRef("phone", claims.phone_number) }),
       ...(oidcClientId && { oidcClientId }),
       // Configurator is the default surface and needs no tenant binding.
