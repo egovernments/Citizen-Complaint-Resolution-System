@@ -135,3 +135,18 @@ describe('PGR onboarding cutover deployment contract', () => {
     expect(values).toMatch(/- name: DIGIT_PROVISIONER_PASSWORD\n    valueFrom:\n      secretKeyRef:/);
   });
 });
+
+describe('pgr-services onboarding reserves the canonical URL slugs (identity-bff docs §2.4.1)', () => {
+  test('OnboardingIdentifierService.RESERVED_URL_SLUGS equals the documented list', () => {
+    const doc = read('backend/identity-bff/docs/identity-bff.md');
+    const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+    expect(block).not.toBeNull();
+    const documented = block![1].split('\n').map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line));
+    const java = read('backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingIdentifierService.java');
+    const list = /RESERVED_URL_SLUGS = Set\.of\(([\s\S]*?)\);/.exec(java);
+    expect(list).not.toBeNull();
+    const reserved = [...list![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(documented.length).toBeGreaterThan(10);
+    expect(reserved.sort()).toEqual(documented.sort());
+  });
+});
