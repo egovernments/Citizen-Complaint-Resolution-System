@@ -60,8 +60,9 @@ public class WorkspaceRouteTest {
     }
     private void mdms(String schema,String json) throws Exception {when(mdms.records("example",schema,"tenant.tenants".equals(schema)?"example":null)).thenReturn(mapper.readTree(json));}
     private void boundaries(String children) throws Exception {
-        when(client.read(eq("boundary"),eq("/boundary-service/boundary-relationships/_search?tenantId=example&hierarchyType=ADMIN&codes=example&includeChildren=true"),any()))
-                .thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"example\",\"children\":"+children+"}]}]}"));
+        mdms("CMS-BOUNDARY.HierarchySchema","[{\"tenantId\":\"example\",\"data\":{\"moduleName\":\"CMS\",\"hierarchy\":\"ADMIN\"}}]");
+        when(client.read(eq("boundary"),eq("/boundary-service/boundary-relationships/_search?tenantId=example&hierarchyType=ADMIN&includeChildren=true"),any()))
+                .thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":"+children+"}]}]}"));
     }
     private static final String WATER="{\"tenantId\":\"example\",\"data\":{\"code\":\"WATER\",\"active\":true}}";
     @Test public void probesExcludePlatformPrerequisitesAndInactiveRows() throws Exception {
@@ -103,9 +104,14 @@ public class WorkspaceRouteTest {
         mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"A\",\"department\":\"WATER\",\"slaHours\":24}}]");
         assertTrue(gateway.probe("example","COMPLAINT_TYPES"));
     }
-    @Test public void geographyNeedsABoundaryReachableUnderTheRoot() throws Exception {
-        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"ORPHAN\",\"children\":[]}]}]}"));
-        assertFalse(gateway.probe("example","GEOGRAPHY"));
+    @Test public void geographyNeedsTwoLevelsInTheTenantsOwnHierarchy() throws Exception {
+        when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
+        when(client.read(eq("boundary"),anyString(),any())).thenReturn(mapper.readTree("{\"TenantBoundary\":[{\"boundary\":[{\"code\":\"COUNTY\",\"children\":[{\"code\":\"WARD_1\"}]}]}]}"));
+        assertFalse(gateway.probe("example","GEOGRAPHY"));                                           // no HierarchySchema record yet
+        mdms("CMS-BOUNDARY.HierarchySchema","[{\"tenantId\":\"example\",\"data\":{\"moduleName\":\"CMS\",\"hierarchy\":\"WORKSPACE\"}}]");
+        assertFalse(gateway.probe("example","GEOGRAPHY"));                                           // the founder's reserved root never counts
+        mdms("CMS-BOUNDARY.HierarchySchema","[{\"tenantId\":\"parent\",\"data\":{\"moduleName\":\"CMS\",\"hierarchy\":\"ADMIN\"}}]");
+        assertFalse(gateway.probe("example","GEOGRAPHY"));                                           // inherited record is not the tenant's
         boundaries("[]");assertFalse(gateway.probe("example","GEOGRAPHY"));
         boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");assertTrue(gateway.probe("example","GEOGRAPHY"));
     }

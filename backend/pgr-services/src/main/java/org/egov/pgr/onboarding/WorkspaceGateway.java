@@ -66,10 +66,15 @@ public class WorkspaceGateway {
                 return false;
             }
             case "GEOGRAPHY": {
-                JsonNode trees=client.read("boundary","/boundary-service/boundary-relationships/_search?tenantId="+tenant+"&hierarchyType=ADMIN&codes="+tenant+"&includeChildren=true",Map.of()).path("TenantBoundary");
+                // The founder's hierarchy is the one the tenant's CMS HierarchySchema names; the baseline's WORKSPACE root never counts.
+                String hierarchy=null;
+                for(JsonNode row:mdms.records(tenant,"CMS-BOUNDARY.HierarchySchema",null)) if(ownedActive(row,tenant) && "CMS".equals(row.path("data").path("moduleName").asText()))hierarchy=row.path("data").path("hierarchy").asText("");
+                if(hierarchy==null || hierarchy.isBlank() || "WORKSPACE".equals(hierarchy))return false;
+                JsonNode trees=client.read("boundary","/boundary-service/boundary-relationships/_search?tenantId="+tenant+"&hierarchyType="+URLEncoder.encode(hierarchy,StandardCharsets.UTF_8)+"&includeChildren=true",Map.of()).path("TenantBoundary");
                 requireArray(trees);
-                for(JsonNode tree:trees) for(JsonNode root:tree.path("boundary")) if(tenant.equals(root.path("code").asText()))
-                    for(JsonNode child:root.path("children")) if(!child.path("code").asText().isBlank() && !tenant.equals(child.path("code").asText()))return true;
+                // At least two levels: some root has a child.
+                for(JsonNode tree:trees) for(JsonNode root:tree.path("boundary"))
+                    for(JsonNode child:root.path("children")) if(!child.path("code").asText().isBlank())return true;
                 return false;
             }
             case "EMPLOYEES": {

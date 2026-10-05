@@ -20,7 +20,8 @@ public class PlatformBaselineGrantsTest {
             "/mdms-v2/v2/_create/RAINMAKER-PGR.ComplaintHierarchy", "/mdms-v2/v2/_update/RAINMAKER-PGR.ComplaintHierarchy",
             "/mdms-v2/v2/_create/common-masters.Department", "/mdms-v2/v2/_update/common-masters.Department",
             "/mdms-v2/v2/_create/common-masters.Designation", "/mdms-v2/v2/_update/common-masters.Designation",
-            "/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig", "/mdms-v2/v2/_update/RAINMAKER-PGR.MapConfig");
+            "/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig", "/mdms-v2/v2/_update/RAINMAKER-PGR.MapConfig",
+            "/mdms-v2/v2/_create/CMS-BOUNDARY.HierarchySchema");
 
     @Test public void everyWorkspaceSetupMdmsWriteIsGrantedToAFounderRole() throws Exception {
         var seed = new PlatformBaseline(new ObjectMapper());

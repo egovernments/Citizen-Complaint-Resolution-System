@@ -50,7 +50,7 @@ public class OnboardingStepsTest {
                 if(path.contains("_search"))return mapper.valueToTree(Map.of("BusinessServices",workflows));
                 workflows.addAll((List<Object>)body.get("BusinessServices"));return mapper.createObjectNode();
             }
-            if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("tenantId","newtown","hierarchyType","ADMIN","boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))))));
+            if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","WORKSPACE")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("tenantId","newtown","hierarchyType","WORKSPACE","boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
         };
         when(client.read(anyString(),anyString(),anyMap())).thenAnswer(api);
@@ -87,7 +87,9 @@ public class OnboardingStepsTest {
         assertTrue(rows.containsKey("newtown|tenant.citymodule|Dashboard"));
         assertTrue(rows.get("newtown|RAINMAKER-PGR.InboxVisibilityConfig|INBOX_VISIBILITY").path("data").path("enabled").asBoolean());
         assertTrue(rows.get("newtown|RAINMAKER-PGR.UIConstants|DEFAULT").path("data").path("REOPENSLA").asLong()>0);
-        assertEquals("ROOT",rows.get("newtown|CMS-BOUNDARY.HierarchySchema|CMS.All").path("data").path("lowestHierarchy").asText());
+        // The Geography step records the operational hierarchy; the baseline must not pre-empt it (#2260).
+        assertTrue(schemas.contains("CMS-BOUNDARY.HierarchySchema"));
+        assertTrue(rows.keySet().stream().noneMatch(key->key.contains("|CMS-BOUNDARY.HierarchySchema|")));
         for(String key:List.of("RAINMAKER-PGR.MapConfig|DEFAULT","common-masters.ThemeConfig|themeconfig","common-masters.uiHomePage|all-services","RAINMAKER-PGR.RejectionReasons|DUPLICATE"))
             assertTrue(key,rows.containsKey("newtown|"+key));
         assertTrue(schemas.contains("RAINMAKER-PGR.EscalationConfig"));
@@ -96,6 +98,15 @@ public class OnboardingStepsTest {
         assertEquals("Asia/Kolkata",tenantRecord.path("timeZone").asText());assertEquals("APRIL_MARCH",tenantRecord.path("financialYearPolicy").asText());
         assertEquals("NEW-TOWN-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]",rows.get("newtown|common-masters.IdFormat|pgr.servicerequestid").path("data").path("format").asText());
         assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
+    }
+    @Test public void founderRootLivesInTheReservedHierarchyNotAdmin(){
+        prerequisites();steps.perform("FOUNDER_HRMS",signup,op,progress);
+        verify(client).read(eq("boundary"),eq("/boundary-service/boundary-hierarchy-definition/_search"),argThat(b->b.toString().contains("hierarchyType=WORKSPACE")));
+        verify(client).read(eq("boundary"),contains("boundary-relationships/_search?tenantId=newtown&hierarchyType=WORKSPACE"),anyMap());
+        verify(client,never()).read(eq("boundary"),anyString(),argThat(b->b.toString().contains("ADMIN")));
+        verify(client).write(any(),eq("hrms"),contains("_create"),argThat(b->{
+            JsonNode j=mapper.valueToTree(b).path("Employees").path(0).path("jurisdictions").path(0);
+            return "WORKSPACE".equals(j.path("hierarchy").asText())&&"ROOT".equals(j.path("boundaryType").asText())&&"newtown".equals(j.path("boundary").asText());}));
     }
     @Test public void foreignTenantCollisionFailsBeforeEncryptionOrFounder(){
         rows.put("newtown|tenant.tenants|newtown",mapper.valueToTree(Map.of("data",Map.of("code","newtown"))));
@@ -122,7 +133,7 @@ public class OnboardingStepsTest {
     }
     @Test public void asynchronousBoundaryWriteIsNotCheckpointedUntilVisible() throws Exception {
         String path="/boundary-service/boundary-hierarchy-definition/_search";
-        when(client.read(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}"));
+        when(client.read(eq("boundary"),eq(path),anyMap())).thenReturn(mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[]}"),mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}"));
         assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
         assertEquals("STARTED",op.getRecordProgress().get("boundary-hierarchy"));
         prerequisites();assertEquals("DONE",op.getRecordProgress().get("boundary-hierarchy"));
@@ -149,12 +160,12 @@ public class OnboardingStepsTest {
             int offset=call.getMethod().getName().equals("write")?1:0;
             String path=call.getArgument(offset+1);Map<String,Object> body=call.getArgument(offset+2);
             if(path.contains("boundary-hierarchy-definition")) {
-                if(path.contains("_create")){made[0]=true;return mapper.createObjectNode();}
-                return mapper.readTree(made[0]?"{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}":"{\"BoundaryHierarchy\":null}");
+                if(path.contains("_create")){assertEquals("WORKSPACE",mapper.valueToTree(body).path("BoundaryHierarchy").path("hierarchyType").asText());made[0]=true;return mapper.createObjectNode();}
+                return mapper.readTree(made[0]?"{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}":"{\"BoundaryHierarchy\":null}");
             }
             if(path.contains("boundary-relationships")) {
-                if(path.contains("_create")){made[2]=true;return mapper.createObjectNode();}
-                return mapper.readTree(made[2]?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}":"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"ADMIN\",\"boundary\":[]}]}");
+                if(path.contains("_create")){assertEquals("WORKSPACE",mapper.valueToTree(body).path("BoundaryRelationship").path("hierarchyType").asText());made[2]=true;return mapper.createObjectNode();}
+                return mapper.readTree(made[2]?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"WORKSPACE\",\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}":"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":\"WORKSPACE\",\"boundary\":[]}]}");
             }
             if(path.contains("_create")) {JsonNode geometry=mapper.valueToTree(body).path("Boundary").path(0).path("geometry");assertEquals("Point",geometry.path("type").asText());assertEquals(mapper.valueToTree(List.of(0,0)),geometry.path("coordinates"));made[1]=true;return mapper.createObjectNode();}
             return mapper.readTree(made[1]?"{\"Boundary\":[{\"code\":\"newtown\"}]}":"{\"Boundary\":null}");
@@ -171,10 +182,10 @@ public class OnboardingStepsTest {
         final boolean[] created={false};
         when(client.read(eq("boundary"),anyString(),anyMap())).thenAnswer(call->{
             String path=call.getArgument(1);
-            if(path.contains("boundary-hierarchy-definition")) return mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"ADMIN\"}]}");
+            if(path.contains("boundary-hierarchy-definition")) return mapper.readTree("{\"BoundaryHierarchy\":[{\"hierarchyType\":\"WORKSPACE\"}]}");
             if(path.contains("boundary-relationships")) {
                 if(path.contains("_create")){created[0]=true;return mapper.createObjectNode();}
-                boolean queryCriteria=path.contains("tenantId=newtown")&&path.contains("hierarchyType=ADMIN");
+                boolean queryCriteria=path.contains("tenantId=newtown")&&path.contains("hierarchyType=WORKSPACE");
                 return mapper.readTree(queryCriteria
                         ?"{\"TenantBoundary\":[{\"tenantId\":\"newtown\",\"hierarchyType\":null,\"boundary\":[{\"code\":\"newtown\",\"boundaryType\":\"ROOT\",\"children\":[]}]}]}"
                         :"{\"TenantBoundary\":[]}");
@@ -206,9 +217,9 @@ public class OnboardingStepsTest {
         for(String field:List.of("BoundaryHierarchy","Boundary","TenantBoundary")) {
             for(String invalid:List.of("foreign","inactive")) {
                 op.getRecordProgress().clear();
-                Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","ADMIN","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
+                Map<String,Object> entry=new LinkedHashMap<>(Map.of("tenantId",invalid.equals("foreign")?"other":"newtown","hierarchyType","WORKSPACE","code","newtown","active",!invalid.equals("inactive"),"boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))));
                 when(client.read(eq("boundary"),contains("_search"),anyMap())).thenAnswer(call->mapper.valueToTree(Map.of(
-                        "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","ADMIN")),
+                        "BoundaryHierarchy",field.equals("BoundaryHierarchy")?List.of(entry):List.of(Map.of("hierarchyType","WORKSPACE")),
                         "Boundary",field.equals("Boundary")?List.of(entry):List.of(Map.of("code","newtown")),
                         "TenantBoundary",field.equals("TenantBoundary")?List.of(entry):List.of(Map.of("boundary",List.of(Map.of("code","newtown","boundaryType","ROOT")))))));
                 assertEquals("BOUNDARY_NOT_VISIBLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
