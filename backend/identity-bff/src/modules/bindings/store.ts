@@ -186,6 +186,17 @@ export async function accept(input: { subject: string; tenantId: string; invitat
   });
 }
 
+/** An admin `_updateEmail` moves the active binding's recorded address with the person's email. */
+export async function recordBindingEmail(input: { subject: string; tenantId: string; uuid: string; email: string }): Promise<void> {
+  await withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
+    const current = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId && b.uuid === input.uuid);
+    if (current?.state !== "active" || current.email === input.email) return;
+    await lease.assertHeld();
+    await lock.assertHeld();
+    await writeBinding(input.subject, { ...current, email: input.email });
+  }));
+}
+
 export async function remove(input: { subject: string; tenantId: string; uuid: string; removedBy: NonNullable<Binding["removedBy"]> }): Promise<{ removed: boolean; binding?: Binding }> {
   return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
     const old = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId && b.uuid === input.uuid);

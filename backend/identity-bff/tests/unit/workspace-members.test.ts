@@ -206,6 +206,14 @@ describe("resumable workspace membership", () => {
     await linkWorkspaceMember(input); f.conflict = true;
     await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
   });
+  it("records the new address on the binding, so a member removed afterwards is listed with it", async () => {
+    await linkWorkspaceMember(input);
+    await updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test");
+    expect(bindingDoc(f.users.get("new-1")!).bindings[0]).toMatchObject({ state: "active", email: "new@example.test" });
+    await removeWorkspaceMember("admin", "pg", uuid);
+    const { members } = await listWorkspaceMembers("admin", "pg", 0, 100, "removed");
+    expect(members).toEqual([expect.objectContaining({ subject: "new-1", email: "new@example.test" })]);
+  });
   it("allows returning to the target's original username email", async () => {
     await linkWorkspaceMember(input);
     await updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test");

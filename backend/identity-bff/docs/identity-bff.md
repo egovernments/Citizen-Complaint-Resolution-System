@@ -526,7 +526,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 
 - No per-member DIGIT calls (only the caller's live `ACCOUNT_ADMIN` check). `digitActive`, `roles` and `missing: true` come from the person's `digit.accounts` staff entry for this tenant, which exists only for `active` bindings and is as fresh as the last mirror.
 - **Only this tenant's data.** A person can be bound at several tenants and hold a citizen account, so the list never returns person-wide profile data to another tenant's admin:
   - `name` is the `name` of this tenant's `digit.accounts` staff entry: this tenant's DIGIT (HRMS) name as last mirrored (§5.1). It is absent for `pending` and `removed` members (no entry), and for an `active` member not yet re-mirrored or whose name came back masked. It is **never** the Keycloak `firstName`, which mirrors the D12 primary account at any tenant, or the citizen account. The console shows the HRMS name it already holds for the `digitUuid`.
-  - `email` for an `active` member is the person's current Keycloak email (their sign-in address while they are a member here). For a `pending` or `removed` member it is the `digit.bindings` `email` recorded by `_link` for that invitation version (the address the invitation was issued to), and absent when the record has none (`bindings/_ensure`, the item-19 conversion, and records written before the field existed). It is **never** the current email of someone who is not an active member here.
+  - `email` for an `active` member is the person's current Keycloak email (their sign-in address while they are a member here). For a `pending` or `removed` member it is the `digit.bindings` `email` recorded by `_link` for that invitation version (the address the invitation was issued to, or the address a later admin `_updateEmail` set), and absent when the record has none (`bindings/_ensure`, the item-19 conversion, and records written before the field existed). It is **never** the current email of someone who is not an active member here.
 - Errors: `INVALID_REQUEST` 400; `SESSION_REQUIRED` / `SESSION_REVOKED` 401; `ADMIN_REQUIRED` 403; 503.
 
 #### 3.3.8 `POST /identity/v1/workspace-members/_remove` (items 9, 10)
@@ -582,7 +582,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. For the case where an employee has l
 
 - The target must have an `active` binding at `tenantId`; otherwise → 404 `DIGIT_ACCOUNT_NOT_FOUND`.
 - The target must not be the caller; every target role at this tenant must be held by the caller; and the target must have no active binding or Organization membership in another workspace (including disabled workspaces). These checks use fresh reads under the target's person lease. A failed check → 403 `ADMIN_EMAIL_CHANGE_NOT_ALLOWED`. The person uses self-service `UPDATE_EMAIL`, or an operator performs global recovery.
-- Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
+- Under the target's person lease, the Keycloak email is set to the new address with `emailVerified=false`, the active binding's recorded `email` is set to it (so a later removal lists this address, §3.3.7), and Keycloak's `VERIFY_EMAIL` action email is sent. Username and `enabled` are untouched.
 - DIGIT gets the new email only after the person verifies it (D18): the `VERIFY_EMAIL` event drives the write-through.
 - An address another Keycloak user already holds → 409 `IDENTITY_EMAIL_CHANGED`.
 - **Deferred (root, D18 scope):** notifying the old address about an email change, here or through self-service `UPDATE_EMAIL`, is not built in v1. Stock Keycloak doesn't send it, and custom Keycloak extensions are not allowed. Verification of the new address and "DIGIT only after verification" are unchanged and required.
@@ -818,7 +818,7 @@ Every write follows the safe writer rule (design §4):
 - A `staff` entry's `name` is the DIGIT name of **that** tenant's account, set on each mirror (dropped when DIGIT returns it empty or masked; kept while `missing`). `citizen` entries never carry `name`. Tenant-scoped readers (the member list, §3.3.7) use it instead of `firstName`.
 - The mirror never invents an entry. Entries follow `digit.bindings` (staff) and resolved citizen accounts.
 
-**`digit.bindings` transitions.** The key is `(person, tenantId)`, with at most one record per key, and the record itself is the tombstone. Every transition happens under person → uuid. A record written by `_link` carries the normalized address it was issued to (`email`); `_accept`, `_remove` and expiry keep it, and a re-invite replaces it.
+**`digit.bindings` transitions.** The key is `(person, tenantId)`, with at most one record per key, and the record itself is the tombstone. Every transition happens under person → uuid. A record written by `_link` carries the normalized address it was issued to (`email`); `_accept`, `_remove` and expiry keep it, a re-invite replaces it, and an admin `_updateEmail` (§3.3.11) replaces it with the new address on the active record.
 
 | From → to | Trigger | Guard |
 |---|---|---|

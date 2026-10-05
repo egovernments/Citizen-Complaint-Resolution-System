@@ -3,7 +3,7 @@ import { withPersonLease, type PersonLease } from "../accounts/person-lease.js";
 import { activateStaffCredential, staffCredentialMode, StaffLoginError } from "../accounts/credential-service.js";
 import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.js";
 import { invitationExpiryHours } from "../bindings/invitations.js";
-import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
+import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, recordBindingEmail, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
 import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, request } from "../organizations/organization-service.js";
 import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
@@ -280,6 +280,8 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
       if ((error as { status?: number }).status === 409) throw new BindingError("IDENTITY_EMAIL_CHANGED", "This email belongs to another identity");
       throw error;
     }
+    // So a later removal lists the address the person had, not the original invite address.
+    await recordBindingEmail({ subject, tenantId, uuid: digitUuid, email });
     await lease.assertHeld();
     await sendVerifyEmail(subject);
     return { status: "verification_sent" as const };
