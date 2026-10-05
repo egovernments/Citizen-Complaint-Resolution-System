@@ -13,6 +13,9 @@ public class PlatformBaselineSeedTest {
     private final PlatformBaseline seed;
     public PlatformBaselineSeedTest() throws Exception { seed = new PlatformBaseline(new ObjectMapper()); }
 
+    /** Version 2: content fixes after v1 (pack locales, inbox/_count). Recorded per workspace as seed_version. */
+    @Test public void seedVersionIsBumpedForContentFixes() { assertEquals("2", seed.version()); }
+
     private Set<String> codes(String schema, String field) {
         Set<String> out = new HashSet<>();
         for (JsonNode row : seed.records()) if (schema.equals(row.path("schemaCode").asText())) out.add(row.path("data").path(field).asText());

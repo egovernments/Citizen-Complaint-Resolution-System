@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "version": "2",
   "source": "Repository default-data-handler schemas and platform records; no runtime source tenant",
   "founderRoles": [
     "EMPLOYEE",
