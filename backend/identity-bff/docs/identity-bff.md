@@ -79,8 +79,82 @@ Until item 14 removes it, staff resolution is **binding, else the managed `kcbff
 
 - **Person** = one Keycloak user (`sub`). One person may be both staff and a citizen (D25/C1).
 - **Tenant** = a plain DIGIT tenant id such as `pg` (D16). Every binding, membership, citizen account and role tenant uses the workspace's tenant id.
-- **Slug** = the Organization `alias` = `digit.urlSlug`, lower-case.
+- **Slug** = the Organization `alias` = `digit.urlSlug`, lower-case. Rules: §2.4.1.
 - Times are epoch **milliseconds** unless a field ends in `Seconds` or `expiresIn`.
+
+### 2.4.1 URL slug rules (source of truth)
+
+A slug is the first path segment of `/{slug}/digit-ui/...`. This section is the one definition; every layer that accepts or routes a slug enforces exactly it and is tested against the list below:
+
+- the SPA, `digit-ui-esbuild/packages/libraries/src/services/tenant/tenantRoute.js` (`isValidTenantSlug`);
+- this BFF, `src/modules/access-context/url-slug.ts` (`validUrlSlug`), used by tenant-context resolution, `/authorize`, the tenant-route backfill, `organizations/_ensure` and `tenant-groups/_ensure`;
+- pgr-services, `OnboardingIdentifierService` (signup and identifier checks).
+
+A valid slug:
+
+- is lower-case, 2–63 characters of `a-z`, `0-9` and `-`, and starts with a letter or digit (`^[a-z0-9][a-z0-9-]{1,62}$`);
+- contains at least two letters (`a1` is invalid);
+- is not reserved.
+
+Reserved slugs are the SPA's own path words plus every top-level path prefix that nginx (`local-setup/ansible/templates/nginx-site.conf.j2`) or Kong (`local-setup/kong/kong.yml`) routes on the same host. A static test fails when either config gains a slug-shaped prefix that is missing here. Adding a route prefix means adding it here and in all three layers.
+
+<!-- reserved-url-slugs:begin -->
+```text
+access
+api
+assets
+auth
+boundary-service
+brand
+citizen
+common-persist
+configurator
+dashboard
+digit-ui
+egov-bndry-mgmnt
+egov-enc-service
+egov-hrms
+egov-idgen
+egov-indexer
+egov-location
+egov-mdms-service
+egov-user-event
+egov-workflow-v2
+employee
+env
+file-store
+filestore
+gatus
+grafana
+health
+identity
+images
+inbox
+kc
+keycloak
+localization
+matomo
+mcp
+mdms-v2
+novu
+novu-api
+novu-bridge
+novu-ws
+otel
+otp
+pgr-services
+static
+status
+tests
+tests-v2
+turbopass
+user
+user-otp
+user-preference
+v1
+xstate-chatbot
+```
+<!-- reserved-url-slugs:end -->
 
 ### 2.5 Locks and the person lease
 
@@ -409,7 +483,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
-  - the account holds a role, at the tenant or any sub-tenant, that the caller lacks at the tenant (or a tenant covering it) → `ROLE_ESCALATION_FORBIDDEN`;
+  - the account holds a role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
   - this person already has a different uuid at the tenant → `BINDING_CONFLICT`.
 - **Find the person** by email, then by username = email. A username match with a different email → `IDENTITY_EMAIL_CHANGED`.

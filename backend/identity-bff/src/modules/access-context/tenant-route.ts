@@ -7,11 +7,8 @@ import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js"
 import type { BoundTenant } from "../authentication/surfaces.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 
-const URL_SLUG = /^[a-z0-9-]{2,63}$/;
-
-export function validUrlSlug(value: string): boolean {
-  return URL_SLUG.test(value) && (value.match(/[a-z]/g) || []).length >= 2;
-}
+export { RESERVED_URL_SLUGS, validUrlSlug } from "./url-slug.js";
+import { validUrlSlug } from "./url-slug.js";
 
 /** Already-public routing metadata for one `/{urlSlug}/...` entry point. */
 export interface PublicTenantRoute {
