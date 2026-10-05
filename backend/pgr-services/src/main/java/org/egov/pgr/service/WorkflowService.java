@@ -358,6 +358,9 @@ public class WorkflowService {
     private Set<String> heldAfterWalk(String tenantId, String assigneeUuid, List<String> undecided,
                                       RequestInfoWrapper requestInfoWrapper) {
         Map<String, List<ProcessInstance>> histories = new HashMap<>();
+        // A transition landing between two pages shifts the offset window by one, so a row can come
+        // back twice; count each process instance once.
+        Set<String> seen = new HashSet<>();
         int calls = 0;
         walk:
         for (List<String> chunk : chunks(undecided, HISTORY_CHUNK_SIZE)) {
@@ -371,7 +374,7 @@ public class WorkflowService {
                 int offset = open.stream().mapToInt(id -> histories.getOrDefault(id, Collections.emptyList()).size()).sum();
                 List<ProcessInstance> page = searchProcessInstances(businessIdSearchURL(tenantId, open, true, offset), requestInfoWrapper);
                 for (ProcessInstance instance : page)
-                    if (open.contains(instance.getBusinessId()))
+                    if (open.contains(instance.getBusinessId()) && (instance.getId() == null || seen.add(instance.getId())))
                         histories.computeIfAbsent(instance.getBusinessId(), id -> new ArrayList<>()).add(instance);
                 boolean exhausted = page.size() < HISTORY_PAGE_SIZE;
                 open.removeIf(id -> exhausted || walkDecided(histories.get(id)));

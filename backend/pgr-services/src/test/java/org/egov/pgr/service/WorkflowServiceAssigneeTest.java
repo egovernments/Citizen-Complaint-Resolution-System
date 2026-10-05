@@ -165,6 +165,23 @@ class WorkflowServiceAssigneeTest {
     }
 
     @Test
+    void newestTransitionsAreReadWithoutHistoryBeforeAnyWalk() {
+        // Phase 1 must ask for each candidate's newest transition only (history=false); with
+        // history=true one long-closed complaint's rows would crowd the others out of the page.
+        List<ProcessInstance> timeline = new ArrayList<>();
+        timeline.add(instance("PGR-OPEN", PENDING_AT_LME, LME));
+        timeline.addAll(closedComplaint("PGR-DONE", LME));
+        stubWorkflow(timeline);
+
+        assertEquals(Set.of("PGR-OPEN"), workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME));
+        // PGR-DONE is only a candidate (an older transition named the LME): its newest transition is read
+        // with history=false, and being terminal it settles there, so no history walk follows.
+        List<String> byId = urls.stream().filter(u -> u.contains("businessIds=")).toList();
+        assertEquals(1, byId.size(), urls.toString());
+        assertTrue(byId.get(0).contains("history=false") && byId.get(0).contains("businessIds=PGR-DONE&"), urls.toString());
+    }
+
+    @Test
     void longHistoriesAcrossChunksAreWalkedWithOffsetPaging() {
         // 30 open complaints, each assigned to the LME and then commented on 9 times: 330 rows,
         // more than one chunk and more than one page per chunk.
