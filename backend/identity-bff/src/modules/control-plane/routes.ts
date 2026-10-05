@@ -1,7 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
 import type express from "express";
 import { config } from "../../infrastructure/config.js";
 import { asyncRoute } from "../../app/async-route.js";
+import { bearerMatches } from "../../app/request-security.js";
 import {
   ensureOrganizationRoleAssignment,
   ensureOrganizationTenantGroup,
@@ -31,12 +31,6 @@ import {
 import { onboardingAuthorization, registerOnboardingRoutes } from "../onboarding/routes.js";
 import { onboardingDependencies } from "../onboarding/production.js";
 import { backfillTenantRoutes } from "../tenant-routes/backfill.js";
-
-function sameSecret(actual: string, expected: string): boolean {
-  const left = Buffer.from(actual);
-  const right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -87,11 +81,7 @@ export function registerControlPlaneRoutes(app: express.Application): void {
     if (!expected) {
       return res.status(503).json({ code: "CONTROL_PLANE_NOT_CONFIGURED", error: "Identity control plane is not configured" });
     }
-    const authorization = req.get("authorization") || "";
-    const supplied = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
-    if (!supplied || !sameSecret(supplied, expected)) {
+    if (!bearerMatches(req, [expected])) {
       return res.status(401).json({ code: "WORKLOAD_UNAUTHORIZED", error: "Invalid workload credential" });
     }
     next();

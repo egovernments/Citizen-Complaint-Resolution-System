@@ -198,7 +198,7 @@ db_fast_path_ack_data_wipe: false
 enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)
 enable_novu: false             # SMS / email / WhatsApp notifications (~1 GB, 8 containers)
 enable_keycloak: false         # single sign-on; DIGIT's own OTP login works without it
-enable_otp_services: false     # real SMS OTP; without it the login OTP is always 123456
+enable_otp_services: false     # real SMS OTP; without it, citizen OTP login needs identity_dev_fixed_otp: true (dev only, OTP 123456)
 enable_digit_ui_v2: false      # the newer citizen SPA at /citizen/
 run_ci_tests: false            # adds 5–10 minutes of Postman + Playwright to every deploy
 requires_nairobi_mdms: false   # an external config submodule most deployments do not use

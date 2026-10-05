@@ -980,9 +980,10 @@ services:
       OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
-      # Fixed OTP stands in for SMS where real OTP is off (develop behaviour).
-      # Ansible derives it from enable_otp_services; identity_dev_fixed_otp overrides.
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      # Fixed OTP is a development mode: off unless .env turns it on. Ansible
+      # sets it only for `identity_dev_fixed_otp: true` (never from the
+      # absence of enable_otp_services).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
       EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
       EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
@@ -3180,7 +3181,8 @@ services:
       IDENTITY_CREDENTIAL_KEY_CURRENT: ${IDENTITY_CREDENTIAL_KEY_CURRENT:-0}
       IDENTITY_CITIZEN_OTP_SECRET: ${IDENTITY_CITIZEN_OTP_SECRET:-}
       IDENTITY_CITIZEN_OTP_SENDER: ${IDENTITY_CITIZEN_OTP_SENDER:-}
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      # Off unless .env turns it on (identity_dev_fixed_otp: true).
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
       IDENTITY_POLLER_MAX_LAG_SECONDS: ${IDENTITY_POLLER_MAX_LAG_SECONDS:-60}
       KEYCLOAK_ADMIN_URL: http://keycloak:8180

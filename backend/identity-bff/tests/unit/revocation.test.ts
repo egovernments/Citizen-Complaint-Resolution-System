@@ -4,7 +4,7 @@ import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.
 import { currentPersonLease, personLeaseKey, withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { createIdentitySession, getIdentitySession, requireCurrentSession, saveSelectedIdentityContext } from "../../src/modules/sessions/session-store.js";
 import { privateRef } from "../../src/modules/citizen-otp/otp-store.js";
-import { cachedToken, drainRevocationJobs, drainTokenRetries, endKeycloakSessions, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
+import { cachedToken, drainKeycloakLogoutRetries, drainRevocationJobs, drainTokenRetries, endKeycloakSessions, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
 import { key, personTokensKey, readToken, tokenKey, tokenHoldersKey } from "../../src/modules/revocation/inventory.js";
 import * as keycloak from "../../src/modules/revocation/keycloak.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
@@ -214,6 +214,28 @@ describe("token inventory and revocation", () => {
     await logoutSessions(subject, "all", current);
     expect(tokens.has("shared-account-token")).toBe(false);
     expect(await getIdentitySession(current)).toBeNull();
+  });
+  it("logout deletes the BFF session during a Keycloak outage and ends Keycloak's session later", async () => {
+    const sid = await session("kc-outage");
+    vi.mocked(keycloak.endKeycloakSession).mockRejectedValue(new Error("Keycloak Admin API returned 503"));
+    await expect(logoutSessions(subject, "current", sid)).resolves.toBeUndefined();
+    expect(await getIdentitySession(sid)).toBeNull();
+    expect(await getRedis().zrange(key("kc-logout-retry"), 0, -1)).toEqual(["kc-outage"]);
+    vi.mocked(keycloak.endKeycloakSession).mockClear().mockResolvedValue();
+    await getRedis().zadd(key("kc-logout-retry"), 0, "kc-outage");
+    await drainKeycloakLogoutRetries();
+    expect(keycloak.endKeycloakSession).toHaveBeenCalledExactlyOnceWith("kc-outage");
+    expect(await getRedis().zcard(key("kc-logout-retry"))).toBe(0);
+    expect(await getRedis().exists(key("kc-logout-retry:kc-outage"))).toBe(0);
+  });
+  it("logout does not wait on a hung Keycloak", async () => {
+    const sid = await session("kc-hung");
+    vi.mocked(keycloak.endKeycloakSession).mockImplementation(() => new Promise(() => {}));
+    const started = Date.now();
+    await logoutSessions(subject, "current", sid);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(await getIdentitySession(sid)).toBeNull();
+    expect(await getRedis().zrange(key("kc-logout-retry"), 0, -1)).toEqual(["kc-hung"]);
   });
   it("phone change ends old-number sessions except the keeper", async () => {
     const keep = await session("keep", "+254700000001"); const old = await session("old", "+254700000001");

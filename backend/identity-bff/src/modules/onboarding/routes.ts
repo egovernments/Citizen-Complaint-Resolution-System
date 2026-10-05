@@ -1,8 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import type express from "express";
 import { errorBody, type HttpErrorCode } from "../../contract/error-codes.js";
 import { config } from "../../infrastructure/config.js";
 import { asyncRoute, sendError as send } from "../../app/async-route.js";
+import { bearerMatches } from "../../app/request-security.js";
 import { currentSession } from "../sessions/current-session.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { OnboardingError } from "./errors.js";
@@ -11,11 +11,6 @@ import type { OnboardingPrimitives } from "./primitives.js";
 const PREFIX = "/internal/identity/v1";
 const READS = new Set(["/sessions/_introspect", "/identifiers/_check"]);
 const MUTATIONS = new Set(["/organizations/_ensure", "/organizations/_lifecycle", "/memberships/_ensure", "/bindings/_ensure"]);
-
-function sameSecret(actual: string, expected: string): boolean {
-  const left = Buffer.from(actual), right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 /** Called by the common internal auth middleware before operator auth. */
 export function onboardingAuthorization(req: express.Request, res: express.Response): boolean | undefined {
@@ -27,9 +22,7 @@ export function onboardingAuthorization(req: express.Request, res: express.Respo
     res.status(503).json(errorBody("CONTROL_PLANE_NOT_CONFIGURED", "Onboarding is not configured"));
     return false;
   }
-  const header = req.get("authorization") ?? "";
-  const supplied = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!supplied || !tokens.some((token) => sameSecret(supplied, token))) {
+  if (!bearerMatches(req, tokens)) {
     res.status(401).json(errorBody("WORKLOAD_UNAUTHORIZED", "Invalid workload credential"));
     return false;
   }

@@ -18,6 +18,29 @@ import {
   sessionIdFromCookie,
 } from "./session-store.js";
 
+/** How long `GET /session` waits for invitations before answering without them. */
+export const PENDING_INVITATIONS_WAIT_MS = 3_000;
+
+/**
+ * Invitations are a hint on the session read, never a dependency of it: a
+ * Keycloak Admin outage, malformed `digit.bindings`, a busy lease or a slow
+ * read all degrade to `[]` rather than failing a valid session.
+ */
+async function pendingInvitationsOrEmpty(subject: string): Promise<Awaited<ReturnType<typeof pendingInvitationsFor>>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      pendingInvitationsFor(subject),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("timed out")), PENDING_INVITATIONS_WAIT_MS); }),
+    ]);
+  } catch (error) {
+    console.warn("Pending invitations unavailable:", (error as Error).message);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function registerSessionRoutes(app: express.Application): void {
   app.get("/identity/v1/session", asyncRoute(async (request, response) => {
     const surface = parseSurface(request.query.surface);
@@ -34,7 +57,7 @@ export function registerSessionRoutes(app: express.Application): void {
     return response.json({
       ...(account && { account, sessions }),
       authenticated: true,
-      pendingInvitations: surfaceContextKind(surface) === "citizen" ? [] : await pendingInvitationsFor(claims.sub),
+      pendingInvitations: surfaceContextKind(surface) === "citizen" ? [] : await pendingInvitationsOrEmpty(claims.sub),
       user: {
         id: claims.sub,
         email: claims.email,

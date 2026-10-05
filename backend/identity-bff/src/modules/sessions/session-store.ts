@@ -76,6 +76,13 @@ async function load<T>(key: string, consume: boolean, valid: (value: T) => boole
 
 export const revocationGenerationKey = (subject: string) => `${config.cachePrefix}:identity:revgen:${subject}`;
 export const personSessionsKey = (subject: string) => `${config.cachePrefix}:identity:person-sessions:${subject}`;
+/** Keycloak session id → subject, so a Keycloak session event finds its person without a realm scan. */
+export const kcSessionSubjectKey = (kcSessionId: string) => `${config.cachePrefix}:identity:kc-session:${kcSessionId}`;
+
+/** The subject whose BFF session last recorded this Keycloak session id, or null. */
+export async function subjectForKcSession(kcSessionId: string): Promise<string | null> {
+  return getRedis().get(kcSessionSubjectKey(kcSessionId));
+}
 
 export class SessionRevokedError extends Error {
   readonly status = 401;
@@ -112,12 +119,17 @@ if not result then return 0 end
 redis.call('sadd', KEYS[4], ARGV[6])
 local ttl = redis.call('pttl', KEYS[2])
 if redis.call('pttl', KEYS[4]) < ttl then redis.call('pexpire', KEYS[4], ttl) end
+if ARGV[7] ~= '' then
+  local indexTtl = redis.call('pttl', KEYS[5])
+  if redis.call('get', KEYS[5]) ~= ARGV[7] or indexTtl < ttl then redis.call('set', KEYS[5], ARGV[7], 'PX', math.max(ttl, indexTtl)) end
+end
 return 1`;
 
 async function writeSessionRecord(lease: PersonLease, sessionId: string, session: IdentitySession, expiry: number | "KEEP", mode: "NX" | "XX"): Promise<void> {
-  const result = await getRedis().eval(WRITE_SESSION, 4, personLeaseKey(lease.subject), sessionKey(sessionId),
-    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), lease.token,
-    JSON.stringify(session), session.revocationGeneration ?? 0, expiry, mode, sessionId);
+  // Without a Keycloak sid the index argument is empty and its key is a never-written placeholder.
+  const result = await getRedis().eval(WRITE_SESSION, 5, personLeaseKey(lease.subject), sessionKey(sessionId),
+    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), kcSessionSubjectKey(session.kcSessionId || ""), lease.token,
+    JSON.stringify(session), session.revocationGeneration ?? 0, expiry, mode, sessionId, session.kcSessionId ? lease.subject : "");
   if (result === -1) throw new LeaseLostError();
   if (result !== 1) throw new SessionRevokedError();
 }
@@ -327,13 +339,22 @@ export async function createPhoneOtpSession(input: {
  * unrevoked record is rewritten (`XX`): a logout or revocation that ended it
  * meanwhile is never undone. Returns false, without throwing, when the
  * session has ended, so the caller can treat it as signed out.
+ *
+ * `session` only pins the revocation generation the caller saw. The write
+ * starts from the record re-read under the lease, so a change made since the
+ * caller's read (rotated tokens, a phone proof) is never reverted; `update`
+ * applies the caller's own change to that fresh copy.
  */
-export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<boolean> {
+export async function touchIdentitySession(
+  sessionId: string,
+  session: IdentitySession,
+  update: (fresh: IdentitySession) => IdentitySession = fresh => fresh,
+): Promise<boolean> {
   return withPersonLease(session.claims.sub, async (lease) => {
     try {
       const fresh = await requireCurrentSession(lease, sessionId);
       if ((fresh.revocationGeneration ?? 0) !== (session.revocationGeneration ?? 0)) return false;
-      await writeSessionRecord(lease, sessionId, { ...session, lastSeenAt: Date.now() }, "KEEP", "XX");
+      await writeSessionRecord(lease, sessionId, { ...update(fresh), lastSeenAt: Date.now() }, "KEEP", "XX");
       return true;
     } catch (error) {
       if (error instanceof SessionRevokedError) return false;

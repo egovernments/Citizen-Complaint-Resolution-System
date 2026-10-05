@@ -42,8 +42,8 @@ export async function completePhoneProof(challenge: OtpChallenge, sessionId: str
       await lock.assertHeld();
       // Revocation precedes fallible propagation, so an outage cannot leave old sessions usable.
       if (oldPhone && oldPhone !== challenge.phoneNumber) await effects.endPhoneSessions(subject, privateRef("phone", oldPhone), sessionId);
-      const updated = { ...session, claims: { ...session.claims, phone_number: challenge.phoneNumber, phone_number_verified: true }, phoneRef: privateRef("phone", challenge.phoneNumber), identityCheckedAt: Date.now() };
-      if (!await touchIdentitySession(sessionId, updated)) throw new SessionRevokedError();
+      const proved = (record: typeof session) => ({ ...record, claims: { ...record.claims, phone_number: challenge.phoneNumber, phone_number_verified: true }, phoneRef: privateRef("phone", challenge.phoneNumber), identityCheckedAt: Date.now() });
+      if (!await touchIdentitySession(sessionId, session, proved)) throw new SessionRevokedError();
       await effects.propagateIdentifiers(subject);
       await lock.assertHeld();
     });
