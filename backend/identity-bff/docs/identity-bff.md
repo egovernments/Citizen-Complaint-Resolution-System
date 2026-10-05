@@ -346,6 +346,7 @@ Body or query `{surface, scope?: "current" | "others" | "all"}`, default `curren
 - `others`: ends every **other** BFF and Keycloak session of the person. It skips DIGIT logout for accounts whose token is held by the current session; tokens used only by the ended sessions are revoked. See the shared-token limitation in §8.
 - `all`: both, and raises the person's revocation generation (§6).
 - Failed DIGIT logouts go on the revocation retry set. They never fail the request.
+- The BFF session is deleted before Keycloak is called. Ending the Keycloak session is best-effort: the request waits at most 2 s for it, and one that fails or times out goes on the Keycloak logout retry set (§7.4). A Keycloak outage never fails the request.
 - Errors: `INVALID_REQUEST`, `UNSUPPORTED_SURFACE` (400); `UNTRUSTED_ORIGIN` 403. A missing session is still `204`.
 
 #### 3.3.3 `GET /identity/v1/tenants` (items 8, 15)
@@ -839,6 +840,8 @@ The magic-link and password-setup IP limit keys switch from the raw IP to `ipRef
 | `{p}:identity:person-tokens:{sub}` | SET of `{tenantId}:{uuid}` | the latest token expiry | L |
 | `{p}:identity:revoke-retry` | ZSET retryId → next attempt time | — | L |
 | `{p}:identity:revoke-retry:{retryId}` | HASH `{tenantId, uuid, accessToken, expiresAt, subject, reason, attempts}` | the token's expiry | L |
+| `{p}:identity:kc-logout-retry` | ZSET kcSessionId → next attempt time | — | S |
+| `{p}:identity:kc-logout-retry:{kcSessionId}` | HASH `{attempts}`; queued before the BFF session is deleted | the ended BFF session's expiry | S |
 | `{p}:identity:revoke-jobs` | ZSET `{sub}\|{reason}\|{eventId}` → due time | — | S |
 
 These replace `{p}:digit-user-token:*`, `{p}:digit-user-token-holders:*` and `{p}:digit-linked-identities:*` (item 10). Losing the inventory: grant-eligible staff are found again through the derived credential (design §6). Citizen tokens, inactive or locked staff tokens, and tokens of a Keycloak user deleted in the same window live until they expire (D25/C6).
