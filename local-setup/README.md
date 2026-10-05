@@ -475,7 +475,10 @@ want soon:
   with the fix if an existing account of that name cannot sign in with those
   roles. If PGR still cannot use it, the runner pauses and logs
   `PGR onboarding runner PAUSED (<reason>)`; signups wait in the queue and
-  resume once it is fixed.
+  resume once it is fixed. It re-checks with backoff (30 s up to 15 min), but
+  a refused password (`PROVISIONER_CREDENTIALS_REJECTED`) only every 6 hours,
+  since each failed login counts toward egov-user's lockout (5 in 30 minutes):
+  fix the password and restart pgr-services.
 - `enable_otp_services` — real SMS one-time passwords. With it off, citizen
   OTP login works only if you also set `identity_dev_fixed_otp: true`
   (development only: the OTP is then always `123456`). Both are off by default.

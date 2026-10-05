@@ -26,7 +26,14 @@ import java.util.function.LongSupplier;
 public class OnboardingRunner implements SmartLifecycle {
     public static final List<String> STEPS = List.of("TENANT_FOUNDATION", "PLATFORM_BASELINE", "FOUNDER_HRMS", "ORGANIZATION", "MEMBERSHIP", "BINDING");
     static final String THREAD_PREFIX = "pgr-onboarding-";
-    static final long READY_RECHECK_MS = 60_000, NOT_READY_RECHECK_MS = 30_000;
+    static final long READY_RECHECK_MS = 60_000, NOT_READY_RECHECK_MS = 30_000, NOT_READY_MAX_RECHECK_MS = 15 * 60_000;
+    /**
+     * egov-user rejected the provisioner's password. Every retry is another failed login, and egov-user
+     * locks the account after 5 in 30 minutes (max.invalid.login.attempts), so a rejected credential is
+     * not retried on the backoff schedule: once per this interval, or at once after a restart.
+     */
+    static final long CREDENTIALS_REJECTED_RECHECK_MS = 6 * 60 * 60_000L;
+    static final String CREDENTIALS_REJECTED = OnboardingProvisionerClient.CREDENTIALS_REJECTED;
     private final OnboardingWorkerService worker;
     private final OnboardingRepository repository;
     private final OnboardingSteps steps;
@@ -38,6 +45,8 @@ public class OnboardingRunner implements SmartLifecycle {
     LongSupplier clock = System::currentTimeMillis;
     private volatile long nextReadinessCheck;
     private volatile String notReady;
+    /** Consecutive failed readiness checks; the re-check interval doubles with each, up to the cap. */
+    private volatile int failedChecks;
     private ThreadPoolTaskScheduler scheduler;
 
     public OnboardingRunner(OnboardingWorkerService worker, OnboardingRepository repository, OnboardingSteps steps, OnboardingLifecyclePublisher publisher) {
@@ -78,7 +87,9 @@ public class OnboardingRunner implements SmartLifecycle {
             }
             worker.complete(operation.getId(), token, operation.getCompletedSteps());
         } catch (OnboardingFailure failure) {
-            if (failure.getCode() != null && failure.getCode().startsWith("PROVISIONER_")) nextReadinessCheck = 0;
+            // A rejected credential pauses at once: re-checking now would be one more failed login.
+            if (CREDENTIALS_REJECTED.equals(failure.getCode())) pause(CREDENTIALS_REJECTED, clock.getAsLong());
+            else if (failure.getCode() != null && failure.getCode().startsWith("PROVISIONER_")) nextReadinessCheck = 0;
             if ("ONBOARDING_LEASE_LOST".equals(failure.getCode())) return;
             worker.fail(operation.getId(), token, failure.isRetryable(), failure.getCode(), failure.getCode(),
                     operation.getCurrentStep(), operation.getCompletedSteps());
@@ -86,7 +97,10 @@ public class OnboardingRunner implements SmartLifecycle {
         // Unexpected failures leave the lease to expire: restart resumes from the last checkpoint.
     }
 
-    /** The provisioner's credentials, login and root-tenant admin roles, re-checked at most once a minute. */
+    /**
+     * The provisioner's credentials, login and root-tenant admin roles. Re-checked once a minute while
+     * ready; while paused, after 30 s doubling to at most 15 min, or after 6 h for a rejected password.
+     */
     boolean provisionerReady() {
         if (provisioner == null) return true;
         long now = clock.getAsLong();
@@ -100,15 +114,41 @@ public class OnboardingRunner implements SmartLifecycle {
         } catch (RuntimeException unexpected) {
             reason = "PROVISIONER_UNAVAILABLE";
         }
-        if (reason == null && notReady != null) log.info("PGR onboarding runner resumed: provisioner is ready");
-        if (reason != null && !reason.equals(notReady)) {
-            log.error("PGR onboarding runner PAUSED ({}): signups stay queued until the provisioner works. Check "
-                    + "PGR_DIGIT_PROVISIONER_USERNAME/PASSWORD/TENANT_ID: the account must log in as an active EMPLOYEE "
-                    + "of that root tenant and hold MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there.", reason);
+        if (reason == null) {
+            if (notReady != null) log.info("PGR onboarding runner resumed: provisioner is ready");
+            notReady = null;
+            failedChecks = 0;
+            nextReadinessCheck = now + READY_RECHECK_MS;
+            return true;
+        }
+        pause(reason, now);
+        return false;
+    }
+
+    private void pause(String reason, long now) {
+        if (!reason.equals(notReady)) {
+            if (CREDENTIALS_REJECTED.equals(reason)) {
+                log.error("PGR onboarding runner PAUSED ({}): egov-user rejected the provisioner login. Not retrying "
+                        + "for {} h: every attempt is a failed login, and egov-user locks the account after 5 in 30 "
+                        + "minutes. An operator must fix PGR_DIGIT_PROVISIONER_PASSWORD (or USERNAME/TENANT_ID, or the "
+                        + "OAuth client secret) and restart pgr-services. If the account is already locked, clear "
+                        + "eg_user.accountlocked and its eg_user_login_failed_attempts rows, or wait 60 minutes.",
+                        reason, CREDENTIALS_REJECTED_RECHECK_MS / 3_600_000);
+            } else {
+                log.error("PGR onboarding runner PAUSED ({}): signups stay queued until the provisioner works. Check "
+                        + "PGR_DIGIT_PROVISIONER_USERNAME/PASSWORD/TENANT_ID: the account must log in as an active EMPLOYEE "
+                        + "of that root tenant and hold MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there.", reason);
+            }
         }
         notReady = reason;
-        nextReadinessCheck = now + (reason == null ? READY_RECHECK_MS : NOT_READY_RECHECK_MS);
-        return reason == null;
+        long delay;
+        if (CREDENTIALS_REJECTED.equals(reason)) {
+            delay = CREDENTIALS_REJECTED_RECHECK_MS;
+        } else {
+            delay = Math.min(NOT_READY_RECHECK_MS << Math.min(failedChecks, 10), NOT_READY_MAX_RECHECK_MS);
+            failedChecks++;
+        }
+        nextReadinessCheck = now + delay;
     }
 
     /** Why the runner is not claiming work, or null while it is. */

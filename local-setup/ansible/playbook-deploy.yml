@@ -5930,7 +5930,8 @@
         fail_msg: >-
           PGR onboarding provisioner '{{ pgr_provisioner_username }}' on
           '{{ pgr_provisioner_tenant_id }}' is not usable (login HTTP
-          {{ pgr_provisioner_login.status }}; missing roles:
+          {{ pgr_provisioner_login.status }}
+          {{ (pgr_provisioner_login.json | default({})).error_description | default('') }}; missing roles:
           {{ (['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)) | join(', ') or 'none' }}).
           The account already existed, so the playbook did not touch it. Either
           set OpenBao pgr_digit_provisioner_password to its real password and give
@@ -5938,6 +5939,17 @@
           pgr_digit_provisioner_username at a new account name, or set
           pgr_onboarding_runner_enabled: false. Until then PGR pauses onboarding
           and signups stay queued.
+          A login refused with the right password may be a LOCKOUT, not a wrong
+          password: egov-user locks an account after 5 failed logins in 30
+          minutes (for 60 minutes), and a pgr-services that ran with the old
+          password tried it before pausing. To unlock now, in the DIGIT database
+          (one transaction, by the account's eg_user id and uuid):
+          UPDATE eg_user SET accountlocked=false, accountlockeddate=NULL,
+          pwdexpirydate=now()+interval '90 days' WHERE id=<id> AND
+          tenantid='{{ pgr_provisioner_tenant_id }}'; UPDATE
+          eg_user_login_failed_attempts SET active=false WHERE
+          user_uuid='<uuid>' AND active; then re-run the deploy, which restarts
+          pgr-services (it retries a refused password only every 6 hours).
       when: pgr_onboarding_runner_effective | bool
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"

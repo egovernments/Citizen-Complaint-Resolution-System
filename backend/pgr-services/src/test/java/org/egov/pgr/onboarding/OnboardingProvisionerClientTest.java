@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.*;
 public class OnboardingProvisionerClientTest {
     private final ObjectMapper mapper=new ObjectMapper();
     private HttpServer server; private OnboardingProvisionerClient client; private OnboardingRepository repository;
-    private ObjectNode user; private JsonNode lastWrite; private int detailsStatus=200, writeStatus=200, writes, details, logins;
+    private ObjectNode user; private JsonNode lastWrite; private int detailsStatus=200, writeStatus=200, loginStatus=200, writes, details, logins;
     private String malformedDetails; private OnboardingSignup signup; private OnboardingOperation operation;
     private static final List<String> ROLES=List.of("MDMS_ADMIN","ACCOUNT_ADMIN","LOC_ADMIN","HRMS_ADMIN");
     @Before public void setup() throws Exception {
@@ -29,7 +29,7 @@ public class OnboardingProvisionerClientTest {
         signup=OnboardingSignup.builder().id(UUID.randomUUID()).requestedTenantId("newtown").build();
         operation=OnboardingOperation.builder().id(UUID.randomUUID()).signupId(signup.getId()).build();
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
-        server.createContext("/user/oauth/token",e->{logins++;respond(e,200,mapper.writeValueAsString(Map.of("access_token","fixture-only","UserRequest",Map.of("uuid","cached-claim","roles",ROLES))));});
+        server.createContext("/user/oauth/token",e->{logins++;respond(e,loginStatus,loginStatus!=200?"{\"error\":\"invalid_grant\",\"error_description\":\"Account locked\"}":mapper.writeValueAsString(Map.of("access_token","fixture-only","UserRequest",Map.of("uuid","cached-claim","roles",ROLES))));});
         server.createContext("/user/_details",e->{details++;e.getRequestBody().readAllBytes();respond(e,detailsStatus,malformedDetails!=null?malformedDetails:mapper.writeValueAsString(Map.of("UserRequest",user)));});
         server.createContext("/",e->{lastWrite=mapper.readTree(e.getRequestBody());writes++;respond(e,writeStatus,writeStatus==200?"{}":"{\"Errors\":[{\"code\":\"EMPLOYEE_ALREADY_EXISTS\"}]}");});
         server.start();String base="http://127.0.0.1:"+server.getAddress().getPort();
@@ -47,6 +47,14 @@ public class OnboardingProvisionerClientTest {
     private OnboardingProgress.WriteScope scope(String step) {return new OnboardingProgress(repository,operation,UUID.randomUUID()).writeScope(signup,step);}
     private void encrypt(){client.write(scope("TENANT_FOUNDATION"),"enc","/egov-enc-service/crypto/v1/_generatekey",Map.of("tenantId","newtown"));}
     @After public void stop(){if(server!=null)server.stop(0);}
+    /** #2269 round-3 review item 2: a refused login is not "unavailable"; the runner must stop retrying it. */
+    @Test public void aRefusedLoginIsReportedAsRejectedCredentialsNotAnOutage(){
+        for(int status:List.of(400,401)){loginStatus=status;
+            assertEquals(String.valueOf(status),OnboardingProvisionerClient.CREDENTIALS_REJECTED,assertThrows(OnboardingFailure.class,client::verifyReady).getCode());}
+        loginStatus=503;assertEquals("PROVISIONER_UNAVAILABLE",assertThrows(OnboardingFailure.class,client::verifyReady).getCode());
+        assertEquals(0,details);
+        loginStatus=200;client.verifyReady();assertEquals(1,details);
+    }
     @Test public void genericInternalPostCannotWriteWithoutSignupAuthorization(){
         assertThrows(OnboardingFailure.class,()->client.read("hrms","/egov-hrms/employees/_create",Map.of()));assertEquals(0,writes);assertEquals(0,logins);
     }

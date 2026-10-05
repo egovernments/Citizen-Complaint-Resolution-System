@@ -1,9 +1,16 @@
 package org.egov.pgr.onboarding;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -25,6 +32,7 @@ public class OnboardingRunnerReadinessTest {
     private OnboardingProvisionerClient provisioner;
     private OnboardingRunner runner;
     private long now = 1_000_000;
+    private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @Before
     public void setUp() {
@@ -37,6 +45,29 @@ public class OnboardingRunnerReadinessTest {
         runner = new OnboardingRunner(worker, repository, steps, publisher, provisioner, 5000);
         runner.clock = () -> now;
         when(worker.claim(anyString(), anyLong())).thenReturn(Optional.empty());
+        logs.start();
+        ((Logger) LoggerFactory.getLogger(OnboardingRunner.class)).addAppender(logs);
+    }
+
+    @After
+    public void detach() {
+        ((Logger) LoggerFactory.getLogger(OnboardingRunner.class)).detachAppender(logs);
+    }
+
+    /** Clock times (relative to the first tick) at which the runner re-checked the provisioner. */
+    private List<Long> checkTimes(long pollMs, long untilMs) {
+        long start = now;
+        List<Long> checks = new ArrayList<>();
+        doAnswer(call -> { checks.add(now - start); throw new OnboardingFailure(currentFailure, true); })
+                .when(provisioner).verifyReady();
+        while (now - start <= untilMs) { runner.tick(); now += pollMs; }
+        return checks;
+    }
+    private String currentFailure = "PROVISIONER_UNAVAILABLE";
+
+    private long pauseErrors() {
+        return logs.list.stream().filter(e -> e.getLevel() == Level.ERROR
+                && e.getFormattedMessage().contains("PAUSED")).count();
     }
 
     @Test
@@ -49,8 +80,8 @@ public class OnboardingRunnerReadinessTest {
         verify(worker, never()).fail(any(), any(), anyBoolean(), any(), any(), any(), any());
         verify(publisher, times(20)).publishPending(); // lifecycle publication is not paused
         assertEquals("PROVISIONER_NOT_CONFIGURED", runner.pausedReason());
-        // Re-checked every 30 s while paused, not on every 5 s poll.
-        verify(provisioner, times(4)).verifyReady();
+        // Not on every 5 s poll: re-checked after 30 s, then 60 s (backoff), within these 100 s.
+        verify(provisioner, times(3)).verifyReady();
     }
 
     @Test
@@ -92,5 +123,48 @@ public class OnboardingRunnerReadinessTest {
         verify(provisioner, times(2)).verifyReady();
         verify(worker, times(1)).claim(anyString(), anyLong());
         assertEquals("PROVISIONER_AUTHORIZATION_REQUIRED", runner.pausedReason());
+    }
+
+    /** #2269 round-3 review item 2: a failing provisioner is re-checked with exponential backoff, capped at 15 min. */
+    @Test
+    public void aPausedRunnerBacksOffExponentiallyUpToFifteenMinutes() {
+        List<Long> checks = checkTimes(5000, 60 * 60_000);
+        List<Long> gaps = new ArrayList<>();
+        for (int i = 1; i < checks.size(); i++) gaps.add(checks.get(i) - checks.get(i - 1));
+        assertEquals(List.of(30_000L, 60_000L, 120_000L, 240_000L, 480_000L, 900_000L, 900_000L), gaps.subList(0, 7));
+        assertTrue(gaps.stream().allMatch(gap -> gap <= OnboardingRunner.NOT_READY_MAX_RECHECK_MS));
+        verify(worker, never()).claim(anyString(), anyLong());
+    }
+
+    /** A rejected password is not retried on the backoff schedule: each retry is a failed login toward lockout. */
+    @Test
+    public void rejectedCredentialsAreNotRetriedUntilTheLongInterval() {
+        currentFailure = OnboardingRunner.CREDENTIALS_REJECTED;
+        List<Long> checks = checkTimes(5000, 6 * 60 * 60_000L);
+        assertEquals(List.of(0L, OnboardingRunner.CREDENTIALS_REJECTED_RECHECK_MS), checks);
+        assertEquals(OnboardingRunner.CREDENTIALS_REJECTED, runner.pausedReason());
+        assertEquals(1, pauseErrors());
+        assertTrue(logs.list.get(0).getFormattedMessage().contains("locks the account"));
+    }
+
+    @Test
+    public void aJobRejectedAtLoginPausesWithoutAnotherLogin() {
+        UUID operationId = UUID.randomUUID(), token = UUID.randomUUID();
+        OnboardingOperation operation = OnboardingOperation.builder().id(operationId)
+                .completedSteps(new ArrayList<>()).build();
+        Map<String, Object> claim = new LinkedHashMap<>();
+        claim.put("Operation", operation);
+        claim.put("Signup", new OnboardingSignup());
+        claim.put("leaseToken", token.toString());
+        when(worker.claim(anyString(), anyLong())).thenReturn(Optional.of(claim)).thenReturn(Optional.empty());
+        doThrow(new OnboardingFailure(OnboardingRunner.CREDENTIALS_REJECTED, true))
+                .when(steps).perform(eq("TENANT_FOUNDATION"), any(), any(), any());
+
+        runner.tick(); // ready, claims, the job's login is refused
+        for (int i = 0; i < 100; i++) { now += 5000; runner.tick(); }
+
+        verify(provisioner, times(1)).verifyReady();
+        verify(worker, times(1)).claim(anyString(), anyLong());
+        assertEquals(OnboardingRunner.CREDENTIALS_REJECTED, runner.pausedReason());
     }
 }
