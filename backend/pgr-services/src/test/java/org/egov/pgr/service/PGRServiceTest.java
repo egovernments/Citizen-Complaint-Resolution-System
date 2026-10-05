@@ -57,7 +57,6 @@ class PGRServiceTest {
     @Mock private PGRConfiguration config;
     @Mock private PGRRepository repository;
     @Mock private MDMSUtils mdmsUtils;
-    @Mock private ComplaintDomainEventService complaintDomainEventService;
     @Mock private PGRUtils pgrUtils;
     @Mock private ExtendedAttributesValidationService extendedAttributesValidationService;
     @Mock private EncryptionDecryptionService encryptionDecryptionService;
@@ -72,7 +71,7 @@ class PGRServiceTest {
     void setup() {
         when(config.getStateLevelTenantIdLength()).thenReturn(2);
         pgrService = new PGRService(enrichmentService, userService, workflowService, validator, producer,
-                config, repository, mdmsUtils, complaintDomainEventService, pgrUtils,
+                config, repository, mdmsUtils, pgrUtils,
                 extendedAttributesValidationService, encryptionDecryptionService, searchAccessPolicyService,
                 fieldVisibilityService, escalationService, escalationLockManager);
     }
@@ -171,7 +170,6 @@ class PGRServiceTest {
         verify(escalationService).prepareUpdate(request, persisted);
         verify(enrichmentService).enrichUpdateRequest(request);
         verify(workflowService).updateWorkflowStatus(request);
-        verify(complaintDomainEventService).publishWorkflowTransitionEvent(request, "PENDINGATLME");
         verify(producer).push("ke.bomet", "pgr-update", request);
         verify(producer).push("ke.bomet", "pgr-inbox-update", request);
         verify(producer).push(eq("ke.bomet"), eq("pgr-escalation-events"), any());

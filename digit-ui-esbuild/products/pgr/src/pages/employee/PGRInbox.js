@@ -10,6 +10,7 @@ import useBusinessServiceStates from "../../hooks/pgr/useBusinessServiceStates";
 import useInboxVisibility from "../../hooks/pgr/useInboxVisibility";
 import PGRInboxTabs from "../../components/PGRInboxTabs";
 import Urls from "../../utils/urls";
+import { revealMenusIn } from "../../utils/revealMenu";
 
 // Defense-in-depth against a misconfigured MDMS regex causing catastrophic
 // backtracking (ReDoS, CWE-1333) when compiled below. Mobile-number patterns
@@ -262,6 +263,11 @@ const PGRSearchInbox = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, visLoading, visibilityEnabled, i18n?.language]);
 
+  // On desktop the filter's fields scroll inside their card (overrides.css);
+  // a dropdown opened near its bottom brings its menu into view.
+  const [pageRoot, setPageRoot] = useState(null);
+  useEffect(() => revealMenusIn(pageRoot, ".digit-section.filter .content-container"), [pageRoot]);
+
   /**
    * Show loader until necessary data is available
    */
@@ -294,7 +300,7 @@ const PGRSearchInbox = () => {
   })();
 
   return (
-    <div className="v2-pgr-inbox v2-scope">
+    <div className="v2-pgr-inbox v2-scope" ref={setPageRoot}>
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
       </header>

@@ -4,6 +4,16 @@
 #   ./deploy.sh mytenant              # full deploy
 #   ./deploy.sh mytenant --tags=nginx # subset
 #   ./deploy.sh mytenant --check      # dry-run + diff
+#   ./deploy.sh mytenant --image-tag=develop-1a2b3c4d
+#                                     # deploy the images CI pushed under one tag
+#   ./deploy.sh mytenant --image-tag=master-3f9e2a1 --image-tag-services=pgr-services
+#                                     # ...for only some images (+ their -db image)
+#   ./deploy.sh mytenant --image-tag=   # ignore a host_vars image_tag for this run
+#
+# --image-tag / --image-tag-services (or CCRS_IMAGE_TAG / CCRS_IMAGE_TAG_SERVICES
+# in the environment) set `image_tag` / `image_tag_services` for this run only; see
+# "One-tag deploys" in inventory/group_vars/digit.yml. Without them every image
+# keeps its compose-file default (or its host_vars pin).
 #
 # Tenants are defined in inventory/host_vars/<name>.yml. The inventory
 # (inventory/hosts.yml) is regenerated on every run from whatever
@@ -217,8 +227,70 @@ if [[ "${SKIP_PREFLIGHT:-0}" != "1" ]]; then
 fi
 
 shift
+
+# One-tag deploys (#1729). Pull our two flags out of the argument list (every
+# other argument still goes to ansible-playbook untouched) and hand them over
+# as JSON extra vars, which outrank host_vars. Validated here as well as in the
+# playbook so a typo fails before ansible ever connects to the box.
+#
+# Each var is passed ONLY when it was actually given: an extra var outranks
+# host_vars, so always sending `image_tag_services: []` silently widened a
+# scope stored in host_vars to every image (Vinoth review on #2166).
+#
+# The environment names carry a CCRS_ prefix on purpose: a bare IMAGE_TAG is
+# what many CI runners already export for their own docker builds, and would
+# have re-tagged every image of a plain `./deploy.sh <tenant>`.
+#
+# The ${arr[@]+...} expansions below keep `set -u` happy on macOS's bash 3.2,
+# which treats an empty array as unbound.
+image_tag="${CCRS_IMAGE_TAG:-}"
+image_tag_services="${CCRS_IMAGE_TAG_SERVICES:-}"
+image_tag_cleared=0   # an explicit `--image-tag=` (empty): drop a host_vars tag for this run
+passthrough=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image-tag=*)          image_tag="${1#*=}"; [[ -z "$image_tag" ]] && image_tag_cleared=1; shift ;;
+    --image-tag)            image_tag="${2:?--image-tag needs a value}"; shift 2 ;;
+    --image-tag-services=*) image_tag_services="${1#*=}"; shift ;;
+    --image-tag-services)   image_tag_services="${2:?--image-tag-services needs a value}"; shift 2 ;;
+    *)                      passthrough+=("$1"); shift ;;
+  esac
+done
+
+extra_json=""
+if [[ -n "$image_tag" ]]; then
+  # Same rule build-images.yml applies before it pushes a tag.
+  if [[ ! "$image_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]]; then
+    echo "ERROR: --image-tag '${image_tag}' is not a Docker tag (letters, digits, . _ -; max 128)." >&2
+    exit 1
+  fi
+  extra_json="\"image_tag\": \"${image_tag}\""
+elif [[ "$image_tag_cleared" == 1 ]]; then
+  extra_json="\"image_tag\": \"\""
+fi
+if [[ -n "$image_tag_services" ]]; then
+  if [[ ! "$image_tag_services" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]]; then
+    echo "ERROR: --image-tag-services '${image_tag_services}' must be comma-separated image names, e.g. pgr-services,novu-bridge." >&2
+    exit 1
+  fi
+  # A loop, not ${var//,/\",\"}: bash < 4.3 (macOS /bin/bash 3.2) keeps the
+  # backslashes of that replacement, producing one malformed element.
+  services_json=""
+  IFS=, read -r -a services_arr <<<"$image_tag_services"
+  for svc in "${services_arr[@]}"; do
+    services_json="${services_json:+${services_json},}\"${svc}\""
+  done
+  extra_json="${extra_json:+${extra_json}, }\"image_tag_services\": [${services_json}]"
+fi
+extra_vars=()
+if [[ -n "$extra_json" ]]; then
+  extra_vars=(-e "{${extra_json}}")
+  echo "──── image tag: ${image_tag:-$([[ "$image_tag_cleared" == 1 ]] && echo '<none: host_vars tag cleared>' || echo '<from host_vars>')}${image_tag_services:+ (only: ${image_tag_services})} ────" >&2
+fi
+
 ansible-playbook \
   -i inventory/hosts.yml \
   --limit "$host" \
   playbook-deploy.yml \
-  "$@"
+  ${extra_vars[@]+"${extra_vars[@]}"} \
+  ${passthrough[@]+"${passthrough[@]}"}

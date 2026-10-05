@@ -18,6 +18,7 @@ import {
   type PreviewTile,
 } from './kpiCatalog';
 import { listTimeZones } from '@/lib/timezones';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -415,17 +416,14 @@ export default function PublicDashboardConfigure() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <select
-            aria-label="Dashboard time zone"
+          <SearchableSelect
+            ariaLabel="Dashboard time zone"
             value={timeZone}
+            options={timeZoneOptions}
+            onChange={(tz) => void setDashboardTimeZone(tz)}
             disabled={savingTimeZone || saving}
-            onChange={(e) => void setDashboardTimeZone(e.target.value)}
-            className="flex h-10 w-full max-w-sm rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {timeZoneOptions.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </select>
+            placeholder="Search timezone…"
+          />
           <p className="text-xs leading-5 text-muted-foreground">
             Most tiles pick up the new zone on their next scheduled refresh (every few minutes),
             not instantly. The daily backlog trend is the one exception — it's an append-only

@@ -34,6 +34,7 @@
  */
 import { test, expect, type Request } from '@playwright/test';
 import { ROOT_TENANT } from '../utils/env';
+import { detectConfiguratorLogin } from '../utils/configurator-auth';
 
 // The configured root (state) tenant, from env — the login placeholder
 // derives from the configured tenant (app fix), so we expect ROOT_TENANT here.
@@ -89,7 +90,10 @@ Pairs with the other three hardcoding tests in this file — together they cover
     const context = await browser.newContext({ storageState: undefined });
     const page = await context.newPage();
     try {
-      await page.goto('/configurator/login');
+      test.skip(
+        (await detectConfiguratorLogin(page)) === 'hosted',
+        'this configurator uses hosted sign-in (#2107): there is no tenant field on its login page; the workspace is chosen after sign-in',
+      );
 
       const tenantInput = page.locator('#tenantCode');
       await expect(tenantInput).toBeVisible();
