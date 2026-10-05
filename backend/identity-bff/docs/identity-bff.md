@@ -759,7 +759,11 @@ Organization membership **only**, and idempotent. The role projection and the ma
 
 ### 5.1 User attributes
 
-All `digit.*` attributes are **admin-only**: declared in the user profile with view and edit for `admin` only (Keycloak config, lane E). Every write follows the safe writer rule (design §4):
+All `digit.*` user attributes are **admin-only**: `keycloak/realm.json` declares each one the BFF writes in the user profile, with view and edit for `admin` only, and `configure-keycloak.sh` applies the declarations to new and existing realms on every run. An undeclared attribute stays admin-only through `unmanagedAttributePolicy: ADMIN_EDIT`.
+
+They are declared for their length limit too. Keycloak caps each value of an undeclared attribute at 2048 characters, which `digit.bindings` and `digit.accounts` outgrow after a few records. The declared limits per value are 65536 for `digit.bindings` and 4194304 for `digit.accounts`, enough for 64 records of the largest shape the schemas allow. The other attributes keep 2048. The reasoning is in the realm's `userProfile.$comment`, and `tests/unit/keycloak-user-profile.test.ts` fails when an attribute in the code is not declared.
+
+Every write follows the safe writer rule (design §4):
 - read the user fresh just before the PUT, under the person lease;
 - send `attributes` (and the mirrored name);
 - **preserve** the freshly read `email`, `emailVerified`, `username` and other profile fields;
