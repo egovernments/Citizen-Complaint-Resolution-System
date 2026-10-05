@@ -753,7 +753,7 @@
      select's focus treatment (border-foreground + 15% ring); the only
      divergence is aria-expanded reusing the focus border while open. */
   .dashboard-popover-trigger {
-    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-[7.5rem] tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-[7.5rem] tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-solid tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
     font-family: inherit;
     -webkit-appearance: none;
     appearance: none;
