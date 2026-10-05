@@ -23,7 +23,7 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     throw new Error('tenant_bootstrap requires an authenticated platform administrator');
   }
   const target = String(args.target_tenant);
-  const source = String(args.source_tenant || api.getEnvironmentInfo().stateTenantId);
+  const source = args.source_tenant ? String(args.source_tenant) : 'platform-baseline';
   const seed = loadPlatformSeed();
   const direct = options.direct ?? process.env.MCP_PLATFORM_BOOTSTRAP_DIRECT === 'true';
   const host = direct ? (options.mdmsHost ?? process.env.EGOV_MDMS_HOST ?? '').replace(/\/$/, '') : '';
@@ -107,8 +107,13 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   }
   let rules = args.user_validation as Record<string, unknown>[] | undefined;
   if (!rules) {
-    const countryRules = await api.mdmsV2SearchRaw(source, 'common-masters.MobileNumberValidation', { limit: 100 });
-    const current = countryRules.find((row) => row.isActive !== false && row.data?.default === true)?.data;
+    // The seed is the default source; reading a live tenant's rule is an explicit source_tenant opt-in.
+    const prefix = args.mobile_prefix ?? args.mobile_zone;
+    const current = args.source_tenant
+      ? (await api.mdmsV2SearchRaw(source, 'common-masters.MobileNumberValidation', { limit: 100 }))
+        .find((row) => row.isActive !== false && row.data?.default === true)?.data
+      : args.country ? seed.countryMobileRules[String(args.country).toUpperCase()]
+        : Object.values(seed.countryMobileRules).find((rule) => rule.countryCode === prefix);
     if (!current && !args.mobile_regex) throw new Error('Country mobile rule is missing');
     const countryCode = args.mobile_prefix ?? args.mobile_zone ?? current?.countryCode;
     if (!countryCode) throw new Error('Country mobile prefix is missing');

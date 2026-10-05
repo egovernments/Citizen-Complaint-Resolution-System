@@ -97,27 +97,10 @@ public class OnboardingSteps {
             });
         }
         progress.record("mobile", () -> {
-            // Country master is deployment-owned; never inherit a regex from an unrelated tenant.
-            JsonNode rules = records(signup.getCountryCode().toLowerCase(Locale.ROOT), "common-masters.MobileNumberValidation", null);
-            JsonNode rule = null; boolean active = false;
-            for (JsonNode r : rules) {
-                if (!r.isObject() || (r.has("isActive") && !r.path("isActive").isBoolean()))
-                    throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true);
-                if (!r.path("isActive").asBoolean(true)) continue;
-                active = true;
-                JsonNode data = r.path("data");
-                validateMobileRule(data);
-                if (data.path("default").booleanValue()) {
-                    if (rule != null) throw new OnboardingFailure("COUNTRY_MOBILE_RULE_AMBIGUOUS", true);
-                    rule = data;
-                }
-            }
-            if (rule == null && active) throw new OnboardingFailure("COUNTRY_MOBILE_RULE_INVALID", true);
-            if (rule == null) {
-                rule = seed.countryMobileRule(signup.getCountryCode());
-                if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
-                validateMobileRule(rule);
-            }
+            // The seed is the only source: onboarding never reads a country rule from another tenant.
+            JsonNode rule = seed.countryMobileRule(signup.getCountryCode());
+            if (rule.isMissingNode()) throw new OnboardingFailure("COUNTRY_NOT_SUPPORTED", false);
+            validateMobileRule(rule);
             ensureRecord(scope, tenant, "common-masters.MobileNumberValidation", rule.path("countryCode").asText(), asMap(rule));
         });
         progress.record("state-info", () -> {

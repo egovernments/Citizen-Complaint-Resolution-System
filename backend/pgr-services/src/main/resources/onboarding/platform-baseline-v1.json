@@ -21,6 +21,16 @@
       "countryCode": "+254",
       "mobileNumberRegex": "^[17][0-9]{8}$",
       "default": true
+    },
+    "ET": {
+      "countryCode": "+251",
+      "mobileNumberRegex": "^9[0-9]{8}$",
+      "default": true
+    },
+    "MZ": {
+      "countryCode": "+258",
+      "mobileNumberRegex": "^8[2-7][0-9]{7}$",
+      "default": true
     }
   },
   "schemas": [
