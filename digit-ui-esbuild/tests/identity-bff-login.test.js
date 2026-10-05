@@ -374,8 +374,9 @@ const withBrowser = async (pathname, surface, fn) => {
       calls.push({ url, init, body: JSON.parse(init.body) });
       return json(204, null);
     },
-    localStorage: { clear: () => cleared.push("local") },
-    sessionStorage: { clear: () => { cleared.push("session"); flags.clear(); }, setItem: (k, v) => flags.set(k, v) },
+    // The flag lives in localStorage so a new tab or window sees it too.
+    localStorage: { clear: () => { cleared.push("local"); flags.clear(); }, setItem: (k, v) => flags.set(k, v) },
+    sessionStorage: { clear: () => cleared.push("session") },
   };
   try {
     await fn();

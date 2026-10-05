@@ -288,7 +288,8 @@ test("after an unconfirmed sign-out the login page warns instead of re-establish
     return json(200, { access_token: "prev-user-token", UserRequest: { uuid: "prev", tenantId: tenant.tenantId, type: "EMPLOYEE", roles: [] } });
   });
   const flags = new Map([["identityBff.signOutIncomplete", "1"]]);
-  window.sessionStorage = { getItem: (k) => flags.get(k) ?? null, setItem: (k, v) => flags.set(k, v), removeItem: (k) => flags.delete(k) };
+  // Set by a sign-out in another tab: localStorage reaches this one.
+  window.localStorage = { getItem: (k) => flags.get(k) ?? null, setItem: (k, v) => flags.set(k, v), removeItem: (k) => flags.delete(k) };
   let signedIn = 0;
   let signedOut = 0;
   Digit.UserService.logout = async () => { signedOut += 1; };

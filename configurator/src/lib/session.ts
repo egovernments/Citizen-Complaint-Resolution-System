@@ -7,10 +7,11 @@ import { API_ORIGIN, logout as identityLogout, type DigitContext, type SessionUs
 export const AUTH_STORAGE_KEY = 'crs-auth-state';
 export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 /**
- * Set in this tab when sign-out cleared the local session but the identity BFF
- * did not confirm it. Its HttpOnly cookie may then still be live, so the login
- * page must not silently resume that session. Cleared by a confirmed sign-out
- * or an explicit sign-in.
+ * Set when sign-out cleared the local session but the identity BFF did not
+ * confirm it. Its HttpOnly cookie may then still be live, so the login page
+ * must not silently resume that session. Cleared by a confirmed sign-out or an
+ * explicit sign-in. It lives in localStorage, not sessionStorage, so a new tab
+ * or window on a shared device is covered too.
  */
 export const SIGN_OUT_INCOMPLETE_KEY = 'crs-sign-out-incomplete';
 
@@ -62,8 +63,8 @@ export async function signOutThisDevice(scope: 'current' | 'all' = 'current'): P
     // The local session is already gone; the identity session may not be.
   }
   try {
-    if (confirmed) window.sessionStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
-    else window.sessionStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
+    if (confirmed) window.localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
+    else window.localStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
   } catch {
     // Private windows and blocked site data both throw on access.
   }

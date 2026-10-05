@@ -15,11 +15,13 @@ it.each([
   ['an unreachable BFF', () => Promise.reject(new TypeError('Failed to fetch')), false],
   ['a successful BFF logout', () => Promise.resolve(), true],
 ])('clears the DIGIT session on %s', async (_label, outcome, confirmed) => {
-  window.sessionStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
+  window.localStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
   vi.mocked(logout).mockImplementation(outcome);
   await expect(signOutThisDevice()).resolves.toBe(confirmed);
   // An unconfirmed sign-out leaves the BFF cookie live, so the login page must not resume it.
-  expect(window.sessionStorage.getItem(SIGN_OUT_INCOMPLETE_KEY)).toBe(confirmed ? null : '1');
+  // localStorage, so a new tab or window on a shared device sees it too.
+  expect(window.localStorage.getItem(SIGN_OUT_INCOMPLETE_KEY)).toBe(confirmed ? null : '1');
+  expect(window.sessionStorage.getItem(SIGN_OUT_INCOMPLETE_KEY)).toBeNull();
   expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
   expect(apiClient.logout).toHaveBeenCalled();
   expect(logout).toHaveBeenCalledWith('current');

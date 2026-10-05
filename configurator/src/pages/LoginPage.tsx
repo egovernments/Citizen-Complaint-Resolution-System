@@ -37,7 +37,7 @@ function expiredSessionMessage(): string | null {
 
 function signOutIncomplete(): boolean {
   try {
-    return sessionStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === '1';
+    return localStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === '1';
   } catch {
     return false;
   }
@@ -143,7 +143,7 @@ export default function LoginPage() {
 
   const signIn = (methodId: string) => {
     try {
-      sessionStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
+      localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
     } catch {
       // Storage can be unavailable; sign-in itself does not depend on it.
     }

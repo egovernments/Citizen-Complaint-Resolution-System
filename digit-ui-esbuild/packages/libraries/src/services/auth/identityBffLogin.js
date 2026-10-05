@@ -209,20 +209,22 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
 }
 
 /**
- * Set in this tab when sign-out cleared local state but the BFF did not
+ * Set when sign-out cleared local state but the BFF did not
  * confirm it. The BFF cookie (HttpOnly) is then still live, so the login page
  * must not silently re-establish that session. Cleared by an explicit sign-in
- * or a successful sign-out (which clears sessionStorage first).
+ * or a successful sign-out (which clears localStorage first). It lives in
+ * localStorage, not sessionStorage, so a new tab or window on a shared device
+ * is covered too; outliving a browser restart is acceptable.
  */
 export const SIGN_OUT_INCOMPLETE_KEY = "identityBff.signOutIncomplete";
 export function markSignOutIncomplete() {
-  try { window.sessionStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, "1"); } catch (_) { /* storage unavailable */ }
+  try { window.localStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, "1"); } catch (_) { /* storage unavailable */ }
 }
 export function signOutIncomplete() {
-  try { return window.sessionStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === "1"; } catch (_) { return false; }
+  try { return window.localStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === "1"; } catch (_) { return false; }
 }
 export function clearSignOutIncomplete() {
-  try { window.sessionStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY); } catch (_) { /* storage unavailable */ }
+  try { window.localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY); } catch (_) { /* storage unavailable */ }
 }
 
 /** Where to land after logout for `surface` under `appBasePath`. */
