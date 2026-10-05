@@ -13,6 +13,10 @@ you have done [Verify the Novu key](README.md#verify-the-novu-key).
 
 ## Do you need this?
 
+This covers complaint notifications sent through novu-bridge. On 2.12, login OTP SMS go
+through `egov-notification-sms` (`SMS_PROVIDER_CLASS: Console`), not Novu, so this gateway
+does not send OTPs.
+
 | Your gateway | What to do |
 |---|---|
 | SMSCountry, legacy bulk API | Not this guide. Use [Enable SMS](README.md#enable-sms), which posts to SMSCountry directly |
@@ -67,7 +71,11 @@ for f in register.js novu.js smscountry.js jasmin.js ozeki.js; do
   git show d713ff94863c3493d9f2db1785feb3ee95a4b169:backend/novu-bridge/novu-worker-providers/$f \
     > local-setup/configs/novu-worker-providers/$f
 done
+wc -c local-setup/configs/novu-worker-providers/*.js
 ```
+
+None of the files may be 0 bytes. A failed `git show` (the commit not fetched, a typo) still
+creates the file through the redirect, and leaves it empty.
 
 That commit's `register.js` already has the redaction boundary (`sealErrors`). None of these
 files had changed on `develop` since, as of 2026-10-05. If
@@ -162,6 +170,9 @@ The rules that matter:
   answer 200 to a rejected message or a wrong password. Keep `validateStatus: () => true`,
   and throw whenever the reply is not a clear acceptance. If you don't throw, Novu records the
   message as sent.
+- **`options.to` is the number as DIGIT stores it.** On 2.12, complaint SMS arrive in
+  national format without the country code (e.g. `841212121`). Add the country code in
+  `sendMessage` if your gateway needs E.164.
 - **Return `{ id, date }`.** `id` is the gateway's message id, which Novu shows in its
   activity feed.
 - **Mask credentials in any gateway text you quote** (`redactedSnippet(text, [secrets])`).
@@ -277,7 +288,7 @@ loses primary, and that is fine as long as `novu_bridge_integration_id_whatsapp`
 
 ## Step 6: Check it works
 
-1. **One message.** In the Configurator, open **Notifications → Providers** and **Test** with
+1. **One message.** In the Configurator, open **Notifications → Notification Providers** and **Test** with
    channel `SMS`, your own number and a message. **Send Test** stays disabled until both are filled in. This uses the same `complaints-sms` workflow and
    primary integration as a real notification. A success there only means Novu accepted it.
 2. **What the gateway said.** In Novu, the message's job should be `completed`, and its
@@ -285,18 +296,20 @@ loses primary, and that is fine as long as `novu_bridge_integration_id_whatsapp`
 
    ```bash
    curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" "$NOVU_BASE_URL/v1/notifications?page=0&limit=5" \
-     | jq '.data[] | {workflow: .template.name, jobs: [.jobs[] | {status,
+     | jq '.data[] | {workflow: .template.name, txn: .transactionId, jobs: [.jobs[] | {status,
            detail: ([.executionDetails[] | .detail] | last),
            raw: ([.executionDetails[] | .raw | select(. != null)] | last)}]}'
    ```
 
    The job's `providerId` field may still say `twilio`. Novu fills it from the step, not from
-   the integration that sent the message. Go by the message id in `raw` and by the gateway's
-   own report.
+   the integration that sent the message. Go by the execution detail `Integration instance
+   selected`, whose `raw` names the integration that sent it (e.g. `acme-sms-prod`), by the
+   message id in `raw`, and by the gateway's own report. Each complaint makes an SMS and a
+   WhatsApp notification; `txn` pairs them.
 3. **The handset**, and the gateway's delivery report. Accepted is not the same as delivered.
 4. **WhatsApp, if enabled.** Run **Test** with channel `WHATSAPP` and an approved Content SID, and check that it still goes
    through Twilio.
-5. **A real complaint.** Trigger a transition, then check **Notifications → Logs**.
+5. **A real complaint.** Trigger a transition, then check **Notifications → Notification Logs**.
 
 ## When it goes wrong
 
@@ -311,7 +324,7 @@ loses primary, and that is fine as long as `novu_bridge_integration_id_whatsapp`
 | Your handler receives an empty credential | The key isn't one Novu stores. Rename it (Step 2) |
 | Novu says `completed`, but nothing arrives | The provider treated a rejection as success. Check how it reads the gateway's reply |
 
-The bridge's **Notifications → Logs** shows `SENT` once Novu accepts the trigger. It doesn't
+The bridge's **Notifications → Notification Logs** shows `SENT` once Novu accepts the trigger. It doesn't
 show whether your gateway took the message. Novu's job status and the gateway's own report do.
 
 ## Upgrading
@@ -330,7 +343,12 @@ show whether your gateway took the message. Novu's job status and the gateway's 
 
 ## Tested
 
-The steps were run against stock `ghcr.io/novuhq/novu/api:2.3.0` and `worker:2.3.0`. The setup
+Verified end to end on a fresh v2.12 deploy (tag `v2.12`, 4dcb55923) on 2026-10-05: the
+`configs/` copy, the overlay loading the providers into `novu-worker`, the worker restart,
+the Novu API create and `set-primary`, WhatsApp staying on Twilio, and a real complaint's SMS
+delivered through the new gateway (a mock).
+
+Before that, the steps were run against stock `ghcr.io/novuhq/novu/api:2.3.0` and `worker:2.3.0`. The setup
 had a `twilio-whatsapp` integration and the `complaints-sms` workflow as a 2.12 deploy creates
 them, plus the ACME example above and a mock gateway:
 

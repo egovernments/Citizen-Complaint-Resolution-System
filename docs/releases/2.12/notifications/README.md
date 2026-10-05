@@ -99,7 +99,7 @@ WhatsApp goes through Twilio. Set these and re-run `./deploy.sh mycity`:
 | `twilio_auth_token` | From the Twilio Console. | |
 | `twilio_whatsapp_from` | Your WhatsApp sender, with the `whatsapp:` prefix. Defaults to Twilio's sandbox number if omitted. | `whatsapp:+14155238886` |
 | `novu_bridge_workflow_id_whatsapp` | Leave at the default unless you renamed the workflow. | `"complaints-whatsapp"` |
-| `novu_bridge_integration_id_whatsapp` | Leave blank. Only needed if a second Twilio integration exists alongside the WhatsApp one. | |
+| `novu_bridge_integration_id_whatsapp` | Leave blank unless another SMS integration is, or may become, Novu's primary (a second Twilio account, or a gateway added with [Adding an SMS Gateway](adding-an-sms-gateway.md)). Then set it to `twilio-whatsapp`. | |
 
 The deploy registers the Twilio account with Novu and creates the message route
 WhatsApp uses. The rest of this section is verification and the extra steps real
