@@ -1,28 +1,20 @@
-import { createHmac } from "node:crypto";
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { errorBody } from "../../contract/error-codes.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import { ensureMagicLinkSignupIdentity } from "../organizations/organization-service.js";
 import { createLoginAttempt } from "../sessions/session-store.js";
 import { enabledIdentityMethods } from "./methods.js";
-import { safeIdentityReturnTo } from "./redirects.js";
+import { returnDestination } from "./redirects.js";
+import { normalizedEmail } from "./password-setup.js";
 import type { IdentityAuthMethod } from "./types.js";
 
 const ACCEPTED = {
   message: "Check your email for a link to continue creating your account.",
 };
-
-function normalizedEmail(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const email = value.trim().toLowerCase();
-  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    ? email
-    : null;
-}
 
 function normalizedName(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -32,13 +24,6 @@ function normalizedName(value: unknown): string | null {
 
 function withinLimit(bucket: string): Promise<boolean> {
   return withinRateLimit(bucket, config.identityMagicLinkRequestLimit, config.identityMagicLinkRequestWindowSeconds);
-}
-
-function privateEmailKey(email: string): string {
-  const key = createHmac("sha256", config.keycloakBffClientSecret)
-    .update("digit.identity.magic-link.rate-limit.v1")
-    .digest();
-  return createHmac("sha256", key).update(email).digest("hex");
 }
 
 async function sendSignupMagicLink(input: {
@@ -112,16 +97,11 @@ export function registerMagicLinkRoutes(app: express.Application): void {
     const email = normalizedEmail(request.body?.email);
     const firstName = normalizedName(request.body?.firstName);
     const lastName = normalizedName(request.body?.lastName);
-    const requestedReturnTo = request.body?.returnTo === undefined
-      ? null
-      : safeIdentityReturnTo(request.body.returnTo);
+    const returnTo = returnDestination(request.body?.returnTo);
     if (!email || !firstName || !lastName) {
       return response.status(400).json(errorBody("INVALID_REQUEST", "First name, last name, and a valid email are required"));
     }
-    if (request.body?.returnTo !== undefined && !requestedReturnTo) {
-      return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
-    }
-    const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
+    if (!returnTo) return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
 
     let magicMethod: IdentityAuthMethod | undefined;
     try {
@@ -138,7 +118,7 @@ export function registerMagicLinkRoutes(app: express.Application): void {
     const prefix = `${config.cachePrefix}:identity:magic-link-signup-limit`;
     const [ipAllowed, emailAllowed] = await Promise.all([
       withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:email:${privateEmailKey(email)}`),
+      withinLimit(`${prefix}:email:${privateRateKey("magic-link", email)}`),
     ]);
     if (!ipAllowed || !emailAllowed) return response.status(202).json(ACCEPTED);
 

@@ -31,6 +31,15 @@ export function tenantBoundReturnTo(value: unknown, prefix: string): string | nu
   return path.startsWith(prefix) ? safe : null;
 }
 
+/**
+ * A request's validated `returnTo`, or null when one was given but is unsafe.
+ * With a tenant prefix the default is the prefix; otherwise the post-login page.
+ */
+export function returnDestination(value: unknown, tenantPrefix?: string): string | null {
+  if (tenantPrefix !== undefined) return value === undefined ? tenantPrefix : tenantBoundReturnTo(value, tenantPrefix);
+  return value === undefined ? config.identityPostLoginRedirect : safeIdentityReturnTo(value);
+}
+
 export function withAuthResult(destination: string, id: string): string {
   if (destination.startsWith("/") && !destination.startsWith("//")) {
     const relative = new URL(destination, "http://identity.invalid");

@@ -1,7 +1,9 @@
 import {
+  IdentityAdminError,
   liveTenantMapping,
   readTenantMappingForUrlSlug,
 } from "../organizations/organization-service.js";
+import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import type { BoundTenant } from "../authentication/surfaces.js";
 import { isActiveDigitTenant } from "./tenant-directory.js";
 
@@ -46,6 +48,27 @@ export async function resolvePublicTenantRoute(
     fallbackTenantIds: mapping.fallbackTenantIds,
     name: mapping.name,
   };
+}
+
+export interface TenantRouteRefusal {
+  status: 400 | 404 | 503;
+  code: "INVALID_REQUEST" | "TENANT_ROUTE_NOT_FOUND" | "TENANT_ROUTE_UNAVAILABLE";
+  error: string;
+}
+
+/** The route for a request's `tenantSlug`, or why it is refused (Admin or DIGIT outage: 503). */
+export async function routeForSlug(tenantSlug: unknown): Promise<PublicTenantRoute | TenantRouteRefusal> {
+  if (typeof tenantSlug !== "string" || !tenantSlug) {
+    return { status: 400, code: "INVALID_REQUEST", error: "tenantSlug is required" };
+  }
+  try {
+    return await resolvePublicTenantRoute(tenantSlug) ??
+      { status: 404, code: "TENANT_ROUTE_NOT_FOUND", error: "Tenant route is not available" };
+  } catch (error) {
+    if (!(error instanceof IdentityAdminError || error instanceof DigitUnavailableError)) throw error;
+    console.warn("Tenant route resolution failed:", error.message);
+    return { status: 503, code: "TENANT_ROUTE_UNAVAILABLE", error: "Tenant routes are temporarily unavailable" };
+  }
 }
 
 /**

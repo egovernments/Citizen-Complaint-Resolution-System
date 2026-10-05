@@ -7,11 +7,7 @@ import { assertPhoneAvailable, completePhoneProof, phoneSignIn, PhoneProofError,
 import { withPhoneLock } from "./phone-lock.js";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
-import {
-  boundTenantOf,
-  resolvePublicTenantRoute,
-  type PublicTenantRoute,
-} from "../access-context/tenant-route.js";
+import { boundTenantOf, routeForSlug, type PublicTenantRoute } from "../access-context/tenant-route.js";
 import { enabledIdentityMethods } from "../authentication/methods.js";
 import { mobileValidationForRoute } from "../citizen-otp/mobile-validation.js";
 import { splitE164 } from "../citizens/citizen-registration.js";
@@ -59,22 +55,10 @@ async function routeTenant(
   tenantSlug: unknown,
   response: express.Response,
 ): Promise<PublicTenantRoute | null> {
-  if (typeof tenantSlug !== "string" || !tenantSlug) {
-    response.status(400).json({ error: "tenantSlug is required", code: "INVALID_REQUEST" });
-    return null;
-  }
-  try {
-    const tenant = await resolvePublicTenantRoute(tenantSlug);
-    if (!tenant) response.status(404).json({ error: "Tenant route is not available", code: "TENANT_ROUTE_NOT_FOUND" });
-    return tenant;
-  } catch (error) {
-    if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
-      console.warn("Tenant route resolution failed:", error.message);
-      response.status(503).json({ error: "Tenant routes are temporarily unavailable", code: "TENANT_ROUTE_UNAVAILABLE" });
-      return null;
-    }
-    throw error;
-  }
+  const route = await routeForSlug(tenantSlug);
+  if (!("status" in route)) return route;
+  response.status(route.status).json({ error: route.error, code: route.code });
+  return null;
 }
 
 async function phoneOtpEnabled(): Promise<boolean> {

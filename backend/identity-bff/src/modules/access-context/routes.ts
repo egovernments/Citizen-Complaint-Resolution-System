@@ -1,6 +1,6 @@
 import type express from "express";
-import { asyncRoute } from "../../app/async-route.js";
-import { errorBody, errorStatus, isErrorCode, type HttpErrorCode } from "../../contract/error-codes.js";
+import { asyncRoute, sendError as send } from "../../app/async-route.js";
+import { errorStatus, isErrorCode, type HttpErrorCode } from "../../contract/error-codes.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
 import {
@@ -75,11 +75,6 @@ async function cleanupIssuedToken(lease: PersonLease, account: AccountRef, login
   // Revocation succeeded or has a durable retry. Compare-and-delete cannot erase
   // a replacement token, and lease loss leaves inventory for the current owner.
   await forgetToken(lease, account, login.accessToken).catch(() => undefined);
-}
-
-function send(response: express.Response, code: HttpErrorCode, message: string) {
-  if (code === "IDENTITY_BUSY" || code === "BINDING_BUSY") response.setHeader("Retry-After", "1");
-  return response.status(errorStatus(code)).json(errorBody(code, message));
 }
 
 /**

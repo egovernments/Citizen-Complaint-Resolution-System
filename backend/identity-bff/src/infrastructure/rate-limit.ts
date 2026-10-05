@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { config } from "./config.js";
 import { getRedis } from "./redis.js";
 
 /**
@@ -26,4 +28,12 @@ const UNCOUNT = `local current = tonumber(redis.call('GET', KEYS[1]) or '0')
 
 export async function uncount(key: string): Promise<void> {
   await getRedis().eval(UNCOUNT, 1, key);
+}
+
+/** HMAC of an identifier under a per-purpose key: rate-limit keys never hold the identifier. */
+export function privateRateKey(purpose: string, identifier: string): string {
+  const key = createHmac("sha256", config.keycloakBffClientSecret)
+    .update(`digit.identity.${purpose}.rate-limit.v1`)
+    .digest();
+  return createHmac("sha256", key).update(identifier).digest("hex");
 }

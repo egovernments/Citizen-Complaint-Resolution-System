@@ -1,7 +1,7 @@
 import type express from "express";
-import { asyncRoute } from "../../app/async-route.js";
+import { asyncRoute, sendError as send } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
-import { errorBody, errorStatus, isErrorCode, type HttpErrorCode } from "../../contract/error-codes.js";
+import { errorStatus, isErrorCode, type HttpErrorCode } from "../../contract/error-codes.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { parseSurface } from "../authentication/surfaces.js";
 import { currentSession } from "../sessions/current-session.js";
@@ -9,10 +9,6 @@ import { acceptWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, r
 
 const tenantPattern = /^[A-Za-z0-9_-]{1,50}$/;
 const uuidPattern = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
-function send(response: express.Response, code: HttpErrorCode, message: string) {
-  if (code === "IDENTITY_BUSY" || code === "BINDING_BUSY") response.setHeader("Retry-After", "1");
-  return response.status(errorStatus(code)).json(errorBody(code, message));
-}
 function failure(error: unknown, response: express.Response) {
   const candidate = error as { code?: unknown; message?: string };
   if (isErrorCode(candidate?.code) && typeof errorStatus(candidate.code as HttpErrorCode) === "number") {

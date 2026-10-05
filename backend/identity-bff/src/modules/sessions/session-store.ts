@@ -50,24 +50,28 @@ function randomId(): string {
   return randomBytes(32).toString("base64url");
 }
 
-function loginKey(state: string): string {
-  return `${config.cachePrefix}:identity:login:${state}`;
+const loginKey = (state: string) => `${config.cachePrefix}:identity:login:${state}`;
+const authResultKey = (id: string) => `${config.cachePrefix}:identity:auth-result:${id}`;
+const passwordSetupKey = (id: string) => `${config.cachePrefix}:identity:password-setup:${id}`;
+export const sessionKey = (sessionId: string) => `${config.cachePrefix}:identity:session:${sessionId}`;
+export const contextKey = (sessionId: string) => `${config.cachePrefix}:identity:context:${sessionId}`;
+
+/** Short-lived JSON under a fresh random id: login attempts, auth results, password setups. */
+async function store(key: (id: string) => string, value: unknown, ttlSeconds: number, id = randomId()): Promise<string> {
+  await getRedis().set(key(id), JSON.stringify(value), "EX", ttlSeconds);
+  return id;
 }
 
-export function sessionKey(sessionId: string): string {
-  return `${config.cachePrefix}:identity:session:${sessionId}`;
-}
-
-function authResultKey(id: string): string {
-  return `${config.cachePrefix}:identity:auth-result:${id}`;
-}
-
-function passwordSetupKey(id: string): string {
-  return `${config.cachePrefix}:identity:password-setup:${id}`;
-}
-
-export function contextKey(sessionId: string): string {
-  return `${config.cachePrefix}:identity:context:${sessionId}`;
+/** Reads (or, single-use, consumes) a stored JSON record; malformed records read as absent. */
+async function load<T>(key: string, consume: boolean, valid: (value: T) => boolean = () => true): Promise<T | null> {
+  const raw = consume ? await getRedis().getdel(key) : await getRedis().get(key);
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as T;
+    return valid(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 export const revocationGenerationKey = (subject: string) => `${config.cachePrefix}:identity:revgen:${subject}`;
@@ -134,23 +138,17 @@ export async function createLoginAttempt(input: {
   codeChallenge: string;
   nonce: string;
 }> {
-  const state = randomId();
   const codeVerifier = randomId();
   const nonce = randomId();
   const codeChallenge = createHash("sha256")
     .update(codeVerifier)
     .digest("base64url");
-  await getRedis().set(
-    loginKey(state),
-    JSON.stringify({
-      codeVerifier,
-      nonce,
-      requiresLoginCookie: input.requiresLoginCookie !== false,
-      ...input,
-    } satisfies LoginAttempt),
-    "EX",
-    config.identityLoginTtlSeconds,
-  );
+  const state = await store(loginKey, {
+    codeVerifier,
+    nonce,
+    requiresLoginCookie: input.requiresLoginCookie !== false,
+    ...input,
+  } satisfies LoginAttempt, config.identityLoginTtlSeconds);
   return { state, codeVerifier, codeChallenge, nonce };
 }
 
@@ -176,99 +174,56 @@ export function attemptSurface(attempt: Pick<LoginAttempt, "surface">): Identity
   return attempt.surface || DEFAULT_SURFACE;
 }
 
-function parseLoginAttempt(raw: string | null): LoginAttempt | null {
-  if (!raw) return null;
-  try {
-    const attempt = JSON.parse(raw) as LoginAttempt;
-    if (!validBinding(attempt.surface, attempt.boundTenant)) return null;
-    const profileDraft = attempt.identityProfileDraft;
-    const validProfileDraft = profileDraft === undefined || (
-      typeof profileDraft.email === "string" &&
-      typeof profileDraft.firstName === "string" &&
-      typeof profileDraft.lastName === "string"
-    );
-    return typeof attempt.codeVerifier === "string" &&
-      typeof attempt.nonce === "string" &&
-      typeof attempt.oidcClientId === "string" &&
-      (attempt.intent === "signin" || attempt.intent === "signup") &&
-      typeof attempt.methodId === "string" &&
-      typeof attempt.returnTo === "string" &&
-      typeof attempt.requiresLoginCookie === "boolean" &&
-      validProfileDraft ? attempt : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function getLoginAttempt(state: string): Promise<LoginAttempt | null> {
-  return parseLoginAttempt(await getRedis().get(loginKey(state)));
-}
-
-export async function consumeLoginAttempt(
-  state: string,
-): Promise<LoginAttempt | null> {
-  return parseLoginAttempt(await getRedis().getdel(loginKey(state)));
-}
-
-export async function createAuthResult(result: IdentityAuthResult): Promise<string> {
-  const id = randomId();
-  await getRedis().set(
-    authResultKey(id),
-    JSON.stringify(result),
-    "EX",
-    config.identityAuthResultTtlSeconds,
+function validLoginAttempt(attempt: LoginAttempt): boolean {
+  if (!validBinding(attempt.surface, attempt.boundTenant)) return false;
+  const profileDraft = attempt.identityProfileDraft;
+  const validProfileDraft = profileDraft === undefined || (
+    typeof profileDraft.email === "string" &&
+    typeof profileDraft.firstName === "string" &&
+    typeof profileDraft.lastName === "string"
   );
-  return id;
+  return typeof attempt.codeVerifier === "string" &&
+    typeof attempt.nonce === "string" &&
+    typeof attempt.oidcClientId === "string" &&
+    (attempt.intent === "signin" || attempt.intent === "signup") &&
+    typeof attempt.methodId === "string" &&
+    typeof attempt.returnTo === "string" &&
+    typeof attempt.requiresLoginCookie === "boolean" &&
+    validProfileDraft;
 }
 
-export async function consumeAuthResult(id: string): Promise<IdentityAuthResult | null> {
-  const raw = await getRedis().getdel(authResultKey(id));
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as IdentityAuthResult;
-  } catch {
-    return null;
-  }
+export function getLoginAttempt(state: string): Promise<LoginAttempt | null> {
+  return load(loginKey(state), false, validLoginAttempt);
 }
 
-export async function createPasswordSetupAttempt(
-  attempt: PasswordSetupAttempt,
-): Promise<string> {
-  const id = randomId();
-  await getRedis().set(
-    passwordSetupKey(id),
-    JSON.stringify(attempt),
-    "EX",
-    // The action token may be opened just before its own expiry and then use a
-    // full Keycloak browser-login session to finish. Keep correlation state
-    // for both windows rather than expiring it while the form is still valid.
-    config.identityPasswordSetupTtlSeconds + config.identityLoginTtlSeconds,
-  );
-  return id;
+export function consumeLoginAttempt(state: string): Promise<LoginAttempt | null> {
+  return load(loginKey(state), true, validLoginAttempt);
 }
 
-function parsePasswordSetupAttempt(raw: string | null): PasswordSetupAttempt | null {
-  if (!raw) return null;
-  try {
-    const attempt = JSON.parse(raw) as PasswordSetupAttempt;
-    return typeof attempt.returnTo === "string" &&
-      typeof attempt.userId === "string" &&
-      typeof attempt.hadPassword === "boolean" ? attempt : null;
-  } catch {
-    return null;
-  }
+export function createAuthResult(result: IdentityAuthResult): Promise<string> {
+  return store(authResultKey, result, config.identityAuthResultTtlSeconds);
 }
 
-export async function getPasswordSetupAttempt(
-  id: string,
-): Promise<PasswordSetupAttempt | null> {
-  return parsePasswordSetupAttempt(await getRedis().get(passwordSetupKey(id)));
+export function consumeAuthResult(id: string): Promise<IdentityAuthResult | null> {
+  return load(authResultKey(id), true);
 }
 
-export async function consumePasswordSetupAttempt(
-  id: string,
-): Promise<PasswordSetupAttempt | null> {
-  return parsePasswordSetupAttempt(await getRedis().getdel(passwordSetupKey(id)));
+export function createPasswordSetupAttempt(attempt: PasswordSetupAttempt): Promise<string> {
+  // The action token may be opened just before its own expiry and then use a
+  // full Keycloak browser-login session to finish. Keep correlation state
+  // for both windows rather than expiring it while the form is still valid.
+  return store(passwordSetupKey, attempt, config.identityPasswordSetupTtlSeconds + config.identityLoginTtlSeconds);
+}
+
+const validPasswordSetupAttempt = (attempt: PasswordSetupAttempt) =>
+  typeof attempt.returnTo === "string" && typeof attempt.userId === "string" && typeof attempt.hadPassword === "boolean";
+
+export function getPasswordSetupAttempt(id: string): Promise<PasswordSetupAttempt | null> {
+  return load(passwordSetupKey(id), false, validPasswordSetupAttempt);
+}
+
+export function consumePasswordSetupAttempt(id: string): Promise<PasswordSetupAttempt | null> {
+  return load(passwordSetupKey(id), true, validPasswordSetupAttempt);
 }
 
 function sessionTtl(tokens: IdentityTokenSet): number {
@@ -284,13 +239,14 @@ export async function createIdentitySession(
 ): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
   const maxAge = sessionTtl(tokens);
-  await writeIdentitySession(
+  await saveIdentitySession(
     sessionId, tokens, claims, maxAge, oidcClientId, undefined, binding, true,
   );
   return { sessionId, maxAge };
 }
 
-async function writeIdentitySession(
+/** Refresh is update-only: only createIdentitySession/createPhoneOtpSession pass `create`. */
+export async function saveIdentitySession(
   sessionId: string,
   tokens: IdentityTokenSet,
   claims: KeycloakClaims,
@@ -333,15 +289,6 @@ async function writeIdentitySession(
   });
 }
 
-/** Refresh is update-only. Only createIdentitySession/createPhoneOtpSession create records. */
-export async function saveIdentitySession(
-  sessionId: string, tokens: IdentityTokenSet, claims: KeycloakClaims,
-  ttl = sessionTtl(tokens), oidcClientId?: string,
-  sessionExpiresAt = Date.now() + ttl * 1000, binding: SessionBinding = {},
-): Promise<void> {
-  return writeIdentitySession(sessionId, tokens, claims, ttl, oidcClientId, sessionExpiresAt, binding);
-}
-
 /**
  * A citizen session proved by a BFF phone OTP (#2189). It carries the same
  * claims `contexts/citizen/_select` reads from a Keycloak-issued citizen
@@ -355,7 +302,7 @@ export async function createPhoneOtpSession(input: {
 }): Promise<{ sessionId: string; maxAge: number }> {
   const sessionId = randomId();
   const maxAge = config.identitySessionTtlSeconds;
-  await writeIdentitySession(
+  await saveIdentitySession(
     sessionId,
     { accessToken: "", accessExpiresIn: maxAge },
     {
@@ -502,8 +449,8 @@ export function loginStateFromCookie(
   return cookieValue(cookieHeader, `${sessionCookieName(surface)}_login`);
 }
 
-function secureFlag(): string {
-  return config.identityCookieSecure ? "; Secure" : "";
+function cookie(name: string, value: string, path: string, maxAge: number): string {
+  return `${name}=${value}; Path=${path}; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${maxAge}${config.identityCookieSecure ? "; Secure" : ""}`;
 }
 
 export function sessionCookie(
@@ -511,11 +458,11 @@ export function sessionCookie(
   maxAge: number,
   surface: IdentitySurface = DEFAULT_SURFACE,
 ): string {
-  return `${sessionCookieName(surface)}=${sessionId}; Path=/; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${maxAge}${secureFlag()}`;
+  return cookie(sessionCookieName(surface), sessionId, "/", maxAge);
 }
 
 export function clearedSessionCookie(surface: IdentitySurface = DEFAULT_SURFACE): string {
-  return `${sessionCookieName(surface)}=; Path=/; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=0${secureFlag()}`;
+  return cookie(sessionCookieName(surface), "", "/", 0);
 }
 
 /**
@@ -524,9 +471,9 @@ export function clearedSessionCookie(surface: IdentitySurface = DEFAULT_SURFACE)
  * callback binding.
  */
 export function loginCookie(state: string, surface: IdentitySurface = DEFAULT_SURFACE): string {
-  return `${sessionCookieName(surface)}_login=${state}; Path=/identity/v1/callback; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=${config.identityLoginTtlSeconds}${secureFlag()}`;
+  return cookie(`${sessionCookieName(surface)}_login`, state, "/identity/v1/callback", config.identityLoginTtlSeconds);
 }
 
 export function clearedLoginCookie(surface: IdentitySurface = DEFAULT_SURFACE): string {
-  return `${sessionCookieName(surface)}_login=; Path=/identity/v1/callback; HttpOnly; SameSite=${config.identityCookieSameSite}; Max-Age=0${secureFlag()}`;
+  return cookie(`${sessionCookieName(surface)}_login`, "", "/identity/v1/callback", 0);
 }

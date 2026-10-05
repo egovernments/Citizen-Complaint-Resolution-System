@@ -1,15 +1,12 @@
-import { createHmac } from "node:crypto";
 import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { privateRateKey, withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
 import { errorBody } from "../../contract/error-codes.js";
-import { resolvePublicTenantRoute } from "../access-context/tenant-route.js";
-import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
+import { routeForSlug } from "../access-context/tenant-route.js";
 import {
   hasPasswordCredential,
-  IdentityAdminError,
   inspectPasswordSetupAccount,
   inspectPasswordSetupAccountById,
   sendPasswordSetupEmail,
@@ -22,14 +19,15 @@ import {
   getPasswordSetupAttempt,
 } from "../sessions/session-store.js";
 import { oidcClientForSurface } from "./oidc.js";
-import { safeIdentityReturnTo, tenantBoundReturnTo, withAuthResult } from "./redirects.js";
+import { returnDestination, withAuthResult } from "./redirects.js";
+import { result } from "./routes.js";
 import { isTenantBoundSurface, parseSurface, surfaceReturnPrefix } from "./surfaces.js";
 
 const ACCEPTED = {
   message: "If an eligible account exists, a password setup email has been sent.",
 };
 
-function normalizedEmail(value: unknown): string | null {
+export function normalizedEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -50,13 +48,21 @@ function withinLimit(bucket: string): Promise<boolean> {
   return withinRateLimit(bucket, config.identityPasswordSetupLimit, config.identityPasswordSetupTtlSeconds);
 }
 
-function privateRateLimitKey(identifier: string): string {
-  const rateLimitKey = createHmac("sha256", config.keycloakBffClientSecret)
-    .update("digit.identity.password-setup.rate-limit.v1")
-    .digest();
-  return createHmac("sha256", rateLimitKey)
-    .update(identifier)
-    .digest("hex");
+/** Records the attempt, then has Keycloak email the password (and, if needed, email) actions. */
+export async function sendPasswordSetup(input: {
+  userId: string;
+  hadPassword: boolean;
+  emailVerified: boolean;
+  returnTo: string;
+  clientId: string;
+}): Promise<void> {
+  const state = await createPasswordSetupAttempt({
+    returnTo: input.returnTo, userId: input.userId, hadPassword: input.hadPassword,
+  });
+  await sendPasswordSetupEmail({
+    userId: input.userId, emailVerified: input.emailVerified,
+    redirectUri: completionRedirectUri(state), clientId: input.clientId,
+  });
 }
 
 async function processPasswordSetup(input: {
@@ -82,16 +88,9 @@ async function processPasswordSetup(input: {
       console.info("Password setup request processed", { outcome: "ineligible" });
       return;
     }
-    const state = await createPasswordSetupAttempt({
-      returnTo: input.returnTo,
-      userId: account.userId,
-      hadPassword: account.hasPassword,
-    });
-    await sendPasswordSetupEmail({
-      userId: account.userId,
-      emailVerified: account.emailVerified,
-      redirectUri: completionRedirectUri(state),
-      clientId: input.clientId,
+    await sendPasswordSetup({
+      userId: account.userId, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
+      returnTo: input.returnTo, clientId: input.clientId,
     });
     console.info("Password setup request processed", {
       outcome: "sent",
@@ -116,39 +115,16 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
     if (!surface || !client) {
       return response.status(400).json(errorBody("UNSUPPORTED_SURFACE", "Unsupported sign-in surface"));
     }
-    let returnTo: string;
+    let returnTo: string | null;
     if (isTenantBoundSurface(surface)) {
-      const tenantSlug = request.body?.tenantSlug;
-      if (typeof tenantSlug !== "string" || !tenantSlug) {
-        return response.status(400).json(errorBody("INVALID_REQUEST", "tenantSlug is required"));
-      }
-      let tenant;
-      try {
-        tenant = await resolvePublicTenantRoute(tenantSlug);
-      } catch (error) {
-        if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
-          console.warn("Tenant route resolution failed:", error.message);
-          return response.status(503).json(errorBody("TENANT_ROUTE_UNAVAILABLE", "Tenant routes are temporarily unavailable"));
-        }
-        throw error;
-      }
-      if (!tenant) return response.status(404).json(errorBody("TENANT_ROUTE_NOT_FOUND", "Tenant route is not available"));
-      const prefix = surfaceReturnPrefix(surface, tenant.urlSlug);
-      const requested = request.body?.returnTo === undefined
-        ? prefix
-        : tenantBoundReturnTo(request.body.returnTo, prefix);
-      if (!requested) {
-        return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
-      }
-      returnTo = requested;
+      const tenant = await routeForSlug(request.body?.tenantSlug);
+      if ("status" in tenant) return response.status(tenant.status).json(errorBody(tenant.code, tenant.error));
+      returnTo = returnDestination(request.body?.returnTo, surfaceReturnPrefix(surface, tenant.urlSlug));
     } else {
-      const requestedReturnTo = request.body?.returnTo === undefined
-        ? null
-        : safeIdentityReturnTo(request.body.returnTo);
-      if (request.body?.returnTo !== undefined && !requestedReturnTo) {
-        return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
-      }
-      returnTo = requestedReturnTo || config.identityPostLoginRedirect;
+      returnTo = returnDestination(request.body?.returnTo);
+    }
+    if (!returnTo) {
+      return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
     }
 
     const signedIn = await currentSession(request.headers.cookie, surface);
@@ -159,7 +135,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
     const accountRateKey = signedIn?.session.claims.sub || email!;
     const [ipAllowed, accountAllowed] = await Promise.all([
       withinLimit(`${prefix}:ip:${request.ip}`),
-      withinLimit(`${prefix}:account:${privateRateLimitKey(accountRateKey)}`),
+      withinLimit(`${prefix}:account:${privateRateKey("password-setup", accountRateKey)}`),
     ]);
     if (!ipAllowed || !accountAllowed) {
       console.info("Password setup request suppressed", { reason: "rate_limited" });
@@ -189,17 +165,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       ? preview.hadPassword || await hasPasswordCredential(preview.userId)
       : false;
     const attempt = preview ? await consumePasswordSetupAttempt(state) : null;
-    const authResult = await createAuthResult(attempt && passwordReady ? {
-      status: "complete",
-      code: "PASSWORD_SETUP_COMPLETE",
-      message: "Your password is ready. You can now sign in with email and password.",
-      actions: ["TRY_AGAIN"],
-    } : attempt ? {
-      status: "failed",
-      code: "PASSWORD_SETUP_FAILED",
-      message: "Password setup was not completed. Request another link when you are ready.",
-      actions: ["SETUP_PASSWORD"],
-    } : {
+    const authResult = await createAuthResult(attempt ? result(passwordReady ? "PASSWORD_SETUP_COMPLETE" : "PASSWORD_SETUP_FAILED") : {
       status: "failed",
       code: "AUTH_ATTEMPT_EXPIRED",
       message: "That password setup link expired or was already used. Please request another.",

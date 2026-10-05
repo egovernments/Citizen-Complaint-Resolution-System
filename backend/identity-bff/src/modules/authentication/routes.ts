@@ -9,8 +9,7 @@ import {
   applyVerifiedSignupIdentityProfile,
   IdentityAdminError,
 } from "../organizations/organization-service.js";
-import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
-import { boundTenantOf, resolvePublicTenantRoute } from "../access-context/tenant-route.js";
+import { boundTenantOf, routeForSlug } from "../access-context/tenant-route.js";
 import {
   attemptSurface,
   clearedLoginCookie,
@@ -48,7 +47,7 @@ import type {
   IdentityAuthResult,
   IdentityAuthResultCode,
 } from "./types.js";
-import { safeIdentityReturnTo, tenantBoundReturnTo, withAuthResult } from "./redirects.js";
+import { returnDestination, withAuthResult } from "./redirects.js";
 
 function requestedIntent(value: unknown): IdentityAuthIntent | null {
   return value === "signin" || value === "signup" ? value : null;
@@ -118,7 +117,7 @@ const RESULT_COPY: Record<IdentityAuthResultCode, Omit<IdentityAuthResult, "code
   },
 };
 
-function result(
+export function result(
   code: IdentityAuthResultCode,
   intent: IdentityAuthIntent = "signin",
 ): IdentityAuthResult {
@@ -148,12 +147,15 @@ function providerErrorCode(error: unknown, description: unknown): IdentityAuthRe
   return "IDENTITY_PROVIDER_UNAVAILABLE";
 }
 
+/** Ends a login attempt: clears its cookie and redirects with a sign-in result. */
 async function redirectWithResult(
   response: express.Response,
+  surface: string,
   destination: string,
   code: IdentityAuthResultCode,
   intent: IdentityAuthIntent = "signin",
 ): Promise<void> {
+  response.setHeader("Set-Cookie", clearedLoginCookie(surface));
   const id = await createAuthResult(result(code, intent));
   response.redirect(303, withAuthResult(destination, id));
 }
@@ -204,39 +206,19 @@ export function registerAuthenticationRoutes(app: express.Application): void {
     // The tenant of an employee/citizen sign-in comes ONLY from the route the
     // browser is on, resolved here, server-side, before Keycloak is involved.
     let boundTenant: BoundTenant | undefined;
-    let returnTo: string;
+    let returnTo: string | null;
     if (isTenantBoundSurface(surface)) {
-      if (!tenantSlug) return response.status(400).json({ error: "tenantSlug is required" });
-      let tenant;
-      try {
-        tenant = await resolvePublicTenantRoute(tenantSlug);
-      } catch (error) {
-        if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
-          console.warn("Tenant route resolution failed:", error.message);
-          return response.status(503).json({ error: "Tenant routes are temporarily unavailable" });
-        }
-        throw error;
-      }
-      if (!tenant) return response.status(404).json({ error: "Tenant route is not available" });
+      const tenant = await routeForSlug(tenantSlug);
+      if ("status" in tenant) return response.status(tenant.status).json({ error: tenant.error });
       boundTenant = boundTenantOf(tenant);
-      const prefix = surfaceReturnPrefix(surface, tenant.urlSlug);
-      const requested = request.query.returnTo === undefined
-        ? prefix
-        : tenantBoundReturnTo(request.query.returnTo, prefix);
-      if (!requested) return response.status(400).json({ error: "Unsupported return destination" });
-      returnTo = requested;
+      returnTo = returnDestination(request.query.returnTo, surfaceReturnPrefix(surface, tenant.urlSlug));
     } else {
       if (tenantSlug !== undefined) {
         return response.status(400).json({ error: "tenantSlug is not supported for this surface" });
       }
-      const requestedReturnTo = request.query.returnTo === undefined
-        ? null
-        : safeIdentityReturnTo(request.query.returnTo);
-      if (request.query.returnTo !== undefined && !requestedReturnTo) {
-        return response.status(400).json({ error: "Unsupported return destination" });
-      }
-      returnTo = requestedReturnTo || config.identityPostLoginRedirect;
+      returnTo = returnDestination(request.query.returnTo);
     }
+    if (!returnTo) return response.status(400).json({ error: "Unsupported return destination" });
 
     let accountAction: { sid: string; sub: string; action: string } | undefined;
     let kcAction: string | undefined;
@@ -309,11 +291,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
   app.get("/identity/v1/callback", asyncRoute(async (request, response) => {
     const code = typeof request.query.code === "string" ? request.query.code : null;
     const state = typeof request.query.state === "string" ? request.query.state : null;
-    if (!state) {
-      response.setHeader("Set-Cookie", clearedLoginCookie());
-      await redirectWithResult(response, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
-      return;
-    }
+    if (!state) return redirectWithResult(response, DEFAULT_SURFACE, config.identityPostLoginRedirect, "SIGN_IN_FAILED");
 
     const preview = await getLoginAttempt(state);
     const previewSurface = preview ? attemptSurface(preview) : DEFAULT_SURFACE;
@@ -330,27 +308,20 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       ? preview.returnTo
       : config.identityPostLoginRedirect;
     if (!loginCookieMatches && preview?.requiresLoginCookie !== false) {
-      response.setHeader("Set-Cookie", clearedLoginCookie(previewSurface));
-      await redirectWithResult(response, failureDestination, "SIGN_IN_FAILED");
-      return;
+      return redirectWithResult(response, previewSurface, failureDestination, "SIGN_IN_FAILED");
     }
 
     const attempt = await consumeLoginAttempt(state);
-    if (!attempt) {
-      response.setHeader("Set-Cookie", clearedLoginCookie(previewSurface));
-      await redirectWithResult(response, failureDestination, "AUTH_ATTEMPT_EXPIRED");
-      return;
-    }
+    if (!attempt) return redirectWithResult(response, previewSurface, failureDestination, "AUTH_ATTEMPT_EXPIRED");
     const surface = attemptSurface(attempt);
     if (request.query.error || !code) {
-      response.setHeader("Set-Cookie", clearedLoginCookie(surface));
-      await redirectWithResult(
+      return redirectWithResult(
         response,
+        surface,
         attempt.returnTo,
         attempt.accountAction ? (request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED") : providerErrorCode(request.query.error, request.query.error_description),
         attempt.intent,
       );
-      return;
     }
 
     try {
@@ -378,10 +349,9 @@ export function registerAuthenticationRoutes(app: express.Application): void {
             Math.max(1, Math.floor((session.sessionExpiresAt - Date.now()) / 1000)), attempt.oidcClientId,
             session.sessionExpiresAt, { surface, boundTenant: session.boundTenant });
         });
-        response.setHeader("Set-Cookie", clearedLoginCookie(surface));
         const outcome = request.query.kc_action_status === "success" ? "ACTION_COMPLETE"
           : request.query.kc_action_status === "cancelled" ? "ACTION_CANCELLED" : "ACTION_FAILED";
-        return redirectWithResult(response, attempt.returnTo, outcome);
+        return redirectWithResult(response, surface, attempt.returnTo, outcome);
       }
       let sessionClaims = claims;
       if (attempt.identityProfileDraft) {
@@ -415,9 +385,7 @@ export function registerAuthenticationRoutes(app: express.Application): void {
       return response.redirect(303, attempt.returnTo);
     } catch (error) {
       console.error("Identity callback failed:", (error as Error).message);
-      response.setHeader("Set-Cookie", clearedLoginCookie(surface));
-      await redirectWithResult(response, attempt.returnTo, attempt.accountAction ? "ACTION_FAILED" : "SIGN_IN_FAILED", attempt.intent);
-      return;
+      return redirectWithResult(response, surface, attempt.returnTo, attempt.accountAction ? "ACTION_FAILED" : "SIGN_IN_FAILED", attempt.intent);
     }
   }));
 

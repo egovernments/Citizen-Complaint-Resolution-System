@@ -5,13 +5,13 @@ import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.j
 import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
-import { ensureOrganizationMembership, isOrganizationMember, request, sendPasswordSetupEmail } from "../organizations/organization-service.js";
+import { ensureOrganizationMembership, isOrganizationMember, request } from "../organizations/organization-service.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute } from "../onboarding/primitives.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
 import { accountEntries } from "../sync/state.js";
 import { mirrorPerson } from "../sync/mirror.js";
-import { createPasswordSetupAttempt } from "../sessions/session-store.js";
+import { sendPasswordSetup } from "../authentication/password-setup.js";
 import { audit } from "../citizen-otp/audit.js";
 import { readDigitAccount, requireAccountAdmin, requireWorkspace, validateBinding } from "./authority.js";
 import { revokeAccount } from "../revocation/index.js";
@@ -106,12 +106,8 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     const { binding } = await ensureActive({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor });
     await activate(binding, lease);
     await lease.assertHeld();
-    const state = await createPasswordSetupAttempt({ userId: subject, hadPassword: false, returnTo: config.identityPostLoginRedirect });
-    const callback = new URL(config.identityRedirectUri);
-    callback.pathname = `${callback.pathname.replace(/\/callback$/, "/password/setup-complete")}/${encodeURIComponent(state)}`;
-    callback.search = "";
-    await sendPasswordSetupEmail({ userId: subject, emailVerified: fresh.emailVerified === true,
-      clientId: config.keycloakBffClientId, redirectUri: callback.toString() });
+    await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true,
+      returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
     await mirrorPerson(subject);
     await updateKeycloakUser(subject, (current) => {
       if (pendingMarker(current)?.requestId !== requestId) return null;

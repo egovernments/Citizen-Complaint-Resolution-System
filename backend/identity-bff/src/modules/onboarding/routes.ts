@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import type express from "express";
-import { errorBody, errorStatus, type HttpErrorCode } from "../../contract/error-codes.js";
+import { errorBody, type HttpErrorCode } from "../../contract/error-codes.js";
 import { config } from "../../infrastructure/config.js";
-import { asyncRoute } from "../../app/async-route.js";
+import { asyncRoute, sendError as send } from "../../app/async-route.js";
 import { currentSession } from "../sessions/current-session.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { OnboardingError } from "./errors.js";
@@ -85,8 +85,7 @@ function sendError(error: unknown, res: express.Response) {
     code = error.code as HttpErrorCode;
     message = error instanceof Error ? error.message : message;
   }
-  if (code === "IDENTITY_BUSY" || code === "BINDING_BUSY") res.setHeader("Retry-After", "1");
-  return res.status(errorStatus(code)).json(errorBody(code, message));
+  return send(res, code, message);
 }
 
 /** Registration is separate so contract tests exercise real routes with controlled dependency failures. */
