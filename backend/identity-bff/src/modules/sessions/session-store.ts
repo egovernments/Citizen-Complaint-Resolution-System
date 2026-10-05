@@ -76,6 +76,13 @@ async function load<T>(key: string, consume: boolean, valid: (value: T) => boole
 
 export const revocationGenerationKey = (subject: string) => `${config.cachePrefix}:identity:revgen:${subject}`;
 export const personSessionsKey = (subject: string) => `${config.cachePrefix}:identity:person-sessions:${subject}`;
+/** Keycloak session id → subject, so a Keycloak session event finds its person without a realm scan. */
+export const kcSessionSubjectKey = (kcSessionId: string) => `${config.cachePrefix}:identity:kc-session:${kcSessionId}`;
+
+/** The subject whose BFF session last recorded this Keycloak session id, or null. */
+export async function subjectForKcSession(kcSessionId: string): Promise<string | null> {
+  return getRedis().get(kcSessionSubjectKey(kcSessionId));
+}
 
 export class SessionRevokedError extends Error {
   readonly status = 401;
@@ -112,12 +119,17 @@ if not result then return 0 end
 redis.call('sadd', KEYS[4], ARGV[6])
 local ttl = redis.call('pttl', KEYS[2])
 if redis.call('pttl', KEYS[4]) < ttl then redis.call('pexpire', KEYS[4], ttl) end
+if ARGV[7] ~= '' then
+  local indexTtl = redis.call('pttl', KEYS[5])
+  if redis.call('get', KEYS[5]) ~= ARGV[7] or indexTtl < ttl then redis.call('set', KEYS[5], ARGV[7], 'PX', math.max(ttl, indexTtl)) end
+end
 return 1`;
 
 async function writeSessionRecord(lease: PersonLease, sessionId: string, session: IdentitySession, expiry: number | "KEEP", mode: "NX" | "XX"): Promise<void> {
-  const result = await getRedis().eval(WRITE_SESSION, 4, personLeaseKey(lease.subject), sessionKey(sessionId),
-    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), lease.token,
-    JSON.stringify(session), session.revocationGeneration ?? 0, expiry, mode, sessionId);
+  // Without a Keycloak sid the index argument is empty and its key is a never-written placeholder.
+  const result = await getRedis().eval(WRITE_SESSION, 5, personLeaseKey(lease.subject), sessionKey(sessionId),
+    revocationGenerationKey(lease.subject), personSessionsKey(lease.subject), kcSessionSubjectKey(session.kcSessionId || ""), lease.token,
+    JSON.stringify(session), session.revocationGeneration ?? 0, expiry, mode, sessionId, session.kcSessionId ? lease.subject : "");
   if (result === -1) throw new LeaseLostError();
   if (result !== 1) throw new SessionRevokedError();
 }

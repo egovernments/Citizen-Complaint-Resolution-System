@@ -813,6 +813,7 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | `{p}:identity:login:{state}` | login attempt JSON (+ `action`, `actionParam`, `initiatingSessionId`) | `IDENTITY_LOGIN_TTL_SECONDS` (1800) | S |
 | `{p}:identity:session:{sid}` | session record (§6) | ≤ `IDENTITY_SESSION_TTL_SECONDS` | S |
 | `{p}:identity:person-sessions:{sub}` | SET of sid | the longest session TTL, refreshed on add | S |
+| `{p}:identity:kc-session:{kcSessionId}` | the subject whose session carries this Keycloak `sid`; written with the session record. A Keycloak session event (`USER_SESSION` DELETE) resolves its person here, then from the event's `userId`, and only then by scanning the realm | at least the session's TTL, extended on write | S |
 | `{p}:identity:revgen:{sub}` | integer | none. A few bytes per person who ever had logout-all | S |
 | `{p}:identity:context:{sid}` | the selected context, + `digitUuid` | the session's remaining TTL; `XX`-guarded | S |
 | `{p}:identity:auth-result:{id}` | result JSON | 300 s | S |

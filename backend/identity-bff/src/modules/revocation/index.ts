@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
-import { currentPersonLease, LeaseLostError, personLeaseKey, withPersonLease, type PersonLease } from "../accounts/person-lease.js";
+import { currentPersonLease, LeaseBusyError, LeaseLostError, personLeaseKey, withPersonLease, type PersonLease } from "../accounts/person-lease.js";
 import { privateRef } from "../citizen-otp/otp-store.js";
 import { deleteIdentitySession, getIdentitySession, getSelectedIdentityContext, listPersonSessions, personSessionsKey, revocationGenerationKey, sessionKey } from "../sessions/session-store.js";
 import type { IdentitySession } from "../sessions/types.js";
@@ -283,9 +283,27 @@ export async function endPhoneSessions(subject: string, oldPhoneRef: string, kee
   await endKeycloakSessionsBestEffort(kcSessions);
 }
 
-/** Event already ended Keycloak's session; do not call back to Keycloak again. */
+/**
+ * Event already ended Keycloak's session; do not call back to Keycloak again.
+ * Without a subject this is the last-resort realm scan: people are matched
+ * with a lock-free read first, so only those holding the session take a
+ * lease, and one busy person cannot stall the effect: their matching BFF
+ * sessions are deleted directly (a delete never revives anything), and their
+ * token claims are pruned as stale at their next logout.
+ */
+const SCAN_LEASE_WAIT_MS = 2_000;
 export async function endKeycloakSessions(kcSessionId: string, clientId?: string, subject?: string): Promise<void> {
-  const subjects = subject ? [subject] : (await listRevocationUsers()).map(user => user.id);
-  for (const sub of subjects) await withPersonLease(sub, async lease => { await endSessions(lease,
-    ({ session }) => session.kcSessionId === kcSessionId && (!clientId || session.oidcClientId === clientId), { keycloak: false }); });
+  const matches = ({ session }: { session: IdentitySession }) =>
+    session.kcSessionId === kcSessionId && (!clientId || session.oidcClientId === clientId);
+  const end = (sub: string, waitMs?: number) => withPersonLease(sub, async lease => { await endSessions(lease, matches, { keycloak: false }); }, { waitMs });
+  if (subject) return end(subject);
+  for (const user of await listRevocationUsers()) {
+    const held = (await sessionsRaw(user.id)).filter(matches);
+    if (!held.length) continue;
+    try { await end(user.id, SCAN_LEASE_WAIT_MS); }
+    catch (error) {
+      if (!(error instanceof LeaseBusyError)) throw error;
+      for (const { sessionId } of held) await deleteIdentitySession(sessionId);
+    }
+  }
 }
