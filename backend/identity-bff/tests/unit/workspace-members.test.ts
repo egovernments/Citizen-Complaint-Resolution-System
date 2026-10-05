@@ -306,7 +306,7 @@ describe("workspace member list", () => {
     "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...binding }] })],
     "digit.bindingTenants": ["pg"], ...(entries && { "digit.accounts": [JSON.stringify({ v: 1, entries })] }) } });
   beforeEach(() => {
-    bind("a-active", { uuid: "u1", state: "active", boundAt: 5 }, [{ kind: "staff", tenantId: "pg", uuid: "u1", boundAt: 5, active: false, roles: [{ code: "GRO", tenantId: "pg" }] }]);
+    bind("a-active", { uuid: "u1", state: "active", boundAt: 5 }, [{ kind: "staff", tenantId: "pg", uuid: "u1", boundAt: 5, active: false, name: "PG Name", roles: [{ code: "GRO", tenantId: "pg" }] }]);
     bind("b-pending", { uuid: "u2", state: "pending", expiresAt: Date.now() + 3600_000 });
     bind("c-expired", { uuid: "u3", state: "pending", expiresAt: 10 });
     bind("d-removed", { uuid: "u4", state: "removed", removedAt: 20 });
@@ -314,8 +314,9 @@ describe("workspace member list", () => {
   it("lists live members with mirrored DIGIT status and roles, by default", async () => {
     const { members, nextFirst } = await listWorkspaceMembers("admin", "pg");
     expect(members.map((m) => [m.subject, m.state])).toEqual([["a-active", "active"], ["b-pending", "pending"]]);
-    expect(members[0]).toMatchObject({ digitActive: false, roles: [{ code: "GRO", tenantId: "pg" }], name: "a-active" });
+    expect(members[0]).toMatchObject({ digitActive: false, roles: [{ code: "GRO", tenantId: "pg" }], name: "PG Name", email: "a-active@example.test" });
     expect(members[1]).not.toHaveProperty("digitActive");
+    expect(members[1]).not.toHaveProperty("name");
     expect(nextFirst).toBeUndefined();
   });
   it("filters removed members, reporting an expired invitation as removed without writing it", async () => {
@@ -323,6 +324,40 @@ describe("workspace member list", () => {
     const { members } = await listWorkspaceMembers("admin", "pg", 0, 100, "removed");
     expect(members.map((m) => [m.subject, m.removedAt])).toEqual([["c-expired", 10], ["d-removed", 20]]);
     expect(f.users.get("c-expired")).toEqual(before);
+  });
+  it("never shows another tenant's name, the person-wide firstName, or a non-member's current email", async () => {
+    const two = (id: string, pgBinding: Record<string, unknown>) => f.users.set(id, { id, email: `${id}-now@example.test`, firstName: "Name At Other", attributes: {
+      "digit.bindings": [JSON.stringify({ v: 1, bindings: [
+        { tenantId: "other", uuid: `o-${id}`, state: "active", boundAt: 1, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" } },
+        { tenantId: "pg", uuid: `p-${id}`, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...pgBinding }] })],
+      "digit.bindingTenants": ["other", "pg"],
+      "digit.accounts": [JSON.stringify({ v: 1, entries: [
+        { kind: "staff", tenantId: "other", uuid: `o-${id}`, boundAt: 1, active: true, name: "Name At Other", roles: [] },
+        ...(pgBinding.state === "active" ? [{ kind: "staff", tenantId: "pg", uuid: `p-${id}`, boundAt: 2, active: true, roles: [] }] : [])] })] } });
+    f.users.clear();
+    two("active-unnamed", { state: "active", boundAt: 2 });
+    two("invited", { state: "pending", expiresAt: Date.now() + 3600_000, email: "invited-then@example.test" });
+    two("legacy-invite", { state: "pending", expiresAt: Date.now() + 3600_000 });
+    two("left", { state: "removed", removedAt: 3, removedBy: { kind: "browser" }, email: "left-then@example.test" });
+    two("left-legacy", { state: "removed", removedAt: 3, removedBy: { kind: "browser" } });
+    const pg = [...(await listWorkspaceMembers("admin", "pg")).members, ...(await listWorkspaceMembers("admin", "pg", 0, 100, "removed")).members];
+    expect(pg.map(({ subject, email, name }) => ({ subject, email, name }))).toEqual([
+      { subject: "active-unnamed", email: "active-unnamed-now@example.test", name: undefined },
+      { subject: "invited", email: "invited-then@example.test", name: undefined },
+      { subject: "legacy-invite", email: undefined, name: undefined },
+      { subject: "left", email: "left-then@example.test", name: undefined },
+      { subject: "left-legacy", email: undefined, name: undefined },
+    ]);
+    expect(pg.filter((m) => "email" in m && m.email === undefined)).toEqual([]);
+    expect((await listWorkspaceMembers("admin", "other")).members.find((m) => m.subject === "invited")).toMatchObject({ name: "Name At Other", email: "invited-now@example.test" });
+  });
+  it("records the invited address on the binding, but keeps it out of _link responses", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: true, attributes: {} });
+    const { binding } = await linkWorkspaceMember(input);
+    expect(binding).not.toHaveProperty("email");
+    expect(bindingDoc(f.users.get("existing")!).bindings[0]).toMatchObject({ state: "pending", email: input.email });
+    await linkWorkspaceMember({ ...input, digitUuid: "00000000-0000-4000-8000-000000000002", email: "new.person@example.test" });
+    expect(bindingDoc(f.users.get("new-1")!).bindings[0]).toMatchObject({ state: "active", email: "new.person@example.test" });
   });
   it("pages the indexed search and returns the next offset", async () => {
     const page = await listWorkspaceMembers("admin", "pg", 0, 2, "active");

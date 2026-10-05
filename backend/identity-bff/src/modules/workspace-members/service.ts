@@ -19,7 +19,7 @@ import { readDigitAccount, requireAccountAdmin, requireWorkspace, validateBindin
 import { revokeAccount } from "../revocation/index.js";
 
 export function publicBinding(subject: string, binding: Binding) {
-  const { uuid, createdAt: _at, createdBy: _by, removedBy: _removedBy, ...rest } = binding;
+  const { uuid, email: _email, createdAt: _at, createdBy: _by, removedBy: _removedBy, ...rest } = binding;
   return { subject, digitUuid: uuid, ...rest };
 }
 
@@ -95,7 +95,7 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     const previous = (await readBindings(subject)).find((b) => b.tenantId === input.tenantId);
     const resumeNew = pendingMarker(fresh)?.requestId === requestId && previous?.state !== "pending" && !(previous?.state === "removed" && input.reinvite);
     if (!resumeNew) {
-      const { binding } = await createPending({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor,
+      const { binding } = await createPending({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor, email,
         expiresAt: Date.now() + await invitationExpiryHours(input.tenantId) * 3600_000, reinvite: input.reinvite });
       await mirrorPerson(subject);
       await linkAudit(subject, input.tenantId, input.digitUuid, input.actor, "ACCOUNT_LINK_CREATE");
@@ -109,7 +109,7 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     const org = await requireWorkspace(input.tenantId);
     await lease.assertHeld();
     await ensureOrganizationMembership({ organizationId: org.id, userId: subject });
-    const { binding } = await ensureActive({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor });
+    const { binding } = await ensureActive({ subject, tenantId: input.tenantId, uuid: input.digitUuid, actor, email });
     await activate(binding, lease);
     await lease.assertHeld();
     await sendPasswordSetup({ userId: subject, hadPassword: false, emailVerified: fresh.emailVerified === true,
@@ -201,7 +201,9 @@ export type MemberState = Binding["state"];
 /**
  * One indexed Keycloak page (`digit.bindingTenants`), so the cost is O(max), not O(realm).
  * Read-only: expiry is applied in the response, never written, and no lease is taken.
- * DIGIT status and roles come from the `digit.accounts` mirror (active bindings only).
+ * DIGIT status, roles and name come from this tenant's `digit.accounts` staff entry (active bindings only).
+ * Nothing person-wide reaches another tenant's admin: no `firstName` (it may come from any tenant or the
+ * citizen account), and the person's current email only while they are an active member here.
  */
 export async function listWorkspaceMembers(actor: string, tenantId: string, first = 0, max = 100, state?: MemberState) {
   await requireAccountAdmin(actor, tenantId);
@@ -213,7 +215,8 @@ export async function listWorkspaceMembers(actor: string, tenantId: string, firs
     if (!user.id || !binding || (state ? binding.state !== state : binding.state === "removed")) return [];
     let entry;
     try { entry = accountEntries(user).find((e) => e.kind === "staff" && e.tenantId === tenantId && e.uuid === binding.uuid); } catch { /* unmirrored */ }
-    return [{ subject: user.id, email: user.email, name: user.firstName || "", digitUuid: binding.uuid, state: binding.state,
+    const email = binding.state === "active" ? user.email : binding.email;
+    return [{ subject: user.id, ...(email && { email }), ...(entry?.name && { name: entry.name }), digitUuid: binding.uuid, state: binding.state,
       invitationVersion: binding.invitationVersion, ...(binding.boundAt !== undefined && { boundAt: binding.boundAt }),
       ...(binding.expiresAt !== undefined && { expiresAt: binding.expiresAt }), ...(binding.removedAt !== undefined && { removedAt: binding.removedAt }),
       ...(entry && { digitActive: entry.active, roles: entry.roles }), ...(entry?.missing && { missing: true as const }) }];

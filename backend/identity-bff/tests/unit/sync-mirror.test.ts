@@ -59,7 +59,7 @@ describe("DIGIT mirror", () => {
     const before = user.attributes!["digit.bindings"];
     await mirrorPerson(subject);
     expect(user).toMatchObject({ firstName: "Staff Name", lastName: "", emailVerified: true, username: "identity" });
-    expect(mirrorEntries()).toEqual([{ ...entry("staff"), userName: "employee-staff" }]);
+    expect(mirrorEntries()).toEqual([{ ...entry("staff"), userName: "employee-staff", name: "Staff Name" }]);
     expect(user.attributes!["digit.bindings"]).toEqual(before);
     expect(writes[0]).not.toHaveProperty("enabled");
   });
@@ -82,11 +82,31 @@ describe("DIGIT mirror", () => {
     accounts.staff!.name = "****";
     await mirrorPerson(subject);
     expect(user.firstName).toBe("Before");
+    expect(mirrorEntries()[0]).not.toHaveProperty("name");
     user.attributes!["digit.bindings"] = [bindings()];
     user.attributes!["digit.accounts"] = [JSON.stringify({ v: 1, entries: [entry("citizen", "citizen")] })];
     accounts.citizen = { ...account("citizen", "712345678"), type: "CITIZEN" };
     await mirrorPerson(subject);
     expect(user.firstName).toBe("Before");
+  });
+
+  it("records each staff entry's own tenant name, never another tenant's or the citizen's", async () => {
+    user.attributes!["digit.bindings"] = [bindings(
+      { tenantId: "tenant", uuid: "staff", state: "active", boundAt: 10 },
+      { tenantId: "other", uuid: "staff-b", state: "active", boundAt: 20 })];
+    user.attributes!["digit.accounts"] = [JSON.stringify({ v: 1, entries: [{ ...entry("citizen", "citizen"), boundAt: 1 }] })];
+    accounts["staff-b"] = { ...account("staff-b", "Name At Other"), tenantId: "other" };
+    accounts.citizen = { ...account("citizen", "Citizen Name"), type: "CITIZEN" };
+    await mirrorPerson(subject);
+    expect(user.firstName).toBe("Staff Name");
+    const byTenant = (kind: string, tenantId: string) => mirrorEntries().find((item: any) => item.kind === kind && item.tenantId === tenantId);
+    expect(byTenant("staff", "tenant").name).toBe("Staff Name");
+    expect(byTenant("staff", "other").name).toBe("Name At Other");
+    expect(byTenant("citizen", "tenant")).not.toHaveProperty("name");
+    accounts.staff!.name = "Renamed In HRMS";
+    await mirrorPerson(subject);
+    expect(byTenant("staff", "tenant").name).toBe("Renamed In HRMS");
+    expect(byTenant("staff", "other").name).toBe("Name At Other");
   });
 
   it("uses oldest active staff before citizen, and citizen after staff is inactive", async () => {

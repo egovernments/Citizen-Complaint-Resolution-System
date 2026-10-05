@@ -48,6 +48,10 @@ export async function readMirrorSnapshot(subject: string, hint: MirrorHint = {})
       ])).values()]
         .sort((a, b) => `${a.code}|${a.tenantId}`.localeCompare(`${b.code}|${b.tenantId}`));
       if (!masked(account.userName)) entry.userName = account.userName;
+      // This tenant's own name, so a tenant reader never needs the person-wide firstName.
+      const staffName = account.name?.trim();
+      if (entry.kind === "staff" && staffName && !masked(staffName)) entry.name = staffName.slice(0, 256);
+      else delete entry.name;
     }
     if (entry.kind === "staff" && hint.credential?.tenantId === entry.tenantId) {
       const { keyVersion, setAt } = hint.credential;

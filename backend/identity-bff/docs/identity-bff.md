@@ -514,7 +514,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 100 (at most 500). `state` is `active`, `pending` or `removed`; without it, `pending` and `active` are listed.
 
 ```
-200 {members: [{subject, email, name, digitUuid, state: "active" | "pending" | "removed", invitationVersion,
+200 {members: [{subject, email?, name?, digitUuid, state: "active" | "pending" | "removed", invitationVersion,
                 boundAt?, expiresAt?, removedAt?, digitActive?, roles?: [{code, tenantId}], missing?: true}],
      nextFirst?}
 ```
@@ -522,7 +522,10 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 
 - `first`/`max` page the Keycloak search `q=digit.bindingTenants:<tenantId>&exact=true` (§5.1), so one request reads at most `max` users, whatever the realm size. Order is Keycloak's (username). The state filter applies after the page is read, so a page may hold fewer than `max` members: continue with `first = nextFirst` until `nextFirst` is absent.
 - A binding written before `digit.bindingTenants` existed is listed once the next reconcile pass backfills the index. The backfill reads and writes only Keycloak and runs before the pass's DIGIT reads, so a DIGIT failure for that person doesn't skip it.
 - Read-only: it takes no lease and writes nothing. An expired invitation is reported as `removed` (with `removedAt = expiresAt`); reconcile persists it later.
-- No per-member DIGIT calls (only the caller's live `ACCOUNT_ADMIN` check). `name` is the Keycloak `firstName` (the mirrored DIGIT name, §5.1). `digitActive`, `roles` and `missing: true` come from the person's `digit.accounts` staff entry for this tenant, which exists only for `active` bindings and is as fresh as the last mirror.
+- No per-member DIGIT calls (only the caller's live `ACCOUNT_ADMIN` check). `digitActive`, `roles` and `missing: true` come from the person's `digit.accounts` staff entry for this tenant, which exists only for `active` bindings and is as fresh as the last mirror.
+- **Only this tenant's data.** A person can be bound at several tenants and hold a citizen account, so the list never returns person-wide profile data to another tenant's admin:
+  - `name` is the `name` of this tenant's `digit.accounts` staff entry: this tenant's DIGIT (HRMS) name as last mirrored (§5.1). It is absent for `pending` and `removed` members (no entry), and for an `active` member not yet re-mirrored or whose name came back masked. It is **never** the Keycloak `firstName`, which mirrors the D12 primary account at any tenant, or the citizen account. The console shows the HRMS name it already holds for the `digitUuid`.
+  - `email` for an `active` member is the person's current Keycloak email (their sign-in address while they are a member here). For a `pending` or `removed` member it is the `digit.bindings` `email` recorded by `_link` for that invitation version (the address the invitation was issued to), and absent when the record has none (`bindings/_ensure`, the item-19 conversion, and records written before the field existed). It is **never** the current email of someone who is not an active member here.
 - Errors: `INVALID_REQUEST` 400; `SESSION_REQUIRED` / `SESSION_REVOKED` 401; `ADMIN_REQUIRED` 403; 503.
 
 #### 3.3.8 `POST /identity/v1/workspace-members/_remove` (items 9, 10)
@@ -811,9 +814,10 @@ Every write follows the safe writer rule (design §4):
 - At most one `citizen` entry per `tenantId`.
 - The **D12 primary entry** is the `staff` entry with the lowest `boundAt` among those with `active: true`. With no such staff entry, it is the citizen entry with the lowest `boundAt`. Staff entries always win (D25/C1).
 - A DIGIT account that disappears gets `missing: true`. The entry is never silently dropped.
+- A `staff` entry's `name` is the DIGIT name of **that** tenant's account, set on each mirror (dropped when DIGIT returns it empty or masked; kept while `missing`). `citizen` entries never carry `name`. Tenant-scoped readers (the member list, §3.3.7) use it instead of `firstName`.
 - The mirror never invents an entry. Entries follow `digit.bindings` (staff) and resolved citizen accounts.
 
-**`digit.bindings` transitions.** The key is `(person, tenantId)`, with at most one record per key, and the record itself is the tombstone. Every transition happens under person → uuid.
+**`digit.bindings` transitions.** The key is `(person, tenantId)`, with at most one record per key, and the record itself is the tombstone. Every transition happens under person → uuid. A record written by `_link` carries the normalized address it was issued to (`email`); `_accept`, `_remove` and expiry keep it, and a re-invite replaces it.
 
 | From → to | Trigger | Guard |
 |---|---|---|

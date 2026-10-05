@@ -36,6 +36,7 @@
         "active": { "type": "boolean", "description": "DIGIT active, as last mirrored" },
         "roles": { "type": "array", "uniqueItems": true, "maxItems": 128, "items": { "$ref": "#/$defs/role" } },
         "userName": { "type": "string", "minLength": 1, "maxLength": 180, "description": "DIGIT userName (immutable in egov-user). Lets revocation sign in without a search" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Staff only: the whole DIGIT name of this tenant's account, as last mirrored (never a masked value). The tenant member list reads it instead of the person-wide firstName" },
         "missing": { "const": true, "description": "Present only when the DIGIT account has disappeared (design 4). The entry stays; it is never silently dropped" },
         "credential": {
           "type": "object",
@@ -49,7 +50,7 @@
         }
       },
       "if": { "properties": { "kind": { "const": "citizen" } } },
-      "then": { "not": { "required": ["credential"] } }
+      "then": { "not": { "anyOf": [{ "required": ["credential"] }, { "required": ["name"] }] } }
     }
   }
 }

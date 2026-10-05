@@ -8,6 +8,8 @@ export type BindingActor =
 export interface Binding {
   tenantId: string;
   uuid: string;
+  /** The normalized address `_link` used for this invitationVersion (absent for _ensure/conversion and older records). */
+  email?: string;
   state: "pending" | "active" | "removed";
   invitationVersion: number;
   createdAt: number;

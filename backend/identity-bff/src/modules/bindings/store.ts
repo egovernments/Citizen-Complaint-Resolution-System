@@ -111,7 +111,7 @@ export async function bindingsFor(tenantId: string): Promise<Array<{ subject: st
   return result;
 }
 
-type BindingInput = { subject: string; tenantId: string; uuid: string; actor: BindingActor };
+type BindingInput = { subject: string; tenantId: string; uuid: string; actor: BindingActor; email?: string };
 
 async function create(input: BindingInput, pending?: { expiresAt: number; reinvite?: boolean }): Promise<{ binding: Binding; created: boolean }> {
   return withPersonLease(input.subject, async (lease) => withUuidLock(input.tenantId, input.uuid, async (lock) => {
@@ -134,7 +134,7 @@ async function create(input: BindingInput, pending?: { expiresAt: number; reinvi
     }
     const now = Date.now();
     const binding: Binding = {
-      tenantId: input.tenantId, uuid: input.uuid, state: pending ? "pending" : "active",
+      tenantId: input.tenantId, uuid: input.uuid, ...(input.email && { email: input.email }), state: pending ? "pending" : "active",
       invitationVersion: old ? old.invitationVersion + 1 : 1, createdAt: now,
       createdBy: input.actor.kind === "migration" ? { kind: "conversion" } : input.actor,
       ...(pending ? { expiresAt: pending.expiresAt } : { boundAt: now }),
