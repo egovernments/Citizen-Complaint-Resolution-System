@@ -1807,7 +1807,13 @@ describe('D26 legacy identity paths are retired', () => {
       'digit-ui-esbuild/packages/modules/core/src/pages/employee/ChangePassword/index.js',
       'digit-ui-v2/src/pages/CitizenLoginPage.tsx',
       'digit-ui-v2/src/pages/CitizenProfilePage.tsx',
+      // Only navigated to the removed /user/login and /user/sign-up pages.
+      'digit-ui-esbuild/packages/modules/core/src/components/LoginSignupSelector.js',
     ]) expect(fs.existsSync(path.join(REPO_ROOT, removed))).toBe(false);
+    // No navigation to the removed tenantless wrapper's pages.
+    expect(read('digit-ui-esbuild/packages/libraries/src/services/molecules/Store/service.js'))
+      .not.toMatch(/location\.href = .*\/user\/invalid-url/);
+    expect(read('digit-ui-esbuild/packages/modules/core/src/Module.js')).not.toContain('LoginSignupSelector');
     expect(read('tests/integration-tests/tests/utils/citizen-login.ts'))
       .toContain("/identity/v1/citizen/otp/_send");
     expect(read('tests/integration-tests/tests/employee/login.spec.ts'))
