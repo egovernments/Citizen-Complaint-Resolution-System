@@ -322,7 +322,10 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   // existed; the seed's founder roles alone would leave it unable to run a PGR lifecycle.
   const employeeRoles = [...new Set([...seed.founderRoles, ...DEPLOY_ADMIN_PGR_ROLES])]
     .map((code) => ({ code, name: code, tenantId: target }));
-  const existing = await api.userSearch(target, { userName: username, limit: 2 });
+  // egov-user's search returns only active users unless asked, so look for a deactivated ADMIN
+  // too; otherwise the deploy would try to create it again and fail on the duplicate username.
+  let existing = await api.userSearch(target, { userName: username, limit: 2 });
+  if (!existing.length) existing = await api.userSearch(target, { userName: username, active: false, limit: 2 });
   if (existing.length > 1) throw new Error('Ambiguous bootstrap administrator');
   const adminMobile = () => options.deriveMobile(String(rules!.find((rule) => rule.default)?.mobileNumberRegex ?? rules![0].mobileNumberRegex),
     Number(args.mobile_length) || 10, args.admin_mobile as string | undefined);
@@ -361,7 +364,8 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     const employees = await api.employeeSearch(target, { codes: [username], limit: 2 });
     if (employees.length > 1) throw new Error('Ambiguous bootstrap employee');
     if (!employees.length) {
-      const users = await api.userSearch(target, { userName: username, limit: 2 });
+      let users = await api.userSearch(target, { userName: username, limit: 2 });
+      if (!users.length) users = await api.userSearch(target, { userName: username, active: false, limit: 2 });
       if (users.length !== 1 || !users[0].uuid) throw new Error('Bootstrap user is not visible yet; retry bootstrap');
       const now = Date.now();
       await api.employeeCreate(target, [{ tenantId: target, code: username, employeeType: 'PERMANENT', employeeStatus: 'EMPLOYED',
