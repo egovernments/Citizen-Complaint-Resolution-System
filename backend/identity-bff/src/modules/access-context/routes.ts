@@ -27,7 +27,7 @@ import { BindingError } from "../bindings/types.js";
 import { readDigitAccount } from "../workspace-members/authority.js";
 import { accountEntries } from "../sync/state.js";
 import { ensureCitizenEntry, mirrorPerson } from "../sync/mirror.js";
-import { cachedToken, recordToken, holdToken } from "../revocation/index.js";
+import { cachedToken, recordToken, holdToken, runPendingRevocations } from "../revocation/index.js";
 import { forgetToken, revokeInventoriedToken, type AccountRef } from "../revocation/inventory.js";
 import { findManagedAccount } from "../managed-accounts/managed-account-service.js";
 import { revokeToken } from "../managed-accounts/digit-user-client.js";
@@ -183,6 +183,8 @@ export function registerAccessContextRoutes(app: express.Application): void {
     try {
       const subject = current.session.claims.sub;
       const login = await withPersonLease(subject, async (lease) => {
+        // A queued revocation could end this session or revoke the cached token (#2286).
+        await runPendingRevocations(lease);
         await requireCurrentSession(lease, current.sessionId);
         const access = await staffAccess(subject, tenantId);
         if (!access.allowed) throw new BindingError(access.binding?.state === "pending" ? "PENDING_INVITATION" : surfacePolicy.tenantBound ? "EMPLOYEE_ACCOUNT_NOT_LINKED" : "TENANT_CONTEXT_UNAVAILABLE", "Tenant context is not available");
@@ -249,6 +251,7 @@ export function registerAccessContextRoutes(app: express.Application): void {
         let issued: DigitLogin | null = null;
         let issuedAccount: AccountRef | null = null;
         try {
+          await runPendingRevocations(lease); // #2286, as in employee _select
           await requireCurrentSession(lease, current.sessionId);
           const access = await citizenAccess(claims.sub);
           if (!access.allowed) return send(response, access.denial === "PHONE_NOT_VERIFIED" ? "PHONE_NOT_VERIFIED" : "CITIZEN_CONTEXT_UNAVAILABLE", "Citizen context is not available");

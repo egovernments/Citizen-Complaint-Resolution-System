@@ -1159,6 +1159,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 - Admin events name the caller's client by **internal id**, not `clientId`.
 - Membership **adds** carry no user id, so the BFF never acts on them.
 - Echo suppression ignores only the BFF service account's own mirror-only writes.
+- Both `_select` routes first run any revocation job already queued for the person, under the person lease. So `_select` never returns a cached DIGIT token that a queued job is about to revoke, and a session the job ends gets `SESSION_REVOKED` (#2286). A failing job fails `_select` and stays queued. Before the poller reads the event (up to about 5 s), the BFF does not know about the change, so a `_select` in that window can still return a token the job revokes later.
 
 ## 11. Configuration added by the contract
 

@@ -4,7 +4,7 @@ import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.
 import { currentPersonLease, personLeaseKey, withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { createIdentitySession, getIdentitySession, requireCurrentSession, saveSelectedIdentityContext } from "../../src/modules/sessions/session-store.js";
 import { privateRef } from "../../src/modules/citizen-otp/otp-store.js";
-import { cachedToken, drainKeycloakLogoutRetries, drainRevocationJobs, drainTokenRetries, endKeycloakSessions, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
+import { cachedToken, drainKeycloakLogoutRetries, drainRevocationJobs, enqueueRevocation, runPendingRevocations, drainTokenRetries, endKeycloakSessions, endPhoneSessions, holdToken, logoutSessions, recordToken, revokeAccount, revokePerson, revokeTenantMembers } from "../../src/modules/revocation/index.js";
 import { key, personTokensKey, readToken, tokenKey, tokenHoldersKey } from "../../src/modules/revocation/inventory.js";
 import * as keycloak from "../../src/modules/revocation/keycloak.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
@@ -268,6 +268,16 @@ describe("token inventory and revocation", () => {
     await revokeTenantMembers(account.tenantId, "ORGANIZATION_DISABLED");
     expect(new Set(observed)).toEqual(new Set(["member", "bound"])); expect(await getRedis().zcard(key("revoke-jobs"))).toBe(0);
     await revokeTenantMembers(account.tenantId, "ORGANIZATION_DISABLED"); expect(observed).toHaveLength(4);
+  });
+  it("runPendingRevocations runs only the lease holder's queued jobs, including ones waiting to retry (#2286)", async () => {
+    const sid = await session(); await inventory(account, login(), sid);
+    const mine = await enqueueRevocation(subject, "CREDENTIAL_CHANGED");
+    await getRedis().zadd(key("revoke-jobs"), Date.now() + 5_000, mine); // a failed run waiting for the worker
+    const others = await enqueueRevocation("someone-else", "LOGOUT_ALL");
+    await withPersonLease(subject, lease => runPendingRevocations(lease));
+    expect(await getIdentitySession(sid)).toBeNull();
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("digit-token");
+    expect(await getRedis().zrange(key("revoke-jobs"), 0, -1)).toEqual([others]);
   });
   it("_select rejects its session after revocation wins the lease", async () => {
     const sid = await session(); await revokePerson(subject, "LOGOUT_ALL");
