@@ -8,6 +8,14 @@ import java.util.*;
 
 @Component
 public class OnboardingSteps {
+    /**
+     * Reserved hierarchy that holds only the tenant's root boundary, for the founder's HRMS
+     * jurisdiction. The operational hierarchy is the founder's own: the Geography step creates it
+     * and records it in CMS-BOUNDARY.HierarchySchema, which digit-ui, the dashboard and the
+     * configurator read. A one-level ADMIN here could never grow levels (boundary-service has no
+     * hierarchy update), so it blocked that step (#2260).
+     */
+    public static final String WORKSPACE_HIERARCHY = "WORKSPACE";
     private final OnboardingProvisionerClient client;
     private final PlatformBaseline seed;
     private final ObjectMapper mapper;
@@ -146,10 +154,10 @@ public class OnboardingSteps {
     private void rootBoundary(OnboardingProgress.WriteScope scope, String tenant, OnboardingProgress progress) {
         Map<String,Object> root = new LinkedHashMap<>(); root.put("boundaryType", "ROOT"); root.put("parentBoundaryType", null); root.put("active", true);
         progress.record("boundary-hierarchy", () -> ensureBoundary(scope, "/boundary-service/boundary-hierarchy-definition/_search",
-                Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType","ADMIN")), "BoundaryHierarchy", tenant,
+                Map.of("BoundaryTypeHierarchySearchCriteria",Map.of("tenantId",tenant,"hierarchyType",WORKSPACE_HIERARCHY)), "BoundaryHierarchy", tenant,
                 "/boundary-service/boundary-hierarchy-definition/_create", Map.of("BoundaryHierarchy",
-                        Map.of("tenantId", tenant, "hierarchyType", "ADMIN", "boundaryHierarchy", List.of(root)))));
-        // Technical root placeholder only; operational geography remains workspace-owned.
+                        Map.of("tenantId", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryHierarchy", List.of(root)))));
+        // Technical root placeholder only; operational geography is workspace-owned (Geography step).
         var geometry = Map.of("type", "Point", "coordinates", List.of(0,0));
         progress.record("boundary-root", () -> ensureBoundary(scope, "/boundary-service/boundary/_search?tenantId=" + tenant + "&codes=" + tenant,
                 Map.of(), "Boundary", tenant, "/boundary-service/boundary/_create",
@@ -157,10 +165,10 @@ public class OnboardingSteps {
         // Stock boundary-service reads relationship search criteria from the query
         // string only; criteria in the body were ignored (8c gate 2).
         progress.record("boundary-relationship", () -> ensureBoundary(scope,
-                "/boundary-service/boundary-relationships/_search?tenantId=" + tenant + "&hierarchyType=ADMIN",
+                "/boundary-service/boundary-relationships/_search?tenantId=" + tenant + "&hierarchyType=" + WORKSPACE_HIERARCHY,
                 Map.of(), "TenantBoundary", tenant,
                 "/boundary-service/boundary-relationships/_create", Map.of("BoundaryRelationship",
-                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", "ADMIN", "boundaryType", "ROOT"))));
+                        Map.of("tenantId", tenant, "code", tenant, "hierarchyType", WORKSPACE_HIERARCHY, "boundaryType", "ROOT"))));
     }
 
     private void validateMobileRule(JsonNode rule) {
@@ -187,7 +195,7 @@ public class OnboardingSteps {
         for (JsonNode entry : entries) {
             if (!entry.isObject()) throw new OnboardingFailure("BOUNDARY_INVALID_RESPONSE", true);
             if (!boundaryIdentity(entry, tenant)) continue;
-            if ("BoundaryHierarchy".equals(field) && "ADMIN".equals(entry.path("hierarchyType").asText())) return true;
+            if ("BoundaryHierarchy".equals(field) && WORKSPACE_HIERARCHY.equals(entry.path("hierarchyType").asText())) return true;
             if ("Boundary".equals(field) && tenant.equals(entry.path("code").asText())) return true;
             if ("TenantBoundary".equals(field)) {
                 // A wrapper exists even when no relationship exists. Only the target
@@ -195,7 +203,7 @@ public class OnboardingSteps {
                 JsonNode hierarchy = entry.path("hierarchyType");
                 String hierarchyCode = hierarchy.isObject() ? hierarchy.path("code").asText()
                         : hierarchy.isTextual() ? hierarchy.asText() : ""; // a JSON null is not the string "null"
-                if (!hierarchyCode.isBlank() && !"ADMIN".equals(hierarchyCode)) continue;
+                if (!hierarchyCode.isBlank() && !WORKSPACE_HIERARCHY.equals(hierarchyCode)) continue;
                 JsonNode roots = entry.path("boundary");
                 if (roots.isMissingNode() || roots.isNull()) continue;
                 if (roots.isObject()) { if (rootNode(roots, tenant)) return true; }
@@ -245,7 +253,7 @@ public class OnboardingSteps {
             employee.put("user", user); employee.put("isActive", true);
             employee.put("assignments", List.of(Map.of("department", "ONBOARDING_ADMIN", "designation", "ONBOARDING_FOUNDER",
                     "fromDate", signup.getCreatedAt(), "isCurrentAssignment", true)));
-            employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", "ADMIN", "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
+            employee.put("jurisdictions", List.of(Map.of("tenantId", tenant, "hierarchy", WORKSPACE_HIERARCHY, "boundaryType", "ROOT", "boundary", tenant, "roles", roles)));
             try {
                 client.write(scope, "hrms", "/egov-hrms/employees/_create", Map.of("Employees", List.of(employee)));
             } catch (OnboardingFailure failure) {
