@@ -6,12 +6,12 @@
  *
  * Three things about this contract drive the shape of everything below:
  *
- *  - **The browser never talks to Keycloak, and never handles a credential.**
- *    Sign-in is a full-page navigation to the BFF, which runs Authorization
- *    Code + PKCE and hands off to Keycloak's own hosted page. So there is no
- *    Keycloak base URL to configure, no password field, and no magic-link
- *    token for us to redeem. `authMethods()` only decides which buttons to
- *    draw.
+ *  - **The browser never handles a Keycloak credential.** Password and social
+ *    sign-in navigate through the BFF to Keycloak's hosted flow. Signup magic
+ *    link is initiated by this application's form: the BFF stores the identity
+ *    draft and asks Keycloak to email a single-use link that returns directly
+ *    to the callback. The frontend configures no Keycloak URL and redeems no
+ *    token itself.
  *
  *  - **The session is an opaque HttpOnly cookie.** Every call is same-origin
  *    with `credentials: "include"`, and no call carries a Keycloak token, a
@@ -39,6 +39,10 @@ export const API_ORIGIN: string = (import.meta.env.VITE_ONBOARDING_API_ORIGIN as
 const IDENTITY_BASE = `${API_ORIGIN}/identity/v1`;
 const ONBOARDING_BASE = `${API_ORIGIN}/pgr-services/v2/onboarding`;
 
+function identityReturnTo(path: string): string {
+  return API_ORIGIN ? `${window.location.origin}${path}` : path;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Contract types                                                             */
 /* -------------------------------------------------------------------------- */
@@ -47,6 +51,16 @@ export interface AuthMethod {
   id: string;
   label: string;
   type: string;
+  intents?: AuthIntent[];
+}
+
+export type AuthIntent = 'signin' | 'signup';
+
+export interface AuthResult {
+  status: 'failed' | 'complete';
+  code: string;
+  message: string;
+  actions: Array<'TRY_AGAIN' | 'TRY_EXISTING_METHOD' | 'SETUP_PASSWORD'>;
 }
 
 export interface SessionUser {
@@ -147,17 +161,21 @@ export interface Signup {
  * deliberately no index signature here: a stray field should fail to compile
  * rather than fail a submit. `schemaVersion` must be 1.
  *
- * `countryCode` inside `tenantAdmin` is derived by the backend from the
- * top-level `Signup.countryCode` and must not be sent.
+ * `countryCode` inside `tenantAdmin` is optional and we do not send it. The
+ * backend derives it from the number it parsed against the top-level
+ * `Signup.countryCode`; a supplied one is only compared against that and
+ * rejected when the two disagree, so sending it buys a failure mode and
+ * nothing else.
  */
 export interface TenantMetadata {
   schemaVersion: 1;
   tenantAdmin: {
     /**
-     * E.164, with the dial prefix. `_submit` requires it: the worker creates
-     * the tenant-local DIGIT employee from it, and the backend validates it
-     * against Signup.countryCode, normalises it to the national number and
-     * derives the prefix itself. A draft may be saved without it.
+     * Either form is accepted, `+254712345678` or `712345678`: the backend
+     * parses it against `Signup.countryCode`, normalises it to the national
+     * number and derives the prefix itself. `_submit` requires it, because the
+     * worker creates the tenant-local DIGIT employee from it. A draft may be
+     * saved without it.
      */
     mobileNumber: string;
   };
@@ -189,6 +207,8 @@ export interface AvailabilityResult {
   type: IdentifierType;
   value: string;
   available: boolean;
+  conflictingType?: IdentifierType;
+  derivedTenantId?: string;
 }
 
 export type OperationStatus =
@@ -352,12 +372,12 @@ export function newIdempotencyKey(): string {
 
 /**
  * Which sign-in methods are actually enabled. Render only what comes back:
- * Google, GitHub and magic link appear here once their Keycloak providers are
- * switched on, and they use this same redirect flow, so no screen changes when
- * they do.
+ * Google, GitHub and magic link appear here only when their Keycloak backing
+ * is enabled. Social methods use `startSignIn`; signup magic link is initiated
+ * with `requestMagicLinkSignup` after this client collects the identity draft.
  */
-export function authMethods(): Promise<{ methods: AuthMethod[] }> {
-  return call(`${IDENTITY_BASE}/auth-methods`);
+export function authMethods(intent: AuthIntent): Promise<{ methods: AuthMethod[] }> {
+  return call(`${IDENTITY_BASE}/auth-methods?intent=${encodeURIComponent(intent)}`);
 }
 
 /**
@@ -365,8 +385,41 @@ export function authMethods(): Promise<{ methods: AuthMethod[] }> {
  * cookies and hand the browser to Keycloak; an XHR cannot do that, and
  * following it in JS would break PKCE.
  */
-export function startSignIn(methodId: string): void {
-  window.location.assign(`${IDENTITY_BASE}/authorize?method=${encodeURIComponent(methodId)}`);
+export function startSignIn(
+  methodId: string,
+  intent: AuthIntent,
+  returnTo = identityReturnTo(`/configurator/${intent === 'signup' ? 'signup' : 'login'}`),
+): void {
+  const query = new URLSearchParams({ method: methodId, intent, returnTo });
+  window.location.assign(`${IDENTITY_BASE}/authorize?${query}`);
+}
+
+export function requestMagicLinkSignup(input: {
+  firstName: string;
+  lastName: string;
+  email: string;
+}): Promise<{ message: string }> {
+  return call(`${IDENTITY_BASE}/authentication/magic-link-requests`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...input,
+      returnTo: identityReturnTo('/configurator/signup'),
+    }),
+  });
+}
+
+export function consumeAuthResult(id: string): Promise<AuthResult> {
+  return call(`${IDENTITY_BASE}/auth-results/${encodeURIComponent(id)}`);
+}
+
+export function requestPasswordSetup(email?: string): Promise<{ message: string }> {
+  return call(`${IDENTITY_BASE}/password/setup-requests`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(email && { email }),
+      returnTo: identityReturnTo('/configurator/login'),
+    }),
+  });
 }
 
 /**
@@ -551,20 +604,26 @@ export function isValidAccountCode(code: string): boolean {
   return /^[A-Z0-9-]{2,32}$/.test(code);
 }
 
+const ACCOUNT_CODE_MAX = 32;
+
 /**
- * "Bomet County Government" + KE -> "KE-BCG". Initials of the first three
- * words, prefixed by the country, matching the lovable reference.
+ * "Bomet County Government" + KE -> "KE-BOMET-COUNTY-GOVERNMENT". Every word of
+ * the name counts, so adding or editing any part of it changes the code. Too
+ * long a name is cut at a word boundary to stay inside the 32-character limit.
  */
 export function deriveAccountCode(name: string, countryCode: string): string {
-  const initials = name
+  const words = name
     .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((word) => word[0])
-    .join('')
-    .replace(/[^A-Za-z0-9]/g, '')
-    .toUpperCase();
-  if (!initials) return '';
-  return countryCode ? `${countryCode.toUpperCase()}-${initials}` : initials;
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!words) return '';
+  const prefix = countryCode ? `${countryCode.toUpperCase()}-` : '';
+  const room = ACCOUNT_CODE_MAX - prefix.length;
+  let body = words;
+  if (body.length > room) {
+    const cut = body.slice(0, room + 1).lastIndexOf('-');
+    body = cut > 0 ? body.slice(0, cut) : body.slice(0, room);
+  }
+  return `${prefix}${body}`;
 }

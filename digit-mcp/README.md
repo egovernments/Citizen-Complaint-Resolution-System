@@ -370,6 +370,7 @@ getResourceBySchema('RAINMAKER-PGR.ServiceDefs');  // → complaint-types config
 | `MCP_DEFAULT_PROVISIONING_PASSWORD` | `eGov@123` | Password given to accounts this server **creates**. A published default — override it |
 | `MCP_CORS_ORIGINS` | — | Origins allowed to call `/v1/*` and `/api/*` cross-origin |
 | `SESSION_DB_PASSWORD` | `mcp123` | Session-viewer database password. Published default — set it on any networked deploy |
+| `MCP_READ_ONLY` | — | Any non-empty value except `false`/`0`/`no`/`off` starts a **read-only** instance (fail-closed): every write-risk tool is dropped at registration (absent, not just disabled) so it can't be listed, enabled, or dispatched — on `/mcp`, `/v1/tools/*`, or the `/v1/tenant/bootstrap`\|`city`\|`cleanup` routes (all resolve tools through `getTool`). `core` session tools stay registered for the group-enable/hints flow but their writes are refused in this mode: `configure` (kept, needed to connect) refuses `base_url` and the role self-grant, `session_checkpoint` is rejected, and `init` skips its session-row write. The routes that bypass the registry are guarded explicitly: read-only mode **refuses `/api/sessions/*` and `POST /v1/tenant/:id/export` with 403** (both are write / bulk-data-exposure surfaces — unbounded INSERTs, stored tool args / user info, whole-tenant MDMS dumps). A public instance should still sit behind edge auth (basic-auth/allowlist) regardless, since some reads (`user_search`, `pgr_search`) return data. |
 
 ## Environments
 

@@ -9,9 +9,16 @@ import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
 import { notificationRoutingDescriptor } from './notification-routing';
 import { notificationTemplateDescriptor } from './notification-template';
+import { notificationChannelDescriptor } from './notification-channel';
+import { notificationProviderTemplateDescriptor } from './notification-provider-template';
+import { notificationsRoutingDescriptor } from './notifications-routing';
+import { notificationsTemplateDescriptor } from './notifications-template';
+import { notificationsChannelDescriptor } from './notifications-channel';
+import { notificationsProviderTemplateDescriptor } from './notifications-provider-template';
+import { notificationsEventCatalogueDescriptor } from './notifications-event-catalogue';
 import { mapConfigDescriptor } from './map-config';
 import { analyticsProviderDescriptor } from './analytics-provider';
-import { escalationConfigDescriptor } from './escalation-config';
+import { pgrEscalationDescriptor } from './pgr-escalation';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
@@ -25,9 +32,16 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,
   [notificationTemplateDescriptor.schema]: notificationTemplateDescriptor,
+  [notificationChannelDescriptor.schema]: notificationChannelDescriptor,
+  [notificationProviderTemplateDescriptor.schema]: notificationProviderTemplateDescriptor,
+  [notificationsRoutingDescriptor.schema]: notificationsRoutingDescriptor,
+  [notificationsTemplateDescriptor.schema]: notificationsTemplateDescriptor,
+  [notificationsChannelDescriptor.schema]: notificationsChannelDescriptor,
+  [notificationsProviderTemplateDescriptor.schema]: notificationsProviderTemplateDescriptor,
+  [notificationsEventCatalogueDescriptor.schema]: notificationsEventCatalogueDescriptor,
   [mapConfigDescriptor.schema]: mapConfigDescriptor,
   [analyticsProviderDescriptor.schema]: analyticsProviderDescriptor,
-  [escalationConfigDescriptor.schema]: escalationConfigDescriptor,
+  [pgrEscalationDescriptor.schema]: pgrEscalationDescriptor,
 };
 
 export function getDescriptor(schemaCode?: string): SchemaDescriptor | undefined {
@@ -39,4 +53,4 @@ export function getFieldSpec(descriptor: SchemaDescriptor | undefined, path: str
   return descriptor?.fields.find((f) => f.path === path);
 }
 
-export type { SchemaDescriptor, FieldSpec, FieldGroup, WidgetKind } from './types';
+export type { SchemaDescriptor, FieldSpec, FieldGroup, WidgetKind, ListWidgetKind } from './types';

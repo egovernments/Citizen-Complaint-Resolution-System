@@ -913,12 +913,16 @@ html .header-dropdown-option:hover * {
  * footer down to where it overlaps the fixed `.digit-action-bar` at the
  * bottom of the viewport.
  *
- * Tighten the top gap to ~88px (topbar 72 + 16px breathing room) and
- * add bottom padding equal to the action bar's typical 72px height so
- * the page can scroll past the action bar without the footer hiding
- * behind it. */
+ * Tighten the top gap to the header height plus one gap unit, and add bottom
+ * padding equal to the action bar's typical 72px height so the page can
+ * scroll past the action bar without the footer hiding behind it.
+ *
+ * Derived from --employee-header-h rather than restated: the literal 88px
+ * here was computed from the vendor's 72px bar, but the employee block later
+ * in this file pins the bar to its own height, so the two had already drifted
+ * apart by 16px. */
 .main.digit-home-main {
-  padding-top: 88px !important;
+  padding-top: calc(var(--employee-header-h, 56px) + var(--employee-header-gap, 16px)) !important;
   margin-top: 0 !important;
 }
 .employee-app-wrapper.digit-home-app-wrapper {
@@ -1045,12 +1049,14 @@ html .digit-topbar:not(.digit-employee-header) {
  * land on the same y-line, just above "Powered by DIGIT".
  * -------------------------------------------------------------------- */
 :root {
-  --v2-page-footer-height: 38px;
-  /* PR #99 reduced the topbar from the legacy ~82px to 56px (see
-   * `.employee .digit-topbar` rules earlier in this file). The var
-   * was left at 82px which made the citizen sidebar end ~26px above
-   * the viewport bottom. Aligned to the actual topbar height. */
-  --v2-topbar-height: 56px;
+  /* The footer renders 40px tall (see the `.citizen-home-footer` rules); at
+   * 38 every page sized from this overran the window by 2px and grew a
+   * scrollbar for nothing. */
+  --v2-page-footer-height: 40px;
+  /* The citizen layout's own name for the top bar height. Citizens now get
+   * the shared bar (#2038 review), so this follows --employee-header-h
+   * rather than restating a number that drifted twice before (82px, 56px). */
+  --v2-topbar-height: var(--employee-header-h, 76px);
 }
 
 /* Vendor sets `.citizen .main { padding-top: 82px; min-height: calc(100vh - 90px) }`.
@@ -1074,31 +1080,16 @@ html .digit-topbar:not(.digit-employee-header) {
   ) !important;
 }
 
-/* Some citizen surfaces (e.g. /user/profile, edit profile) mount under
- * the `.employee` wrapper because of how `useRouteSubscription` flips on
- * those paths. Vendor css then pins the citizen page footer with
- * `.employee .citizen-home-footer { position: fixed; bottom: 0 }`,
- * which on a modernized route lays the "Powered by DIGIT" bar OVER the
- * v2 sidebar/form column instead of below them. Whenever the v2 sidebar
- * is present in main, force the footer back to normal flow + clear the
- * 72px legacy margin so it parks flush below the v2 column. */
-body:has(.main.center-container.citizen-home-container > aside.v2-scope) .citizen-home-footer {
-  position: static !important;
-  bottom: auto !important;
-  margin-bottom: 0 !important;
-  /* Reserve the 260px sidebar gutter on the left so the "Powered by
-   * DIGIT" text lands in the centre of the right-side content area
-   * (the same column the form / module list sits in) rather than the
-   * centre of the full viewport — which would put it visually under
-   * the sidebar's right edge. Only kicks in when the v2 sidebar is
-   * actually mounted (via the body :has() guard above). */
-  padding-left: 260px !important;
-}
-@media (max-width: 47.99rem) {
-  /* Mobile: sidebar is hidden, drop the gutter so the footer text is
-   * centred to the full viewport again. */
-  body:has(.main.center-container.citizen-home-container > aside.v2-scope) .citizen-home-footer {
-    padding-left: 0 !important;
+/* "Powered by DIGIT" centres on the content column, as it does on employee
+ * pages, whose footer sits inside the rail-inset `.main`. The citizen footer
+ * is a full-width sibling of the page that runs under the fixed rail, so it
+ * is inset by the rail's width (the page's own left and right gutters are
+ * equal, so this is the column's centre) and travels with the rail. Only
+ * where a rail is mounted: the signed-out pages have none. */
+@media (min-width: 48rem) {
+  html[data-sidebar-pinned] .citizen > .citizen-home-footer {
+    padding-left: calc(var(--app-rail-w) + 16px) !important;
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
@@ -2072,55 +2063,124 @@ button[class*="toast-close"] svg,
  *    soft top divider, theme-aligned text colour.
  * -------------------------------------------------------------------- */
 
-/* Topbar pinned + larger logos */
-.employee .digit-topbar,
-.employee .digit-topbar.digit-employee-header {
-  height: 56px !important;
-  min-height: 56px !important;
+/* Topbar height + larger logos.
+ *
+ * 76px, up from 56px (#2038 review: "make top navbar 1.3-1.5 times taller").
+ * That is 1.36x, and the number is not only about presence: the logo below is
+ * 44px, so a 56px bar left it 6px of air top and bottom and the lockup read as
+ * jammed against both edges. At 76px it gets 16px, which is the same rhythm
+ * the rest of the employee chrome uses.
+ *
+ * Declared once as a custom property because three rules have to agree: this
+ * height, and the content offset further down. They did not agree before —
+ * the offset was computed from the vendor's 72px bar that this very block had
+ * already overridden to 56px, so every employee page carried 32px of dead
+ * space above its content instead of the 16px the comment claimed. */
+:root {
+  /* 64px, as in the design; it was 76px while the crest sat in a full-height
+   * rail's head, which had to share the bar's height. */
+  --employee-header-h: 64px;
+  /* Breathing room between the fixed bar and the first content. */
+  --employee-header-gap: 16px;
+}
+@media (max-width: 30rem) {
+  /* Vendor drops to 3.5rem here and vertical space is scarcer than presence
+   * on a phone, so this takes a smaller lift than the desktop bar. */
+  :root { --employee-header-h: 64px; }
+}
+:is(.employee, .citizen) .digit-topbar,
+:is(.employee, .citizen) .digit-topbar.digit-employee-header {
+  height: var(--employee-header-h) !important;
+  min-height: var(--employee-header-h) !important;
   align-items: center !important;
+  /* Vertical padding is symmetric so `align-items: center` actually centres;
+   * the bar is a fixed height, so these only bound the children. */
   padding-top: 8px !important;
   padding-bottom: 8px !important;
+  /* Vendor asks for 2.5rem (40px) of side gutter, which was set against a
+   * short bar with small logos and now reads as the brand floating in the
+   * middle of the strip rather than anchored to the edge. 24px lines the
+   * lockup up closer to the 48px nav rail below it and gives the action
+   * cluster on the right the same margin. */
+  padding-left: 24px !important;
+  padding-right: 24px !important;
 }
-/* Topbar logos — bumped per CCRS#562 ("logos are the wrong size
- * and hard to read"). Previous 36/28px shrunk the brand assets
- * far below their natural aspect; on naipepea both eGov and Nairobi
- * marks ship at 400×120 source (10:3) and 360×100 source so a 28px
- * height left them looking like icons. Lifting to 44px on the
- * primary eGov mark and 38px on the secondary marks gives the
- * topbar a properly weighted brand strip while still fitting inside
- * the 56px topbar height. */
-.employee .digit-topbar .digit-header-logo-img {
-  height: 44px !important;
+@media (max-width: 47.99rem) {
+  :is(.employee, .citizen) .digit-topbar,
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+/* Topbar logos — sized per CCRS#562 ("logos are the wrong size and hard to
+ * read"), then corrected in the #2038 review.
+ *
+ * 44px was compensating for a defect rather than being a real size. The eGov
+ * asset was an 800x800 canvas holding a 800x200 wordmark on transparency, so
+ * a 44px box rendered 11px of actual wordmark and three quarters of nothing.
+ * Both lockups are cropped to their wordmark now (see TopBar.js), which means
+ * the declared height is finally the height you see. 28px, because the mark
+ * it sits beside is often a small square badge — Bomet ships a 2251x2251
+ * crest rendered at 38px — and a 4:1 wordmark at any greater height reads as
+ * the primary brand on someone else's deployment. Still two and a half times
+ * the wordmark that was actually visible before the crop.
+ *
+ * The wrapper has to stop constraining it. Vendor pins
+ * `.digit-logo-ulb-wrapper` to a fixed 2rem, which was sized for the old
+ * short bar; an image taller than that overflowed an inline box and sat 11px
+ * off centre. Letting both wrapper and slot size to their content is what
+ * actually centres the lockup, rather than nudging it with margins. */
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper,
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-logo {
+  height: auto !important;
+  max-height: none !important;
+  display: flex !important;
+  align-items: center !important;
+}
+:is(.employee, .citizen) .digit-topbar .digit-header-logo-img {
+  height: 28px !important;
   width: auto !important;
-  max-height: 44px !important;
+  max-height: 28px !important;
   max-width: 180px !important;
+  display: block !important;
 }
-.employee .digit-topbar img.state,
-.employee .digit-topbar .digit-topbar-ulb img,
-.employee .digit-topbar .digit-logo-ulb-wrapper img.state {
+/* The tenant mark sat 4.7px low for the same reason the eGov one did, by a
+ * different route: it is an `display:inline` image on a text baseline, so its
+ * block reserved descender space underneath it — a 38px image in a 41.7px
+ * box. Taking it out of inline flow removes the phantom descender, which is
+ * what actually centres it; nudging it with a margin would only have hidden
+ * the gap at this one font size. */
+:is(.employee, .citizen) .digit-topbar img.state,
+:is(.employee, .citizen) .digit-topbar .digit-topbar-ulb img,
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper img.state {
   height: 38px !important;
   max-height: 38px !important;
   width: auto !important;
+  display: block !important;
+}
+:is(.employee, .citizen) .digit-topbar .digit-logo-ulb-wrapper .digit-topbar-ulb {
+  display: flex !important;
+  align-items: center !important;
 }
 /* Right-side action icons (language switcher, ULB picker, profile,
  * notifications, etc.) — vendor renders 24×24 SVGs that read tiny
  * vs the bumped left-hand logos. Lift to 28px so the topbar feels
  * balanced left-to-right. */
-.employee .digit-topbar [class*="header-action"] svg,
-.employee .digit-topbar [class*="topbar-action"] svg,
-.employee .digit-topbar [class*="topbar-icon"] svg,
-.employee .digit-topbar [class*="header-right"] svg,
-.employee .digit-topbar [class*="profile"] svg,
-.employee .digit-topbar [class*="notification"] svg,
-.employee .digit-topbar > div > svg,
-.employee .digit-topbar > div > div > svg {
+:is(.employee, .citizen) .digit-topbar [class*="header-action"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="topbar-action"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="topbar-icon"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="header-right"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="profile"] svg,
+:is(.employee, .citizen) .digit-topbar [class*="notification"] svg,
+:is(.employee, .citizen) .digit-topbar > div > svg,
+:is(.employee, .citizen) .digit-topbar > div > div > svg {
   width: 28px !important;
   height: 28px !important;
 }
 /* Right-side branding image (`.digit-header-img` — tenant secondary
  * wordmark on naipepea). Same uplift as the left-hand state logo. */
-.employee .digit-topbar img.digit-header-img,
-.employee .digit-topbar .digit-header-img {
+:is(.employee, .citizen) .digit-topbar img.digit-header-img,
+:is(.employee, .citizen) .digit-topbar .digit-header-img {
   height: 28px !important;
   max-height: 28px !important;
   width: auto !important;
@@ -2133,7 +2193,7 @@ button[class*="toast-close"] svg,
  * the initial sits at the optical centre regardless of letter width.
  * Closes the avatar-centering point on egovernments/CCRS#505. */
 .employee .topbar .right .user-img-txt,
-.employee .digit-topbar .user-img-txt,
+:is(.employee, .citizen) .digit-topbar .user-img-txt,
 .user-img-txt {
   width: 36px !important;
   height: 36px !important;
@@ -2169,20 +2229,20 @@ button[class*="toast-close"] svg,
  * green) + brand-tinted active state. Uses the legacy `--color-sidebar-*`
  * tokens so a tenant's MDMS theme drives every shade. Falls back to the
  * Nairobi green when a tenant ships nothing. */
-.employee .digit-sidebar,
-.employee .digit-sidebar.dark {
+:is(.employee, .citizen) .digit-sidebar,
+:is(.employee, .citizen) .digit-sidebar.dark {
   background: var(--color-sidebar-bg, var(--color-header-bg, var(--color-primary-1, #204F37))) !important;
   color: var(--color-sidebar-text-default, #D1D5DB) !important;
   border-right: 1px solid var(--color-sidebar-bg, var(--color-border, #d6d5d4)) !important;
 }
-.employee .digit-sidebar svg,
-.employee .digit-sidebar .digit-sidebar-item svg,
-.employee .digit-sidebar .digit-sidebar-item svg path {
+:is(.employee, .citizen) .digit-sidebar svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item svg path {
   fill: var(--color-sidebar-icon-default, var(--color-sidebar-text-default, #D1D5DB)) !important;
 }
-.employee .digit-sidebar .digit-sidebar-item,
-.employee .digit-sidebar .digit-sidebar-item .digit-sidebar-link,
-.employee .digit-sidebar .digit-sidebar-item-label {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item .digit-sidebar-link,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-label {
   color: var(--color-sidebar-text-default, #D1D5DB) !important;
 }
 /* Sidebar item hover — every state-class combination the vendor
@@ -2197,12 +2257,12 @@ button[class*="toast-close"] svg,
  * fallback chain `hover-text → primary-1 → sidebar-bg` lands the
  * text at the sidebar's own dark green on naipepea (#204F37) and
  * a sensible brand-toned dark on other tenants. */
-.employee .digit-sidebar .digit-sidebar-item:hover,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel:hover,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover,
-.employee .digit-sidebar .digit-sidebar-item.collapsed:hover,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.collapsed:hover {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed:hover,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.collapsed:hover {
   background-color: var(--color-sidebar-hover-bg, var(--color-primary-selected-bg, #FFF4D6)) !important;
   color: var(--color-sidebar-hover-text, var(--color-primary-1, var(--color-sidebar-bg, #204F37))) !important;
 }
@@ -2214,50 +2274,50 @@ button[class*="toast-close"] svg,
  * reads dark-on-yellow instead of white-on-yellow
  * (egov/CCRS#562 follow-up). Both `.item-label` and the legacy
  * `.digit-sidebar-item-label` are covered for defensive parity. */
-.employee .digit-sidebar .digit-sidebar-item:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item:active:hover .item-label,
-.employee .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-item-label,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-item-label,
-.employee .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-link,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-link {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:active:hover .item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-item-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover .digit-sidebar-link,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover .digit-sidebar-link {
   color: var(--color-sidebar-hover-text, var(--color-primary-1, var(--color-sidebar-bg, #204F37))) !important;
 }
-.employee .digit-sidebar .digit-sidebar-item.active,
-.employee .digit-sidebar .digit-sidebar-item-active,
-.employee .digit-sidebar .digit-sidebar-item.selected {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.active,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-active,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected {
   background-color: var(--color-sidebar-selected-bg, var(--color-primary-1, #c84c0e)) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
 /* SVG icon colours follow the row's foreground via the fallback
  * chain. Hover state matches the dark hover text; idle/selected
  * matches the white selected text. */
-.employee .digit-sidebar .digit-sidebar-item:hover svg,
-.employee .digit-sidebar .digit-sidebar-item:hover svg path,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover svg,
-.employee .digit-sidebar .digit-sidebar-item.selected:hover svg path,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg,
-.employee .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg path {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item:hover svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected:hover svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.parentLevel.selected:hover svg path {
   fill: var(--color-sidebar-hover-text, var(--color-primary-1, var(--color-sidebar-bg, #204F37))) !important;
 }
-.employee .digit-sidebar .digit-sidebar-item.active svg,
-.employee .digit-sidebar .digit-sidebar-item.active svg path,
-.employee .digit-sidebar .digit-sidebar-item-active svg,
-.employee .digit-sidebar .digit-sidebar-item-active svg path,
-.employee .digit-sidebar .digit-sidebar-item.selected svg,
-.employee .digit-sidebar .digit-sidebar-item.selected svg path {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.active svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.active svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-active svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item-active svg path,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected svg path {
   fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
 /* Search input inside the expanded sidebar — translucent on dark surface */
-.employee .digit-sidebar .digit-sidebar-search-container,
-.employee .digit-sidebar .digit-sidebar-search-container input {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container input {
   background: rgba(255, 255, 255, 0.06) !important;
   color: var(--color-sidebar-selected-text, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
-.employee .digit-sidebar .digit-sidebar-search-container ::placeholder {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container ::placeholder {
   color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.55)) !important;
 }
 /* CCRS#1469: typed text was invisible in the sidebar's nav filter.
@@ -2270,20 +2330,23 @@ button[class*="toast-close"] svg,
  *
  * Keep the wrapper and its inner container transparent so the translucent
  * container behind them shows through and the white text stays legible. */
-.employee .digit-sidebar .digit-sidebar-search-container .digit-text-input-field,
-.employee .digit-sidebar .digit-sidebar-search-container .input-container {
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container .digit-text-input-field,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-search-container .input-container {
   background: transparent !important;
   background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
 }
 
-/* Sidebar position — vendor `top: 0` + topbar height 72 + sidebar
- * effective top from layout = 64. With our 56px topbar override the
- * sidebar should park at top: 56 with no gap. Pin it. */
-.employee .digit-sidebar {
-  top: 56px !important;
-  height: calc(100vh - 56px) !important;
+/* Sidebar position — vendor ships `top: 0`, which parks the rail behind the
+ * fixed header. It has to start exactly where the header ends.
+ *
+ * Derived from --employee-header-h, not restated. It was pinned to a literal
+ * 56px, so raising the bar to 76px hid the rail's top 20px behind it and left
+ * the column 20px too tall. The literal is why the breakage existed at all. */
+:is(.employee, .citizen) .digit-sidebar {
+  top: var(--employee-header-h, 56px) !important;
+  height: calc(100vh - var(--employee-header-h, 56px)) !important;
   margin-top: 0 !important;
 }
 
@@ -3057,6 +3120,16 @@ button[class*="toast-close"] svg,
   align-self: stretch !important;
 }
 
+/* The side column (the links card and the filter) took a flat 20% of the row:
+ * 230px on a wide desktop but 130px on an 820px tablet, where "Assigned to Me"
+ * broke mid-word and the filter dropdowns cut their labels short. It keeps its
+ * 20% wherever that's enough, and never drops below 13rem. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox {
+    grid-template-columns: minmax(13rem, 20%) minmax(0, 1fr) !important;
+  }
+}
+
 /* ...except the links panel, which is in the FIRST grid row, not the second.
  * The rule above was written for the table/filter row and catching row 1 as
  * well left the links card stretched to the height of the search form beside
@@ -3197,12 +3270,14 @@ button[class*="toast-close"] svg,
 
 .employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
   margin-left: 0 !important;
-  padding-left: var(--digit-sidebar-width, 3rem) !important;
+  padding-left: var(--app-rail-w, 0px) !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
   overflow-x: clip !important;
-  padding-top: 56px !important;
+  /* padding-top intentionally NOT set here: the dashboard product ships this
+   * same selector in its own stylesheet, which loads later and wins. It is
+   * fixed there. */
   box-sizing: border-box !important;
 }
 
@@ -4712,14 +4787,14 @@ label .required, label sup,
  * matched `.digit-popup-heading`, which is the title TEXT, so the rule drew a
  * short rule under the word itself — the stray underline beneath "Logout"
  * (#2038). Colour still applies to both; only the border is row-scoped. */
-.employee .digit-popup-header,
-.employee .digit-modal-header,
-.employee .digit-dialog-header {
+:is(.employee, .citizen) .digit-popup-header,
+:is(.employee, .citizen) .digit-modal-header,
+:is(.employee, .citizen) .digit-dialog-header {
   border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
 }
-.employee .digit-popup-header,
-.employee .digit-modal-header,
-.employee .digit-dialog-header,
+:is(.employee, .citizen) .digit-popup-header,
+:is(.employee, .citizen) .digit-modal-header,
+:is(.employee, .citizen) .digit-dialog-header,
 .employee [class*="popup-heading"] {
   color: var(--color-text-heading, var(--color-primary-1, #204F37));
 }
@@ -5563,8 +5638,8 @@ html .digit-back-link-icon {
    * (◂) used by `.back-btn2` on /pgr/* surfaces. mask-image lets the
    * glyph inherit currentColor / theme so MDMS theming keeps working. */
   background-color: var(--color-button-tertiary-text, var(--color-primary-1, #204F37));
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M14 7l-5 5 5 5V7z'/></svg>");
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M14 7l-5 5 5 5V7z'/></svg>");
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   -webkit-mask-size: contain;
   mask-size: contain;
   -webkit-mask-repeat: no-repeat;
@@ -5953,11 +6028,11 @@ html .h1, html header.h1, html [class~="h1"] {
    * down past the topbar (~64px) and stretch it to the viewport bottom
    * so it reads as a proper full-height sidebar. */
   .digit-msb-sidebar {
-    /* Topbar is 56px tall on mobile (was 64-78px on larger viewports);
-     * pin the drawer flush against it. */
-    top: 56px !important;
-    height: calc(100vh - 56px) !important;
-    max-height: calc(100vh - 56px) !important;
+    /* Flush against the bar, whatever height it is at this width —
+     * --employee-header-h already carries the per-breakpoint value. */
+    top: var(--employee-header-h, 56px) !important;
+    height: calc(100vh - var(--employee-header-h, 56px)) !important;
+    max-height: calc(100vh - var(--employee-header-h, 56px)) !important;
   }
   .digit-employee-sidemenu,
   .digit-employee-sidemenu > *:first-child,
@@ -6484,7 +6559,7 @@ header.digit-header .digit-dropdown-master {
  * action field let the avatar collapse into an oval. If :has() is unsupported
  * the rule is simply skipped, which degrades to the clipping it replaces
  * rather than to broken controls. */
-.employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
+:is(.employee, .citizen) .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
 .employee .digit-working-context {
   position: relative;
   display: inline-flex;
@@ -6494,9 +6569,9 @@ header.digit-header .digit-dropdown-master {
 }
 .employee .digit-working-context-trigger { min-width: 0; max-width: 100%; }
 /* Circular avatar must keep its aspect ratio regardless of flex pressure. */
-.employee .digit-header-action-fields .digit-profile-image,
-.employee .digit-header-action-fields img[alt="Profile"],
-.employee .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
+:is(.employee, .citizen) .digit-header-action-fields .digit-profile-image,
+:is(.employee, .citizen) .digit-header-action-fields img[alt="Profile"],
+:is(.employee, .citizen) .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
 .employee .digit-working-context-trigger {
   background: none;
   border: none;
@@ -6549,6 +6624,16 @@ header.digit-header .digit-dropdown-master {
 
 /* Positioned inline as fixed by the component (the header container is
  * overflow:hidden), so only the chrome lives here. */
+/* Same surface as the other two header dropdowns.
+ *
+ * This panel was drawn to its own spec — 2px radius against their 4px, a heavy
+ * single `0 6px 22px` shadow against their two-layer soft one, and hardcoded
+ * #d6d8da / #0b0c0c where they read theme tokens. Three menus hanging off one
+ * bar looked like three different components.
+ *
+ * Only the surface is aligned. The panel's contents are genuinely richer than
+ * a list of options — grouped labels and chips — and that difference is the
+ * point of it. */
 .employee .digit-working-context-panel {
   z-index: 10000;
   min-width: 272px;
@@ -6556,9 +6641,10 @@ header.digit-header .digit-dropdown-master {
   max-height: 70vh;
   overflow-y: auto;
   background: #fff;
-  border: 1px solid #d6d8da;
-  border-radius: 2px;
-  box-shadow: 0 6px 22px rgba(11, 12, 12, .16);
+  border: 1px solid var(--color-card-border, #E5E7EB);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.10),
+              0 2px 4px -2px rgba(16, 24, 40, 0.06);
   padding: 8px 0;
   text-align: left;
 }
@@ -6577,7 +6663,9 @@ header.digit-header .digit-dropdown-master {
 .employee .digit-working-context-panel,
 .employee .digit-working-context-panel div,
 .employee .digit-working-context-panel span {
-  color: #0b0c0c;
+  /* Themed, like the other menus' option text. The literal near-black was one
+   * more way this panel opted out of the tenant's palette. */
+  color: var(--color-text-primary, #363636);
 }
 .employee .digit-working-context-group-value {
   font-size: 13px;
@@ -6600,15 +6688,15 @@ header.digit-header .digit-dropdown-master {
    * resizing down from desktop leaves the inline copy rendered and both would
    * show. Hide it explicitly rather than relying on that. */
   .employee .digit-working-context-mobile { display: block; }
-  .employee .digit-header-action-fields .digit-working-context { display: none; }
+  :is(.employee, .citizen) .digit-header-action-fields .digit-working-context { display: none; }
   /* …and collapse the wrapper Header.js puts around it so it leaves no gap.
    * Layered: the rule above always hides the content, this one removes the
    * empty slot where :has() is supported. */
-  .employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
+  :is(.employee, .citizen) .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
 }
 .employee .digit-working-context-mobile {
   position: sticky;
-  top: 56px;
+  top: var(--employee-header-h, 56px);
   z-index: 40;
   background: #fff;
   border-bottom: 1px solid #d6d8da;
@@ -7119,13 +7207,20 @@ header.digit-header .digit-dropdown-master {
   opacity: 0.78;
 }
 
-/* Panel */
+/* Panel.
+ *
+ * Radius and shadow match the other two header dropdowns rather than the
+ * card scale: this is a menu hanging off the bar, not a page card, and at
+ * 12px with a `0 12px 32px` drop it read as a different component from the
+ * language and profile menus beside it. Padding stays generous — its contents
+ * are grouped labels and chips, not a list of options. */
 .employee .digit-working-context-panel {
   min-width: 280px;
   padding: 16px 18px 18px !important;
-  border-radius: 12px !important;
+  border-radius: 4px !important;
   border: 1px solid var(--color-card-border, #E5E7EB) !important;
-  box-shadow: 0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.1) !important;
+  box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.10),
+              0 2px 4px -2px rgba(16, 24, 40, 0.06) !important;
 }
 .employee .digit-working-context-place-block {
   padding-bottom: 12px;
@@ -7179,7 +7274,7 @@ header.digit-header .digit-dropdown-master {
  *     edge. A hairline at the boundary is enough — it keeps both surfaces
  *     the tenant's navy rather than inventing a second shade.
  * -------------------------------------------------------------------- */
-.employee .digit-topbar.digit-employee-header {
+:is(.employee, .citizen) .digit-topbar.digit-employee-header {
   border-bottom: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
 }
 
@@ -7326,18 +7421,18 @@ header.digit-header .digit-dropdown-master {
  * weight dropped out from under them. 12px is the system shell radius, so
  * that one is safe to apply to any employee dialog. */
 html .employee .digit-popup-overlay .digit-popup-wrapper,
-html .employee .digit-popup-wrapper,
-html .employee .digit-popup-wrapper.digit-logout-popup-wrapper.default {
+html :is(.employee, .citizen) .digit-popup-wrapper,
+html :is(.employee, .citizen) .digit-popup-wrapper.digit-logout-popup-wrapper.default {
   border-radius: 12px !important;
 }
-.employee .digit-logout-popup-wrapper button,
-.employee .digit-logout-popup-wrapper [class*="popup-footer"] button {
+:is(.employee, .citizen) .digit-logout-popup-wrapper button,
+:is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"] button {
   border-radius: 6px !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
-.employee .digit-logout-popup-wrapper button .digit-button-label,
-.employee .digit-logout-popup-wrapper [class*="popup-footer"] button .digit-button-label {
+:is(.employee, .citizen) .digit-logout-popup-wrapper button .digit-button-label,
+:is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"] button .digit-button-label {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
@@ -7345,8 +7440,8 @@ html .employee .digit-popup-wrapper.digit-logout-popup-wrapper.default {
 /* The dialog's footer carries no ground of its own in vendor CSS, so it shows
  * whatever is behind the card. Paint it with the card surface so the action
  * row is unambiguously part of the dialog (#2038). */
-html .employee .digit-logout-popup-wrapper .digit-popup-footer,
-html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
+html :is(.employee, .citizen) .digit-logout-popup-wrapper .digit-popup-footer,
+html :is(.employee, .citizen) .digit-logout-popup-wrapper [class*="popup-footer"] {
   background: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
@@ -7386,11 +7481,11 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * page's near-black stroke — these are stroke-drawn (lucide) glyphs, so a
  * `fill` would not have touched them. Take the same foreground every other
  * filled primary control uses (#2038). */
-.employee .v2-profile-camera-btn {
+:is(.employee, .citizen) .v2-profile-camera-btn {
   color: var(--color-button-primary-text, #FFFFFF) !important;
 }
-.employee .v2-profile-camera-btn svg,
-.employee .v2-profile-camera-btn svg * {
+:is(.employee, .citizen) .v2-profile-camera-btn svg,
+:is(.employee, .citizen) .v2-profile-camera-btn svg * {
   stroke: var(--color-button-primary-text, #FFFFFF) !important;
 }
 
@@ -7407,6 +7502,15 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   .employee .grounded-container > .v2-scope {
     padding-left: 16px !important;
     padding-right: 16px !important;
+  }
+}
+/* With a rail on the page the left gutter starts where the rail ends, so the
+ * column centres in the space beside it rather than across the whole window;
+ * at 272px open the rail otherwise reached the heading. */
+@media (min-width: 48rem) {
+  html[data-sidebar-pinned] .employee .grounded-container > .v2-scope {
+    padding-left: calc(var(--app-rail-w) + 24px) !important;
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
@@ -7629,13 +7733,15 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *     deviation: `/citizen/all-services` paints a white `div.v2-scope`
  *     route root over the grey `.body-container`, so the page reads as a
  *     white slab with the ground surviving only below the fold and the
- *     card invisible on it.
+ *     card invisible on it. The complaint pages mount theirs one level
+ *     down, inside `.pgr-citizen-wrapper`, which is why My Complaints, a
+ *     complaint and the File a Complaint form each sat in a white panel of
+ *     their own, cards nested inside it, where employee pages put white
+ *     cards straight on the grey.
  *
- *     Guarded with the same `:has(> aside.v2-scope)` test the layout rules
- *     above use, because the citizen login / OTP surfaces don't mount the
- *     sidebar and do want their own white ground. `div.v2-scope` (not bare
- *     `.v2-scope`) so the navy sidebar `aside` keeps its background. */
-.center-container.citizen-home-container:has(> aside.v2-scope) > div.v2-scope {
+ *     The sign-in card (`.citizen-form-wrapper`) keeps its own ground. */
+.citizen .center-container.citizen-home-container > .v2-scope:not(.citizen-form-wrapper),
+.citizen .pgr-citizen-wrapper > .v2-scope {
   background-color: transparent !important;
 }
 
@@ -7810,5 +7916,2902 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   .body-container > .employee > .main > .employee-app-wrapper {
     flex: 1 1 auto !important;
     min-height: 0 !important;
+  }
+}
+
+/* ======================================================================
+ * Employee sidebar — pin-to-open, and content that travels with it
+ * (#2038 review: "smoother animation, always open button as well for
+ * desktop, content moves with sidebar opening").
+ *
+ * Three separate complaints with one shared cause: the nav is
+ * `position: fixed`, so it has never been able to move anything. Widening
+ * it on hover painted a 240px panel straight over the page, and because
+ * SideNav was handed empty `expandedWidth`/`collapsedWidth` strings it fell
+ * through to the stylesheet's `width: auto` open state, which is not an
+ * animatable value — so the declared transition never ran and the panel
+ * simply appeared.
+ *
+ * SideNav now takes concrete widths (3rem / 15rem) so the width genuinely
+ * interpolates, plus an opt-in pin. The pinned state is published on the
+ * root element by EmployeeSideBar, which is what lets this stylesheet inset
+ * the surface by the same distance over the same duration.
+ *
+ * Round 3 removed the hover peek altogether: the toggle in the rail's head is
+ * now the only way to open or close it (see the full-height block at the end
+ * of this file), so "pinned" and "open" are the same state.
+ * ---------------------------------------------------------------------- */
+
+/* The sidebar only exists at >=768px (EmployeeSideBar renders inside
+ * `MediaQuery minWidth={768}`), so there is nothing to inset below that. */
+@media (min-width: 48rem) {
+  /* Vendor: `margin-left: 72px; width: calc(100% - 83px)`, a 48px rail plus
+   * a 24px gutter and 11px on the right. The same gutters, around whatever
+   * width the rail has now (--app-rail-w), so the page and the panel cannot
+   * disagree about how far they moved. */
+  .employee .main {
+    transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  html[data-sidebar-pinned] .employee .main {
+    margin-left: calc(var(--app-rail-w) + 24px) !important;
+    width: calc(100% - var(--app-rail-w) - 35px) !important;
+  }
+}
+
+/* An open rail keeps the expanded padding; without this the vendor's
+ * collapsed `padding: 0 .75rem` fights the open layout. */
+.digit-sidebar.pinned {
+  padding: 0;
+}
+
+/* …and the open state must not clamp its own animation.
+ *
+ * Vendor's `.digit-sidebar.hovered` sets `min-width: 15rem`. `min-width` is
+ * not an animatable property and it clamps the USED width, so the moment the
+ * class lands the rail is 240px wide regardless of what `width` is busy
+ * transitioning towards. Opening therefore snapped while closing animated —
+ * on close the class is removed, the clamp disappears, and the width
+ * transition finally has somewhere to travel.
+ *
+ * SideNav now supplies both widths inline, so the vendor's minimum has no job
+ * left to do. Releasing it is what lets the open direction animate at all. */
+:is(.employee, .citizen) .digit-sidebar.hovered,
+:is(.employee, .citizen) .digit-sidebar.pinned {
+  min-width: 0 !important;
+}
+
+/* Logout dialog account card — avatar, name, and the identifying line inside
+ * a bordered block, so the dialog shows WHICH account is being signed out
+ * rather than restating its own heading three times (#2038 review).
+ *
+ * The name and meta are separate rows deliberately: as inline spans they ran
+ * together as "AdminADMIN", which reads as one corrupted string rather than
+ * two facts about the account. */
+.digit-logout-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-card-border, #E5E7EB);
+  border-radius: 8px;
+  /* The popup header carries a 1px rule and the body started 5px under it, so
+   * the card read as stuck to the divider. 16px is the spacing the rest of the
+   * employee app puts between a section rule and the block beneath it. */
+  margin-top: 12px;
+}
+.digit-logout-account-avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-primary-1-bg, #FFF4D7);
+  color: var(--color-primary-1, #204F37);
+  font-weight: 700;
+  font-size: 0.875rem;
+  /* The initials are decorative next to the name they are derived from; the
+   * fixed box keeps a long pair from stretching the circle into an ellipse. */
+  letter-spacing: 0.02em;
+}
+.digit-logout-account-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.digit-logout-account-name {
+  font-weight: 700;
+  color: var(--color-text-primary, #363636);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.digit-logout-account-meta {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #505A5F);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mobile header: one tenant mark, not two.
+ *
+ * Below the shared header's own breakpoint the `img` slot and the `ulb` slot
+ * sit side by side in `.digit-header-img-ulb-wrapper-mobileview` with a
+ * `.topbar-divider` between them. Plenty of deployments point both at the same
+ * asset — Bomet serves one crest for both — so the same image rendered twice,
+ * at 28px and 38px, split by a rule.
+ *
+ * Neither prop can simply be dropped: `ulb` is the only one that renders above
+ * this breakpoint, and blanking `img` makes the shared header substitute its
+ * own default mSeva mark. So both stay and the smaller one is hidden here,
+ * along with the now-pointless divider.
+ *
+ * `--single-mark` is set by TopBar.js, which is the only place the two URLs
+ * can be compared; a tenant whose marks differ never gets the class and keeps
+ * both images. */
+:is(.employee, .citizen) .digit-topbar.digit-employee-header--single-mark
+  .digit-header-img-ulb-wrapper-mobileview .digit-header-img,
+:is(.employee, .citizen) .digit-topbar.digit-employee-header--single-mark
+  .digit-header-img-ulb-wrapper-mobileview .topbar-divider {
+  display: none !important;
+}
+
+/* Dropdown carets are chrome, not action icons.
+ *
+ * The rule above bumps every SVG under `[class*="header-action"]` to 28px, to
+ * stop the right-hand action icons reading tiny against the enlarged logos.
+ * It also caught `.header-dropdown-arrow`, which is not an action icon but the
+ * caret belonging to a text label — at 28px beside a 14px word it outweighed
+ * the thing it points at, and sat 4px low because the SVG is inline and so
+ * rides the text baseline rather than the line box.
+ *
+ * 18px matches the label's own optical weight, and taking the caret out of
+ * inline flow is what actually centres it. Measured before: 28px, 4px low. */
+:is(.employee, .citizen) .digit-topbar .header-dropdown-arrow {
+  display: inline-flex !important;
+  align-items: center !important;
+  /* The caret reads as part of its label, so it sits closer to it than the
+     8px the action row uses between separate controls. */
+  margin-left: 2px !important;
+}
+:is(.employee, .citizen) .digit-topbar .header-dropdown-arrow svg {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+}
+
+/* Action row spacing — 32px between three small controls reads as three
+ * unrelated things rather than one cluster, and it pushes the working-context
+ * pill away from the header's right edge for no reason. 16px still separates
+ * them clearly at this size; the caret rule above already tightens each label
+ * to its own caret, so the only gaps left are the ones between controls. */
+:is(.employee, .citizen) .digit-topbar .digit-header-action-fields {
+  gap: 16px !important;
+}
+
+/* The icon column must not move when the rail opens.
+ *
+ * Vendor gives `.digit-sidebar-item` no padding while collapsed and 16px once
+ * open, so every icon jumped 4.5px right and the rows re-spaced as the panel
+ * expanded — the icons appeared to jitter under the sliding edge. One padding
+ * for both states fixes the column in place; 12px is what centres a 24px icon
+ * in the 48px collapsed rail, so the closed state is unchanged and only the
+ * open state stops moving. The rail is 80px closed now, so 28px is what
+ * centres the icon; the value changed, the reasoning did not. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item,
+:is(.employee, .citizen) .digit-sidebar.hovered .digit-sidebar-item,
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-item {
+  padding: 8px 28px !important;
+}
+
+/* Labels stay on one line while the rail widens.
+ *
+ * A row's label lands the moment the rail starts to open, while the rail is
+ * still 80px wide. Free to wrap, "File a Complaint" and "My Complaints" ran to
+ * two lines until the rail passed about 230px, so their rows grew and every row
+ * below dropped 12px and came back up as the width caught up: the jitter on
+ * open. On one line, clipped until the rail has room, each row keeps its final
+ * height for the whole animation. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item .item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Icons hold their place while the rail narrows.
+ *
+ * Collapsed, vendor centres each row and its wrapper. The class lands the
+ * moment the rail starts to close, while it is still 272px wide, so every icon
+ * jumped from x=28 to the middle (x=124) and then slid back as the width
+ * shrank: the jitter on close. Left-aligned, the 28px padding keeps the icon at
+ * x=28 throughout, and at the final 80px that is still dead centre (28 + 24 + 28).
+ * Vendor also gives a collapsed icon 12px of side margin, which the centring
+ * hid; open, the icon has none, so it goes here too. */
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-items-container .item-child-wrapper,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed {
+  justify-content: flex-start !important;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.collapsed .icon {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Optical alignment of the bar's right edge.
+ *
+ * Both sides sit 24px from the edge geometrically — measured, the boxes agree
+ * exactly. The right still reads wider because the last thing on it is a
+ * caret, and the caret's ink does not fill its own box: the arrow path spans
+ * 7→17 of a 24-unit viewBox, so at 18px it carries 5.25px of built-in
+ * whitespace on its right. The eGov wordmark opposite is cropped to its ink
+ * and starts at exactly 24px, so the two edges are measured the same and seen
+ * differently.
+ *
+ * Shifting the cluster out by that whitespace is what makes the INK symmetric,
+ * which is the thing the eye is actually judging.
+ *
+ * Applied to the row, not to its last field: the row's real last child is the
+ * duplicate tenant mark suppressed above, so `:last-child` selects a
+ * `display: none` element and moves nothing. The cluster's left edge is not
+ * aligned to anything, so shifting the whole thing only shows at the edge that
+ * needed correcting. */
+:is(.employee, .citizen) .digit-topbar .digit-header-action-fields {
+  /* 11px, not the caret's 5.25px alone: the trailing field carries its own
+   * padding past the glyph as well. Measured from the rendered result rather
+   * than derived — left ink 24px, right ink 24px. */
+  margin-right: -11px !important;
+}
+
+/* One row rhythm, open or closed.
+ *
+ * Two separate causes, which is why setting the gap alone was not enough.
+ *
+ * Vendor puts `gap: 24px` on the items container while the rail is collapsed,
+ * so items sat 64px apart. It also switches the container from `flex` to
+ * `block` once the rail opens — and `gap` does nothing on a block box — so the
+ * open state ignored any gap at all and the rows fell to 40px apart. Every
+ * item below the first visibly closed ranks as the panel widened.
+ *
+ * Pinning the display is the half that matters: a constant gap is meaningless
+ * if the box stops being a flex container. 4px rather than either original —
+ * 24 is airy for a labelled list and 0 leaves the rows touching, and the point
+ * is that the rail should not re-space itself just because it got wider. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-items-container,
+:is(.employee, .citizen) .digit-sidebar.hovered .digit-sidebar-items-container,
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-items-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  row-gap: 4px !important;
+}
+
+/* Logout dialog: no close cross.
+ *
+ * The dialog already offers Cancel, and the overlay stays dismissable, so the
+ * cross was a third way to do the same thing — and it collided with the
+ * heading, which is now a question rather than a one-word title. Measured: the
+ * heading block ran to x=952.7 while the close glyph started at x=934.5, so
+ * "log out?" sat under it.
+ *
+ * Removing it is the fix rather than padding the heading away from it: the
+ * control had no job left once Cancel existed. Scoped to this dialog — other
+ * popups have no Cancel and still need a way out. */
+.digit-logout-popup-wrapper .digit-popup-close {
+  display: none !important;
+}
+
+/* Logout dialog heading: dialog scale, not page scale.
+ *
+ * The shared PopUp renders its heading at 32px/700 — measured identical to the
+ * dashboard's page <h1>. A confirm dialog is not a page, and inside a 520px
+ * box that put the question at the same weight as the title of the screen
+ * behind it. 20px still leads the dialog without competing with the page.
+ *
+ * Scoped here rather than changed on PopUp: every dialog in the app inherits
+ * that 32px, so it is worth correcting centrally, but not from a ticket about
+ * the employee chrome. */
+.digit-logout-popup-wrapper .digit-popup-heading,
+.digit-logout-popup-wrapper .digit-popup-heading-subheading-wrap h1,
+.digit-logout-popup-wrapper .digit-popup-heading-subheading-wrap h2,
+.digit-logout-popup-wrapper .digit-popup-heading-subheading-wrap > * {
+  font-size: 20px !important;
+  line-height: 1.35 !important;
+}
+
+/* Secondary buttons sit on the surface, they do not paint one.
+ *
+ * DIGIT's Secondary is an outline button: brand stroke, brand label, no fill.
+ * The stroke and label are already right and already themed — the record ships
+ * `--color-button-secondary-border` and `--color-button-secondary-text`, both
+ * #2563EB on this tenant. There is no matching background token, so the ground
+ * stayed a hardcoded white that neither the tenant nor the surface could
+ * influence.
+ *
+ * On a white card that is invisible. On the employee page ground (#EEEEEE),
+ * inside the dark mobile drawer, or anywhere else, it read as a white filled
+ * pill wearing a blue outline rather than as an outline button. Tertiary and
+ * link are both transparent already; this makes the family consistent.
+ *
+ * Hover takes the brand tint every other outline control in this UI uses,
+ * rather than a second opaque fill. */
+:is(.employee, .citizen) .digit-button-secondary {
+  background-color: transparent !important;
+}
+:is(.employee, .citizen) .digit-button-secondary:hover:not(.disabled):not(:disabled) {
+  background-color: var(--color-primary-1-bg, rgba(37, 99, 235, 0.08)) !important;
+}
+
+/* Header dropdown options — a real transition, and the same highlight for the
+ * keyboard as for the pointer.
+ *
+ * Two things were off. The option declares `transition: all` with no duration,
+ * which is inert: `all` names the properties but nothing says how long, so the
+ * tint appeared and vanished between frames. Naming the two properties that
+ * actually change, with a duration, is also cheaper than animating `all`,
+ * which would happily animate layout if anything ever moved.
+ *
+ * The larger one is that nothing styled `.activeIndex`. The shared component
+ * puts that class on the option the arrow keys have moved to, and no rule
+ * picked it up — so the menu highlighted under a pointer and stayed
+ * completely flat under the keyboard. Same for `:focus-visible`. Reusing the
+ * hover treatment means the two input methods cannot drift apart. */
+html .header-dropdown-option {
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+html .header-dropdown-option.activeIndex,
+html .header-dropdown-option.activeIndex *,
+html .header-dropdown-option:focus-visible,
+html .header-dropdown-option:focus-visible * {
+  background-color: var(--color-primary-1-bg, #FFF4D7) !important;
+  color: var(--color-primary-1, #204F37) !important;
+}
+/* The keyboard position should be legible without relying on the tint alone,
+ * which is subtle at these sizes. */
+html .header-dropdown-option.activeIndex,
+html .header-dropdown-option:focus-visible {
+  box-shadow: inset 2px 0 0 var(--color-primary-1, #204F37);
+  outline: none;
+}
+
+/* ======================================================================
+ * Inbox top row: the search card is as tall as the card beside it
+ * (#2038 review: "align boxes on search page").
+ *
+ * The links card sits at the height of its content (149px on a laptop),
+ * but the search card beside it came out at 210px. Three things made it
+ * tall, none of them content:
+ *   - the actions had a row of their own under the fields,
+ *   - the Date Range field carries the legacy select's `margin-bottom:
+ *     24px`, which set the height of the whole field row,
+ *   - vendor gives every `.digit-section` a `min-height: 10rem` floor.
+ *
+ * With the actions inline and the other two cleared, the search card is
+ * shorter than the links card, and both stretch to the row so their edges
+ * meet whichever one is taller. That also covers widths where the links
+ * title wraps to three lines.
+ *
+ * Inline actions need room: three fields of about 170px plus the two
+ * buttons. The rail and a pinned sidebar both take width from this card
+ * independently of the viewport, so the switch is a container query on the
+ * card itself rather than a media query. Below it the actions keep their
+ * own row, full width and right-aligned.
+ * ---------------------------------------------------------------------- */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.search {
+  min-height: 0 !important;
+  container: pgr-inbox-search / inline-size;
+}
+/* Supersedes the `align-self: start` above. That was written while the
+ * search card stood 210px tall; now that it is compact, sharing the row
+ * height is what lines the two cards up. */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.links {
+  align-self: stretch !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-label-field-pair .digit-employee-select-wrap {
+  margin-bottom: 0 !important;
+}
+
+/* Tablet and up. Vendor pins the actions to `grid-column: 3 / -1`, so the
+ * third track took the buttons' 234px and squeezed Complaint No and Mobile
+ * No to about 108px each at 834px, the phone input to about 30px. Equal
+ * tracks, and the actions span the row under them. Phones have their own
+ * stacked layout (section 58). */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    row-gap: 16px !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    grid-column: 1 / -1 !important;
+    justify-content: flex-end !important;
+  }
+}
+
+/* A narrow search card (a tablet, beside the filter column) can't hold three
+ * fields in a row: at 418px the phone input behind its +254 prefix was about
+ * 30px wide. Two to a row there, the actions still on their own row below.
+ * Tablets and up only: phones keep their one-field-per-row layout. */
+@media (min-width: 48rem) {
+  @container pgr-inbox-search (max-width: 37.99rem) {
+    .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+  }
+}
+
+@container pgr-inbox-search (min-width: 50rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto !important;
+    align-items: end !important;
+  }
+  /* 40px buttons centred on the 44px fields beside them. */
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    grid-column: auto !important;
+    margin-bottom: 2px !important;
+  }
+}
+
+/* An error under one field (an invalid mobile number, say) made that cell
+ * taller, and with the cells bottom-aligned its input rose above the inputs
+ * beside it. Each field is a label, an input and an optional error, so the
+ * cells of a row share those three tracks (subgrid): labels sit level above
+ * the inputs even when one wraps, the inputs stay in line, and an error only
+ * opens space under its own row. Tablet and up; phones stack the fields. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper {
+    row-gap: 0 !important;
+    align-items: stretch !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair {
+    display: grid !important;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0 !important;
+    margin: 0 !important;
+    /* Room under each row of fields, carried into the error track by the
+     * empty item below so the track keeps it with no error in it. */
+    padding-bottom: 16px;
+  }
+  /* Every part placed outright, in one column. Left to auto-placement, two
+   * items pinned to the error track would open a second column for the
+   * cell. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > * {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair::after {
+    content: "";
+    grid-column: 1;
+    grid-row: 3;
+  }
+  /* A short label sits on its input when a neighbour's label wraps. The
+   * vendor spaced label and input with an 8px flex gap; a margin does it here,
+   * since a gap would also open under every input with no error below it. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > :first-child {
+    grid-row: 1;
+    align-self: end;
+    margin-bottom: 8px !important;
+  }
+  /* Date Range renders an empty spacer between its label and its picker,
+   * which would push the picker down into the error track; the picker also
+   * carried a -8px pull-up written for the old flex layout. */
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .filter-label:empty {
+    display: none !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .digit-employee-select-wrap {
+    margin-top: 0 !important;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-inbox-search-composer-label-pair > .digit-error-icon-message-wrap {
+    grid-row: 3;
+    align-self: start;
+    margin-top: 4px !important;
+  }
+}
+/* One row of fields with the actions inline: the buttons go in the input
+ * track, so an error under a field never moves them, and nothing pads the
+ * card below the row. */
+@container pgr-inbox-search (min-width: 50rem) {
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-inbox-search-composer-label-pair {
+    padding-bottom: 0;
+  }
+  .v2-pgr-inbox .digit-section.search .digit-search-field-wrapper > .digit-search-button-wrapper {
+    /* Both lines: a row alone would auto-place it in the first column. */
+    grid-row: 2 !important;
+    grid-column: -2 / -1 !important;
+    align-self: center !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Search and Clear, sized to their labels. Both took the vendor's 105px
+ * minimum, so two five-letter labels spanned 234px of the row. Clear is an
+ * outlined Secondary beside Search: the same height, padding and corners,
+ * where the vendor drew it 32px tall and square-cornered, with a 16px label.
+ * Its stroke and label take the theme's secondary tokens: the vendor paints
+ * both in --color-primary-main, a pale yellow on white on yellow-primary
+ * tenants. */
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper {
+  gap: 12px !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper :is(.digit-button-primary, .digit-button-secondary) {
+  width: auto !important;
+  min-width: 5rem !important;
+  height: 40px !important;
+  padding: 0 20px !important;
+  border-radius: 6px !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+}
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
+/* The filter card's Clear All, outlined like Clear above and the same size as
+ * Apply beside it: the vendor's Secondary is square-cornered, with its stroke
+ * and label in --color-primary-main. */
+.v2-pgr-inbox .digit-section.filter .button-container .digit-button-secondary {
+  height: 40px !important;
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+  border-radius: 6px !important;
+}
+/* Every Clear label matches the Search and Apply labels beside it: the
+ * vendor's Secondary also tightens its letter-spacing. */
+.v2-pgr-inbox .digit-section.filter .button-container .digit-button-secondary .digit-button-label,
+.v2-pgr-inbox .digit-section.search .digit-search-button-wrapper .digit-button-secondary .digit-button-label,
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
+/* The phone search and filter sheets stack Clear over a full-width Search.
+ * Clear kept the vendor's square corners and its stroke and label in
+ * --color-primary-main; the same corners and secondary tokens as above. */
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary {
+  border: 1px solid var(--color-button-secondary-border, var(--color-primary-1, #204F37)) !important;
+  border-radius: 6px !important;
+}
+.digit-popup-wrapper .digit-search-button-wrapper .digit-button-secondary .digit-button-label {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-button-secondary-text, var(--color-primary-1, #204F37)) !important;
+}
+
+/* The filter card was padded twice: 20px on the card, then 24px again on
+ * its header and on its content, so the fields started 45px in while the
+ * cards above start 24px in. One inset, the same as theirs. */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.filter {
+  padding: 24px !important;
+}
+.v2-pgr-inbox .digit-section.filter .filter-header {
+  padding: 0 !important;
+  margin-bottom: 16px !important;
+}
+.v2-pgr-inbox .digit-section.filter .content-container {
+  padding: 0 !important;
+}
+
+/* Side by side, the filter column (County/Sub County/Ward and ~10 statuses,
+ * ~1310px) outgrew a 10-row table (~840px) and the stretched table card was
+ * left with a tall blank band under its pagination.
+ *
+ * The table now sets the row height: `contain: size` takes the filter's
+ * content out of the row's sizing, and its fields scroll inside the card
+ * with Apply / Clear All kept in view below them. The floor of about one
+ * screen keeps a one- or two-row table from squeezing the filter into a
+ * sliver; the table card then stretches to it with the pagination at its
+ * foot. */
+@media (min-width: 48rem) {
+  .v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.filter {
+    contain: size;
+    /* Vendor's `height: fit-content` would keep it out of the row stretch. */
+    height: auto !important;
+    min-height: max(24rem, calc(100vh - 8rem));
+    display: flex;
+    flex-direction: column;
+  }
+  .v2-pgr-inbox .digit-section.filter > .digit-tab-main,
+  .v2-pgr-inbox .digit-section.filter .filter-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .content-container {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for the fields' focus rings at the scroll edges. */
+    padding: 0 4px !important;
+    margin: 0 -4px;
+  }
+  /* The section already insets the card by 24px; vendor pads the buttons by
+   * another 24px all round. */
+  .v2-pgr-inbox .digit-section.filter .filter-card > .button-container {
+    flex: none;
+    padding: 16px 0 0 !important;
+  }
+  /* Vendor marks the header and buttons `with-shadow` while the fields
+   * overflow. Its 1px shadow hugged the unpadded header like a box; a
+   * hairline under the header and over the buttons marks the scroll edges. */
+  .v2-pgr-inbox .digit-section.filter .filter-card > .filter-header.with-shadow {
+    box-shadow: none !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 0 !important;
+    border-bottom: 1px solid var(--color-border, #d6d5d4);
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .filter-header.with-shadow + .content-container {
+    padding-top: 12px !important;
+  }
+  .v2-pgr-inbox .digit-section.filter .filter-card > .button-container.with-shadow {
+    box-shadow: none !important;
+    border-top: 1px solid var(--color-border, #d6d5d4);
+  }
+  .v2-pgr-inbox .digit-table-card > div:last-child:has(> .rdt_Pagination) {
+    margin-top: auto;
+  }
+}
+
+/* The module icon belongs to the title's first line. Centred on the whole
+ * block, it floated between the lines once the title wrapped, and lower
+ * still because the title carries a bottom margin. 1px centres the 20px
+ * glyph on the 22.4px line. */
+.v2-pgr-inbox .digit-section.links .digit-inbox-search-links-header {
+  align-items: flex-start !important;
+}
+.v2-pgr-inbox .digit-section.links .digit-inbox-search-links-header-logo {
+  margin-top: 1px !important;
+}
+
+/* ======================================================================
+ * Employee page gutters between 600px and 768px (#2038 review).
+ *
+ * Vendor reserves the sidebar rail from 640px up (`.employee .main {
+ * margin-left: 72px; width: calc(100% - 83px) }`), but EmployeeSideBar only
+ * renders the rail from 768px (`MediaQuery minWidth={768}`). The phone rule
+ * that gives the space back stops at 600px. In between, every employee page
+ * kept a 72px gutter for a rail that is not there: 100px of left gap against
+ * 27px on the right, measured on the inbox at 697px.
+ *
+ * Same three resets as the phone block, over the whole range without a rail.
+ * Scoped to `.employee`; citizen pages have their own shell.
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .employee .main.digit-home-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  .employee .ground-container.digit-home-ground {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .employee .digit-landing-page-wrapper {
+    margin-left: 16px !important;
+    margin-right: 16px !important;
+  }
+  /* Home's module cards stop at 480px wide. Beside the old 72px gutter that
+   * happened to look centred; without it they sat 28px from the left and
+   * 189px from the right. Full width here, as they already are on phones. */
+  .employee .digit-landing-page-card {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+/* ======================================================================
+ * App shell: full-width top bar, rail below it (#2038 design).
+ *
+ * Both apps. The top bar spans the window again with the tenant crest at its
+ * left, on a white tile; the rail starts under it and opens or closes only
+ * from the blue square on its edge. Its foot carries Logout and the eGov
+ * lockup, so the bar no longer shows the lockup.
+ *
+ * The rail's two widths are declared once. `--app-rail-w` follows the rail's
+ * state (published on <html> by AppSideNav) and is what every page inset
+ * reads, so the page, the footer and the toggle cannot disagree with the
+ * panel about how far it moved. Unset (no rail, or a phone) it is 0.
+ * ---------------------------------------------------------------------- */
+:root {
+  --app-rail-open: 17rem;
+  --app-rail-closed: 5rem;
+  --app-rail-w: 0px;
+}
+@media (min-width: 48rem) {
+  html[data-sidebar-pinned="false"] {
+    --app-rail-w: var(--app-rail-closed);
+  }
+  html[data-sidebar-pinned="true"] {
+    --app-rail-w: var(--app-rail-open);
+  }
+
+  /* The lockup lives in the rail's foot; the bar keeps only the crest. A
+   * tenant with no crest image at all keeps the logo slot rather than an
+   * empty corner. */
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header:not(.digit-employee-header--no-crest) .digit-topbar-logo {
+    display: none !important;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb {
+    border: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb-label {
+    color: var(--color-header-text, #ffffff);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb img.state {
+    width: 40px !important;
+    height: 40px !important;
+    max-height: 40px !important;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 2px;
+    box-sizing: border-box;
+  }
+}
+
+/* The toggle: a blue square on the rail's edge, just under the bar. Fixed to
+ * the viewport (see RailToggle), so it is placed from the same width variable
+ * and eased on the same curve as the rail. Desktop only, like the rail. */
+.digit-rail-toggle {
+  display: none;
+}
+@media (min-width: 48rem) {
+  html[data-sidebar-pinned] .digit-rail-toggle {
+    position: fixed;
+    top: calc(var(--employee-header-h, 64px) + 18px);
+    left: calc(var(--app-rail-w) - 16px);
+    z-index: 1001;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 2px solid #ffffff;
+    border-radius: 9px;
+    background: var(--color-primary-2, #2563EB);
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
+    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s ease;
+  }
+  /* No theme publishes a hover shade of primary-2, so it is derived. */
+  html[data-sidebar-pinned] .digit-rail-toggle:hover {
+    background: color-mix(in srgb, var(--color-primary-2, #2563EB) 85%, #000000);
+  }
+  html[data-sidebar-pinned] .digit-rail-toggle:focus-visible {
+    outline: 2px solid var(--color-primary-2, #2563EB);
+    outline-offset: 2px;
+  }
+  .digit-rail-toggle svg,
+  .digit-rail-toggle svg * {
+    fill: none !important;
+    stroke: currentColor !important;
+  }
+}
+
+/* The selected row is plain blue: vendor adds an 8px white strip down its
+ * left edge (a ::before), which the design does not have. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-item.selected::before {
+  display: none !important;
+}
+
+/* Rows start 22px under the bar, as designed; the rail has no head now. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-items-container {
+  padding-top: 22px !important;
+}
+
+/* A section is a label over its rows; the rows keep the list's own 4px rhythm.
+ * It also closes with a rule. Without one, the row after the section
+ * (Dashboard) read as the section's third entry. Same height open or closed,
+ * so nothing below it moves. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 8px 12px 4px;
+  background: rgba(255, 255, 255, 0.18);
+}
+:is(.employee, .citizen) .digit-sidebar.collapsed .digit-sidebar-section::after {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-label,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-divider {
+  height: 28px;
+  box-sizing: border-box;
+  margin: 0;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-label {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--color-sidebar-text-default, #D1D5DB);
+  opacity: 0.7;
+}
+/* Closed, there is no room for words: a hairline in the same 28px. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-section-divider {
+  border: 0;
+  margin: 0 10px;
+  background: linear-gradient(
+    transparent 13px,
+    rgba(255, 255, 255, 0.18) 13px,
+    rgba(255, 255, 255, 0.18) 14px,
+    transparent 14px
+  );
+}
+
+/* Foot: Logout, then the eGov lockup. Logout's icon sits on the same 28px
+ * line as the row icons above it, open or closed. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot {
+  margin-top: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 46px;
+  margin: 6px 12px 10px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  /* The rail's own row colour, as its navigation rows use. */
+  color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.88));
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout svg,
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-logout svg * {
+  flex: 0 0 auto;
+  fill: none !important;
+  stroke: currentColor !important;
+}
+/* The lockup's band is exactly as tall as the page's "Powered by DIGIT"
+ * footer (--v2-page-footer-height, 40px), so its top rule runs level with the
+ * footer's top border across the whole window. Same navy as the rail: a
+ * darker band read as a separate strip stuck to the rail's foot. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-egov-band {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: var(--v2-page-footer-height, 40px);
+  box-sizing: border-box;
+  padding: 0 0 0 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  /* The lockup travels with the rail rather than jumping (the rail's own
+   * 0.28s and easing, AppSideNav's transitionDuration). Clipped, not squeezed,
+   * while the rail is still too narrow for it. */
+  overflow: hidden;
+  transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Closed, the lockup sits centred in the 80px rail: (80 - 56) / 2 = 12px. A
+ * padding, not justify-content: center, because centring can't animate and
+ * snapped the lockup from x=28 to the middle of the still-wide rail. */
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov-band {
+  padding-left: 12px;
+}
+.digit-sidebar-foot .digit-sidebar-egov {
+  display: block;
+  height: 18px;
+  width: auto;
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-egov {
+  flex: 0 0 auto;
+  max-width: none;
+  transition: height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+:is(.employee, .citizen) .digit-sidebar .digit-sidebar-foot.closed .digit-sidebar-egov {
+  height: 14px;
+}
+
+/* Phones: the eGov lockup moves to the drawer's foot, and the crest keeps the
+ * bar. The drawer is the Hamburger, not SideNav, hence its own selectors. */
+@media (max-width: 47.99rem) {
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-logo.mobileview {
+    display: none !important;
+  }
+  /* The phone bar renders the crest twice (the wrapper's image and the ulb
+   * block) and older rules hid one or the other depending on width, which left
+   * no crest at all under 600px once the lockup went. One crest, from the
+   * wrapper, at every phone width. */
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview {
+    height: auto !important;
+    align-self: center !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
+    display: block !important;
+    height: 32px !important;
+    max-height: 32px !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-topbar-ulb-mobileview {
+    display: none !important;
+  }
+}
+/* The drawer's Logout is a secondary button on the drawer's own navy. Since
+ * secondary buttons went transparent (#2038 round 2), its label and icon kept
+ * the page's dark text colour: #1D2433 on #0B1F3A, about 1.1:1, and the word
+ * all but vanished. On a dark surface it takes the drawer's own light text,
+ * the same as the rows above it. */
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary .digit-button-label {
+  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary svg path {
+  fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.digit-msb-sidebar .digit-msb-section-label {
+  padding: 16px 16px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-sidebar-text-default, #D1D5DB);
+  opacity: 0.7;
+}
+
+/* ======================================================================
+ * Citizen shell on the employee rail and top bar (#2038 review).
+ *
+ * Citizen pages now render the same SideNav and Header as employee pages,
+ * and the rules above that style those were widened to `:is(.employee,
+ * .citizen)`. What is citizen-specific is the layout they sit in: the
+ * content is `.citizen-home-container`, a padded flex row, where the
+ * employee surface is a margined `.main`. The old gutter was a fixed 260px
+ * keyed on the v2 sidebar (`aside.v2-scope`), which no longer renders.
+ *
+ * A rail is on the page exactly when <html> carries `data-sidebar-pinned`
+ * (AppSideNav sets it while mounted), so the signed-out sign-in pages keep a
+ * centred layout. The inset reads --app-rail-w, so the page travels with it.
+ * ---------------------------------------------------------------------- */
+/* "Powered by DIGIT" sat 74px above the bottom of the window on short pages:
+ * the row's min-height subtracts the bar's height as well as the footer's,
+ * but the row's own padding already makes room for the bar. A column that
+ * fills the window, with the row taking the slack, parks the footer at the
+ * bottom whatever either height is, the way employee pages end. */
+.citizen:has(> .center-container.citizen-home-container) {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.citizen > .center-container.citizen-home-container {
+  flex: 1 0 auto;
+}
+
+/* Vendor pads `.citizen .main` 82px (58px from 640px), sized for the legacy
+ * citizen bar. Content now clears the shared bar by the same distance as on
+ * employee pages. */
+.citizen .main.center-container.citizen-home-container {
+  padding-top: var(--employee-header-h, 76px) !important;
+}
+@media (min-width: 48rem) {
+  /* The right gutter mirrors the 20px left of the page, so a card sits as
+   * far from the window's edge as from the rail. */
+  html[data-sidebar-pinned] .citizen .center-container.citizen-home-container {
+    padding-left: calc(var(--app-rail-w) + 20px) !important;
+    padding-right: 20px !important;
+    align-items: flex-start !important;
+    transition: padding-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+/* The rail renders beside the page now, not inside it, and the vendor sheet
+ * lifts this container to z-index 100 in the citizen flex column: its left
+ * padding sat over the rail and took every click on it. With a rail on the
+ * page the container takes no stacking level of its own, so the rail stays
+ * clickable and a dialog opened in the page can cover the bar too. */
+html[data-sidebar-pinned] .citizen .main.center-container.citizen-home-container {
+  z-index: auto;
+}
+
+/* A module's landing page (/citizen/pgr-home): the Back row the module's
+ * pages open with, then its All Services card at the same 434px cap. */
+.citizen .citizen-module-home {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding: 0 16px 24px;
+}
+/* The column's gap already spaces the Back row from the card. */
+.citizen .citizen-module-home > .back-btn2 {
+  margin-bottom: 0;
+}
+.citizen-module-home__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 434px));
+  gap: 16px;
+  align-items: start;
+}
+
+/* Back reads as a link in the action colour, like the card rows and the
+ * tertiary buttons it sits among, but its glyph was a small filled
+ * triangle where every other chevron in the app (card rows, the account
+ * menu, list cards) is an outline. Same outline chevron here, masked so it
+ * takes the link colour and its hover. */
+.back-btn2 > svg {
+  display: none !important;
+}
+.back-btn2::before {
+  content: "";
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m15 18-6-6 6-6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>") center / contain no-repeat;
+}
+
+/* One inset for every citizen page: heading, cards and Back 24px in from the
+ * content column, as on All Services and Edit Profile. The complaint pages
+ * sat 16px further in, their wrapper's own `padding: 0 16px` stacked on the
+ * 24px their headers and cards already carry, with Back left between the
+ * two. */
+.citizen .pgr-citizen-wrapper {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+.citizen .pgr-citizen-wrapper > .back-btn2 {
+  margin-left: 24px;
+}
+.citizen .citizen-module-home {
+  padding: 0 24px 24px !important;
+}
+
+/* Citizen sign-in (mobile number, OTP): the employee sign-in's ground, the
+ * tenant's navy from edge to edge with the card lifted off it, where it was a
+ * white page with a hairline card. The top bar stays for its language picker
+ * (citizens have no language step of their own) and, being the same navy,
+ * reads as part of the ground; "Powered by DIGIT" sits on the navy too. */
+.citizen:has(.citizen-form-wrapper) {
+  background-color: var(--color-digitv2-header-sidenav, #0B4B66);
+}
+.citizen .citizen-form-wrapper {
+  background-color: transparent !important;
+}
+.citizen:has(.citizen-form-wrapper) > .citizen-home-footer {
+  background-color: transparent !important;
+  border-top: 0 !important;
+}
+.citizen:has(.citizen-form-wrapper) .digit-topbar.digit-employee-header {
+  box-shadow: none !important;
+  border-bottom: 0 !important;
+}
+/* The sign-in card carries the crest, so the bar does not repeat it: on
+ * desktop its brand block, on a phone the crest beside the menu button (the
+ * button stays; it is where a phone reaches Language). Keyed on the card
+ * itself, not the sign-in wrapper, so a step that renders without the card
+ * keeps the bar's crest rather than showing none. */
+.citizen:has(.citizen-sign-in-card) .digit-topbar .digit-logo-ulb-wrapper,
+.citizen:has(.citizen-sign-in-card) .digit-topbar .digit-header-img-ulb-wrapper-mobileview {
+  display: none !important;
+}
+.citizen:has(.citizen-sign-in-card) .digit-topbar .digit-header-action-fields {
+  margin-left: auto !important;
+}
+
+/* ======================================================================
+ * Phone bar and drawer (#2038 design and mobile review).
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  /* Menu button: a translucent rounded square, and no blue box on tap.
+   * The box was the browser's tap highlight on a clickable div, and the
+   * focus ring left behind after a pointer tap; keyboard focus still shows. */
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger {
+    display: grid !important;
+    place-items: center;
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 auto;
+    border-radius: 9px;
+    /* A tint of the bar's own text colour, so a light-header tenant gets a
+     * dark chip rather than white on white. */
+    background: color-mix(in srgb, var(--color-header-text, #ffffff) 12%, transparent);
+    -webkit-tap-highlight-color: transparent;
+  }
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:focus:not(:focus-visible) {
+    outline: none;
+  }
+  /* Vendor's `.clickable:hover` draws a 1px brand border, and on a touch
+   * screen hover sticks after the tap, so the button kept a blue box. */
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger:is(:hover, :active) {
+    border: 0 !important;
+  }
+  :is(.employee, .citizen) .digit-topbar .digit-topbar-hamburger svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  /* Crest on the same white rounded square as the desktop bar. */
+  :is(.employee, .citizen) .digit-topbar.digit-employee-header .digit-header-img-ulb-wrapper-mobileview .digit-header-img {
+    width: 38px !important;
+    height: 38px !important;
+    max-height: 38px !important;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 2px;
+    box-sizing: border-box;
+  }
+  :is(.employee, .citizen) .digit-topbar .digit-header-mobile-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* Language pill (phone bar). */
+.digit-language-pill {
+  position: relative;
+}
+.digit-language-pill-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  /* The bar's text colour and a tint of it, as the menu button. */
+  background: color-mix(in srgb, var(--color-header-text, #ffffff) 12%, transparent);
+  color: var(--color-header-text, #ffffff);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.digit-language-pill-button:focus:not(:focus-visible) {
+  outline: none;
+}
+.digit-language-pill-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.digit-language-pill-button svg,
+.digit-language-pill-button svg * {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+.digit-language-pill-menu {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  width: 160px;
+  max-width: calc(100vw - 48px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 14px 32px rgba(17, 24, 39, 0.24);
+  overflow: hidden;
+  z-index: 10000;
+}
+.digit-language-pill-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid #f1f3f7;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.digit-language-pill-menu li:last-child .digit-language-pill-option {
+  border-bottom: 0;
+}
+.digit-language-pill-option.active {
+  background: #f3f6fc;
+  font-weight: 600;
+}
+/* The menu opens inside the bar, whose rules paint every descendant with the
+ * header's white text (`.digit-topbar.light *`); on the white menu that made
+ * the names invisible. */
+.digit-topbar .digit-language-pill-menu .digit-language-pill-option,
+.digit-topbar .digit-language-pill-menu .digit-language-pill-option span {
+  color: #111827 !important;
+}
+.digit-language-pill-option svg,
+.digit-language-pill-option svg * {
+  fill: none !important;
+  stroke: var(--color-primary-2, #2563EB) !important;
+}
+
+/* Drawer: one faint line under the last grouped section, and one over the eGov
+ * lockup (as the desktop rail has over its eGov band); no other lines, not
+ * between rows, not under the profile, not around Logout. The global `[class*="divider"]` rule adds a light grey top border
+ * to the separator, which is what made it read white; only its fill stays. */
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-profile,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-item-child-wrapper,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom,
+:is(.employee, .citizen) .digit-msb-sidebar .digit-sidebar-foot {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-divider {
+  height: 1px;
+  margin: 8px 16px;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.14);
+}
+/* Logout as a plain row, then the eGov lockup at the very bottom behind a
+ * faint line, as at the foot of the desktop rail. */
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom {
+  order: 3;
+  margin: auto 0 0 !important;
+  padding: 0 12px !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot {
+  order: 4;
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 14px 28px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14) !important;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-drawer-foot .digit-sidebar-egov {
+  height: 20px;
+}
+:is(.employee, .citizen) .digit-msb-sidebar .digit-msb-sidebar-bottom .digit-button-secondary {
+  width: 100% !important;
+  height: 46px !important;
+  justify-content: flex-start !important;
+  gap: 16px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+}
+
+/* ==========================================================================
+ * Citizen "File a Complaint" (#2038 design). Desktop: a card with the
+ * numbered stepper, grouped panels and a footer of hint + Back / Next. Phone
+ * (up to 48rem): a "Step 1 of 3" strip with bars, flat panels on grey, and
+ * the footer pinned to the bottom with an icon-only Back. The submitted page
+ * (.cms-receipt) and a complaint's page (.cms-details) share the tokens.
+ * ========================================================================== */
+.cms-file,
+.cms-receipt,
+.cms-details,
+.cms-complaints {
+  /* The theme's own button tokens, as the shared Button reads them, so the
+   * accents here follow each tenant the way its buttons do. */
+  --cms-accent: var(--color-button-secondary-text, var(--color-primary-2, #2563EB));
+  --cms-fill: var(--color-button-primary-bg-default, var(--color-primary-2, #2563EB));
+  --cms-on-fill: var(--color-button-primary-text, #FFFFFF);
+  --cms-accent-soft: #F3F6FC;
+  --cms-accent-line: #C7D2E4;
+  --cms-ink: #111827;
+  --cms-ink-2: #374151;
+  --cms-muted: #6B7280;
+  --cms-line: #E5E7EB;
+  --cms-panel: #F9FAFB;
+  --cms-panel-line: #E9ECF2;
+  --cms-danger: #DC2626;
+  --cms-warn: #B45309;
+  --cms-ok: #137A3E;
+  color: var(--cms-ink);
+}
+/* The page's own inset, as My Complaints and All Services have theirs:
+ * nothing else sits between the bar or the rail and these pages. */
+.cms-file,
+.cms-receipt,
+.cms-details {
+  padding: 24px 24px 32px;
+}
+.cms-file-title {
+  margin-bottom: 18px;
+}
+/* The app's global button hover (a lifted shadow and a half-pixel press) is
+ * for real buttons; the stepper, links and pickers here are not those. */
+:is(.cms-step-mark, .cms-link-button, .cms-sheet-option):is(:hover, :active) {
+  box-shadow: none !important;
+  transform: none !important;
+}
+.cms-file .cms-mic-button:is(:hover, :active) {
+  box-shadow: 0 6px 16px rgba(17, 24, 39, 0.22) !important;
+  transform: none !important;
+}
+.cms-file-card {
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 14px;
+}
+
+/* Desktop stepper */
+.cms-stepper {
+  display: flex;
+  justify-content: center;
+  padding: 22px 28px;
+  border-bottom: 1px solid #EEF1F6;
+}
+.cms-stepper ol {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: max-content;
+}
+.cms-step:last-child {
+  flex: 0 0 auto;
+}
+.cms-step-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.cms-step-mark:disabled {
+  cursor: default;
+}
+.cms-step-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #D1D5DB;
+  background: #FFFFFF;
+  color: #9CA3AF;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.cms-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #9CA3AF;
+  white-space: nowrap;
+}
+.cms-step.current .cms-step-dot {
+  border-color: var(--cms-accent);
+  color: var(--cms-accent);
+}
+.cms-step.done .cms-step-dot {
+  border-color: var(--cms-fill);
+  background: var(--cms-fill);
+  color: var(--cms-on-fill);
+}
+.cms-step.current .cms-step-label,
+.cms-step.done .cms-step-label {
+  color: var(--cms-ink);
+}
+.cms-step.current .cms-step-label {
+  font-weight: 700;
+}
+.cms-step-line {
+  flex: 1;
+  min-width: 40px;
+  height: 3px;
+  margin: 0 14px 26px;
+  border-radius: 2px;
+  background: #D8DCE2;
+}
+.cms-step-line.done {
+  background: var(--cms-fill);
+}
+
+/* Phone strip: hidden on desktop */
+.cms-strip {
+  display: none;
+}
+
+.cms-file-body {
+  padding: 24px 28px;
+}
+.cms-step-pane.is-hidden {
+  display: none;
+}
+.cms-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.cms-section {
+  padding: 20px;
+  background: var(--cms-panel);
+  border: 1px solid var(--cms-panel-line);
+  border-radius: 12px;
+}
+.cms-section-head {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cms-ink-2);
+}
+.cms-section-hint {
+  margin: -8px 0 16px;
+  max-width: 620px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4B5563;
+}
+.cms-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cms-ink);
+}
+.cms-required {
+  color: var(--cms-danger);
+}
+
+.cms-file .cms-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.cms-file .cms-section-address .cms-field-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+/* The cascade carries an inline flex column; here its levels join the grid. */
+.cms-file .cms-field-grid > .pgr-boundary-cascade,
+.cms-file .cms-field-grid > .cms-hierarchy {
+  display: contents !important;
+}
+.cms-file .cms-section-address .cms-field-grid > :last-child {
+  grid-column: 1 / -1;
+}
+
+/* Description */
+.cms-textarea-wrap {
+  position: relative;
+}
+.cms-textarea-wrap .cms-textarea {
+  min-height: 150px;
+  /* A bare textarea takes the browser's monospace; this one is prose. */
+  font-family: inherit;
+  line-height: 1.55;
+}
+.cms-textarea-wrap.with-mic .cms-textarea {
+  padding-right: 76px;
+}
+.cms-mic-button {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cms-fill);
+  color: var(--cms-on-fill);
+  box-shadow: 0 6px 16px rgba(17, 24, 39, 0.22);
+  cursor: pointer;
+}
+.cms-mic-button:hover {
+  background: var(--color-button-primary-bg-hover, var(--cms-fill));
+}
+.cms-counter {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+
+/* Photos */
+/* Rules on the shared Button's own utilities (display, padding, fill) need a
+ * third class: Tailwind scopes those as `.v2-scope .x` and loads later. */
+.cms-file .cms-photos .cms-photo-button {
+  display: none;
+}
+.cms-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 34px 20px;
+  text-align: center;
+  background: #FFFFFF;
+  border: 1.5px dashed var(--cms-accent-line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.cms-drop:hover,
+.cms-drop.dragging {
+  border-color: var(--cms-accent);
+  background: var(--cms-accent-soft);
+}
+.cms-drop.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.cms-drop.disabled:hover {
+  border-color: var(--cms-accent-line);
+  background: #FFFFFF;
+}
+.cms-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #E8EDF7;
+  color: var(--cms-accent);
+}
+.cms-drop-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--cms-accent);
+}
+.cms-drop-hint {
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+.cms-field-error {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--cms-danger);
+}
+.cms-photo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 10px;
+}
+.cms-photo-thumb {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #E8EDF7;
+}
+.cms-photo-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.cms-photo-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--cms-ink);
+}
+.cms-photo-status {
+  font-size: 12px;
+  color: var(--cms-muted);
+}
+.cms-photo-status.failed {
+  color: var(--cms-danger);
+}
+.cms-link-button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cms-accent);
+  cursor: pointer;
+}
+.cms-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Location: the map sits on the page, not in a panel */
+.cms-section-map {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.cms-section-map .cms-section-head {
+  font-size: 14px;
+  color: var(--cms-ink);
+  margin-bottom: 13px;
+}
+.cms-map {
+  /* Leaflet's panes and controls stack in here, not over the page. */
+  isolation: isolate;
+}
+/* GeoLocations is shared, so it is shaped from here rather than edited: its
+ * instruction line moves under the map as a small caption, and its frame
+ * (inline styles, hence the attribute match) takes the design's corners. */
+.cms-map > div {
+  display: flex;
+  flex-direction: column-reverse;
+  margin-bottom: 0 !important;
+}
+.cms-map > div > .card-label {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #4B5563;
+}
+.cms-map div[style*="border-radius: 20px"] {
+  border-color: var(--cms-line) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+.cms-pin-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.cms-pin-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #9CA3AF;
+}
+.cms-pin-icon.pinned {
+  background: #E8EDF7;
+  color: var(--color-primary-1, #14306B);
+}
+.cms-pin-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cms-pin-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cms-ink);
+}
+.cms-pin-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+
+/* Review */
+.cms-review-heading {
+  display: none;
+}
+.cms-review-body {
+  gap: 16px;
+}
+.cms-review-card {
+  padding: 18px 20px;
+  background: var(--cms-panel);
+  border: 1px solid var(--cms-panel-line);
+  border-radius: 12px;
+}
+.cms-review-head {
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cms-panel-line);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cms-ink);
+}
+.cms-review-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+}
+.cms-review-row {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.cms-review-row dt {
+  font-size: 12.5px;
+  color: var(--cms-muted);
+}
+.cms-review-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--cms-ink);
+}
+.cms-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-attachment {
+  overflow: hidden;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 12px;
+}
+.cms-attachment img {
+  display: block;
+  width: 100%;
+  height: 104px;
+  object-fit: cover;
+  background: #EEF1F6;
+}
+.cms-attachment-name {
+  display: block;
+  overflow: hidden;
+  padding: 10px 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 500;
+}
+.cms-file-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #FEF2F2;
+  color: var(--cms-danger);
+  font-size: 13.5px;
+}
+
+/* .body-container clips sideways overflow with overflow-x:hidden, which also
+ * makes it a scroll container. It never scrolls itself (it grows with the
+ * page and the window scrolls), so a sticky footer inside it would pin to a
+ * box that doesn't move. clip clips the same without becoming a scroller. */
+.body-container:has(.cms-file) {
+  overflow-x: clip;
+}
+
+/* Footer: why Next is held, then Back / Next. Pinned to the bottom of the
+ * screen at every width, so a long step (the map, the boundary levels, postal
+ * code and landmark) never hides the way on behind a scroll. */
+.cms-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px 20px;
+  background: #FFFFFF;
+  border-top: 1px solid #EEF1F6;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 -8px 16px -12px rgba(17, 24, 39, 0.18);
+}
+.cms-hint {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--cms-warn);
+}
+.cms-footer-actions {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* Sheets: a dialog on desktop, a card at the foot of a phone screen. Above
+ * the top bar, which sits at z-index 9999999. */
+.cms-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.5);
+}
+.cms-sheet {
+  width: 100%;
+  max-width: 440px;
+  padding: 28px 24px 22px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  color: #111827;
+  animation: cmsRise 200ms ease-out;
+}
+.cms-sheet-head {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+/* The sheet itself takes focus only while it has no action to give it to. */
+.cms-sheet:focus {
+  outline: none;
+}
+.cms-sheet-hint {
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6B7280;
+}
+.cms-sheet-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 22px;
+}
+.cms-sheet-actions > button {
+  flex: 1;
+}
+.cms-sheet-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+}
+.cms-sheet-stack .cms-sheet-actions {
+  gap: 10px;
+  margin-top: 0;
+}
+
+
+/* Voice recorder */
+.cms-voice {
+  text-align: center;
+}
+.cms-voice-live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.cms-voice-pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  margin: 22px auto 6px;
+}
+.cms-voice-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #DC2626;
+  animation: cmsPulse 1.8s ease-out infinite;
+}
+.cms-voice-ring.late {
+  animation-delay: 0.6s;
+}
+.cms-voice-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: #DC2626;
+  color: #FFFFFF;
+}
+.cms-voice-live.ready .cms-voice-dot {
+  background: #137A3E;
+}
+.cms-voice-live.error .cms-voice-dot {
+  background: #9CA3AF;
+}
+.cms-voice-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 46px;
+  margin-top: 8px;
+}
+.cms-voice-bars span {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: #C7D2E4;
+  transform-origin: center;
+  transform: scaleY(0.3);
+}
+.cms-voice-live.recording .cms-voice-bars span {
+  background: #DC2626;
+  animation-name: cmsBar;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.cms-voice-time {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+.cms-voice-text,
+.cms-voice-result {
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #111827;
+  background: #F9FAFB;
+  border: 1px solid #E9ECF2;
+  border-radius: 10px;
+}
+.cms-voice-interim {
+  color: #9CA3AF;
+}
+
+/* Photo source sheet (phone only; desktop uses the drop zone) */
+.cms-photo-sheet {
+  padding: 16px;
+}
+.cms-photo-sheet .cms-sheet-head {
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cms-sheet-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cms-sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 14px;
+  background: #FFFFFF;
+  border: 1px solid #C7D2E4;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--cms-accent);
+  text-align: left;
+  cursor: pointer;
+}
+.cms-sheet-option:hover {
+  background: #F3F6FC;
+  border-color: var(--cms-accent);
+}
+.cms-photo-sheet .cms-sheet-cancel {
+  margin-top: 12px;
+}
+
+@keyframes cmsPulse {
+  0% { transform: scale(1); opacity: 0.35; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes cmsBar {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+@keyframes cmsRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cms-sheet,
+  .cms-voice-ring,
+  .cms-voice-live.recording .cms-voice-bars span {
+    animation: none !important;
+  }
+}
+
+/* Phone */
+@media (max-width: 48rem) {
+  .cms-file,
+  .cms-receipt {
+    padding: 0;
+  }
+  .cms-file-title {
+    display: none;
+  }
+  .cms-file-card {
+    border: 0;
+    border-radius: 0;
+    background: #F9FAFB;
+  }
+  .cms-stepper {
+    display: none;
+  }
+  .cms-strip {
+    display: block;
+    padding: 14px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--cms-line);
+  }
+  .cms-strip-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .cms-strip-heading {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--cms-ink);
+  }
+  .cms-strip-next {
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--cms-muted);
+  }
+  .cms-strip-bars {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .cms-strip-bars span {
+    flex: 1;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--cms-line);
+  }
+  .cms-strip-bars span.on {
+    background: var(--cms-fill);
+  }
+  .cms-file-body {
+    padding: 16px;
+  }
+  .cms-step-body {
+    gap: 20px;
+  }
+  .cms-section {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+  .cms-label {
+    font-size: 14.5px;
+  }
+  .cms-textarea-wrap .cms-textarea {
+    min-height: 130px;
+    resize: none;
+  }
+  .cms-textarea-wrap.with-mic .cms-textarea {
+    padding-right: 68px;
+  }
+  .cms-mic-button {
+    right: 12px;
+    bottom: 12px;
+    width: 46px;
+    height: 46px;
+  }
+  .cms-counter {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  /* Photos ride under the description, as one button and a sheet. */
+  .cms-section-photos {
+    margin-top: -8px;
+  }
+  .cms-section-photos .cms-section-head,
+  .cms-drop {
+    display: none;
+  }
+  .cms-file .cms-photos .cms-photo-button {
+    display: inline-flex;
+    background: #FFFFFF;
+  }
+  .cms-photo-row {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .cms-section-category .cms-section-head {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--cms-line);
+  }
+  .cms-file .cms-field-grid,
+  .cms-file .cms-section-address .cms-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  /* Location: the map runs edge to edge, the fields ride up over it in a
+   * sheet headed by what is pinned. */
+  .cms-file-body.is-location {
+    padding: 0;
+  }
+  .cms-location-body {
+    gap: 0;
+  }
+  .cms-section-map .cms-section-head,
+  .cms-section-map .cms-section-hint {
+    display: none;
+  }
+  .cms-map div[style*="border-radius: 20px"] {
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  .cms-map > div > .card-label {
+    display: none;
+  }
+  .cms-pin-summary {
+    position: relative;
+    z-index: 1;
+    margin-top: -18px;
+    padding: 24px 16px 12px;
+    background: #FFFFFF;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -10px 30px rgba(17, 24, 39, 0.16);
+  }
+  .cms-pin-summary::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    width: 38px;
+    height: 4px;
+    margin-left: -19px;
+    border-radius: 999px;
+    background: #D1D5DB;
+  }
+  .cms-pin-title {
+    font-size: 15px;
+  }
+  .cms-pin-meta {
+    font-size: 12px;
+  }
+  .cms-section-address {
+    position: relative;
+    z-index: 1;
+    padding: 0 16px 16px;
+    background: #FFFFFF;
+  }
+
+  /* Review */
+  .cms-review-heading {
+    display: block;
+    margin: 0 0 -4px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--cms-ink);
+  }
+  .cms-review-body {
+    gap: 12px;
+  }
+  .cms-review-card {
+    padding: 14px;
+    background: #FFFFFF;
+    border-color: var(--cms-line);
+  }
+  .cms-review-head {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom-color: #F1F3F7;
+  }
+  .cms-review-rows {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .cms-review-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .cms-attachments {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .cms-attachment img {
+    height: 82px;
+  }
+
+  /* Full width on a phone, clear of the home indicator */
+  .cms-footer {
+    display: block;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: #FFFFFF;
+    border-top: 1px solid var(--cms-line);
+    border-radius: 0;
+  }
+  .cms-hint {
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+  .cms-footer-actions {
+    gap: 12px;
+    margin-left: 0;
+  }
+  .cms-file .cms-footer .cms-back {
+    flex: none;
+    width: 48px;
+    padding: 0;
+  }
+  .cms-back-label {
+    display: none;
+  }
+  .cms-footer .cms-next {
+    flex: 1;
+  }
+
+  .cms-sheet-overlay {
+    place-items: end stretch;
+    padding: 16px;
+  }
+  .cms-sheet {
+    max-width: none;
+    padding: 22px 18px 18px;
+    animation-duration: 220ms;
+  }
+  .cms-sheet-head {
+    font-size: 16px;
+  }
+  .cms-sheet-hint {
+    font-size: 12.5px;
+  }
+  .cms-voice-pulse {
+    width: 96px;
+    height: 96px;
+    margin: 18px auto 4px;
+  }
+  .cms-voice-dot {
+    width: 66px;
+    height: 66px;
+  }
+  .cms-voice-bars {
+    height: 40px;
+    margin-top: 6px;
+  }
+  .cms-voice-time {
+    margin-top: 10px;
+    font-size: 20px;
+  }
+  .cms-sheet-actions,
+  .cms-sheet-stack {
+    margin-top: 18px;
+  }
+  .cms-photo-sheet {
+    padding: 16px;
+  }
+}
+
+/* Complaint submitted */
+.cms-receipt {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+}
+.cms-receipt-strip {
+  display: none;
+}
+.cms-receipt-card {
+  padding: 44px 40px;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 14px;
+}
+.cms-receipt-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  background: #E7F4EC;
+  color: var(--cms-ok);
+}
+.cms-receipt-icon.failed {
+  background: #FEF2F2;
+  color: var(--cms-danger);
+}
+.cms-receipt-head {
+  margin: 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--cms-ink);
+}
+.cms-receipt-text {
+  max-width: 460px;
+  margin: 10px auto 0;
+  text-align: center;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #4B5563;
+}
+.cms-receipt-number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 16px 18px;
+  background: var(--cms-panel);
+  border: 1px solid var(--cms-line);
+  border-radius: 12px;
+}
+.cms-receipt-number-label {
+  font-size: 12px;
+  color: var(--cms-muted);
+}
+.cms-receipt-number-value {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--cms-ink);
+}
+.cms-receipt-number .cms-link-button {
+  font-size: 13.5px;
+}
+.cms-receipt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--cms-line);
+  border-radius: 12px;
+}
+.cms-receipt-rows .cms-review-row {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+.cms-receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+
+/* A complaint */
+.cms-details {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+.cms-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: #4B5563;
+}
+.cms-breadcrumb a {
+  font-weight: 500;
+  color: var(--cms-accent);
+  text-decoration: none;
+}
+.cms-breadcrumb a:hover {
+  text-decoration: underline;
+}
+.cms-breadcrumb > span[aria-hidden] {
+  margin: 0;
+  color: #9CA3AF;
+}
+.cms-breadcrumb [aria-current="page"] {
+  font-weight: 400;
+  color: #4B5563;
+}
+.cms-details-head {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.cms-details-card {
+  padding: 26px 28px;
+  background: #FFFFFF;
+  border: 1px solid var(--cms-line);
+  border-radius: 14px;
+}
+.cms-details-card-head {
+  margin: 0 0 20px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--cms-ink);
+}
+.cms-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 22px 32px;
+  margin: 0;
+}
+.cms-details-item.wide {
+  grid-column: 1 / -1;
+}
+.cms-details-item dt {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8A93A2;
+}
+.cms-details-item dd {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  font-size: 16px;
+  color: var(--cms-ink);
+}
+
+
+@media (max-width: 48rem) {
+  .cms-receipt-strip {
+    display: block;
+    padding: 14px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--cms-line);
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .cms-receipt-card {
+    padding: 24px 16px 0;
+    background: #F9FAFB;
+    border: 0;
+    border-radius: 0;
+  }
+  .cms-receipt-icon {
+    margin-bottom: 16px;
+  }
+  .cms-receipt-head {
+    font-size: 20px;
+    letter-spacing: 0;
+  }
+  .cms-receipt-text {
+    margin-top: 6px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .cms-receipt-number {
+    gap: 12px;
+    margin-top: 18px;
+    padding: 14px;
+    background: #FFFFFF;
+  }
+  .cms-receipt-number-label {
+    font-size: 11.5px;
+  }
+  .cms-receipt-number-value {
+    font-size: 16px;
+  }
+  .cms-receipt-rows {
+    gap: 10px;
+    margin-top: 12px;
+    padding: 14px;
+    background: #FFFFFF;
+  }
+  .cms-receipt-rows .cms-review-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .cms-receipt-actions {
+    position: sticky;
+    bottom: 0;
+    flex-direction: column;
+    gap: 8px;
+    margin: 24px -16px 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: #FFFFFF;
+    border-top: 1px solid var(--cms-line);
+  }
+  .cms-receipt-actions > button {
+    width: 100%;
+  }
+  .cms-details {
+    gap: 14px;
+    padding: 16px 16px 24px;
+  }
+  .cms-details-card {
+    padding: 18px 16px;
+  }
+  .cms-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .cms-details-item dd {
+    margin-top: 5px;
+    font-size: 15px;
+  }
+  .cms-details-actions > button {
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+ * Citizen My Complaints as an inbox (#2223)
+ *
+ * The employee inbox's shape for a citizen's own complaints: a table on a
+ * desktop (Complaint No., Concern, Status, Filed on), a list on a phone, both
+ * in the theme's table and status colours, with a search above and a pager
+ * below. Each row opens the complaint.
+ * ========================================================================== */
+.cms-complaints-head {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 1rem 1.5rem 0.5rem;
+}
+.cms-complaints-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+.cms-complaints-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.cms-complaints-count {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cms-muted);
+}
+.cms-complaints-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1.5rem 1.5rem;
+}
+.cms-complaints-search {
+  position: relative;
+  max-width: 420px;
+  margin-bottom: 16px;
+}
+/* Room for the icon. A global rule pads every search input 12px with
+ * !important and three :not()s of weight, so this matches it and comes later. */
+.cms-complaints .cms-complaints-search input.cms-complaints-search-field[type="search"] {
+  padding-left: 36px !important;
+}
+.cms-complaints-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--cms-muted);
+  pointer-events: none;
+}
+.cms-complaints-card {
+  background: #FFFFFF;
+  border: 1px solid var(--color-table-border, var(--cms-line));
+  border-radius: 12px;
+  overflow: hidden;
+  /* The table or the list follows the card's own width, not the viewport's:
+   * the rail takes width from it independently. */
+  container: cms-complaints / inline-size;
+}
+
+/* Desktop: the table. Fixed layout, so a long description is cut rather than
+ * widening the Concern column past the card. */
+.cms-complaints-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.cms-complaints-col-number { width: 236px; }
+.cms-complaints-col-status { width: 210px; }
+.cms-complaints-col-date { width: 120px; }
+.cms-complaints-col-go { width: 44px; }
+.cms-complaints-table th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-table-border, var(--cms-line));
+  background: var(--color-table-header-bg, #F3F4F6);
+  color: var(--color-table-header-text, var(--cms-ink-2));
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.cms-complaints-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-table-border, var(--cms-line));
+  color: var(--color-table-row-text, var(--cms-ink));
+  font-size: 14px;
+  vertical-align: middle;
+}
+.cms-complaints-table tbody tr {
+  cursor: pointer;
+}
+.cms-complaints-table tbody tr:hover td {
+  background: var(--color-table-hover, #F9FAFB);
+}
+.cms-complaints-number {
+  color: var(--cms-accent);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+.cms-complaints-number:focus-visible {
+  outline: 2px solid var(--cms-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.cms-complaints-concern {
+  display: block;
+  font-weight: 600;
+  color: var(--cms-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-complaints-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--cms-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-complaints-date {
+  color: var(--cms-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cms-complaints-go {
+  color: #9CA3AF;
+  text-align: right;
+}
+.cms-complaints-go svg,
+svg.cms-complaints-go {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+/* Status, in the theme's status colours, toned by where the complaint is. */
+.cms-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cms-status-pill::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cms-status-pill.is-open {
+  background: var(--color-status-warning-bg, #FFF4D7);
+  color: var(--color-status-warning-text, #7A4E00);
+}
+.cms-status-pill.is-closed {
+  background: var(--color-status-success-bg, #EAF6ED);
+  color: var(--color-status-success-text, #2E7D32);
+}
+.cms-status-pill.is-rejected {
+  background: var(--color-status-error-bg, #FDECEC);
+  color: var(--color-status-error-text, #C62828);
+}
+
+/* A narrow card (a phone, a tablet beside the rail): the list. The table's
+ * fixed columns need about 610px, so below 48rem Concern would be a sliver;
+ * each complaint becomes one row with status and date, then its concern, two
+ * lines of description and its number. */
+.cms-complaints-list {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cms-complaints-list li + li {
+  border-top: 1px solid var(--color-table-border, var(--cms-line));
+}
+.cms-complaints-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.cms-complaints-item:active {
+  background: var(--color-table-hover, #F9FAFB);
+}
+.cms-complaints-item:focus-visible {
+  outline: 2px solid var(--cms-accent);
+  outline-offset: -2px;
+}
+.cms-complaints-item-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cms-complaints-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cms-complaints-item .cms-complaints-concern {
+  font-size: 15px;
+  line-height: 1.3;
+  white-space: normal;
+}
+.cms-complaints-item .cms-complaints-desc {
+  margin-top: 0;
+  line-height: 1.4;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cms-complaints-item .cms-complaints-number {
+  font-size: 12.5px;
+  text-decoration: none;
+}
+.cms-complaints-item .cms-complaints-date {
+  font-size: 12.5px;
+}
+
+.cms-complaints-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-table-border, var(--cms-line));
+  font-size: 13px;
+  color: var(--cms-muted);
+}
+.cms-complaints-table + .cms-complaints-list + .cms-complaints-pager {
+  /* The last table row draws its own rule above the pager. */
+  border-top: 0;
+}
+.cms-complaints-pager-buttons {
+  display: inline-flex;
+  gap: 6px;
+}
+.cms-complaints-pager button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-table-border, var(--cms-line));
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: var(--cms-ink-2);
+  cursor: pointer;
+}
+.cms-complaints-pager button:disabled {
+  color: #C5C5C5;
+  cursor: default;
+}
+.cms-complaints-pager button svg {
+  width: 16px;
+  height: 16px;
+}
+
+@container cms-complaints (max-width: 47.99rem) {
+  .cms-complaints-table {
+    display: none;
+  }
+  .cms-complaints-list {
+    display: block;
+  }
+  /* The list ends without a rule, so the pager draws its own. */
+  .cms-complaints-table + .cms-complaints-list + .cms-complaints-pager {
+    border-top: 1px solid var(--color-table-border, var(--cms-line));
+  }
+}
+@media (max-width: 47.99rem) {
+  .cms-complaints-head {
+    padding: 1rem 1rem 0.5rem;
+  }
+  .cms-complaints-body {
+    padding: 0.5rem 1rem 1.5rem;
+  }
+  .cms-complaints-search {
+    max-width: none;
   }
 }

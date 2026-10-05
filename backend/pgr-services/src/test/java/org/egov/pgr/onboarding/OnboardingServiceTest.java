@@ -33,7 +33,7 @@ public class OnboardingServiceTest {
 
     @Before
     public void setUp() {
-        service = new OnboardingService(repository);
+        service = new OnboardingService(repository, new OnboardingIdentifierService());
         principal = new OnboardingPrincipal("https://issuer", "subject-1", "person@example.com", "Person");
     }
 

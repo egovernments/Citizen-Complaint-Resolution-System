@@ -4,7 +4,7 @@ import { BooleanInput } from '@/admin/widgets';
 
 export function ComplaintTypeEdit() {
   return (
-    <DigitEdit title="Edit Complaint Type">
+    <DigitEdit title="Edit Complaint Category">
       <FieldSection title="Details">
         <div className="space-y-4">
           {/* Grouping key — parent node code in the ComplaintHierarchy tree
@@ -28,7 +28,7 @@ export function ComplaintTypeEdit() {
               "expected type: Boolean, found: String" — same fix
               Chakshu shipped for the generic edit path in #46. */}
           <BooleanInput source="active" label="Active" />
-          <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
+          <DigitFormInput source="name" label="Complaint Subcategory" validate={v.name} />
           <DigitFormInput source="serviceCode" label="Service Code" disabled />
         </div>
       </FieldSection>

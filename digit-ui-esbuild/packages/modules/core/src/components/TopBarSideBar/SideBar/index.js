@@ -2,6 +2,7 @@ import React from "react";
 import { CitizenSideBar } from "./CitizenSideBar";
 import EmployeeSideBar from "./EmployeeSideBar";
 import { useEmployeeNavItems } from "./employeeNavItems";
+import { useCitizenNavItems } from "./citizenNavItems";
 
 // The employee mobile drawer needs the same nav tree the desktop SideNav
 // renders. Fetching it in a wrapper keeps the hook out of CitizenSideBar,
@@ -23,13 +24,18 @@ const forHamburger = (items = []) =>
 
 const EmployeeMobileSideBar = (props) => {
   const { items } = useEmployeeNavItems();
-  return <CitizenSideBar {...props} employeeNavItems={forHamburger(items)} />;
+  return <CitizenSideBar {...props} navItems={forHamburger(items)} />;
 };
 
-const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobileView, userDetails, modules, linkData, islinkDataLoading,userProfile}) => {
+const CitizenMobileSideBar = (props) => {
+  const { items } = useCitizenNavItems(props.linkData);
+  return <CitizenSideBar {...props} navItems={forHamburger(items)} />;
+};
+
+const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, userDetails, linkData, islinkDataLoading, userProfile }) => {
   if (CITIZEN)
     return (
-      <CitizenSideBar
+      <CitizenMobileSideBar
         isOpen={isSidebarOpen}
         isMobile={true}
         toggleSidebar={toggleSidebar}
@@ -43,7 +49,7 @@ const SideBar = ({ t, CITIZEN, isSidebarOpen, toggleSidebar, handleLogout, mobil
     else {
       return !isSidebarOpen && userDetails?.access_token ? (
         <div className="digit-employeeSidebar">
-          <EmployeeSideBar {...{ mobileView, userDetails, modules }} />
+          <EmployeeSideBar t={t} onLogout={handleLogout} />
         </div>
       ) : (
         <div className="digit-citizenSidebar">

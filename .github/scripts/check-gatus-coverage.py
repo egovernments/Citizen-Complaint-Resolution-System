@@ -92,6 +92,10 @@ LS = ROOT / "local-setup"
 # triggers on every entry here wherever it lives -- adding one needs no change there. Do
 # not narrow that filter to a list of names: when a paths: filter guesses wrong the
 # workflow never runs, so the guard cannot report what it was never invoked to see.
+# Compose files here are inputs to local-setup/ansible/tests/, not deployable
+# stacks -- see find_unlisted_compose_files().
+FIXTURES = (LS / "ansible" / "tests" / "fixtures").resolve()
+
 COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
@@ -122,6 +126,7 @@ EXEMPT = {
     "default-data-handler": "one-shot: loads default data then exits",
     "hrms-prereq-gate": "one-shot: gate container, exits on success",
     "db-history-normalize": "one-shot: restart:no, no ports; normalises flyway history then exits",
+    "xstate-chatbot-db": "one-shot: flyway migration for the chatbot session store, then exits",
     # No listening port at all -- nothing to probe.
     "telemetry": "no port: alpine sidecar, file-based healthcheck only",
     "novu-worker": "no port: kafka/queue worker, exposes no HTTP or TCP listener",
@@ -160,6 +165,10 @@ EXEMPT = {
     "matomo": "analytics, not a serving dependency: profile-gated and off by default; the portal's shim fails soft when it is absent",
     "matomo-db": "analytics store: no published port, reachable only inside egov-network, and read by nothing the platform serves",
     "matomo-archiver": "no port: runs console core:archive on a loop, exposes no listener",
+    # Read-only variant of digit-mcp (profile mcp-readonly, off by default). Same
+    # image and /healthz as digit-mcp, which the DIGIT MCP check already covers;
+    # a public read-only instance is opt-in and not part of the default perimeter.
+    "digit-mcp-readonly": "opt-in read-only variant of digit-mcp; same /healthz, covered by the DIGIT MCP check",
 }
 
 # Suffixes that mark generated one-shot migration containers. These are created
@@ -363,6 +372,15 @@ def find_unlisted_compose_files():
     # names it already expects.
     on_disk = {p.resolve() for p in LS.rglob("*compose*.yml")} | \
               {p.resolve() for p in LS.rglob("*compose*.yaml")}
+    # Test fixtures are not a stack anyone deploys, and one of them has to carry
+    # this exact filename: tasks/pg-storage-guard.yml decides "has this box been
+    # deployed to before" by stat-ing {{ digit_dir }}/docker-compose.egov-digit.yaml,
+    # so the fixture standing in for an existing stack must be named that.
+    #
+    # Scoped to this one directory on purpose. A broader "skip anything under a
+    # tests/ dir" rule would let a real compose file hide by being moved, which is
+    # the failure this function exists to prevent.
+    on_disk = {p for p in on_disk if FIXTURES not in p.parents}
     return sorted(str(p.relative_to(LS)) for p in on_disk - listed)
 
 

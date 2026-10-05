@@ -223,6 +223,13 @@ test("happy path files a complaint through fuzzy city and locality search", asyn
 
   service.send(textMessage("1"));
   await settle();
+  assert.match(String(outputs.at(-1)), /attach a photo of your grievance/);
+
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));
+  await settle();
   assert.deepEqual(outputs.at(-2), { type: "image", output: "test-image-id" });
   assert.match(String(outputs.at(-1)), /Please share your location/);
 
@@ -270,7 +277,13 @@ test("invalid complaint choice retries and returns to the frequent complaints qu
   );
 });
 
-test("see more path reaches complaint item selection", async () => {
+// SKIPPED: this path is unreachable in the current machine.
+// `complaintType.question` builds its list with dialog.constructListPromptAndGrammer(..., false)
+// (pgr.js:83), so no "see more" option is offered and INTENTION_MORE can never be produced --
+// which makes the whole `complaintType2Step` (category -> item) sub-flow, and this test,
+// dead. Re-enabling the two-step picker is a product decision, not a test fix, so the test is
+// kept (not deleted) as the record of what to re-assert if `more` is ever turned back on.
+test.skip("see more path reaches complaint item selection", async () => {
   const { service, outputs } = createHarness({
     serviceStub: createHappyPathServiceStub(),
   });
@@ -308,11 +321,16 @@ test("rejecting fuzzy city confirmation loops back to city entry", async () => {
 
   service.start();
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // file a new complaint
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // complaint type
   await settle();
-  service.send(textMessage("1"));
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));   // continue without a photo
+  await settle();
+  service.send(textMessage("1"));   // type the location instead of sharing it
   await settle();
 
   service.send(textMessage("ctya"));
@@ -331,9 +349,14 @@ test("shared geolocation with confirmed locality persists immediately", async ()
 
   service.start();
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // file a new complaint
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // complaint type
+  await settle();
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));   // continue without a photo
   await settle();
 
   service.send(locationMessage("{12.34,56.78}"));
@@ -357,11 +380,16 @@ test("persist complaint degrades gracefully when the backend omits complaint dat
 
   service.start();
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // file a new complaint
   await settle();
-  service.send(textMessage("1"));
+  service.send(textMessage("1"));   // complaint type
   await settle();
-  service.send(textMessage("1"));
+  // The dialog now routes complaint-type selection straight to the photo step
+  // (pgr.js: complaintType.process -> #imageUpload), and only then to location.
+  // Sending "1" continues without a photo (pgr.js: imageUpload.process accepts "1").
+  service.send(textMessage("1"));   // continue without a photo
+  await settle();
+  service.send(textMessage("1"));   // type the location instead of sharing it
   await settle();
   service.send(textMessage("CityA"));
   await settle();
@@ -437,4 +465,89 @@ test("track complaint handles no-records case", async () => {
 
   assert.match(String(outputs.at(-1)), /No complaint records were found/);
   assert.equal(service.state.done, true);
+});
+
+function capturingStub(overrides = {}) {
+  const captured = {};
+  const stub = createHappyPathServiceStub({
+    persistComplaint: async (user, slots) => {
+      Object.assign(captured, slots);
+      return { complaintNumber: "PGR-1", complaintLink: "https://example.test/complaints/PGR-1" };
+    },
+    ...overrides,
+  });
+  return { stub, captured };
+}
+
+test("REGRESSION (review): a locality picked from the list files as a boundary code, with its name", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ geoSearch: false, serviceStub: stub });
+  service.start();
+  await settle();
+  // menu, complaint type, no photo, no location, city 1, locality 1
+  for (const input of ["1", "1", "1", "1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, true);
+  // Carried from the list, so filing does not fetch the localisation module again.
+  assert.equal(captured.localityName, "LocalityA");
+});
+
+test("REGRESSION (review): an NLP fuzzy-search locality is marked as a bare code", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1", "1", "CityA", "LocalityA"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, false);
+});
+
+test("a confirmed shared location files as a boundary code, with its name", async () => {
+  const { stub, captured } = capturingStub({
+    getCityAndLocalityForGeocode: async () => ({
+      city: "pg.citya",
+      locality: "loc-1",
+      localityIsBoundaryCode: true,
+      matchedCityMessageBundle: { en_IN: "CityA" },
+      matchedLocalityMessageBundle: { en_IN: "LocalityA" },
+    }),
+  });
+  const { service } = createHarness({ serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  service.send(locationMessage("{12.34,56.78}"));
+  await settle();
+  service.send(textMessage("2"));
+  await settle();
+  assert.equal(captured.localityIsBoundaryCode, true);
+  assert.equal(captured.localityName, "LocalityA");
+});
+
+test("REGRESSION (review): a pick not in this version's name map is not a boundary code, and the map is not kept", async () => {
+  const { stub, captured } = capturingStub();
+  const { service } = createHarness({ geoSearch: false, serviceStub: stub });
+  service.start();
+  await settle();
+  for (const input of ["1", "1", "1", "1", "1"]) {
+    service.send(textMessage(input));
+    await settle();
+  }
+  // At the locality question. Simulate a list whose names were built for other codes,
+  // as after a rollback: the offered loc-1 is not among them.
+  service.state.context.localityNames = { ADMIN_SUN04: "Sun 04" };
+  service.send(textMessage("1"));
+  await settle();
+  assert.equal(captured.locality, "loc-1");
+  assert.equal(captured.localityIsBoundaryCode, false);
+  assert.equal(service.state.context.localityNames, undefined);
 });

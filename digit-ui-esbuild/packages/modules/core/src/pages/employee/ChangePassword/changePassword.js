@@ -1,8 +1,9 @@
 import { CardSubHeader, FormComposer,CardText} from "@egovernments/digit-ui-react-components";
 import { BackLink,Toast} from "@egovernments/digit-ui-components";
+import { DEFAULT_MOBILE_PREFIX } from "@egovernments/digit-ui-libraries";
 import PropTypes from "prop-types";
 import React, { useEffect, useState } from "react";
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import Background from "../../../components/Background";
 import Header from "../../../components/Header";
 import SelectOtp from "../../citizen/Login/SelectOtp";
@@ -10,12 +11,40 @@ import ImageComponent from "../../../components/ImageComponent";
 
 const ChangePasswordComponent = ({ config: propsConfig, t }) => {
   const [user, setUser] = useState(null);
-  const { mobile_number: mobileNumber, tenantId } = Digit.Hooks.useQueryParams();
+  const { USERNAME: userName, tenantId } = Digit.Hooks.useQueryParams();
   const history = useHistory();
+  // Set by Forgot Password from the _send response. Only otp-publisher
+  // returns it, so the page falls back to generic copy without it.
+  const maskedMobileNumber = useLocation().state?.maskedMobileNumber;
+  const stateId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+  // Priority: MDMS common-masters.MobileNumberValidation → globalConfigs.CORE_MOBILE_CONFIGS → constants fallback.
+  const { data: mdmsCountryCode } = Digit.Hooks.useCustomMDMS(
+    stateId,
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
+    {
+      select: (data) => {
+        const list = data?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          null;
+        return record?.countryCode || null;
+      },
+      staleTime: 300000,
+      enabled: !!stateId && !!maskedMobileNumber,
+    }
+  );
+  const countryCode =
+    mdmsCountryCode || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode || DEFAULT_MOBILE_PREFIX;
   const [otp, setOtp] = useState("");
   const [isOtpValid, setIsOtpValid] = useState(true);
   const [showToast, setShowToast] = useState(null);
   const getUserType = () => Digit.UserService.getType();
+  const tr = (key, fallback) => {
+    const v = t(key);
+    return v === key ? fallback : v;
+  };
   useEffect(() => {
     if (!user) {
       Digit.UserService.setType("employee");
@@ -33,7 +62,7 @@ const ChangePasswordComponent = ({ config: propsConfig, t }) => {
   const onResendOTP = async () => {
     const requestData = {
       otp: {
-        mobileNumber,
+        userName,
         userType: getUserType().toUpperCase(),
         type: "passwordreset",
         tenantId,
@@ -116,19 +145,21 @@ const ChangePasswordComponent = ({ config: propsConfig, t }) => {
         inline
         submitInForm
         config={config}
+        defaultValues={{ [username.name]: userName || "" }}
         label={propsConfig.texts.submitButtonLabel}
         cardStyle={{ maxWidth: "408px", margin: "auto" }}
         className="employeeChangePassword"
       >
         <Header />
         <CardSubHeader style={{ textAlign: "center" }}> {propsConfig.texts.header} </CardSubHeader>
-        <CardText>
-          {`${t(`CS_LOGIN_OTP_TEXT`)} `}
-          <b>
-            {" "}
-            {`${t(`+ 91 - `)}`} {mobileNumber}
-          </b>
-        </CardText>
+        {maskedMobileNumber ? (
+          <CardText>
+            {`${tr("CS_LOGIN_OTP_TEXT", "Enter the OTP sent to")} `}
+            <b>{`${countryCode} ${maskedMobileNumber}`}</b>
+          </CardText>
+        ) : (
+          <CardText>{tr("CORE_EMPLOYEE_OTP_CHECK_MESSAGE", "Please check your messages for the OTP & then set a new password.")}</CardText>
+        )}
         <SelectOtp t={t} userType="employee" otp={otp} onOtpChange={setOtp} error={isOtpValid} onResend={onResendOTP} />
         {/* <div>
           <CardLabel style={{ marginBottom: "8px" }}>{t("CORE_OTP_SENT_MESSAGE")}</CardLabel>

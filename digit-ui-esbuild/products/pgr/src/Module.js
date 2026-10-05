@@ -3,9 +3,11 @@ import React, { useState } from "react";
 import { useRouteMatch } from "react-router-dom";
 import { default as EmployeeApp } from "./pages/employee";
 import PGRCard from "./components/PGRCard";
+import { getPGRSidebarSection, getPGRCitizenSidebarSection } from "./utils/employeeLinks";
 import { overrideHooks, updateCustomConfigs } from "./utils";
 import { ProviderContext } from "./utils/context";
 import BoundaryComponent from "./components/BoundaryComponent";
+import ComplaintCategoryFilter from "./components/ComplaintCategoryFilter";
 import ComplaintHierarchyComponent from "./components/ComplaintHierarchyComponent";
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
@@ -102,7 +104,12 @@ const componentsToRegister = {
   PGRModule,
   PGRLinks,
   PGRCard,
+  // Not a component: the core sidebar looks up `${code}SidebarSection` the way
+  // the home page looks up `${code}Card`, and calls it for its rows.
+  PGRSidebarSection: getPGRSidebarSection,
+  PGRCitizenSidebarSection: getPGRCitizenSidebarSection,
   PGRBoundaryComponent: BoundaryComponent,
+  PGRComplaintCategoryFilter: ComplaintCategoryFilter,
   PGRComplaintHierarchyComponent: ComplaintHierarchyComponent,
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,

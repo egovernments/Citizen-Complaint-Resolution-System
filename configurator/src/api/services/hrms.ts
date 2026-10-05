@@ -369,7 +369,9 @@ export const hrmsService = {
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '.')
       .replace(/\.+/g, '.')
-      .replace(/^\.|\.$/, '');
+      // Both ends: without the g flag only the first stray dot went, so a
+      // name with a leading and a trailing space kept "anita.wanjiru.".
+      .replace(/^\.|\.$/g, '');
   },
 
   // Delay helper for rate limiting

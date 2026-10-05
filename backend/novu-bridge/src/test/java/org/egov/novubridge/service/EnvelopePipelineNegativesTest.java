@@ -1,10 +1,17 @@
 package org.egov.novubridge.service;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+import org.egov.novubridge.service.provider.ProviderAvailability;
+
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
+import org.egov.novubridge.web.models.DispatchLogEntry;
+import org.mockito.ArgumentCaptor;
+
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.web.models.ComplaintsDomainEvent;
+import org.egov.novubridge.web.models.NotificationEvent;
 import org.egov.novubridge.web.models.Contact;
-import org.egov.novubridge.web.models.WorkflowInfo;
 import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,19 +21,22 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * NB-7: envelope negatives driven through the REAL {@link EnvelopeValidator} via
  * {@code process()}. Every invalid mutation of the valid pre-rendered event throws
- * a {@link CustomException} ({@code NB_INVALID_EVENT}) BEFORE any provider call or
- * dispatch-log write. The one legacy-shape mutation that clears the recipient
+ * a {@link CustomException} ({@code NB_INVALID_EVENT}) BEFORE any provider call, and leaves
+ * exactly one {@code REJECTED} dispatch-log row carrying the code so the rejection is visible. The one legacy-shape mutation that clears the recipient
  * yields {@code NB_SUBSCRIBER_ID_MISSING} from the post-validator guard.
  */
 class EnvelopePipelineNegativesTest {
@@ -36,7 +46,6 @@ class EnvelopePipelineNegativesTest {
     private NovuClient novuClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
-    private MdmsServiceClient mdmsServiceClient;
 
     private DispatchPipelineService service;
 
@@ -47,22 +56,22 @@ class EnvelopePipelineNegativesTest {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         config = new NovuBridgeConfiguration();
-        config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        mdmsServiceClient = mock(MdmsServiceClient.class);
-        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                null, dispatchLogRepository, config, mdmsServiceClient);
+        service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient), null),
+                new ChannelPolicyClient(null, config), dispatchLogRepository, config,
+                new ProviderAvailability(novuClient, config));
     }
 
-    private ComplaintsDomainEvent validEvent() {
+    private NotificationEvent validEvent() {
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")
                 .phone("+254712345678").email("jane@example.com").locale("en_IN")
                 .build();
         Map<String, Object> data = new HashMap<>();
         data.put("complaintNo", "PGR-001");
-        return ComplaintsDomainEvent.builder()
+        return NotificationEvent.builder()
                 .eventId("evt-1").eventType("COMPLAINTS_WORKFLOW_TRANSITIONED")
                 .eventName("COMPLAINTS.WORKFLOW.ASSIGN").module("Complaints")
                 .entityType("COMPLAINT").entityId("PGR-001").tenantId("ke.bomet")
@@ -73,71 +82,88 @@ class EnvelopePipelineNegativesTest {
                 .build();
     }
 
-    private void assertRejected(ComplaintsDomainEvent event, String expectedCode) {
+    private void assertRejected(NotificationEvent event, String expectedCode) {
         CustomException ex = assertThrows(CustomException.class, () -> service.process(event, true, null));
         assertEquals(expectedCode, ex.getCode());
-        // Validation must fail before delivery and before any dispatch-log write.
+        // Validation must fail before delivery — but the rejection itself is written down.
         verifyNoInteractions(novuClient);
-        verify(dispatchLogRepository, never()).upsert(any());
+        ArgumentCaptor<DispatchLogEntry> row = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository, times(1)).upsert(row.capture());
+        assertEquals("REJECTED", row.getValue().getStatus());
+        assertEquals(expectedCode, row.getValue().getLastErrorCode());
+        assertNotNull(row.getValue().getTransactionId(), "a REJECTED row still needs its NOT NULL key");
+        assertNotNull(row.getValue().getRecipientValue());
     }
 
     @Test
     void blankRenderedBody_withContactPresent_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setRenderedBody("   ");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void blankSubscriberId_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setSubscriberId("  ");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void blankChannel_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setChannel("");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
     void blankTenantId_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+        NotificationEvent event = validEvent();
         event.setTenantId("");
         assertRejected(event, "NB_INVALID_EVENT");
     }
 
     @Test
-    void nullContact_blankBody_noWorkflow_isInvalid() {
-        ComplaintsDomainEvent event = validEvent();
+    void unknownEventType_isRejectedAsUnsupported_notGuessed() {
+        NotificationEvent event = validEvent();
+        event.setEventType("SOMETHING_NEW");
+        assertRejected(event, "NB_UNSUPPORTED_EVENT_TYPE");
+    }
+
+    @Test
+    void futureSchemaVersion_isRejected() {
+        NotificationEvent event = validEvent();
+        event.setSchemaVersion("2");
+        assertRejected(event, "NB_UNSUPPORTED_SCHEMA_VERSION");
+    }
+
+    @Test
+    void schemaVersionOne_orAbsent_isAccepted() {
+        NotificationEvent versioned = validEvent();
+        versioned.setSchemaVersion("1");
+        assertDoesNotThrow(() -> envelopeValidator.validate(versioned));
+        assertDoesNotThrow(() -> envelopeValidator.validate(validEvent()));
+    }
+
+    @Test
+    void coreSmsEvent_withThePreRenderedShape_isAccepted() {
+        // A second producer registers a type; it does NOT get a special envelope.
+        NotificationEvent otp = validEvent();
+        otp.setEventType("CORE_SMS");
+        otp.setEventName("CORE.SMS.OTP");
+        otp.setModule("CORE");
+        otp.setContact(Contact.builder().type("CITIZEN").phone("+254712345678").build());
+        otp.setSubscriberId("ke:+254712345678");
+        otp.setRenderedBody("DIGIT: Your one-time login code is 123456.");
+        assertDoesNotThrow(() -> envelopeValidator.validate(otp));
+    }
+
+    @Test
+    void contactMayBeAbsent_butSubscriberAndBodyMayNot() {
+        NotificationEvent event = validEvent();
         event.setContact(null);
+        assertDoesNotThrow(() -> envelopeValidator.validate(event));
         event.setRenderedBody(null);
-        event.setWorkflow(null);   // legacy path needs workflow.toState
         assertRejected(event, "NB_INVALID_EVENT");
-    }
-
-    @Test
-    void legacyShape_withWorkflow_butNoRecipient_isSubscriberMissing() {
-        // Passes envelope validation (legacy event carries workflow.toState) but the
-        // derived subscriberId is blank → the post-validator guard rejects it.
-        ComplaintsDomainEvent event = validEvent();
-        event.setContact(null);
-        event.setRenderedBody(null);
-        event.setSubscriberId(null);
-        event.setWorkflow(WorkflowInfo.builder().action("ASSIGN").toState("PENDINGATLME").build());
-        assertRejected(event, "NB_SUBSCRIBER_ID_MISSING");
-    }
-
-    @Test
-    void validEvent_asControl_doesNotThrow() {
-        // Sanity: the un-mutated event is genuinely valid (guards against a false-green
-        // suite where every event happens to be rejected for an unrelated reason).
-        org.mockito.Mockito.when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
-                .thenReturn(true);
-        org.mockito.Mockito.when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
-                .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of()).build());
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.process(validEvent(), true, null));
     }
 }

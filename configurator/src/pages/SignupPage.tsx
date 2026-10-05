@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, Check, Loader2, Mail, RefreshCw } from 'lucide-react';
 import {
-  API_ORIGIN,
+  type AuthMethod,
   type AvailabilityResult,
   type Operation,
   type ProvisioningStep,
@@ -24,6 +24,7 @@ import {
   logout,
   newIdempotencyKey,
   retryOperation,
+  requestMagicLinkSignup,
   selectContext,
   tenantReadiness,
   session,
@@ -33,11 +34,13 @@ import {
   tenants,
   updateSignup,
 } from '@/api/onboarding';
-import { clearLocalSession } from '@/lib/session';
+import { clearLocalSession, installDigitContext } from '@/lib/session';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Stepper } from '@/components/ui/stepper';
+import { AuthShell } from '@/components/signup/AuthPanel';
+import { useAuthResult } from '@/hooks/useAuthResult';
 
 const STEPS = [
   { id: 'account', label: 'Account' },
@@ -46,15 +49,29 @@ const STEPS = [
 ];
 
 /** Base countries, with the IANA zone each one suggests. */
-const COUNTRIES: { code: string; name: string; timeZone: string }[] = [
-  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi' },
-  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata' },
-  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa' },
-  { code: 'NG', name: 'Nigeria', timeZone: 'Africa/Lagos' },
-  { code: 'SN', name: 'Senegal', timeZone: 'Africa/Dakar' },
-  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo' },
-  { code: 'ZA', name: 'South Africa', timeZone: 'Africa/Johannesburg' },
-  { code: 'ID', name: 'Indonesia', timeZone: 'Asia/Jakarta' },
+/**
+ * `dialCode` is shown beside the mobile field so it is obvious the field takes
+ * the national number and the prefix is added for you. That distinction is not
+ * cosmetic: the value is submitted as `tenantMetadata.tenantAdmin.mobileNumber`
+ * and egov-user validates it as a national number, so a founder who copied the
+ * old `+254700000199` placeholder was being shown a shape the backend rejects.
+ *
+ * Every offered country has a product-owned rule in identity-bff tenant
+ * foundation. Foundation persists it for the new tenant before egov-user
+ * creates the founder's account; countries without an agreed rule are not
+ * offered here.
+ */
+const COUNTRIES: {
+  code: string;
+  name: string;
+  timeZone: string;
+  dialCode: string;
+  nationalExample: string;
+}[] = [
+  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi', dialCode: '+254', nationalExample: '712345678' },
+  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata', dialCode: '+91', nationalExample: '9876543210' },
+  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa', dialCode: '+251', nationalExample: '911234567' },
+  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo', dialCode: '+258', nationalExample: '841234567' },
 ];
 
 const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
@@ -87,12 +104,36 @@ const FINANCIAL_YEARS = [
 
 const TERMS_VERSION = '2026-09';
 
+/**
+ * 44px tall, to the reference's `authInputStyle`. The shadcn default is 36px,
+ * which reads cramped beside a 28px step heading and sits under the comfortable
+ * touch target on the phone layout.
+ */
+const CONTROL_HEIGHT = 'h-11';
+
 const selectClass =
-  'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ' +
+  `flex ${CONTROL_HEIGHT} w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm ` +
   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
 
 /** Poll cadence the contract asks for: every 2-5 seconds. */
 const POLL_MS = 3000;
+
+function SignupMethodIcon({ method }: { method: AuthMethod }) {
+  if (method.id.toLowerCase() !== 'github') return null;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      data-icon="inline-start"
+      data-provider="github"
+      aria-hidden="true"
+    >
+      <path
+        fill="#181717"
+        d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.39.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.29-5.27-5.73 0-1.27.45-2.3 1.2-3.11-.12-.3-.52-1.48.11-3.07 0 0 .98-.31 3.16 1.19a10.96 10.96 0 0 1 5.75 0c2.2-1.5 3.17-1.19 3.17-1.19.63 1.6.23 2.78.11 3.07.75.81 1.2 1.84 1.2 3.11 0 4.45-2.71 5.43-5.29 5.72.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"
+      />
+    </svg>
+  );
+}
 
 /**
  * Founder-facing names for the backend's step codes. Lower-casing the codes
@@ -110,6 +151,7 @@ const STEP_LABELS: Record<ProvisioningStep, string> = {
 type Phase =
   | 'loading'
   | 'signedOut'
+  | 'checkEmail'
   | 'chooseTenant'
   | 'wizard'
   | 'provisioning'
@@ -147,7 +189,7 @@ function Field({
     <div>
       <label
         htmlFor={id}
-        className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground"
       >
         {label}
       </label>
@@ -189,7 +231,10 @@ function AvailabilityNote({
     </p>
   ) : (
     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-      <AlertCircle className="h-3 w-3" /> Already taken.
+      <AlertCircle className="h-3 w-3" />{' '}
+      {state.conflictingType === 'TENANT_ID' && state.derivedTenantId
+        ? `This URL maps to tenant ID “${state.derivedTenantId}”, which is already in use.`
+        : 'Already taken.'}
     </p>
   );
 }
@@ -200,43 +245,14 @@ function AvailabilityNote({
  * the provisioning screen and the workspace picker all read as one product
  * instead of a form floating on an empty page.
  */
-function SignupShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Hidden on small screens so the form owns the viewport. */}
-      <aside className="hidden flex-col justify-between bg-secondary p-10 text-white lg:flex">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-1 bg-primary" />
-          <div>
-            <p className="font-condensed text-xl font-bold">DIGIT Complaint Management</p>
-            <p className="text-xs uppercase tracking-widest text-white/70">
-              Digital infrastructure for public services
-            </p>
-          </div>
-        </div>
-        <div>
-          <h1 className="font-condensed text-4xl font-bold leading-tight">
-            Manage complaints from intake to closure.
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-white/80">
-            Set up your account to receive complaints, assign them to the right team, track service
-            timelines, and monitor resolution across departments and localities.
-          </p>
-        </div>
-        <p className="text-xs text-white/50">© 2026 eGovernments Foundation · DIGIT</p>
-      </aside>
-
-      <main className="flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md space-y-6">{children}</div>
-      </main>
-    </div>
-  );
-}
-
 function SignupFlow() {
+  const authResult = useAuthResult();
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
+  const [methods, setMethods] = useState<AuthMethod[]>([]);
+  const [signupFirstName, setSignupFirstName] = useState('');
+  const [signupLastName, setSignupLastName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   // The tenant the operator picked and how far it has actually been built. Set
@@ -267,6 +283,9 @@ function SignupFlow() {
   // Fields the operator has edited by hand stop being derived from the name.
   const codeTouched = useRef(false);
   const slugTouched = useRef(false);
+  const timeZoneTouched = useRef(false);
+  /** Drives the dial-code prefix and the mobile hint on the Preferences step. */
+  const selectedCountry = COUNTRIES.find((c) => c.code === countryCode);
   // Reused when retrying the *same* action after a network failure, which is
   // the whole point of the header.
   const createKey = useRef<string>(newIdempotencyKey());
@@ -283,8 +302,17 @@ function SignupFlow() {
     setFinancialYearPolicy(record.financialYearPolicy || '');
     setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
     setAcceptedTerms(Boolean(record.acceptedTermsVersion));
-    if (record.accountCode) codeTouched.current = true;
-    if (record.urlSlug) slugTouched.current = true;
+    // Only a value the operator typed stops following the name. A saved value
+    // that is still what the saved name derives was never edited by hand, so
+    // it keeps updating when the name changes after a resume.
+    const savedName = record.accountName || '';
+    if (record.accountCode && record.accountCode !== deriveAccountCode(savedName, record.countryCode || '')) {
+      codeTouched.current = true;
+    }
+    if (record.urlSlug && record.urlSlug !== slugifyAccountName(savedName)) slugTouched.current = true;
+    // A resumed draft's zone was already settled once; changing country
+    // on the way back through should not quietly rewrite it.
+    if (record.timeZone) timeZoneTouched.current = true;
   }, []);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
@@ -296,7 +324,7 @@ function SignupFlow() {
       const current = await session();
       if (current.user) setSessionUser({ email: current.user.email, name: current.user.name });
       if (!current.authenticated) {
-        const { methods: available } = await authMethods();
+        const { methods: available } = await authMethods('signup');
         setMethods(available);
         setPhase('signedOut');
         return;
@@ -466,7 +494,7 @@ function SignupFlow() {
       return;
     }
     try {
-      const { methods: available } = await authMethods();
+      const { methods: available } = await authMethods('signup');
       setMethods(available);
     } catch {
       /* The gate still renders; it just may list nothing. */
@@ -498,6 +526,25 @@ function SignupFlow() {
       setPhase('provisioning');
     } catch (caught) {
       await handleFailure(caught);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendSignupLink = async (event: React.FormEvent) => {
+    event.preventDefault();
+    authResult.clear();
+    setSaving(true);
+    setError(null);
+    try {
+      await requestMagicLinkSignup({
+        firstName: signupFirstName.trim(),
+        lastName: signupLastName.trim(),
+        email: signupEmail.trim(),
+      });
+      setPhase('checkEmail');
+    } catch (caught) {
+      setError(errorText(caught));
     } finally {
       setSaving(false);
     }
@@ -585,36 +632,7 @@ function SignupFlow() {
       // App.tsx reads one blob under `crs-auth-state`; writing digit-ui's
       // `Employee.*` keys instead left the operator looking at whichever
       // session was already there.
-      const { UserRequest: user, access_token: authToken } = context;
-      window.localStorage.setItem(
-        'crs-auth-state',
-        JSON.stringify({
-          isAuthenticated: true,
-          // What the person is actually called, from the backend first and the
-          // identity session second. The managed username is a machine handle
-          // (`kcbff-<uuid>`), so showing it as a name is wrong, and an address
-          // built out of it is an address that does not exist.
-          // `id` and `mobileNumber` travel too, as the legacy login path stores
-          // them. App rebuilds `RequestInfo.userInfo` from this blob, so
-          // leaving them out made every downstream request carry `id: 0` and an
-          // empty mobile while the BFF had returned the real values.
-          user: {
-            name: user.name || sessionUser?.name || user.userName,
-            email: user.emailId || sessionUser?.email || '',
-            roles: user.roles?.map((role) => role.code) ?? [],
-            uuid: user.uuid,
-            id: user.id,
-            mobileNumber: user.mobileNumber,
-          },
-          environment: API_ORIGIN || window.location.origin,
-          tenant: user.tenantId,
-          targetTenant: user.tenantId,
-          mode: 'management',
-          currentPhase: 1,
-          completedPhases: [],
-          authToken,
-        })
-      );
+      installDigitContext(context, sessionUser);
       setPhase('entering');
       window.location.assign('/configurator/');
     } catch (caught) {
@@ -636,11 +654,13 @@ function SignupFlow() {
     slugState?.available !== false &&
     tenantAdminMobile.trim().length > 0;
 
-  const banner = error ? (
+  const callbackError = authResult.error ||
+    (authResult.result?.status === 'failed' ? authResult.result.message : null);
+  const banner = (callbackError || error) ? (
     <Alert variant="destructive" className="mb-4">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Could not continue</AlertTitle>
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{callbackError || error}</AlertDescription>
     </Alert>
   ) : null;
 
@@ -653,48 +673,91 @@ function SignupFlow() {
   }
 
   if (phase === 'signedOut') {
-    // Deliberately the same card as the original first step: stepper, heading,
-    // small print, the sign-in line. Only the middle changed, because Keycloak
-    // collects the email now and there is nothing left for us to ask for.
-    const [primary, ...rest] = methods;
+    const magicLink = methods.find((method) => method.type === 'magic_link');
+    const alternatives = methods.filter((method) => method.type !== 'magic_link');
+    const magicReady = signupFirstName.trim() && signupLastName.trim() &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim());
     return (
       <>
         <Stepper steps={STEPS} current="account" />
         {banner}
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Verify your email to begin</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Verify your email to begin</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Confirm who you are first. Once your email is verified, you can name your account and
               continue the setup.
             </p>
           </div>
 
-          {primary ? (
-            <Button className="w-full" onClick={() => startSignIn(primary.id)}>
-              <Mail className="mr-2 h-4 w-4" /> {primary.label}
-            </Button>
-          ) : (
+          {magicLink ? (
+            <form className="space-y-3" onSubmit={(event) => void sendSignupLink(event)}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field id="signup-first-name" label="First name">
+                  <Input
+                    id="signup-first-name"
+                    className={CONTROL_HEIGHT}
+                    autoComplete="given-name"
+                    value={signupFirstName}
+                    onChange={(event) => setSignupFirstName(event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field id="signup-last-name" label="Last name">
+                  <Input
+                    id="signup-last-name"
+                    className={CONTROL_HEIGHT}
+                    autoComplete="family-name"
+                    value={signupLastName}
+                    onChange={(event) => setSignupLastName(event.target.value)}
+                    required
+                  />
+                </Field>
+              </div>
+              <Field id="signup-email" label="Email address">
+                <Input
+                  id="signup-email"
+                  className={CONTROL_HEIGHT}
+                  type="email"
+                  autoComplete="email"
+                  value={signupEmail}
+                  onChange={(event) => setSignupEmail(event.target.value)}
+                  required
+                />
+              </Field>
+              <Button className="h-11 w-full" type="submit" disabled={!magicReady || saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                {magicLink.label}
+              </Button>
+            </form>
+          ) : alternatives.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No sign-in method is enabled on this environment.
             </p>
-          )}
+          ) : null}
 
-          {/* Anything beyond the first sits under it as a quiet alternative
-              rather than a second wall of buttons. */}
-          {rest.length > 0 && (
-            <p className="text-center text-sm text-muted-foreground">
-              {rest.map((method) => (
-                <button
-                  key={method.id}
-                  type="button"
-                  onClick={() => startSignIn(method.id)}
-                  className="text-primary underline underline-offset-4"
-                >
-                  {method.label}
-                </button>
-              ))}
-            </p>
+          {/* Provider sign-up remains visually secondary to email verification. */}
+          {alternatives.length > 0 && (
+            <>
+              <div className="flex items-center gap-3">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">OR</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <div className="space-y-3">
+                {alternatives.map((method) => (
+                  <Button
+                    key={method.id}
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => startSignIn(method.id, 'signup')}
+                  >
+                    <SignupMethodIcon method={method} />
+                    {method.label}
+                  </Button>
+                ))}
+              </div>
+            </>
           )}
 
           <p className="text-sm text-muted-foreground">
@@ -706,6 +769,29 @@ function SignupFlow() {
               Sign in
             </Link>
           </p>
+        </section>
+      </>
+    );
+  }
+
+  if (phase === 'checkEmail') {
+    return (
+      <>
+        <Stepper steps={STEPS} current="account" />
+        <section className="space-y-5 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Mail className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Check your email</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              We sent a secure sign-up link to <span className="font-medium text-foreground">{signupEmail.trim()}</span>.
+              Open it to verify your email and continue creating your account.
+            </p>
+          </div>
+          <Button variant="outline" className="w-full" onClick={() => setPhase('signedOut')}>
+            Use a different email
+          </Button>
         </section>
       </>
     );
@@ -742,7 +828,7 @@ function SignupFlow() {
     const provisioned = signup?.status === 'ACTIVE';
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">
+        <h1 className="text-[28px] font-semibold leading-[1.15]">
           {provisioned ? 'Opening your workspace' : `Setting up ${accountName || 'your account'}`}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -783,7 +869,7 @@ function SignupFlow() {
     const { title, body } = copy[gated.readiness as Exclude<TenantReadiness, 'READY'>];
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">{title}</h1>
+        <h1 className="text-[28px] font-semibold leading-[1.15]">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{body}</p>
         <div className="mt-6 rounded border px-4 py-3 text-sm">
           <div className="font-medium">{gated.option.name}</div>
@@ -940,7 +1026,7 @@ function SignupFlow() {
       {step === 'account' ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Set up your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Set up your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Create the account details that will identify your account in DIGIT Complaint
               Management.
@@ -1001,7 +1087,7 @@ function SignupFlow() {
       ) : step === 'preferences' ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Personalise your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Personalise your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Set the defaults your account will use across the product.
             </p>
@@ -1019,9 +1105,13 @@ function SignupFlow() {
               onChange={(e) => {
                 const next = e.target.value;
                 setCountryCode(next);
-                // Suggest, never overwrite a zone already chosen by hand.
+                // Suggest, never overwrite a zone chosen by hand. "Chosen by
+                // hand" has to be tracked, not inferred from the field being
+                // non-empty: the first country pick fills it, so that test was
+                // true from then on and every later country change silently
+                // kept the old zone. Same ref pattern as the code and slug.
                 const suggested = COUNTRIES.find((c) => c.code === next)?.timeZone;
-                if (suggested && !timeZone) setTimeZone(suggested);
+                if (suggested && !timeZoneTouched.current) setTimeZone(suggested);
               }}
             >
               <option value="">Select a country</option>
@@ -1034,7 +1124,7 @@ function SignupFlow() {
           </Field>
 
           <div>
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Languages
             </span>
             {/* Pills, not checkboxes: a short multi-select reads better as
@@ -1071,7 +1161,11 @@ function SignupFlow() {
               id="timeZone"
               className={selectClass}
               value={timeZone}
-              onChange={(e) => setTimeZone(e.target.value)}
+              onChange={(e) => {
+                // From here on the country no longer overrides it.
+                timeZoneTouched.current = true;
+                setTimeZone(e.target.value);
+              }}
             >
               <option value="">Select a time zone</option>
               {TIME_ZONES.map((zone) => (
@@ -1130,14 +1224,26 @@ function SignupFlow() {
           <Field
             id="tenantAdminMobile"
             label="Your mobile number"
-            help="Used to create your account inside the new workspace."
+            help={
+              selectedCountry
+                ? `Used to create your account inside the new workspace. Enter the number without the ${selectedCountry.dialCode} prefix.`
+                : 'Used to create your account inside the new workspace.'
+            }
           >
-            <Input
-              id="tenantAdminMobile"
-              value={tenantAdminMobile}
-              onChange={(e) => setTenantAdminMobile(e.target.value)}
-              placeholder="+254700000199"
-            />
+            <div className="flex items-center gap-2">
+              {selectedCountry ? (
+                <span className="shrink-0 rounded border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  {selectedCountry.dialCode}
+                </span>
+              ) : null}
+              <Input
+                id="tenantAdminMobile"
+                className="flex-1"
+                value={tenantAdminMobile}
+                onChange={(e) => setTenantAdminMobile(e.target.value)}
+                placeholder={selectedCountry?.nationalExample ?? 'National number'}
+              />
+            </div>
           </Field>
 
           <div className="flex gap-3">
@@ -1152,7 +1258,7 @@ function SignupFlow() {
       ) : (
         <section className="space-y-4">
           <div>
-            <h2 className="font-condensed text-2xl font-bold">Review and create your account</h2>
+            <h2 className="text-[28px] font-semibold leading-[1.15]">Review and create your account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               These will be the main entry points for your account once your workspace has been set
               up.
@@ -1167,7 +1273,13 @@ function SignupFlow() {
               ['Languages', languages.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')],
               ['Timezone', timeZone],
               ['Financial year', FINANCIAL_YEARS.find((f) => f.code === financialYearPolicy)?.label || financialYearPolicy],
-              ['Mobile number', tenantAdminMobile],
+              // With the prefix: the previous step taught "national part only,
+              // prefix added for you", so showing it back bare gives the
+              // founder nothing to check against the number they meant.
+              [
+                'Mobile number',
+                selectedCountry ? `${selectedCountry.dialCode} ${tenantAdminMobile}` : tenantAdminMobile,
+              ],
             ].map(([label, value], i) => (
               <div
                 key={label}
@@ -1207,8 +1319,8 @@ function SignupFlow() {
 
 export default function SignupPage() {
   return (
-    <SignupShell>
+    <AuthShell>
       <SignupFlow />
-    </SignupShell>
+    </AuthShell>
   );
 }

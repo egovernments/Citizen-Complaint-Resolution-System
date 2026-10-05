@@ -109,7 +109,7 @@ services:
           - kafka-v2.kafka-cluster
 
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -129,7 +129,7 @@ services:
       - egov-network
 
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
@@ -389,31 +389,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
-    networks:
-      - egov-network
-
-  egov-notification-sms:
-    image: egovio/egov-notification-sms:master-e22c7c5
-    container_name: egov-notification-sms
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8080
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      SMS_ENABLED: 'false'
-      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
-      OTEL_TRACES_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
-    ports:
-      - 18093:8080
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/notification-sms/actuator/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
     networks:
       - egov-network
 
@@ -935,9 +910,9 @@ services:
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"
       GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_PROFILE_CHATBOT: "false"
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "false"
-      GATUS_SMS_PORT: "8080"
       # No grafana/prometheus/loki/tempo on this path, so the observability
       # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
       # enabled-var as true, which would make them red forever here.

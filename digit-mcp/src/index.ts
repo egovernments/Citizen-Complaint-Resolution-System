@@ -5,7 +5,7 @@ import { sessionStore } from './services/session-store.js';
 import { db } from './services/db.js';
 import { digitDb } from './services/digit-db.js';
 import { handlePgrDashboard } from './api/pgr-dashboard.js';
-import { ToolRegistry } from './tools/registry.js';
+import { ToolRegistry, setEffectiveReadOnly } from './tools/registry.js';
 import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
 import type { ToolAccess, ToolMetadata } from './types/index.js';
@@ -154,6 +154,11 @@ if (transportMode === 'stdio') {
   const restRegistry = new ToolRegistry();
   registerAllTools(restRegistry);
   restRegistry.enableGroups(ALL_GROUPS);
+
+  // Single source of truth for read-only mode: publish the registry's resolved
+  // state so tool handlers (e.g. `configure`'s guards) consult the same value
+  // the dispatch registry filtered on, rather than re-deriving it from the env.
+  setEffectiveReadOnly(restRegistry.isReadOnly());
 
   // The DigitApiClient is a process-level singleton, so REST calls must
   // be serialized while we swap its auth state. For an admin-only
@@ -753,6 +758,10 @@ if (transportMode === 'stdio') {
         nodeVersion: detailed ? process.version : undefined,
         startedAt: new Date(Date.now() - Math.floor(process.uptime() * 1000)).toISOString(),
         uptimeSec: Math.floor(process.uptime()),
+        // Read-only instances (MCP_READ_ONLY) carry only read-risk tools, so an
+        // operator/client can confirm the mutating surface is absent up front.
+        readOnly: restRegistry.isReadOnly(),
+        toolCount: restRegistry.getAllTools().length,
         features: ['v1/tenant/bootstrap', 'v1/tenant/city', 'v1/tenant/cleanup', 'v1/tenant/:id/export', 'v1/tools/:name', 'v1/tools/:name/bulk', 'sse-progress', 'cors'],
       });
       return;
@@ -856,6 +865,15 @@ if (transportMode === 'stdio') {
     // sibling deployment. Body: { "auth": …, "schemas"?: ["…"], "limit"?: 500 }
     const exportMatch = pathname.match(/^\/v1\/tenant\/([a-zA-Z][a-zA-Z0-9._-]*)\/export$/);
     if (req.method === 'POST' && exportMatch) {
+      // This route calls exportTenant() directly rather than resolving through
+      // restRegistry.getTool, so the read-only filter never sees it. It dumps a
+      // whole tenant's MDMS + workflow — no business on a read-only (publicly-
+      // exposed) instance even for an authenticated caller — so refuse it here,
+      // same as /api/sessions.
+      if (restRegistry.isReadOnly()) {
+        jsonResponse(res, 403, { success: false, error: 'Tenant export is disabled on a read-only MCP instance.' });
+        return;
+      }
       try {
         const targetTenant = exportMatch[1];
         const body = JSON.parse(await readBody(req) || '{}');
@@ -1088,6 +1106,20 @@ if (transportMode === 'stdio') {
       return;
     }
 
+    // Read-only instances refuse the session-viewer data routes outright. They
+    // live OUTSIDE the tool registry (so the read-only tool filter never reaches
+    // them), and they are both a write surface (POST /api/sessions/:id/messages
+    // does unbounded INSERTs) and a data-exposure surface (GET .../events returns
+    // stored tool args, user_name, client_ip). These routes ARE authenticated in
+    // token mode (the http default) — the /api/* bearer+admin check, and the
+    // CRS_* env-cred fallback is ambient-only (#2023) — but a publicly-exposed
+    // read-only instance has no business offering a session viewer at all, so
+    // refuse them here as defence in depth. The internal (full) instance keeps it.
+    if (restRegistry.isReadOnly() && pathname.startsWith('/api/sessions')) {
+      jsonResponse(res, 403, { error: 'The session API is disabled on a read-only MCP instance.' });
+      return;
+    }
+
     // Events endpoint (must be before /api/sessions to avoid prefix match)
     const eventsMatch = pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/events$/);
     if (req.method === 'GET' && eventsMatch) {
@@ -1232,8 +1264,12 @@ if (transportMode === 'stdio') {
     process.env.MCP_BIND || (getAuthMode() === 'ambient' ? '127.0.0.1' : '0.0.0.0');
 
   httpServer.listen(port, bindAddress, () => {
-    mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath });
+    const readOnly = restRegistry.isReadOnly();
+    mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath, readOnly, tools: restRegistry.getAllTools().length });
     console.error(`DIGIT MCP server listening on http://${bindAddress}:${port}/mcp`);
+    // Log the resolved mode explicitly: an operator who typo'd MCP_READ_ONLY
+    // otherwise has no way to notice a dropped-tool instance short of a 404.
+    console.error(`[digit-mcp] read-only mode: ${readOnly} (MCP_READ_ONLY=${JSON.stringify(process.env.MCP_READ_ONLY ?? '')}); ${restRegistry.getAllTools().length} tools registered`);
     console.error(`Session viewer: http://0.0.0.0:${port}/`);
     console.error(`Health check: http://0.0.0.0:${port}/healthz`);
     console.error(`Logging to: ${mcpLogger.logPath}`);

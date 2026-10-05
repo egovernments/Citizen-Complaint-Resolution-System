@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1",
+  "eventId": "c0de1f42-5a7b-4c6d-8e9f-0a1b2c3d4e5f",
+  "eventType": "COMPLAINTS_WORKFLOW_TRANSITIONED",
+  "eventTime": "2026-09-21T07:44:50.180Z",
+  "producer": "complaints-service",
+  "module": "Complaints",
+  "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+  "entityType": "COMPLAINT",
+  "entityId": "PGR-2026-000124",
+  "tenantId": "ke.bomet",
+  "channel": "WHATSAPP",
+  "subscriberId": "ke.bomet:+254712345678",
+  "contact": {
+    "userId": null,
+    "type": "CITIZEN",
+    "name": "Jane Doe",
+    "phone": "+254712345678",
+    "email": null,
+    "locale": "sw_KE"
+  },
+  "renderedBody": "Malalamiko yako PGR-2026-000124 yamepokelewa.",
+  "subject": null,
+  "transactionId": "PGR-2026-000124:APPLY:PENDINGFORASSIGNMENT:ke.bomet:+254712345678:WHATSAPP",
+  "templateKey": "CITIZEN.APPLY.PENDINGFORASSIGNMENT.WHATSAPP.sw_KE",
+  "templateId": "HX1234567890abcdef1234567890abcdef",
+  "contentVariables": {
+    "1": "Jane Doe",
+    "2": "PGR-2026-000124"
+  },
+  "data": {
+    "complaintNo": "PGR-2026-000124",
+    "status": "PENDINGFORASSIGNMENT",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT"
+  }
+}

@@ -521,7 +521,10 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
                     <div style={{
                       fontSize: "14px",
                       fontWeight: "600",
-                      color: "#0B0C0C",
+                      // Inherit the themed tooltip text: the surface is
+                      // --color-tooltip-bg (navy on CMS Blue), so a fixed
+                      // near-black left the address dark on dark.
+                      color: "inherit",
                       padding: "4px 8px",
                       whiteSpace: "normal",
                       textAlign: "center",

@@ -127,7 +127,7 @@ services:
           - kafka-v2.kafka-cluster
 
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -152,7 +152,7 @@ services:
       - egov-network
 
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
@@ -483,38 +483,6 @@ services:
         limits:
           memory: 256M
           cpus: '0.2'
-    networks:
-      - egov-network
-
-  egov-notification-sms:
-    image: egovio/egov-notification-sms:master-e22c7c5
-    container_name: egov-notification-sms
-    depends_on:
-      redpanda:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8080
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      SMS_ENABLED: 'true'
-      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
-      EGOV_MDMS_HOST: http://egov-mdms-service:8094
-      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-      EGOV_STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: none
-      OTEL_METRICS_EXPORTER: none
-      OTEL_LOGS_EXPORTER: none
-      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
-      SMS_PROVIDER_CLASS: Console
-    ports:
-      - 18093:8080
-    healthcheck:
-      test: ["NONE"]
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.1'
     networks:
       - egov-network
 
@@ -1156,9 +1124,9 @@ services:
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"
       GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_PROFILE_CHATBOT: "false"
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "true"
-      GATUS_SMS_PORT: "8080"
       # No grafana/prometheus/loki/tempo on this path, so the observability
       # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
       # enabled-var as true, which would make them red forever here.

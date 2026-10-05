@@ -5,7 +5,7 @@
 # pgbouncer 'postgres' alias, which runs in transaction mode and breaks Flyway).
 #
 # How future migrations flow, conditions, testing & troubleshooting:
-#   docs/db-migration-flow.md
+#   docs/operations/data-migration/README.md
 services:
   # ── Guard · runs before EVERY migrator ──────────────────────────────────────
   # An operator-supplied dump carries the LEGACY compose history-table names
@@ -15,7 +15,7 @@ services:
   # their tables and exit 0 — silent, unrecoverable data loss (the encryption keys
   # that decrypt all user PII). This renames them into place first, and aborts the
   # deploy on anything it cannot prove safe.
-  #   docs/superpowers/specs/2026-07-13-ansible-flyway-history-normalization-design.md
+  #   docs/operations/data-migration/flyway-history-normalization-design.md
   db-history-normalize:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
@@ -43,7 +43,9 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/pgr-services-db:2.12-5137119
+    # Same build as pgr-services (NOTIFICATION_STACK_TAG — see the note on that
+    # service in docker-compose.egov-digit.yaml). PGR_SERVICES_DB_IMAGE pins it alone.
+    image: ${PGR_SERVICES_DB_IMAGE:-egovio/pgr-services-db:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
@@ -54,7 +56,7 @@ services:
       # services' tables (boundary_relationship/_hierarchy, eg_user, eg_mdms_data,
       # eg_wf_*). Gate on those services being healthy so their schemas exist
       # before this migrator runs — deterministic ordering, unlike K8s which
-      # relies on init-container retry. (See docs/superpowers/specs item #10.)
+      # relies on init-container retry. (See docs/operations/data-migration/compose-k8s-migration-parity-design.md, item #10.)
       boundary-service:
         condition: service_healthy
       egov-user:
@@ -91,7 +93,12 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/novu-bridge-db:2.12-5137119
+    # Same build as novu-bridge (NOTIFICATION_STACK_TAG). A hard pin here meant a new
+    # bridge ran against the old schema: its dispatch-log migrations (delivery
+    # receipts, source_path) never ran and every ledger write failed. build-config.yml
+    # builds this image from backend/novu-bridge/src/main/resources/db in the same run,
+    # under the same tag, as the app. NOVU_BRIDGE_DB_IMAGE pins it alone.
+    image: ${NOVU_BRIDGE_DB_IMAGE:-egovio/novu-bridge-db:${NOTIFICATION_STACK_TAG:-nightly-develop}}
     container_name: novu-bridge-migration
     profiles: ["notifications"]   # active exactly when novu-bridge is
     depends_on:
@@ -123,7 +130,7 @@ services:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/digit-config-service-db:2.12-5137119
+    image: ${DIGIT_CONFIG_SERVICE_DB_IMAGE:-egovio/digit-config-service-db:2.12-5137119}
     container_name: digit-config-service-migration
     profiles: ["notifications"]   # active exactly when digit-config-service is
     depends_on:
@@ -149,6 +156,38 @@ services:
       SPRING_FLYWAY_ENABLED: "false"
     depends_on:
       digit-config-service-migration:
+        condition: service_completed_successfully
+
+  # Was absent while this service was a Go binary that self-migrated with GORM
+  # AutoMigrate. It is now Spring Boot + Flyway, so it joins the same pattern:
+  # the migrator owns the schema and the app's embedded Flyway is off.
+  digit-user-preferences-service-migration:
+    image: ${DIGIT_USER_PREFERENCES_SERVICE_DB_IMAGE:-egovio/digit-user-preferences-service-db:2.12-5137119}
+    container_name: digit-user-preferences-service-migration
+    profiles: ["notifications"]   # active exactly when digit-user-preferences-service is
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      db-history-normalize:
+        condition: service_completed_successfully
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      # This service's migrate.sh sets currentSchema per SCHEMA_NAME.
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: digit_user_preferences_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
+
+  digit-user-preferences-service:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      digit-user-preferences-service-migration:
         condition: service_completed_successfully
 
   # ── Phase 3 · core services ─────────────────────────────────────────────────
@@ -532,7 +571,7 @@ services:
   # compose alone enabled embedded Flyway. Converting keeps compose's current state
   # exactly (history + tables already exist -> the migrator no-ops) while removing
   # the last self-migrating service. Whether compose should create them at all is a
-  # separate decision; see docs/db-migration-flow.md.
+  # separate decision; see docs/operations/data-migration/README.md.
   egov-accesscontrol-migration:
     # Hardening (review): match the base stack — no caps, no priv-escalation.
     security_opt: ["no-new-privileges:true"]

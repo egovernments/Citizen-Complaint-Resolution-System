@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import TopBar from "./TopBar";
 import { useHistory } from "react-router-dom";
 import SideBar from "./SideBar";
+import CitizenNavSideBar from "./SideBar/CitizenNavSideBar";
 import LogoutDialog from "../Dialog/LogoutDialog";
 const TopBarSideBar = ({
   t,
@@ -14,6 +15,10 @@ const TopBarSideBar = ({
   logoUrl,
   logoUrlWhite,
   showSidebar = true,
+  // The citizen's desktop rail. The employee rail comes with SideBar; the
+  // citizen one is asked for by the page, which knows which of its routes
+  // (sign-in, language, location) have none.
+  showRail = false,
   showLanguageChange,
   linkData,
   islinkDataLoading,
@@ -73,6 +78,7 @@ const TopBarSideBar = ({
         workingContextTenantId={workingContextTenantId}
       />
       {showDialog && <LogoutDialog onSelect={handleOnSubmit} onCancel={handleOnCancel} onDismiss={handleOnCancel}></LogoutDialog>}
+      {CITIZEN && showRail ? <CitizenNavSideBar t={t} linkData={linkData} onLogout={handleLogout} /> : null}
       {!CITIZEN
         ? showSidebar && (
             <SideBar

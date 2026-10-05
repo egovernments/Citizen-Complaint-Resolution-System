@@ -8,6 +8,8 @@ import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
+import { DrawerFoot } from "./SidebarBrand";
+import { trackEvent } from "../../analytics";
 import { LogoutIcon } from "@egovernments/digit-ui-react-components";
 import ImageComponent from "../../ImageComponent";
 
@@ -83,10 +85,10 @@ export const CitizenSideBar = ({
   toggleSidebar,
   onLogout,
   isEmployee = false,
-  // Employee navigation, same tree the desktop SideNav renders. Supplied by
-  // EmployeeMobileSideBar rather than fetched here, so the citizen drawer
-  // never mounts the access-control query.
-  employeeNavItems = [],
+  // The rows the desktop rail renders, for whichever app this is. Supplied by
+  // the Employee/Citizen mobile wrappers rather than fetched here, so the
+  // citizen drawer never mounts the employee access-control query.
+  navItems = [],
   linkData,
   islinkDataLoading,
   userProfile,
@@ -263,7 +265,7 @@ export const CitizenSideBar = ({
   }
   // The employee branch that used to live here rebuilt the module rows from
   // `data.actions` into `menuItems`. Those rows now come from
-  // `employeeNavItems` via the `employeeNavItems` prop, and `menuItems` is no
+  // the `navItems` prop, and `menuItems` is no
   // longer rendered on the employee drawer at all, so the whole build was
   // running on every render and having its output discarded.
 
@@ -367,37 +369,14 @@ export const CitizenSideBar = ({
     key: "city",
   }));
 
-  const transformedLanguageData = languages?.map((language) => ({
-    ...language,
-    type: "custom",
-    key: "language",
-    icon: "Language",
-  }));
-
   // On employee the access-control tree already supplies Home (and the
   // module rows, and Dashboard) so the hardcoded HOME row would duplicate it.
   // Before this, the drawer had neither: the employee branch built no module
   // rows at all, so "Modules" opened onto "No Tenants Found" and there was no
   // way to reach the dashboard from a phone (#2038 mobile review).
-  const hamburgerItems = [
-    // The employee drawer also renders logged out (SideBar/index.js falls to
-    // this branch when there is no access_token), and `login-btn` used to reach
-    // it inside the Modules group that employees no longer get. Without this
-    // there is no way to sign in from the drawer on a phone.
-    ...(isEmployee && !user?.access_token
-      ? [{ label: t("CORE_COMMON_LOGIN"), type: "custom", icon: "Login", key: "login" }]
-      : []),
-    ...(isEmployee
-      ? employeeNavItems
-      : [
-          {
-            label: "HOME",
-            value: "HOME",
-            icon: "Home",
-            type: "custom",
-            key: "home",
-          },
-        ]),
+  // The account rows under the navigation: the tenant switcher (when shown)
+  // and Edit Profile.
+  const accountRows = [
     // Same rule as the top bar's ChangeCity, via the shared helper, so the two
     // surfaces cannot disagree about whether the tenant switcher is shown.
     ...(showTenantSwitcher(selectCityData?.length)
@@ -412,26 +391,58 @@ export const CitizenSideBar = ({
           },
         ]
       : []),
-    {
-      label: t("Language"),
-      children: transformedLanguageData?.length > 0 ? transformedLanguageData : undefined,
-      type: "custom",
-      icon: "Language",
-      key: "language",
-    },
+    // Language is the pill in the phone bar now (#2038 design), so the drawer
+    // no longer repeats it.
     ...(user && user.access_token
-    ? [
-        {
-          label: t("EDIT_PROFILE"),
-          type: "custom",
-          icon: "Edit",
-          key: "editProfile",
-        },
-      ]
-    : []),
-    // Citizen only: on employee the module rows are already above, and this
-    // group resolved to an empty list.
-    ...(isEmployee
+      ? [
+          {
+            label: t("EDIT_PROFILE"),
+            type: "custom",
+            icon: "Edit",
+            key: "editProfile",
+          },
+        ]
+      : []),
+  ];
+
+  // The rail's own rows when the app supplies them (both apps do now), so
+  // the drawer and the desktop rail list the same destinations. The bare
+  // HOME row is only the fallback for a caller that passes none.
+  const navRows =
+    isEmployee || navItems.length
+      ? navItems
+      : [
+          {
+            label: "HOME",
+            value: "HOME",
+            icon: "Home",
+            type: "custom",
+            key: "home",
+          },
+        ];
+  // One faint line under the last grouped section, as the desktop rail draws
+  // it, and no other lines in the drawer (#2038 mobile review). Rows after the
+  // sections (Dashboard, configured links) go under the line with the account
+  // rows; without sections the line sits above the account rows.
+  const splitAt = navRows.map((item) => item?.type).lastIndexOf("section") + 1;
+  const treeRows = splitAt > 0 ? navRows.slice(0, splitAt) : navRows;
+  const belowRows = [...(splitAt > 0 ? navRows.slice(splitAt) : []), ...accountRows];
+
+  const hamburgerItems = [
+    // The employee drawer also renders logged out (SideBar/index.js falls to
+    // this branch when there is no access_token), and `login-btn` used to reach
+    // it inside the Modules group that employees no longer get. Without this
+    // there is no way to sign in from the drawer on a phone.
+    ...(isEmployee && !user?.access_token
+      ? [{ label: t("CORE_COMMON_LOGIN"), type: "custom", icon: "Login", key: "login" }]
+      : []),
+    ...treeRows,
+    ...(treeRows.length > 0 && belowRows.length > 0 ? [{ type: "divider", key: "tree-divider" }] : []),
+    ...belowRows,
+    // Only for a caller without rail rows: with them, the modules' sections,
+    // the MDMS-configured links and Login are already above, and this group
+    // would repeat them.
+    ...(isEmployee || navItems.length
       ? []
       : [
           {
@@ -458,7 +469,16 @@ export const CitizenSideBar = ({
       // bottom and the drawer top. CSS in overrides.css aligns the
       // drawer flush against the actual topbar height instead.
       styles={{ height: "93%" }}
-      onLogout={onLogout}
+      // The drawer's Logout is the shared component's own button, which takes
+      // no analytics tag, so its outcome is sent from here.
+      onLogout={
+        onLogout
+          ? () => {
+              trackEvent("shell.drawer.logout", { category: "shell" });
+              onLogout();
+            }
+          : undefined
+      }
       hideUserManuals={true}
       profile={profilePic ? profilePic : undefined}
       isSearchable={true}
@@ -468,6 +488,10 @@ export const CitizenSideBar = ({
       closeOnClickOutside={true}
       onOutsideClick={() => toggleSidebar(false)}
       onSelect={({ item, index, parentIndex }) => onItemSelect({ item, index, parentIndex })}
+      // On a phone the crest stays in the top bar right above the drawer, so
+      // the drawer takes just the eGov foot; a crest here too would show the
+      // same mark twice.
+      renderFooter={() => <DrawerFoot />}
     />
   ) : (
     <StaticCitizenSideBar logout={onLogout} />

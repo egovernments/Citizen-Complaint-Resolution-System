@@ -1,44 +1,42 @@
 import React from "react";
-import { SideNav, Loader } from "@egovernments/digit-ui-components";
 import { useHistory } from "react-router-dom";
 import MediaQuery from "react-responsive";
 import { useEmployeeNavItems, navigateToEmployeeUrl } from "./employeeNavItems";
+import { AppSideNav } from "./AppSideNav";
 
-const EmployeeSideBar = () => {
-  const { isLoading, items } = useEmployeeNavItems();
-  const isMultiRootTenant = Digit.Utils.getMultiRootTenant();
+/**
+ * A pinned sidebar is a display preference, not user data: it survives a
+ * reload but nothing downstream reads it, so one key per browser is the right
+ * scope. (Contrast the dashboard layout, which is keyed by tenant+user
+ * because two personas sharing a machine would otherwise overwrite each
+ * other's saved arrangement.) A shared counter machine sharing this costs one
+ * click to undo.
+ */
+const PINNED_STORAGE_KEY = "ccrs.employee.sidebar-pinned";
+
+const EmployeeSideBar = ({ t, onLogout }) => {
+  const { items } = useEmployeeNavItems();
   const history = useHistory();
+  const isMultiRootTenant = Digit.Utils.getMultiRootTenant();
   const tenantId = Digit.ULBService.getStateId();
 
-  const onItemSelect = ({ item }) => {
+  const onItemSelect = (item) => {
     if (item?.navigationUrl) {
       navigateToEmployeeUrl(history, item?.navigationUrl, { isMultiRootTenant, tenantId });
     }
   };
 
-  if (isLoading) {
-    return <Loader />;
-  }
-
+  // No early return while the nav items load. A spinner in place of the rail
+  // meant the toggle and the rail's width arrived late; the rail renders at
+  // once and its rows fill in.
   return (
     <MediaQuery minWidth={768}>
-      <SideNav
+      <AppSideNav
+        t={t}
         items={items}
-        hideAccessbilityTools={true}
-        // #2038: drop the search affordance. SideNav defaults enableSearch to
-        // true, which on a CCRS deployment buys a magnifier over a two-item
-        // nav. The component already ships the collapsed `searchDisabled`
-        // layout for this case, so nothing else has to move.
-        enableSearch={false}
-        onSelect={({ item, index, parentIndex }) => onItemSelect({ item, index, parentIndex })}
-        theme={"dark"}
-        variant={"primary"}
-        transitionDuration={""}
-        className=""
-        styles={{}}
-        expandedWidth=""
-        collapsedWidth=""
-        onBottomItemClick={() => {}}
+        storageKey={PINNED_STORAGE_KEY}
+        onItemSelect={onItemSelect}
+        onLogout={onLogout}
       />
     </MediaQuery>
   );

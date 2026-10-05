@@ -378,6 +378,15 @@ components:
         available:
           type: boolean
           readOnly: true
+        conflictingType:
+          type: string
+          readOnly: true
+          enum: [ORGANIZATION_NAME, ACCOUNT_CODE, TENANT_ID, ORGANIZATION_ALIAS, URL_SLUG]
+          description: The canonical identifier that is already occupied when available is false.
+        derivedTenantId:
+          type: string
+          readOnly: true
+          description: The DIGIT root tenant id projected from a URL slug or organization alias.
     OnboardingOperationRequest:
       type: object
       required: [Operation]

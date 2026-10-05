@@ -25,6 +25,7 @@ export const mapConfigDescriptor: SchemaDescriptor = {
   customEditor: 'map-config',
   groups: [
     { title: 'Identity', fields: ['code'] },
+    { title: 'Map provider', fields: ['mapProvider', 'googleMapsApiKey'] },
     { title: 'Basemap', fields: ['baseMapTheme', 'tileUrl', 'tileAttribution', 'wardHighlightColor'] },
     { title: 'Starting position', fields: ['center.lat', 'center.lng', 'defaultZoom', 'minZoom', 'maxZoom'] },
     { title: 'Ward boundaries', fields: ['boundaryTenantId'] },
@@ -42,6 +43,11 @@ export const mapConfigDescriptor: SchemaDescriptor = {
   fields: [
     { path: 'code', widget: 'text', required: true,
       help: 'Record key. The maps read a single config, so use "DEFAULT" unless you are deliberately keeping several variants.' },
+
+    { path: 'mapProvider', widget: 'text', label: 'Map provider',
+      help: 'Which library draws the maps: OpenStreetMap tiles (the default, styled by the Basemap settings below) or Google Maps. Boundaries and addresses don\'t change — only the map underneath. Google needs the API key next to this.' },
+    { path: 'googleMapsApiKey', widget: 'text', label: 'Google Maps API key',
+      help: 'A Google Maps JavaScript API key, used when the provider is Google Maps. It is sent to every browser that shows a map, so restrict it to this site (HTTP referrers) in Google Cloud Console. Currently drawn by the configurator\'s boundary maps; the citizen complaint maps still use the Basemap tiles.' },
 
     { path: 'baseMapTheme', widget: 'text', label: 'Base map theme',
       help: 'Tile style the map is drawn in: voyager (light, labelled — the default), light, dark, or osm. Ignored if a custom tile URL is set below.' },

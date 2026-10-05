@@ -1,0 +1,5 @@
+# post-#2085: the overlay no longer restates the volume, only the init scripts
+services:
+  postgres-db:
+    volumes:
+      - ./db/full-dump.sql:/docker-entrypoint-initdb.d/01-full-dump.sql:ro

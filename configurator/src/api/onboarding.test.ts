@@ -102,16 +102,33 @@ describe('idempotency keys', () => {
 });
 
 describe('deriveAccountCode', () => {
-  it('takes the initials of the first three words', () => {
-    expect(deriveAccountCode('Bomet County Government', '')).toBe('BCG');
+  it('uses every word of the name', () => {
+    expect(deriveAccountCode('Bomet County Government', '')).toBe('BOMET-COUNTY-GOVERNMENT');
   });
 
   it('prefixes the country once one is chosen', () => {
-    expect(deriveAccountCode('Bomet County Government', 'KE')).toBe('KE-BCG');
+    expect(deriveAccountCode('Bomet County Government', 'KE')).toBe('KE-BOMET-COUNTY-GOVERNMENT');
   });
 
-  it('ignores words beyond the third', () => {
-    expect(deriveAccountCode('One Two Three Four Five', 'IN')).toBe('IN-OTT');
+  it('changes when a word is added or edited', () => {
+    expect(deriveAccountCode('Bomet County', 'KE')).not.toBe(deriveAccountCode('Bomet County Government', 'KE'));
+    expect(deriveAccountCode('Bomet County', 'KE')).not.toBe(deriveAccountCode('Bomet Countie', 'KE'));
+  });
+
+  it('cuts a long name at a word boundary inside the limit', () => {
+    const code = deriveAccountCode('Municipal Corporation of Greater Mumbai Region', 'IN');
+    expect(code).toBe('IN-MUNICIPAL-CORPORATION-OF');
+    expect(isValidAccountCode(code)).toBe(true);
+  });
+
+  it('hard-cuts a single word longer than the limit', () => {
+    const code = deriveAccountCode('A'.repeat(40), 'KE');
+    expect(code).toHaveLength(32);
+    expect(isValidAccountCode(code)).toBe(true);
+  });
+
+  it('drops punctuation', () => {
+    expect(deriveAccountCode("  St. John's  Ward ", 'KE')).toBe('KE-ST-JOHN-S-WARD');
   });
 });
 

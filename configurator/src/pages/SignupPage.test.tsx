@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
 
 // The gate links to /login, so the page needs a Router around it.
-const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+const render = (ui: React.ReactElement, path = '/') =>
+  rtlRender(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
 
 /**
  * The network-facing half of the contract is mocked; the pure helpers
@@ -17,6 +18,7 @@ vi.mock('@/api/onboarding', async () => {
     ...actual,
     session: vi.fn(),
     authMethods: vi.fn(),
+    consumeAuthResult: vi.fn(),
     tenants: vi.fn(),
     findSignup: vi.fn(),
     createSignup: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock('@/api/onboarding', async () => {
     findOperation: vi.fn(),
     selectContext: vi.fn(),
     startSignIn: vi.fn(),
+    requestMagicLinkSignup: vi.fn(),
     logout: vi.fn(),
   };
 });
@@ -55,6 +58,44 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
+  it('shows the GitHub mark on the GitHub signup action', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'github', label: 'Continue with GitHub', type: 'oauth' }],
+    });
+
+    render(<SignupPage />);
+
+    const github = await screen.findByRole('button', { name: /continue with github/i });
+    const mark = github.querySelector('svg[data-icon="inline-start"][data-provider="github"]');
+    expect(mark?.querySelector('path')).toHaveAttribute('fill', '#181717');
+  });
+
+  it('collects the signup identity in Configurator and shows check-email without opening Keycloak', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic-link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.requestMagicLinkSignup).mockResolvedValue({
+      message: 'Check your email for a link to continue creating your account.',
+    });
+
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/first name/i), { target: { value: 'Amina' } });
+    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Diallo' } });
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'amina@example.org' } });
+    fireEvent.click(screen.getByRole('button', { name: /email me a sign-in link/i }));
+
+    await waitFor(() => expect(api.requestMagicLinkSignup).toHaveBeenCalledWith({
+      firstName: 'Amina',
+      lastName: 'Diallo',
+      email: 'amina@example.org',
+    }));
+    expect(await screen.findByRole('heading', { name: /check your email/i })).toBeInTheDocument();
+    expect(screen.getByText(/amina@example.org/i)).toBeInTheDocument();
+    expect(api.startSignIn).not.toHaveBeenCalled();
+  });
+
   it('hands sign-in to the backend rather than collecting a credential', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
@@ -64,9 +105,27 @@ describe('sign-in gate', () => {
     render(<SignupPage />);
     fireEvent.click(await screen.findByRole('button', { name: /email and password/i }));
 
-    expect(api.startSignIn).toHaveBeenCalledWith('password');
+    expect(api.startSignIn).toHaveBeenCalledWith('password', 'signup');
     // The whole point: no password field ever exists in this flow.
     expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('renders a callback failure on the signup page that initiated it', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'magic_link', label: 'Email me a sign-in link', type: 'magic_link' }],
+    });
+    vi.mocked(api.consumeAuthResult).mockResolvedValue({
+      status: 'failed',
+      code: 'AUTH_CANCELLED',
+      message: 'Sign-up was cancelled. No changes were made to your account.',
+      actions: ['TRY_AGAIN'],
+    });
+
+    render(<SignupPage />, '/signup?authResult=signup-result');
+
+    expect(await screen.findByText(/sign-up was cancelled/i)).toBeInTheDocument();
+    expect(api.consumeAuthResult).toHaveBeenCalledWith('signup-result');
   });
 });
 
@@ -96,7 +155,7 @@ describe('wizard', () => {
     fireEvent.change(await screen.findByLabelText(/account name/i), {
       target: { value: 'Bomet County Government' },
     });
-    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('BCG'));
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('BOMET-COUNTY-GOVERNMENT'));
   });
 
   it('re-prefixes the code once a country is chosen', async () => {
@@ -104,7 +163,7 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
-    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BCG'));
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY-GOVERNMENT'));
   });
 
   it('derives the slug without promising an address for it', async () => {
@@ -132,6 +191,18 @@ describe('wizard', () => {
     await completeAccountStep();
     fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: '12-34' } });
     expect(await screen.findByText(/at least two letters/i)).toBeInTheDocument();
+  });
+
+  it('explains when a free slug projects to an occupied tenant id', async () => {
+    vi.mocked(api.checkIdentifier).mockImplementation(async (type, value) => type === 'URL_SLUG'
+      ? { type, value, available: false, conflictingType: 'TENANT_ID', derivedTenantId: 'kd' }
+      : { type, value, available: true });
+
+    render(<SignupPage />);
+    await completeAccountStep();
+    fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'kd4' } });
+
+    expect(await screen.findByText(/maps to tenant ID “kd”.*already in use/i)).toBeInTheDocument();
   });
 
   it('creates the draft once Preferences is complete, not before', async () => {
@@ -186,6 +257,40 @@ describe('wizard', () => {
     render(<SignupPage />);
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
     expect(api.createSignup).not.toHaveBeenCalled();
+  });
+
+  const resumedDraft = (accountCode: string) => ({
+    id: 'signup-1',
+    status: 'DRAFT',
+    accountName: 'Bomet County',
+    accountCode,
+    urlSlug: 'bomet-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    timeZone: 'Africa/Nairobi',
+    financialYearPolicy: 'JUL_JUN',
+    tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
+  });
+
+  it('keeps deriving a resumed code that was never edited by hand', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumedDraft('KE-BOMET-COUNTY') as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET-COUNTY-GOVERNMENT'));
+  });
+
+  it('never overwrites a resumed code the operator typed', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumedDraft('KE-BOMET') as never);
+    render(<SignupPage />);
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County Government'));
+    expect(screen.getByLabelText(/account code/i)).toHaveValue('KE-BOMET');
   });
 });
 
@@ -298,6 +403,59 @@ describe('provisioning', () => {
  * platform configuration, so entering on the strength of a successful sign-in
  * drops the operator into a console where every call is refused (CCRS#2073 G9).
  */
+describe('preferences follow the selected country (CCRS#2098)', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+  });
+
+  const reachPreferences = async () => {
+    await completeAccountStep();
+  };
+
+  it('re-suggests the timezone when the country changes', async () => {
+    // The old guard fired only while the field was empty, so the first pick
+    // filled it and every later country change silently kept the old zone,
+    // submitting India next to Africa/Nairobi.
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Africa/Nairobi');
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Asia/Kolkata');
+  });
+
+  it('leaves a timezone the operator picked themselves alone', async () => {
+    // The original intent, now tracked rather than inferred.
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Africa/Maputo' } });
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
+
+    expect(screen.getByLabelText(/timezone/i)).toHaveValue('Africa/Maputo');
+  });
+
+  it('shows the dial code and example for the selected country, not Kenya', async () => {
+    render(<SignupPage />);
+    await reachPreferences();
+
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'IN' } });
+    expect(screen.getByText('+91')).toBeInTheDocument();
+    expect(screen.queryByText('+254')).not.toBeInTheDocument();
+
+    const mobile = screen.getByLabelText(/mobile number/i);
+    // National format, which is what the backend validates. The old hint was
+    // international, so copying its shape produced a validation failure.
+    expect(mobile).toHaveAttribute('placeholder', '9876543210');
+    expect(mobile.getAttribute('placeholder')).not.toMatch(/^\+/);
+  });
+
+});
+
 describe('workspace readiness gate', () => {
   const option = (readiness?: 'IDENTITY_READY' | 'PROVISIONING' | 'READY' | 'FAILED') => ({
     organizationAlias: 'kisumu-county',
