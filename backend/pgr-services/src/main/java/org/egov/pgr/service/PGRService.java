@@ -368,7 +368,9 @@ public class PGRService {
      * Adds the caller's currently-assigned complaints to a department/jurisdiction-restricted
      * employee scope, so an employee can always find what workflow has assigned to them — e.g.
      * a GRO routing a ward-B complaint to a ward-A LME. Resolved exactly like the "My" assignee
-     * filter (workflow process search by assignee). Never widens anything else: deny-all
+     * filter ({@link WorkflowService#getServiceRequestIdsByAssignee}: who currently holds it, read
+     * from workflow history, bounded newest-first). Workflow matches the tenant exactly, so a
+     * state-level search gets no exception; search the city tenant. Never widens anything else: deny-all
      * decisions, citizens, unrestricted scopes, and the tenant axis are untouched, and a workflow failure leaves the
      * scope as it was (no exception, not a wider one).
      */

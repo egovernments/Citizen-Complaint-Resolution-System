@@ -1,6 +1,7 @@
 package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.*;
 
+@Slf4j
 @org.springframework.stereotype.Service
 public class WorkflowService {
 
@@ -260,31 +262,124 @@ public class WorkflowService {
 
     }
 
+    /**
+     * Upper bound on workflow rows for an assignee lookup. Without one, egov-workflow-v2 returns its
+     * default page (egov.wf.default.limit, 10 in the stock jar) and silently drops the rest; above
+     * egov.wf.max.limit (100 in the stock jar) workflow clamps it. Matches EscalationService's bound.
+     */
+    static final int ASSIGNEE_SEARCH_LIMIT = 200;
+
+    /**
+     * Complaints this employee currently holds in workflow, at this exact tenant (workflow matches
+     * {@code tenantid} exactly, so a state-level tenant finds nothing).
+     *
+     * <p>Workflow's own {@code assignee} filter only looks at each complaint's newest transition,
+     * and most transitions — a citizen COMMENT, ESCALATE, a blank ASSIGN — name no assignee. On its
+     * own it therefore drops a complaint from its holder the moment anyone comments on it. The
+     * holder is instead derived the way {@link EscalationService#getCurrentAssignees} does it
+     * (#2129/#2138): the assignee named by the newest transition that named anyone, within the
+     * complaint's current state occupancy ({@link #currentHolders}).
+     *
+     * <ol>
+     *   <li>Complaints whose newest transition names the employee — held by definition.</li>
+     *   <li>Complaints an older transition named them on (history search by assignee), whose full
+     *       histories are then fetched in one batch and walked with {@link #currentHolders}.</li>
+     * </ol>
+     *
+     * Each search is bounded by {@link #ASSIGNEE_SEARCH_LIMIT}, newest first: an employee with more
+     * assignments than that loses the least recently touched ones. A truncated history can only
+     * omit a complaint, never admit one it does not hold. If step 2 fails the step-1 result stands.
+     */
     public Set<String> getServiceRequestIdsByAssignee(RequestInfo requestInfo, String tenantId, String assigneeUuid) {
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+
+        Set<String> held = businessIdsOf(searchProcessInstances(assigneeSearchURL(tenantId, assigneeUuid, false), requestInfoWrapper));
+
+        try {
+            Set<String> candidates = businessIdsOf(searchProcessInstances(assigneeSearchURL(tenantId, assigneeUuid, true), requestInfoWrapper));
+            candidates.removeAll(held);
+            if (candidates.isEmpty())
+                return held;
+
+            StringBuilder historyUrl = getprocessInstanceSearchURL(tenantId, String.join(",", candidates));
+            historyUrl.append("&history=true&limit=").append(ASSIGNEE_SEARCH_LIMIT);
+            Map<String, List<ProcessInstance>> histories = new LinkedHashMap<>();
+            for (ProcessInstance instance : searchProcessInstances(historyUrl, requestInfoWrapper))
+                histories.computeIfAbsent(instance.getBusinessId(), id -> new ArrayList<>()).add(instance);
+
+            histories.forEach((businessId, history) -> {
+                if (candidates.contains(businessId) && currentHolders(history).contains(assigneeUuid))
+                    held.add(businessId);
+            });
+        } catch (Exception e) {
+            log.warn("WorkflowService: workflow history lookup for assignee={} tenant={} failed — using complaints whose latest transition names them only: {}",
+                    assigneeUuid, tenantId, e.getMessage());
+        }
+        return held;
+    }
+
+    /**
+     * Who holds a complaint, from its workflow history ordered newest-first (as egov-workflow-v2
+     * returns it): the assignees of the newest transition that named anyone, walking back only
+     * while the state is unchanged. Leaving a state relinquishes ownership (REASSIGN and REOPEN
+     * return a complaint to a queue on purpose), so an occupancy entered without an assignee is
+     * genuinely unowned and yields an empty list. See {@link EscalationService#getCurrentAssignees}.
+     */
+    public static List<String> currentHolders(List<ProcessInstance> newestFirst) {
+        if (CollectionUtils.isEmpty(newestFirst))
+            return Collections.emptyList();
+        String currentState = stateOf(newestFirst.get(0));
+        for (ProcessInstance instance : newestFirst) {
+            if (!Objects.equals(currentState, stateOf(instance)))
+                return Collections.emptyList();
+            List<String> assignees = assigneeUuidsOf(instance);
+            if (!assignees.isEmpty())
+                return assignees;
+        }
+        return Collections.emptyList();
+    }
+
+    private static String stateOf(ProcessInstance instance) {
+        return instance == null || instance.getState() == null ? null : instance.getState().getUuid();
+    }
+
+    private static List<String> assigneeUuidsOf(ProcessInstance instance) {
+        if (instance == null || CollectionUtils.isEmpty(instance.getAssignes()))
+            return Collections.emptyList();
+        return instance.getAssignes().stream()
+                .map(User::getUuid)
+                .filter(uuid -> uuid != null && !uuid.isBlank())
+                .collect(Collectors.toList());
+    }
+
+    private StringBuilder assigneeSearchURL(String tenantId, String assigneeUuid, boolean history) {
         StringBuilder url = new StringBuilder(pgrConfiguration.getWfHost());
         url.append(pgrConfiguration.getWfProcessInstanceSearchPath());
         url.append("?tenantId=").append(tenantId);
         url.append("&businessService=").append(PGR_BUSINESSSERVICE);
         url.append("&assignee=").append(assigneeUuid);
+        url.append("&history=").append(history);
+        url.append("&limit=").append(ASSIGNEE_SEARCH_LIMIT);
+        return url;
+    }
 
-        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+    private List<ProcessInstance> searchProcessInstances(StringBuilder url, RequestInfoWrapper requestInfoWrapper) {
         Object result = repository.fetchResult(url, requestInfoWrapper);
-
+        if (result == null)
+            throw new CustomException("WORKFLOW_SEARCH_FAILED", "Workflow process instance search returned no response");
         ProcessInstanceResponse response;
         try {
             response = mapper.convertValue(result, ProcessInstanceResponse.class);
         } catch (IllegalArgumentException e) {
             throw new CustomException("PARSING ERROR", "Failed to parse workflow response for assignee search");
         }
-
-        if (CollectionUtils.isEmpty(response.getProcessInstances())) {
-            return Collections.emptySet();
-        }
-
-        return response.getProcessInstances().stream()
-                .map(ProcessInstance::getBusinessId)
-                .collect(Collectors.toSet());
+        return response == null || response.getProcessInstances() == null
+                ? Collections.emptyList() : response.getProcessInstances();
     }
 
+    private static Set<String> businessIdsOf(List<ProcessInstance> instances) {
+        return instances.stream().map(ProcessInstance::getBusinessId).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
 
 }
