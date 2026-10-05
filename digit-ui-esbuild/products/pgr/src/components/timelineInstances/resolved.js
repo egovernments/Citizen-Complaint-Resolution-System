@@ -49,7 +49,7 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime, r
         if (action && action !== "COMMENT") {
           if (action !== "REOPEN" || reopenWindowOpen)
           return (
-            <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
+            <Link key={index} to={`/${window?.contextPath}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>
             </Link>
           );
@@ -76,7 +76,7 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime, r
         if (action && action !== "COMMENT") {
           if (action !== "REOPEN" || reopenWindowOpen)
           return (
-            <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
+            <Link key={index} to={`/${window?.contextPath}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>
             </Link>
           );

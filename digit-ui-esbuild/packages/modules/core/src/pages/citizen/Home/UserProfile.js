@@ -199,9 +199,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     ) || 15
   );
 
-  const stateLvlTenantId = Digit.Utils.getMultiRootTenant()
+  // A tenant route names its tenant; elsewhere keep the configured root.
+  const stateLvlTenantId = window.__digitTenantContext?.tenantId || (Digit.Utils.getMultiRootTenant()
     ? Digit.ULBService.getCurrentTenantId()
-    : window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
+    : window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID"));
   const moduleName = Digit?.Utils?.getConfigModuleName?.() || "commonUiConfig";
 
   // User Preferences - fetch enable flag from MDMS v2
