@@ -51,6 +51,12 @@ describe("binding actor validation", () => {
     await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     admin.roles.push({ code: "EMPLOYEE", tenantId: "pg" });
     await expect(call()).resolves.toBeUndefined();
+    f.accounts[0].roles.push({ code: "SUPERUSER", tenantId: "pg.citya" });
+    await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    admin.roles.push({ code: "SUPERUSER", tenantId: "pg.cityb" });
+    await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    admin.roles.push({ code: "SUPERUSER", tenantId: "pg" });
+    await expect(call()).resolves.toBeUndefined();
     admin.roles = [{ code: "ACCOUNT_ADMIN", tenantId: "elsewhere" }];
     await expect(call()).rejects.toMatchObject({ code: "ADMIN_REQUIRED" });
   });

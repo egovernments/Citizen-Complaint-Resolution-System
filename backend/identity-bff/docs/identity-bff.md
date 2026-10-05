@@ -409,7 +409,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
-  - the account holds a role the caller lacks at the tenant → `ROLE_ESCALATION_FORBIDDEN`;
+  - the account holds a role, at the tenant or any sub-tenant, that the caller lacks at the tenant (or a tenant covering it) → `ROLE_ESCALATION_FORBIDDEN`;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
   - this person already has a different uuid at the tenant → `BINDING_CONFLICT`.
 - **Find the person** by email, then by username = email. A username match with a different email → `IDENTITY_EMAIL_CHANGED`.
@@ -426,7 +426,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - **Repeats:**
   - The request id is `linkRequestId(caller, tenantId, digitUuid, email)` (`src/modules/bindings/link-request-id.ts`). Only a person whose `digit.linkPending.requestId` equals it resumes the new-user branch. Any other existing person takes the existing-user branch.
   - A repeat returns the current state. It never demotes `active` and never resurrects `removed`.
-  - `reinvite: true` on a `pending` or `removed` key issues `invitationVersion + 1` with a fresh expiry, which makes the old version stale. Without it, a `removed` key → `BINDING_REMOVED`.
+  - `reinvite: true` on a `pending` or `removed` key issues `invitationVersion + 1` with a fresh expiry, which makes the old version stale. On a `removed` key the re-invite may name a different uuid (the person's new DIGIT record). Without it, a `removed` key → `BINDING_REMOVED`.
 - **Locks:** person → uuid.
 - Errors: as listed in `routes.ts`, including `BINDING_BUSY`, `IDENTITY_BUSY`, `DIGIT_UNAVAILABLE` and `IDENTITY_UNAVAILABLE` (503).
 

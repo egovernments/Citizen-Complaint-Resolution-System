@@ -48,6 +48,16 @@ describe("sign-in surfaces", () => {
     expect(surfaceReturnPrefix("employee", "bomet-county")).toBe("/bomet-county/digit-ui/employee/");
   });
 
+  it("parses the registry once per configuration", () => {
+    config.identitySurfacesJson = JSON.stringify({ reviewer: { contextKind: "employee", clientId: "reviewer", clientSecret: "", scope: "openid", cookieName: "reviewer_session" } });
+    const first = surfaceRegistry();
+    expect(surfaceRegistry()).toBe(first);
+    expect(parseSurface("reviewer")).toBe("reviewer");
+    config.identitySurfacesJson = "";
+    expect(surfaceRegistry()).not.toBe(first);
+    expect(parseSurface("reviewer")).toBeNull();
+  });
+
   it("rejects unsafe registry entries and colliding cookies at startup", () => {
     for (const override of [
       { "../bad": {} }, { employee: { contextKind: "unknown" } },
