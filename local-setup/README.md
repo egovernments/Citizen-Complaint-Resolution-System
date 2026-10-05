@@ -465,8 +465,10 @@ want soon:
 - `enable_novu` — SMS, email and WhatsApp notifications. Eight more containers.
   There is a turn-key installer, `scripts/enable-notifications.sh`, rather than
   just the flag.
-- `enable_keycloak` — single sign-on. DIGIT's own OTP login works without it.
-  It also turns on self-service tenant onboarding: PGR's onboarding runner
+- `enable_keycloak` — Keycloak and the Identity BFF. **Not optional any more:**
+  every employee and citizen sign-in goes through them, the old DIGIT
+  OTP/password login pages are gone, and the deploy refuses `false`. The
+  shipped examples set it to `true`. It also turns on self-service tenant onboarding: PGR's onboarding runner
   (`pgr_onboarding_runner_enabled`, default `true`, rendered on only with
   Keycloak) provisions each signup as a platform provisioner account. The
   deploy creates that account if absent (`PGR_PROVISIONER` on `state_root`,

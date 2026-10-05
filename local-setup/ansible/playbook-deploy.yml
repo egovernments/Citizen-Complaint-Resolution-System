@@ -587,6 +587,28 @@
           flipping auth_provider.
       when: _keycloak_login_surfaces | length > 0
 
+    # D26 removed every sign-in path that did not go through the Identity BFF:
+    # the tenantless /digit-ui/user/* pages, the legacy citizen OTP and
+    # employee password pages, and (with Keycloak on) the native create/reset/
+    # OTP endpoints at Kong. Tenant routes resolve through
+    # /identity/v1/tenant-contexts/<slug>, which only exists in the `keycloak`
+    # compose profile. identity_legacy_user_endpoints reopens Kong endpoints,
+    # not the UI pages, so it is no way around this. (Dhruv, #2271 review 2.)
+    - name: "preflight — identity requires enable_keycloak: true"
+      ansible.builtin.fail:
+        msg: >-
+          enable_keycloak is false on {{ inventory_hostname }}, but since D26
+          every DIGIT UI sign-in (employee and citizen) goes through the
+          Identity BFF, which only runs with Keycloak. Without it the
+          /<tenant-slug>/digit-ui/ routes cannot resolve their tenant and
+          nobody can sign in; the old DIGIT OTP/password login pages are gone.
+          Set `enable_keycloak: true` (and `nginx_features.keycloak: true`)
+          in host_vars/{{ inventory_hostname }}.yml, with keycloak_admin_password,
+          keycloak_db_password and identity_digit_admin_password in
+          bootstrap_secrets (or OpenBao). See the Keycloak section of
+          host_vars/_example.yml.
+      when: not (enable_keycloak | default(false) | bool)
+
     - name: "preflight — refuse retired digit-ui-v2 citizen identity"
       ansible.builtin.fail:
         msg: >-

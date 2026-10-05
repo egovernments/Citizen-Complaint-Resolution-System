@@ -1753,6 +1753,26 @@ describe('D26 legacy identity paths are retired', () => {
     expect(keycloakConfig).toContain('name: identity-legacy-user-endpoints-denied');
   });
 
+  // High 3 (Dhruv, #2271 review 2): with Keycloak off there is no Identity
+  // BFF, so no tenant route resolves and nobody can sign in.
+  test('the deploy refuses enable_keycloak: false and every shipped example turns it on', () => {
+    const preflight = playbook.slice(playbook.indexOf('- name: "preflight — identity requires enable_keycloak: true"'));
+    expect(preflight).toMatch(/^- name: "preflight — identity requires enable_keycloak: true"\n\s+ansible\.builtin\.fail:/);
+    expect(preflight.slice(0, 1500)).toContain("when: not (enable_keycloak | default(false) | bool)");
+    const dir = 'local-setup/ansible/inventory/host_vars';
+    const examples = fs.readdirSync(path.join(REPO_ROOT, dir))
+      .filter((f) => f.endsWith('.example') || f === '_example.yml');
+    expect(examples.length).toBeGreaterThanOrEqual(6);
+    for (const example of examples) {
+      const text = read(`${dir}/${example}`);
+      expect([example, text.match(/^enable_keycloak: (\S+)/m)?.[1]]).toEqual([example, 'true']);
+      expect([example, /^\s+keycloak: true\b/m.test(text)]).toEqual([example, true]);
+      expect([example, /OTP login works without|inert while enable_keycloak is false|DIGIT keeps working on OTP login/.test(text)])
+        .toEqual([example, false]);
+    }
+    expect(read('local-setup/README.md')).not.toContain("DIGIT's own OTP login works without it");
+  });
+
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
     expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
     expect(playbook).toContain('D26 retired its fixed-OTP');

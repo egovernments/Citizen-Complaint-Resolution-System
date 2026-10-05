@@ -734,11 +734,16 @@ novu_bridge_smscountry_password: ""
 # novu_front_base_url:  "https://pilot.example.org/novu"
 # novu_node_env: "production"
 
-# ────────── Keycloak SSO (opt-in) ──────────
+# ────────── Keycloak + Identity BFF (REQUIRED) ──────────
 # Adds Keycloak 26.7.3 and the Identity BFF. Public browser routes are /auth/
 # and /identity/v1/; internal provisioning routes stay on the Docker network.
 #
-# Workflow when enable_keycloak: true:
+# REQUIRED since D26: every employee and citizen sign-in goes through the
+# Identity BFF (the /<tenant-slug>/digit-ui/ routes resolve their tenant
+# through it), the old DIGIT OTP/password login pages are gone, and the
+# deploy refuses `enable_keycloak: false`.
+#
+# Workflow:
 #   1. The deploy creates one shared realm (`digit` by default) with
 #      Organizations enabled and configures confidential BFF/admin clients.
 #   2. Each DIGIT tenant maps to a Keycloak Organization in that realm.
@@ -754,7 +759,7 @@ novu_bridge_smscountry_password: ""
 # and stored in OpenBao, so none of them is derivable from another. Read one
 # back with `bao kv get -field=<key> kv/digit/<tenant>`; rotate one with
 # `bao kv put`, and the next deploy pushes it into Keycloak.
-enable_keycloak: false
+enable_keycloak: true
 # Rollback switch for D26. Defaults to false when Keycloak is enabled and true
 # otherwise. Keep false after identity completion; it closes native create,
 # reset and OTP endpoints at Kong while preserving /user/oauth/token.
@@ -1230,7 +1235,7 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
-  keycloak: false            # /auth/ + /identity/v1/ — requires enable_keycloak: true
+  keycloak: true             # /auth/ + /identity/v1/ — requires enable_keycloak: true
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)

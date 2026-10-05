@@ -89,6 +89,9 @@ enable_mcp: true
 build_mcp: true
 enable_search_stack: false
 enable_novu: false
+# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
+# D26, and the deploy refuses `false`.
+enable_keycloak: true
 requires_nairobi_mdms: false
 db_fast_path: true
 # Ships as `false` on purpose (issue #2082). preflight.py refuses
@@ -134,6 +137,7 @@ nginx_features:
                              #   bao kv get -field=status_basic_auth_password <secrets_path>
   api_pgr: false
   mcp: true                    # /mcp + /v1/* — MCP HTTP transport + REST shim
+  keycloak: true               # validates /auth/ and /identity/v1/ after the deploy
 
 secrets_path: kv/digit/maputo
 # Secrets are NOT committed. This is a public repository, so anything that ships
@@ -158,3 +162,6 @@ bootstrap_secrets:
   # throws AEADBadTagException in egov-enc-service at boot.
   elasticsearch_master_password: "CHANGE_ME"
   egov_hrms_default_password: "CHANGE_ME"
+  keycloak_admin_password: "CHANGE_ME"
+  keycloak_db_password: "CHANGE_ME"
+  identity_digit_admin_password: "CHANGE_ME"

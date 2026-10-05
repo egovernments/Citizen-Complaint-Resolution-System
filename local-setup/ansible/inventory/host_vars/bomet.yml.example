@@ -136,9 +136,9 @@ pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 
 # Build a subpath-rebased Novu dashboard image so the SPA serves cleanly
-# under /novu. Not required here (enable_keycloak is false below, so no
-# domain-sharing conflict yet) — matches _example.yml's off-by-default.
-build_novu_dashboard: false
+# under /novu. REQUIRED here: Keycloak (enable_keycloak below) shares this
+# domain, and the stock dashboard's nginx workaround hijacks all of /auth/.
+build_novu_dashboard: true
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
 # with the actual CI tags once the Phase 1/2 images are built. Until then the
@@ -189,9 +189,11 @@ nginx_features:
   integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
 # ── auth (Keycloak) ──
-enable_keycloak: false
-# Must stay '' while enable_keycloak is false. The organization-aware frontend
-# uses /identity/v1, which has no upstream when the Keycloak profile is off.
+# REQUIRED: every sign-in goes through Keycloak and the Identity BFF since
+# D26, and the deploy refuses `false`.
+enable_keycloak: true
+# Leave ''. Sign-in goes through the Identity BFF whatever this says; the
+# deploy refuses `keycloak` here (the old browser-adapter path is gone).
 auth_provider: ""
 keycloak_client_id: digit-ui
 enable_digit_ui_v2: true

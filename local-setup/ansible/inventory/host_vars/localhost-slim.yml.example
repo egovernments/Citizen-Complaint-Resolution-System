@@ -306,13 +306,13 @@ novu_bridge_channel: "sms"
 
 # ────────── Keycloak SSO ──────────
 
-# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes
-# blocks. Inert in the rest of the stack — DIGIT keeps working on OTP login
-# until auth_provider is flipped. Values: true | false.
-enable_keycloak: false
+# Adds Keycloak + Identity BFF and the /auth/ + /identity/v1/ routes.
+# REQUIRED: every employee and citizen sign-in goes through them, the old
+# DIGIT OTP/password login pages are gone, and the deploy refuses `false`.
+enable_keycloak: true
 
-# Which auth path the SPA uses. Values: `keycloak` for OIDC PKCE, `""` (here)
-# for OTP login. Do not flip until the realm is imported and a test login works.
+# Leave "". Sign-in goes through the Identity BFF whatever this says; the
+# deploy refuses `keycloak` here (the old browser-adapter path is gone).
 auth_provider: ""
 
 # OIDC public client id inside the per-tenant realm. The shipped realm template
@@ -385,7 +385,6 @@ nginx_features:
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
   keycloak: true           # /auth/ + /identity/v1/ — needs enable_keycloak: true
-                           # (true here but inert while enable_keycloak is false)
   digit_ui_v2: true        # /citizen/ — needs enable_digit_ui_v2: true
   integration_tests: false      # /tests/ + /tests-v2/
   integration_tests_runner: false  # /tests/api/

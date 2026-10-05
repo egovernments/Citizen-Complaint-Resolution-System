@@ -194,10 +194,15 @@ db_fast_path: true
 # migrate it first: docs/releases/2.12/operations/postgres-volume-migration.md
 db_fast_path_ack_data_wipe: false
 
+# REQUIRED. Every employee and citizen sign-in goes through Keycloak and the
+# Identity BFF; the old DIGIT OTP/password login pages are gone, and the deploy
+# refuses `false`. Needs the keycloak_* and identity_digit_admin_password
+# entries in bootstrap_secrets below.
+enable_keycloak: true
+
 # Off by default, and each one costs real memory:
 enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)
 enable_novu: false             # SMS / email / WhatsApp notifications (~1 GB, 8 containers)
-enable_keycloak: false         # single sign-on; DIGIT's own OTP login works without it
 enable_otp_services: false     # real SMS OTP; without it, citizen OTP login needs identity_dev_fixed_otp: true (dev only, OTP 123456)
 enable_digit_ui_v2: false      # the newer citizen SPA at /citizen/
 run_ci_tests: false            # adds 5–10 minutes of Postman + Playwright to every deploy
@@ -227,7 +232,7 @@ nginx_features:
   grafana: true              # /grafana/ — dashboards; asks for a login
   brand_assets: false
   api_pgr: false
-  keycloak: false
+  keycloak: true             # validates /auth/ and /identity/v1/ after the deploy
   digit_ui_v2: false
   integration_tests: false
   integration_tests_runner: false
@@ -262,6 +267,9 @@ bootstrap_secrets:
   minio_root_password: change-me-strong
   elasticsearch_master_password: "asd@#$@$!132123"   # do not change while db_fast_path is true
   egov_hrms_default_password: "eGov@123"             # first password for every employee you onboard
+  keycloak_admin_password: change-me-strong          # Keycloak master-realm admin
+  keycloak_db_password: change-me-strong             # Keycloak's own Postgres
+  identity_digit_admin_password: change-me-strong    # the Identity BFF's DIGIT admin login
 
 # The ADMIN account the deploy creates in each tenant, and that you use to
 # log into the configurator. Uncomment to change them — the defaults are

@@ -44,7 +44,9 @@ a Keycloak token or Keycloak admin credential.
 
 ## Enable the deployment
 
-Set the following in the target host vars:
+This is required, not an add-on: since the legacy identity paths were removed
+(D26) every employee and citizen sign-in goes through the BFF, and the deploy
+refuses `enable_keycloak: false`. Set the following in the target host vars:
 
 ```yaml
 enable_keycloak: true
