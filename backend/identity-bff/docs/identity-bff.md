@@ -332,7 +332,7 @@ Query: `surface`; `include=account` (optional).
 401 {authenticated: false, code: "SESSION_REQUIRED" | "SESSION_REVOKED", error}
 ```
 
-- `pendingInvitations` is on every staff surface (D25/B2) and `[]` for citizens.
+- `pendingInvitations` is on every staff surface (D25/B2) and `[]` for citizens. It is read without the person lease, and any failure reading it (Keycloak Admin unavailable or slower than 3 s, malformed `digit.bindings`) gives `[]`, never an error: the session read does not depend on it.
 - `include=account` costs Keycloak Admin reads, so only the account menu asks for it (§1: the BFF is not called on a signed-in page load).
 - Phone-only citizens get empty `account` arrays.
 - A refresh failure caused by Keycloak being **unavailable** keeps the session. Only `invalid_grant` ends it (item 15).
