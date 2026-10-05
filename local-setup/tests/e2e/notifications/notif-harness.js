@@ -92,6 +92,10 @@ const BASIC = process.env.E2E_BASIC_AUTH || 'Basic ZWdvdi11c2VyLWNsaWVudDo=';
 
 const NB_PREFIX = '/novu-bridge/novu-adapter/v1';
 
+// Identity BFF citizen sign-in (see bffCitizenSignIn).
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG || process.env.IDENTITY_TEST_TENANT_SLUG || '';
+const PUBLIC_ORIGIN = process.env.E2E_PUBLIC_ORIGIN || new URL(BASE).origin;
+
 // ---------------------------------------------------------------------------
 // NOVU_API_KEY resolution (env first, then the running container on this host)
 // ---------------------------------------------------------------------------
@@ -264,15 +268,46 @@ function rolesOf(uuid) {
 // ---------------------------------------------------------------------------
 // PGR flow primitives (create ONE complaint; APPLY only)
 // ---------------------------------------------------------------------------
-async function citizenLogin(regPhone, name) {
-  await post(`/user-otp/v1/_send?tenantId=${ROOT}`,
-    { otp: { mobileNumber: regPhone, tenantId: ROOT, userType: 'citizen', type: 'register' } },
-    { 'Content-Type': 'application/json' });
-  await post(`/user/citizen/_create?tenantId=${ROOT}`,
-    { RequestInfo: RI(), User: { name, username: regPhone, mobileNumber: regPhone,
-        emailId: TEST_EMAIL, otpReference: OTP, tenantId: ROOT, type: 'CITIZEN' } },
-    { 'Content-Type': 'application/json' });
-  return token(regPhone, OTP, 'citizen', ROOT);
+// Citizen sign-in goes through the Identity BFF (#2189). D26 closes the native
+// /user-otp/v1/_send + /user/citizen/_create pair at Kong on Keycloak boxes, so
+// the citizen is created (on first sign-in) and signed in by the BFF's phone
+// OTP: _send -> _verify (sets the HttpOnly citizen session cookie) -> citizen
+// _select, which returns the DIGIT token in the /user/oauth/token shape. The
+// code is the box's fixed dev OTP (identity_dev_fixed_otp) unless overridden.
+async function bffCitizenSignIn(base, mobileNumber, code) {
+  if (!TENANT_SLUG) {
+    throw new Error('citizen sign-in goes through the Identity BFF since D26: set E2E_TENANT_SLUG to the '
+      + 'tenant route slug (and E2E_PUBLIC_ORIGIN when the base URL is not the origin the BFF trusts)');
+  }
+  const headers = { 'Content-Type': 'application/json', Origin: PUBLIC_ORIGIN };
+  const send = async (path, body, extra) => {
+    const r = await fetch(base + path, { method: 'POST', headers: { ...headers, ...(extra || {}) }, body: JSON.stringify(body) });
+    const t = await r.text();
+    let j; try { j = JSON.parse(t); } catch { j = null; }
+    return { status: r.status, text: t, json: j, cookies: r.headers.getSetCookie ? r.headers.getSetCookie() : [] };
+  };
+  const sent = await send('/identity/v1/citizen/otp/_send',
+    { tenantSlug: TENANT_SLUG, mobileNumber, purpose: 'signin', locale: 'en_IN' });
+  if (sent.status !== 202 || !sent.json || !sent.json.challengeId) {
+    throw new Error(`BFF citizen OTP send failed ${sent.status}: ${sent.text.slice(0, 200)}`);
+  }
+  const verified = await send('/identity/v1/citizen/otp/_verify',
+    { tenantSlug: TENANT_SLUG, challengeId: sent.json.challengeId, code, purpose: 'signin' });
+  if (verified.status !== 200 || !verified.json || verified.json.authenticated !== true) {
+    throw new Error(`BFF citizen OTP verify failed ${verified.status}: ${verified.text.slice(0, 200)}`);
+  }
+  const cookie = verified.cookies.map((c) => c.split(';')[0]).join('; ');
+  const selected = await send('/identity/v1/contexts/citizen/_select', { surface: 'citizen' }, { Cookie: cookie });
+  if (selected.status !== 200 || !selected.json || !selected.json.access_token || !selected.json.UserRequest) {
+    throw new Error(`BFF citizen context select failed ${selected.status}: ${selected.text.slice(0, 200)}`);
+  }
+  return selected.json;
+}
+
+// The complaint carries the citizen's name/email itself (service.citizen), so
+// the BFF-provisioned account needs neither.
+async function citizenLogin(regPhone) {
+  return bffCitizenSignIn(BASE, regPhone, OTP);
 }
 
 async function createComplaint(tok, ui, contact) {
@@ -313,7 +348,7 @@ async function ensureComplaint(ctx) {
   if (ctx._complaintErr) throw ctx._complaintErr;
   try {
     const regPhone = '7' + String(Date.now()).slice(-8);
-    const citizen = await citizenLogin(regPhone, 'zz-e2e Notif Citizen');
+    const citizen = await citizenLogin(regPhone);
     const cUi = citizen.UserRequest, cTok = citizen.access_token;
     const contact = { name: 'zz-e2e Notif Citizen', mobileNumber: regPhone, countryCode: null, emailId: TEST_EMAIL };
     const service = await createComplaint(cTok, cUi, contact);
@@ -366,7 +401,7 @@ module.exports = {
   // dispatch
   queryDispatch, rolesOf,
   // complaint fixture
-  citizenLogin, createComplaint, pollDispatch, ensureComplaint,
+  bffCitizenSignIn, citizenLogin, createComplaint, pollDispatch, ensureComplaint,
   // results
   PASS, FAIL, SKIP, guard,
 };
