@@ -106,7 +106,10 @@ async function create(input: BindingInput, pending?: { expiresAt: number; reinvi
     await validateBinding(input);
     const previous = bindingsFromUser(await readBindingUser(input.subject)).find((b) => b.tenantId === input.tenantId);
     const old = previous && effectiveBinding(previous);
-    if (old && old.uuid !== input.uuid) throw new BindingConflictError();
+    // A removed key no longer owns its old uuid: an explicit re-invite may name the person's new
+    // DIGIT record. Without reinvite, a removed key still answers BINDING_REMOVED / BINDING_CONFLICT.
+    const reinviteRemoved = old?.state === "removed" && pending?.reinvite === true;
+    if (old && old.uuid !== input.uuid && !reinviteRemoved) throw new BindingConflictError();
     if (old?.state === "active") return { binding: old, created: false };
     if (old?.state === "removed" && !pending?.reinvite) throw new BindingError("BINDING_REMOVED", "This binding was removed");
     if (old?.state === "pending" && !pending?.reinvite) {
