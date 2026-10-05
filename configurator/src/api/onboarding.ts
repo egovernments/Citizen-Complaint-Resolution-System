@@ -565,10 +565,73 @@ export function slugifyAccountName(name: string): string {
     .slice(0, 63);
 }
 
-/** The server's own rule, mirrored so the field can say why before submit does. */
+/**
+ * Reserved URL slugs, copied from the identity-bff contract (docs/identity-bff.md
+ * §2.4.1), which the BFF, the SPA and pgr-services also enforce. The configurator
+ * builds on its own, so it cannot import that list; a test keeps this copy equal
+ * to the document.
+ */
+export const RESERVED_URL_SLUGS: ReadonlySet<string> = new Set([
+  'access',
+  'api',
+  'assets',
+  'auth',
+  'boundary-service',
+  'brand',
+  'citizen',
+  'common-persist',
+  'configurator',
+  'dashboard',
+  'digit-ui',
+  'egov-bndry-mgmnt',
+  'egov-enc-service',
+  'egov-hrms',
+  'egov-idgen',
+  'egov-indexer',
+  'egov-location',
+  'egov-mdms-service',
+  'egov-user-event',
+  'egov-workflow-v2',
+  'employee',
+  'env',
+  'file-store',
+  'filestore',
+  'gatus',
+  'grafana',
+  'health',
+  'identity',
+  'images',
+  'inbox',
+  'kc',
+  'keycloak',
+  'localization',
+  'matomo',
+  'mcp',
+  'mdms-v2',
+  'novu',
+  'novu-api',
+  'novu-bridge',
+  'novu-ws',
+  'otel',
+  'otp',
+  'pgr-services',
+  'static',
+  'status',
+  'tests',
+  'tests-v2',
+  'turbopass',
+  'user',
+  'user-otp',
+  'user-preference',
+  'v1',
+  'xstate-chatbot',
+]);
+
+/** The server's own rule (§2.4.1), mirrored so the field can say why before submit does. */
 export function isValidUrlSlug(slug: string): boolean {
-  if (!/^[a-z0-9-]{2,63}$/.test(slug)) return false;
-  return (slug.match(/[a-z]/g) || []).length >= 2;
+  return /^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)
+    && (slug.match(/[a-z]/g) || []).length >= 2
+    && !RESERVED_URL_SLUGS.has(slug);
 }
 
 /** 2–32 of A-Z, 0-9 and hyphen. */
