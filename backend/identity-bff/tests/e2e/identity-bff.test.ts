@@ -5,7 +5,8 @@ import * as sessionStore from "../../src/modules/sessions/session-store.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { staffAccess } from "../../src/modules/bindings/predicate.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { holdToken, recordToken } from "../../src/modules/revocation/index.js";
+import { drainRevocationJobs, holdToken, recordToken } from "../../src/modules/revocation/index.js";
+import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
 import { propagateIdentifiers } from "../../src/modules/sync/identifiers.js";
 import { tokenKey, tokenHoldersKey, personTokensKey, accountId } from "../../src/modules/revocation/inventory.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -1648,6 +1649,61 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(await getIdentitySession(current.sessionId)).toBeNull();
       expect((await details()).status).toBe(401);
       expect(digit.stats.logouts).toBe(logouts + 1);
+    } finally {
+      config.identityStaffCredentialMode = previousMode;
+    }
+  });
+
+  it("B3: a self password change revokes a DIGIT token an ended session shares with the initiator", async () => {
+    const subject = "managed-b3-shared";
+    const tenantId = "ke.bomet";
+    const identity = managedIdentity(config.keycloakIssuer, subject, tenantId);
+    expect((await kcAdmin("/users", { id: subject, username: subject, enabled: true })).status).toBe(201);
+    await ensureOrganizationMembership({ organizationId: "org-bomet-id", userId: subject });
+    const account = digit.addAccount({
+      userName: identity.username, name: "Managed employee", mobileNumber: "0712345001", emailId: null,
+      tenantId, type: "EMPLOYEE", active: true, identificationMark: identity.marker,
+      roles: [{ code: "EMPLOYEE", tenantId }], password: "Initial@123",
+    });
+    const makeSession = async (device: string) => {
+      const { sessionId } = await createIdentitySession({ accessToken: "test-session", accessExpiresIn: 3600 },
+        { sub: subject, sid: `${subject}-${device}` }, config.keycloakEmployeeClientId,
+        { surface: "employee", boundTenant: { urlSlug: "bomet-county", tenantId, rootTenantId: tenantId, name: "Bomet" } });
+      return { sessionId, kcSessionId: `${subject}-${device}`, cookie: `digit_identity_session_employee=${sessionId}` };
+    };
+    const select = (cookie: string) => fetch(`${app()}/identity/v1/contexts/_select`, {
+      method: "POST", headers: { Cookie: cookie, Origin: "http://localhost:3000", "Content-Type": "application/json" },
+      body: JSON.stringify({ surface: "employee", tenantId }),
+    });
+    const details = (token: string) => fetch(`${config.digitUserServiceUrl}/_details?access_token=${encodeURIComponent(token)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const previousMode = config.identityStaffCredentialMode;
+    config.identityStaffCredentialMode = "rotate";
+    try {
+      // S1 is the device being locked out; S2 changes the password.
+      const s1 = await makeSession("s1"), s2 = await makeSession("s2");
+      const shared = (await (await select(s1.cookie)).json()).access_token;
+      expect((await (await select(s2.cookie)).json()).access_token).toBe(shared);
+      expect((await getRedis().smembers(tokenHoldersKey(account))).sort()).toEqual(
+        [sessionTokenRef(s1.sessionId), sessionTokenRef(s2.sessionId)].sort());
+      const logouts = digit.stats.logouts;
+      await applyKeycloakEvent("user", { id: "b3-change", time: Date.now(), type: "UPDATE_CREDENTIAL", userId: subject,
+        clientId: config.keycloakEmployeeClientId, details: { credential_type: "password", code_id: s2.kcSessionId } });
+      await drainRevocationJobs();
+      expect(await getIdentitySession(s1.sessionId)).toBeNull();
+      expect(await getIdentitySession(s2.sessionId)).not.toBeNull();
+      // S1's copy of the token, e.g. in that browser's localStorage, no longer works.
+      expect((await details(shared)).status).toBe(401);
+      expect(digit.stats.logouts).toBe(logouts + 1);
+      expect(await getRedis().get(tokenKey(account))).toBeNull();
+      // The kept session gets a fresh token at its next _select.
+      const reselected = await select(s2.cookie);
+      expect(reselected.status).toBe(200);
+      const fresh = (await reselected.json()).access_token;
+      expect(fresh).not.toBe(shared);
+      expect((await details(fresh)).status).toBe(200);
+      expect(await getRedis().smembers(tokenHoldersKey(account))).toEqual([sessionTokenRef(s2.sessionId)]);
     } finally {
       config.identityStaffCredentialMode = previousMode;
     }

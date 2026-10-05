@@ -65,10 +65,19 @@ async function bumpGeneration(lease: PersonLease, keepSessionId?: string): Promi
   if (result === -1) throw new LeaseLostError();
 }
 
+async function heldOnlyBy(account: AccountRef, sessionIds: string[]): Promise<boolean> {
+  const holders = await getRedis().smembers(tokenHoldersKey(account));
+  const allowed = new Set(sessionIds.map(id => privateRef("session", id)));
+  return holders.length > 0 && holders.every(holder => allowed.has(holder));
+}
+
 async function revokeOne(lease: PersonLease, account: AccountRef, entry: AccountEntry | undefined, reason: RevocationReason, keepSessionId?: string, fallback = true): Promise<void> {
   const token = await readToken(account);
   if (token && token.subject !== lease.subject) return;
-  if (keepSessionId && await getRedis().sismember(tokenHoldersKey(account), privateRef("session", keepSessionId))) return;
+  // The B3 initiator keeps a token only if it is the token's sole holder. One an ended session
+  // also holds may sit on the device the person is locking out, so it is revoked; the
+  // initiator gets a fresh token at its next _select.
+  if (keepSessionId && await heldOnlyBy(account, [keepSessionId])) return;
   if (token) {
     await lease.assertHeld();
     await revokeInventoriedToken(account, token, reason);
