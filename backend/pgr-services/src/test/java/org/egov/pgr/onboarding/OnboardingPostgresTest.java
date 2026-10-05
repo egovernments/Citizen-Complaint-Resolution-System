@@ -291,7 +291,9 @@ public class OnboardingPostgresTest {
                 assertFalse("projection recovery must search before another create",stored.containsKey(key));stored.put(key,record);hidden.add(key);return mapper.createObjectNode();
             }
             if(service.equals("hrms")) return mapper.valueToTree(Map.of("Employees",List.of(Map.of("user",Map.of("uuid","stable-founder")))));
-            if(service.equals("boundary")) return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","example")),"TenantBoundary",List.of(Map.of("tenantId","example","hierarchyType","ADMIN","boundary",List.of(Map.of("code","example","boundaryType","ROOT"))))));
+            // The baseline seeds the PGR workflow: a search finds none, the accepted create is the checkpoint.
+            if(service.equals("workflow")) return path.contains("_search")?mapper.valueToTree(Map.of("BusinessServices",List.of())):mapper.createObjectNode();
+            if(service.equals("boundary")) return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY)),"Boundary",List.of(Map.of("code","example")),"TenantBoundary",List.of(Map.of("tenantId","example","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY,"boundary",List.of(Map.of("code","example","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
         };
         when(client.read(anyString(),anyString(),anyMap())).thenAnswer(api);
