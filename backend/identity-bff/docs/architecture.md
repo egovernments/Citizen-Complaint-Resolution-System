@@ -61,7 +61,6 @@ Only `/identity/v1` and the required `/auth/realms/...` and `/auth/resources/...
 ## Further reading
 
 - [Frozen contract](identity-bff.md)
-- [Keycloak 26.7.3 event probe](keycloak-event-probe.md)
 - [Identity BFF README](../README.md)
 - [Deployment and integration setup](../../../docs/setup/deployment/identity-bff.md)
 - [Environment reference](../deploy/digit-compose/identity-bff.env.example)

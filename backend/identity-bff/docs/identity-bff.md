@@ -13,7 +13,6 @@
 | `encode_v1` reference implementation | `src/modules/accounts/credential.ts` |
 | Payload hash reference implementation | `src/modules/control-plane/operation-hash.ts` |
 | `_link` request id reference implementation | `src/modules/bindings/link-request-id.ts` |
-| Keycloak 26.7.3 event shapes (probe) | `docs/keycloak-event-probe.md` |
 
 **Contents:**
 1. [Boundary](#1-boundary)
@@ -996,7 +995,7 @@ that disagrees with its created replacement fail closed with
 
 ## 10. Keycloak events the BFF reacts to
 
-Probed on Keycloak 26.7.3 on 2026-10-04; the full findings and samples are in `docs/keycloak-event-probe.md`.
+Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are fixed in `tests/unit/keycloak-poller.test.ts`.
 
 **Realm prerequisites** (Keycloak config, lane E):
 - `eventsEnabled` and `adminEventsEnabled` both on, with **`adminEventsDetailsEnabled=true`**;

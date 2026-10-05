@@ -12,30 +12,17 @@ as its Docker context. See `theme-src/README.md` for theme development.
 
 ## Realm policy
 
-- User and admin events are enabled, including admin representations. Both
-  retention periods default to **604800 seconds (seven days)**. The tolerated
-  BFF outage must be shorter than seven days; the poller conservatively revokes
-  when its checkpoint is older than retained history. The deployment can set
-  `KEYCLOAK_EVENTS_EXPIRATION_SECONDS` to a longer positive duration.
-- The BFF service account has `view-events` and the required Organization/user
-  roles. Event fields are not transformed. Password changes use
-  `details.code_id`, while ordinary logout events use `sessionId`; see the
-  frozen BFF contract §10.
-- People can view names but only admins can edit them. `lastName` is optional.
-  DIGIT mirrors the whole name into `firstName`.
-- Every configured IdP and IdP mapper uses `IMPORT`, preserving later local
-  profile changes. Providers use the shared first-broker account-linking flow.
-- The employee browser flow requires a password, then OTP only when the person
-  has configured it. Enrolling TOTP turns on the second step at the next login.
-- `clientPolicy.accountActions` becomes CSV `digit.auth.account.actions` on
-  the BFF, employee and citizen clients. The BFF still checks the initiating
-  person, credential type and provider eligibility. Password setup callbacks
-  remain allowed for every surface.
+`realm.json` is the declared state; the frozen BFF contract
+(`backend/identity-bff/docs/identity-bff.md` §10) lists the event and profile
+prerequisites it satisfies. The one deployment-facing number: user and admin
+event retention default to **604800 seconds (seven days)**, so a tolerated BFF
+outage must be shorter than that; the poller revokes conservatively when its
+checkpoint is older than retained history. Set
+`KEYCLOAK_EVENTS_EXPIRATION_SECONDS` to lengthen it.
 
-The theme resolves the tenant slug through the public tenant-context route,
-then fetches branding directly from public MDMS and localization. It never calls
-the removed BFF branding relay. Branding environment values now belong to the
-Keycloak container; the Ansible values remain shared with digit-ui.
+The theme resolves the tenant slug through the public tenant-context route and
+fetches branding directly from public MDMS and localization; branding
+environment values belong to the Keycloak container.
 
 ## Checks
 
@@ -64,16 +51,3 @@ egov-user and non-fixed egov-otp. Those gates remain with their owning lanes.
 Keycloak CI separately builds the custom image, smoke-tests the packaged theme,
 and runs screenshot regression in the pinned Playwright container. A stock-image
 realm test alone does not prove custom theme packaging or magic-link behavior.
-
-## Deferred behavior
-
-Identity-root explicitly deferred notification to the old email address on
-2026-10-04 (bridge approval `apr_2a08b76cd6b041a8b7958fb3d8f67999`).
-The frozen contract records this decision in `identity-bff.md` §3.3.11 at
-commit `63e88080f`. D18 still requires verification of the new address, DIGIT
-write-through only after verification, and the admin email-change path. This PR
-adds no custom Keycloak SPI, listener or notification workaround. The stock 26.7.3 runtime and existing
-magic-link provider remain the supported extension boundary.
-
-The new-address verification check remains a required live test. The BFF's
-verified-only write-through and admin route are verified by their owning lanes.
