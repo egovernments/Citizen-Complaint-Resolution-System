@@ -1,6 +1,7 @@
 import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { toPascal } from '@/utils/excelParser';
+import { labelLocales } from '../labelLocales';
 
 /**
  * Complaint types built from scratch: types, each handled by one department,
@@ -270,13 +271,10 @@ export async function saveComplaints(
     ).catch(() => undefined);
   }
 
-  await localizationService
-    .uploadComplaintTypeLocalizations(
-      tenantId,
-      rows.map((row) => ({ serviceCode: row.code, name: text(row.data.name), department: text(row.data.department) || undefined })),
-      'en_IN',
-    )
-    .catch(() => undefined);
+  const labels = rows.map((row) => ({ serviceCode: row.code, name: text(row.data.name), department: text(row.data.department) || undefined }));
+  for (const locale of await labelLocales(tenantId)) {
+    await localizationService.uploadComplaintTypeLocalizations(tenantId, labels, locale).catch(() => undefined);
+  }
   await localizationService.cacheBust().catch(() => undefined);
 
   return rows.filter((row) => row.data.slaHours != null).length;
