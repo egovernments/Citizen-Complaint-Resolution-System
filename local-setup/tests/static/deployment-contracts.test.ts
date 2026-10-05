@@ -1792,6 +1792,22 @@ describe('D26 legacy identity paths are retired', () => {
     expect(parity).toContain('LEGACY_IDENTITY_TAG = "-- identity-legacy-user-endpoint"');
   });
 
+  // Low (Dhruv, #2271 review 2): host_vars keys that no longer do anything
+  // must not be documented as if they did.
+  test('the example host_vars do not document retired no-op keys', () => {
+    const dir = 'local-setup/ansible/inventory/host_vars';
+    for (const example of fs.readdirSync(path.join(REPO_ROOT, dir)).filter((f) => f.endsWith('.example') || f === '_example.yml')) {
+      expect([example, /^login_tenant_allowlist:/m.test(read(`${dir}/${example}`))]).toEqual([example, false]);
+    }
+    const reference = read(`${dir}/_example.yml`);
+    for (const key of ['auth_provider', 'citizen_auth_provider', 'employee_auth_provider', 'keycloak_client_id']) {
+      expect([key, new RegExp(`^#? ?${key}:`, 'm').test(reference)]).toEqual([key, false]);
+    }
+    expect(reference).toContain('# Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider');
+    // Nothing renders the allowlist into the UI config any more.
+    expect(read('local-setup/ansible/templates/globalConfigs.js.j2')).not.toContain('login_tenant_allowlist');
+  });
+
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
     expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
     expect(playbook).toContain('D26 retired its fixed-OTP');

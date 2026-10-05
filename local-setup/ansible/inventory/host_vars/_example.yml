@@ -125,11 +125,6 @@ map_center:
   lat: 0.0
   lng: 0.0
 
-# Only these tenants can log in. Most deployments allow exactly one
-# city tenant. Leave empty to allow all.
-login_tenant_allowlist:
-  - ke.mycity
-
 # Hide these modules in the employee UI. Common: ["IM"] to hide
 # inbox-v2 if you're not running the search stack.
 employee_module_denylist:
@@ -803,34 +798,11 @@ identity_smtp_user: ""
 identity_smtp_ssl: false
 identity_smtp_starttls: true
 
-# MUST stay '' (or 'digit'). The deploy REFUSES to run with 'keycloak' on any
-# of the three keys below.
-#
-# 'keycloak' used to mean "SSO via the digit-ui auth-adapter", which called the
-# `/kc` token-exchange route against a per-tenant realm's `digit-ui` client.
-# #2088 removed all three in favour of the Identity BFF at /identity/v1, and
-# the frontend cutover onto that BFF is a separate change. Until it lands,
-# 'keycloak' here means a 404 at login, so the preflight fails instead.
-#
-# `enable_keycloak: true` is independent of this and is what actually stands
-# up Keycloak, the Identity BFF and /identity/v1.
-auth_provider: ""
-
-# Per-surface override (digit-ui-esbuild resolves these post-#793):
-#   citizen surface  -> citizen_auth_provider  || auth_provider || 'digit'
-#   employee surface -> employee_auth_provider || 'digit'  (never inherits auth_provider)
-# Use these when Keycloak SSO ("Continue with Google") should live ONLY on the
-# separate digit-ui-v2 (/citizen) surface while the legacy esbuild citizen login
-# stays on OTP — e.g. bomet sets `citizen_auth_provider: digit` with
-# `auth_provider: keycloak` (issue #809). Leave unset to inherit the defaults above.
-# citizen_auth_provider: ""
-# employee_auth_provider: ""
-
-# OIDC public client id the frontends bake in. Inert while auth_provider is
-# '' — the per-tenant realm and its `digit-ui` client were removed with the
-# legacy login path (see auth_provider above); this key is kept so the
-# frontend cutover has somewhere to point.
-keycloak_client_id: "digit-ui"
+# Retired (D26): auth_provider, citizen_auth_provider, employee_auth_provider
+# and keycloak_client_id no longer change anything. Every employee and citizen
+# sign-in goes through the Identity BFF (enable_keycloak above). The deploy
+# still refuses `keycloak` in the first three, because that meant the removed
+# browser-adapter path. Leave them unset.
 
 # Federated Google login (optional). Leave blank to skip Google IdP
 # wiring entirely. When set, the bootstrap will register a Google

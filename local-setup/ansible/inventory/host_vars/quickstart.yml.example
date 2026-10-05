@@ -21,7 +21,7 @@
 #
 # ── The seven CHANGE ME lines ──────────────────────────────────────
 #   state_root, state_tenant_id, tenant_id, boot_tenant,
-#   ui_state_tenant_id, login_tenant_allowlist   → your tenant names
+#   ui_state_tenant_id                           → your tenant names
 #   map_center                                   → your city's coordinates
 #   pgr_boundary_* / boundary_type               → your admin-area names
 #   core_mobile_configs                          → your country's phone rule
@@ -88,13 +88,6 @@ boot_tenant: mycountry.mycity
 # tenant: that is where the onboarding wizard stores boundaries, and the
 # citizen, employee and complaint screens all have to read the same tenant.
 ui_state_tenant_id: mycountry.mycity
-
-# CHANGE ME — which tenants appear in the login screen's City dropdown.
-# A tenant that is missing here cannot be logged into, even though it
-# exists. List both your root and your city.
-login_tenant_allowlist:
-  - mycountry
-  - mycountry.mycity
 
 # Hide employee-UI modules you are not running. `IM` is the inbox, which
 # needs the Elasticsearch search stack (off below) — leaving it visible

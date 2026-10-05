@@ -111,10 +111,6 @@ map_center:
   lat: 30.7333
   lng: 76.7794
 
-# Restrict which tenants may log in. Values: list of tenant ids, or `[]` (here)
-# to allow all. Most production deployments list exactly one city.
-login_tenant_allowlist: []
-
 # Employee-UI modules to hide. Values: list of module codes — commonly `["IM"]`
 # to hide inbox-v2 when enable_search_stack is false. Empty: hide nothing.
 employee_module_denylist: []

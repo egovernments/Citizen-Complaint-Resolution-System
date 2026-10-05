@@ -38,7 +38,6 @@ city_tenant: mz.maputo         # MCP city target (decoupled from .citya)
 # root) — everything (boundaries, citizen login, employee, PGR picker) lines up.
 ui_state_tenant_id: mz.maputo
 map_center: { lat: -25.9692, lng: 32.5732 }
-login_tenant_allowlist: [ mz, mz.maputo ]
 employee_module_denylist: [ IM ]
 
 # Keep locale_region "IN" → i18n locale stays en_IN, which the bootstrap always
