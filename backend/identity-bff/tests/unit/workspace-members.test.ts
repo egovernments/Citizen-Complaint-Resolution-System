@@ -45,7 +45,8 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
     sendPasswordSetupEmail: vi.fn(async () => { f.emails++; fail("email"); }),
   };
 });
-vi.mock("../../src/modules/workspace-members/authority.js", () => ({
+vi.mock("../../src/modules/workspace-members/authority.js", async (importOriginal) => ({
+  mayManageRoles: (await importOriginal<typeof import("../../src/modules/workspace-members/authority.js")>()).mayManageRoles,
   validateBinding: vi.fn(async () => {}), requireAccountAdmin: vi.fn(async () => ({ roles: f.callerRoles })),
   requireWorkspace: vi.fn(async (tenantId: string) => ({ id: tenantId, alias: tenantId, name: tenantId, lifecycle: "ACTIVE", enabled: true })),
   readDigitAccount: vi.fn(async (tenantId: string, uuid: string) => ({ tenantId, uuid, active: true, userName: "employee", name: "Employee", roles: f.targetRoles })),
@@ -150,10 +151,18 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toMatchObject({ email: "new@example.test", emailVerified: false, username: input.email });
     expect(f.activations).toBe(before);
   });
-  it.each(["self", "higher role", "same role in another tenant", "other binding", "other membership"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
+  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "other binding", "other membership"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
     await linkWorkspaceMember(input);
     if (reason === "higher role") f.targetRoles.push({ code: "SUPERUSER", tenantId: "pg" });
-    if (reason === "same role in another tenant") f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, { code: "EMPLOYEE", tenantId: "other" }];
+    if (reason === "admin role at a sub-tenant") f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg.citya" });
+    if (reason === "same role in another tenant") {
+      f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg" });
+      f.callerRoles.push({ code: "HRMS_ADMIN", tenantId: "other.city" });
+    }
+    if (reason === "founder, role at another root") {
+      f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "other" });
+      f.callerRoles.push({ code: "SUPERUSER", tenantId: "pg" });
+    }
     if (reason === "other membership") f.members.add("other:new-1");
     if (reason === "other binding") {
       const user = f.users.get("new-1")!;
@@ -167,6 +176,17 @@ describe("resumable workspace membership", () => {
       .rejects.toMatchObject({ code: "ADMIN_EMAIL_CHANGE_NOT_ALLOWED", status: 403 });
     expect(f.users.get("new-1")).toEqual(before);
     expect(f.emails).toBe(emails);
+  });
+  // Same rule as _link: operational roles are not guarded, and the founder may act on any role within the workspace.
+  it.each([
+    ["an operational role the caller lacks", [{ code: "GRO", tenantId: "pg" }, { code: "PGR_LME", tenantId: "pg.citya" }], []],
+    ["an administrative role the caller holds", [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }], [{ code: "HRMS_ADMIN", tenantId: "pg" }]],
+    ["any role, for the founder", [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }, { code: "INTERNAL_MICROSERVICE_ROLE", tenantId: "pg" }], [{ code: "SUPERUSER", tenantId: "pg" }]],
+  ])("allows admin email recovery for %s", async (_reason, targetRoles, callerRoles) => {
+    await linkWorkspaceMember(input);
+    f.targetRoles.push(...targetRoles);
+    f.callerRoles.push(...callerRoles);
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
   });
   it.each(["inventory", "membership"])("fails closed if the other-workspace %s check is unavailable", async (reason) => {
     await linkWorkspaceMember(input);
