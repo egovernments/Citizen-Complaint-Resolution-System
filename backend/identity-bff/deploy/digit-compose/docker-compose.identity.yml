@@ -52,9 +52,9 @@ services:
     env_file:
       - ${IDENTITY_ENV_DIR:?set IDENTITY_ENV_DIR}/identity-bff.env
     environment:
-      # From the stack's .env, as egov-user reads them (#2189), but off unless
-      # .env turns it on: this overrides identity-bff.env.
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
+      # From the stack's .env, as egov-user reads them (#2189). Off unless .env
+      # sets it to true; note this overrides identity-bff.env.
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: ${CITIZEN_OTP_FIXED_VALUE:-123456}
     depends_on:
       keycloak:
