@@ -489,3 +489,19 @@ ccrs_image_catalog:
 # anyone holding the URL can post into the channel -- so prefer pulling it from
 # OpenBao via secrets_path rather than committing it here.
 gatus_slack_webhook_url: ""
+
+# PGR tenant onboarding (#2269). The runner provisions self-service signups
+# and needs a platform provisioner: an EMPLOYEE at a ROOT tenant holding
+# MDMS_ADMIN, ACCOUNT_ADMIN, LOC_ADMIN and HRMS_ADMIN there
+# (OnboardingProvisionerClient). Signups only arrive through the identity
+# BFF, so the runner is rendered on only with enable_keycloak. When it is
+# on, playbook-deploy.yml ensures this account exists (create-if-absent,
+# then a token mint that checks its roles) and keeps its password in OpenBao
+# as `pgr_digit_provisioner_password` (generated when absent).
+#
+# Empty host_vars values fall back, so an inventory copied from an older
+# _example.yml (which shipped "") still gets a working account; a box that
+# already has the legacy identity_digit_provisioner_* account keeps it.
+pgr_onboarding_runner_effective: "{{ (pgr_onboarding_runner_enabled | default(true) | bool) and (enable_keycloak | default(false) | bool) }}"
+pgr_provisioner_username: "{{ pgr_digit_provisioner_username | default('', true) or identity_digit_provisioner_username | default('', true) or 'PGR_PROVISIONER' }}"
+pgr_provisioner_tenant_id: "{{ pgr_digit_provisioner_tenant_id | default('', true) or identity_digit_provisioner_tenant_id | default('', true) or state_root | default('', true) or 'pg' }}"

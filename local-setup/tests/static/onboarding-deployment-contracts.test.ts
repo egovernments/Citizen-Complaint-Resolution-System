@@ -76,9 +76,14 @@ describe('PGR onboarding cutover deployment contract', () => {
   test('Ansible preserves stored provisioner credentials while rendering them only for PGR', () => {
     const template = read('local-setup/ansible/templates/digit.env.j2');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
-    expect(template).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_enabled | default(true) | lower }}');
+    expect(template).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_effective | bool | lower }}');
+    expect(template).toContain('PGR_DIGIT_PROVISIONER_USERNAME={{ pgr_provisioner_username }}');
+    expect(template).toContain('PGR_DIGIT_PROVISIONER_TENANT_ID={{ pgr_provisioner_tenant_id }}');
     expect(template).not.toMatch(/^IDENTITY_(?:DIGIT_PROVISIONER|ONBOARDING_WORKER|FOUNDATION_SOURCE)/m);
-    expect(playbook).toContain('PGR_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.pgr_digit_provisioner_password | default(bao_secrets_identity.json.data.data.identity_digit_provisioner_password');
+    expect(playbook).toContain('PGR_DIGIT_PROVISIONER_PASSWORD={{ identity_secrets.pgr_digit_provisioner_password }}');
+    const password = playbook.match(/pgr_digit_provisioner_password: >-\n([\s\S]*?)(?=\n      when:)/)?.[1];
+    // Stored value, then the legacy BFF provisioner's, then a generated one egov-user accepts.
+    expect(password).toMatch(/_identity_stored\.pgr_digit_provisioner_password[\s\S]*_identity_stored\.identity_digit_provisioner_password[\s\S]*lookup\('password'/);
     expect(playbook).not.toMatch(/^\s+IDENTITY_DIGIT_PROVISIONER_PASSWORD=/m);
     expect(playbook).toContain('IDENTITY_ONBOARDING_TOKEN={{ identity_secrets.identity_onboarding_token }}');
     const resolver = playbook.match(/identity_onboarding_token: >-\n([\s\S]*?)(?=\n          \S)/)?.[1];
@@ -88,5 +93,45 @@ describe('PGR onboarding cutover deployment contract', () => {
     const secretScan = read('local-setup/ansible/scripts/check-committed-secrets.sh');
     expect(secretScan).toContain('"pgr_digit_provisioner_password"');
     expect(secretScan).toContain('"pgr_digit_oauth_client_secret"');
+  });
+
+  // Review #2269 item 7: the runner is on by default, so the deploy must create the
+  // provisioner it signs in as, or fail with the fix.
+  test('Ansible ensures the provisioner account with the roles PGR re-verifies', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    const groupVars = read('local-setup/ansible/inventory/group_vars/digit.yml');
+    expect(groupVars).toContain("pgr_onboarding_runner_effective: \"{{ (pgr_onboarding_runner_enabled | default(true) | bool) and (enable_keycloak | default(false) | bool) }}\"");
+    expect(groupVars).toMatch(/^pgr_provisioner_username: .*or 'PGR_PROVISIONER' }}"$/m);
+    expect(groupVars).toMatch(/^pgr_provisioner_tenant_id: .*or state_root \| default\('', true\) or 'pg' }}"$/m);
+
+    const ensure = playbook.match(/- name: "onboarding provisioner — ensure the account exists[\s\S]*?(?=\n    - name: )/)?.[0];
+    expect(ensure).toBeDefined();
+    expect(ensure).toContain('http://egov-user-proxy:8107/user/users/_createnovalidate'); // never through Kong
+    expect(ensure).toContain('DuplicateUserName');
+    expect(ensure).toContain('password: "{{ identity_secrets.pgr_digit_provisioner_password }}"');
+    expect(ensure).toContain('no_log: true');
+    expect(ensure).toContain('when: pgr_onboarding_runner_effective | bool');
+    const client = read('backend/pgr-services/src/main/java/org/egov/pgr/onboarding/OnboardingProvisionerClient.java');
+    for (const role of ['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN']) {
+      expect(client).toContain(`"${role}"`);
+      expect(ensure).toContain(`code: ${role}, `);
+    }
+
+    const verify = playbook.match(/- name: "onboarding provisioner — can sign in with the onboarding admin roles"[\s\S]*?(?=\n    - name: )/)?.[0];
+    expect(verify).toContain("['MDMS_ADMIN', 'ACCOUNT_ADMIN', 'LOC_ADMIN', 'HRMS_ADMIN'] | difference(_roles)");
+    expect(verify).toContain('pgr_provisioner_login.status == 200');
+    expect(playbook.indexOf('onboarding provisioner — settings are usable'))
+      .toBeLessThan(playbook.indexOf('onboarding provisioner — ensure the account exists'));
+  });
+
+  test('Helm wires onboarding with the runner off by default', () => {
+    const values = read('devops/deploy-as-code/charts/urban/pgr-services/values.yaml');
+    expect(values).toMatch(/^onboarding:\n  runnerEnabled: false$/m);
+    expect(values).toContain('- name: PGR_ONBOARDING_RUNNER_ENABLED\n    value: {{ .Values.onboarding.runnerEnabled | quote }}');
+    for (const name of ['PGR_ONBOARDING_IDENTITY_BFF_URL', 'PGR_ONBOARDING_IDENTITY_BFF_TOKEN', 'DIGIT_PROVISIONER_USERNAME',
+      'DIGIT_PROVISIONER_TENANT_ID', 'DIGIT_PROVISIONER_PASSWORD']) {
+      expect(values).toContain(`- name: ${name}\n`);
+    }
+    expect(values).toMatch(/- name: DIGIT_PROVISIONER_PASSWORD\n    valueFrom:\n      secretKeyRef:/);
   });
 });
