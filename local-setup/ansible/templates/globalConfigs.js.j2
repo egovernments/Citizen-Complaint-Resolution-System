@@ -31,16 +31,9 @@ var globalConfigs = (function () {
   var mdmsContext = {{ mdms_context | to_json }};
   var hrmsContext = {{ hrms_context | to_json }};
   var invalidEmployeeRoles = {{ invalid_employee_roles | to_json }};
-  var authProvider = {{ auth_provider | to_json }};
-  // Per-surface auth provider (digit-ui-esbuild reads these post-#793):
-  //   citizen surface  -> CITIZEN_AUTH_PROVIDER || AUTH_PROVIDER || "digit"
-  //   employee surface -> EMPLOYEE_AUTH_PROVIDER || "digit"  (never inherits AUTH_PROVIDER)
-  // Pin `citizen_auth_provider: digit` in host_vars when Keycloak SSO is only
-  // wanted on the separate digit-ui-v2 (/citizen) surface and the legacy
-  // esbuild citizen login must stay on OTP (see issue #809). Defaults preserve
-  // existing behaviour: citizen inherits auth_provider, employee stays digit.
-  var citizenAuthProvider = {{ (citizen_auth_provider | default(auth_provider)) | to_json }};
-  var employeeAuthProvider = {{ (employee_auth_provider | default('digit')) | to_json }};
+  // No sign-in provider or Keycloak settings here (#2072): canonical tenant
+  // routes sign in through the Identity BFF and legacy /digit-ui routes use
+  // DIGIT auth, which is digit-ui's default when no provider is configured.
   var pgrBoundaryHighestLevel = {{ pgr_boundary_highest_level | to_json }};
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
@@ -62,10 +55,6 @@ var globalConfigs = (function () {
   // the SPA falls back to its baked-in default.
   var mapTenant = {{ (city_tenant | default(ui_state_tenant_id | default(''))) | to_json }};
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
-  // null leaves the rule to the UI (shown only where there is more than one
-  // tenant to switch to); true or false decides it for the deployment.
-  var showTenantSwitcher = {{ show_tenant_switcher | to_json }};
-  var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
   // already expresses length, starting-digit constraints, and alnum shapes
@@ -95,24 +84,8 @@ var globalConfigs = (function () {
   var analyticsScriptHosts = {{ analytics_script_hosts | default([]) | to_json }};
   var analyticsCustomEnabled = {{ analytics_custom_enabled | default(false) | to_json }};
 
-  // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
-  // (which is the default). The auth-adapter inside digit-ui reads
-  // these via Digit.Utils.getConfig() when it switches into the
-  // Keycloak code path. Empty keycloak_url defaults to the relative
-  // `/auth` path that Kong proxies to the keycloak container; set
-  // keycloak_url explicitly when KC lives on a separate subdomain.
-  // tokenExchangeUrl defaults to `/kc` (Kong route /kc → token-exchange-svc).
-  var keycloakUrl = {{ (keycloak_url | default('')) | to_json }};
-  if (!keycloakUrl) { keycloakUrl = "/auth"; }
-  var keycloakRealm = {{ ((keycloak_realm | default('')) or (state_tenant_id | default('pg'))) | to_json }};
-  var keycloakClientId = {{ (keycloak_client_id | default('digit-ui')) | to_json }};
-  var tokenExchangeUrl = {{ (token_exchange_url | default('')) | to_json }};
-  if (!tokenExchangeUrl) { tokenExchangeUrl = "/kc"; }
-
   var getConfig = function (key) {
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
-    if (key === "SHOW_TENANT_SWITCHER") return showTenantSwitcher;
-    if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
     if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;
     } else if (key === "GMAPS_API_KEY") {
@@ -147,12 +120,6 @@ var globalConfigs = (function () {
       return mdmsContext;
     } else if (key === "HRMS_CONTEXT_PATH") {
       return hrmsContext;
-    } else if (key === "AUTH_PROVIDER") {
-      return authProvider;
-    } else if (key === "CITIZEN_AUTH_PROVIDER") {
-      return citizenAuthProvider;
-    } else if (key === "EMPLOYEE_AUTH_PROVIDER") {
-      return employeeAuthProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
     } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
@@ -175,14 +142,6 @@ var globalConfigs = (function () {
       return corePostalConfigs;
     } else if (key === "DASHBOARD_METRICS_ENABLED") {
       return dashboardMetricsEnabled;
-    } else if (key === "KEYCLOAK_URL") {
-      return keycloakUrl;
-    } else if (key === "KEYCLOAK_REALM") {
-      return keycloakRealm;
-    } else if (key === "KEYCLOAK_CLIENT_ID") {
-      return keycloakClientId;
-    } else if (key === "TOKEN_EXCHANGE_URL") {
-      return tokenExchangeUrl;
     } else if (key === "ANALYTICS_KILL_SWITCH") {
       return analyticsKillSwitch;
     } else if (key === "ANALYTICS_SCRIPT_HOSTS") {

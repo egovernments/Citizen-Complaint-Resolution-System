@@ -1,8 +1,7 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
-import { getAuthAdapter } from "../../auth/index";
-import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/authSurface";
+import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
 import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
@@ -11,22 +10,6 @@ const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
 
 export const UserService = {
   authenticate: async (details) => {
-    // Legacy opt-in Keycloak (*_AUTH_PROVIDER=keycloak on /digit-ui). Removed
-    // together with KeycloakAuthAdapter in the legacy-removal PR.
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      const result = await adapter.login({
-        email: details.username,
-        password: details.password,
-        tenantId: details.tenantId,
-      });
-      return {
-        UserRequest: result.user,
-        access_token: result.token,
-        token_type: "bearer",
-      };
-    }
-
     const data = new URLSearchParams();
     Object.entries(details).forEach(([key, value]) => data.append(key, value));
     data.append("scope", "read");
@@ -107,12 +90,6 @@ export const UserService = {
         `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
       );
       return;
-    }
-    // Legacy opt-in Keycloak: end the Keycloak session too, or check-sso signs
-    // the user straight back in. Removed with KeycloakAuthAdapter.
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      return adapter.logout();
     }
 
     // The session's own user decides where logout lands. `userType` is one

@@ -650,6 +650,35 @@ describe('reserved tenant URL slugs (identity-bff docs §2.4.1)', () => {
     const spaSlugs = [...list![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
     expect(spaSlugs).toEqual([...reserved].sort());
   });
+
+  const globalConfig = read('local-setup/ansible/templates/globalConfigs.js.j2');
+  const helmGlobalConfig = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/files/globalConfigs.js.tpl'
+  );
+
+  test('tenant selection is no longer deployment global configuration', () => {
+    expect(globalConfig).not.toContain('SHOW_TENANT_SWITCHER');
+    expect(globalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+    expect(helmGlobalConfig).not.toContain('LOGIN_TENANT_ALLOWLIST');
+  });
+
+  test('globalConfigs contain no browser auth-provider or direct-Keycloak keys', () => {
+    const removed = ['AUTH_PROVIDER', 'KEYCLOAK_URL', 'KEYCLOAK_REALM',
+      'KEYCLOAK_CLIENT_ID', 'TOKEN_EXCHANGE_URL', 'authProvider',
+      'keycloakUrl', 'keycloakRealm', 'keycloakClientId', 'tokenExchangeUrl'];
+    const sources = {
+      'globalConfigs.js.j2': globalConfig,
+      'helm globalConfigs.js.tpl': helmGlobalConfig,
+      'helm values.yaml': read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml'),
+      'digit-ui-esbuild dev stub': read('digit-ui-esbuild/public/globalConfigs.js'),
+      'local-setup nginx stub': read('local-setup/nginx/globalConfigs.js'),
+    };
+    for (const [name, body] of Object.entries(sources)) {
+      for (const key of removed) {
+        expect({ name, key, found: body.includes(key) }).toEqual({ name, key, found: false });
+      }
+    }
+  });
 });
 
 describe('Novu workflow creation deployment contract', () => {
