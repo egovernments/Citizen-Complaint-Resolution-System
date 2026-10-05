@@ -327,13 +327,22 @@ export async function createPhoneOtpSession(input: {
  * unrevoked record is rewritten (`XX`): a logout or revocation that ended it
  * meanwhile is never undone. Returns false, without throwing, when the
  * session has ended, so the caller can treat it as signed out.
+ *
+ * `session` only pins the revocation generation the caller saw. The write
+ * starts from the record re-read under the lease, so a change made since the
+ * caller's read (rotated tokens, a phone proof) is never reverted; `update`
+ * applies the caller's own change to that fresh copy.
  */
-export async function touchIdentitySession(sessionId: string, session: IdentitySession): Promise<boolean> {
+export async function touchIdentitySession(
+  sessionId: string,
+  session: IdentitySession,
+  update: (fresh: IdentitySession) => IdentitySession = fresh => fresh,
+): Promise<boolean> {
   return withPersonLease(session.claims.sub, async (lease) => {
     try {
       const fresh = await requireCurrentSession(lease, sessionId);
       if ((fresh.revocationGeneration ?? 0) !== (session.revocationGeneration ?? 0)) return false;
-      await writeSessionRecord(lease, sessionId, { ...session, lastSeenAt: Date.now() }, "KEEP", "XX");
+      await writeSessionRecord(lease, sessionId, { ...update(fresh), lastSeenAt: Date.now() }, "KEEP", "XX");
       return true;
     } catch (error) {
       if (error instanceof SessionRevokedError) return false;
