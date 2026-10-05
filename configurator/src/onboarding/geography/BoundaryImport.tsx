@@ -156,6 +156,23 @@ async function runPostCreatePipeline(
   hierarchyType: string,
   levels: { boundaryType: string }[],
 ): Promise<void> {
+  // Make this the tenant's PGR hierarchy (CMS-BOUNDARY.HierarchySchema) when it
+  // has none yet: digit-ui, the dashboard and PGR read it in place of the
+  // deployment-wide HIERARCHY_TYPE / pgrBoundary*Level globalConfigs (#2260).
+  // Not fatal — the boundaries exist; a re-import writes it again.
+  if (levels.length > 0) {
+    try {
+      await mdmsService.ensureHierarchySchema(tenantId, {
+        hierarchy: hierarchyType,
+        highestHierarchy: levels[0].boundaryType,
+        lowestHierarchy: levels[levels.length - 1].boundaryType,
+      });
+    } catch (e) {
+      console.warn('[geography] CMS-BOUNDARY.HierarchySchema not written', e);
+      reportStepError('geography', 'hierarchy_schema', e, tenantId);
+    }
+  }
+
   // Create localizations for boundaries
   const boundaryData = created.map(b => ({
     code: b.code,
