@@ -167,4 +167,22 @@ public class OnboardingRunnerReadinessTest {
         verify(worker, times(1)).claim(anyString(), anyLong());
         assertEquals(OnboardingRunner.CREDENTIALS_REJECTED, runner.pausedReason());
     }
+
+    /** Test gap 8: the pause is logged once per reason, not on every re-check. */
+    @Test
+    public void thePauseIsLoggedOncePerReasonNotOnEveryCheck() {
+        List<Long> checks = checkTimes(5000, 30 * 60_000);
+        assertTrue("several re-checks happened", checks.size() >= 5);
+        assertEquals(1, pauseErrors());
+
+        currentFailure = "PROVISIONER_AUTHORIZATION_REQUIRED";
+        checkTimes(5000, 30 * 60_000);
+        assertEquals("a new reason is logged once", 2, pauseErrors());
+
+        doNothing().when(provisioner).verifyReady();
+        now += OnboardingRunner.NOT_READY_MAX_RECHECK_MS;
+        runner.tick();
+        assertNull(runner.pausedReason());
+        assertEquals(1, logs.list.stream().filter(e -> e.getFormattedMessage().contains("resumed")).count());
+    }
 }
