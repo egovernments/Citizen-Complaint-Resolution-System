@@ -13,7 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +36,9 @@ class WorkflowServiceAssigneeTest {
     private static final String LME = "lme-a";
     private static final String PENDING_AT_LME = "state-pendingatlme";
     private static final String PENDING_REASSIGN = "state-pendingforreassignment";
+    private static final String PENDING_ASSIGNMENT = "state-pendingforassignment";
+    private static final String RESOLVED = "state-resolved";
+    private static final String CLOSED = "state-closedafterresolution";
 
     private ServiceRequestRepository repository;
     private WorkflowService workflowService;
@@ -47,20 +53,49 @@ class WorkflowServiceAssigneeTest {
         workflowService = new WorkflowService(config, repository, new ObjectMapper());
     }
 
-    /** Stubs workflow: latest-only assignee search, history assignee search, batched history search. */
-    private void stubWorkflow(List<ProcessInstance> latestNamingLme, List<ProcessInstance> everNamingLme,
-                              List<ProcessInstance> histories) {
+    /**
+     * Answers process searches the way egov-workflow-v2's getProcessInstanceIds does, over
+     * {@code timeline} (every transition, newest first): {@code history=false} keeps each
+     * complaint's newest row, {@code assignee} keeps rows naming them, then ORDER BY
+     * lastModifiedTime DESC OFFSET ? LIMIT ? — one page across all requested complaints, the
+     * limit defaulting to 10 and clamped to {@code maxLimit}.
+     */
+    private void stubWorkflow(List<ProcessInstance> timeline) {
         when(repository.fetchResultWithTimeout(any(), any())).thenAnswer(inv -> {
             String url = inv.getArgument(0).toString();
             urls.add(url);
-            if (url.contains("assignee=") && url.contains("history=false"))
-                return response(latestNamingLme);
-            if (url.contains("assignee=") && url.contains("history=true"))
-                return response(everNamingLme);
-            if (url.contains("businessIds="))
-                return response(histories);
-            throw new AssertionError("unexpected workflow call " + url);
+            Map<String, String> params = params(url);
+            boolean history = Boolean.parseBoolean(params.getOrDefault("history", "false"));
+            Set<String> businessIds = params.containsKey("businessIds")
+                    ? new HashSet<>(Arrays.asList(params.get("businessIds").split(","))) : null;
+            String assignee = params.get("assignee");
+            Set<String> seen = new HashSet<>();
+            List<ProcessInstance> matching = new ArrayList<>();
+            for (ProcessInstance row : timeline) {
+                boolean newest = seen.add(row.getBusinessId());
+                if (!history && !newest)
+                    continue;
+                if (businessIds != null && !businessIds.contains(row.getBusinessId()))
+                    continue;
+                if (assignee != null && row.getAssignes().stream().noneMatch(u -> assignee.equals(u.getUuid())))
+                    continue;
+                matching.add(row);
+            }
+            int offset = Integer.parseInt(params.getOrDefault("offset", "0"));
+            int limit = Math.min(Integer.parseInt(params.getOrDefault("limit", "10")), maxLimit);
+            return response(matching.subList(Math.min(offset, matching.size()), Math.min(offset + limit, matching.size())));
         });
+    }
+
+    private int maxLimit = 200;
+
+    private static Map<String, String> params(String url) {
+        Map<String, String> params = new HashMap<>();
+        for (String pair : url.substring(url.indexOf('?') + 1).split("&")) {
+            String[] kv = pair.split("=", 2);
+            params.put(kv[0], kv.length > 1 ? kv[1] : "");
+        }
+        return params;
     }
 
     @Test
@@ -69,7 +104,7 @@ class WorkflowServiceAssigneeTest {
         // The COMMENT is now the newest transition and names nobody.
         ProcessInstance assign = instance("PGR-B", PENDING_AT_LME, LME);
         ProcessInstance comment = instance("PGR-B", PENDING_AT_LME);
-        stubWorkflow(List.of(), List.of(assign), List.of(comment, assign));
+        stubWorkflow(List.of(comment, assign));
 
         Set<String> held = workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME);
 
@@ -83,8 +118,7 @@ class WorkflowServiceAssigneeTest {
         ProcessInstance reassign = instance("PGR-REQUEUED", PENDING_REASSIGN);
         ProcessInstance assignedToMe2 = instance("PGR-HANDED-ON", PENDING_AT_LME, LME);
         ProcessInstance assignedToOther = instance("PGR-HANDED-ON", PENDING_AT_LME, "lme-other");
-        stubWorkflow(List.of(), List.of(assignedToMe1, assignedToMe2),
-                List.of(reassign, assignedToOther, assignedToMe1, assignedToMe2));
+        stubWorkflow(List.of(reassign, assignedToOther, assignedToMe1, assignedToMe2));
 
         assertTrue(workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME).isEmpty());
     }
@@ -92,7 +126,7 @@ class WorkflowServiceAssigneeTest {
     @Test
     void latestTransitionNamingTheAssigneeNeedsNoHistory() {
         ProcessInstance assign = instance("PGR-1", PENDING_AT_LME, LME);
-        stubWorkflow(List.of(assign), List.of(assign), List.of());
+        stubWorkflow(List.of(assign));
 
         assertEquals(Set.of("PGR-1"), workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME));
         assertTrue(urls.stream().noneMatch(u -> u.contains("businessIds=")), "no candidates left to walk: " + urls);
@@ -102,12 +136,71 @@ class WorkflowServiceAssigneeTest {
     void everyWorkflowSearchPassesAnExplicitLimit() {
         // egov-workflow-v2 otherwise returns its default page (10 in the stock jar).
         ProcessInstance assign = instance("PGR-B", PENDING_AT_LME, LME);
-        stubWorkflow(List.of(), List.of(assign), List.of(instance("PGR-B", PENDING_AT_LME), assign));
+        stubWorkflow(List.of(instance("PGR-B", PENDING_AT_LME), assign));
 
         workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME);
 
-        assertEquals(3, urls.size(), urls.toString());
-        urls.forEach(u -> assertTrue(u.contains("limit=" + WorkflowService.ASSIGNEE_SEARCH_LIMIT), u));
+        assertEquals(4, urls.size(), urls.toString());
+        urls.forEach(u -> assertTrue(u.contains("&limit="), u));
+        urls.subList(2, 4).forEach(u -> assertTrue(u.contains("limit=" + WorkflowService.HISTORY_PAGE_SIZE), u));
+    }
+
+    @Test
+    void staleAssignOlderThanAPageOfOtherRowsIsStillFound() {
+        // #2281 round 2: the LME was assigned PGR-STALE weeks ago and has closed 60 complaints since
+        // (4 rows each, 240 rows newer than the old ASSIGN); now the citizen comments to chase it.
+        // One shared history page across all candidates would drop the old ASSIGN row.
+        List<ProcessInstance> timeline = new ArrayList<>();
+        timeline.add(instance("PGR-STALE", PENDING_AT_LME));
+        for (int i = 0; i < 60; i++)
+            timeline.addAll(closedComplaint("PGR-CLOSED-" + i, LME));
+        timeline.add(instance("PGR-STALE", PENDING_AT_LME, LME));
+        timeline.add(instance("PGR-STALE", PENDING_ASSIGNMENT));
+        stubWorkflow(timeline);
+
+        assertEquals(Set.of("PGR-STALE"), workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME));
+        // Closed complaints settle on their newest (terminal) transition: only PGR-STALE is walked.
+        String walk = urls.get(urls.size() - 1);
+        assertTrue(walk.contains("history=true") && walk.contains("businessIds=PGR-STALE&"), walk);
+    }
+
+    @Test
+    void longHistoriesAcrossChunksAreWalkedWithOffsetPaging() {
+        // 30 open complaints, each assigned to the LME and then commented on 9 times: 330 rows,
+        // more than one chunk and more than one page per chunk.
+        List<ProcessInstance> timeline = new ArrayList<>();
+        for (int c = 0; c < 9; c++)
+            for (int i = 0; i < 30; i++)
+                timeline.add(instance("PGR-" + i, PENDING_AT_LME));
+        for (int i = 0; i < 30; i++)
+            timeline.add(instance("PGR-" + i, PENDING_AT_LME, LME));
+        for (int i = 0; i < 30; i++)
+            timeline.add(instance("PGR-" + i, PENDING_ASSIGNMENT));
+        stubWorkflow(timeline);
+        maxLimit = 100; // stock egov.wf.max.limit
+
+        Set<String> held = workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME);
+
+        assertEquals(30, held.size(), held.toString());
+        assertTrue(urls.stream().anyMatch(u -> u.contains("history=true") && !u.contains("offset=0")),
+                "expected a second page: " + urls);
+        assertTrue(urls.size() <= 4 + WorkflowService.MAX_HISTORY_CALLS, urls.toString());
+    }
+
+    @Test
+    void historyWalkStopsAtTheCallBudgetAndOmitsTheUndecided() {
+        // 150 open complaints whose ASSIGN sits under 99 comments each: no walk decides within the
+        // budget, so the lookup stops there and admits nothing it could not prove.
+        List<ProcessInstance> timeline = new ArrayList<>();
+        for (int c = 0; c < 99; c++)
+            for (int i = 0; i < 150; i++)
+                timeline.add(instance("PGR-" + i, PENDING_AT_LME));
+        for (int i = 0; i < 150; i++)
+            timeline.add(instance("PGR-" + i, PENDING_AT_LME, LME));
+        stubWorkflow(timeline);
+
+        assertTrue(workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME).isEmpty());
+        assertEquals(2 + 2 + WorkflowService.MAX_HISTORY_CALLS, urls.size(), urls.toString());
     }
 
     @Test
@@ -121,6 +214,14 @@ class WorkflowServiceAssigneeTest {
         });
 
         assertEquals(Set.of("PGR-1"), workflowService.getServiceRequestIdsByAssignee(new RequestInfo(), TENANT, LME));
+    }
+
+    /** APPLY, ASSIGN to {@code lme}, RESOLVE, RATE (terminal) — newest first. */
+    private static List<ProcessInstance> closedComplaint(String businessId, String lme) {
+        ProcessInstance rate = instance(businessId, CLOSED);
+        rate.getState().setIsTerminateState(true);
+        return List.of(rate, instance(businessId, RESOLVED), instance(businessId, PENDING_AT_LME, lme),
+                instance(businessId, PENDING_ASSIGNMENT));
     }
 
     private static ProcessInstanceResponse response(List<ProcessInstance> instances) {

@@ -263,11 +263,25 @@ public class WorkflowService {
     }
 
     /**
-     * Upper bound on workflow rows for an assignee lookup. Without one, egov-workflow-v2 returns its
-     * default page (egov.wf.default.limit, 10 in the stock jar) and silently drops the rest; above
-     * egov.wf.max.limit (100 in the stock jar) workflow clamps it. Matches EscalationService's bound.
+     * Upper bound on workflow rows for an assignee search (steps 1-2 below). Without one,
+     * egov-workflow-v2 returns its default page (egov.wf.default.limit, 10 in the stock jar) and
+     * silently drops the rest; above egov.wf.max.limit (100 in the stock jar, 200 in our compose
+     * files) workflow clamps it. Matches EscalationService's bound.
      */
     static final int ASSIGNEE_SEARCH_LIMIT = 200;
+
+    /**
+     * Rows per page when reading candidates' latest transitions and histories (steps 3-4). Kept at
+     * the stock egov.wf.max.limit so workflow never clamps it: a page shorter than this means the
+     * requested complaints have no rows left.
+     */
+    static final int HISTORY_PAGE_SIZE = 100;
+
+    /** Complaints whose histories share one page in step 4 (~5 rows each per 100-row page). */
+    static final int HISTORY_CHUNK_SIZE = 20;
+
+    /** Most history pages one lookup reads in step 4; complaints still undecided after it are omitted. */
+    static final int MAX_HISTORY_CALLS = 5;
 
     /**
      * Complaints this employee currently holds in workflow, at this exact tenant (workflow matches
@@ -282,13 +296,22 @@ public class WorkflowService {
      *
      * <ol>
      *   <li>Complaints whose newest transition names the employee — held by definition.</li>
-     *   <li>Complaints an older transition named them on (history search by assignee), whose full
-     *       histories are then fetched in one batch and walked with {@link #currentHolders}.</li>
+     *   <li>Candidates: complaints an older transition named them on (history search by assignee).</li>
+     *   <li>Each candidate's newest transition ({@code history=false}, one row per complaint). One
+     *       naming anyone settles it; so does a terminal state (closed complaints, typically most
+     *       candidates). Only open complaints whose newest transition names nobody remain.</li>
+     *   <li>Those complaints' histories, {@link #HISTORY_CHUNK_SIZE} complaints per request, paged
+     *       with {@code offset} until every walk is decided ({@link #walkDecided}). Workflow pages
+     *       across all requested complaints, so one shared page would push old ASSIGN rows of stale
+     *       complaints out of reach.</li>
      * </ol>
      *
-     * Each search is bounded by {@link #ASSIGNEE_SEARCH_LIMIT}, newest first: an employee with more
-     * assignments than that loses the least recently touched ones. A truncated history can only
-     * omit a complaint, never admit one it does not hold. If step 2 fails the step-1 result stands.
+     * Calls per lookup: 2 when there are no candidates, 2 + ceil(candidates / 100) (3 or 4) when
+     * every candidate settles on its newest transition, and at most 4 + {@link #MAX_HISTORY_CALLS}
+     * = 9 overall, reading at most 200 + 200 + 200 + 500 process instances. Steps 1-2 are bounded by
+     * {@link #ASSIGNEE_SEARCH_LIMIT}, newest first: an employee with more assignments than that
+     * loses the least recently touched ones. A missing or cut-off history can only omit a complaint,
+     * never admit one it does not hold. If steps 2-4 fail the step-1 result stands.
      */
     public Set<String> getServiceRequestIdsByAssignee(RequestInfo requestInfo, String tenantId, String assigneeUuid) {
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
@@ -301,21 +324,79 @@ public class WorkflowService {
             if (candidates.isEmpty())
                 return held;
 
-            StringBuilder historyUrl = getprocessInstanceSearchURL(tenantId, String.join(",", candidates));
-            historyUrl.append("&history=true&limit=").append(ASSIGNEE_SEARCH_LIMIT);
-            Map<String, List<ProcessInstance>> histories = new LinkedHashMap<>();
-            for (ProcessInstance instance : searchProcessInstances(historyUrl, requestInfoWrapper))
-                histories.computeIfAbsent(instance.getBusinessId(), id -> new ArrayList<>()).add(instance);
+            Map<String, ProcessInstance> latest = new HashMap<>();
+            for (List<String> chunk : chunks(new ArrayList<>(candidates), HISTORY_PAGE_SIZE))
+                for (ProcessInstance instance : searchProcessInstances(businessIdSearchURL(tenantId, chunk, false, 0), requestInfoWrapper))
+                    latest.putIfAbsent(instance.getBusinessId(), instance);
 
-            histories.forEach((businessId, history) -> {
-                if (candidates.contains(businessId) && currentHolders(history).contains(assigneeUuid))
+            List<String> undecided = new ArrayList<>();
+            for (String businessId : candidates) {
+                ProcessInstance newest = latest.get(businessId);
+                if (newest == null)
+                    continue;
+                List<String> named = assigneeUuidsOf(newest);
+                if (named.contains(assigneeUuid))
                     held.add(businessId);
-            });
+                else if (named.isEmpty() && !isTerminal(newest))
+                    undecided.add(businessId);
+            }
+
+            held.addAll(heldAfterWalk(tenantId, assigneeUuid, undecided, requestInfoWrapper));
         } catch (Exception e) {
             log.warn("WorkflowService: workflow history lookup for assignee={} tenant={} failed — using complaints whose latest transition names them only: {}",
                     assigneeUuid, tenantId, e.getMessage());
         }
         return held;
+    }
+
+    /**
+     * Step 4: walks the histories of {@code undecided}, chunk by chunk. Each further page asks only
+     * for the complaints still undecided, at an offset equal to the rows already read for them:
+     * workflow orders by lastModifiedTime across the requested complaints, so those rows are
+     * exactly the newest ones of that smaller set.
+     */
+    private Set<String> heldAfterWalk(String tenantId, String assigneeUuid, List<String> undecided,
+                                      RequestInfoWrapper requestInfoWrapper) {
+        Map<String, List<ProcessInstance>> histories = new HashMap<>();
+        int calls = 0;
+        walk:
+        for (List<String> chunk : chunks(undecided, HISTORY_CHUNK_SIZE)) {
+            List<String> open = new ArrayList<>(chunk);
+            while (!open.isEmpty()) {
+                if (calls++ == MAX_HISTORY_CALLS) {
+                    log.warn("WorkflowService: assignee={} tenant={} — history walk stopped after {} calls; complaints still undecided are omitted",
+                            assigneeUuid, tenantId, MAX_HISTORY_CALLS);
+                    break walk;
+                }
+                int offset = open.stream().mapToInt(id -> histories.getOrDefault(id, Collections.emptyList()).size()).sum();
+                List<ProcessInstance> page = searchProcessInstances(businessIdSearchURL(tenantId, open, true, offset), requestInfoWrapper);
+                for (ProcessInstance instance : page)
+                    if (open.contains(instance.getBusinessId()))
+                        histories.computeIfAbsent(instance.getBusinessId(), id -> new ArrayList<>()).add(instance);
+                boolean exhausted = page.size() < HISTORY_PAGE_SIZE;
+                open.removeIf(id -> exhausted || walkDecided(histories.get(id)));
+            }
+        }
+
+        Set<String> held = new LinkedHashSet<>();
+        for (String businessId : undecided)
+            if (currentHolders(histories.get(businessId)).contains(assigneeUuid))
+                held.add(businessId);
+        return held;
+    }
+
+    /**
+     * Whether {@link #currentHolders} would give the same answer however many older rows follow:
+     * the walk has reached a row naming anyone, or left the current state.
+     */
+    static boolean walkDecided(List<ProcessInstance> newestFirst) {
+        if (CollectionUtils.isEmpty(newestFirst))
+            return false;
+        String currentState = stateOf(newestFirst.get(0));
+        for (ProcessInstance instance : newestFirst)
+            if (!Objects.equals(currentState, stateOf(instance)) || !assigneeUuidsOf(instance).isEmpty())
+                return true;
+        return false;
     }
 
     /**
@@ -350,6 +431,25 @@ public class WorkflowService {
                 .map(User::getUuid)
                 .filter(uuid -> uuid != null && !uuid.isBlank())
                 .collect(Collectors.toList());
+    }
+
+    private static boolean isTerminal(ProcessInstance instance) {
+        return instance.getState() != null && Boolean.TRUE.equals(instance.getState().getIsTerminateState());
+    }
+
+    private static <T> List<List<T>> chunks(List<T> items, int size) {
+        List<List<T>> chunks = new ArrayList<>();
+        for (int from = 0; from < items.size(); from += size)
+            chunks.add(items.subList(from, Math.min(items.size(), from + size)));
+        return chunks;
+    }
+
+    private StringBuilder businessIdSearchURL(String tenantId, List<String> businessIds, boolean history, int offset) {
+        StringBuilder url = getprocessInstanceSearchURL(tenantId, String.join(",", businessIds));
+        url.append("&history=").append(history);
+        url.append("&limit=").append(HISTORY_PAGE_SIZE);
+        url.append("&offset=").append(offset);
+        return url;
     }
 
     private StringBuilder assigneeSearchURL(String tenantId, String assigneeUuid, boolean history) {
