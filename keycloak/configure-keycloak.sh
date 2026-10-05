@@ -326,22 +326,29 @@ configure_digit_ui_client() {
 # Keeps every attribute an admin can see (ADMIN_EDIT, instead of silently
 # dropping unmanaged attributes). Written as JSON because kcadm cannot set the
 # dotted `unmanagedAttributePolicy` key.
-# The name fields follow realm.json: DIGIT owns names, so people cannot edit
-# them here, and lastName is not required. `"required": null` there removes the
-# requirement; a missing key leaves Keycloak's.
+# Every attribute in realm.json is applied on each run, so an existing realm
+# picks up a newly declared one: a missing attribute is added, and on a present
+# one each declared key (permissions, validations, multivalued) replaces
+# Keycloak's. The name fields: DIGIT owns names, so people cannot edit them
+# here, and lastName is not required. `"required": null` removes the
+# requirement; a missing key leaves Keycloak's. The digit.* attributes are
+# declared for their length limit (Keycloak caps an undeclared value at 2048).
 configure_user_profile() {
   kc get users/profile -r "$REALM" |
     jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' |
     jq --argjson declared "$(jq -c '.userProfile.attributes' "$REALM_CONFIG")" '
+      def apply($wanted):
+        . + ($wanted | del(.required) | with_entries(select(.key | startswith("$") | not))) |
+        if $wanted | has("required") | not then .
+        elif $wanted.required == null then del(.required)
+        else .required = $wanted.required end;
+      ([.attributes[].name]) as $present |
       .attributes |= map(
         . as $attribute | $declared[$attribute.name] as $wanted |
-        if $wanted == null then .
-        else
-          (if $wanted | has("permissions") then .permissions = $wanted.permissions else . end) |
-          (if $wanted | has("required") | not then .
-           elif $wanted.required == null then del(.required)
-           else .required = $wanted.required end)
-        end)' |
+        if $wanted == null then . else apply($wanted) end) |
+      .attributes += [$declared | to_entries[] |
+        select(.key as $name | any($present[]; . == $name) | not) |
+        .value as $wanted | {name: .key} | apply($wanted)]' |
     kc_put users/profile
 }
 
