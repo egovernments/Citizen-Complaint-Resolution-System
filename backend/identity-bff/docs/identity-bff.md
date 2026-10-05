@@ -279,9 +279,9 @@ Answers `303` to the attempt's `returnTo` with a result: `PASSWORD_SETUP_COMPLET
 - `stepup` and `change_phone` need a citizen session and take the tenant from that session (`tenantSlug` is ignored).
 - `mobileNumber` is national (`^\d{4,15}$`) and must pass the tenant's `MobileNumberValidation` rule.
 - The challenge is bound to `(challengeId, phone, tenant, purpose)`, plus the session and person for `stepup` and `change_phone`.
-- `stepup` and `change_phone` to a number another person owns → 409 `PHONE_IN_USE` (checked under the phone lock).
+- The answer does not depend on whether the number has an account, for any `purpose`. A `stepup` or `change_phone` code for a number another person owns is still sent (and charged to the send limits); `_verify` refuses it with 409 `PHONE_IN_USE`, checked under the phone lock.
 - Delivery goes through `HttpOtpSender` (item 3, see below), or `log` on dev boxes.
-- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `PHONE_IN_USE` 409; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
+- Errors: `INVALID_REQUEST`, `PHONE_OTP_DISABLED`, `INVALID_MOBILE_NUMBER` (400); `SESSION_REQUIRED` 401; `UNTRUSTED_ORIGIN` 403; `TENANT_ROUTE_NOT_FOUND` 404; `OTP_RESEND_TOO_SOON`, `OTP_RATE_LIMITED` (429, `Retry-After`); `TENANT_ROUTE_UNAVAILABLE`, `CITIZEN_SIGNIN_NOT_CONFIGURED`, `OTP_CHANNEL_UNAVAILABLE`, `IDENTITY_UNAVAILABLE` (503).
 
 **`HttpOtpSender`** POSTs to `IDENTITY_OTP_SENDER_URL`:
 

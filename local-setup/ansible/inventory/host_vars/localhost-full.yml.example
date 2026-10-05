@@ -217,8 +217,11 @@ enable_integration_tests_runner: false
 # Real OTP delivery: egov-otp + user-otp generate/validate; novu-bridge sends the SMS
 # (requires enable_novu: true and SMS enabled for the tenant). Values: true | false.
 # False (here) means Kong mocks /user-otp/* with a canned 200, so citizen login works
-# with the fixed OTP 123456 and no SMS infra. The deploy strips the mocks when true.
+# with the fixed OTP 123456 and no SMS infra — but only because this local
+# dev box opts in with identity_dev_fixed_otp below (off by default). The deploy strips the mocks when true.
 enable_otp_services: false
+# Development only: accept the fixed citizen OTP 123456 (never on a public box).
+identity_dev_fixed_otp: true
 
 # Elasticsearch + egov-indexer + inbox-v2. Values: true | false.
 # Off saves ~2-3 GB. The trade: the inbox and search screens stop working —

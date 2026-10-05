@@ -2300,8 +2300,12 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
         attributes: { phoneNumber: ["+254799000612"], phoneNumberVerified: ["true"] } });
       const refused = await proofPost("_verify", { challengeId, code });
       expect([refused.status, (await refused.json()).code]).toEqual([409, "PHONE_IN_USE"]);
-      const blockedSend = await proofPost("_send", { mobileNumber: "799000612" });
-      expect([blockedSend.status, (await blockedSend.json()).code]).toEqual([409, "PHONE_IN_USE"]);
+      // The send answers as for any number (no ownership oracle, and charged);
+      // only proving the code reaches the ownership refusal.
+      const ownedSend = await proofPost("_send", { mobileNumber: "799000612" });
+      expect(ownedSend.status).toBe(202);
+      const owned = await proofPost("_verify", { challengeId: (await ownedSend.json()).challengeId, code: lastCode() });
+      expect([owned.status, (await owned.json()).code]).toEqual([409, "PHONE_IN_USE"]);
       expect((await getIdentitySession(sessionId))?.claims.phone_number_verified).not.toBe(true);
     });
 
@@ -2614,6 +2618,48 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
           identityCitizenOtpResendSeconds: 0, identityCitizenOtpIpSendLimit: otpConfig.identityCitizenOtpIpSendLimit,
         });
       }
+    });
+
+    it("refunds the IP charge and cooldown of a send refused by the per-phone cap", async () => {
+      Object.assign(config as any, {
+        identityCitizenOtpResendSeconds: 60, identityCitizenOtpPhoneSendLimit: 1, identityCitizenOtpIpSendLimit: 1,
+      });
+      try {
+        expect((await send("799000526", "203.0.113.70")).status).toBe(202);
+        const ip = "203.0.113.71";
+        for (let press = 0; press < 2; press += 1) {
+          // The real window each time, never a cooldown armed by a refusal.
+          const capped = await send("799000526", ip);
+          expect(capped.status).toBe(429);
+          expect((await capped.json()).code).toBe("OTP_RATE_LIMITED");
+          expect(Number(capped.headers.get("retry-after"))).toBeGreaterThan(60);
+        }
+        // Refusals spent nothing from this address's one-send budget.
+        expect((await send("799000527", ip)).status).toBe(202);
+      } finally {
+        Object.assign(config as any, {
+          identityCitizenOtpResendSeconds: 0,
+          identityCitizenOtpPhoneSendLimit: otpConfig.identityCitizenOtpPhoneSendLimit,
+          identityCitizenOtpIpSendLimit: otpConfig.identityCitizenOtpIpSendLimit,
+        });
+      }
+    });
+
+    it("answers a JSON 503 when MDMS fails during verify, and keeps the code usable", async () => {
+      const { challengeId } = await (await send("799000528")).json();
+      const code = lastCode();
+      const mdmsUrl = config.digitMdmsSearchUrl;
+      // MobileNumberValidation is read live; a 404 from the fake is an MDMS outage.
+      (config as any).digitMdmsSearchUrl = `${mdmsUrl}-unavailable`;
+      try {
+        const down = await verify(challengeId, code);
+        expect(down.status).toBe(503);
+        expect(down.headers.get("content-type")).toMatch(/application\/json/);
+        expect((await down.json()).code).toBe("IDENTITY_UNAVAILABLE");
+      } finally {
+        (config as any).digitMdmsSearchUrl = mdmsUrl;
+      }
+      expect((await verify(challengeId, code)).status).toBe(200);
     });
 
     it("sends nothing when Redis fails to store the challenge", async () => {
@@ -2938,6 +2984,30 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(ambiguous.status).toBe(409);
       expect((await ambiguous.json()).code).toBe("CITIZEN_ACCOUNT_AMBIGUOUS");
       expect(digit.stats.creates).toBe(creates);
+    });
+
+    it("trusts a phone OTP session only for the number it proved, not a later Keycloak phone", async () => {
+      // Vinoth/Dhruv: a phone_otp session proved one number; if Keycloak's
+      // phoneNumber now says another (user-editable profile, or an admin edit),
+      // _select must not link the DIGIT citizen who owns that other number.
+      const victim = legacy({ userName: "799000776", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000776", roles: ["CITIZEN"] });
+      await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+      resetPhoneTrustCache();
+      const { challengeId } = await (await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber: "799000775" }),
+      })).json();
+      const verified = await fetch(`${app()}/identity/v1/citizen/otp/_verify`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", challengeId, code: sent[sent.length - 1].code }),
+      });
+      const cookie = cookieFrom(verified, "digit_identity_session_citizen")!;
+      const subject = (await getIdentitySession(cookie.split("=")[1]))!.claims.sub;
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, phoneNumber: ["+254799000776"], phoneNumberVerified: ["true"] } });
+      const selected = await citizenSelect(cookie);
+      if (selected.status === 200) expect((await selected.json()).UserRequest.uuid).not.toBe(victim.uuid);
+      else expect(selected.status).toBeGreaterThanOrEqual(400);
     });
 
     it("trusts a Keycloak-verified phone only when users cannot edit it", async () => {

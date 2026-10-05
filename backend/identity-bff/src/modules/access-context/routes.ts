@@ -281,7 +281,9 @@ export function registerAccessContextRoutes(app: express.Application): void {
           // A failed check is retryable (503), never "untrusted": treating it as
           // untrusted would create a new account and split a legacy citizen from
           // their existing one for good.
-          const phoneTrusted = current.session.authMethod === "phone_otp" ||
+          // A phone_otp session proved only `claims.phone_number`: it vouches for
+          // the live Keycloak phone only while the two are the same number.
+          const phoneTrusted = (current.session.authMethod === "phone_otp" && claims.phone_number === livePhone) ||
             await keycloakPhoneIsAdminControlled();
           const { identity, registration } = await ensureCitizenRegistration({
             phoneTrusted,

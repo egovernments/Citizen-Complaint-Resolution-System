@@ -466,8 +466,9 @@ want soon:
   There is a turn-key installer, `scripts/enable-notifications.sh`, rather than
   just the flag.
 - `enable_keycloak` — single sign-on. DIGIT's own OTP login works without it.
-- `enable_otp_services` — real SMS one-time passwords. Off means the citizen
-  login OTP is always `123456`, which is what you want while testing.
+- `enable_otp_services` — real SMS one-time passwords. With it off, citizen
+  OTP login works only if you also set `identity_dev_fixed_otp: true`
+  (development only: the OTP is then always `123456`). Both are off by default.
 - `observability_level` — `metrics`, `logs` or `traces` (the default, meaning
   everything). Lowering it deploys fewer monitoring containers.
 - `enable_matomo` — self-hosted web analytics for the portal. Three more
@@ -590,7 +591,7 @@ repository — change them before anyone else can reach the machine.**
 | Onboarding wizard (`/configurator/`) | `ADMIN` | `eGov@123` | your **root** — the field is pre-filled from `state_tenant_id` |
 | Employee app (`/digit-ui/employee`) | `ADMIN` | `eGov@123` | pick from the City dropdown; only tenants in `login_tenant_allowlist` appear |
 | Employees you onboard later | their **employee code** | `eGov@123` | their city tenant |
-| Citizen app | a mobile number | OTP `123456` | — |
+| Citizen app | a mobile number | OTP `123456` (only with `identity_dev_fixed_otp: true`) | — |
 | Grafana (`/grafana/`) | `admin` | generated — see below | — |
 
 To change the administrator credentials, set `bootstrap_user` and
@@ -616,8 +617,9 @@ The employee code overriding the username is not a typo: HRMS replaces the
 `userName` you supply with the employee code when it creates the record, and
 the employee code is what actually authenticates.
 
-The citizen OTP is fixed at `123456` because `enable_otp_services` is off and
-Kong answers `/user-otp/*` with a canned response — no SMS provider needed.
+With `enable_otp_services` off, Kong answers `/user-otp/*` with a canned
+response, and the citizen OTP is `123456` only when the host opts in with
+`identity_dev_fixed_otp: true` (off by default; never on a public box).
 Turning real OTP on takes more than the flag; see the notes in
 `kong/kong.yml`.
 
