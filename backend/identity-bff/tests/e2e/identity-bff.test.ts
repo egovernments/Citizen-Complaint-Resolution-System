@@ -2986,6 +2986,30 @@ describe("digit-ui employee and citizen surfaces (#2167)", () => {
       expect(digit.stats.creates).toBe(creates);
     });
 
+    it("trusts a phone OTP session only for the number it proved, not a later Keycloak phone", async () => {
+      // Vinoth/Dhruv: a phone_otp session proved one number; if Keycloak's
+      // phoneNumber now says another (user-editable profile, or an admin edit),
+      // _select must not link the DIGIT citizen who owns that other number.
+      const victim = legacy({ userName: "799000776", tenantId: "ke", type: "CITIZEN", mobileNumber: "799000776", roles: ["CITIZEN"] });
+      await setProfile({ unmanagedAttributePolicy: "ENABLED", attributes: [] });
+      resetPhoneTrustCache();
+      const { challengeId } = await (await fetch(`${app()}/identity/v1/citizen/otp/_send`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", mobileNumber: "799000775" }),
+      })).json();
+      const verified = await fetch(`${app()}/identity/v1/citizen/otp/_verify`, {
+        method: "POST", headers: { Origin: "http://localhost:3000", "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: "bomet-county", challengeId, code: sent[sent.length - 1].code }),
+      });
+      const cookie = cookieFrom(verified, "digit_identity_session_citizen")!;
+      const subject = (await getIdentitySession(cookie.split("=")[1]))!.claims.sub;
+      const user = await (await fetch(`${config.keycloakAdminUrl}/admin/realms/${config.keycloakOrganizationRealm}/users/${subject}`)).json();
+      await kcUpdate(`/users/${subject}`, { attributes: { ...user.attributes, phoneNumber: ["+254799000776"], phoneNumberVerified: ["true"] } });
+      const selected = await citizenSelect(cookie);
+      if (selected.status === 200) expect((await selected.json()).UserRequest.uuid).not.toBe(victim.uuid);
+      else expect(selected.status).toBeGreaterThanOrEqual(400);
+    });
+
     it("trusts a Keycloak-verified phone only when users cannot edit it", async () => {
       const userEditable = { name: "phoneNumber", permissions: { view: ["admin", "user"], edit: ["admin", "user"] } };
       const adminOnly = (name: string) => ({ name, permissions: { view: ["admin", "user"], edit: ["admin"] } });
