@@ -1,11 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { selectContext } from '@/api/onboarding';
-import { apiClient, ApiClientError } from '@/api/client';
+import { apiClient } from '@/api/client';
 import { installDigitContext } from '@/lib/session';
 import { searchWorkspace, WORKSPACE_STEPS } from './workspace';
 import { enterWorkspace } from './entry';
 vi.mock('@/api/onboarding', () => ({ API_ORIGIN: '', selectContext: vi.fn() }));
-vi.mock('@/api/client', async () => ({ ApiClientError: (await vi.importActual<typeof import('@/api/client')>('@/api/client')).ApiClientError, apiClient: { setEnvironment: vi.fn(), setAuth: vi.fn(), getAuth: () => ({ token: null, user: null }), getEnvironment: () => '', logout: vi.fn() } }));
+vi.mock('@/api/client', () => ({ apiClient: { setEnvironment: vi.fn(), setAuth: vi.fn(), getAuth: () => ({ token: null, user: null }), getEnvironment: () => '', logout: vi.fn() } }));
 vi.mock('@/lib/session', () => ({ installDigitContext: vi.fn() }));
 vi.mock('./workspace', async () => ({ ...await vi.importActual<typeof import('./workspace')>('./workspace'), searchWorkspace: vi.fn() }));
 const context = { access_token: 'digit', token_type: 'bearer', expires_in: 100, scope: 'read', UserRequest: { uuid: 'u', userName: 'employee', tenantId: 'acme', roles: [{ code: 'ACCOUNT_ADMIN', name: 'Admin', tenantId: 'acme' }] } };
@@ -33,10 +33,4 @@ it('does not call the admin-only setup endpoint for ordinary staff', async () =>
   await enterWorkspace('acme');
   expect(searchWorkspace).not.toHaveBeenCalled();
   expect(installDigitContext).toHaveBeenCalledWith(expect.anything(), undefined, [1, 2, 3, 4, 5]);
-});
-it('lets the deploy-provisioned admin in when pgr-services has no workspace API', async () => {
-  vi.mocked(searchWorkspace).mockRejectedValue(new ApiClientError([{ code: 'HTTP_404', message: 'Not Found' }], 404));
-  await enterWorkspace('acme');
-  expect(installDigitContext).toHaveBeenCalledWith(context, undefined, [1, 2, 3, 4, 5]);
-  expect(apiClient.logout).not.toHaveBeenCalled();
 });

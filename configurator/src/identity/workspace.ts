@@ -1,4 +1,4 @@
-import { apiClient, ApiClientError } from '@/api/client';
+import { apiClient } from '@/api/client';
 import { mdmsService } from '@/api/services/mdms';
 
 // Contract: b0f7b37770d99acc0579eb830d93f8ebcbedf053, PGR onboarding-workspace-contract.md.
@@ -31,18 +31,6 @@ export interface WorkspaceView {
   Rename: Rename | null;
 }
 const base = '/pgr-services/v2/onboarding/workspaces';
-/**
- * The workspace API ships in pgr-services with #2269. A deployment whose
- * pgr-services predates it answers 404 (no such route) or 501. That means
- * "this server keeps no workspace state", not a failed request: callers fall
- * back to the pre-workspace behaviour instead of locking the admin out. Every
- * error the API itself returns carries a WORKSPACE_* code and is never a 404.
- */
-export function isWorkspaceApiMissing(error: unknown): boolean {
-  return error instanceof ApiClientError
-    && [404, 501].includes(error.statusCode)
-    && !error.errors.some(e => e.code?.startsWith('WORKSPACE_'));
-}
 export async function searchWorkspace(tenantId: string): Promise<WorkspaceView> {
   return await apiClient.post(`${base}/_search`, { RequestInfo: apiClient.buildRequestInfo(), tenantId }) as unknown as WorkspaceView;
 }
@@ -56,22 +44,6 @@ export async function renameWorkspace(request: RenameRequest): Promise<Rename> {
 }
 export function completedSteps(workspace: Workspace): number[] {
   return WORKSPACE_STEPS.flatMap((step, index) => ['DONE', 'SKIPPED'].includes(workspace.steps[step].state) ? [index + 1] : []);
-}
-/**
- * Record a finished (or skipped) setup phase and return the completed phases.
- * PGR is authoritative when it has the workspace API; without it (pre-#2269
- * pgr-services) progress stays local, as it did before the API existed, so
- * "Save and continue" still advances.
- */
-export async function recordStep(tenantId: string, phase: number, skip: boolean, localProgress: number[]): Promise<number[]> {
-  try {
-    const latest = await searchWorkspace(tenantId);
-    const updated = await updateWorkspace(tenantId, WORKSPACE_STEPS[phase - 1], skip ? 'SKIPPED' : 'DONE', latest.Workspace.version);
-    return completedSteps(updated.Workspace);
-  } catch (error) {
-    if (!isWorkspaceApiMissing(error)) throw error;
-    return [...new Set([...localProgress, phase])].sort((a, b) => a - b);
-  }
 }
 
 export function validateExpiry(hours: number) {

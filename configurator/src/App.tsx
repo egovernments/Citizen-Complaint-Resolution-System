@@ -1,7 +1,7 @@
 import AccountPage from '@/identity/AccountPage';
 import MembersPage from '@/identity/MembersPage';
 import WorkspacePage from '@/identity/WorkspacePage';
-import { recordStep } from '@/identity/workspace';
+import { completedSteps, searchWorkspace, updateWorkspace, WORKSPACE_STEPS } from '@/identity/workspace';
 import { toast } from '@/hooks/use-toast';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
@@ -435,7 +435,9 @@ function App() {
 
   const completePhase = async (phase: number, skip = false): Promise<boolean> => {
     try {
-      const completedPhases = await recordStep(state.tenant, phase, skip, state.completedPhases);
+      const latest = await searchWorkspace(state.tenant);
+      const updated = await updateWorkspace(state.tenant, WORKSPACE_STEPS[phase - 1], skip ? 'SKIPPED' : 'DONE', latest.Workspace.version);
+      const completedPhases = completedSteps(updated.Workspace);
       setState(s => ({ ...s, completedPhases, currentPhase: Math.min(phase + 1, ONBOARDING_STEPS.length) }));
       const step = ONBOARDING_STEPS.find(candidate => candidate.number === phase);
       trackEvent('phase_complete', { phase, step: step?.id, tenant: state.tenant });
