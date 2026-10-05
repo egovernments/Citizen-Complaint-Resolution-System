@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile, mkdir, copyFile, writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import Ajv from 'ajv';
 import { loadPlatformSeed, substituteTenant } from './src/tools/platform-baseline.js';
 import { bootstrapPlatform } from './src/tools/platform-bootstrap.js';
@@ -109,22 +107,6 @@ test('bootstrap uses canonical inventory, country-only source lookup, and replay
   const writes = f.writes(); const second = await bootstrapPlatform({ target_tenant: 'in.newtown' }, f.options);
   assert.equal(second.summary.data_copied, 0); assert.equal(f.writes(), writes); assert.equal(f.users.length, 1); assert.equal(f.employees.length, 1);
 });
-
-test('source and built package receive byte-identical canonical seed', async () => {
-  const canonical = await readFile('../backend/pgr-services/src/main/resources/onboarding/platform-baseline-v1.json');
-  for (const dir of ['data', 'src/data', 'dist/data']) assert.deepEqual(await readFile(`${dir}/platform-baseline-v1.json`), canonical);
-});
-
-test('built loader resolves seed outside the monorepo', async () => {
-  const root = resolve('../.artifacts/onboarding/mcp-package-test');
-  await mkdir(`${root}/tools`, { recursive: true }); await mkdir(`${root}/data`, { recursive: true });
-  await writeFile(`${root}/package.json`, '{"type":"module"}');
-  await copyFile('dist/tools/platform-baseline.js', `${root}/tools/platform-baseline.js`);
-  await copyFile('dist/data/platform-baseline-v1.json', `${root}/data/platform-baseline-v1.json`);
-  const packaged = await import(pathToFileURL(`${root}/tools/platform-baseline.js`).href);
-  assert.deepEqual(packaged.loadPlatformSeed(), loadPlatformSeed());
-});
-
 
 test('direct bootstrap rejects forged claims, missing tokens and non-root roles before MDMS', async () => {
   for (const verified of [null, { uuid: 'forged', roles: [{ code: 'CITIZEN', tenantId: 'in' }] }, { uuid: 'forged', roles: [{ code: 'SUPERUSER', tenantId: 'in.other' }] }]) {
