@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ERROR_CODES } from "../../src/contract/error-codes.js";
 import { ROUTES } from "../../src/contract/routes.js";
+import { ADMINISTRATIVE_ROLES } from "../../src/contract/roles.js";
 
 // docs/identity-bff.md is the readable copy of src/contract/*. These tests keep
 // the two identical, so neither can drift on its own.
@@ -61,5 +62,12 @@ describe("route catalogue", () => {
   it("no route is listed twice", () => {
     const keys = ROUTES.map((route) => `${route.method} ${route.path}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("administrative roles", () => {
+  it("the doc's _link rule lists exactly ADMINISTRATIVE_ROLES", () => {
+    const rule = /codes in `ADMINISTRATIVE_ROLES` \(`src\/contract\/roles\.ts`\): ([^;]+);/.exec(section("3. Routes"))?.[1];
+    expect(rule?.split(", ").map((code) => code.replaceAll("`", ""))).toEqual(ADMINISTRATIVE_ROLES);
   });
 });

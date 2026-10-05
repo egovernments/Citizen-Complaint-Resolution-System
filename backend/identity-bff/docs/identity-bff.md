@@ -9,6 +9,7 @@
 |---|---|
 | Error codes | `src/contract/error-codes.ts` |
 | Routes, auth and codes per route | `src/contract/routes.ts` |
+| Administrative roles (role-escalation rule, §3.3.6) | `src/contract/roles.ts` |
 | Keycloak attribute schemas | `docs/contract/schemas/*.schema.json` |
 | `encode_v1` reference implementation | `src/modules/accounts/credential.ts` |
 | Payload hash reference implementation | `src/modules/control-plane/operation-hash.ts` |
@@ -483,7 +484,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
-  - the account holds an **administrative** role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`. Administrative roles are `SUPERUSER`, every `*_ADMIN`, `INTERNAL_MICROSERVICE_ROLE`, `SYSTEM`, `REINDEXING_ROLE` and `QA_AUTOMATION`; operational roles (GRO, CSR, PGR_LME, SUPERVISOR, …) are never checked. A caller holding `SUPERUSER` at the tenant itself (the founder, D11) may link an account with any role;
+  - the account holds an **administrative** role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`. Administrative roles are the codes in `ADMINISTRATIVE_ROLES` (`src/contract/roles.ts`): `SUPERUSER`, `INTERNAL_MICROSERVICE_ROLE`, `SYSTEM`, `REINDEXING_ROLE`, `QA_AUTOMATION`; plus every other `*_ADMIN` code. Operational roles (GRO, CSR, PGR_LME, SUPERVISOR, …) are never checked. A caller holding `SUPERUSER` at the tenant itself (the founder, D11) skips this check for target roles at the tenant or its sub-tenants, so may link an account with any role there; a target role at another root tenant is still checked;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
   - this person already has a different uuid at the tenant → `BINDING_CONFLICT`.
 - **Find the person** by email, then by username = email. A username match with a different email → `IDENTITY_EMAIL_CHANGED`.

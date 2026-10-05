@@ -1,10 +1,11 @@
 import { config } from "../../infrastructure/config.js";
 import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
-import { searchAccounts, type DigitAccount } from "../managed-accounts/digit-user-client.js";
+import { searchAccounts, type DigitAccount, type DigitRole } from "../managed-accounts/digit-user-client.js";
 import { findManagedAccount, isBffManagedAccount, managedIdentity } from "../managed-accounts/managed-account-service.js";
 import { staffAccess } from "../bindings/predicate.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
 import { BindingError, type BindingActor } from "../bindings/types.js";
+import { isAdministrativeRole } from "../../contract/roles.js";
 
 export async function readDigitAccount(tenantId: string, uuid: string, userType = "EMPLOYEE"): Promise<DigitAccount | null> {
   for (const active of [true, false]) {
@@ -48,17 +49,22 @@ export async function validateBinding(input: { subject: string; tenantId: string
   if (input.actor.kind !== "browser") return;
   if (input.actor.subject === input.subject) throw new BindingError("SELF_BINDING_FORBIDDEN", "You cannot bind your own account");
   const caller = await requireAccountAdmin(input.actor.subject, input.tenantId);
-  // A SUPERUSER at the workspace (the founder) may link any role. Otherwise every administrative target role
-  // counts, including HRMS roles at sub-tenants (pg.citya under pg): the caller must hold the same code at the
-  // role's tenant or a tenant above it (pg covers pg and pg.citya, never pgx or another root). Operational roles (GRO, PGR_LME, …) are not guarded.
-  if (caller.roles.some((c) => c.code === "SUPERUSER" && c.tenantId === input.tenantId)) return;
-  const covers = (callerTenant: string, roleTenant: string) =>
-    callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
-  if (target.roles.some((r) => isAdminRole(r.code) && !caller.roles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)))) {
+  if (!mayManageRoles(caller.roles, target.roles, input.tenantId)) {
     throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds an administrative role you do not hold");
   }
 }
 
-/** Roles that administer the workspace or act as the platform; operational roles (GRO, PGR_LME, …) are not guarded. */
-const ADMIN_ROLES = new Set(["SUPERUSER", "INTERNAL_MICROSERVICE_ROLE", "SYSTEM", "REINDEXING_ROLE", "QA_AUTOMATION"]);
-const isAdminRole = (code: string) => ADMIN_ROLES.has(code) || code.endsWith("_ADMIN");
+/**
+ * The role rule shared by `_link` and `_updateEmail`. Only administrative target roles count (ADMINISTRATIVE_ROLES or
+ * `*_ADMIN`), including HRMS roles at sub-tenants (pg.citya under pg): the caller must hold the same code at the
+ * role's tenant or a tenant above it (pg covers pg and pg.citya, never pgx or another root). A SUPERUSER at the workspace (the founder) skips that
+ * check for target roles inside the workspace subtree, so may grant any role there; roles at another root still need it.
+ */
+export function mayManageRoles(callerRoles: DigitRole[], targetRoles: DigitRole[], tenantId: string): boolean {
+  const founder = callerRoles.some((c) => c.code === "SUPERUSER" && c.tenantId === tenantId);
+  const inWorkspace = (roleTenant: string) => roleTenant === tenantId || roleTenant.startsWith(`${tenantId}.`);
+  const covers = (callerTenant: string, roleTenant: string) =>
+    callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
+  return !targetRoles.some((r) => isAdministrativeRole(r.code) && !(founder && inWorkspace(r.tenantId))
+    && !callerRoles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)));
+}

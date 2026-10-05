@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DigitAccount } from "../../src/modules/managed-accounts/digit-user-client.js";
+import type { DigitAccount, DigitRole } from "../../src/modules/managed-accounts/digit-user-client.js";
 const f = vi.hoisted(() => ({ accounts: [] as DigitAccount[], access: true, org: true }));
 vi.mock("../../src/modules/managed-accounts/digit-admin-session.js", () => ({
   withDigitAdmin: (fn: (token: string) => unknown) => fn("test-admin"),
@@ -65,16 +65,46 @@ describe("binding actor validation", () => {
     admin.roles = [{ code: "ACCOUNT_ADMIN", tenantId: "elsewhere" }];
     await expect(call()).rejects.toMatchObject({ code: "ADMIN_REQUIRED" });
   });
-  it("checks administrative roles at sub-tenants unless the caller is SUPERUSER at the workspace", async () => {
+  // Each case gives the target an administrative role the caller lacks, so only the rule under test can let it through.
+  const linkAs = (callerRoles: DigitRole[], targetRoles: DigitRole[]) => {
     f.accounts[0].active = true;
-    f.accounts[0].roles = [{ code: "EMPLOYEE", tenantId: "pg" }, { code: "SUPERUSER", tenantId: "pg.citya" }];
-    const admin: DigitAccount = { ...target(), uuid: "admin-uuid", active: true, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }] };
-    f.accounts.push(admin);
-    const call = () => validateBinding({ ...input(), actor: { kind: "browser" as const, subject: "admin", requestId: "request" } });
-    await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });   // Dhruv's sub-tenant path stays closed
-    admin.roles.push({ code: "SUPERUSER", tenantId: "pg.cityb" });                         // a sibling tenant doesn't cover pg.citya
-    await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
-    admin.roles.push({ code: "SUPERUSER", tenantId: "pg" });                               // the founder may link any role
-    await expect(call()).resolves.toBeUndefined();
+    f.accounts[0].roles = [{ code: "EMPLOYEE", tenantId: "pg" }, ...targetRoles];
+    f.accounts.push({ ...target(), uuid: "admin-uuid", active: true, roles: [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...callerRoles] });
+    return validateBinding({ ...input(), actor: { kind: "browser" as const, subject: "admin", requestId: "request" } });
+  };
+  // Listed literally (not read from ADMINISTRATIVE_ROLES) so dropping a code from the constant fails a case.
+  it.each(["SUPERUSER", "INTERNAL_MICROSERVICE_ROLE", "SYSTEM", "REINDEXING_ROLE", "QA_AUTOMATION", "HRMS_ADMIN", "TENANT_ADMIN"])(
+    "guards the administrative role %s", async (code) => {
+      await expect(linkAs([], [{ code, tenantId: "pg" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    });
+  it.each(["EMPLOYEE", "GRO", "CSR", "PGR_LME", "SUPERVISOR"])("does not guard the operational role %s", async (code) => {
+    await expect(linkAs([], [{ code, tenantId: "pg.citya" }])).resolves.toBeUndefined();
+  });
+  it("checks administrative roles at sub-tenants: a sibling tenant does not cover pg.citya", async () => {
+    await expect(linkAs([], [{ code: "SUPERUSER", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    f.accounts.pop();
+    await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg.cityb" }], [{ code: "SUPERUSER", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+  });
+  it("a sub-tenant role covers only its own subtree, not a tenant sharing its name prefix", async () => {
+    await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.city" }], [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    f.accounts.pop();
+    await expect(linkAs([{ code: "HRMS_ADMIN", tenantId: "pg.city" }], [{ code: "HRMS_ADMIN", tenantId: "pg.city.ward1" }])).resolves.toBeUndefined();
+  });
+  describe("the founder (SUPERUSER at the workspace) may grant any role within the workspace", () => {
+    it.each([["HRMS_ADMIN", "pg.citya"], ["INTERNAL_MICROSERVICE_ROLE", "pg"], ["SYSTEM", "pg.citya.ward1"]])("links %s@%s", async (code, tenantId) => {
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code, tenantId }])).resolves.toBeUndefined();
+    });
+    it("a SUPERUSER at a sibling sub-tenant is not the founder", async () => {
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg.cityb" }], [{ code: "HRMS_ADMIN", tenantId: "pg.citya" }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    });
+    it.each(["otherroot", "pgx"])("still checks administrative roles at another root (%s)", async (tenantId) => {
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code: "HRMS_ADMIN", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    });
+    it.each(["otherroot", "pgx"])("rejects SUPERUSER@%s: a workspace role never covers another root", async (tenantId) => {
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code: "SUPERUSER", tenantId }])).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    });
+    it("does not guard operational roles at another root", async () => {
+      await expect(linkAs([{ code: "SUPERUSER", tenantId: "pg" }], [{ code: "GRO", tenantId: "otherroot" }])).resolves.toBeUndefined();
+    });
   });
 });
