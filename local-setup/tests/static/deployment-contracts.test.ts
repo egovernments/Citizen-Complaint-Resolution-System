@@ -1773,6 +1773,25 @@ describe('D26 legacy identity paths are retired', () => {
     expect(read('local-setup/README.md')).not.toContain("DIGIT's own OTP login works without it");
   });
 
+  // Low (Dhruv, #2271 review 2): the Helm Spring gateway must close the same
+  // native identity endpoints Kong drops from AUTH_OPTIONAL.
+  test('the Spring gateway whitelists do not open the retired identity endpoints', () => {
+    const retired = ['/user-otp/v1/_send', '/otp/v1/_validate', '/user/citizen/_create', '/user/password/nologin/_update'];
+    for (const file of [
+      'devops/deploy-as-code/charts/environments/env.yaml',
+      'devops/deploy-as-code/charts/core-services/gateway/values.yaml',
+    ]) {
+      const whitelists = read(file).split('\n')
+        .filter((line) => /egov-(open|mixed-mode)-endpoints-whitelist:/.test(line))
+        .flatMap((line) => line.split(':').slice(1).join(':').replace(/"/g, '').split(',').map((p) => p.trim()));
+      expect(whitelists.length).toBeGreaterThan(10);
+      for (const path of retired) expect([file, whitelists.includes(path)]).toEqual([file, false]);
+    }
+    for (const path of retired) expect(kong).toContain(`["${path}"]=true, -- identity-legacy-user-endpoint`);
+    const parity = read('.github/scripts/check-gateway-whitelist-parity.py');
+    expect(parity).toContain('LEGACY_IDENTITY_TAG = "-- identity-legacy-user-endpoint"');
+  });
+
   test('digit-ui-v2 cannot be deployed after its citizen identity removal', () => {
     expect(playbook).toContain('enable_digit_ui_v2 is no longer supported');
     expect(playbook).toContain('D26 retired its fixed-OTP');
