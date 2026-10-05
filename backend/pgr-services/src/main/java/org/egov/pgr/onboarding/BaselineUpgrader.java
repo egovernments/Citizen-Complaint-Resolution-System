@@ -161,7 +161,13 @@ public class BaselineUpgrader {
     private void stateInfo(OnboardingProgress.WriteScope scope, OnboardingSignup signup, List<String> kept) {
         String tenant = signup.getRequestedTenantId(), schema = "common-masters.StateInfo";
         JsonNode rows = steps.records(tenant, schema, tenant);
-        if (rows.isEmpty()) throw new OnboardingFailure("MDMS_RECORD_NOT_VISIBLE", true);
+        // StateInfo is the workspace's own (name, logo, languages). A tenant provisioned before the baseline may have
+        // none; inventing one could change its UI, so it is left absent.
+        if (rows.isEmpty()) {
+            log.info("Workspace {}: no StateInfo record; left absent", tenant);
+            kept.add("state-info:absent");
+            return;
+        }
         JsonNode languages = rows.get(0).path("data").path("languages"), current = mapper.valueToTree(steps.stateInfoLanguages(signup));
         if (languages.equals(current)) return;
         if (!languages.equals(mapper.valueToTree(v1Languages(signup)))) {

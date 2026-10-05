@@ -172,6 +172,23 @@ public class BaselineUpgraderTest {
         assertEquals(1, writes.stream().filter(w -> w.startsWith("schema:")).count());
     }
 
+    @Test public void workspaceWithoutStateInfoFinishesAndLeavesItAbsent() {
+        // Pre-baseline tenant: no StateInfo and none of the baseline masters. Step 1 creates the masters, never StateInfo.
+        rows.keySet().removeIf(key -> key.contains("|common-masters.StateInfo|") || key.contains("|DataSecurity.") || key.contains("|egov-hrms.")
+                || key.contains("|tenant.citymodule|"));
+        when(workspaces.claimUpgrade(anyLong(), any(), anyLong(), anyLong())).thenReturn(Optional.of(new LinkedHashMap<>(Map.of(
+                "tenantId", "walkone", "seedVersion", "1", "progress", new LinkedHashMap<>()))));
+        assertTrue(upgrader.upgradeNext());
+        verify(workspaces, never()).retryUpgrade(anyString(), any(), anyString(), anyBoolean(), anyString(), anyInt(), anyLong());
+        verify(workspaces).finishUpgrade(eq("walkone"), any(), eq(seed.version()), any(), anyLong());
+        assertEquals(List.of("state-info:absent"), finished.get("kept"));
+        assertFalse(rows.containsKey("walkone|common-masters.StateInfo|walkone"));
+        assertFalse(writes.stream().anyMatch(w -> w.contains("common-masters.StateInfo")));
+        for (String schema : List.of("DataSecurity.SecurityPolicy", "egov-hrms.EmployeeType", "tenant.citymodule"))
+            assertTrue(schema, writes.stream().anyMatch(w -> w.startsWith("create:" + schema + ":")));
+        assertFalse("the stray en_KE name key still goes", messages.containsKey("walkone|en_KE|rainmaker-common|TENANT_TENANTS_WALKONE"));
+    }
+
     @Test public void repeatedFailuresAtOnePointStopTheWorkspaceWithOneWarning() {
         var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(BaselineUpgrader.class);
         var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>(); appender.start(); logger.addAppender(appender);

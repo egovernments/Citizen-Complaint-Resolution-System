@@ -40,7 +40,7 @@ Steps, all safe to repeat:
 
 1. Create any missing schemas first, then any missing seed records (actions and role-actions included), the PGR workflow, IdFormat, MobileNumberValidation and DashboardConfig. Records that exist are not rewritten; a record the founder deactivated stays inactive.
 2. For each current StateInfo locale that has seeded packs, add the pack messages the tenant lacks and the `TENANT_TENANTS_<T>` key where the locale has the rainmaker-common pack. Existing messages are not rewritten. If the tenant has no messages of its own there (`default` answers), it is left alone.
-3. From seed v1 only: rewrite `StateInfo.languages` with the current rule (en_IN first) if it still holds exactly what v1 wrote.
+3. From seed v1 only: rewrite `StateInfo.languages` with the current rule (en_IN first) if it still holds exactly what v1 wrote. StateInfo belongs to the workspace, so a tenant without one (provisioned before the baseline) does not get one; this is reported as `state-info:absent`.
 4. From seed v1 only: delete `TENANT_TENANTS_<T>` from locales with no seeded rainmaker-common pack, if its text is still the workspace name. That one key hides every `default` message for the locale (#2257).
 5. Bust the localization cache if steps 2 or 4 changed anything.
 6. Set `seedVersion` to the current version and record a `SEED_UPGRADED` workspace event. Its details list `from`, `to` and `kept`: what was left alone because the founder changed it.
