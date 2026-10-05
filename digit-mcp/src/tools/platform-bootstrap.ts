@@ -181,20 +181,28 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       if (!messages.size) continue;
       const result = { locale, copied: 0, failed: 0 };
       const batch = [...messages.values()];
+      let nameModuleFailed = 0;
       for (let offset = 0; offset < batch.length; offset += 500) {
         const chunk = batch.slice(offset, offset + 500);
         try { await api.localizationUpsert(target, locale, chunk); result.copied += chunk.length; continue; } catch { /* isolate the bad row */ }
         for (const m of chunk) {
           try { await api.localizationUpsert(target, locale, [m]); result.copied++; } catch (error) {
             if (/duplicate|already exists|unique/i.test(error instanceof Error ? error.message : String(error))) result.copied++;
-            else result.failed++;
+            else { result.failed++; if (m.module === tenantName.module) nameModuleFailed++; }
           }
         }
       }
-      // The tenant name is branding an operator may have changed: create it only where absent.
+      // As PGR onboarding (OnboardingSteps.seedsTenantNameModule): a tenant gets its name key only in a
+      // locale where it holds the whole rainmaker-common module. A lone key would stop egov-localization
+      // falling back for that module, and the tenant would lose every other common label (#2257).
+      // The target qualifies when the module was copied in full; the city's root when it holds the
+      // module already. The tenant name is branding an operator may have changed: never overwritten.
+      const copiedNameModule = nameModuleFailed === 0 && batch.some((m) => m.module === tenantName.module && m.code !== tenantName.code);
       for (const tenant of cityRoot ? [target, cityRoot] : [target]) {
         try {
-          const held = await api.localizationSearch(tenant, locale, 'rainmaker-common');
+          if (tenant === target && !copiedNameModule) continue;
+          const held = await api.localizationSearch(tenant, locale, tenantName.module);
+          if (tenant !== target && !held.some((m) => !String(m.code).startsWith('TENANT_TENANTS_'))) continue;
           if (!held.some((m) => m.code === tenantName.code)) await api.localizationUpsert(tenant, locale, [tenantName]);
         } catch { result.failed++; }
       }

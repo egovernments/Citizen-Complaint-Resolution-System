@@ -581,3 +581,29 @@ test('bootstrap copies the source tenant localization packs as before the seed (
   assert.equal(partial.success, false); assert.equal(partial.summary.localizations_failed, 1);
   assert.ok(poisoned.messages.get('ke|en_IN').some((m: any) => m.code === 'GOOD'));
 });
+
+test('the tenant-name key is written only where the whole rainmaker-common module is (#2269 round-3 item 5)', async () => {
+  const f = fixture(), upsert = f.options.api.localizationUpsert;
+  const msg = (code: string, message: string, module = 'rainmaker-common') => ({ code, message, module });
+  const ke = loadPlatformSeed().countryMobileRules.KE;
+  f.rows.set('pg|common-masters.StateInfo/pg', { tenantId: 'pg', schemaCode: 'common-masters.StateInfo', uniqueIdentifier: 'pg',
+    isActive: true, data: { languages: [{ value: 'en_IN' }, { value: 'fr_FR' }, { value: 'pt_BR' }] } });
+  await upsert('pg', 'en_IN', [msg('CS_COMMON_SUBMIT', 'Submit'), msg('CS_COMMON_BROKEN', 'x')]);
+  await upsert('pg', 'fr_FR', [msg('CS_HEADER', 'Plaintes', 'rainmaker-pgr')]); // no rainmaker-common in fr_FR
+  await upsert('pg', 'pt_BR', [msg('CS_COMMON_SUBMIT', 'Enviar')]);
+  // The root holds rainmaker-common in pt_BR only.
+  await upsert('ke', 'pt_BR', [msg('CS_COMMON_SUBMIT', 'Enviar')]);
+  // egov-localization rejects one rainmaker-common row in en_IN, so that module is incomplete there.
+  f.options.api.localizationUpsert = async (tenant: string, locale: string, values: any[]) => {
+    if (tenant === 'ke.nairobi' && values.some(v => v.code === 'CS_COMMON_BROKEN')) throw new Error('HTTP 400');
+    return upsert(tenant, locale, values);
+  };
+  const result = await bootstrapPlatform({ target_tenant: 'ke.nairobi', source_tenant: 'pg', user_validation: [ke] }, f.options);
+  const name = (tenant: string, locale: string) => (f.messages.get(`${tenant}|${locale}`) ?? []).some((m: any) => m.code === 'TENANT_TENANTS_KE_NAIROBI');
+  assert.equal(name('ke.nairobi', 'en_IN'), false, 'rainmaker-common copied only in part');
+  assert.equal(name('ke.nairobi', 'fr_FR'), false, 'no rainmaker-common copied');
+  assert.equal(name('ke.nairobi', 'pt_BR'), true);
+  assert.equal(name('ke', 'pt_BR'), true, 'the root holds the module');
+  for (const locale of ['en_IN', 'fr_FR']) assert.equal(name('ke', locale), false, `the root lacks rainmaker-common in ${locale}`);
+  assert.equal(result.summary.localizations_failed, 1, 'only the rejected row failed');
+});
