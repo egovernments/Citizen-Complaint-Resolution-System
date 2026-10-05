@@ -208,6 +208,23 @@ export async function establishIdentityBffSession({ surface, tenant, authResultI
   return { status: "authenticated", user: { info: scopedInfo, ...tokens } };
 }
 
+/**
+ * Set in this tab when sign-out cleared local state but the BFF did not
+ * confirm it. The BFF cookie (HttpOnly) is then still live, so the login page
+ * must not silently re-establish that session. Cleared by an explicit sign-in
+ * or a successful sign-out (which clears sessionStorage first).
+ */
+export const SIGN_OUT_INCOMPLETE_KEY = "identityBff.signOutIncomplete";
+export function markSignOutIncomplete() {
+  try { window.sessionStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, "1"); } catch (_) { /* storage unavailable */ }
+}
+export function signOutIncomplete() {
+  try { return window.sessionStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === "1"; } catch (_) { return false; }
+}
+export function clearSignOutIncomplete() {
+  try { window.sessionStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY); } catch (_) { /* storage unavailable */ }
+}
+
 /** Where to land after logout for `surface` under `appBasePath`. */
 export function identityBffLogoutRedirect(appBasePath, surface) {
   return surface === "citizen"

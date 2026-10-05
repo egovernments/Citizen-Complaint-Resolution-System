@@ -3,7 +3,7 @@ import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
 import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/authSurface";
-import { identityBffLogout, identityBffLogoutRedirect } from "../../auth/identityBffLogin";
+import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
 export const UserService = {
@@ -88,7 +88,9 @@ export const UserService = {
       try {
         await identityBffLogout({ surface, scope, fetchImpl });
       } catch (e) {
-        // The BFF session cookie may outlive this; the local DIGIT session is gone.
+        // The BFF session cookie outlives this; the local DIGIT session is gone.
+        // The login page must not use that cookie to sign this tab back in.
+        markSignOutIncomplete();
       } finally {
         window.location.replace(
           `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,

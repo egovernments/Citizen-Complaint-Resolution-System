@@ -46,6 +46,8 @@ import {
   establishIdentityBffSession,
   restrictDestination as restrictIdentityBffDestination,
   surfaceBase as identityBffSurfaceBase,
+  signOutIncomplete as identityBffSignOutIncomplete,
+  clearSignOutIncomplete as clearIdentityBffSignOutIncomplete,
 } from "./services/auth/identityBffLogin";
 import { fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp } from "./services/auth/citizenOtp";
 
@@ -105,6 +107,7 @@ export * from "./constants/mobileValidation";
 
 export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter, isIdentityBffAuth,
   buildIdentityBffAuthorizeUrl, establishIdentityBffSession, restrictIdentityBffDestination, identityBffSurfaceBase,
+  identityBffSignOutIncomplete, clearIdentityBffSignOutIncomplete,
   fetchCitizenSigninMethods, fillMessage, sendCitizenOtp, verifyCitizenOtp };
 
 export * as IdentityAccount from "./services/auth/identityAccount";

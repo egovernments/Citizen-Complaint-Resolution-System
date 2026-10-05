@@ -41,7 +41,8 @@ before(async () => {
             export * from ${JSON.stringify(auth + "/citizenOtp.js")};
             export * from ${JSON.stringify(auth + "/authSurface.js")};
             export { establishIdentityBffSession, buildAuthorizeUrl as buildIdentityBffAuthorizeUrl,
-              surfaceBase as identityBffSurfaceBase, restrictDestination as restrictIdentityBffDestination } from ${JSON.stringify(auth + "/identityBffLogin.js")};
+              surfaceBase as identityBffSurfaceBase, restrictDestination as restrictIdentityBffDestination,
+              signOutIncomplete as identityBffSignOutIncomplete, clearSignOutIncomplete as clearIdentityBffSignOutIncomplete } from ${JSON.stringify(auth + "/identityBffLogin.js")};
             export const DEFAULT_MOBILE_PREFIX = '+254';`;
         } else if (args.path === "react-i18next") contents = `export const useTranslation = () => ({ t: (key, options) => options?.defaultValue || key });`;
         else if (args.path === "empty") contents = `export default () => null;`;
@@ -266,6 +267,37 @@ test("pending invitation UI waits for consent and shows stale rejection", async 
   assert.ok(calls.includes("/identity/v1/workspace-invitations/_accept?surface=employee"));
   assert.match(text(view.root.findByProps({ role: "alert" })), /expired or changed/);
   assert.ok(button(view, "Try again"));
+  view.unmount();
+});
+
+test("after an unconfirmed sign-out the login page warns instead of re-establishing the session", async () => {
+  const calls = [];
+  browser("employee", async (url) => {
+    calls.push(url);
+    if (url.includes("/session")) return json(200, { authenticated: true, tenant });
+    return json(200, { access_token: "prev-user-token", UserRequest: { uuid: "prev", tenantId: tenant.tenantId, type: "EMPLOYEE", roles: [] } });
+  });
+  const flags = new Map([["identityBff.signOutIncomplete", "1"]]);
+  window.sessionStorage = { getItem: (k) => flags.get(k) ?? null, setItem: (k, v) => flags.set(k, v), removeItem: (k) => flags.delete(k) };
+  let signedIn = 0;
+  let signedOut = 0;
+  Digit.UserService.logout = async () => { signedOut += 1; };
+  const Shell = ({ children }) => ui.React.createElement("section", null, children);
+  const Login = () => {
+    const signIn = ui.useIdentityBffSignIn({ surface: "employee", t, onAuthenticated: () => { signedIn += 1; } });
+    return ui.React.createElement(ui.SignInFailureCard, { signIn, Shell });
+  };
+  const view = await render(Login);
+  assert.deepEqual(calls, []);
+  assert.equal(signedIn, 0);
+  assert.match(text(view.root.findByProps({ role: "alert" })), /Sign-out may be incomplete/);
+  await click(button(view, "Try signing out again"));
+  assert.equal(signedOut, 1);
+  assert.equal(flags.has("identityBff.signOutIncomplete"), true);
+  // An explicit sign-in clears the flag and only then consults the BFF.
+  await click(button(view, "Sign in"));
+  assert.equal(flags.has("identityBff.signOutIncomplete"), false);
+  assert.ok(calls.some((url) => url.includes("/identity/v1/session")));
   view.unmount();
 });
 

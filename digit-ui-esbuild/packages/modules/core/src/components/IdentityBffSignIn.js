@@ -6,7 +6,9 @@ import {
 } from "@egovernments/digit-ui-components-v2";
 import {
   buildIdentityBffAuthorizeUrl,
+  clearIdentityBffSignOutIncomplete,
   establishIdentityBffSession,
+  identityBffSignOutIncomplete,
   identityBffSurfaceBase,
   restrictIdentityBffDestination,
   IdentityAccount,
@@ -105,18 +107,31 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     }
   });
 
+  // An explicit sign-in: the user chose to continue despite the warning.
+  const signInAfterIncompleteSignOut = () => {
+    clearIdentityBffSignOutIncomplete();
+    return retry(establishSession);
+  };
+
   useEffect(() => {
+    // The last sign-out in this tab could not end the BFF session, so its
+    // cookie may still be live: do not silently sign that user back in.
+    if (identityBffSignOutIncomplete()) {
+      setStatus("signout-incomplete");
+      setMessage(tr("CORE_IDENTITY_SIGNOUT_INCOMPLETE", "Sign-out may be incomplete — close the browser or try again."));
+      return;
+    }
     retry(establishSession);
     // Tenant context is immutable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation };
+  return { tenant, status, setStatus, message, setMessage, tr, unavailable, beginSignIn, establishSession, complete, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut };
 };
 
 /** The card shown when sign-in stops: retry, sign in again, or sign out. */
 export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
-  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation } = signIn;
+  const { tenant, status, message, tr, beginSignIn, establishSession, retry, invitation, acceptInvitation, signInAfterIncompleteSignOut } = signIn;
   return (
     <Shell>
       <V2Card
@@ -158,18 +173,25 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
             {tr("CORE_IDENTITY_ACCEPT_INVITATION", "Accept invitation")}
           </V2Button>
         )}
+        {status === "signout-incomplete" && (
+          <V2Button type="button" width="full" variant="secondary" onClick={signInAfterIncompleteSignOut}>
+            {tr("CORE_IDENTITY_SIGN_IN", "Sign in →")}
+          </V2Button>
+        )}
         <V2Button
           type="button"
           width="full"
           onClick={
-            status === "forbidden" || status === "pending-invitation"
+            status === "forbidden" || status === "pending-invitation" || status === "signout-incomplete"
               ? () => retry(() => Digit.UserService.logout())
               : status === "error"
                 ? () => retry(establishSession)
                 : () => retry(onSignIn || beginSignIn)
           }
         >
-          {status === "forbidden" || status === "pending-invitation"
+          {status === "signout-incomplete"
+            ? tr("CORE_IDENTITY_SIGN_OUT_AGAIN", "Try signing out again")
+            : status === "forbidden" || status === "pending-invitation"
             ? tr("CORE_IDENTITY_SIGN_OUT", "Sign out")
             : status === "error"
               ? tr("CORE_IDENTITY_TRY_AGAIN", "Try again")
