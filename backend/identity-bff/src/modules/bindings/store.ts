@@ -59,8 +59,7 @@ const indexed = (user: BindingUser) =>
   bindingTenants(bindingsFromUser(user)).join() === [...user.attributes?.["digit.bindingTenants"] ?? []].sort().join();
 
 /** Backfills the tenant index for records written before it existed. Caller holds the person lease. */
-export async function indexBindingTenants(subject: string, snapshot?: BindingUser): Promise<void> {
-  if (snapshot && indexed(snapshot)) return;
+export async function indexBindingTenants(subject: string): Promise<void> {
   await updateKeycloakUser(subject, (user) => indexed(user) ? null
     : { ...user, attributes: { ...user.attributes, "digit.bindingTenants": bindingTenants(bindingsFromUser(user)) } });
 }

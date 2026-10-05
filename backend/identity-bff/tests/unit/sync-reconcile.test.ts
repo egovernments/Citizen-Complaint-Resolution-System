@@ -5,7 +5,7 @@ import { currentPersonLease, withPersonLease } from "../../src/modules/accounts/
 import { recordToken, readToken } from "../../src/modules/revocation/inventory.js";
 import * as digitClient from "../../src/modules/managed-accounts/digit-user-client.js";
 import * as credentials from "../../src/modules/accounts/credential-service.js";
-import { bindingsFor } from "../../src/modules/bindings/store.js";
+import { bindingsFor, indexBindingTenants } from "../../src/modules/bindings/store.js";
 import { runReconcile, startReconcile, getReconcileReadiness, requestReconcileNow, reconcileStatsKey, reconcileLeaseKey } from "../../src/modules/sync/reconcile.js";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), read: vi.fn(), bindings: vi.fn(), organization: vi.fn(),
@@ -288,6 +288,12 @@ describe("reconciliation", () => {
     expect((await runReconcile()).failures).toHaveLength(1);
     expect(await getRedis().hget(reconcileStatsKey(), "completedGeneration")).toBeNull();
     expect((await getReconcileReadiness()).status).toBe("down");
+  });
+  it("backfills the binding-tenant index before, and despite, a failed DIGIT read", async () => {
+    mocks.read.mockRejectedValue(new digitClient.DigitUnavailableError("DIGIT unavailable"));
+    vi.mocked(indexBindingTenants).mockImplementation(async () => expect(mocks.read).not.toHaveBeenCalled());
+    expect((await runReconcile()).failures).toEqual([{ subject: "person", code: "DIGIT_UNAVAILABLE" }]);
+    expect(indexBindingTenants).toHaveBeenCalledExactlyOnceWith("person");
   });
   it("returns not acquired instead of running a second sweep", async () => {
     await getRedis().set(reconcileLeaseKey(), "other", "PX", 10000);

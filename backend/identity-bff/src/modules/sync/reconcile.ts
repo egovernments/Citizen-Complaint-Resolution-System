@@ -133,10 +133,11 @@ export async function runReconcile(): Promise<ReconcileResult> {
           try {
             await assertHeld();
             await withPersonLease(subject, async lease => {
+              // Keycloak only, so it runs before (and despite) the DIGIT reads below.
+              await indexBindingTenants(subject);
               // The store persists pending expiry under the established lock order.
               const bindings = await readBindings(subject);
               const snapshot = await readMirrorSnapshot(subject);
-              await indexBindingTenants(subject, snapshot.user);
               const revoke = async (account: { tenantId: string; uuid: string }, reason: Parameters<typeof revokeAccount>[2], fallback = false) => {
                 await assertHeld();
                 await lease.assertHeld();

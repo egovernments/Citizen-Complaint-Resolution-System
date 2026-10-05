@@ -520,7 +520,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. `first` defaults to 0, and `max` to 
 ```
 
 - `first`/`max` page the Keycloak search `q=digit.bindingTenants:<tenantId>&exact=true` (§5.1), so one request reads at most `max` users, whatever the realm size. Order is Keycloak's (username). The state filter applies after the page is read, so a page may hold fewer than `max` members: continue with `first = nextFirst` until `nextFirst` is absent.
-- A binding written before `digit.bindingTenants` existed is listed once the next reconcile pass backfills the index.
+- A binding written before `digit.bindingTenants` existed is listed once the next reconcile pass backfills the index. The backfill reads and writes only Keycloak and runs before the pass's DIGIT reads, so a DIGIT failure for that person doesn't skip it.
 - Read-only: it takes no lease and writes nothing. An expired invitation is reported as `removed` (with `removedAt = expiresAt`); reconcile persists it later.
 - No per-member DIGIT calls (only the caller's live `ACCOUNT_ADMIN` check). `name` is the Keycloak `firstName` (the mirrored DIGIT name, §5.1). `digitActive`, `roles` and `missing: true` come from the person's `digit.accounts` staff entry for this tenant, which exists only for `active` bindings and is as fresh as the last mirror.
 - Errors: `INVALID_REQUEST` 400; `SESSION_REQUIRED` / `SESSION_REVOKED` 401; `ADMIN_REQUIRED` 403; 503.
