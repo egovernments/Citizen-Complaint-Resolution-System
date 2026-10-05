@@ -4,7 +4,7 @@ import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
 import { indexBindingTenants } from "../../src/modules/bindings/store.js";
 import { config } from "../../src/infrastructure/config.js";
 import type { UserRepresentation } from "../../src/modules/sync/keycloak-writer.js";
-const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}>, passwords: new Set<string>() }));
+const f = vi.hoisted(() => ({ users: new Map<string, UserRepresentation>(), members: new Set<string>(), crash: "", emails: 0, activations: 0, revoked: [] as string[], createCount: 0, conflict: false, targetRoles: [] as Array<{code: string; tenantId: string}>, callerRoles: [] as Array<{code: string; tenantId: string}>, passwords: new Set<string>(), duringEmail: undefined as undefined | (() => Promise<void>) }));
 function bindingDoc(user: UserRepresentation) { return JSON.parse(user.attributes?.["digit.bindings"]?.[0] || '{"v":1,"bindings":[]}'); }
 vi.mock("../../src/modules/organizations/organization-service.js", () => {
   const fail = (step: string) => { if (f.crash === step) { f.crash = ""; throw new Error(`crash:${step}`); } };
@@ -24,7 +24,7 @@ vi.mock("../../src/modules/organizations/organization-service.js", () => {
         const first = Number(url.searchParams.get("first") || 0);
         return Response.json(users.slice(first, first + Number(url.searchParams.get("max") || 100)));
       }
-      if (url.pathname.includes("/execute-actions-email")) { f.emails++; fail("email"); return new Response(null, { status: 204 }); }
+      if (url.pathname.includes("/execute-actions-email")) { f.emails++; await f.duringEmail?.(); fail("email"); return new Response(null, { status: 204 }); }
       if (url.pathname.startsWith("/organizations/") && init?.method === "DELETE") {
         const parts = url.pathname.split("/"); f.members.delete(`${parts[2]}:${parts[4]}`); fail("remove-membership"); return new Response(null, { status: 204 });
       }
@@ -73,7 +73,7 @@ vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(a
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
 import { acceptWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
-import { isOrganizationMember } from "../../src/modules/organizations/organization-service.js";
+import { isOrganizationMember, request } from "../../src/modules/organizations/organization-service.js";
 import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
@@ -81,7 +81,7 @@ const uuid = "00000000-0000-4000-8000-000000000001";
 const input = { actor: "admin", tenantId: "pg", digitUuid: uuid, email: "employee@example.test" };
 beforeAll(() => { Object.assign(config, { cachePrefix: `members-test-${process.pid}`, identityCredentialKeyCurrent: 1 }); initCache(); });
 afterAll(() => closeCache());
-beforeEach(async () => { await getRedis().del(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`); f.passwords.clear(); f.users.clear(); f.members.clear(); f.crash = ""; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
+beforeEach(async () => { await getRedis().del(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`); f.passwords.clear(); f.users.clear(); f.members.clear(); f.crash = ""; f.duringEmail = undefined; f.emails = 0; f.activations = 0; f.revoked = []; f.createCount = 0; f.conflict = false; f.targetRoles = [{ code: "EMPLOYEE", tenantId: "pg" }]; f.callerRoles = [{ code: "ACCOUNT_ADMIN", tenantId: "pg" }, ...f.targetRoles]; });
 
 describe("resumable workspace membership", () => {
   it.each(["create", "membership", "binding", "activation", "email", "mirror", "clear"])("resumes after a crash at %s without creating another identity", async (step) => {
@@ -267,6 +267,31 @@ describe("admin resend of the activation email", () => {
     await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
     await linkWorkspaceMember(input); await removeWorkspaceMember("admin", "pg", uuid);
     await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "BINDING_REMOVED" });
+  });
+  it("refuses an email that no longer matches the person, and a disabled person, without sending", async () => {
+    await linkWorkspaceMember(input); const emails = f.emails;
+    const user = f.users.get("new-1")!;
+    // Found by username = the old email, but the email has changed.
+    f.users.set("new-1", { ...user, email: "changed@example.test" });
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
+    // A stale search hit whose fresh read under the lease no longer has the email.
+    vi.mocked(request).mockImplementationOnce(async () => Response.json([user]));
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
+    f.users.set("new-1", { ...user, enabled: false });
+    await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "IDENTITY_DISABLED", status: 403 });
+    expect(f.emails).toBe(emails);
+    expect(await getRedis().exists(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`)).toBe(0);
+  });
+  it("a failed send does not release a window another request now owns", async () => {
+    const key = `${config.cachePrefix}:identity:member-resend:pg:${uuid}`;
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
+    f.passwords.add("existing");
+    await linkWorkspaceMember(input);
+    // Simulate this request's window expiring mid-send and another request taking it.
+    f.duringEmail = async () => { await getRedis().set(key, "other-request", "EX", 60); };
+    f.crash = "email";
+    await expect(linkWorkspaceMember(resend)).rejects.toThrow("crash:email");
+    expect(await getRedis().get(key)).toBe("other-request");
   });
   it("releases the cooldown when the send fails", async () => {
     await linkWorkspaceMember(input);

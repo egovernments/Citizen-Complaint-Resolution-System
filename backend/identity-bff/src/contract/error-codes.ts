@@ -93,7 +93,7 @@ export const ERROR_CODES = {
   OTP_CHANNEL_UNAVAILABLE: { status: 503, retry: "yes", meaning: "The OTP sender failed; the challenge was dropped and quota refunded" },
   OTP_INVALID: { status: 400, retry: "after-change", meaning: "Wrong code; attemptsRemaining is set" },
   OTP_EXPIRED: { status: 400, retry: "no", meaning: "The challenge is missing, expired, used up, or for another route or purpose" },
-  IDENTITY_DISABLED: { status: 403, retry: "no", meaning: "The phone's Keycloak user is disabled (D6)" },
+  IDENTITY_DISABLED: { status: 403, retry: "no", meaning: "The Keycloak user is disabled: the phone's (D6), or a _link resend target" },
   IDENTITY_CONFLICT: { status: 409, retry: "no", meaning: "Two verified Keycloak users hold the phone" },
   PHONE_IN_USE: { status: 409, retry: "no", meaning: "Another person owns the phone (step-up or change)" },
   PHONE_NOT_VERIFIED: { status: 403, retry: "after-change", meaning: "The citizen session has no verified phone" },

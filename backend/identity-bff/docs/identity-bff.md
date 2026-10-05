@@ -503,9 +503,9 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
   - A repeat returns the current state. It never demotes `active` and never resurrects `removed`.
   - `reinvite: true` on a `pending` or `removed` key issues `invitationVersion + 1` with a fresh expiry, which makes the old version stale. On a `removed` key the re-invite may name a different uuid (the person's new DIGIT record). Without it, a `removed` key → `BINDING_REMOVED`.
 - **Resend** (`resend: true`; not with `reinvite`): re-sends sign-in setup for the person found by `email` whose `pending` or `active` binding at `tenantId` is `digitUuid`. The binding is never changed, so a retry is safe.
-  - The admin and target checks above apply. No such binding → `DIGIT_ACCOUNT_NOT_FOUND`; a `removed` (or expired) one → `BINDING_REMOVED`.
+  - The admin and target checks above apply. No person with that email, no binding at `tenantId`, a binding to another uuid, or a person whose email, read fresh under the lease, no longer equals `email` → `DIGIT_ACCOUNT_NOT_FOUND` (a username match whose email has changed → `IDENTITY_EMAIL_CHANGED`, as above); a `removed` (or expired) binding → `BINDING_REMOVED`; a disabled Keycloak user → 403 `IDENTITY_DISABLED` (nothing is sent).
   - Under the person lease, read fresh: if Keycloak still has `UPDATE_PASSWORD` pending, or the person has neither a password nor a linked provider, it sends the password-setup email (§3.2.6, with `VERIFY_EMAIL` when unverified) → `activationEmail: "password_setup"`. Else, if the email is unverified, it sends `VERIFY_EMAIL` → `"verify_email"`. Else → 409 `ACTIVATION_NOT_NEEDED` (nothing is sent; a pending invitee then accepts from `/session`).
-  - One send per member per 60 s (`{p}:identity:member-resend:*`, §7.2); a repeat inside the window → 429 `RESEND_TOO_SOON` with `Retry-After`. A failed send releases the window.
+  - At most one `resend` per binding (tenant + `digitUuid`) per 60 s (`{p}:identity:member-resend:{tenantId}:{uuid}`, §7.2); a repeat inside the window → 429 `RESEND_TOO_SOON` with `Retry-After`. The window is token-owned: a successful send lets it expire, and a failed send deletes it only if it is still that request's. The window covers `resend` only: a plain `_link` repeat for an unverified existing invitee re-sends `VERIFY_EMAIL` without it (above), and a person bound at several tenants has one window per tenant.
 - **Locks:** person → uuid (resend: person only).
 - Errors: as listed in `routes.ts`, including `BINDING_BUSY`, `IDENTITY_BUSY`, `DIGIT_UNAVAILABLE` and `IDENTITY_UNAVAILABLE` (503).
 
@@ -734,7 +734,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `OTP_CHANNEL_UNAVAILABLE` | 503 | yes | The OTP sender failed; the challenge was dropped and quota refunded |
 | `OTP_INVALID` | 400 | after-change | Wrong code; attemptsRemaining is set |
 | `OTP_EXPIRED` | 400 | no | The challenge is missing, expired, used up, or for another route or purpose |
-| `IDENTITY_DISABLED` | 403 | no | The phone's Keycloak user is disabled (D6) |
+| `IDENTITY_DISABLED` | 403 | no | The Keycloak user is disabled: the phone's (D6), or a _link resend target |
 | `IDENTITY_CONFLICT` | 409 | no | Two verified Keycloak users hold the phone |
 | `PHONE_IN_USE` | 409 | no | Another person owns the phone (step-up or change) |
 | `PHONE_NOT_VERIFIED` | 403 | after-change | The citizen session has no verified phone |
@@ -921,7 +921,7 @@ A `nil` reply means the session was revoked: answer 401 and never recreate it. A
 | `{p}:identity:password-setup:{id}` | setup attempt JSON (`returnTo` already holds the surface's path) | 2700 s | S |
 | `{p}:identity:magic-link-signup-limit:{ip\|email}:{ref}` | counter | 1800 s | S |
 | `{p}:identity:password-setup-limit:{ip\|account}:{ref}` | counter | 900 s | S |
-| `{p}:identity:member-resend:{tenantId}:{uuid}` | `"1"` (`_link` resend cooldown, `SET NX`) | 60 s | S |
+| `{p}:identity:member-resend:{tenantId}:{uuid}` | random token (`_link` resend cooldown, `SET NX`; compare-and-delete on a failed send) | 60 s | S |
 
 The magic-link and password-setup IP limit keys switch from the raw IP to `ipRef` (item 15).
 

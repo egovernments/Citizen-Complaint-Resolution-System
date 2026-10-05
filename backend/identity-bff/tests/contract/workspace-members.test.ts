@@ -105,9 +105,9 @@ describe("workspace membership HTTP contract", () => {
     expect(response.headers.get("retry-after")).toBe("42");
     await expectContractError(response, routes.link, "RESEND_TOO_SOON");
   });
-  it("refuses a resend for a member who is already set up", async () => {
-    f.signedIn = true; f.failure = "ACTIVATION_NOT_NEEDED";
-    await expectContractError(await post(routes.link.path, { ...valid, resend: true }), routes.link, "ACTIVATION_NOT_NEEDED");
+  it.each(["ACTIVATION_NOT_NEEDED", "IDENTITY_DISABLED"])("refuses a resend with %s", async (code) => {
+    f.signedIn = true; f.failure = code;
+    await expectContractError(await post(routes.link.path, { ...valid, resend: true }), routes.link, code);
   });
   it("accepts a member state filter, including removed", async () => {
     f.signedIn = true;

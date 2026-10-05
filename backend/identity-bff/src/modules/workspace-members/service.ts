@@ -6,7 +6,7 @@ import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
 import { ensureOrganizationMembership, inspectPasswordSetupAccountById, isOrganizationMember, request } from "../organizations/organization-service.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
 import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute } from "../onboarding/primitives.js";
@@ -144,18 +144,22 @@ async function resendActivation(input: { actor: string; tenantId: string; digitU
     const binding = record && effectiveBinding(record);
     if (normalizeLinkEmail(user.email || "") !== email || binding?.uuid !== input.digitUuid) throw new BindingError("DIGIT_ACCOUNT_NOT_FOUND", "No binding matches the employee and email");
     if (binding.state === "removed") throw new BindingError("BINDING_REMOVED", "This binding was removed");
+    // A disabled person can't use either email; the condition won't change on retry.
+    if (user.enabled === false) throw new BindingError("IDENTITY_DISABLED", "The member's identity is disabled");
     const account = await inspectPasswordSetupAccountById(subject);
     if (!account) throw new BindingError("IDENTITY_UNAVAILABLE", "The identity is not available");
     const needsPassword = user.requiredActions?.includes("UPDATE_PASSWORD") || (!account.hasPassword && !account.federatedProviders.length);
     if (!needsPassword && account.emailVerified) throw new BindingError("ACTIVATION_NOT_NEEDED", "The member has already set up sign-in");
     const key = `${config.cachePrefix}:identity:member-resend:${input.tenantId}:${input.digitUuid}`;
-    if (await getRedis().set(key, "1", "EX", RESEND_COOLDOWN_SECONDS, "NX") !== "OK") throw new ResendTooSoonError(Math.max(1, await getRedis().ttl(key)));
+    // Token-owned window: a success lets it expire; a failed send releases only its own window.
+    const window = await acquireRedisLease(key, { ttlMs: RESEND_COOLDOWN_SECONDS * 1000 });
+    if (!window) throw new ResendTooSoonError(Math.max(1, await getRedis().ttl(key)));
     try {
       await lease.assertHeld();
       if (needsPassword) await sendPasswordSetup({ userId: subject, hadPassword: account.hasPassword, emailVerified: account.emailVerified,
         returnTo: config.identityPostLoginRedirect, clientId: config.keycloakBffClientId });
       else await sendVerifyEmail(subject);
-    } catch (error) { await getRedis().del(key); throw error; }
+    } catch (error) { await window.release(); throw error; }
     return { binding: publicBinding(subject, binding), identityUserCreated: false, activationEmailSent: true,
       activationEmail: needsPassword ? "password_setup" as const : "verify_email" as const };
   });
