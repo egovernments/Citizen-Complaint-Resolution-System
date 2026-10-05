@@ -151,7 +151,7 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toMatchObject({ email: "new@example.test", emailVerified: false, username: input.email });
     expect(f.activations).toBe(before);
   });
-  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "operational role at another root", "other binding", "other membership", "citizen account", "verified phone"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
+  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "operational role at another root", "other binding", "other membership", "citizen account", "verified phone", "legacy citizen account link", "citizen registration"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
     await linkWorkspaceMember(input);
     if (reason === "higher role") f.targetRoles.push({ code: "SUPERUSER", tenantId: "pg" });
     if (reason === "admin role at a sub-tenant") f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg.citya" });
@@ -166,6 +166,8 @@ describe("resumable workspace membership", () => {
     if (reason === "operational role at another root") f.targetRoles.push({ code: "GRO", tenantId: "other" });
     if (reason === "other membership") f.members.add("other:new-1");
     if (reason === "verified phone") Object.assign(f.users.get("new-1")!.attributes!, { phoneNumber: ["+254712345678"], phoneNumberVerified: ["true"] });
+    if (reason === "legacy citizen account link") Object.assign(f.users.get("new-1")!.attributes!, { "digit.accountLinks": ["CITIZEN|pg|citizen-uuid"] });
+    if (reason === "citizen registration") Object.assign(f.users.get("new-1")!.attributes!, { "digit.citizenRegistrations": ["pg"] });
     if (reason === "citizen account") {
       const user = f.users.get("new-1")!;
       const entries = JSON.parse(user.attributes!["digit.accounts"]![0]).entries;
