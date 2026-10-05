@@ -28,6 +28,14 @@ Rows are written with source = cod | geoboundaries, id = <source>:<ISO3>:<code>,
 subtype = country | ADM<n>, admin_level = n, and official = 1 on the chosen
 source's rows. What was kept, skipped and why lands in `official_datasets`.
 
+Agreement: each kept level of the chosen set is compared with the same level of
+the other source. An area is "matched" when the other source has an area whose
+overlap with it is at least MATCH_IOU of their combined area; the level report
+gets other_areas (0 = the other source has no such level), matched (% of the
+chosen areas) and, when only a few areas are off, their names. The configurator
+shows this as the set's confidence: evidence from an independently drawn
+source, not proof that the boundaries are current.
+
 Environment:
   COUNTRIES              ISO 3166-1 alpha-2 codes, as for scrape.py
   OFFICIAL_SOURCES       comma list of cod,geoboundaries (default both);
@@ -69,6 +77,8 @@ EQUAL_AREA = 'EPSG:6933'
 SLIVER_M = 50.0  # half the width of a gap ignored as a sliver
 MAX_ADM = 5
 SOURCES = ('cod', 'geoboundaries')
+MATCH_IOU = 0.8           # shared area / combined area for two areas to count as the same
+MAX_NAMED_MISMATCHES = 3  # name the unmatched areas only when there are this few
 HDX_PACKAGE = 'https://data.humdata.org/api/3/action/package_show?id=cod-ab-{iso3}'
 GB_LEVEL = 'https://www.geoboundaries.org/api/current/gbOpen/{iso3}/ADM{n}/'
 # COD bundles ship lines, points and label layers next to the polygons.
@@ -169,6 +179,12 @@ def cod_frame(gdf, n):
     gdf = gdf.rename(columns=str.lower)
     cols = set(gdf.columns)
     name = _first(cols, f'adm{n}_name', f'adm{n}_en', f'admin{n}name_en', f'adm{n}_name1', f'admin{n}name')
+    if not name:
+        # Single-language sets name the column by language instead: Brazil's
+        # is ADM1_PT / ADM2_PT. Without this every area came out unnamed, and
+        # the configurator skips unnamed areas, so Brazil couldn't be onboarded.
+        langs = sorted(c for c in cols if re.fullmatch(rf'adm{n}_[a-z]{{2}}', c))
+        name = langs[0] if langs else None
     code = _first(cols, f'adm{n}_pcode', f'admin{n}pcode')
     parent = _first(cols, f'adm{n - 1}_pcode', f'admin{n - 1}pcode') if n > 0 else None
     return gpd.GeoDataFrame({
@@ -376,7 +392,60 @@ def choose(datasets):
     return max(usable, key=lambda d: (len(d.levels), len(d.levels[-1].gdf), d.quality == 'cod-enhanced', d.source == 'cod'))
 
 
+
+def agreement(level, other):
+    """Compare a kept level with another source's same level.
+
+    Returns other_areas, matched (% of `level`'s areas that have an area in
+    `other` overlapping them by >= MATCH_IOU) and unmatched (their names, when
+    there are at most MAX_NAMED_MISMATCHES of them). `other` may be None.
+    """
+    if other is None or not len(other.gdf):
+        return {'other_areas': 0, 'matched': None, 'unmatched': []}
+    # Light simplification (a quarter of the sliver width) keeps BR's 5,572
+    # municipalities fast without moving any overlap meaningfully.
+    a = shapely.simplify(level.gdf['ea'].values, SLIVER_M / 2)
+    b = shapely.simplify(other.gdf['ea'].values, SLIVER_M / 2)
+    ia, ib = shapely.STRtree(b).query(a, predicate='intersects')
+    try:
+        inter = shapely.area(shapely.intersection(a[ia], b[ib]))
+    except shapely.errors.GEOSException:
+        inter = shapely.area(shapely.intersection(_fix(a[ia]), _fix(b[ib])))
+    union = shapely.area(a[ia]) + shapely.area(b[ib]) - inter
+    best = np.zeros(len(a))
+    np.maximum.at(best, ia, np.where(union > 0, inter / np.where(union > 0, union, 1), 0.0))
+    off = np.flatnonzero(best < MATCH_IOU)
+    names = [str(n) for n in level.gdf['name'].values[off] if isinstance(n, str) and n]
+    return {
+        'other_areas': len(other.gdf),
+        'matched': round(100 * float(np.mean(best >= MATCH_IOU)), 1),
+        'unmatched': names if len(off) <= MAX_NAMED_MISMATCHES else [],
+    }
+
+
+def add_agreement(best, datasets, report):
+    """Write the chosen set's per-level agreement with the other source into its report."""
+    others = [d for d in datasets if d is not best and d.usable]
+    other_levels = {lv.n: lv for lv in others[0].levels} if others else {}
+    by_level = {r['level']: r for r in report}
+    for lv in best.levels[1:]:
+        by_level[f'ADM{lv.n}'].update(agreement(lv, other_levels.get(lv.n)))
+
+
 # ---------------------------------------------------------------- writing
+
+def polygonal(geoms):
+    """Only the polygon parts. make_valid can leave a stray line next to an area
+    (a GeometryCollection), which clients that take Polygon / MultiPolygon drop
+    whole — 12 of Brazil's municipalities went missing that way."""
+    out = []
+    for g in geoms:
+        if g is not None and g.geom_type == 'GeometryCollection':
+            parts = [p for p in shapely.get_parts(g) if p.geom_type in ('Polygon', 'MultiPolygon')]
+            g = parts[0] if len(parts) == 1 else shapely.union_all(parts) if parts else g
+        out.append(g)
+    return np.asarray(out, dtype=object)
+
 
 def rows_for(ds, alpha2, tolerance, chosen):
     prefix = f'{ds.source}:{ds.iso3}'
@@ -395,7 +464,7 @@ def rows_for(ds, alpha2, tolerance, chosen):
         ids_by_level[i] = ids
         # Only COD codes are P-codes; a geoBoundaries shapeID is an internal id.
         pcodes = [c if ds.source == 'cod' and not c.startswith('ADM') else None for c in codes]
-        geoms = g.geometry.values
+        geoms = polygonal(g.geometry.values)
         if tolerance > 0:
             geoms = shapely.simplify(geoms, tolerance, preserve_topology=True)
         geoms = shapely.transform(np.asarray(geoms), lambda xy: np.round(xy, 6))
@@ -477,6 +546,11 @@ def main():
                     ds = Dataset(src, iso3, usable=False, note=f'failed: {type(e).__name__}: {e}'[:500])
             datasets.append(ds)
         best = choose(datasets)
+        if best is not None:
+            try:
+                add_agreement(best, datasets, reports[best.source])
+            except Exception as e:  # the comparison is informative; it must not cost the country its set
+                print(f'  {alpha2}: agreement check failed ({type(e).__name__}: {e})')
         cur.execute(f'DELETE FROM boundaries WHERE country = ? AND source IN ({placeholders})', (alpha2, *sources))
         cur.execute(f'DELETE FROM official_datasets WHERE country = ? AND source IN ({placeholders})', (alpha2, *sources))
         for ds in datasets:
@@ -494,6 +568,11 @@ def main():
             print(f"  {alpha2} {ds.source:13} {'CHOSEN ' if chosen else '       '}levels {kept}"
                   f"{'  (' + ds.note + ')' if ds.note else ''}")
             for r in reports.get(ds.source, []):
+                if chosen and r.get('other_areas') is not None and r['level'] != 'ADM0':
+                    print(f"      {r['level']} vs other source: " + (
+                        f"{r['matched']}% of {r['areas_kept']:,} matched ({r['other_areas']:,} there)"
+                        + (f"; off: {', '.join(r['unmatched'])}" if r['unmatched'] else '')
+                        if r['other_areas'] else 'no second source'))
                 if not r['kept']:
                     print(f"      dropped {r['level']}: {r['coverage']}% coverage of {r['parent']}, {r['orphans']}% outside it")
         conn.commit()
