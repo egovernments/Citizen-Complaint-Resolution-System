@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { digitApi } from '../services/digit-api.js';
+import { digitDb } from '../services/digit-db.js';
 import { adminRoleCodes, checkToolAccess } from '../services/auth.js';
 import { loadPlatformSeed, substituteTenant } from './platform-baseline.js';
 
@@ -19,6 +21,14 @@ function hasWorkspaceRoot(trees: Record<string, unknown>[], tenant: string): boo
   });
 }
 
+/** Seeded by SQL before the first gateway write: accesscontrol authorizes writes from these rows (CCRS#1928). */
+const ACCESS_FLOOR_SCHEMAS = ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions'];
+
+interface FloorDb {
+  query<T extends Record<string, any>>(sql: string, params?: unknown[]): Promise<T[]>;
+  execute(sql: string, params?: unknown[]): Promise<number>;
+}
+
 interface BootstrapOptions {
   deriveMobile(regex: string, length: number, requested?: string): string;
   defaultPassword(): string;
@@ -28,6 +38,8 @@ interface BootstrapOptions {
   userHost?: string;
   direct?: boolean;
   stateTenant?: string;
+  /** DIGIT database for the role-action floor; defaults to the shared egov pool. */
+  db?: FloorDb;
 }
 
 /** Versioned platform bootstrap; workspace business masters are populated by workspace setup. */
@@ -143,7 +155,34 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   if (!Array.isArray(rules) || !rules.length || rules.some((rule) => typeof rule.countryCode !== 'string' || typeof rule.mobileNumberRegex !== 'string')) {
     throw new Error('Invalid country mobile rules');
   }
+  let accessFloorSeeded = 0;
+  async function accessFloor() {
+    // Gateway writes are authorized by egov-accesscontrol from the target's own role-action rows.
+    // A brand-new tenant has none, and the only way to grant one is an MDMS write that itself
+    // needs a grant, so the seed's actions and role-actions are inserted directly first (CCRS#1928).
+    // Additive and skipped once the target has any role-action. Non-fatal: if the database is
+    // unreachable, the first gateway write fails with the real 403 instead.
+    const db = options.db ?? digitDb;
+    try {
+      if (!options.db) await digitDb.initialize();
+      const [row] = await db.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'`, [target]);
+      if (Number(row?.count ?? 0) > 0) return;
+      const now = Date.now();
+      for (const record of seed.records.filter((r) => ACCESS_FLOOR_SCHEMAS.includes(r.schemaCode))) {
+        accessFloorSeeded += await db.execute(
+          `INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
+           VALUES ($1, $2, $3, $4, $5::jsonb, true, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $6, $6)
+           ON CONFLICT (tenantid, schemacode, uniqueidentifier) DO NOTHING`,
+          [randomUUID(), target, record.uniqueIdentifier, record.schemaCode, JSON.stringify(substituteTenant(record.data, target)), now]);
+      }
+    } catch (error) {
+      results.warnings.push(`Role-action floor was not seeded for ${target} (CCRS#1928): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   if (!args.user_only) {
+    // Direct mode writes to MDMS without the gateway, so it needs no floor.
+    if (!direct) await accessFloor();
     for (const schema of seed.schemas) {
       const criteria = { SchemaDefCriteria: { tenantId: target, codes: [schema.code] } };
       const exists = async () => {
@@ -221,7 +260,7 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     summary: { schemas_copied: results.schemas.copied.length, schemas_skipped: results.schemas.skipped.length, schemas_failed: 0,
       data_copied: results.data.copied.length, data_skipped: results.data.skipped.length, data_failed: 0,
       workflows_created: 0, workflows_skipped: 0, workflows_failed: 0, localizations_copied: 0, localizations_failed: 0,
-      locales_seen: 0, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, warnings: results.warnings.length },
+      locales_seen: 0, admin_user_provisioned: true, admin_employee_provisioned: employeeProvisioned, access_floor_seeded: accessFloorSeeded, warnings: results.warnings.length },
     adminUser: { provisioned: true, username, tenantId: target, roles: employeeRoles.map((role) => role.code) },
     adminEmployee: { provisioned: employeeProvisioned, code: username, department: 'ONBOARDING_ADMIN', designation: 'ONBOARDING_FOUNDER' },
     localizations: [], results, nextSteps: ['Configure workspace branding, geography, departments, employees and complaint types.'],

@@ -50,7 +50,19 @@ function fixture(role = 'SUPERUSER') {
     else throw new Error(`Unexpected route ${path}`);
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
-  return { options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
+  // eg_mdms_data as seen by the role-action floor; rows it inserts become visible to MDMS reads.
+  const sql: { tenant: string; schemaCode: string; uniqueIdentifier: string; data: any; writesBefore: number }[] = [];
+  const db = {
+    query: async (_text: string, params: any[]) => [{ count: String(sql.filter(r => r.tenant === params[0] && r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions').length) }],
+    execute: async (_text: string, params: any[]) => {
+      const [, tenant, uniqueIdentifier, schemaCode, data] = params;
+      if (sql.some(r => r.tenant === tenant && r.schemaCode === schemaCode && r.uniqueIdentifier === uniqueIdentifier)) return 0;
+      sql.push({ tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), writesBefore: writes });
+      rows.set(`${schemaCode}/${uniqueIdentifier}`, { schemaCode, uniqueIdentifier, data: JSON.parse(data) });
+      return 1;
+    },
+  };
+  return { options: { api: api as any, fetcher: fetcher as typeof fetch, mdmsHost: 'http://mdms.test', userHost: 'http://user.test', direct: true, stateTenant: 'in', db, deriveMobile: () => '9876543210', defaultPassword: () => 'test-only-password' }, schemas, rows, users, employees, sql, reads: () => sourceReads, writes: () => writes, directCalls: () => directCalls, verifyAs: (value: any) => { verified = value; } };
 }
 
 test('canonical baseline records satisfy schemas and exclude workspace business data', () => {
@@ -404,4 +416,32 @@ test('city_setup never inherits the reserved ROOT level as city geography (#2269
     for (const h of created) assert.ok(!h.levels.includes('ROOT') && h.levels.length > 1, JSON.stringify(h));
     assert.ok(!related.includes('ROOT'));
   } finally { Object.assign(api, saved); }
+});
+
+test('gateway bootstrap seeds the role-action floor before its first write, once (#2269 review item 1d, CCRS#1928)', async () => {
+  const seed = loadPlatformSeed();
+  const floor = seed.records.filter(r => ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions'].includes(r.schemaCode));
+  const f = fixture();
+  const result = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct: false });
+  assert.equal(result.summary.access_floor_seeded, floor.length);
+  assert.equal(f.sql.length, floor.length);
+  assert.ok(f.sql.every(r => r.tenant === 'ke' && r.writesBefore === 0), 'every floor row precedes the first gateway write');
+  assert.ok(f.sql.filter(r => r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions').every(r => r.data.tenantId === 'ke'));
+  assert.ok(!JSON.stringify(f.sql).includes('{tenantid}'));
+  assert.equal(f.sql.findIndex(r => r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'), floor.findIndex(r => r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'), 'actions land before role-actions');
+  const replay = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct: false });
+  assert.equal(replay.summary.access_floor_seeded, 0); assert.equal(f.sql.length, floor.length);
+
+  const unreachable = fixture();
+  const degraded = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...unreachable.options, direct: false,
+    db: { query: async () => { throw new Error('DIGIT database not available'); }, execute: async () => 0 } });
+  assert.equal(degraded.summary.access_floor_seeded, 0);
+  assert.ok(degraded.results.warnings.some((w: string) => w.includes('CCRS#1928')));
+
+  const direct = fixture();
+  await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, direct.options);
+  assert.equal(direct.sql.length, 0, 'direct MDMS needs no floor');
+  const userOnly = fixture();
+  await bootstrapPlatform({ target_tenant: 'ke', country: 'KE', user_only: true }, { ...userOnly.options, direct: false });
+  assert.equal(userOnly.sql.length, 0);
 });
