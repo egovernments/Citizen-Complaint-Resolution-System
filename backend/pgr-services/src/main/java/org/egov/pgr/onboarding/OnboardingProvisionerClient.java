@@ -98,6 +98,12 @@ public class OnboardingProvisionerClient {
         return exchange(base(service) + path, request, null);
     }
 
+    /**
+     * Throws the same PROVISIONER_* failure a job would hit when the configured provisioner
+     * cannot log in as an active EMPLOYEE of its root tenant holding the onboarding admin roles.
+     */
+    public void verifyReady() { verifiedWriteInfo(); }
+
     private Map<String,Object> verifiedWriteInfo() {
         String root = env.getProperty("pgr.onboarding.provisioner.tenant-id", "");
         if (root.isBlank() || root.contains(".")) throw new OnboardingFailure("PROVISIONER_NOT_CONFIGURED", true);

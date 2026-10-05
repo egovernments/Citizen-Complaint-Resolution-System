@@ -45,6 +45,12 @@ public class PlatformBaseline {
     public JsonNode countryMobileRule(String country) {
         return seed.path("countryMobileRules").path(country.toUpperCase(java.util.Locale.ROOT)).deepCopy();
     }
+    /** ISO 3166-1 alpha-2 codes that have a country mobile rule in the seed. */
+    public Set<String> supportedCountries() {
+        Set<String> countries = new TreeSet<>();
+        seed.path("countryMobileRules").fieldNames().forEachRemaining(code -> countries.add(code.toUpperCase(java.util.Locale.ROOT)));
+        return Collections.unmodifiableSet(countries);
+    }
     public SortedMap<String, JsonNode> localizationPacks(String locale) { return packs.getOrDefault(locale, new TreeMap<>()); }
     public boolean isPackMessage(JsonNode m) {
         return packMessages.contains(List.of(m.path("locale").asText(), m.path("module").asText(), m.path("code").asText(), m.path("message").asText()));

@@ -764,10 +764,19 @@ identity_signup_methods: [magic_link, google, github]
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
-pgr_onboarding_runner_enabled: true # PGR is the only onboarding runner; the BFF worker is gone
+# PGR is the only onboarding runner (the BFF worker is gone). Rendered on only
+# with enable_keycloak: signups arrive through the identity BFF.
+pgr_onboarding_runner_enabled: true
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
-pgr_digit_provisioner_username: "" # platform provisioner; PGR only, internal APIs
+# Platform provisioner the runner signs in as (PGR only, internal APIs). It must
+# be an EMPLOYEE of a ROOT tenant (no dot) holding MDMS_ADMIN, ACCOUNT_ADMIN,
+# LOC_ADMIN and HRMS_ADMIN there. With the runner on, the playbook creates it if
+# absent, with a generated password kept in OpenBao (pgr_digit_provisioner_password),
+# and fails the deploy if an existing account of this name cannot sign in with
+# those roles. Empty = PGR_PROVISIONER on state_root (or a legacy
+# identity_digit_provisioner_username / _tenant_id when set).
+pgr_digit_provisioner_username: ""
 pgr_digit_provisioner_tenant_id: ""
 pgr_digit_oauth_client_id: "egov-user-client"
 identity_digit_otp_create_url: ""     # default: internal http://egov-otp:8089/otp/v1/_create (needs the otp profile)
@@ -1314,6 +1323,8 @@ bootstrap_secrets:
   # BFF account-management credential. The legacy key remains a migration
   # fallback; new environments should set identity_digit_admin_password.
   identity_digit_admin_password: "CHANGE_ME"
-  pgr_digit_provisioner_password: "" # existing identity_digit_provisioner_password is a fallback
+  # Empty = generated on first deploy (an existing identity_digit_provisioner_password
+  # wins over generating). Set it only to adopt an existing provisioner account.
+  pgr_digit_provisioner_password: ""
   pgr_digit_oauth_client_secret: ""
   identity_smtp_password: ""

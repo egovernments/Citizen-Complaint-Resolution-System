@@ -255,6 +255,53 @@ public class OnboardingServiceTest {
     }
 
     @Test
+    public void aCountryTheBaselineCannotProvisionIsRefusedWhenTheDraftIsWritten() {
+        // FR passes the two-letter shape check but has no country mobile rule in the
+        // platform baseline: the worker would fail it COUNTRY_NOT_SUPPORTED with the
+        // country already locked on the reopened draft.
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+        Map<String, Object> request = completeRequest(null);
+        request.remove("tenantMetadata");
+        request.put("countryCode", "fr");
+
+        CustomException error = assertThrows(CustomException.class,
+                () -> service.create(principal, request, "create-fr"));
+
+        assertEquals("ONBOARDING_VALIDATION_ERROR", error.getCode());
+        assertEquals("Signup.countryCode is not supported", error.getMessage());
+        verify(repository, never()).insertSignup(any(), any());
+    }
+
+    @Test
+    public void submitRefusesAStoredDraftWhoseCountryIsNotSupportedBeforeAnythingRuns() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        signup.setCountryCode("FR"); // saved before the check existed
+        when(repository.findOwnedSignupForUpdate(signupId, "https://issuer", "subject-1"))
+                .thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.empty());
+
+        CustomException error = assertThrows(CustomException.class, () -> service.submit(
+                principal, Collections.singletonMap("id", signupId.toString()), "submit-fr"));
+
+        assertEquals("Signup.countryCode is not supported", error.getMessage());
+        verify(repository, never()).reserveIdentifier(any(), any(), any(), anyLong());
+        verify(repository, never()).submit(any(), any(), anyLong());
+    }
+
+    @Test
+    public void everyCountryTheSignupScreenOffersIsSupported() {
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+        when(repository.insertSignup(any(OnboardingSignup.class), any())).thenReturn(true);
+        for (String country : Arrays.asList("KE", "IN", "ET", "MZ")) {
+            Map<String, Object> request = completeRequest(null);
+            request.remove("tenantMetadata");
+            request.put("countryCode", country);
+            assertEquals(country, service.create(principal, request, "create-" + country).getCountryCode());
+        }
+    }
+
+    @Test
     public void aSlugThatCannotDeriveATenantIdIsRejectedByCheckNotBySubmit() {
         assertThrows(CustomException.class, () -> service.checkIdentifier(
                 principal, identifierRequest("URL_SLUG", "a-123")));
