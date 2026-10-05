@@ -1,8 +1,7 @@
 import { startRevocationWorkers } from "./workers.js";
 export { startRevocationWorkers } from "./workers.js";
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
 import { key, drainTokenRetries } from "./inventory.js";
 import { drainRevocationJobs, enqueueRevocation } from "./index.js";
 import { listRevocationUsers } from "./keycloak.js";
@@ -37,17 +36,13 @@ async function knownSubjects(): Promise<string[]> {
 
 /** One replica polls. Every checkpoint mutation is fenced to its renewable lease. */
 export async function pollKeycloakEvents(options: PollerOptions = {}): Promise<boolean> {
-  const redis = getRedis(); const token = randomUUID();
-  if (await redis.set(leaseKey(), token, "PX", LEASE_MS, "NX") !== "OK") return false;
-  let lost = false;
+  const redis = getRedis();
+  const lease = await acquireRedisLease(leaseKey(), { ttlMs: LEASE_MS, renewMs: LEASE_MS / 3 });
+  if (!lease) return false;
+  const token = lease.token;
   const assertHeld = async () => {
-    if (lost || await redis.get(leaseKey()) !== token) throw new PollerLeaseLostError("Keycloak event poller lease was lost");
+    if (!await lease.held()) throw new PollerLeaseLostError("Keycloak event poller lease was lost");
   };
-  const renewal = setInterval(() => {
-    redis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end",
-      1, leaseKey(), token, LEASE_MS).then(result => { if (result !== 1) lost = true; }, () => { lost = true; });
-  }, LEASE_MS / 3);
-  renewal.unref();
   try {
     const source = options.source ?? keycloakEventSource;
     const effect = options.effect ?? applyKeycloakEvent;
@@ -116,8 +111,7 @@ export async function pollKeycloakEvents(options: PollerOptions = {}): Promise<b
     await drainTokenRetries();
     return true;
   } finally {
-    clearInterval(renewal);
-    await redis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", 1, leaseKey(), token).catch(() => undefined);
+    await lease.release().catch(() => undefined);
   }
 }
 export async function getPollerReadiness(): Promise<{ status: "ok" | "down" | "disabled"; lagSeconds: number | null }> {

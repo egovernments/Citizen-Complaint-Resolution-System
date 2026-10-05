@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { withRedisLease } from "../../infrastructure/redis.js";
 import { currentPersonLease, LeaseLostError, PERSON_LEASE_RENEW_MS } from "./person-lease.js";
 
 /**
@@ -22,9 +21,6 @@ export class BindingBusyError extends Error {
   }
 }
 
-const RELEASE = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
-const RENEW = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end";
-
 export interface UuidLock {
   /** Throws LeaseLostError unless this uuid lock is still held. */
   assertHeld(): Promise<void>;
@@ -40,31 +36,12 @@ export async function withUuidLock<T>(
   options: { waitMs?: number } = {},
 ): Promise<T> {
   if (!currentPersonLease()) throw new Error("The uuid lock is only taken inside a person lease");
-  const key = uuidLockKey(tenantId, uuid);
-  const token = randomUUID();
-  const deadline = Date.now() + (options.waitMs ?? WAIT_MS);
-  while (await getRedis().set(key, token, "PX", UUID_LOCK_TTL_MS, "NX") !== "OK") {
-    if (Date.now() >= deadline) throw new BindingBusyError();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  let lost = false;
-  const renew = async () => {
-    if (lost) return;
-    if (await getRedis().eval(RENEW, 1, key, token, String(UUID_LOCK_TTL_MS)) !== 1) lost = true;
-  };
-  const timer = setInterval(() => { renew().catch(() => { lost = true; }); }, PERSON_LEASE_RENEW_MS);
-  timer.unref();
-  const lock: UuidLock = {
+  return withRedisLease(uuidLockKey(tenantId, uuid), {
+    ttlMs: UUID_LOCK_TTL_MS, renewMs: PERSON_LEASE_RENEW_MS, waitMs: options.waitMs ?? WAIT_MS,
+    busy: () => new BindingBusyError(), quietRelease: true,
+  }, (lease) => operation({
     async assertHeld() {
-      if (!lost && await getRedis().get(key) === token) return;
-      lost = true;
-      throw new LeaseLostError("The DIGIT account lock was lost; retry");
+      if (!await lease.held()) throw new LeaseLostError("The DIGIT account lock was lost; retry");
     },
-  };
-  try {
-    return await operation(lock);
-  } finally {
-    clearInterval(timer);
-    await getRedis().eval(RELEASE, 1, key, token).catch(() => undefined);
-  }
+  }));
 }

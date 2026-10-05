@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { getRedis, withRedisLease, type RedisLease } from "../../infrastructure/redis.js";
 
 /**
  * One renewable Redis lease per Keycloak person (design §6, D25/A2).
@@ -51,8 +50,6 @@ export interface PersonLease {
   fencedSet(key: string, value: string, expiresAtMs: number): Promise<boolean>;
 }
 
-const RELEASE = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
-const RENEW = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end";
 const FENCED_SET = [
   "if redis.call('get', KEYS[1]) ~= ARGV[1] then return 0 end",
   "redis.call('set', KEYS[2], ARGV[2], 'PXAT', ARGV[3])",
@@ -70,25 +67,17 @@ export function currentPersonLease(): PersonLease | null {
 }
 
 class RedisPersonLease implements PersonLease {
-  lost = false;
-  constructor(readonly subject: string, readonly token: string, private readonly key: string) {}
-
-  async renew(): Promise<void> {
-    if (this.lost) return;
-    const renewed = await getRedis().eval(RENEW, 1, this.key, this.token, String(PERSON_LEASE_TTL_MS));
-    if (renewed !== 1) this.lost = true;
-  }
+  constructor(readonly subject: string, private readonly lease: RedisLease) {}
+  get token(): string { return this.lease.token; }
 
   async assertHeld(): Promise<void> {
-    if (!this.lost && await getRedis().get(this.key) === this.token) return;
-    this.lost = true;
-    throw new LeaseLostError();
+    if (!await this.lease.held()) throw new LeaseLostError();
   }
 
   async fencedSet(key: string, value: string, expiresAtMs: number): Promise<boolean> {
-    if (this.lost) return false;
-    const written = await getRedis().eval(FENCED_SET, 2, this.key, key, this.token, value, String(Math.ceil(expiresAtMs)));
-    if (written !== 1) this.lost = true;
+    if (this.lease.lost) return false;
+    const written = await getRedis().eval(FENCED_SET, 2, this.lease.key, key, this.token, value, String(Math.ceil(expiresAtMs)));
+    if (written !== 1) this.lease.lost = true;
     return written === 1;
   }
 }
@@ -104,24 +93,11 @@ export async function withPersonLease<T>(
     if (current.subject === subject) return operation(current);
     throw new Error("Already holding another person's lease; take person leases one at a time");
   }
-
-  const key = personLeaseKey(subject);
-  const token = randomUUID();
-  const deadline = Date.now() + (options.waitMs ?? PERSON_LEASE_WAIT_MS);
-  while (await getRedis().set(key, token, "PX", PERSON_LEASE_TTL_MS, "NX") !== "OK") {
-    if (Date.now() >= deadline) throw new LeaseBusyError();
-    await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-  }
-
-  const lease = new RedisPersonLease(subject, token, key);
-  const timer = setInterval(() => {
-    lease.renew().catch(() => { lease.lost = true; });
-  }, PERSON_LEASE_RENEW_MS);
-  timer.unref();
-  try {
-    return await held.run(lease, () => operation(lease));
-  } finally {
-    clearInterval(timer);
-    await getRedis().eval(RELEASE, 1, key, token).catch(() => undefined);
-  }
+  return withRedisLease(personLeaseKey(subject), {
+    ttlMs: PERSON_LEASE_TTL_MS, renewMs: PERSON_LEASE_RENEW_MS, waitMs: options.waitMs ?? PERSON_LEASE_WAIT_MS,
+    retryMs: RETRY_MS, busy: () => new LeaseBusyError(), quietRelease: true,
+  }, (redisLease) => {
+    const lease = new RedisPersonLease(subject, redisLease);
+    return held.run(lease, () => operation(lease));
+  });
 }

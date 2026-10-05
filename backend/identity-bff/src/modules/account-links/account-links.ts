@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { withRedisLease } from "../../infrastructure/redis.js";
 import { audit } from "../citizen-otp/audit.js";
 import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
 import { searchAccounts, type DigitAccount } from "../managed-accounts/digit-user-client.js";
@@ -78,22 +77,11 @@ export async function linkedIdentityFor(
 }
 
 /** One writer per DIGIT account, so two subjects cannot both claim it. */
-async function withAccountLease<T>(digitUuid: string, operation: () => Promise<T>): Promise<T> {
-  const key = `${config.cachePrefix}:account-link-lease:${digitUuid}`;
-  const value = randomUUID();
-  const deadline = Date.now() + config.digitUserLeaseWaitMs;
-  while (await getRedis().set(key, value, "EX", config.digitUserLeaseSeconds, "NX") !== "OK") {
-    if (Date.now() >= deadline) throw new AccountLinkError("The account is being linked; retry", 503, "ACCOUNT_LINK_BUSY");
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  try {
-    return await operation();
-  } finally {
-    await getRedis().eval(
-      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-      1, key, value,
-    );
-  }
+function withAccountLease<T>(digitUuid: string, operation: () => Promise<T>): Promise<T> {
+  return withRedisLease(`${config.cachePrefix}:account-link-lease:${digitUuid}`, {
+    ttlMs: config.digitUserLeaseSeconds * 1000, waitMs: config.digitUserLeaseWaitMs, retryMs: 150,
+    busy: () => new AccountLinkError("The account is being linked; retry", 503, "ACCOUNT_LINK_BUSY"),
+  }, operation);
 }
 
 /** Finds an existing DIGIT employee by username for an admin import. */

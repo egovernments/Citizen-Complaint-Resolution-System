@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getRedis } from "../../infrastructure/redis.js";
+import { withRedisLease } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 
@@ -60,22 +60,10 @@ export async function managedTenantsFromIdentity(userId: string): Promise<string
  * user, across replicas. Otherwise a managed-tenant write and a citizen
  * registration write for the same person can erase each other.
  */
-async function withUserAttributeLease<T>(userId: string, operation: () => Promise<T>): Promise<T> {
-  const key = `${config.cachePrefix}:identity:user-attributes-lease:${userId}`;
-  const value = randomUUID();
-  const deadline = Date.now() + 5_000;
-  while (await getRedis().set(key, value, "EX", 30, "NX") !== "OK") {
-    if (Date.now() >= deadline) throw new IdentityAdminError("The Keycloak user is busy; retry", 503);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  try {
-    return await operation();
-  } finally {
-    await getRedis().eval(
-      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-      1, key, value,
-    );
-  }
+function withUserAttributeLease<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+  return withRedisLease(`${config.cachePrefix}:identity:user-attributes-lease:${userId}`, {
+    ttlMs: 30_000, waitMs: 5_000, busy: () => new IdentityAdminError("The Keycloak user is busy; retry", 503),
+  }, operation);
 }
 
 /** Durable inventory used to deactivate accounts after Organization removal. */

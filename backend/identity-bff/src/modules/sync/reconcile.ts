@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { acquireRedisLease, getRedis } from "../../infrastructure/redis.js";
 import { withPersonLease, LeaseLostError } from "../accounts/person-lease.js";
 import { readBindings } from "../bindings/store.js";
 import { revokeAccount, revokePerson, revokeTenantMembers } from "../revocation/index.js";
@@ -71,21 +70,16 @@ const codeOf = (error: unknown) => {
  */
 export async function runReconcile(): Promise<ReconcileResult> {
   const redis = getRedis();
-  const token = randomUUID();
   const ttl = Math.max(1000, config.identityReconciliationLeaseSeconds * 1000);
-  const acquired = await redis.set(reconcileLeaseKey(), token, "PX", ttl, "NX") === "OK";
+  const lease = await acquireRedisLease(reconcileLeaseKey(), { ttlMs: ttl, renewMs: Math.max(100, Math.floor(ttl / 3)) });
+  const acquired = lease !== null;
   const result: ReconcileResult = { acquired, subjects: 0, mirrored: 0, revoked: 0, propagated: 0,
     unchanged: 0, failures: [], lagSeconds: (await getReconcileReadiness()).lagSeconds };
-  if (!acquired) return result;
-  let lost = false;
+  if (!lease) return result;
+  const token = lease.token;
   const assertHeld = async () => {
-    if (lost || await redis.get(reconcileLeaseKey()) !== token) throw new LeaseLostError("Reconcile lease lost");
+    if (!await lease.held()) throw new LeaseLostError("Reconcile lease lost");
   };
-  const timer = setInterval(() => {
-    void redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('pexpire',KEYS[1],ARGV[2]) else return 0 end",
-      1, reconcileLeaseKey(), token, ttl).then(value => { if (value !== 1) lost = true; }, () => { lost = true; });
-  }, Math.max(100, Math.floor(ttl / 3)));
-  timer.unref();
   try {
     const stats = await redis.hgetall(reconcileStatsKey());
     const observedGeneration = Number(stats.requestGeneration || 0);
@@ -212,9 +206,7 @@ export async function runReconcile(): Promise<ReconcileResult> {
     result.lagSeconds = (await getReconcileReadiness()).lagSeconds;
     return result;
   } finally {
-    clearInterval(timer);
-    await redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end",
-      1, reconcileLeaseKey(), token);
+    await lease.release();
   }
 }
 
