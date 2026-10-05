@@ -7,6 +7,7 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -25,6 +26,21 @@ public class OnboardingIdentifierService {
     // Normal onboarding creates an independent root. Dotted ids are reserved
     // for a separate, explicit subtenant operation and are never derived here.
     private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,63}$");
+    /**
+     * URL slugs that would collide with a route on the same host: the SPA's own
+     * path words plus every top-level nginx/Kong path prefix. The source of
+     * truth is backend/identity-bff/docs/identity-bff.md section 2.4.1; the BFF
+     * and the SPA carry the same list (a local-setup static test compares them).
+     * The two-letter minimum is enforced by the tenant-id projection below.
+     */
+    static final Set<String> RESERVED_URL_SLUGS = Set.of(
+            "access", "api", "assets", "auth", "boundary-service", "brand", "citizen", "common-persist",
+            "configurator", "dashboard", "digit-ui", "egov-bndry-mgmnt", "egov-enc-service", "egov-hrms",
+            "egov-idgen", "egov-indexer", "egov-location", "egov-mdms-service", "egov-user-event",
+            "egov-workflow-v2", "employee", "env", "file-store", "filestore", "gatus", "grafana", "health",
+            "identity", "images", "inbox", "kc", "keycloak", "localization", "matomo", "mcp", "mdms-v2",
+            "novu", "novu-api", "novu-bridge", "novu-ws", "otel", "otp", "pgr-services", "static", "status",
+            "tests", "tests-v2", "turbopass", "user", "user-otp", "user-preference", "v1", "xstate-chatbot");
 
     public List<Identifier> forInput(String rawType, String rawValue) {
         String type = required(rawType, "Identifier.type").toUpperCase(Locale.ROOT);
@@ -93,7 +109,7 @@ public class OnboardingIdentifierService {
             case "ORGANIZATION_ALIAS":
             case "URL_SLUG":
                 value = value.toLowerCase(Locale.ROOT);
-                if (!SLUG.matcher(value).matches()) invalid(field);
+                if (!SLUG.matcher(value).matches() || RESERVED_URL_SLUGS.contains(value)) invalid(field);
                 // Apply the same projection validation here, so an unusable slug
                 // is rejected at entry rather than surviving until submit.
                 tenantIdForSlug(value, field);
