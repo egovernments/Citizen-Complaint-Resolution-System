@@ -32,7 +32,11 @@ async function run(ctx) {
       { 'Content-Type': 'application/json' });
     // D26 closes the native OTP endpoint at Kong on Keycloak boxes (citizen OTP is
     // the Identity BFF's now); identity_legacy_user_endpoints: true reopens it.
-    if (r.status === 404) return H.SKIP('G1', '/user-otp/v1/_send is closed at Kong (D26, Keycloak box) — set identity_legacy_user_endpoints: true to exercise the native OTP path');
+    // Only Kong's deny route (kong.yml, identity-legacy-user-deny) is a SKIP: any
+    // other 404 is a broken route on a box that should serve it, so it FAILs below.
+    if (r.status === 404 && r.json && r.json.code === 'IDENTITY_LEGACY_ENDPOINT_REMOVED') {
+      return H.SKIP('G1', '/user-otp/v1/_send is closed at Kong (D26, Keycloak box) — set identity_legacy_user_endpoints: true to exercise the native OTP path');
+    }
     if (r.status !== 200) return H.FAIL('G1', `/user-otp/v1/_send returned ${r.status}: ${r.text.slice(0, 120)}`);
     const identity = r.json && r.json.otp && r.json.otp.identity;
     if (!identity) return H.SKIP('G1', 'Kong still answers /user-otp with the mock (empty identity) — otp profile / real OTP not enabled on this box');
