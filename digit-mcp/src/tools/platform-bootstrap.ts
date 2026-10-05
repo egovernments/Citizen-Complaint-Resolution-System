@@ -108,16 +108,20 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   let rules = args.user_validation as Record<string, unknown>[] | undefined;
   if (!rules) {
     // The seed is the default source; reading a live tenant's rule is an explicit source_tenant opt-in.
-    const prefix = args.mobile_prefix ?? args.mobile_zone;
+    // Empty strings are absent: Ansible renders an unset countryCode as "" (#2269 review item 3).
+    const prefix = (args.mobile_prefix || args.mobile_zone || undefined) as string | undefined;
+    const regex = (args.mobile_regex || undefined) as string | undefined;
     const current = args.source_tenant
       ? (await api.mdmsV2SearchRaw(source, 'common-masters.MobileNumberValidation', { limit: 100 }))
         .find((row) => row.isActive !== false && row.data?.default === true)?.data
       : args.country ? seed.countryMobileRules[String(args.country).toUpperCase()]
         : Object.values(seed.countryMobileRules).find((rule) => rule.countryCode === prefix);
-    if (!current && !args.mobile_regex) throw new Error('Country mobile rule is missing');
-    const countryCode = args.mobile_prefix ?? args.mobile_zone ?? current?.countryCode;
-    if (!countryCode) throw new Error('Country mobile prefix is missing');
-    rules = [{ countryCode, mobileNumberRegex: args.mobile_regex ?? current?.mobileNumberRegex, default: true }];
+    if (!current && !regex) throw new Error('Country mobile rule is missing');
+    // An explicit regex without a prefix takes the seeded country with that regex, else the
+    // historical default (+91) that tenant_bootstrap used before the seed existed.
+    const countryCode = prefix || current?.countryCode
+      || Object.values(seed.countryMobileRules).find((rule) => rule.mobileNumberRegex === regex)?.countryCode || '+91';
+    rules = [{ countryCode, mobileNumberRegex: regex || current?.mobileNumberRegex, default: true }];
   }
   if (!Array.isArray(rules) || !rules.length || rules.some((rule) => typeof rule.countryCode !== 'string' || typeof rule.mobileNumberRegex !== 'string')) {
     throw new Error('Invalid country mobile rules');

@@ -303,3 +303,20 @@ test('MCP defaults to the seeded country rule and reads source_tenant only on op
   assert.equal(explicit.reads(), 0);
   assert.deepEqual(explicit.rows.get('common-masters.MobileNumberValidation/+254').data, override);
 });
+
+test('an empty mobile_prefix is treated as absent, as the deploy renders an unset countryCode (#2269 review item 3)', async () => {
+  // The playbook's user_only call renders `core_mobile_configs.countryCode | default('')`.
+  const userOnly = fixture();
+  const result = await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in', user_only: true,
+    mobile_regex: '^[6-9][0-9]{9}$', mobile_prefix: '' }, userOnly.options);
+  assert.equal(result.admin_user_provisioned, true);
+  // Without a source rule an explicit regex resolves the seeded country, else the historical +91.
+  for (const [regex, prefix] of [['^[17][0-9]{8}$', '+254'], ['^5[0-9]{8}$', '+91']]) {
+    const f = fixture();
+    await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_regex: regex, mobile_prefix: '' }, f.options);
+    assert.deepEqual(f.rows.get(`common-masters.MobileNumberValidation/${prefix}`).data, { countryCode: prefix, mobileNumberRegex: regex, default: true });
+  }
+  const empty = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'KE', mobile_prefix: '', mobile_regex: '' }, empty.options);
+  assert.deepEqual(empty.rows.get('common-masters.MobileNumberValidation/+254').data, loadPlatformSeed().countryMobileRules.KE);
+});
