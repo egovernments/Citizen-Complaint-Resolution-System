@@ -58,7 +58,7 @@ test('canonical baseline records satisfy schemas and exclude workspace business 
     const id = `${row.schemaCode}/${row.uniqueIdentifier}`; assert.ok(!ids.has(id), `duplicate ${id}`); ids.add(id);
     const validate = schemas.get(row.schemaCode); assert.ok(validate, `missing schema ${row.schemaCode}`);
     assert.ok(validate(substituteTenant(row.data, 'in.newtown')), `${id}: ${JSON.stringify(validate.errors)}`);
-    assert.ok(!['Workflow.BusinessService', 'common-masters.ThemeConfig', 'RAINMAKER-PGR.ComplaintHierarchy'].includes(row.schemaCode));
+    assert.ok(!['Workflow.BusinessService', 'RAINMAKER-PGR.ComplaintHierarchy'].includes(row.schemaCode));
   }
   assert.ok(seed.founderRoles.includes('SUPERUSER'));
   assert.equal(seed.records.find(r => r.schemaCode === 'identity.invitationPolicy')?.data.invitationExpiryHours, 336);

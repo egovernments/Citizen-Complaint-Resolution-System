@@ -81,6 +81,18 @@ public class OnboardingStepsTest {
         op.getRecordProgress().clear();prerequisites();assertEquals(1,workflows.size());
         verify(client,times(1)).write(any(),eq("workflow"),eq("/egov-workflow-v2/egov-wf/businessservice/_create"),anyMap());
     }
+    @Test public void baselineSeedsTenantReadMastersOnlyAtTheNewTenant(){
+        rows.clear();prerequisites();
+        assertEquals("newtown",rows.get("newtown|tenant.citymodule|PGR").path("data").path("tenants").path(0).path("code").asText());
+        assertTrue(rows.containsKey("newtown|tenant.citymodule|Dashboard"));
+        assertTrue(rows.get("newtown|RAINMAKER-PGR.InboxVisibilityConfig|INBOX_VISIBILITY").path("data").path("enabled").asBoolean());
+        assertTrue(rows.get("newtown|RAINMAKER-PGR.UIConstants|DEFAULT").path("data").path("REOPENSLA").asLong()>0);
+        assertEquals("ROOT",rows.get("newtown|CMS-BOUNDARY.HierarchySchema|CMS.All").path("data").path("lowestHierarchy").asText());
+        for(String key:List.of("RAINMAKER-PGR.MapConfig|DEFAULT","common-masters.ThemeConfig|themeconfig","common-masters.uiHomePage|all-services","RAINMAKER-PGR.RejectionReasons|DUPLICATE"))
+            assertTrue(key,rows.containsKey("newtown|"+key));
+        assertTrue(schemas.contains("RAINMAKER-PGR.EscalationConfig"));
+        assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
+    }
     @Test public void foreignTenantCollisionFailsBeforeEncryptionOrFounder(){
         rows.put("newtown|tenant.tenants|newtown",mapper.valueToTree(Map.of("data",Map.of("code","newtown"))));
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));assertEquals("TENANT_TAKEN",failure.getCode());assertFalse(failure.isRetryable());
