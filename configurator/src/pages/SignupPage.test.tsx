@@ -58,6 +58,22 @@ describe('sign-in gate', () => {
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
+  it('does not resume a session an unconfirmed sign-out may have left, until the user chooses a method', async () => {
+    localStorage.setItem('crs-sign-out-incomplete', '1');
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'google', label: 'Continue with Google', type: 'oidc' }],
+    });
+
+    render(<SignupPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /continue with google/i }));
+    expect(api.session).not.toHaveBeenCalled();
+    expect(api.tenants).not.toHaveBeenCalled();
+    expect(localStorage.getItem('crs-sign-out-incomplete')).toBeNull();
+    expect(api.startSignIn).toHaveBeenCalledWith('google', 'signup');
+  });
+
   it('shows the GitHub mark on the GitHub signup action', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({

@@ -18,7 +18,7 @@ import { AuthShell } from '@/components/signup/AuthPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { SESSION_EXPIRED_KEY, SIGN_OUT_INCOMPLETE_KEY, signOutThisDevice } from '@/lib/session';
+import { SESSION_EXPIRED_KEY, clearSignOutIncomplete, signOutIncomplete, signOutThisDevice } from '@/lib/session';
 import { useAuthResult } from '@/hooks/useAuthResult';
 
 type Phase = 'loading' | 'methods' | 'tenants' | 'noAccess' | 'invitations' | 'entering';
@@ -33,14 +33,6 @@ function expiredSessionMessage(): string | null {
     // Storage can be unavailable; authentication itself does not depend on it.
   }
   return null;
-}
-
-function signOutIncomplete(): boolean {
-  try {
-    return localStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === '1';
-  } catch {
-    return false;
-  }
 }
 
 export default function LoginPage() {
@@ -142,11 +134,7 @@ export default function LoginPage() {
   };
 
   const signIn = (methodId: string) => {
-    try {
-      localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
-    } catch {
-      // Storage can be unavailable; sign-in itself does not depend on it.
-    }
+    clearSignOutIncomplete();
     startSignIn(methodId, 'signin');
   };
 

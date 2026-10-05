@@ -46,6 +46,24 @@ export function clearLocalSession(): void {
   }
 }
 
+/** True when this browser's last sign-out could not be confirmed by the BFF. */
+export function signOutIncomplete(): boolean {
+  try {
+    return window.localStorage.getItem(SIGN_OUT_INCOMPLETE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** An explicit sign-in or sign-up: the user chose to continue despite the warning. */
+export function clearSignOutIncomplete(): void {
+  try {
+    window.localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
+  } catch {
+    // Storage can be unavailable; authentication itself does not depend on it.
+  }
+}
+
 /**
  * Sign this device out. Fails open: the DIGIT token is cleared first, so a BFF
  * outage or a 403 (e.g. UNTRUSTED_ORIGIN) can never leave a shared device
