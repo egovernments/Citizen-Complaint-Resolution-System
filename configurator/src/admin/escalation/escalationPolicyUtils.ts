@@ -134,52 +134,67 @@ export interface HierarchyRecordLike {
 /**
  * Normalizes an override value which may be:
  * - undefined or null
- * - a plain array of percentages: e.g. [60, 100, 180]
- * - an object missing slaPercentageByLevel, enabledByLevel, or slaByLevel
+ * - a plain array of absolute milliseconds: e.g. [3600000, 14400000] per EscalationConfigurationService.override()
+ * - an object with slaPercentageByLevel and/or slaByLevel, and enabledByLevel
  */
 export function normalizeOverride(
   rawOverride: unknown,
-  defaultPcts: number[] = [80, 120, 200],
+  defaultPcts?: number[],
   defaultEnabled: boolean[] = [true, true, true],
-  defaultFallbacks: number[] = [3600000, 14400000, 86400000]
+  defaultFallbacks?: number[]
 ): EscalationLevelOverride | undefined {
   if (!rawOverride) return undefined;
 
-  // Plain list format accepted by backend: [60, 100, 180]
+  // 1. Plain list format accepted by backend:
+  // EscalationConfigurationService.override() treats a plain array as an absolute
+  // millisecond ladder (numberList goes into slas; percentages stay empty).
   if (Array.isArray(rawOverride)) {
-    const pcts = rawOverride.map((n) => Number(n) || 0);
+    const slas = rawOverride.map((n) => Number(n) || 0);
     return {
-      slaPercentageByLevel: pcts,
-      enabledByLevel: defaultEnabled.slice(0, pcts.length),
-      slaByLevel: defaultFallbacks.slice(0, pcts.length),
+      slaByLevel: slas,
+      enabledByLevel: slas.map(() => true),
     };
   }
 
+  // 2. Object format
   if (typeof rawOverride === 'object') {
     const obj = rawOverride as Record<string, unknown>;
+
+    // Only set percentages if explicitly present in the override object
     const pcts = Array.isArray(obj.slaPercentageByLevel)
       ? (obj.slaPercentageByLevel as number[]).map((n) => Number(n) || 0)
-      : [...defaultPcts];
+      : undefined;
 
-    const enabled = Array.isArray(obj.enabledByLevel)
-      ? (obj.enabledByLevel as boolean[])
-      : defaultEnabled.slice(0, pcts.length);
-
+    // Only set fallbacks if explicitly present in the override object
     const fallbacks = Array.isArray(obj.slaByLevel)
       ? (obj.slaByLevel as number[]).map((n) => Number(n) || 0)
-      : defaultFallbacks.slice(0, pcts.length);
+      : defaultFallbacks && pcts
+      ? defaultFallbacks.slice(0, pcts.length)
+      : undefined;
 
-    while (enabled.length < pcts.length) {
-      enabled.push(defaultEnabled[enabled.length] ?? true);
-    }
-    while (fallbacks.length < pcts.length) {
-      fallbacks.push(defaultFallbacks[fallbacks.length] ?? 3600000);
+    const depth = pcts?.length ?? fallbacks?.length ?? (defaultPcts?.length || 3);
+
+    // Copy array to avoid mutating React state in-place.
+    // Clamp/pad with the LAST value of the array to match backend valueAt semantics.
+    let enabled: boolean[];
+    if (Array.isArray(obj.enabledByLevel) && obj.enabledByLevel.length > 0) {
+      enabled = [...(obj.enabledByLevel as boolean[])];
+      const lastVal = enabled[enabled.length - 1];
+      while (enabled.length < depth) {
+        enabled.push(lastVal);
+      }
+    } else {
+      enabled = defaultEnabled.slice(0, depth);
+      const lastVal = enabled[enabled.length - 1] ?? true;
+      while (enabled.length < depth) {
+        enabled.push(lastVal);
+      }
     }
 
     return {
       slaPercentageByLevel: pcts,
-      enabledByLevel: enabled.slice(0, pcts.length),
-      slaByLevel: fallbacks.slice(0, pcts.length),
+      slaByLevel: fallbacks,
+      enabledByLevel: enabled.slice(0, depth),
     };
   }
 

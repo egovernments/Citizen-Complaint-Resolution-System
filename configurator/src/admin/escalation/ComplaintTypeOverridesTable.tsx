@@ -34,6 +34,7 @@ import type {
   CatalogueItem,
   StatusFilter,
 } from './escalationPolicyTypes';
+import { formatDurationMs } from './escalationPolicyUtils';
 
 interface ComplaintTypeOverridesTableProps {
   catalogue: CatalogueItem[];
@@ -428,10 +429,14 @@ export function ComplaintTypeOverridesTable({
                 const isAutoOff =
                   isOverridden && (item.override?.enabledByLevel || []).every((en) => !en);
 
-                const effectivePcts =
-                  isOverridden && item.override?.slaPercentageByLevel
-                    ? item.override.slaPercentageByLevel
-                    : defaultPcts;
+                let effectiveLadderText = defaultPcts.map((p) => `${p}%`).join(' · ');
+                if (isOverridden) {
+                  if (item.override?.slaPercentageByLevel && item.override.slaPercentageByLevel.length > 0) {
+                    effectiveLadderText = item.override.slaPercentageByLevel.map((p) => `${p}%`).join(' · ');
+                  } else if (item.override?.slaByLevel && item.override.slaByLevel.length > 0) {
+                    effectiveLadderText = item.override.slaByLevel.map(formatDurationMs).join(' · ');
+                  }
+                }
 
                 return (
                   <TableRow key={item.code}>
@@ -467,7 +472,7 @@ export function ComplaintTypeOverridesTable({
                       {item.slaHours > 0 ? `${item.slaHours}h` : '—'}
                     </TableCell>
                     <TableCell className="text-xs font-mono">
-                      {effectivePcts.map((p) => `${p}%`).join(' · ')}
+                      {effectiveLadderText}
                     </TableCell>
                     <TableCell>
                       {isAutoOff ? (

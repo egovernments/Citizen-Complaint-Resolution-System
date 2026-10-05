@@ -72,7 +72,7 @@ export function EscalationLevelTable({
           </TableHeader>
           <TableBody>
             {percentages.map((pct, idx) => {
-              const enabled = enabledByLevel[idx] ?? true;
+              const enabled = enabledByLevel[idx] ?? (enabledByLevel[enabledByLevel.length - 1] ?? true);
               const fallback = fallbacks[idx] ?? 0;
               const pctError = pctErrors[idx];
               const fbError = fallbackErrors[idx];

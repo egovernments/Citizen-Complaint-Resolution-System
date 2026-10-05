@@ -489,7 +489,7 @@ export interface SetupProgress {
 // ============================================
 
 export interface EscalationLevelOverride {
-  slaPercentageByLevel: number[];
+  slaPercentageByLevel?: number[];
   slaByLevel?: number[];
   enabledByLevel: boolean[];
 }
@@ -498,9 +498,9 @@ export interface EscalationConfigData {
   code: string;
   maxDepth: number;
   eligibleStatuses: string[];
-  defaultSlaPercentageByLevel: number[];
-  defaultSlaByLevel: number[];
-  enabledByLevel: boolean[];
+  defaultSlaPercentageByLevel?: number[];
+  defaultSlaByLevel?: number[];
+  enabledByLevel?: boolean[];
   overrides: Record<string, EscalationLevelOverride>;
   [key: string]: unknown;
 }

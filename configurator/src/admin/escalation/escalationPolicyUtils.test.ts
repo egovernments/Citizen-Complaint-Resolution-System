@@ -224,18 +224,47 @@ describe('escalationPolicyUtils', () => {
       expect(normalizeOverride(undefined)).toBeUndefined();
     });
 
-    it('normalizes plain list format [60, 100, 180]', () => {
-      const norm = normalizeOverride([60, 100, 180], [80, 120, 200], [true, true, true], [1000, 2000, 3000]);
+    it('normalizes plain list format as absolute milliseconds (slaByLevel), leaving percentages empty', () => {
+      // Per EscalationConfigurationService.override(), a plain list [3600000, 14400000]
+      // is an absolute millisecond ladder, NOT percentages.
+      const norm = normalizeOverride([3600000, 14400000]);
       expect(norm).toEqual({
-        slaPercentageByLevel: [60, 100, 180],
-        enabledByLevel: [true, true, true],
-        slaByLevel: [1000, 2000, 3000],
+        slaByLevel: [3600000, 14400000],
+        enabledByLevel: [true, true],
+      });
+      expect(norm?.slaPercentageByLevel).toBeUndefined();
+    });
+
+    it('preserves millisecond-only overrides without injecting default percentages', () => {
+      const msOnly = { slaByLevel: [7200000, 21600000] };
+      const norm = normalizeOverride(msOnly, [80, 120, 200]);
+      expect(norm).toEqual({
+        slaPercentageByLevel: undefined,
+        slaByLevel: [7200000, 21600000],
+        enabledByLevel: [true, true],
       });
     });
 
-    it('normalizes object missing enabledByLevel or slaByLevel', () => {
-      const partial = { slaPercentageByLevel: [50, 100] };
-      const norm = normalizeOverride(partial, [80, 120, 200], [true, false, true], [1000, 2000, 3000]);
+    it('pads enabledByLevel with its last value (valueAt semantics) without mutating the original object', () => {
+      const originalObj = {
+        slaPercentageByLevel: [50, 100, 150],
+        enabledByLevel: [false], // Only L1 explicitly set to false
+      };
+      const norm = normalizeOverride(originalObj);
+
+      // Should pad with false (the last value), NOT true!
+      expect(norm?.enabledByLevel).toEqual([false, false, false]);
+
+      // Ensure original object was not mutated in-place
+      expect(originalObj.enabledByLevel).toEqual([false]);
+    });
+
+    it('normalizes object with percentages and custom enabled flags', () => {
+      const partial = {
+        slaPercentageByLevel: [50, 100],
+        enabledByLevel: [true, false],
+      };
+      const norm = normalizeOverride(partial, [80, 120, 200], [true, true, true], [1000, 2000, 3000]);
       expect(norm).toEqual({
         slaPercentageByLevel: [50, 100],
         enabledByLevel: [true, false],
