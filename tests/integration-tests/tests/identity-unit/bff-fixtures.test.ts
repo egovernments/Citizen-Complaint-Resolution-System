@@ -10,7 +10,8 @@ const token = {
   access_token: 'test-opaque-token', token_type: 'bearer', expires_in: 3600, scope: 'read',
   UserRequest: { uuid: 'test-uuid', tenantId: tenant.tenantId, type: 'CITIZEN' }, tenant,
 };
-async function fixture(run: (ctx: Awaited<ReturnType<typeof playwrightRequest.newContext>>, base: string, calls: Array<{ path: string; body: any; cookie?: string }>) => Promise<void>, options: { failure?: string; context?: unknown; cooldown?: boolean } = {}) {
+async function fixture(run: (ctx: Awaited<ReturnType<typeof playwrightRequest.newContext>>, base: string, calls: Array<{ path: string; body: any; cookie?: string }>) => Promise<void>, options: { failure?: string; context?: unknown; cooldown?: boolean; tenant?: typeof tenant } = {}) {
+  const routeTenant = options.tenant ?? tenant;
   const calls: Array<{ path: string; body: any; cookie?: string }> = [];
   const server = createServer(async (req, res) => {
     const chunks = [];
@@ -21,7 +22,7 @@ async function fixture(run: (ctx: Awaited<ReturnType<typeof playwrightRequest.ne
     calls.push({ path, body, cookie: req.headers.cookie });
     res.setHeader('Content-Type', 'application/json');
     if (path === options.failure) { res.writeHead(503).end(JSON.stringify({ code: 'IDENTITY_UNAVAILABLE', error: 'secret-must-not-leak' })); return; }
-    if (path.startsWith('/identity/v1/tenant-contexts/')) res.end(JSON.stringify({ tenant }));
+    if (path.startsWith('/identity/v1/tenant-contexts/')) res.end(JSON.stringify({ tenant: routeTenant }));
     else if (path.endsWith('/otp/_send')) {
       if (options.cooldown && calls.filter(call => call.path.endsWith('/otp/_send')).length === 1) {
         res.writeHead(429, { 'Retry-After': '0' }).end(JSON.stringify({ code: 'OTP_RESEND_TOO_SOON' }));
@@ -29,7 +30,7 @@ async function fixture(run: (ctx: Awaited<ReturnType<typeof playwrightRequest.ne
     }
     else if (path.endsWith('/otp/_verify')) {
       res.setHeader('Set-Cookie', 'identity_citizen=test-session; HttpOnly; Path=/');
-      res.end(JSON.stringify({ authenticated: true, tenant }));
+      res.end(JSON.stringify({ authenticated: true, tenant: routeTenant }));
     } else if (path.endsWith('/_select')) {
       if (body.surface === 'citizen' && req.headers.cookie !== 'identity_citizen=test-session') { res.writeHead(401).end('{}'); return; }
       res.end(JSON.stringify(options.context ?? token));
@@ -39,7 +40,7 @@ async function fixture(run: (ctx: Awaited<ReturnType<typeof playwrightRequest.ne
   const addr = server.address();
   assert(addr && typeof addr !== 'string');
   const request = await playwrightRequest.newContext();
-  process.env.IDENTITY_TEST_TENANT_SLUG = tenant.urlSlug;
+  process.env.IDENTITY_TEST_TENANT_SLUG = routeTenant.urlSlug;
   try { await run(request, `http://127.0.0.1:${addr.port}`, calls); }
   finally { await request.dispose(); await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve())); }
 }
@@ -83,6 +84,24 @@ for (const [name, context] of [
     }, { context });
   });
 }
+
+test('city-level citizen accepts the root-tenant token and the city route tenant', async () => {
+  const city = { tenantId: 'ke.bomet', urlSlug: 'bomet' };
+  const rootToken = { ...token, UserRequest: { ...token.UserRequest, tenantId: 'ke' }, tenant: city };
+  await fixture(async (request, base) => {
+    const result = await citizenSignIn(request, base, '712345678', async () => '654321');
+    assert.equal(result.UserRequest.tenantId, 'ke');
+    assert.equal(result.tenant?.tenantId, 'ke.bomet');
+  }, { tenant: city, context: rootToken });
+  for (const context of [
+    { ...rootToken, UserRequest: { ...rootToken.UserRequest, tenantId: 'ke.bomet' } },
+    { ...rootToken, tenant: { ...city, tenantId: 'ke.other' } },
+  ]) {
+    await fixture(async (request, base) => {
+      await assert.rejects(citizenSignIn(request, base, '712345678', async () => '654321'), /invalid or wrong-tenant/);
+    }, { tenant: city, context });
+  }
+});
 
 test('employee context selection sends surface and exact tenant without deriving a parent', async () => {
   await fixture(async (request, base, calls) => {
