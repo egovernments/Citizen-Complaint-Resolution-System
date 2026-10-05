@@ -486,7 +486,8 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
   - the account holds a role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
-  - this person already has a different uuid at the tenant → `BINDING_CONFLICT`.
+  - this person already has a different uuid at the tenant → `BINDING_CONFLICT`;
+  - the person found by email is disabled in Keycloak → 403 `IDENTITY_DISABLED` (nothing is created or sent).
 - **Find the person** by email, then by username = email. A username match with a different email → `IDENTITY_EMAIL_CHANGED`.
 - **New person:**
   1. Create the user with `digit.linkPending` in the same POST.
@@ -737,7 +738,7 @@ The console calls HRMS first, then the BFF. The BFF never writes HRMS (§1), and
 | `OTP_CHANNEL_UNAVAILABLE` | 503 | yes | The OTP sender failed; the challenge was dropped and quota refunded |
 | `OTP_INVALID` | 400 | after-change | Wrong code; attemptsRemaining is set |
 | `OTP_EXPIRED` | 400 | no | The challenge is missing, expired, used up, or for another route or purpose |
-| `IDENTITY_DISABLED` | 403 | no | The Keycloak user is disabled: the phone's (D6), or a _link resend target |
+| `IDENTITY_DISABLED` | 403 | no | The Keycloak user is disabled: the phone's (D6), or a _link target |
 | `IDENTITY_CONFLICT` | 409 | no | Two verified Keycloak users hold the phone |
 | `PHONE_IN_USE` | 409 | no | Another person owns the phone (step-up or change) |
 | `PHONE_NOT_VERIFIED` | 403 | after-change | The citizen session has no verified phone |

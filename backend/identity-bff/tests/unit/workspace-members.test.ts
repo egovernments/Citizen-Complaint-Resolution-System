@@ -263,6 +263,13 @@ describe("admin resend of the activation email", () => {
     expect(f.emails).toBe(emails);
     expect(await getRedis().exists(`${config.cachePrefix}:identity:member-resend:pg:${uuid}`)).toBe(0);
   });
+  it("refuses a plain _link to a disabled person with IDENTITY_DISABLED, without binding or sending", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: false, emailVerified: false, attributes: {} });
+    const emails = f.emails;
+    await expect(linkWorkspaceMember(input)).rejects.toMatchObject({ code: "IDENTITY_DISABLED", status: 403 });
+    expect(f.users.get("existing")!.attributes).toEqual({});
+    expect(f.emails).toBe(emails);
+  });
   it("refuses removed and unknown members", async () => {
     await expect(linkWorkspaceMember(resend)).rejects.toMatchObject({ code: "DIGIT_ACCOUNT_NOT_FOUND" });
     await linkWorkspaceMember(input); await removeWorkspaceMember("admin", "pg", uuid);

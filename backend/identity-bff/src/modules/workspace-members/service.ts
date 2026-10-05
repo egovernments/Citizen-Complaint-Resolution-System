@@ -86,7 +86,8 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
     user = id ? await readBindingUser(id) : await findPerson(email);
     if (!user?.id) throw new BindingError("IDENTITY_UNAVAILABLE", "Identity creation did not return a user");
   }
-  if (!user.id || user.enabled === false) throw new BindingError("IDENTITY_UNAVAILABLE", "The identity is not available");
+  if (!user.id) throw new BindingError("IDENTITY_UNAVAILABLE", "The identity is not available");
+  if (user.enabled === false) throw new BindingError("IDENTITY_DISABLED", "The person's identity is disabled");
   const subject = user.id;
   return withPersonLease(subject, async (lease) => {
     const fresh = await readBindingUser(subject);
