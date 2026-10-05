@@ -16,7 +16,6 @@ import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
 import { trackEvent } from "../../utils/analytics";
 import { currentAssigneesInOccupancy, isCurrentAssignee } from "./escalationVisibility";
-import { getTenantHierarchy } from "../../services/tenantHierarchy";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -372,7 +371,7 @@ const PGRDetails = () => {
         if (!cancelled) setBoundaryRows([]);
         return;
       }
-      const { hierarchyType } = await getTenantHierarchy(complaintTenantId);
+      const hierarchyType = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
       try {
         const res = await Digit.CustomService.getResponse({
           url: "/boundary-service/boundary-relationships/_search",
