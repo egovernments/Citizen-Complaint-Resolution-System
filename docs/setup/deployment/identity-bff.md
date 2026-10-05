@@ -81,6 +81,29 @@ Keycloak admin secret and writes them only to the mode-0600 Compose environment.
 A Keycloak admin-password rotation therefore also rotates those credentials on
 the next converge.
 
+### Staff password reset needs an email address
+
+Employee passwords live in Keycloak now. Both self-service routes send an
+email through the realm mail server: "Forgot password?" on the employee login
+page, and Account → "Set or update password" (a Keycloak `UPDATE_PASSWORD`
+action). So a self-service reset needs the employee's own email address on
+their Keycloak account, plus working realm SMTP (`identity_smtp_*`).
+
+The legacy SMS-OTP reset is gone. It was the employee "Forgot password" page
+calling `/user/password/nologin/_update`, which Kong closes when Keycloak is
+enabled. An employee known only by mobile number therefore cannot reset their
+own password. An administrator can:
+
+- give the employee an email address in the configurator. For an active
+  member use Members → "Change email"; the employee verifies it, then uses
+  "Forgot password?". For one who has not signed in yet, "Complete
+  invitation" (or "Reinvite") emails a password-setup link; or
+- set a temporary password in the Keycloak admin console (realm
+  `keycloak_organization_realm` → Users → the employee → Credentials → Reset
+  password, with "Temporary" on). Keycloak then makes them choose a new one at
+  next sign-in. The console is not public; reach it on the loopback port
+  `18180` (see [Validation](#validation)).
+
 ### Optional authentication methods
 
 SMTP is required for the identity stack even when magic link is disabled:
