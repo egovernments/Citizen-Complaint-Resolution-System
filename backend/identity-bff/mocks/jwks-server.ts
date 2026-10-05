@@ -170,10 +170,12 @@ export function createJwksApp() {
             },
           }),
         };
+      // Like Keycloak, a code grant names its SSO session; the mock omits it on refresh.
       const accessToken = await signJwt({
         ...claims,
         azp: clientId,
         aud: "digit-identity-bff",
+        ...(grantType === "authorization_code" && { sid: `kc-sid-${nonce}` }),
       });
       const idToken = await signJwt({
         sub: claims.sub,
