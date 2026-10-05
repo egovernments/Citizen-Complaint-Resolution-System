@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import useMapConfig from "./useMapConfig";
 import { sameLevelName } from "../../utils/boundaryLevels";
+import { getTenantHierarchy } from "../../services/tenantHierarchy";
 
 // No hardcoded boundary data. When a tenant has no usable geometry (or no
 // boundary tenant is configured), the map shows NO ward overlay rather than
@@ -74,9 +75,8 @@ const useTenantBoundaries = () => {
   // the deploy-time globalConfigs MAP_TENANT key.
   const { isReady, boundaryTenantId: MAP_TENANT } = useMapConfig();
   // The hierarchy is a boundary construct rather than a map one, so it is not
-  // part of MapConfig; it stays on globalConfigs until a default-boundary-
-  // hierarchy master exists to own it.
-  const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
+  // part of MapConfig: it is the boundary tenant's CMS-BOUNDARY.HierarchySchema,
+  // else globalConfigs (services/tenantHierarchy).
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +92,7 @@ const useTenantBoundaries = () => {
 
     const fetchBoundaries = async () => {
       try {
+        const { hierarchyType: HIERARCHY_TYPE, lowestLevel: configuredLevel } = await getTenantHierarchy(MAP_TENANT);
         // Step 1: full hierarchy tree (codes + parentage only).
         const relResponse = await Digit.CustomService.getResponse({
           url: "/boundary-service/boundary-relationships/_search",
@@ -131,7 +132,6 @@ const useTenantBoundaries = () => {
         // Falls back to the deepest depth in the tree when nothing is configured
         // or the configured name is not a level of THIS tree, which is the
         // pre-existing behaviour.
-        const configuredLevel = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
         const atConfiguredLevel = configuredLevel
           ? nodes.filter((n) => sameLevelName(n.boundaryType, configuredLevel))
           : [];
@@ -144,7 +144,7 @@ const useTenantBoundaries = () => {
             // Silent fallbacks here cost hours to diagnose — the map looks fine
             // and merely resolves nothing. Say which levels the tree does have.
             console.warn(
-              `PGR_BOUNDARY_LOWEST_LEVEL "${configuredLevel}" is not a level of the ${MAP_TENANT} boundary tree ` +
+              `Lowest boundary level "${configuredLevel}" is not a level of the ${MAP_TENANT} boundary tree ` +
                 `(levels present: ${[...new Set(nodes.map((n) => n.boundaryType))].join(", ") || "none"}). ` +
                 "Falling back to the deepest level."
             );
@@ -196,7 +196,7 @@ const useTenantBoundaries = () => {
     return () => {
       cancelled = true;
     };
-  }, [isReady, MAP_TENANT, HIERARCHY_TYPE]);
+  }, [isReady, MAP_TENANT]);
 
   return tenantBoundaries;
 };
