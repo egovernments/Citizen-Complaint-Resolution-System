@@ -26,6 +26,9 @@ export interface OsmAdminLevel {
   /** The level's local name from the boundary source ("Ward"), used to
    *  pre-fill mappedName; absent when the source doesn't know it. */
   suggestedName?: string;
+  /** The source's own number for this level (ADM2 → 2) when every area at it
+   *  agrees; how an official set's per-level agreement is matched to it. */
+  adminLevel?: number;
   /**
    * Whether this level is included in the hierarchy. The operator picks a
    * CONTIGUOUS subset of the discovered levels (trim the top/bottom, never a
@@ -403,12 +406,15 @@ export function groupFetchedLevels(features: any[] | null | undefined): OsmAdmin
       const names = [...new Set(levelFeatures.map((f) => f.properties?.name).filter(Boolean))];
       const levelNames = [...new Set(levelFeatures.map((f) => f.properties?.level_name).filter(Boolean))];
       const suggestedName = levelNames.length === 1 ? String(levelNames[0]) : undefined;
+      const adminLevels = [...new Set(levelFeatures.map((f) => f.properties?.admin_level))];
+      const adminLevel = adminLevels.length === 1 && Number.isInteger(adminLevels[0]) ? (adminLevels[0] as number) : undefined;
       return {
         level: i + 1,
         features: levelFeatures,
         examples: names.slice(0, 3),
         mappedName: suggestedName ?? '',
         suggestedName,
+        ...(adminLevel !== undefined && { adminLevel }),
         // Default all selected (a contiguous, valid starting point); the
         // operator trims the range and names what they keep.
         selected: true,

@@ -21,12 +21,22 @@ export function normalizeForMatch(s: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-/** boundary-service /boundary/_create rejects MultiPolygon. Collapse to
- *  the ring set with the most coordinates (the main contiguous piece). */
+/** boundary-service /boundary/_create rejects MultiPolygon, and any polygon
+ *  with a hole ("Polygon must not be empty neither should it contain any
+ *  holes"). Collapse a MultiPolygon to the part with the most coordinates (the
+ *  main contiguous piece) and keep only the outer ring. Five of the twelve
+ *  official country outlines have a hole (a lake, an enclave), and when the
+ *  country fails every area under it fails too. Which area contains which is
+ *  worked out before this, from the full shapes, so dropping holes here only
+ *  changes the stored outline. */
 export function coerceForBoundaryService(geom: { type?: string; coordinates?: unknown }): BoundaryGeometry | undefined {
   if (!geom || !geom.type) return undefined;
-  if (geom.type === 'Point' || geom.type === 'Polygon') {
+  if (geom.type === 'Point') {
     return geom as BoundaryGeometry;
+  }
+  if (geom.type === 'Polygon') {
+    const rings = geom.coordinates as number[][][];
+    return Array.isArray(rings) && rings.length > 1 ? { type: 'Polygon', coordinates: [rings[0]] } : (geom as BoundaryGeometry);
   }
   if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)) {
     const polys = geom.coordinates as unknown[][][];
@@ -38,7 +48,7 @@ export function coerceForBoundaryService(geom: { type?: string; coordinates?: un
       const pts = Array.isArray(outer) ? outer.length : 0;
       if (pts > largestPoints) { largestPoints = pts; largestIdx = i; }
     }
-    return { type: 'Polygon', coordinates: polys[largestIdx] as number[][][] };
+    return { type: 'Polygon', coordinates: [(polys[largestIdx] as number[][][])[0]] };
   }
   return undefined; // LineString, MultiPoint, etc. — unsupported here
 }

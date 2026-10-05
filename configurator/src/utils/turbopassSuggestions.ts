@@ -188,7 +188,7 @@ export function turbopassSearchUrl(
   return `${base}/boundary/search?${qs.toString()}`;
 }
 
-const DATASET_NAMES: Record<string, string> = {
+export const DATASET_NAMES: Record<string, string> = {
   cod: 'OCHA COD-AB',
   geoboundaries: 'geoBoundaries',
   overture: 'Overture Maps',

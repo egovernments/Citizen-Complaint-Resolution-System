@@ -1,0 +1,639 @@
+{
+ "BI": {
+  "country": "BI",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2026-07-07",
+  "quality": "cod-enhanced",
+  "url": "https://data.humdata.org/dataset/cod-ab-bdi",
+  "root": {
+   "id": "cod:BDI:BDI",
+   "name": "Burundi"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Province",
+    "areas": 5,
+    "coverage": 100,
+    "other_areas": 18,
+    "matched": 0,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "Commune",
+    "areas": 42,
+    "coverage": 100,
+    "other_areas": 119,
+    "matched": 2.4,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Zone",
+    "areas": 462,
+    "coverage": 100,
+    "other_areas": 2615,
+    "matched": 0.2,
+    "unmatched": []
+   },
+   {
+    "level": "ADM4",
+    "admin_level": 4,
+    "name": "Colline",
+    "areas": 3067,
+    "coverage": 100,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2006/2007/2014/2015",
+   "quality": null,
+   "note": null
+  }
+ },
+ "BJ": {
+  "country": "BJ",
+  "source": "geoboundaries",
+  "licence": "Open Data Commons Open Database License 1.0; Public Domain",
+  "dataset_date": "2007/2012/2021",
+  "quality": null,
+  "url": "https://www.geoboundaries.org/countryDownloads.html#BEN",
+  "root": {
+   "id": "geoboundaries:BEN:84139743B99999625492710",
+   "name": "The Republic of Benin"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Department",
+    "areas": 12,
+    "coverage": 99,
+    "other_areas": 12,
+    "matched": 75,
+    "unmatched": [
+     "Littoral",
+     "Oueme",
+     "Mono"
+    ]
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "Commune",
+    "areas": 77,
+    "coverage": 95.4,
+    "other_areas": 77,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Arrondissement",
+    "areas": 546,
+    "coverage": 96.5,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "cod",
+   "usable": true,
+   "dataset_date": "2019-08-16",
+   "quality": "cod-enhanced",
+   "note": null
+  }
+ },
+ "BR": {
+  "country": "BR",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2020-09-30",
+  "quality": "cod-standard",
+  "url": "https://data.humdata.org/dataset/cod-ab-bra",
+  "root": {
+   "id": "cod:BRA:BR",
+   "name": "Brazil"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "State",
+    "areas": 27,
+    "coverage": 100,
+    "other_areas": 27,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "Municipality",
+    "areas": 5572,
+    "coverage": 100,
+    "other_areas": 5546,
+    "matched": 99.5,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2006/2020",
+   "quality": null,
+   "note": null
+  }
+ },
+ "DJ": {
+  "country": "DJ",
+  "source": "geoboundaries",
+  "licence": "Creative Commons Attribution 3.0 Intergovernmental Organisat",
+  "dataset_date": "2020/2021",
+  "quality": null,
+  "url": "https://www.geoboundaries.org/countryDownloads.html#DJI",
+  "root": {
+   "id": "geoboundaries:DJI:68745449B48312656270320",
+   "name": "The Repubic of Djibouti"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Region",
+    "areas": 6,
+    "coverage": 100,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "cod",
+   "usable": false,
+   "dataset_date": "2022-12-06",
+   "quality": "cod-standard",
+   "note": "geometry is GADM (licence forbids commercial use)"
+  }
+ },
+ "ET": {
+  "country": "ET",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2025-01-01",
+  "quality": "cod-enhanced",
+  "url": "https://data.humdata.org/dataset/cod-ab-eth",
+  "root": {
+   "id": "cod:ETH:ET",
+   "name": "Ethiopia"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Region",
+    "areas": 15,
+    "coverage": 100,
+    "other_areas": 11,
+    "matched": 60,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "Zone",
+    "areas": 107,
+    "coverage": 100,
+    "other_areas": 74,
+    "matched": 43,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Woreda",
+    "areas": 1148,
+    "coverage": 100,
+    "other_areas": 690,
+    "matched": 22.4,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2016",
+   "quality": null,
+   "note": null
+  }
+ },
+ "GW": {
+  "country": "GW",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2021-06-09",
+  "quality": "cod-enhanced",
+  "url": "https://data.humdata.org/dataset/cod-ab-gnb",
+  "root": {
+   "id": "cod:GNB:GW",
+   "name": "Guinea-Bissau"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Region",
+    "areas": 9,
+    "coverage": 100,
+    "other_areas": 9,
+    "matched": 66.7,
+    "unmatched": [
+     "Bolama/Bijagos",
+     "Bissau",
+     "Quinara"
+    ]
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "Sector",
+    "areas": 39,
+    "coverage": 100,
+    "other_areas": 39,
+    "matched": 51.3,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2017",
+   "quality": null,
+   "note": null
+  }
+ },
+ "IN": {
+  "country": "IN",
+  "source": "geoboundaries",
+  "licence": "CC0 1.0 Universal (CC0 1.0) Public Domain Dedication; Creati",
+  "dataset_date": "2011/2014/2018/2019/2021",
+  "quality": null,
+  "url": "https://www.geoboundaries.org/countryDownloads.html#IND",
+  "root": {
+   "id": "geoboundaries:IND:67634026B97797269081249",
+   "name": "India"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "State",
+    "areas": 36,
+    "coverage": 98.8,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "District",
+    "areas": 734,
+    "coverage": 99.1,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Sub-district",
+    "areas": 6814,
+    "coverage": 97.3,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "cod",
+   "usable": false,
+   "dataset_date": null,
+   "quality": null,
+   "note": "no COD-AB dataset on HDX"
+  }
+ },
+ "KE": {
+  "country": "KE",
+  "source": "geoboundaries",
+  "licence": "Creative Commons Attribution 3.0 Intergovernmental Organisat",
+  "dataset_date": "2020",
+  "quality": null,
+  "url": "https://www.geoboundaries.org/countryDownloads.html#KEN",
+  "root": {
+   "id": "geoboundaries:KEN:21065076B29129174773383",
+   "name": "Republic of Kenya"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "County",
+    "areas": 47,
+    "coverage": 100,
+    "other_areas": 47,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "Sub-county",
+    "areas": 290,
+    "coverage": 99.2,
+    "other_areas": 290,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Ward",
+    "areas": 1449,
+    "coverage": 96.4,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "cod",
+   "usable": true,
+   "dataset_date": "2019-10-31",
+   "quality": "cod-enhanced",
+   "note": null
+  }
+ },
+ "LR": {
+  "country": "LR",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2019-11-04",
+  "quality": "cod-enhanced",
+  "url": "https://data.humdata.org/dataset/cod-ab-lbr",
+  "root": {
+   "id": "cod:LBR:LR",
+   "name": "Liberia"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "County",
+    "areas": 15,
+    "coverage": 100,
+    "other_areas": 15,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "District",
+    "areas": 136,
+    "coverage": 100,
+    "other_areas": 136,
+    "matched": 100,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2021",
+   "quality": null,
+   "note": null
+  }
+ },
+ "MZ": {
+  "country": "MZ",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2025-01-01",
+  "quality": "cod-enhanced",
+  "url": "https://data.humdata.org/dataset/cod-ab-moz",
+  "root": {
+   "id": "cod:MOZ:MZ",
+   "name": "Moçambique"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Province",
+    "areas": 11,
+    "coverage": 100,
+    "other_areas": 10,
+    "matched": 90.9,
+    "unmatched": [
+     "Cidade de Maputo"
+    ]
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "District",
+    "areas": 161,
+    "coverage": 100,
+    "other_areas": 158,
+    "matched": 83.2,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Administrative Post",
+    "areas": 457,
+    "coverage": 100,
+    "other_areas": 409,
+    "matched": 59.5,
+    "unmatched": []
+   },
+   {
+    "level": "ADM4",
+    "admin_level": 4,
+    "name": "Locality",
+    "areas": 1712,
+    "coverage": 100,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2017/2019/2021",
+   "quality": null,
+   "note": null
+  }
+ },
+ "RW": {
+  "country": "RW",
+  "source": "geoboundaries",
+  "licence": "Creative Commons Attribution 4.0 (CC BY 4.0); Creative Commo",
+  "dataset_date": "2012/2020/2021",
+  "quality": null,
+  "url": "https://www.geoboundaries.org/countryDownloads.html#RWA",
+  "root": {
+   "id": "geoboundaries:RWA:41251308B48772205060280",
+   "name": "Rwanda"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Province",
+    "areas": 5,
+    "coverage": 99.9,
+    "other_areas": 5,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "District",
+    "areas": 30,
+    "coverage": 99.9,
+    "other_areas": 30,
+    "matched": 93.3,
+    "unmatched": [
+     "Karongi",
+     "Rutsiro"
+    ]
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Sector",
+    "areas": 416,
+    "coverage": 96,
+    "other_areas": 416,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM4",
+    "admin_level": 4,
+    "name": "Cell",
+    "areas": 2148,
+    "coverage": 100,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   },
+   {
+    "level": "ADM5",
+    "admin_level": 5,
+    "name": "Village",
+    "areas": 14815,
+    "coverage": 99.9,
+    "other_areas": 0,
+    "matched": null,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "cod",
+   "usable": true,
+   "dataset_date": "2018-09-27",
+   "quality": "cod-standard",
+   "note": null
+  }
+ },
+ "ZA": {
+  "country": "ZA",
+  "source": "cod",
+  "licence": "Creative Commons Attribution for Intergovernmental Organisat",
+  "dataset_date": "2020-11-09",
+  "quality": "cod-enhanced",
+  "url": "https://data.humdata.org/dataset/cod-ab-zaf",
+  "root": {
+   "id": "cod:ZAF:ZA",
+   "name": "South Africa"
+  },
+  "agreement_measured": true,
+  "levels": [
+   {
+    "level": "ADM1",
+    "admin_level": 1,
+    "name": "Province",
+    "areas": 9,
+    "coverage": 100,
+    "other_areas": 9,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM2",
+    "admin_level": 2,
+    "name": "District",
+    "areas": 52,
+    "coverage": 100,
+    "other_areas": 52,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM3",
+    "admin_level": 3,
+    "name": "Local Municipality",
+    "areas": 213,
+    "coverage": 100,
+    "other_areas": 213,
+    "matched": 100,
+    "unmatched": []
+   },
+   {
+    "level": "ADM4",
+    "admin_level": 4,
+    "name": "Ward",
+    "areas": 4392,
+    "coverage": 100,
+    "other_areas": 4392,
+    "matched": 100,
+    "unmatched": []
+   }
+  ],
+  "other": {
+   "source": "geoboundaries",
+   "usable": true,
+   "dataset_date": "2020",
+   "quality": null,
+   "note": null
+  }
+ }
+}

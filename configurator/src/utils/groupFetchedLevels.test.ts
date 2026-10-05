@@ -27,6 +27,17 @@ describe('groupFetchedLevels', () => {
     expect(levels.map((l) => l.examples[0])).toEqual(['Root', 'A']);
   });
 
+  it("keeps the source's own level number when all a level's areas share it", () => {
+    const [country, adm1, mixed] = groupFetchedLevels([
+      f({ name: 'Kenya', admin_level: 0, depth: 0 }),
+      f({ name: 'Nairobi', admin_level: 1, depth: 1 }),
+      f({ name: 'Mombasa', admin_level: 1, depth: 1 }),
+      f({ name: 'Westlands', admin_level: 2, depth: 2 }),
+      f({ name: 'Odd one', admin_level: 3, depth: 2 }),
+    ]);
+    expect([country.adminLevel, adm1.adminLevel, mixed.adminLevel]).toEqual([0, 1, undefined]);
+  });
+
   it('renumbers after dropping levels without polygons', () => {
     const levels = groupFetchedLevels([
       f({ name: 'Root', depth: 0 }, null), // no polygon: not a level
