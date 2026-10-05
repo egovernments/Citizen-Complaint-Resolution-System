@@ -98,7 +98,12 @@ public class PlatformBaselineGrantsTest {
         for (JsonNode row : seed.records()) if ("ACCESSCONTROL-ROLEACTIONS.roleactions".equals(row.path("schemaCode").asText())
                 && founder.contains(row.path("data").path("rolecode").asText())) granted.add(urls.get(row.path("data").path("actionid").asLong()));
         assertTrue("the scan found the configurator's calls", called.size() > 30);
-        List<String> denied = called.stream().filter(p -> !open.contains(p) && !granted.contains(p) && !NOT_FOUNDER_CALLS.containsKey(p)).toList();
+        // A matched string can be a base the code appends to (`${WORKSPACES}/_search`): it is
+        // covered when every granted/open action under it is what the code calls, i.e. any exists.
+        java.util.function.Predicate<String> coveredBase = p -> granted.stream().anyMatch(g -> g != null && g.startsWith(p + "/"))
+                || open.stream().anyMatch(o -> o.startsWith(p + "/"));
+        List<String> denied = called.stream().filter(p -> !open.contains(p) && !granted.contains(p) && !NOT_FOUNDER_CALLS.containsKey(p)
+                && !coveredBase.test(p)).toList();
         assertEquals("configurator calls a founder would be refused at Kong", List.of(), denied);
     }
 }
