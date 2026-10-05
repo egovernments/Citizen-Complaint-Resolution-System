@@ -147,7 +147,7 @@ describe("onboarding worker", () => {
     ]);
     const tenantRecord = digit.mdms.get("riverside|tenant.tenants")?.[0]?.data;
     expect(tenantRecord).toMatchObject({
-      tenantId: "riverside", code: "riverside", name: "riverside council",
+      tenantId: "riverside", code: "riverside", name: "riverside council", country: "KE",
     });
     expect(tenantRecord).not.toHaveProperty("type");
     expect(tenantRecord).not.toHaveProperty("city");

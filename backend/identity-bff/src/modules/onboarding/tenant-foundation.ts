@@ -286,6 +286,9 @@ async function ensureTenantRecord(
     return;
   }
   const tenantId = signup.requestedTenantId;
+  const country = /^[A-Za-z]{2}$/.test(signup.countryCode?.trim() || "")
+    ? signup.countryCode.trim().toUpperCase()
+    : "";
   try {
     await post(`${config.digitMdmsCreateUrl.replace(/\/$/, "")}/tenant.tenants`, {
       RequestInfo: requestInfo(token),
@@ -300,6 +303,10 @@ async function ensureTenantRecord(
           name: signup.accountName,
           description: `Independent root tenant for ${signup.accountName}`,
           imageId: null,
+          // The country picked at signup (ISO 3166-1 alpha-2). Not in the
+          // tenant.tenants schema's properties, which allows extra fields; the
+          // configurator reads it to offer that country's official boundaries.
+          ...(country && { country }),
         },
       },
     }, "tenant record create");
