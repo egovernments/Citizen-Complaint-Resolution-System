@@ -1,0 +1,83 @@
+# Identity stack: Keycloak and the Identity BFF (/identity/v1).
+#
+# OFF unless `identity.enabled: true` in charts/environments/env.yaml. Once
+# legacy identity is removed (#2271) every digit-ui sign-in goes through the BFF
+# and Keycloak, so with this off nobody can sign in: on such a release it is
+# REQUIRED. See docs/setup/deployment/helm-identity.md.
+#
+# Values are release-scoped (deploy-as-code/README.md: "prefer a release-scoped
+# block over a new top-level key"): each chart gets `global`, the shared
+# `identity` settings, its own overrides from identity.keycloak /
+# identity.identity-bff, and the secret reference from secrets.identity — not
+# the whole env.yaml tree.
+environments:
+  env:
+    values:
+      # Defaults for the keys read below, listed BEFORE env.yaml so it
+      # overrides them and so they always exist (same reason as
+      # charts/monitoring/monitoring-helmfile.yaml).
+      - identity:
+          enabled: false
+      - ../environments/env-secrets.yaml
+      - ../environments/env.yaml
+---
+{{- /* Read defensively, as monitoring-helmfile.yaml does: helmfile renders
+       with missingkey=error and CI pins helmfile v0.140.0 (no sprig `dig`). An
+       `identity:` that is not a map is a typo for "turn identity on"; failing
+       beats silently uninstalling the stack. */ -}}
+{{- $id := dict }}
+{{- if hasKey .Values "identity" }}
+{{-   if not (kindIs "map" (index .Values "identity")) }}
+{{-     fail "`identity:` in charts/environments/env.yaml must be a map (enabled, realm, publicUrl, ...), not a single value" }}
+{{-   end }}
+{{-   $id = .Values.identity }}
+{{- end }}
+{{- $enabled := index $id "enabled" | default false }}
+{{- $shared := dict
+      "realm" (index $id "realm" | default "digit")
+      "publicUrl" (index $id "publicUrl" | default "")
+      "postLoginRedirect" (index $id "postLoginRedirect" | default "")
+      "allowedOrigins" (index $id "allowedOrigins" | default "") }}
+{{- /* secrets.identity in env-secrets.yaml: existingSecret (preferred) or
+       values (escape hatch). Both charts get the same block, so Keycloak's
+       clients and the BFF share one value per secret. */ -}}
+{{- $sec := dict }}
+{{- if and (hasKey .Values "secrets") (hasKey .Values.secrets "identity") }}
+{{-   $sec = index .Values.secrets "identity" }}
+{{- end }}
+{{- $secret := dict "existingSecret" (index $sec "existingSecret" | default "") "values" (index $sec "values" | default dict) }}
+
+releases:
+  # Ready before the BFF starts: the BFF's readiness needs the realm the
+  # keycloak release's post-install Job creates.
+  - name: keycloak
+    chart: ./keycloak
+    namespace: egov
+    installed: {{ $enabled }}
+    missingFileHandler: Warn
+    wait: true
+    timeout: 900
+    values:
+      - global:
+          {{- .Values.global | toYaml | nindent 10 }}
+        identity:
+          {{- $shared | toYaml | nindent 10 }}
+        secret:
+          {{- $secret | toYaml | nindent 10 }}
+      - {{ index $id "keycloak" | default dict | toYaml | nindent 8 }}
+
+  - name: identity-bff
+    chart: ./identity-bff
+    namespace: egov
+    installed: {{ $enabled }}
+    missingFileHandler: Warn
+    needs:
+      - keycloak
+    values:
+      - global:
+          {{- .Values.global | toYaml | nindent 10 }}
+        identity:
+          {{- $shared | toYaml | nindent 10 }}
+        secret:
+          {{- $secret | toYaml | nindent 10 }}
+      - {{ index $id "identity-bff" | default dict | toYaml | nindent 8 }}

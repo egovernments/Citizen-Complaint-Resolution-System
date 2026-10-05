@@ -1,0 +1,178 @@
+{{- /*
+Realm reconcile, the Helm counterpart of the Ansible task "identity-bootstrap —
+reconcile Organizations realm and BFF clients" (local-setup/ansible/
+playbook-deploy.yml). It runs keycloak/configure-keycloak.sh with
+keycloak/realm.json after every install and upgrade; the script is idempotent.
+
+It runs in the Keycloak image itself (bash, kcadm.sh and jq), with files/docker
+on PATH standing in for the script's `docker exec` into the keycloak container.
+kcadm reaches the server over the Service. The master admin is the bootstrap
+admin from the Secret, so the script never creates a temporary one.
+
+The client secrets come from the same Secret (or the same env-secrets.yaml
+values) as the identity-bff chart's, so Keycloak's clients and the BFF cannot
+disagree about one.
+
+The pod template's checksum annotation changes with the script or realm.json,
+so a change to either is a release diff and `helmfile apply` re-runs the Job.
+*/ -}}
+{{- $_ := include "common.name" . }}
+{{- if .Values.configure.enabled }}
+{{- $secret := include "keycloak.secretName" . }}
+{{- $public := include "keycloak.publicUrl" . }}
+{{- $identity := .Values.identity }}
+{{- $quickstart := eq (toString .Values.global.setup) "quickstart" }}
+{{- $smtp := .Values.configure.smtp }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "common.name" . }}-realm-configure
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    # Keep a failed run for `kubectl logs`; replace it on the next upgrade.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.configure.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.configure.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "common.name" . }}-realm-configure
+      annotations:
+        checksum/realm-config: {{ printf "%s%s%s" (.Files.Get "files/configure-keycloak.sh") (.Files.Get "files/realm.json") (.Files.Get "files/docker") | sha256sum }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      volumes:
+        - name: realm-config
+          configMap:
+            name: {{ template "common.name" . }}-realm-config
+            defaultMode: 0555
+            items:
+              - key: configure-keycloak.sh
+                path: configure-keycloak.sh
+              - key: realm.json
+                path: realm.json
+              - key: docker
+                path: bin/docker
+      containers:
+        - name: realm-configure
+          image: {{ template "common.image" (dict "Values" $.Values "repository" .Values.image.repository "tag" .Values.image.tag) }}
+          imagePullPolicy: {{ include "keycloak.pullPolicy" . }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              # Keycloak answers on the Service once its database migrations
+              # are done; the Job can start before that on a first install.
+              server=${KEYCLOAK_KCADM_SERVER#http://}
+              host=${server%%:*}; port=${server##*:}
+              ready() {
+                exec 3<>"/dev/tcp/$host/$port" || return 1
+                printf 'GET /realms/master HTTP/1.0\r\nHost: %s\r\n\r\n' "$host" >&3
+                local status=""
+                IFS= read -r status <&3 || true
+                exec 3<&-
+                case "$status" in *" 200 "*) return 0 ;; esac
+                return 1
+              }
+              deadline=$((SECONDS + {{ .Values.configure.waitSeconds }}))
+              until ready 2>/dev/null; do
+                if [ "$SECONDS" -ge "$deadline" ]; then
+                  echo "Keycloak at $KEYCLOAK_KCADM_SERVER did not answer within {{ .Values.configure.waitSeconds }}s" >&2
+                  exit 1
+                fi
+                sleep 5
+              done
+              exec /identity-config/configure-keycloak.sh
+          volumeMounts:
+            - name: realm-config
+              mountPath: /identity-config
+              readOnly: true
+          env:
+            - name: PATH
+              value: /identity-config/bin:/opt/keycloak/bin:/usr/local/bin:/usr/bin:/bin
+            - name: KEYCLOAK_KCADM_SERVER
+              value: {{ include "keycloak.serviceUrl" . | quote }}
+            - name: KEYCLOAK_CONTAINER
+              value: {{ template "common.name" . }}
+            - name: KEYCLOAK_REALM_CONFIG
+              value: /identity-config/realm.json
+            - name: KEYCLOAK_ORGANIZATION_REALM
+              value: {{ $identity.realm | quote }}
+            - name: KEYCLOAK_SSL_REQUIRED
+              value: {{ .Values.configure.sslRequired | default (ternary "none" "external" $quickstart) | quote }}
+            - name: KEYCLOAK_EVENTS_EXPIRATION_SECONDS
+              value: {{ .Values.configure.eventsExpirationSeconds | toString | quote }}
+            - name: KEYCLOAK_MAGIC_LINK_ENABLED
+              value: {{ .Values.configure.magicLinkEnabled | toString | quote }}
+            - name: IDENTITY_REDIRECT_URI
+              value: {{ printf "%s/identity/v1/callback" $public | quote }}
+            - name: IDENTITY_POST_LOGIN_REDIRECT
+              value: {{ $identity.postLoginRedirect | default (printf "%s/configurator/login" $public) | quote }}
+            - name: IDENTITY_ALLOWED_ORIGINS
+              value: {{ $identity.allowedOrigins | default $public | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: {{ .Values.admin.username | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: keycloak-admin-password
+            {{- range $env, $key := dict "KEYCLOAK_BFF_CLIENT_SECRET" "keycloak-bff-client-secret" "KEYCLOAK_ADMIN_CLIENT_SECRET" "keycloak-admin-client-secret" "KEYCLOAK_EMPLOYEE_CLIENT_SECRET" "keycloak-employee-client-secret" "KEYCLOAK_CITIZEN_CLIENT_SECRET" "keycloak-citizen-client-secret" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- range $env, $key := dict "KEYCLOAK_MAGIC_LINK_CLIENT_SECRET" "keycloak-magic-link-client-secret" "KEYCLOAK_SMTP_PASSWORD" "keycloak-smtp-password" "KEYCLOAK_GOOGLE_CLIENT_SECRET" "keycloak-google-client-secret" "KEYCLOAK_GITHUB_CLIENT_SECRET" "keycloak-github-client-secret" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: {{ $key }}
+                  optional: true
+            {{- end }}
+            - name: KEYCLOAK_SMTP_HOST
+              value: {{ required "configure.smtp.host is required: Keycloak sends password recovery, invitation and verification mail" $smtp.host | quote }}
+            - name: KEYCLOAK_SMTP_PORT
+              value: {{ $smtp.port | toString | quote }}
+            - name: KEYCLOAK_SMTP_FROM
+              value: {{ required "configure.smtp.from is required" $smtp.from | quote }}
+            - name: KEYCLOAK_SMTP_FROM_DISPLAY_NAME
+              value: {{ $smtp.fromDisplayName | quote }}
+            - name: KEYCLOAK_SMTP_AUTH
+              value: {{ $smtp.auth | toString | quote }}
+            - name: KEYCLOAK_SMTP_USER
+              value: {{ $smtp.user | quote }}
+            - name: KEYCLOAK_SMTP_SSL
+              value: {{ $smtp.ssl | toString | quote }}
+            - name: KEYCLOAK_SMTP_STARTTLS
+              value: {{ $smtp.starttls | toString | quote }}
+            - name: KEYCLOAK_GOOGLE_CLIENT_ID
+              value: {{ .Values.configure.googleClientId | quote }}
+            - name: KEYCLOAK_GITHUB_CLIENT_ID
+              value: {{ .Values.configure.githubClientId | quote }}
+            - name: KEYCLOAK_BFF_SIGNIN_METHODS
+              value: {{ .Values.configure.signinMethods | quote }}
+            - name: KEYCLOAK_BFF_SIGNUP_METHODS
+              value: {{ .Values.configure.signupMethods | quote }}
+            - name: KEYCLOAK_CITIZEN_SIGNIN_METHODS
+              value: {{ .Values.configure.citizenSigninMethods | quote }}
+            {{- range $name, $value := .Values.configure.extraEnv }}
+            - name: {{ $name }}
+              value: {{ $value | toString | quote }}
+            {{- end }}
+          resources:
+            {{- tpl .Values.configure.resources . | nindent 12 }}
+{{- end }}

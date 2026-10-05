@@ -1,0 +1,20 @@
+{{- /* The realm-configure Job's inputs: the script and declared realm state
+       (copies of keycloak/configure-keycloak.sh and keycloak/realm.json; helm
+       reads files only from inside the chart) and the `docker exec` shim the
+       script calls. A plain resource, not a hook, so it exists before the
+       post-install Job starts. */ -}}
+{{- if .Values.configure.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "common.name" . }}-realm-config
+  labels:
+{{- include "common.labels" . | nindent 4 }}
+data:
+  configure-keycloak.sh: |-
+{{ .Files.Get "files/configure-keycloak.sh" | indent 4 }}
+  realm.json: |-
+{{ .Files.Get "files/realm.json" | indent 4 }}
+  docker: |-
+{{ .Files.Get "files/docker" | indent 4 }}
+{{- end }}

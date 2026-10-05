@@ -1,0 +1,14 @@
+apiVersion: v2
+name: keycloak
+description: >-
+  Keycloak for the DIGIT identity stack (the project image built from
+  keycloak/Dockerfile), with the shared realm reconciled by a post-install and
+  post-upgrade Job that runs keycloak/configure-keycloak.sh.
+type: application
+version: 0.1.0
+appVersion: "26.7.3"
+
+dependencies:
+- name: common
+  version: 0.0.5
+  repository: file://../../common

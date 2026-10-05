@@ -1,0 +1,6 @@
+{{- /* common.name merges env overrides into .Values; run it first so the
+       pull-policy decision sees an overriding tag. */ -}}
+{{- $_ := include "common.name" . }}
+{{- $_ := set .Values.image "pullPolicy" (include "keycloak.pullPolicy" .) }}
+# deployment.yaml
+{{- template "common.deployment" . -}}
