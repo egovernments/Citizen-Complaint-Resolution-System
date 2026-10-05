@@ -3,6 +3,7 @@ package org.egov.pgr.onboarding;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import java.util.*;
 
@@ -19,11 +20,23 @@ public class OnboardingSteps {
     private final OnboardingProvisionerClient client;
     private final PlatformBaseline seed;
     private final ObjectMapper mapper;
+    private final OnboardingIdentifierService identifiers;
+    /** Platform tenant ids only (`default`); for tests that need no deployment configuration. */
     public OnboardingSteps(OnboardingProvisionerClient client, PlatformBaseline seed, ObjectMapper mapper) {
-        this.client = client; this.seed = seed; this.mapper = mapper;
+        this(client, seed, mapper, new OnboardingIdentifierService());
+    }
+    @Autowired
+    public OnboardingSteps(OnboardingProvisionerClient client, PlatformBaseline seed, ObjectMapper mapper,
+                           OnboardingIdentifierService identifiers) {
+        this.client = client; this.seed = seed; this.mapper = mapper; this.identifiers = identifiers;
     }
 
     public void perform(String step, OnboardingSignup signup, OnboardingOperation operation, OnboardingProgress progress) {
+        // Submit refuses a reserved tenant id, but a signup queued before that check existed may
+        // still carry `default` or a state root. Refuse it terminally before any write, at every
+        // step, so a run resumed past TENANT_FOUNDATION cannot finish either (#2269 round-3 item 1).
+        if (identifiers.reservedTenantId(signup.getRequestedTenantId()))
+            throw new OnboardingFailure("ONBOARDING_IDENTIFIER_TAKEN", false);
         var scope = progress.writeScope(signup, step);
         switch (step) {
             case "TENANT_FOUNDATION" -> foundation(signup, operation, progress, scope);
