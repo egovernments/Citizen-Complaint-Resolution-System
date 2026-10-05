@@ -1113,7 +1113,7 @@ function SignupFlow() {
                 checking={slugChecking}
                 invalidReason={
                   urlSlug && !slugValid
-                    ? '2 to 63 characters, lowercase letters, digits and hyphens, with at least two letters.'
+                    ? '2 to 63 characters, lowercase letters, digits and hyphens, starting with a letter or digit, with at least two letters, and not a reserved word.'
                     : undefined
                 }
               />

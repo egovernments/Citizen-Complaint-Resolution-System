@@ -6,6 +6,14 @@ import { API_ORIGIN, logout as identityLogout, type DigitContext, type SessionUs
 /** The one blob App restores a DIGIT session from. */
 export const AUTH_STORAGE_KEY = 'crs-auth-state';
 export const SESSION_EXPIRED_KEY = 'crs-session-expired';
+/**
+ * Set when sign-out cleared the local session but the identity BFF did not
+ * confirm it. Its HttpOnly cookie may then still be live, so the login page
+ * must not silently resume that session. Cleared by a confirmed sign-out or an
+ * explicit sign-in. It lives in localStorage, not sessionStorage, so a new tab
+ * or window on a shared device is covered too.
+ */
+export const SIGN_OUT_INCOMPLETE_KEY = 'crs-sign-out-incomplete';
 
 /**
  * Drop the DIGIT half of a session: the stored token, both API clients and the
@@ -42,15 +50,25 @@ export function clearLocalSession(): void {
  * Sign this device out. Fails open: the DIGIT token is cleared first, so a BFF
  * outage or a 403 (e.g. UNTRUSTED_ORIGIN) can never leave a shared device
  * signed in. Revoking the identity session is then best-effort; its cookie is
- * HttpOnly and expires on its own.
+ * HttpOnly, so when revocation fails SIGN_OUT_INCOMPLETE_KEY stops the login
+ * page from resuming it. Resolves to whether the BFF confirmed the sign-out.
  */
-export async function signOutThisDevice(scope: 'current' | 'all' = 'current'): Promise<void> {
+export async function signOutThisDevice(scope: 'current' | 'all' = 'current'): Promise<boolean> {
   clearLocalSession();
+  let confirmed = false;
   try {
     await identityLogout(scope);
+    confirmed = true;
   } catch {
-    // Best-effort: the local session is already gone.
+    // The local session is already gone; the identity session may not be.
   }
+  try {
+    if (confirmed) window.localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
+    else window.localStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
+  } catch {
+    // Private windows and blocked site data both throw on access.
+  }
+  return confirmed;
 }
 
 /**

@@ -21,6 +21,7 @@ vi.mock('@/api/onboarding', async () => {
 
 vi.mock('@/lib/session', () => ({
   SESSION_EXPIRED_KEY: 'crs-session-expired',
+  SIGN_OUT_INCOMPLETE_KEY: 'crs-sign-out-incomplete',
   clearLocalSession: vi.fn(),
   installDigitContext: vi.fn(),
   signOutThisDevice: vi.fn(),
@@ -54,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
+  localStorage.removeItem('crs-sign-out-incomplete');
 });
 
 describe('configurator sign in', () => {
@@ -167,5 +169,28 @@ describe('configurator sign in', () => {
     await waitFor(() => expect(localSession.signOutThisDevice).toHaveBeenCalled());
     expect(await screen.findByRole('button', { name: /^log in$/i })).toBeInTheDocument();
     expect(api.logout).not.toHaveBeenCalled();
+  });
+
+  it('does not resume the identity session after an unconfirmed sign-out until an explicit sign-in', async () => {
+    // Set by a sign-out in another tab: localStorage reaches this one.
+    localStorage.setItem('crs-sign-out-incomplete', '1');
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    renderPage();
+
+    expect(await screen.findByText('Sign-out may be incomplete')).toBeInTheDocument();
+    expect(screen.getByText(/close the browser or try again/i)).toBeInTheDocument();
+    expect(api.session).not.toHaveBeenCalled();
+    expect(api.tenants).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^log in$/i }));
+    expect(localStorage.getItem('crs-sign-out-incomplete')).toBeNull();
+    expect(api.startSignIn).toHaveBeenCalledWith('password', 'signin');
+  });
+
+  it('offers to retry an unconfirmed sign-out', async () => {
+    localStorage.setItem('crs-sign-out-incomplete', '1');
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /try signing out again/i }));
+    await waitFor(() => expect(localSession.signOutThisDevice).toHaveBeenCalled());
   });
 });

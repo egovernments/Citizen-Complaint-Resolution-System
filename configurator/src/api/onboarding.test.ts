@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   OnboardingError,
@@ -9,6 +11,7 @@ import {
   findSignup,
   isValidAccountCode,
   isValidUrlSlug,
+  RESERVED_URL_SLUGS,
   newIdempotencyKey,
   session,
   slugifyAccountName,
@@ -128,6 +131,20 @@ describe('validation mirrors the server rules', () => {
 
   it('rejects an uppercase slug', () => {
     expect(isValidUrlSlug('Bomet')).toBe(false);
+  });
+
+  it('rejects a leading hyphen and reserved words, like the server', () => {
+    expect(isValidUrlSlug('-bomet')).toBe(false);
+    expect(isValidUrlSlug('digit-ui')).toBe(false);
+    expect(isValidUrlSlug('configurator')).toBe(false);
+  });
+
+  it('keeps the reserved slugs equal to the identity-bff contract list (docs §2.4.1)', () => {
+    const doc = readFileSync(resolve(process.cwd(), '../backend/identity-bff/docs/identity-bff.md'), 'utf8');
+    const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+    expect(block, 'identity-bff.md must keep the reserved-url-slugs block').toBeTruthy();
+    const documented = block![1].split('\n').map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line));
+    expect([...RESERVED_URL_SLUGS].sort()).toEqual(documented.sort());
   });
 
   it('accepts an account code of A-Z, 0-9 and hyphens', () => {

@@ -51,12 +51,12 @@ it('clears the local token before the BFF acknowledges sign-out everywhere', asy
   await waitFor(() => expect(logout).toHaveBeenCalledWith('all'));
   expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
 });
-it('still clears the local token when the BFF rejects sign-out', async () => {
+it('clears the local token but reports a failed sign-out everywhere', async () => {
   vi.mocked(logout).mockRejectedValue(new Error('UNTRUSTED_ORIGIN'));
   page(); fireEvent.click(await screen.findByRole('button', { name: 'Sign out everywhere' }));
-  await waitFor(() => expect(logout).toHaveBeenCalledWith('all'));
+  expect(await screen.findByText(/could not be confirmed\. Other devices may still be signed in/)).toBeInTheDocument();
+  expect(logout).toHaveBeenCalledWith('all');
   expect(window.localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
-  expect(screen.queryByText('UNTRUSTED_ORIGIN')).not.toBeInTheDocument();
 });
 it('keeps this session when signing out other sessions fails', async () => {
   vi.mocked(logout).mockRejectedValue(new Error('Sign-out failed'));

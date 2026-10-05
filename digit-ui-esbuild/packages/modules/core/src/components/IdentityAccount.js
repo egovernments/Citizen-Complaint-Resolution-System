@@ -180,7 +180,15 @@ const IdentityAccount = ({ surface }) => {
       action: name, ...extra, returnTo: `${window.location.pathname}` }));
   });
   const logout = (scope) => run(async () => {
-    await Digit.UserService.logout(scope);
+    try {
+      await Digit.UserService.logout(scope);
+    } catch (error) {
+      if (scope !== "all") throw error;
+      // This device is signed out locally; the others may not be.
+      setMessage(tr("CORE_IDENTITY_LOGOUT_ALL_FAILED",
+        "Signing out everywhere could not be confirmed. Other devices may still be signed in. Try again."));
+      return;
+    }
     if (scope === "others") {
       await refresh();
       setMessage(tr("CORE_IDENTITY_OTHER_SESSIONS_ENDED", "Your other sessions have been signed out."));
