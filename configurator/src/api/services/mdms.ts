@@ -1,6 +1,7 @@
 // MDMS Service - Master Data Management
 import { apiClient } from '../client';
 import { ENDPOINTS, MDMS_SCHEMAS } from '../config';
+import { WORKSPACE_HIERARCHY_TYPE } from './boundary';
 import type {
   Department,
   Designation,
@@ -209,6 +210,13 @@ export const mdmsService = {
     tenantId: string,
     hierarchy: { hierarchy: string; highestHierarchy: string; lowestHierarchy: string },
   ): Promise<MdmsRecord | null> {
+    // WORKSPACE only roots the founder; the GEOGRAPHY probe never accepts it
+    // as the tenant's hierarchy, and this row is never rewritten once set.
+    if (hierarchy.hierarchy === WORKSPACE_HIERARCHY_TYPE) {
+      throw new Error(
+        `"${WORKSPACE_HIERARCHY_TYPE}" is reserved for the workspace root and can't be your complaint hierarchy. Use another hierarchy name.`,
+      );
+    }
     const rows = await this.searchRecords(tenantId, MDMS_SCHEMAS.HIERARCHY_SCHEMA);
     const visible = rows.find(
       (r) => r.isActive !== false && (r.data as { moduleName?: string } | undefined)?.moduleName === 'CMS',

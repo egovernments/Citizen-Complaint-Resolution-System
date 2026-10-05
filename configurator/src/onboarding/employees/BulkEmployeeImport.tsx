@@ -112,7 +112,9 @@ export default function BulkEmployeeImport({ onDone, onCancel }: { onDone: () =>
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),
           mdmsService.getDesignations(targetTenant),
-          boundaryService.searchBoundaries(targetTenant, hierarchyType ? { hierarchyType } : undefined),
+          // No operational hierarchy yet: an unfiltered search would return the
+          // reserved WORKSPACE root, so treat it as no boundaries.
+          hierarchyType ? boundaryService.searchBoundaries(targetTenant, { hierarchyType }) : Promise.resolve([]),
           mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(targetTenant).catch(() => null),
         ]);
