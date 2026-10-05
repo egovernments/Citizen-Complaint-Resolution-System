@@ -113,7 +113,7 @@ export const ROUTES: RouteContract[] = [
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
   // `?surface=` (optional, default configurator) picks the session cookie; staff surfaces only.
   { method: "POST", path: "/identity/v1/workspace-invitations/_accept", auth: "session", state: "live", items: [9],
-    codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "INVITATION_STALE", "BINDING_BUSY", "IDENTITY_BUSY",
+    codes: [...BROWSER_WRITE, "UNSUPPORTED_SURFACE", "INVITATION_STALE", "INVITATION_EMAIL_UNVERIFIED", "BINDING_BUSY", "IDENTITY_BUSY",
       "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
   // `?surface=` (optional, default configurator) picks the session cookie.
   { method: "POST", path: "/identity/v1/account/providers/_unlink", auth: "session", state: "changing", items: [4],

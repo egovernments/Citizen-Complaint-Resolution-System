@@ -6,7 +6,7 @@ import { invitationExpiryHours } from "../bindings/invitations.js";
 import { accept, bindingsFromUser, createPending, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
 import { ensureOrganizationMembership, isOrganizationMember, request } from "../organizations/organization-service.js";
-import { createdId, paged } from "../../integrations/keycloak/admin-api.js";
+import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
 import { readOnboardingOrganizations } from "../onboarding/organization-reader.js";
 import { organizationAttribute } from "../onboarding/primitives.js";
 import { updateKeycloakUser } from "../sync/keycloak-writer.js";
@@ -124,6 +124,8 @@ export async function acceptWorkspaceInvitation(subject: string, tenantId: strin
   return withPersonLease(subject, async (lease) => {
     const pending = (await readBindings(subject)).find((b) => b.tenantId === tenantId);
     if (!pending || pending.state === "removed" || pending.invitationVersion !== invitationVersion) throw new BindingError("INVITATION_STALE", "The invitation is no longer current");
+    // Invitations are matched by email; only a person who proved that email may take the binding.
+    if ((await readUser(subject)).emailVerified !== true) throw new BindingError("INVITATION_EMAIL_UNVERIFIED", "Verify your email before accepting the invitation");
     const org = await requireWorkspace(tenantId).catch((error) => {
       if (error instanceof BindingError && error.code === "WORKSPACE_TENANT_REQUIRED") {
         throw new BindingError("INVITATION_STALE", "The inviting workspace is unavailable");

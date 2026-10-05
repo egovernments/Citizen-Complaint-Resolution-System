@@ -465,6 +465,7 @@ Caller: live `ACCOUNT_ADMIN` at `tenantId`. The configurator calls it right afte
 
 - Bound to the signed-in person, on any staff surface (D25/B2). The optional `surface` query picks which surface's session cookie is read, so digit-ui can accept with the employee session. A citizen surface → 400 `UNSUPPORTED_SURFACE`.
 - The binding must be `pending`, unexpired, and at that version. Otherwise → 409 `INVITATION_STALE`, which also covers "no invitation at all", so invitations can't be enumerated.
+- The person's Keycloak email must be verified, read fresh from Keycloak, else 403 `INVITATION_EMAIL_UNVERIFIED`. An invitation is matched by email, so an unverified account carrying someone else's address must not be able to take their binding. Invitees verify by following the setup email.
 - On success, under person → uuid: grant membership, make the binding `active`, set the derived credential, and mirror.
 - A repeat on an already-`active` binding at the same version returns `200`.
 - The inviter's authority is not re-checked at accept; the invitation was authorized when it was made.
@@ -655,6 +656,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `BINDING_CONFLICT` | 409 | no | This person already has a different DIGIT account at the tenant |
 | `BINDING_BUSY` | 503 | yes | The DIGIT-account (uuid) lock wait timed out; Retry-After is set |
 | `INVITATION_STALE` | 409 | no | The invitation was removed, replaced, expired or never existed |
+| `INVITATION_EMAIL_UNVERIFIED` | 403 | after-change | The accepting account's email is not verified in Keycloak |
 | `IDENTITY_EMAIL_CHANGED` | 409 | after-change | A Keycloak user matches by username but its email has changed |
 | `WORKSPACE_TENANT_REQUIRED` | 400 | no | The tenant is not a workspace (Organization) tenant (D16) |
 | `DIGIT_ACCOUNT_NOT_FOUND` | 404 | after-change | No active DIGIT account matches, or the bound account has disappeared |

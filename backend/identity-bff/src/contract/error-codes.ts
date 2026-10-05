@@ -112,6 +112,7 @@ export const ERROR_CODES = {
   BINDING_CONFLICT: { status: 409, retry: "no", meaning: "This person already has a different DIGIT account at the tenant" },
   BINDING_BUSY: { status: 503, retry: "yes", meaning: "The DIGIT-account (uuid) lock wait timed out; Retry-After is set" },
   INVITATION_STALE: { status: 409, retry: "no", meaning: "The invitation was removed, replaced, expired or never existed" },
+  INVITATION_EMAIL_UNVERIFIED: { status: 403, retry: "after-change", meaning: "The accepting account's email is not verified in Keycloak" },
   IDENTITY_EMAIL_CHANGED: { status: 409, retry: "after-change", meaning: "A Keycloak user matches by username but its email has changed" },
   WORKSPACE_TENANT_REQUIRED: { status: 400, retry: "no", meaning: "The tenant is not a workspace (Organization) tenant (D16)" },
 

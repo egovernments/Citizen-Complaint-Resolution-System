@@ -3132,7 +3132,7 @@ describe("binding workspace public routes", () => {
 
   it.each(["configurator", "employee"] as const)("shows and accepts an existing person's invitation on %s, then selects its DIGIT account", async (surface) => {
     const subject = `binding-existing-${surface}`;
-    await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, enabled: true });
+    await kcAdmin("/users", { id: subject, username: subject, email: `${subject}@example.test`, emailVerified: true, enabled: true });
     const account = employee(`BINDING-EXISTING-${surface}`);
     const response = await post("/workspace-members/_link", adminCookie, { tenantId: "ug", digitUuid: account.uuid, email: `${subject}@example.test` });
     expect(response.status).toBe(200);

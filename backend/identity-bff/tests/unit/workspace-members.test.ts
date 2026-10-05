@@ -104,12 +104,19 @@ describe("resumable workspace membership", () => {
     expect(f.createCount).toBe(0);
   });
   it("accepts an existing user's invitation, grants membership and activates once", async () => {
-    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, attributes: {} });
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: true, attributes: {} });
     const invite = await linkWorkspaceMember(input);
     expect(invite.binding.state).toBe("pending"); expect(f.members.size).toBe(0); expect(f.activations).toBe(0);
     await acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion);
     await acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion);
     expect(f.members.has("pg:existing")).toBe(true); expect(f.activations).toBe(1);
+  });
+  it("refuses acceptance by an account whose email is not verified", async () => {
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
+    const invite = await linkWorkspaceMember(input);
+    await expect(acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_EMAIL_UNVERIFIED", status: 403 });
+    expect(bindingDoc(f.users.get("existing")!).bindings[0].state).toBe("pending");
+    expect(f.members.has("pg:existing")).toBe(false); expect(f.activations).toBe(0);
   });
   it("retries removal side effects even after the tombstone released its uuid", async () => {
     await linkWorkspaceMember(input);
@@ -200,7 +207,7 @@ describe("resumable workspace membership", () => {
     expect(f.members.has("pg:new-1")).toBe(false);
   });
   it("keeps a workspace dependency failure retryable during acceptance", async () => {
-    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, attributes: {} });
+    f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: true, attributes: {} });
     const invite = await linkWorkspaceMember(input);
     vi.mocked(requireWorkspace).mockRejectedValueOnce(new BindingError("IDENTITY_UNAVAILABLE", "Temporary read failure"));
     await expect(acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "IDENTITY_UNAVAILABLE" });
