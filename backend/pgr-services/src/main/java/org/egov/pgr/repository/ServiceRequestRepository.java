@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.tracer.model.ServiceCallException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.client.HttpClientErrorException;
@@ -37,7 +38,10 @@ public class ServiceRequestRepository {
 	/**
 	 * The shared RestTemplate has no timeouts. Calls made on every complaint search/count (the
 	 * workflow assignee lookups) use this copy instead, so a hung workflow fails the call rather
-	 * than pinning the request thread. Same converters, interceptors and error handler.
+	 * than pinning the request thread. Same converters, interceptors and error handler, and the
+	 * same buffering factory the tracer gives the shared template: with
+	 * tracer.restTemplateDetailedLoggingEnabled its logging interceptor reads the response body,
+	 * which an unbuffered response would then no longer have.
 	 */
 	private static RestTemplate timeBoxed(RestTemplate shared, int connectTimeoutMs, int readTimeoutMs) {
 		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -46,7 +50,7 @@ public class ServiceRequestRepository {
 		RestTemplate scoped = new RestTemplate(shared.getMessageConverters());
 		scoped.setInterceptors(shared.getInterceptors());
 		scoped.setErrorHandler(shared.getErrorHandler());
-		scoped.setRequestFactory(factory);
+		scoped.setRequestFactory(new BufferingClientHttpRequestFactory(factory));
 		return scoped;
 	}
 
