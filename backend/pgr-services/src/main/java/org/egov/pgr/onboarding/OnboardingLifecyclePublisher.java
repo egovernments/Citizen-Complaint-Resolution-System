@@ -1,10 +1,16 @@
 package org.egov.pgr.onboarding;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
+@Slf4j
 @Service
 public class OnboardingLifecyclePublisher {
+    /** Backoff caps near 4 minutes, so the 10th failure is roughly 8 minutes after the decision. */
+    static final int STUCK_ATTEMPTS = 10;
     private final OnboardingRepository repository;
     private final OnboardingSteps steps;
     public OnboardingLifecyclePublisher(OnboardingRepository repository, OnboardingSteps steps) {
@@ -32,8 +38,20 @@ public class OnboardingLifecyclePublisher {
                 repository.acknowledgePublication(operation, System.currentTimeMillis());
             } catch (OnboardingFailure e) {
                 if ("ATTEMPT_STALE".equals(e.getCode())) repository.acknowledgePublication(operation, System.currentTimeMillis());
-                else repository.deferPublication(operation, System.currentTimeMillis());
+                else repository.deferPublication(operation, System.currentTimeMillis())
+                        .ifPresent(deferral -> logDeferral(operation, deferral, e));
             }
         }
+    }
+
+    /** One line per failed attempt; the backoff keeps this to a few per hour once a publication is stuck. */
+    private void logDeferral(OnboardingOperation operation, OnboardingRepository.PublicationDeferral deferral, OnboardingFailure failure) {
+        Object[] args = {operation.getId(), deferral.tenantId(), operation.getLifecycleDecision(), deferral.attempts(),
+                Instant.ofEpochMilli(deferral.nextAttemptAt()), failure.getHttpStatus(), failure.getCode()};
+        String detail = "operation={} tenant={} decision={} attempts={} nextAttemptAt={} httpStatus={} code={}";
+        if (deferral.attempts() == STUCK_ATTEMPTS)
+            log.error("Onboarding lifecycle publication is STUCK (an ACTIVE workspace stays hidden from its founder until "
+                    + "the identity BFF accepts it); still retrying: " + detail, args);
+        else log.warn("Onboarding lifecycle publication failed, will retry: " + detail, args);
     }
 }
