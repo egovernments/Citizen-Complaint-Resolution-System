@@ -45,12 +45,14 @@ public class WorkspaceGateway {
     }
     /** Advisory readout for _search: a probe whose dependency fails reads null instead of failing the call. */
     public Map<String,Boolean> probes(String tenant) {
-        Map<String,Boolean> probes=new LinkedHashMap<>();
-        for(String step:WorkspaceRepository.STEPS) try{probes.put(step,probe(tenant,step));}catch(RuntimeException e){probes.put(step,null);}
+        Map<String,Boolean> probes=new LinkedHashMap<>(); Reads reads=new Reads(tenant);
+        for(String step:WorkspaceRepository.STEPS) try{probes.put(step,probe(reads,step));}catch(RuntimeException e){probes.put(step,null);}
         return probes;
     }
     /** One step's live check; dependency failures propagate so DONE is never granted on an unreadable probe. */
-    public boolean probe(String tenant,String step) {
+    public boolean probe(String tenant,String step){return probe(new Reads(tenant),step);}
+    private boolean probe(Reads reads,String step) {
+        String tenant=reads.tenant;
         switch(step) {
             case "BRANDING": return !tenant(tenant).path("data").path("imageId").asText("").isBlank();
             case "DEPARTMENTS": {
@@ -62,8 +64,17 @@ public class WorkspaceGateway {
                 Set<String> departments=departments(tenant), parents=new HashSet<>(); List<JsonNode> rows=new ArrayList<>();
                 for(JsonNode row:mdms.records(tenant,"RAINMAKER-PGR.ComplaintHierarchy",null)) if(ownedActive(row,tenant)) {rows.add(row);parents.add(row.path("data").path("parentCode").asText(""));}
                 // A leaf is a row nothing else names as its parent; it must route to a live department with an SLA.
-                for(JsonNode row:rows) if(!code(row).isBlank() && !parents.contains(code(row)) && departments.contains(row.path("data").path("department").asText("")) && row.path("data").path("slaHours").asDouble(0)>0)return true;
-                return false;
+                boolean routable=false; Set<String> routed=new HashSet<>();
+                for(JsonNode row:rows) if(!code(row).isBlank() && !parents.contains(code(row))) {
+                    String department=row.path("data").path("department").asText("");
+                    if(!department.isBlank())routed.add(department);
+                    if(departments.contains(department) && row.path("data").path("slaHours").asDouble(0)>0)routable=true;
+                }
+                if(!routable)return false;
+                // GRO ABAC is department OWN: a department with no GRO strands its complaints in PENDINGFORASSIGNMENT.
+                for(JsonNode row:reads.employees()) if(row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true) && hasRole(row,"GRO",tenant))
+                    for(JsonNode assignment:row.path("assignments")) if(assignment.path("isCurrentAssignment").asBoolean(false))routed.remove(assignment.path("department").asText(""));
+                return routed.isEmpty();
             }
             case "GEOGRAPHY": {
                 // The founder's hierarchy is the one the tenant's CMS HierarchySchema names; the baseline's WORKSPACE root never counts.
@@ -78,13 +89,28 @@ public class WorkspaceGateway {
                 return false;
             }
             case "EMPLOYEES": {
-                JsonNode employees=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
-                requireArray(employees);
-                for(JsonNode row:employees) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
+                for(JsonNode row:reads.employees()) if(!row.path("code").asText().isBlank() && !row.path("code").asText().startsWith("FOUNDER_") && row.path("isActive").asBoolean(true) && row.path("user").path("active").asBoolean(true))return true;
                 return false;
             }
             default: throw new IllegalArgumentException(step);
         }
+    }
+    /** Dependency reads shared by the probes of one call, so EMPLOYEES and COMPLAINT_TYPES read HRMS once. */
+    private final class Reads {
+        final String tenant; private JsonNode employees; private RuntimeException employeesFailure;
+        Reads(String tenant){this.tenant=tenant;}
+        JsonNode employees() {
+            if(employeesFailure!=null)throw employeesFailure;
+            if(employees==null) try {
+                JsonNode rows=client.read("hrms","/egov-hrms/employees/_search?tenantId="+tenant+"&offset=0&limit=1000",Map.of()).path("Employees");
+                requireArray(rows); employees=rows;
+            } catch(RuntimeException e){employeesFailure=e;throw e;}
+            return employees;
+        }
+    }
+    private static boolean hasRole(JsonNode employee,String role,String tenant) {
+        for(JsonNode r:employee.path("user").path("roles")) if(role.equals(r.path("code").asText()) && tenant.equals(r.path("tenantId").asText()))return true;
+        return false;
     }
     private Set<String> departments(String tenant) {
         Set<String> codes=new HashSet<>();

@@ -78,8 +78,16 @@ public class WorkspaceRouteTest {
         mdms("common-masters.Designation","[{\"tenantId\":\"example\",\"data\":{\"code\":\"ENGINEER\"}}]");
         mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"Water\"}},{\"tenantId\":\"example\",\"data\":{\"code\":\"Leak\",\"parentCode\":\"Water\",\"department\":\"WATER\",\"slaHours\":24}}]");
         boundaries("[{\"code\":\"WARD_1\",\"children\":[]}]");
-        when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":[{\"code\":\"EMP_1\",\"user\":{\"active\":true}}]}"));
+        hrms(gro("EMP_1","WATER",true,"example"));clearInvocations(client);
         assertEquals(Map.of("BRANDING",true,"GEOGRAPHY",true,"DEPARTMENTS",true,"EMPLOYEES",true,"COMPLAINT_TYPES",true),gateway.probes("example"));
+        verify(client,times(1)).read(eq("hrms"),anyString(),any());                                  // EMPLOYEES and COMPLAINT_TYPES share one HRMS read
+    }
+    private void hrms(String... employees) throws Exception {
+        when(client.read(eq("hrms"),anyString(),any())).thenReturn(mapper.readTree("{\"Employees\":["+String.join(",",employees)+"]}"));
+    }
+    private static String gro(String code,String department,boolean current,String roleTenant) {
+        return "{\"code\":\""+code+"\",\"user\":{\"active\":true,\"roles\":[{\"code\":\"EMPLOYEE\",\"tenantId\":\"example\"},{\"code\":\"GRO\",\"tenantId\":\""+roleTenant+"\"}]},"
+                +"\"assignments\":[{\"department\":\""+department+"\",\"isCurrentAssignment\":"+current+"}]}";
     }
     @Test public void departmentsNeedARealDesignation() throws Exception {
         mdms("common-masters.Department","["+WATER+"]");
@@ -101,8 +109,33 @@ public class WorkspaceRouteTest {
             mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":"+rows+"}]");
             assertFalse(rows,gateway.probe("example","COMPLAINT_TYPES"));
         }
+        verifyNoInteractions(client);                                                                 // no routable leaf: HRMS is never read
         mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"A\",\"department\":\"WATER\",\"slaHours\":24}}]");
+        hrms(gro("EMP_1","WATER",true,"example"));
         assertTrue(gateway.probe("example","COMPLAINT_TYPES"));
+    }
+    @Test public void complaintTypesNeedACurrentGroInEveryRoutedDepartment() throws Exception {
+        String roads="{\"tenantId\":\"example\",\"data\":{\"code\":\"ROADS\",\"active\":true}}";
+        mdms("common-masters.Department","["+WATER+","+roads+"]");
+        mdms("RAINMAKER-PGR.ComplaintHierarchy","[{\"tenantId\":\"example\",\"data\":{\"code\":\"Leak\",\"department\":\"WATER\",\"slaHours\":24}},"
+                +"{\"tenantId\":\"example\",\"data\":{\"code\":\"Pothole\",\"department\":\"ROADS\",\"slaHours\":48}},"
+                +"{\"tenantId\":\"example\",\"data\":{\"code\":\"Retired\",\"department\":\"PARKS\",\"slaHours\":8,\"active\":false}}]");
+        String nonGro="{\"code\":\"EMP_3\",\"user\":{\"active\":true,\"roles\":[{\"code\":\"PGR_LME\",\"tenantId\":\"example\"}]},\"assignments\":[{\"department\":\"ROADS\",\"isCurrentAssignment\":true}]}";
+        hrms(gro("EMP_1","WATER",true,"example"));                                                  // the live bug: ROADS complaints visible to nobody
+        assertFalse(gateway.probe("example","COMPLAINT_TYPES"));
+        for(String roadsCover:List.of(
+                gro("EMP_2","ROADS",false,"example"),                                                // past assignment
+                gro("EMP_2","ROADS",true,"other"),                                                   // GRO at another tenant
+                nonGro,                                                                              // in ROADS but not GRO
+                gro("EMP_2","ROADS",true,"example").replaceFirst("\\{","{\"isActive\":false,"),        // inactive employee
+                gro("EMP_2","ROADS",true,"example").replace("\"active\":true","\"active\":false"))) { // disabled user
+            hrms(gro("EMP_1","WATER",true,"example"),roadsCover);
+            assertFalse(roadsCover,gateway.probe("example","COMPLAINT_TYPES"));
+        }
+        hrms(gro("EMP_1","WATER",true,"example"),gro("EMP_2","ROADS",true,"example"));               // inactive PARKS leaf needs no GRO
+        assertTrue(gateway.probe("example","COMPLAINT_TYPES"));
+        when(client.read(eq("hrms"),anyString(),any())).thenThrow(new OnboardingFailure("HRMS_DOWN",true));
+        assertThrows(OnboardingFailure.class,()->gateway.probe("example","COMPLAINT_TYPES"));       // unreadable HRMS never grants DONE
     }
     @Test public void geographyNeedsTwoLevelsInTheTenantsOwnHierarchy() throws Exception {
         when(mdms.records(eq("example"),anyString(),any())).thenReturn(mapper.readTree("[]"));
