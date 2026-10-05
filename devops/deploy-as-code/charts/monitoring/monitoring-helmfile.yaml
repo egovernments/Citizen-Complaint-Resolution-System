@@ -146,20 +146,20 @@ releases:
             params:
               module: [http_2xx]
             static_configs:
-              # /digit-ui/ and not the bare root: NOTHING in this tier serves
-              # `/`. Every ingress is a prefix on its own context
-              # (charts/common/templates/_ingress.yaml:48 renders
-              # `path: /<context>`) and the controller's defaultBackend is
-              # disabled (ingress-nginx/values.yaml:916), so a probe of `/`
+              # Not the bare root: NOTHING in this tier serves `/` (unless
+              # root-ingress.defaultTenantSlug is set). Every ingress is a
+              # prefix on its own context and the controller's defaultBackend
+              # is disabled (ingress-nginx/values.yaml:916), so a probe of `/`
               # gets the controller's built-in 404 and probe_success is pinned
               # at 0 forever -- a red panel that means nothing.
-              # /digit-ui/ is a real 2xx: the ingress passes the path through
-              # unrewritten (no rewrite-target annotation) and the SPA image's
-              # nginx serves `location /digit-ui` with
-              # `try_files $uri $uri/ /digit-ui/index.html`
-              # (frontend/micro-ui/web/docker/nginx.conf).
+              # Not /digit-ui/ either: since D26 the app is served only under
+              # /<tenant-slug>/digit-ui/ and the legacy /digit-ui ingress is
+              # off (ingress.legacyPathEnabled), so that probe is permanently
+              # red. The bundle is the tenant-independent 2xx: tenant pages
+              # load it from the absolute /digit-ui/ prefix, which the
+              # digit-ui chart's static-assets ingress routes to the SPA pod.
               - targets:
-                  - https://{{ .Values.global.domain }}/digit-ui/
+                  - https://{{ .Values.global.domain }}/digit-ui/index.js
             relabel_configs:
               - source_labels: [__address__]
                 target_label: __param_target

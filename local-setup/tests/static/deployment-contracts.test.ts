@@ -1691,6 +1691,22 @@ describe('D26 legacy identity paths are retired', () => {
     });
   });
 
+  // High 2 (Dhruv, #2271 review 2): the post-deploy gate and the Helm blackbox
+  // probe both GET a URL that D26 turned into a 404 when no default slug is set.
+  test('deploy validation and the blackbox probe check URLs that exist without a default slug', () => {
+    const gate = playbook.slice(
+      playbook.indexOf('- name: "validate — public UI serves the tenant route and its bundle"'),
+      playbook.indexOf('- name: "validate — configurator returns 200 (when enabled)"'),
+    );
+    expect(gate).toContain('{path: "/{{ digit_ui_default_tenant_slug | default(\'\', true) or \'deploy-check\' }}/digit-ui/", type: "text/html"}');
+    expect(gate).toContain('{path: "/digit-ui/index.js", type: "javascript"}');
+    expect(gate).toContain('is search(item.type)');
+    expect(playbook).not.toContain('- name: "validate — public UI returns 200"');
+    const probe = read('devops/deploy-as-code/charts/monitoring/monitoring-helmfile.yaml');
+    expect(probe).toContain('- https://{{ .Values.global.domain }}/digit-ui/index.js');
+    expect(probe).not.toContain('- https://{{ .Values.global.domain }}/digit-ui/\n');
+  });
+
   test('Helm publishes only tenant-scoped digit-ui routes by default', () => {
     expect(read('devops/deploy-as-code/charts/urban/digit-ui/values.yaml')).toContain('legacyPathEnabled: false');
     expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/ingress.yaml'))

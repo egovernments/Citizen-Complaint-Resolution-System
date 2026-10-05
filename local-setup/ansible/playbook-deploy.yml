@@ -5343,13 +5343,31 @@
     # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
     # `Host: {{ domain }}` so nginx routes to the right server-name block.
     # The hostname itself doesn't have to be DNS-resolvable.
-    - name: "validate — public UI returns 200"
+    #
+    # D26: the UI is canonical only under /<tenant-slug>/digit-ui/; the
+    # tenantless /digit-ui/ answers 404 unless digit_ui_default_tenant_slug is
+    # set, so it cannot be the gate. nginx does not resolve the slug (the SPA
+    # asks the Identity BFF), so any well-formed slug proves the route; the
+    # default one is used when configured. The bundle is checked on its own:
+    # tenant pages load it from the absolute /digit-ui/ prefix (esbuild
+    # PUBLIC_PATH), and a missing file there falls back to the SPA shell with
+    # 200 text/html, so the content type is what proves it is served.
+    - name: "validate — public UI serves the tenant route and its bundle"
       ansible.builtin.uri:
-        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/digit-ui/"
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}{{ item.path }}"
         status_code: [200]
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+      loop:
+        - {path: "/{{ digit_ui_default_tenant_slug | default('', true) or 'deploy-check' }}/digit-ui/", type: "text/html"}
+        - {path: "/digit-ui/index.js", type: "javascript"}
+      loop_control:
+        label: "{{ item.path }}"
+      register: public_ui_check
+      until: >-
+        public_ui_check.status | default(0) == 200
+        and (public_ui_check.content_type | default('')) is search(item.type)
       retries: 3
       delay: 5
 
