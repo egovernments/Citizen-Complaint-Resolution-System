@@ -1333,7 +1333,7 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     expect(env).toContain("{% set fixed_otp = identity_dev_fixed_otp | default(not (enable_otp_services | default(false))) %}");
     expect(env).toContain('CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED={{ fixed_otp | lower }}');
     expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if fixed_otp else '') }}");
-    expect(env).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_enabled | default(false) | lower }}');
+    expect(env).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_enabled | default(true) | lower }}');
     const bff = service(read('local-setup/docker-compose.egov-digit.yaml'), 'identity-bff');
     for (const setting of ['IDENTITY_SURFACES_JSON', 'IDENTITY_STAFF_CREDENTIAL_MODE',
       'IDENTITY_CREDENTIAL_KEYS', 'IDENTITY_CREDENTIAL_KEY_CURRENT', 'IDENTITY_CITIZEN_OTP_SENDER',

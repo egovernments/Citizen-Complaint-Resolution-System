@@ -753,7 +753,7 @@ identity_signup_methods: [magic_link, google, github]
 identity_magic_link_enabled: false
 identity_reconcile_on_startup: true
 identity_reconciliation_interval_seconds: 900
-pgr_onboarding_runner_enabled: false # enable with the coordinated PGR/BFF cutover
+pgr_onboarding_runner_enabled: true # PGR is the only onboarding runner; the BFF worker is gone
 identity_digit_admin_username: "ADMIN"  # use a dedicated ACCOUNT_ADMIN in production
 identity_digit_admin_tenant_id: "pg"
 pgr_digit_provisioner_username: "" # platform provisioner; PGR only, internal APIs

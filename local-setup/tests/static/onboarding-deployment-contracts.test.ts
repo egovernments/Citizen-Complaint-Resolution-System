@@ -35,7 +35,7 @@ describe('PGR onboarding cutover deployment contract', () => {
     }
     expect(bff).not.toMatch(/^      (?:ONBOARDING_WORKER|PGR_ONBOARDING_WORKER|ONBOARDING_TENANT_ADMIN|DIGIT_FOUNDATION_SOURCE_TENANT)/m);
     expect(bff).not.toMatch(/^      DIGIT_(?:MDMS_CREATE_URL|MDMS_SCHEMA_CREATE_URL|ENC_GENERATE_KEY_URL):/m);
-    expect(setting(pgr, 'PGR_ONBOARDING_RUNNER_ENABLED')).toBe('${PGR_ONBOARDING_RUNNER_ENABLED:-false}');
+    expect(setting(pgr, 'PGR_ONBOARDING_RUNNER_ENABLED')).toBe('${PGR_ONBOARDING_RUNNER_ENABLED:-true}');
   });
 
   test('workspace writes have a separate Kong origin with no implicit internal fallback', () => {
@@ -68,7 +68,7 @@ describe('PGR onboarding cutover deployment contract', () => {
   test('Ansible preserves stored provisioner credentials while rendering them only for PGR', () => {
     const template = read('local-setup/ansible/templates/digit.env.j2');
     const playbook = read('local-setup/ansible/playbook-deploy.yml');
-    expect(template).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_enabled | default(false) | lower }}');
+    expect(template).toContain('PGR_ONBOARDING_RUNNER_ENABLED={{ pgr_onboarding_runner_enabled | default(true) | lower }}');
     expect(template).not.toMatch(/^IDENTITY_(?:DIGIT_PROVISIONER|ONBOARDING_WORKER|FOUNDATION_SOURCE)/m);
     expect(playbook).toContain('PGR_DIGIT_PROVISIONER_PASSWORD={{ bao_secrets_identity.json.data.data.pgr_digit_provisioner_password | default(bao_secrets_identity.json.data.data.identity_digit_provisioner_password');
     expect(playbook).not.toMatch(/^\s+IDENTITY_DIGIT_PROVISIONER_PASSWORD=/m);
