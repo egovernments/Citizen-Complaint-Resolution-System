@@ -464,13 +464,15 @@ test("failed BFF sign-out of this device still clears local credentials and leav
       const { cleared, replacedWith, flags } = await withBrowser(
         "/bomet-county/digit-ui/employee/pgr/inbox", "employee", async () => {
           window.fetch = async () => response;
-          await UserService.logout(scope);
+          // "Sign out everywhere" reports the failure rather than leaving as if it worked.
+          if (scope === "all") await assert.rejects(UserService.logout(scope));
+          else await UserService.logout(scope);
         },
       );
       assert.deepEqual(cleared.sort(), ["local", "session"]);
       // The BFF cookie survived, so the login page must not auto-establish it.
       assert.equal(flags.get("identityBff.signOutIncomplete"), "1");
-      assert.equal(replacedWith, "https://example.test/bomet-county/digit-ui/employee/user/login");
+      assert.equal(replacedWith, scope === "all" ? null : "https://example.test/bomet-county/digit-ui/employee/user/login");
     }
   }
 });

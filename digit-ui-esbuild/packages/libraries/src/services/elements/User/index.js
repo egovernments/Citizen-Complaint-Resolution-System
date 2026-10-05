@@ -85,17 +85,21 @@ export const UserService = {
       // state first, then revoke the BFF session best-effort.
       window.localStorage.clear();
       window.sessionStorage.clear();
+      let failure = null;
       try {
         await identityBffLogout({ surface, scope, fetchImpl });
       } catch (e) {
         // The BFF session cookie outlives this; the local DIGIT session is gone.
         // The login page must not use that cookie to sign this tab back in.
         markSignOutIncomplete();
-      } finally {
-        window.location.replace(
-          `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
-        );
+        failure = e;
       }
+      // "Sign out everywhere" must not look like it worked: other devices may
+      // still be signed in, so the caller reports it instead of navigating.
+      if (failure && scope === "all") throw failure;
+      window.location.replace(
+        `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
+      );
       return;
     }
     // Legacy opt-in Keycloak: end the Keycloak session too, or check-sso signs

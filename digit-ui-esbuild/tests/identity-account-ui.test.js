@@ -131,6 +131,16 @@ test("staff account offers advertised actions, second factors, providers and sco
   view.unmount();
 });
 
+test("a failed sign-out everywhere is reported, not presented as success", async () => {
+  browser("employee", async () => json(200, { authenticated: true, user: { email: "ada@example.test" },
+    account: { actions: [], credentials: [], providers: [] }, sessions: [{ id: "current", current: true, surface: "employee" }] }));
+  Digit.UserService.logout = async () => { throw new Error("Sign-out could not be completed. Please try again."); };
+  const view = await render(ui.Account, { surface: "employee" });
+  await click(button(view, "Sign out everywhere"));
+  assert.match(text(view.root.findByProps({ role: "status" })), /could not be confirmed\. Other devices may still be signed in/);
+  view.unmount();
+});
+
 test("phone-only account hides credential actions and offers phone change", async () => {
   browser("citizen", async () => json(200, { user: {}, account: { actions: [], credentials: [], providers: [] }, sessions: [] }));
   const view = await render(ui.Account, { surface: "citizen" });

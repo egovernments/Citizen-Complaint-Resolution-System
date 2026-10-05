@@ -26,7 +26,9 @@ export default function AccountPage() {
   };
   const signOut = async (scope: 'others' | 'all') => {
     if (scope === 'others') { await logout(scope); return; }
-    await signOutThisDevice(scope);
+    // This device is signed out locally either way; only a confirmed BFF
+    // sign-out means the other devices are too.
+    if (!await signOutThisDevice(scope)) throw new Error('Signing out everywhere could not be confirmed. Other devices may still be signed in. Try again.');
     window.location.assign('/configurator/login');
   };
   const actions = current?.account?.actions ?? [];
