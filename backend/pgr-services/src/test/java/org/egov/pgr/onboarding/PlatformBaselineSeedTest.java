@@ -13,8 +13,8 @@ public class PlatformBaselineSeedTest {
     private final PlatformBaseline seed;
     public PlatformBaselineSeedTest() throws Exception { seed = new PlatformBaseline(new ObjectMapper()); }
 
-    /** Version 2: content fixes after v1 (pack locales, inbox/_count). Recorded per workspace as seed_version. */
-    @Test public void seedVersionIsBumpedForContentFixes() { assertEquals("2", seed.version()); }
+    /** Recorded per workspace as seed_version; the JSON is the only place it is set. v1 workspaces exist, so it is past 1. */
+    @Test public void seedVersionIsAnIntegerPastTheFirstRelease() { assertTrue(seed.versionNumber() >= 2); assertEquals(String.valueOf(seed.versionNumber()), seed.version()); }
 
     private Set<String> codes(String schema, String field) {
         Set<String> out = new HashSet<>();

@@ -146,7 +146,7 @@ test('workspace routes grant access only to tenant ACCOUNT_ADMIN', () => {
 test('bootstrap uses canonical inventory, country-only source lookup, and replays without duplicate users', async () => {
   const f = fixture(), seed = loadPlatformSeed();
   const first = await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in' }, f.options);
-  assert.equal(first.seedVersion, '2'); assert.equal(first.summary.schemas_copied, seed.schemas.length);
+  assert.equal(first.seedVersion, seed.version); assert.equal(first.summary.schemas_copied, seed.schemas.length);
   assert.equal(first.summary.data_copied, seed.records.length + 3); assert.equal(first.summary.workflows_created, 1);
   assert.equal(first.summary.admin_employee_provisioned, true); assert.equal(f.reads(), 1);
   assert.ok(!JSON.stringify([...f.rows.values()]).includes('{tenantid}'));
