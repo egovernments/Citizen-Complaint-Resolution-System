@@ -156,6 +156,10 @@ public class MDMSUtils {
                     }
                 }
             }
+        } catch (com.jayway.jsonpath.PathNotFoundException noComplaintTypes) {
+            // A tenant with no RAINMAKER-PGR records yet (e.g. a new workspace before its complaint types step)
+            // answers without the module: an empty map, not a failure.
+            log.debug("No complaint types for tenant {}; no serviceCode->SLA map", tenantId);
         } catch (Exception e) {
             log.error("Failed to load serviceCode->SLA map for tenant {}; inbox SLA sort will fall back "
                     + "to the configured absolute escalation threshold", tenantId, e);
