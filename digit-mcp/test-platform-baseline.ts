@@ -320,3 +320,30 @@ test('an empty mobile_prefix is treated as absent, as the deploy renders an unse
   await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'KE', mobile_prefix: '', mobile_regex: '' }, empty.options);
   assert.deepEqual(empty.rows.get('common-masters.MobileNumberValidation/+254').data, loadPlatformSeed().countryMobileRules.KE);
 });
+
+test('user_only merges administrator roles, clears a lockout and is idempotent (#2269 review item 2)', async () => {
+  const f = fixture();
+  const operational = ['CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO'];
+  const held = [...operational.map(code => ({ code, name: code, tenantId: 'in.newtown' })),
+    { code: 'PGR_VIEWER', name: 'PGR_VIEWER', tenantId: 'in.newtown' }, { code: 'SUPERUSER', name: 'SUPERUSER', tenantId: 'in' }];
+  f.users.push({ uuid: 'founder', userName: 'admin', accountLocked: true, roles: held });
+  const args = { target_tenant: 'in.newtown', source_tenant: 'in', user_only: true, mobile_regex: '^[6-9][0-9]{9}$', mobile_prefix: '' };
+  const key = (r: any) => `${r.code}@${r.tenantId}`;
+  await bootstrapPlatform(args, f.options);
+  const first = f.users[0].roles.map(key);
+  for (const role of held) assert.ok(first.includes(key(role)), `kept ${key(role)}`);
+  for (const code of loadPlatformSeed().founderRoles) assert.ok(first.includes(`${code}@in.newtown`), `added ${code}`);
+  assert.equal(new Set(first).size, first.length, 'no duplicate roles');
+  assert.equal(f.users[0].accountLocked, false); assert.equal(f.users[0].password, 'test-only-password');
+  await bootstrapPlatform(args, f.options);
+  assert.deepEqual(f.users[0].roles.map(key), first, 'a second deploy changes nothing');
+
+  // A fresh administrator gets the PGR operating roles it had before the seed existed.
+  const fresh = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, fresh.options);
+  for (const code of operational) assert.ok(fresh.users[0].roles.some((r: any) => r.code === code), code);
+  // A full re-run only adds missing roles and never replaces existing ones.
+  fresh.users[0].roles = fresh.users[0].roles.filter((r: any) => r.code !== 'GRO').concat({ code: 'CUSTOM', tenantId: 'in.newtown' });
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, fresh.options);
+  assert.ok(fresh.users[0].roles.some((r: any) => r.code === 'GRO') && fresh.users[0].roles.some((r: any) => r.code === 'CUSTOM'));
+});

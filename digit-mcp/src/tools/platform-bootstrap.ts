@@ -2,6 +2,9 @@ import { digitApi } from '../services/digit-api.js';
 import { adminRoleCodes, checkToolAccess } from '../services/auth.js';
 import { loadPlatformSeed, substituteTenant } from './platform-baseline.js';
 
+/** PGR operating roles the deploy administrator held before the seed existed (#2269 review item 2). */
+export const DEPLOY_ADMIN_PGR_ROLES = ['CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO'];
+
 interface BootstrapOptions {
   deriveMobile(regex: string, length: number, requested?: string): string;
   defaultPassword(): string;
@@ -149,14 +152,29 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
   }
   await api.generateEncKey(target);
   const username = auth.user?.userName || 'ADMIN';
-  const employeeRoles = seed.founderRoles.map((code) => ({ code, name: code, tenantId: target }));
+  // The deploy administrator also files and routes complaints, as it did before the seed
+  // existed; the seed's founder roles alone would leave it unable to run a PGR lifecycle.
+  const employeeRoles = [...new Set([...seed.founderRoles, ...DEPLOY_ADMIN_PGR_ROLES])]
+    .map((code) => ({ code, name: code, tenantId: target }));
   const existing = await api.userSearch(target, { userName: username, limit: 2 });
   if (existing.length > 1) throw new Error('Ambiguous bootstrap administrator');
-  if (args.user_only || !existing.length) {
-    const mobile = options.deriveMobile(String(rules.find((rule) => rule.default)?.mobileNumberRegex ?? rules[0].mobileNumberRegex), Number(args.mobile_length) || 10, args.admin_mobile as string | undefined);
-    const user = { name: auth.user?.name || 'Administrator', mobileNumber: mobile, userName: username,
-      password: api.getLoginPassword() || options.defaultPassword(), type: 'EMPLOYEE', active: true, roles: employeeRoles, tenantId: target };
-    if (existing[0]) await api.userUpdate({ ...existing[0], ...user }); else await api.userCreate(user, target);
+  const adminMobile = () => options.deriveMobile(String(rules!.find((rule) => rule.default)?.mobileNumberRegex ?? rules![0].mobileNumberRegex),
+    Number(args.mobile_length) || 10, args.admin_mobile as string | undefined);
+  if (existing[0]) {
+    // Additive only: roles granted elsewhere (other tenants, operators) are never removed (#2269 review item 2).
+    const held = (existing[0].roles ?? []) as { code: string; tenantId?: string }[];
+    const missing = employeeRoles.filter((role) => !held.some((r) => r.code === role.code && r.tenantId === role.tenantId));
+    if (args.user_only) {
+      // Re-provisioning re-encrypts mobile/password under the now-active state key and is the
+      // recovery path after credential drift, so it also clears a lockout from failed logins.
+      await api.userUpdate({ ...existing[0], mobileNumber: adminMobile(), password: api.getLoginPassword() || options.defaultPassword(),
+        active: true, accountLocked: false, roles: [...held, ...missing] });
+    } else if (missing.length) {
+      await api.userUpdate({ ...existing[0], roles: [...held, ...missing] });
+    }
+  } else {
+    await api.userCreate({ name: auth.user?.name || 'Administrator', mobileNumber: adminMobile(), userName: username,
+      password: api.getLoginPassword() || options.defaultPassword(), type: 'EMPLOYEE', active: true, roles: employeeRoles, tenantId: target }, target);
   }
   let employeeProvisioned = false;
   if (!args.user_only) {
