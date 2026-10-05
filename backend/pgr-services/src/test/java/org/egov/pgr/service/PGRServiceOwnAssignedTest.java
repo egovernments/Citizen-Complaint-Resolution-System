@@ -12,6 +12,8 @@ import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
 import org.egov.pgr.web.models.RequestSearchCriteria;
+import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,14 +23,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -83,6 +89,82 @@ class PGRServiceOwnAssignedTest {
 
         assertSame(denied, countScope());
         verify(workflowService, never()).getServiceRequestIdsByAssignee(any(), any(), any());
+    }
+
+    @Test
+    void restrictedEmployeeScopeAdmitsTheirAssignedComplaintsInSqlAndTier2() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, List.of("WATER"), List.of("WT_WARD_A"));
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), eq(TENANT), eq("lme-1"))).thenReturn(Set.of("PGR-B"));
+        RequestSearchCriteria criteria = criteria();
+        when(repository.getServiceWrappers(eq(criteria), any())).thenReturn(new ArrayList<>(List.of(new ServiceWrapper())));
+
+        pgrService.search(employee("lme-1"), criteria);
+
+        ArgumentCaptor<PgrSearchScope> sqlScope = ArgumentCaptor.forClass(PgrSearchScope.class);
+        verify(repository).getServiceWrappers(eq(criteria), sqlScope.capture());
+        assertTrue(sqlScope.getValue().isOwnAssigned("PGR-B"));
+        assertEquals(List.of("WATER"), sqlScope.getValue().departmentCodes);
+        assertEquals(List.of("WT_WARD_A"), sqlScope.getValue().jurisdictionCodes);
+        verify(searchAccessPolicyService).enforce(any(), eq(TENANT), same(sqlScope.getValue()), any());
+    }
+
+    @Test
+    void countAppliesTheSameException() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, List.of("WATER"), List.of("WT_WARD_A"));
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), eq(TENANT), eq("lme-1"))).thenReturn(Set.of("PGR-B"));
+
+        pgrService.count(employee("lme-1"), criteria());
+
+        assertTrue(countScope().isOwnAssigned("PGR-B"));
+    }
+
+    @Test
+    void citizenScopeNeverGetsTheException() {
+        // Even an EMPLOYEE-typed caller pinned to citizen-self (and some department) is not widened.
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, "lme-1", List.of("WATER"), null);
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), any(), any())).thenReturn(Set.of("PGR-B"));
+
+        pgrService.count(employee("lme-1"), criteria());
+
+        assertSame(resolved, countScope());
+        verify(workflowService, never()).getServiceRequestIdsByAssignee(any(), any(), any());
+    }
+
+    @Test
+    void nonEmployeeCallerNeverGetsTheException() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, List.of("WATER"), List.of("WT_WARD_A"));
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), any(), any())).thenReturn(Set.of("PGR-B"));
+
+        pgrService.count(requestInfo("sys-1", "SYSTEM"), criteria());
+
+        assertSame(resolved, countScope());
+        verify(workflowService, never()).getServiceRequestIdsByAssignee(any(), any(), any());
+    }
+
+    @Test
+    void unrestrictedEmployeeScopeIsLeftAlone() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, null, null);
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+
+        pgrService.count(employee("gro-1"), criteria());
+
+        assertSame(resolved, countScope());
+        verify(workflowService, never()).getServiceRequestIdsByAssignee(any(), any(), any());
+    }
+
+    @Test
+    void workflowFailureKeepsTheScopeAsItWas() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, List.of("WATER"), List.of("WT_WARD_A"));
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), any(), any()))
+                .thenThrow(new CustomException("WORKFLOW_SEARCH_FAILED", "down"));
+
+        assertDoesNotThrow(() -> pgrService.count(employee("lme-1"), criteria()));
+        assertSame(resolved, countScope());
     }
 
     @Test
