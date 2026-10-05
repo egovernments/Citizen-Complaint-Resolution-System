@@ -49,6 +49,8 @@ public class WorkspacePostgresTest {
         when(gateway.requireAdmin(anyString(), any())).thenReturn("admin");
         when(gateway.tenant(anyString())).thenAnswer(call -> mapper.valueToTree(Map.of("data", Map.of("name", "Old " + call.getArgument(0)))));
         when(gateway.languages(anyString())).thenReturn(List.of("en_IN", "hi_IN"));
+        // These tests cover multi-locale rename publication; which locales qualify is WorkspaceServiceTest's concern.
+        when(gateway.seedsTenantNameModule(anyString())).thenReturn(true);
         when(gateway.probes(anyString())).thenReturn(Map.of("BRANDING", true, "DEPARTMENTS", true, "GEOGRAPHY", true, "EMPLOYEES", true, "COMPLAINT_TYPES", true));
         service = transactional(new WorkspaceService(repository, gateway, new OnboardingIdentifierService()));
     }
@@ -86,6 +88,18 @@ public class WorkspacePostgresTest {
         assertEquals("WORKSPACE_VERSION_CONFLICT", assertThrows(ResponseStatusException.class, () -> service.update(update("example", 1))).getReason());
         assertEquals(List.of("CREATED", "STEP_UPDATED"), jdbc.queryForList("SELECT event_type FROM eg_pgr_onboarding_workspace_event ORDER BY version", String.class));
         assertEquals(2L, repository.find("example", false).orElseThrow().get("version"));
+    }
+
+    /** Escalation scans every live onboarded tenant, whatever its checklist status (#2269 item 8). */
+    @Test public void onboardedTenantsAreEveryActiveSignupAndWorkspaceWhateverItsChecklistStatus() {
+        signup("draft");
+        var failed = signup("failed"); jdbc.update("UPDATE eg_pgr_onboarding_signup SET status='FAILED' WHERE id=?", failed.getId());
+        activate(signup("notstarted"));
+        activate(signup("inprogress")); service.update(update("inprogress", 1));
+        assertEquals("IN_PROGRESS", repository.find("inprogress", false).orElseThrow().get("status"));
+        var unmaterialized = signup("noworkspace"); jdbc.update("UPDATE eg_pgr_onboarding_signup SET status='ACTIVE' WHERE id=?", unmaterialized.getId());
+        repository.materializeLegacy("legacy");
+        assertEquals(List.of("inprogress", "legacy", "notstarted", "noworkspace"), repository.onboardedTenantIds());
     }
 
     @Test public void signupReservationWinsConcurrentRenameWithoutTheft() throws Exception {

@@ -59,6 +59,9 @@ public class WorkspaceService {
         if(!repository.nameAvailable(tenant,normalized))WorkspaceRepository.conflict("WORKSPACE_NAME_TAKEN");
         if(!normalized.equals(oldName))gateway.requireNameAvailable(normalized);
         List<String> locales=gateway.languages(tenant);
+        // An onboarded tenant owns rainmaker-common only where the baseline seeded it; its name key anywhere else
+        // would hide `default` for that locale (#2257). Legacy tenants keep their own packs, so every locale stays.
+        if(!Boolean.TRUE.equals(workspace.get("legacy")))locales=locales.stream().filter(gateway::seedsTenantNameModule).toList();
         repository.reserveName(tenant,oldName);repository.reserveName(tenant,normalized);
         repository.update(workspace,version,actor);
         Map<String,Object> rename=repository.beginRename(tenant,name,normalized,oldName,version,locales,actor);

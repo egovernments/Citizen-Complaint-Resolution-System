@@ -20,7 +20,9 @@ public class PlatformBaseline {
         try (var input = new ClassPathResource("onboarding/platform-baseline-v1.json").getInputStream()) {
             seed = mapper.readTree(input);
         }
-        if (!"1".equals(seed.path("version").asText())) throw new IOException("Unsupported platform seed");
+        // The seed version is recorded per workspace as seed_version. Bump it with every content change; records are
+        // create-if-absent, so a workspace onboarded on an older version keeps that content until it is upgraded.
+        if (!"2".equals(seed.path("version").asText())) throw new IOException("Unsupported platform seed");
         for (Resource pack : new PathMatchingResourcePatternResolver().getResources(PACKS)) {
             String[] path = pack.getURL().getPath().split("/");
             String locale = path[path.length - 2], module = path[path.length - 1].replaceFirst("\\.json$", "");
@@ -52,6 +54,8 @@ public class PlatformBaseline {
         return Collections.unmodifiableSet(countries);
     }
     public SortedMap<String, JsonNode> localizationPacks(String locale) { return packs.getOrDefault(locale, new TreeMap<>()); }
+    /** Locales with at least one committed pack, sorted. */
+    public SortedSet<String> localeCodes() { return new TreeSet<>(packs.keySet()); }
     public boolean isPackMessage(JsonNode m) {
         return packMessages.contains(List.of(m.path("locale").asText(), m.path("module").asText(), m.path("code").asText(), m.path("message").asText()));
     }

@@ -133,6 +133,7 @@ public class WorkspaceGateway {
         if(locales.isEmpty())throw new OnboardingFailure("TENANT_LANGUAGES_MISSING",true);
         return locales;
     }
+    public boolean seedsTenantNameModule(String locale){return mdms.seedsTenantNameModule(locale);}
     public void requireNameAvailable(String normalized) {
         JsonNode response=client.identity("identifiers/_check",Map.of("identifiers",List.of(Map.of("type","ORGANIZATION_NAME","value",normalized))));
         JsonNode results=response==null?mapper.nullNode():response.path("results");

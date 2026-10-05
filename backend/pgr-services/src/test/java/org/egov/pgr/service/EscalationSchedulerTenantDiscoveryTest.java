@@ -38,9 +38,9 @@ public class EscalationSchedulerTenantDiscoveryTest {
         ReflectionTestUtils.setField(scheduler, "stateLevelTenantId", "ke");
     }
 
-    @Test public void scansStateCitiesAndDoneWorkspacesOnceEachWithTheirOwnSystemRole() {
+    @Test public void scansStateCitiesAndOnboardedTenantsOnceEachWithTheirOwnSystemRole() {
         when(configurationService.resolveStateTenants(any(), eq("ke"))).thenReturn(List.of("ke.bomet"));
-        when(workspaces.doneTenantIds()).thenReturn(List.of("ke.bomet", "riverside"));
+        when(workspaces.onboardedTenantIds()).thenReturn(List.of("ke.bomet", "riverside"));
 
         scheduler.scanAndEscalate();
 
@@ -59,12 +59,12 @@ public class EscalationSchedulerTenantDiscoveryTest {
     @Test public void workspaceTenantsStillScanWhenStateDiscoveryFailsAndViceVersa() {
         when(configurationService.resolveStateTenants(any(), eq("ke"))).thenReturn(List.of());
         when(repository.getComplaintTenantIds("ke")).thenThrow(new RuntimeException("db"));
-        when(workspaces.doneTenantIds()).thenReturn(List.of("riverside"));
+        when(workspaces.onboardedTenantIds()).thenReturn(List.of("riverside"));
         scheduler.scanAndEscalate();
         verify(configurationService).resolve(any(), eq("riverside"));
 
         reset(workspaces);
-        when(workspaces.doneTenantIds()).thenThrow(new RuntimeException("db"));
+        when(workspaces.onboardedTenantIds()).thenThrow(new RuntimeException("db"));
         when(configurationService.resolveStateTenants(any(), eq("ke"))).thenReturn(List.of("ke.bomet"));
         scheduler.scanAndEscalate();
         verify(configurationService).resolve(any(), eq("ke.bomet"));
