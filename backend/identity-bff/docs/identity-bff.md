@@ -983,6 +983,13 @@ derived credential; deterministic credentials do not create per-session DIGIT
 tokens. Logout-current releases its claim and preserves tokens with remaining
 holders; logout-all ends all claims and revokes the shared token.
 
+A credential change (§10) does **not** keep shared tokens. A DIGIT token
+survives it only if sessions that survive are its **only** holders. That
+includes the B3 initiating session. If any ended session also held the token,
+the BFF revokes it with an egov-user logout, because that copy may sit on the
+device the person is locking out. A surviving holder gets a fresh token at its
+next `_select`.
+
 ## 9. Onboarding: payload hash, `restartNo` and lifecycle
 
 ### 9.1 Canonical payload hash (`organizations/_ensure`)
@@ -1094,7 +1101,7 @@ Probed on Keycloak 26.7.3 on 2026-10-04; the event shapes the poller matches are
 | Delete | admin `DELETE` + `USER`, path `users/{id}` | Write an audit record first, then revoke. This also covers the person's memberships, which emit no event of their own |
 | Logout-all (admin) | admin `ACTION` + `USER`, path `users/{id}/logout` | Raise the generation; revoke everything. No user events come with it |
 | Admin credential reset | admin `ACTION` + `USER`, path `users/{id}/reset-password` | Revoke everything. Keycloak does **not** end sessions itself |
-| Self password change | user `UPDATE_CREDENTIAL` with `details.credential_type = "password"` (its twin `UPDATE_PASSWORD` fires 1 ms earlier; act once) | Keep the BFF session whose `kcSessionId` = **`details.code_id`** (the event has **no `sessionId`**) and whose client = the event's `clientId`. Raise the generation, rewrite that one session's generation, and revoke the others (D25/B3). No match → revoke everything |
+| Self password change | user `UPDATE_CREDENTIAL` with `details.credential_type = "password"` (its twin `UPDATE_PASSWORD` fires 1 ms earlier; act once) | Keep the BFF session whose `kcSessionId` = **`details.code_id`** (the event has **no `sessionId`**) and whose client = the event's `clientId`. Raise the generation, rewrite that one session's generation, and revoke the others (D25/B3). Keep a DIGIT token only if that session is its **only** holder; a token an ended session also holds is revoked, and the kept session gets a fresh token at its next `_select` (§8). No match → revoke everything |
 | Other credential change | user `UPDATE_CREDENTIAL` / `REMOVE_CREDENTIAL` for another `credential_type` | Revoke everything |
 | Sign out other devices | user `LOGOUT` with `details.logout_triggered_by_required_action` | End the BFF session with that `kcSessionId` |
 | Normal logout | user `LOGOUT`, `sessionId` + `clientId` | End the BFF session with that `kcSessionId` |
