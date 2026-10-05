@@ -58,15 +58,19 @@ const bindingTenants = (records: Binding[]) => records.map((b) => b.tenantId).so
 const indexed = (user: BindingUser) =>
   bindingTenants(bindingsFromUser(user)).join() === [...user.attributes?.["digit.bindingTenants"] ?? []].sort().join();
 
-/** Backfills the tenant index for records written before it existed. Caller holds the person lease. */
-export async function indexBindingTenants(subject: string): Promise<void> {
+/**
+ * Backfills the tenant index for records written before it existed. Caller holds the person lease.
+ * A snapshot that is already indexed skips the Keycloak read (the reconcile pass hands it one).
+ */
+export async function indexBindingTenants(subject: string, snapshot?: BindingUser): Promise<void> {
+  if (snapshot && indexed(snapshot)) return;
   await updateKeycloakUser(subject, (user) => indexed(user) ? null
     : { ...user, attributes: { ...user.attributes, "digit.bindingTenants": bindingTenants(bindingsFromUser(user)) } });
 }
 
-/** Expiry is a durable transition, serialized with acceptance and re-invite. */
-export async function readBindings(subject: string): Promise<Binding[]> {
-  const records = bindingsFromUser(await readBindingUser(subject));
+/** Expiry is a durable transition, serialized with acceptance and re-invite. A caller under the person lease may pass its snapshot. */
+export async function readBindings(subject: string, snapshot?: BindingUser): Promise<Binding[]> {
+  const records = bindingsFromUser(snapshot ?? await readBindingUser(subject));
   if (!records.some((b) => b.state === "pending" && b.expiresAt! <= Date.now())) return records;
   return withPersonLease(subject, async (lease) => {
     const fresh = bindingsFromUser(await readBindingUser(subject));

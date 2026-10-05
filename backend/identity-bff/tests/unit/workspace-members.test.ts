@@ -378,4 +378,13 @@ describe("workspace member list", () => {
     await withPersonLease("a-active", () => indexBindingTenants("a-active"));
     expect(f.users.get("a-active")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
   });
+  it("skips the Keycloak read for an already-indexed snapshot, and backfills a stale one", async () => {
+    const indexedUser = structuredClone(f.users.get("a-active")!);
+    vi.mocked(request).mockClear();
+    await withPersonLease("a-active", () => indexBindingTenants("a-active", indexedUser));
+    expect(request).not.toHaveBeenCalled();
+    delete f.users.get("a-active")!.attributes!["digit.bindingTenants"];
+    await withPersonLease("a-active", () => indexBindingTenants("a-active", structuredClone(f.users.get("a-active")!)));
+    expect(f.users.get("a-active")?.attributes?.["digit.bindingTenants"]).toEqual(["pg"]);
+  });
 });
