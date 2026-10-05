@@ -15,7 +15,10 @@ it.each([
   ['an unreachable BFF', () => Promise.reject(new TypeError('Failed to fetch')), false],
   ['a successful BFF logout', () => Promise.resolve(), true],
 ])('clears the DIGIT session on %s', async (_label, outcome, confirmed) => {
-  window.localStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
+  // Start from the opposite state, so the assertion below can only pass if
+  // signOutThisDevice wrote the flag itself.
+  if (confirmed) window.localStorage.setItem(SIGN_OUT_INCOMPLETE_KEY, '1');
+  else window.localStorage.removeItem(SIGN_OUT_INCOMPLETE_KEY);
   vi.mocked(logout).mockImplementation(outcome);
   await expect(signOutThisDevice()).resolves.toBe(confirmed);
   // An unconfirmed sign-out leaves the BFF cookie live, so the login page must not resume it.

@@ -356,10 +356,10 @@ test("logout redirect targets the tenant's login page for the surface", () => {
   assert.equal(identityBffLogoutRedirect(TENANT.appBasePath, "employee"), "/bomet-county/digit-ui/employee/user/login");
 });
 
-const withBrowser = async (pathname, surface, fn) => {
+const withBrowser = async (pathname, surface, fn, preset = {}) => {
   const calls = [];
   const cleared = [];
-  const flags = new Map();
+  const flags = new Map(Object.entries(preset));
   let replacedWith = null;
   global.window = {
     location: {
@@ -375,7 +375,7 @@ const withBrowser = async (pathname, surface, fn) => {
       return json(204, null);
     },
     // The flag lives in localStorage so a new tab or window sees it too.
-    localStorage: { clear: () => { cleared.push("local"); flags.clear(); }, setItem: (k, v) => flags.set(k, v) },
+    localStorage: { clear: () => { cleared.push("local"); flags.clear(); }, setItem: (k, v) => flags.set(k, v), getItem: (k) => (flags.has(k) ? flags.get(k) : null) },
     sessionStorage: { clear: () => cleared.push("session") },
   };
   try {
@@ -476,6 +476,16 @@ test("failed BFF sign-out of this device still clears local credentials and leav
       assert.equal(replacedWith, scope === "all" ? null : "https://example.test/bomet-county/digit-ui/employee/user/login");
     }
   }
+});
+
+test("digit-ui sign-out keeps the Configurator's unconfirmed sign-out flag on the shared origin", async () => {
+  const { cleared, flags } = await withBrowser(
+    "/bomet-county/digit-ui/employee/pgr/inbox", "employee", () => UserService.logout(),
+    { "crs-sign-out-incomplete": "1", "Employee.token": "old" },
+  );
+  assert.deepEqual(cleared.sort(), ["local", "session"]);
+  assert.equal(flags.get("crs-sign-out-incomplete"), "1");
+  assert.equal(flags.has("Employee.token"), false);
 });
 
 test("an unreachable BFF does not keep the device signed in", async () => {

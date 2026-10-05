@@ -107,10 +107,12 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     }
   });
 
-  // An explicit sign-in: the user chose to continue despite the warning.
-  const signInAfterIncompleteSignOut = () => {
+  // An explicit sign-in: the user chose to continue despite the warning. Go
+  // through Keycloak (prompt=login) instead of reusing a cookie the failed
+  // sign-out may have left behind.
+  const signInAfterIncompleteSignOut = (start) => {
     clearIdentityBffSignOutIncomplete();
-    return retry(establishSession);
+    return retry(start || beginSignIn);
   };
 
   useEffect(() => {
@@ -118,7 +120,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
     // cookie may still be live: do not silently sign that user back in.
     if (identityBffSignOutIncomplete()) {
       setStatus("signout-incomplete");
-      setMessage(tr("CORE_IDENTITY_SIGNOUT_INCOMPLETE", "Sign-out may be incomplete — close the browser or try again."));
+      setMessage(tr("CORE_IDENTITY_SIGNOUT_INCOMPLETE", "Sign-out may not have finished, so this browser can still be signed in. Try signing out again, or sign in to continue."));
       return;
     }
     retry(establishSession);
@@ -174,7 +176,7 @@ export const SignInFailureCard = ({ signIn, Shell, onSignIn }) => {
           </V2Button>
         )}
         {status === "signout-incomplete" && (
-          <V2Button type="button" width="full" variant="secondary" onClick={signInAfterIncompleteSignOut}>
+          <V2Button type="button" width="full" variant="secondary" onClick={() => signInAfterIncompleteSignOut(onSignIn)}>
             {tr("CORE_IDENTITY_SIGN_IN", "Sign in →")}
           </V2Button>
         )}

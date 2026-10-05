@@ -6,6 +6,9 @@ import { getAuthSurface, isIdentityBffAuth, isKeycloakAuth } from "../../auth/au
 import { identityBffLogout, identityBffLogoutRedirect, markSignOutIncomplete } from "../../auth/identityBffLogin";
 import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
+/** Set by the Configurator (same origin) when its own sign-out could not be confirmed. */
+const CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY = "crs-sign-out-incomplete";
+
 export const UserService = {
   authenticate: async (details) => {
     // Legacy opt-in Keycloak (*_AUTH_PROVIDER=keycloak on /digit-ui). Removed
@@ -83,7 +86,10 @@ export const UserService = {
       // Fail open: the DIGIT token lives in localStorage, so a BFF outage or an
       // UNTRUSTED_ORIGIN 403 must not leave a shared device signed in. Clear local
       // state first, then revoke the BFF session best-effort.
+      // The Configurator shares this origin; keep its unconfirmed-sign-out flag.
+      const configuratorSignOut = window.localStorage.getItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY);
       window.localStorage.clear();
+      if (configuratorSignOut !== null) window.localStorage.setItem(CONFIGURATOR_SIGN_OUT_INCOMPLETE_KEY, configuratorSignOut);
       window.sessionStorage.clear();
       let failure = null;
       try {

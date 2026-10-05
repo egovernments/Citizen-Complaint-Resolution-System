@@ -22,6 +22,8 @@ vi.mock('@/api/onboarding', async () => {
 vi.mock('@/lib/session', () => ({
   SESSION_EXPIRED_KEY: 'crs-session-expired',
   SIGN_OUT_INCOMPLETE_KEY: 'crs-sign-out-incomplete',
+  signOutIncomplete: () => localStorage.getItem('crs-sign-out-incomplete') === '1',
+  clearSignOutIncomplete: () => localStorage.removeItem('crs-sign-out-incomplete'),
   clearLocalSession: vi.fn(),
   installDigitContext: vi.fn(),
   signOutThisDevice: vi.fn(),

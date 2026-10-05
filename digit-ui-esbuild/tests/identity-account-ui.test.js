@@ -282,7 +282,7 @@ test("pending invitation UI waits for consent and shows stale rejection", async 
 
 test("after an unconfirmed sign-out the login page warns instead of re-establishing the session", async () => {
   const calls = [];
-  browser("employee", async (url) => {
+  const { stored } = browser("employee", async (url) => {
     calls.push(url);
     if (url.includes("/session")) return json(200, { authenticated: true, tenant });
     return json(200, { access_token: "prev-user-token", UserRequest: { uuid: "prev", tenantId: tenant.tenantId, type: "EMPLOYEE", roles: [] } });
@@ -301,14 +301,16 @@ test("after an unconfirmed sign-out the login page warns instead of re-establish
   const view = await render(Login);
   assert.deepEqual(calls, []);
   assert.equal(signedIn, 0);
-  assert.match(text(view.root.findByProps({ role: "alert" })), /Sign-out may be incomplete/);
+  assert.match(text(view.root.findByProps({ role: "alert" })), /Sign-out may not have finished/);
   await click(button(view, "Try signing out again"));
   assert.equal(signedOut, 1);
   assert.equal(flags.has("identityBff.signOutIncomplete"), true);
-  // An explicit sign-in clears the flag and only then consults the BFF.
+  // An explicit sign-in clears the flag and goes through Keycloak (prompt=login)
+  // instead of reusing a cookie the failed sign-out may have left.
   await click(button(view, "Sign in"));
   assert.equal(flags.has("identityBff.signOutIncomplete"), false);
-  assert.ok(calls.some((url) => url.includes("/identity/v1/session")));
+  assert.deepEqual(calls, []);
+  assert.match(stored.redirect, /\/identity\/v1\/authorize\?/);
   view.unmount();
 });
 
