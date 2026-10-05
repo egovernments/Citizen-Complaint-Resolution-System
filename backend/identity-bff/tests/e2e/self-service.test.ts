@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { config } from "../../src/infrastructure/config.js";
-import { createIdentitySession, createPhoneOtpSession, deleteIdentitySession, getIdentitySession, listPersonSessions } from "../../src/modules/sessions/session-store.js";
+import { createIdentitySession, createPhoneOtpSession, deleteIdentitySession, getIdentitySession, kcSessionSubjectKey, listPersonSessions } from "../../src/modules/sessions/session-store.js";
+import { applyKeycloakEvent } from "../../src/modules/revocation/event-effects.js";
+import { drainRevocationJobs } from "../../src/modules/revocation/index.js";
 import { getRedis } from "../../src/infrastructure/redis.js";
 import { startIdentityTestApp, stopIdentityTestApp } from "./identity-test-app.js";
 import { ACCOUNT_ACTIONS } from "../../src/modules/authentication/account-service.js";
@@ -111,6 +113,39 @@ describe("account self-service", () => {
     const responses = await Promise.all([unlink("google"), unlink("github")]);
     expect(responses.map(response => response.status).sort()).toEqual([200, 409]);
     expect(await responses.find(response => response.status === 409)!.json()).toMatchObject({ code: "LAST_SIGNIN_METHOD" });
+  });
+});
+
+describe("Keycloak session id from a signed token", () => {
+  // The mock token endpoint signs a real RS256 access token (test key, served by the JWKS mock)
+  // with `sid` = `kc-sid-<nonce>`, so this runs the server's own verifier and session save.
+  async function signIn() {
+    const authorize = await fetch(`${base}/identity/v1/authorize?method=password&returnTo=/account`, { redirect: "manual" });
+    const nonce = new URL(authorize.headers.get("location")!).searchParams.get("nonce")!;
+    const state = new URL(authorize.headers.get("location")!).searchParams.get("state")!;
+    const callback = await fetch(`${base}/identity/v1/callback?state=${state}&code=valid-code:${nonce}`,
+      { redirect: "manual", headers: { Cookie: authorize.headers.getSetCookie()[0].split(";")[0] } });
+    expect(callback.status).toBe(303);
+    const sessionCookie = callback.headers.getSetCookie().find(value => value.startsWith(`${config.identityCookieName}=`))!;
+    return { sessionId: sessionCookie.split(";")[0].split("=")[1], kcSessionId: `kc-sid-${nonce}` };
+  }
+  it("a callback stores the token's sid as kcSessionId and writes the kc-session index", async () => {
+    const { sessionId, kcSessionId } = await signIn();
+    expect(await getIdentitySession(sessionId)).toMatchObject({ kcSessionId, oidcClientId: config.keycloakBffClientId });
+    expect(await getRedis().get(kcSessionSubjectKey(kcSessionId))).toBe("identity-user-1");
+  });
+  it("B3: a self UPDATE_PASSWORD keeps the initiating session and ends the others", async () => {
+    const initiator = await signIn(); const other = await signIn();
+    const details = { credential_type: "password", code_id: initiator.kcSessionId };
+    const shape = { userId: "identity-user-1", clientId: config.keycloakBffClientId, details };
+    // Keycloak 26.7.3 emits the UPDATE_PASSWORD twin 1 ms before UPDATE_CREDENTIAL.
+    await applyKeycloakEvent("user", { ...shape, id: "twin", time: Date.now() - 1, type: "UPDATE_PASSWORD" });
+    await applyKeycloakEvent("user", { ...shape, id: "change", time: Date.now(), type: "UPDATE_CREDENTIAL" });
+    await drainRevocationJobs();
+    expect(await getIdentitySession(initiator.sessionId)).not.toBeNull();
+    expect(await getIdentitySession(other.sessionId)).toBeNull();
+    const kept = await fetch(`${base}/identity/v1/session`, { headers: { Cookie: cookie(initiator.sessionId) } });
+    expect(kept.status).toBe(200);
   });
 });
 
