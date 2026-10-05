@@ -1329,7 +1329,9 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     const env = read('local-setup/ansible/templates/digit.env.j2');
     expect(env).toContain("IDENTITY_STAFF_CREDENTIAL_MODE={{ identity_staff_credential_mode | default('rotate') }}");
     expect(env).toContain("IDENTITY_SURFACES_JSON={{ identity_surfaces_json | default('') }}");
-    expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if (identity_dev_fixed_otp | default(false)) else '') }}");
+    expect(env).toContain("{% set fixed_otp = identity_dev_fixed_otp | default(not (enable_otp_services | default(false))) %}");
+    expect(env).toContain('CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED={{ fixed_otp | lower }}');
+    expect(env).toContain("IDENTITY_CITIZEN_OTP_SENDER={{ identity_citizen_otp_sender | default('log' if fixed_otp else '') }}");
     expect(env).toContain('IDENTITY_ONBOARDING_WORKER_ENABLED={{ identity_onboarding_worker_enabled | default(false) | lower }}');
     const bff = service(read('local-setup/docker-compose.egov-digit.yaml'), 'identity-bff');
     for (const setting of ['IDENTITY_SURFACES_JSON', 'IDENTITY_STAFF_CREDENTIAL_MODE',
@@ -1341,8 +1343,8 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
     expect(read('local-setup/ansible/playbook-deploy.yml')).toContain("rotate mode requires neither");
   });
 
-  test('fixed citizen OTP is off unless explicitly enabled in every compose path', () => {
-    const variable = 'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-false}';
+  test('fixed citizen OTP keeps develop\'s default (on unless overridden) in every compose path', () => {
+    const variable = 'CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}';
     for (const file of ['local-setup/docker-compose.yml', 'local-setup/docker-compose.registry.yml']) {
       expect(service(read(file), 'egov-user')).toContain(variable);
     }
