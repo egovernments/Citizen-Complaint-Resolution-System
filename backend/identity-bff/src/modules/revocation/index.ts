@@ -196,49 +196,41 @@ async function releaseSessionTokens(lease: PersonLease, ended: string[], retaine
   }
 }
 
+/**
+ * Ends the person's sessions matching `ends`, then releases their token
+ * claims. With `keycloak`, each ended session's Keycloak session is ended
+ * first, unless a session that stays still uses it; a failure there leaves
+ * the session indexed for a retry.
+ */
+async function endSessions(lease: PersonLease, ends: (item: { sessionId: string; session: IdentitySession }) => boolean,
+  options: { keycloak: boolean; bump?: boolean; retained?: RetainedSessionTokens }): Promise<void> {
+  const sessions = await sessionsRaw(lease.subject);
+  const ended = sessions.filter(ends);
+  const retainedKcSessions = new Set(sessions.filter(item => !ended.includes(item)).map(item => item.session.kcSessionId));
+  for (const { sessionId, session } of ended) {
+    await lease.assertHeld();
+    if (options.keycloak && session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await endKeycloakSession(session.kcSessionId);
+    await deleteIdentitySession(sessionId);
+  }
+  if (options.bump) await bumpGeneration(lease);
+  await releaseSessionTokens(lease, ended.map(item => item.sessionId), options.retained);
+}
+
 export async function logoutSessions(subject: string, scope: "current" | "others" | "all", currentSessionId: string): Promise<void> {
   await withPersonLease(subject, async lease => {
     const retained = scope === "others" ? await retainedSessionTokens(lease, currentSessionId) : undefined;
-    const sessions = await sessionsRaw(subject);
-    const ended = sessions.filter(item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId));
-    const retainedKcSessions = new Set(sessions.filter(item => !ended.includes(item)).map(item => item.session.kcSessionId));
-    for (const { sessionId, session } of ended) {
-      await lease.assertHeld();
-      // End at Keycloak first; if it fails the caller can retry the still-indexed session.
-      if (session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await endKeycloakSession(session.kcSessionId);
-      await deleteIdentitySession(sessionId);
-    }
-    if (scope === "all") await bumpGeneration(lease);
-    await releaseSessionTokens(lease, ended.map(item => item.sessionId), retained);
+    await endSessions(lease, item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId),
+      { keycloak: true, bump: scope === "all", retained });
   });
 }
 export async function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void> {
-  await withPersonLease(subject, async lease => {
-    const ended: string[] = [];
-    const sessions = await sessionsRaw(subject);
-    const retainedKcSessions = new Set(sessions.filter(item => item.sessionId === keepSessionId || item.session.phoneRef !== oldPhoneRef).map(item => item.session.kcSessionId));
-    for (const { sessionId, session } of sessions) {
-      if (sessionId === keepSessionId || session.phoneRef !== oldPhoneRef) continue;
-      await lease.assertHeld();
-      if (session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await endKeycloakSession(session.kcSessionId);
-      await deleteIdentitySession(sessionId);
-      ended.push(sessionId);
-    }
-    await releaseSessionTokens(lease, ended);
-  });
+  await withPersonLease(subject, lease => endSessions(lease,
+    item => item.sessionId !== keepSessionId && item.session.phoneRef === oldPhoneRef, { keycloak: true }));
 }
 
 /** Event already ended Keycloak's session; do not call back to Keycloak again. */
 export async function endKeycloakSessions(kcSessionId: string, clientId?: string, subject?: string): Promise<void> {
   const subjects = subject ? [subject] : (await listRevocationUsers()).map(user => user.id);
-  for (const sub of subjects) await withPersonLease(sub, async lease => {
-    const ended: string[] = [];
-    for (const { sessionId, session } of await sessionsRaw(sub)) {
-      if (session.kcSessionId !== kcSessionId || (clientId && session.oidcClientId !== clientId)) continue;
-      await lease.assertHeld();
-      await deleteIdentitySession(sessionId);
-      ended.push(sessionId);
-    }
-    await releaseSessionTokens(lease, ended);
-  });
+  for (const sub of subjects) await withPersonLease(sub, lease => endSessions(lease,
+    ({ session }) => session.kcSessionId === kcSessionId && (!clientId || session.oidcClientId === clientId), { keycloak: false }));
 }
