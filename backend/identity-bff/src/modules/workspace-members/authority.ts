@@ -48,10 +48,11 @@ export async function validateBinding(input: { subject: string; tenantId: string
   if (input.actor.kind !== "browser") return;
   if (input.actor.subject === input.subject) throw new BindingError("SELF_BINDING_FORBIDDEN", "You cannot bind your own account");
   const caller = await requireAccountAdmin(input.actor.subject, input.tenantId);
-  // Every target role counts, including HRMS roles at sub-tenants (pg.citya under pg): the caller
-  // must hold the same code at the workspace or at a tenant covering the target role's tenant.
+  // Every target role counts, at any tenant: the caller must hold the same code at the role's
+  // tenant or at a tenant above it (pg covers pg and pg.citya, never pgx or another root). A role
+  // outside the workspace subtree is therefore only linkable by someone who already holds it there.
   const covers = (callerTenant: string, roleTenant: string) =>
-    callerTenant === input.tenantId || callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
+    callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
   if (target.roles.some((r) => !caller.roles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)))) {
     throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds a role you do not hold");
   }

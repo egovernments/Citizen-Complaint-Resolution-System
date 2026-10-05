@@ -57,6 +57,14 @@ describe("binding actor validation", () => {
     await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
     admin.roles.push({ code: "SUPERUSER", tenantId: "pg" });
     await expect(call()).resolves.toBeUndefined();
+    // A workspace role never covers a role held at another root.
+    f.accounts[0].roles.push({ code: "SUPERUSER", tenantId: "other" });
+    await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    admin.roles.push({ code: "SUPERUSER", tenantId: "other" });
+    await expect(call()).resolves.toBeUndefined();
+    f.accounts[0].roles.push({ code: "SUPERUSER", tenantId: "pgx" });
+    await expect(call()).rejects.toMatchObject({ code: "ROLE_ESCALATION_FORBIDDEN" });
+    f.accounts[0].roles.pop();
     admin.roles = [{ code: "ACCOUNT_ADMIN", tenantId: "elsewhere" }];
     await expect(call()).rejects.toMatchObject({ code: "ADMIN_REQUIRED" });
   });
