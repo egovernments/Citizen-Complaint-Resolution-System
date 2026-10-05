@@ -20,6 +20,10 @@ if [ -f "$IDENTITY_ENV_DIR/identity-bff.env" ]; then
 fi
 
 readonly KEYCLOAK_CONTAINER=${KEYCLOAK_CONTAINER:-keycloak}
+# Where kcadm.sh reaches the Admin API, as seen from where kcadm runs: inside
+# the Keycloak container under Compose. The Helm realm-configure Job runs kcadm
+# in its own pod and points this at the Keycloak Service instead.
+readonly KCADM_SERVER=${KEYCLOAK_KCADM_SERVER:-http://127.0.0.1:8180}
 readonly KC_CONFIG=/tmp/identity-bff-kcadm.config
 readonly BFF_CLIENT=digit-identity-bff
 # Removed design: Standard Token Exchange to this audience is no longer used.
@@ -123,8 +127,9 @@ trap cleanup EXIT
 docker exec \
   -e KCADM_USERNAME="$KC_BOOTSTRAP_ADMIN_USERNAME" \
   -e KCADM_PASSWORD="$KC_BOOTSTRAP_ADMIN_PASSWORD" \
+  -e KCADM_SERVER="$KCADM_SERVER" \
   "$KEYCLOAK_CONTAINER" sh -c \
-  '/opt/keycloak/bin/kcadm.sh config credentials --config '"$KC_CONFIG"' --server http://127.0.0.1:8180 --realm master --user "$KCADM_USERNAME" --password "$KCADM_PASSWORD" >/dev/null'
+  '/opt/keycloak/bin/kcadm.sh config credentials --config '"$KC_CONFIG"' --server "$KCADM_SERVER" --realm master --user "$KCADM_USERNAME" --password "$KCADM_PASSWORD" >/dev/null'
 
 # Writes the JSON on stdin to an Admin API path in the realm.
 kc_put() {
