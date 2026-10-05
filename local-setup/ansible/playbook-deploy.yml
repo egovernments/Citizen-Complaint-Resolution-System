@@ -174,6 +174,30 @@
       delegate_to: localhost
       become: false
 
+    # digit-ui-v2 (the Vite citizen SPA at /citizen) was removed. Tenant
+    # host_vars are gitignored, so upgraded boxes still carry its keys. They
+    # are read by nothing now; say so instead of failing, so the operator can
+    # drop them. The leftover bundle is deleted further down ("digit-ui-v2
+    # (removed)"). The digit-ui-esbuild citizen app at /digit-ui/citizen is
+    # unaffected.
+    - name: "preflight — WARNING: digit-ui-v2 settings are ignored (app removed)"
+      vars:
+        _v2_keys: >-
+          {{ ([] if (enable_digit_ui_v2 | default(false)) in [false, '', none] else ['enable_digit_ui_v2'])
+             + ([] if ((nginx_features | default({})).digit_ui_v2 | default(false)) in [false, '', none] else ['nginx_features.digit_ui_v2'])
+             + ([] if (digit_ui_v2_repo | default('')) in [false, '', none] else ['digit_ui_v2_repo'])
+             + ([] if (digit_ui_v2_branch | default('')) in [false, '', none] else ['digit_ui_v2_branch']) }}
+      ansible.builtin.debug:
+        msg: >-
+          WARNING (deprecated): {{ _v2_keys | join(', ') }} {{ 'is' if (_v2_keys | length) == 1 else 'are' }}
+          set in host_vars but IGNORED. The digit-ui-v2 citizen SPA was removed, so
+          /citizen is no longer served (it falls through to the default route). Citizens
+          use /digit-ui/citizen, which is unaffected. Delete
+          {{ 'this key' if (_v2_keys | length) == 1 else 'these keys' }} from
+          host_vars/{{ inventory_hostname }}.yml; this deploy removes the leftover
+          /opt/digit-ui-v2 and /var/www/citizen.
+      when: _v2_keys | length > 0
+
     # ==================== One-tag deploys (#1729) ====================
     # Turn `image_tag` (usually `./deploy.sh <tenant> --image-tag=<tag>`) into
     # the ref each catalog image would get from it. Resolved HERE, first, because
@@ -4079,6 +4103,26 @@
       until: ui_early_check.rc == 0
       changed_when: false
       when: digit_ui_mode == "hmr"
+
+    # ============================================================
+    # digit-ui-v2 (the Vite citizen SPA once served at /citizen) was
+    # REMOVED. Earlier deploys built it under /opt/digit-ui-v2 and synced
+    # the bundle to /var/www/citizen for host nginx to serve; there was
+    # never a container or service for it. Remove both leftovers so an
+    # upgraded box does not keep a stale, unreachable bundle around.
+    # Idempotent (absent paths are a no-op) and runs whether or not the
+    # host_vars still set enable_digit_ui_v2. No data lives here: both
+    # are build output re-creatable from source. Darwin never ran the
+    # build (it needed become for /var/www), so it is skipped there.
+    # ============================================================
+    - name: "digit-ui-v2 (removed) — delete leftover build source and served bundle"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /opt/digit-ui-v2
+        - /var/www/citizen
+      when: ansible_system != "Darwin"
 
     # ==================== Wait for MCP Server ====================
     # Only when MCP is actually deployed. enable_mcp is false on Mac (the

@@ -128,6 +128,22 @@ def r_identity_needs_keycloak(cfg):
 
 
 @rule(
+    "digit-ui-v2-removed",
+    "The digit-ui-v2 citizen SPA (/citizen) was removed. Tenant host_vars are "
+    "gitignored, so existing boxes still carry enable_digit_ui_v2 / "
+    "nginx_features.digit_ui_v2 — warn (never fail) so the operator can drop "
+    "the stale keys. The citizen app at /digit-ui/citizen is unaffected.",
+)
+def r_digit_ui_v2_removed(cfg):
+    stale = [k for k in ("enable_digit_ui_v2", "nginx_features.digit_ui_v2",
+                         "digit_ui_v2_repo", "digit_ui_v2_branch")
+             if get(cfg, k) not in (None, False, "")]
+    if stale:
+        yield (WARN, f"{', '.join(stale)} ignored: digit-ui-v2 was removed and /citizen is no "
+                     "longer served (use /digit-ui/citizen). Delete these keys.")
+
+
+@rule(
     "matomo-combo",
     "Matomo has two halves that are useless apart. enable_matomo starts the "
     "containers but binds them to 127.0.0.1, so with nginx_features.matomo off "
@@ -425,6 +441,13 @@ SELF_TEST_CASES = [
     ("enable_keycloak as the string 'true' is clean", {"enable_keycloak": "true"}, set()),
     ("keycloak fully wired is clean", {"auth_provider": "keycloak", "enable_keycloak": True,
       "bootstrap_secrets": {"keycloak_admin_password": "x"}},
+     set()),
+    ("leftover enable_digit_ui_v2 warns", {"enable_digit_ui_v2": True},
+     {"digit-ui-v2-removed"}),
+    ("leftover nginx_features.digit_ui_v2 warns", {"nginx_features": {"digit_ui_v2": True}},
+     {"digit-ui-v2-removed"}),
+    ("digit-ui-v2 explicitly off is clean",
+     {"enable_digit_ui_v2": False, "nginx_features": {"digit_ui_v2": False}},
      set()),
     ("mcp without registry fires", {"enable_mcp": True, "docker_registry": ""},
      {"mcp-needs-registry"}),
