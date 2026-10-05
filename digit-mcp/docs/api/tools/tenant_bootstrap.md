@@ -11,7 +11,7 @@ The MCP build stages these same bytes into `dist/data/`; published npm packages 
 
 Bootstrap creates missing schemas and baseline records, substitutes the target tenant into seed data, creates the tenant self-record and mobile validation records, and provisions the administrator user, employee, and minimal ADMIN boundary. The administrator username follows the authenticated caller (falling back to `ADMIN`); founder roles come from the seed.
 
-Only country mobile rules are read from `source_tenant`. Workspace branding, geography, business departments/designations, complaint hierarchy, and workflow setup are configured separately. Existing active records are skipped; inactive baseline records fail instead of being silently reactivated. New records must become visible before bootstrap continues. Replays reuse an existing administrator and employee.
+The country mobile rule comes from the seed's `countryMobileRules` (selected by `country`, or by a seeded `mobile_prefix`); `source_tenant` is an explicit opt-in to read it from a live tenant instead, and nothing else is read from it. Workspace branding, geography, business departments/designations, complaint hierarchy, and workflow setup are configured separately. Existing active records are skipped; inactive baseline records fail instead of being silently reactivated. New records must become visible before bootstrap continues. Replays reuse an existing administrator and employee.
 
 ## Authorization and transport
 
@@ -24,8 +24,9 @@ An operator may explicitly enable direct MDMS with `MCP_PLATFORM_BOOTSTRAP_DIREC
 | Parameter | Type | Behavior |
 | --- | --- | --- |
 | `target_tenant` | string, required | Tenant root to bootstrap. |
-| `source_tenant` | string | Country mobile-rule source; defaults to the configured environment's state tenant. |
-| `mobile_regex` | string | Overrides the source country's mobile regex. Missing source rule without an explicit regex fails. |
+| `country` | string | ISO country whose seeded mobile rule is used (KE, IN, ET, MZ). |
+| `source_tenant` | string | Opt-in: read the country mobile rule from this live tenant instead of the seed. |
+| `mobile_regex` | string | Overrides the country's mobile regex. A missing country rule without an explicit regex fails. |
 | `mobile_prefix` | string | Overrides the country dialling prefix. |
 | `mobile_zone` | string | Legacy alias used only when `mobile_prefix` is absent. |
 | `mobile_length` | integer | Generated administrator mobile length; default 10. |

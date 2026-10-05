@@ -65,8 +65,8 @@ test('canonical baseline records satisfy schemas and exclude workspace business 
 });
 
 test('privilege and direct-MDMS configuration fail closed', async () => {
-  const denied = fixture('CITIZEN'); await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, denied.options), /administrator/); assert.equal(denied.directCalls(), 0);
-  const missing = fixture(); await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, { ...missing.options, mdmsHost: '' }), /EGOV_MDMS_HOST/); assert.equal(missing.writes(), 0);
+  const denied = fixture('CITIZEN'); await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, denied.options), /administrator/); assert.equal(denied.directCalls(), 0);
+  const missing = fixture(); await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, { ...missing.options, mdmsHost: '' }), /EGOV_MDMS_HOST/); assert.equal(missing.writes(), 0);
 });
 
 test('invitation policy has one default and enforces expiry boundaries', () => {
@@ -104,38 +104,38 @@ test('bootstrap uses canonical inventory, country-only source lookup, and replay
   assert.equal(first.summary.data_copied, seed.records.length + 2); assert.equal(first.summary.workflows_created, 0);
   assert.equal(first.summary.admin_employee_provisioned, true); assert.equal(f.reads(), 1);
   assert.ok(!JSON.stringify([...f.rows.values()]).includes('{tenantid}'));
-  const writes = f.writes(); const second = await bootstrapPlatform({ target_tenant: 'in.newtown' }, f.options);
+  const writes = f.writes(); const second = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options);
   assert.equal(second.summary.data_copied, 0); assert.equal(f.writes(), writes); assert.equal(f.users.length, 1); assert.equal(f.employees.length, 1);
 });
 
 test('direct bootstrap rejects forged claims, missing tokens and non-root roles before MDMS', async () => {
   for (const verified of [null, { uuid: 'forged', roles: [{ code: 'CITIZEN', tenantId: 'in' }] }, { uuid: 'forged', roles: [{ code: 'SUPERUSER', tenantId: 'in.other' }] }]) {
     const f = fixture(); f.verifyAs(verified);
-    await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, f.options));
+    await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options));
     assert.equal(f.directCalls(), 0); assert.equal(f.reads(), 0);
   }
   const f = fixture(); f.options.api.getAuthInfo = () => ({ authenticated: false, token: null, user: null });
-  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, f.options), /administrator/);
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, f.options), /administrator/);
   assert.equal(f.directCalls(), 0);
 });
 
 test('flag-off bootstrap uses gateway methods and never direct MDMS or user hosts', async () => {
   const f = fixture();
-  const result = await bootstrapPlatform({ target_tenant: 'in.newtown' }, { ...f.options, direct: false, mdmsHost: 'invalid-direct-host', fetcher: async () => { throw new Error('direct request forbidden'); } });
+  const result = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, { ...f.options, direct: false, mdmsHost: 'invalid-direct-host', fetcher: async () => { throw new Error('direct request forbidden'); } });
   assert.equal(result.success, true); assert.ok(f.writes() > 0); assert.equal(f.directCalls(), 0);
 });
 
 test('direct mode rejects inactive users, missing tokens and failed live verification before MDMS', async () => {
   const inactive = fixture();
   inactive.verifyAs({ uuid: 'inactive', active: false, roles: [{ code: 'SUPERUSER', tenantId: 'in' }] });
-  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, inactive.options), /verified state administrator/);
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, inactive.options), /verified state administrator/);
   assert.equal(inactive.directCalls(), 0); assert.equal(inactive.reads(), 0);
   const missing = fixture(), claimed = missing.options.api.getAuthInfo();
   missing.options.api.getAuthInfo = () => ({ ...claimed, token: null });
-  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, missing.options), /verified state administrator/);
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, missing.options), /verified state administrator/);
   assert.equal(missing.directCalls(), 0); assert.equal(missing.reads(), 0);
   const revoked = fixture();
-  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, {
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, {
     ...revoked.options, fetcher: async input => {
       assert.equal(String(input), 'http://user.test/user/_details?access_token=test-only-token');
       return new Response('{}', { status: 401 });
@@ -151,7 +151,7 @@ test('unset and false environment flags keep the gateway default', async () => {
       if (flag === undefined) delete process.env.MCP_PLATFORM_BOOTSTRAP_DIRECT;
       else process.env.MCP_PLATFORM_BOOTSTRAP_DIRECT = flag;
       const f = fixture();
-      const result = await bootstrapPlatform({ target_tenant: 'in.newtown' }, {
+      const result = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, {
         ...f.options, direct: undefined, mdmsHost: 'invalid', userHost: 'invalid',
         fetcher: async () => { throw new Error('direct transport forbidden'); },
       });
@@ -165,8 +165,8 @@ test('unset and false environment flags keep the gateway default', async () => {
 
 test('legacy workspace inputs emit warnings without changing baseline records', async () => {
   const baseline = fixture(), legacy = fixture();
-  const normal = await bootstrapPlatform({ target_tenant: 'in.newtown' }, baseline.options);
-  const result = await bootstrapPlatform({ target_tenant: 'in.newtown', pincode_allowlist: ['99999'], dashboard_roles: ['CUSTOM_ROLE'] }, legacy.options);
+  const normal = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN' }, baseline.options);
+  const result = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN', pincode_allowlist: ['99999'], dashboard_roles: ['CUSTOM_ROLE'] }, legacy.options);
   assert.equal(normal.summary.warnings, 0);
   assert.equal(result.summary.warnings, 2);
   assert.equal(result.results.warnings.length, 2);
@@ -178,13 +178,13 @@ test('legacy workspace inputs emit warnings without changing baseline records', 
 
 test('user_only updates the administrator without writing baseline or employee records', async () => {
   const f = fixture();
-  const result = await bootstrapPlatform({ target_tenant: 'in.newtown', user_only: true,
+  const result = await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN', user_only: true,
     user_validation: [{ countryCode: '+91', mobileNumberRegex: '^[6-9][0-9]{9}$', default: true }],
   }, f.options);
   assert.equal(result.user_only, true); assert.equal(result.admin_user_provisioned, true);
   assert.equal(result.summary.admin_employee_provisioned, false);
   assert.equal(f.writes(), 0); assert.equal(f.reads(), 0); assert.equal(f.employees.length, 0);
-  await bootstrapPlatform({ target_tenant: 'in.newtown', user_only: true }, f.options);
+  await bootstrapPlatform({ target_tenant: 'in.newtown', country: 'IN', user_only: true }, f.options);
   assert.equal(f.users.length, 1); assert.equal(f.writes(), 0);
 });
 
@@ -254,8 +254,11 @@ test('branding gateway create and update authorize only tenant ACCOUNT_ADMIN', (
 
 test('canonical country defaults have an explicit supported inventory and valid mobile-rule data', async () => {
   const seed = loadPlatformSeed();
-  assert.deepEqual(Object.keys(seed.countryMobileRules).sort(), ['IN', 'KE']);
+  // Countries offered at signup: COUNTRIES in configurator/src/pages/SignupPage.tsx.
+  assert.deepEqual(Object.keys(seed.countryMobileRules).sort(), ['ET', 'IN', 'KE', 'MZ']);
   assert.deepEqual(seed.countryMobileRules.IN, { countryCode: '+91', mobileNumberRegex: '^[6-9][0-9]{9}$', default: true });
+  assert.deepEqual(seed.countryMobileRules.ET, { countryCode: '+251', mobileNumberRegex: '^9[0-9]{8}$', default: true });
+  assert.deepEqual(seed.countryMobileRules.MZ, { countryCode: '+258', mobileNumberRegex: '^8[2-7][0-9]{7}$', default: true });
   const nairobi = JSON.parse(await readFile('../ansible/nairobi-mdms/mdms/common-masters/MobileNumberValidation.json', 'utf8'));
   assert.deepEqual(seed.countryMobileRules.KE, nairobi[0].data);
   const definition = seed.schemas.find(s => s.code === 'common-masters.MobileNumberValidation')!.definition;
@@ -264,13 +267,11 @@ test('canonical country defaults have an explicit supported inventory and valid 
     assert.match(iso, /^[A-Z]{2}$/); assert.ok(validate(rule)); assert.equal(rule.default, true);
     assert.doesNotThrow(() => new RegExp(rule.mobileNumberRegex));
   }
-  assert.equal(seed.countryMobileRules.ET, undefined);
-  assert.equal(seed.countryMobileRules.MZ, undefined);
   assert.equal(seed.records.filter(r => r.schemaCode === 'common-masters.MobileNumberValidation').length, 0,
     'country defaults must not be blindly seeded into every tenant');
 });
 
-test('MCP preserves source overrides and does not infer country defaults from tenant IDs', async () => {
+test('MCP defaults to the seeded country rule and reads source_tenant only on opt-in', async () => {
   const configured = fixture();
   const search = configured.options.api.mdmsV2SearchRaw;
   const override = { countryCode: '+254', mobileNumberRegex: '^7[0-9]{8}$', default: true };
@@ -283,6 +284,19 @@ test('MCP preserves source overrides and does not infer country defaults from te
   missing.options.api.mdmsV2SearchRaw = async () => [];
   await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'in' }, missing.options), /Country mobile rule is missing/);
   assert.equal(missing.writes(), 0, 'matching tenant name must not opt into canonical ISO fallback');
+
+  for (const [country, prefix] of [['KE', '+254'], ['ET', '+251'], ['MZ', '+258']]) {
+    const seeded = fixture();
+    await bootstrapPlatform({ target_tenant: 'in.newtown', country }, seeded.options);
+    assert.equal(seeded.reads(), 0, 'without source_tenant no live tenant is read');
+    assert.deepEqual(seeded.rows.get(`common-masters.MobileNumberValidation/${prefix}`).data, loadPlatformSeed().countryMobileRules[country]);
+  }
+  const byPrefix = fixture();
+  await bootstrapPlatform({ target_tenant: 'in.newtown', mobile_prefix: '+254' }, byPrefix.options);
+  assert.equal(byPrefix.reads(), 0); assert.equal(byPrefix.rows.get('common-masters.MobileNumberValidation/+254').data.mobileNumberRegex, '^[17][0-9]{8}$');
+  const unknown = fixture();
+  await assert.rejects(bootstrapPlatform({ target_tenant: 'in.newtown' }, unknown.options), /Country mobile rule is missing/);
+  assert.equal(unknown.reads(), 0); assert.equal(unknown.writes(), 0);
 
   const explicit = fixture();
   await bootstrapPlatform({ target_tenant: 'in.newtown', source_tenant: 'pg', user_validation: [override] }, explicit.options);

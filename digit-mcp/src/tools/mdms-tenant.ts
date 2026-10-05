@@ -1210,7 +1210,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
     description:
       'Bootstrap a tenant using the versioned platform baseline shared with PGR. Requires an authenticated platform administrator. Uses the gateway by default; direct MDMS requires server opt-in and live state-admin verification. ' +
       'Seeds platform access/security/HRMS prerequisites and an ADMIN user. Workspace business masters are configured separately. ' +
-      'source_tenant supplies country mobile rules only; no schemas or business data are cloned.',
+      'The country mobile rule comes from the seed (country, or a seeded mobile_prefix); source_tenant opts in to reading it from a live tenant instead. No schemas or business data are cloned.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -1218,16 +1218,20 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           type: 'string',
           description: 'The new tenant root to bootstrap (e.g. "tenant", "ke")',
         },
+        country: {
+          type: 'string',
+          description: 'ISO country (e.g. "KE", "IN", "ET", "MZ") whose seeded mobile rule is used. Ignored when source_tenant or user_validation is supplied.',
+        },
         source_tenant: {
           type: 'string',
-          description: 'Country mobile-rule source only (default: configured state tenant). Platform schemas and records come from the versioned seed.',
+          description: 'Explicit opt-in: read the country mobile rule from this live tenant instead of the seed. Platform schemas and records always come from the versioned seed.',
         },
         mobile_regex: {
           type: 'string',
           description:
             'Mobile-number regex stored as mobileNumberRegex in the synthesized ' +
-            'common-masters.MobileNumberValidation record. Inherited from the source tenant\'s ' +
-            'MobileNumberValidation when omitted; fails if no country rule or explicit regex is available. ' +
+            'common-masters.MobileNumberValidation record. Taken from the seeded country rule (or source_tenant) ' +
+            'when omitted; fails if no country rule or explicit regex is available. ' +
             'Kenya: "^[17][0-9]{8}$". Mozambique: "^8[0-9]{8}$".',
         },
         mobile_length: {
@@ -1242,7 +1246,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           description:
             'Country dialling prefix (e.g. "+258" for Mozambique, "+254" for Kenya). ' +
             'Used as the countryCode field and x-unique key in the MobileNumberValidation record. ' +
-            'Inherited from the source tenant\'s MobileNumberValidation when omitted. ' +
+            'Taken from the seeded country rule (or source_tenant) when omitted. ' +
             'Ignored when user_validation is supplied.',
         },
         mobile_zone: {

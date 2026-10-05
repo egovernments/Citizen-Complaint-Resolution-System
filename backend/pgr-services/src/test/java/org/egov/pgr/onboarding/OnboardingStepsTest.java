@@ -66,7 +66,7 @@ public class OnboardingStepsTest {
         assertEquals(2,rows.get("newtown|common-masters.StateInfo|newtown").path("data").path("languages").size());
         assertEquals(336,rows.get("newtown|identity.invitationPolicy|default").path("data").path("invitationExpiryHours").asInt());
         verify(client,times(2)).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),argThat(b->b.toString().contains("New Town")));
-        verify(client).read(eq("mdms"),anyString(),argThat(b->b.toString().contains("tenantId=in")&&b.toString().contains("MobileNumberValidation")));
+        verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
     }
@@ -129,22 +129,15 @@ public class OnboardingStepsTest {
         OnboardingFailure failure=assertThrows(OnboardingFailure.class,()->steps.perform("TENANT_FOUNDATION",signup,op,progress));
         assertTrue(failure.isRetryable());assertEquals("STARTED",op.getRecordProgress().get("schema:tenant.tenants"));
     }
-    @Test public void countryAbsenceUsesCanonicalDefaultsOnlyInTargetTenant() {
-        rows.clear();prerequisites();
-        assertEquals("^[6-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
-        assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
-    }
-    @Test public void configuredCountryRuleIsPreservedAndMalformedRuleNeverFallsBack() {
+    @Test public void liveCountryTenantRuleIsNeverReadOrCopied() {
         rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","mobileNumberRegex","^[7-9][0-9]{9}$","default",true))));
-        prerequisites();assertEquals("^[7-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
-        op.getRecordProgress().remove("mobile");
-        rows.put("in|common-masters.MobileNumberValidation|+91",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","default",true))));
-        assertEquals("COUNTRY_MOBILE_RULE_INVALID",assertThrows(OnboardingFailure.class,()->steps.perform("PLATFORM_BASELINE",signup,op,progress)).getCode());
+        rows.put("in|common-masters.MobileNumberValidation|second",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+91","default",true))));
+        prerequisites();assertEquals("^[6-9][0-9]{9}$",rows.get("newtown|common-masters.MobileNumberValidation|+91").path("data").path("mobileNumberRegex").asText());
+        verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
     }
-    @Test public void unsupportedCountryIsExplicitAndAmbiguousConfiguredRulesFailClosed() {
-        signup.setCountryCode("ZZ");assertEquals("COUNTRY_NOT_SUPPORTED",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
-        signup.setCountryCode("IN");rows.put("in|common-masters.MobileNumberValidation|second",rows.get("in|common-masters.MobileNumberValidation|+91"));
-        assertEquals("COUNTRY_MOBILE_RULE_AMBIGUOUS",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
+    @Test public void unsupportedCountryIsExplicit() {
+        signup.setCountryCode("ZZ");OnboardingFailure failure=assertThrows(OnboardingFailure.class,this::prerequisites);
+        assertEquals("COUNTRY_NOT_SUPPORTED",failure.getCode());assertFalse(failure.isRetryable());
     }
     @Test public void nullBoundaryResultsCreateValidEntityAndEmptyWrapperDoesNotCountAsRelationship() throws Exception {
         final boolean[] made={false,false,false};
@@ -189,19 +182,20 @@ public class OnboardingStepsTest {
         verify(client,never()).write(any(),eq("boundary"),eq("/boundary-service/boundary-relationships/_create"),anyMap());
         assertEquals("DONE",op.getRecordProgress().get("boundary-relationship"));
     }
-    @Test public void kenyaFallbackUsesCanonicalRuleAndConfiguredOtherCountryRemainsSupported() {
-        rows.clear();signup.setCountryCode("KE");prerequisites();
-        assertEquals("^[17][0-9]{8}$",rows.get("newtown|common-masters.MobileNumberValidation|+254").path("data").path("mobileNumberRegex").asText());
+    // Countries offered at signup: COUNTRIES in configurator/src/pages/SignupPage.tsx.
+    @Test public void everySignupCountryUsesItsSeedRuleWithoutCountryTenants() throws Exception {
+        Set<String> seeded=new TreeSet<>();new ObjectMapper().readTree(getClass().getResourceAsStream("/onboarding/platform-baseline-v1.json")).path("countryMobileRules").fieldNames().forEachRemaining(seeded::add);
+        assertEquals(new TreeSet<>(List.of("ET","IN","KE","MZ")),seeded);
+        Map<String,List<String>> expected=Map.of("IN",List.of("+91","^[6-9][0-9]{9}$"),"KE",List.of("+254","^[17][0-9]{8}$"),
+                "ET",List.of("+251","^9[0-9]{8}$"),"MZ",List.of("+258","^8[2-7][0-9]{7}$"));
+        rows.clear();
+        for(var country:expected.entrySet()) {
+            signup.setCountryCode(country.getKey());op.getRecordProgress().remove("mobile");prerequisites();
+            JsonNode rule=rows.get("newtown|common-masters.MobileNumberValidation|"+country.getValue().get(0)).path("data");
+            assertEquals(country.getValue().get(1),rule.path("mobileNumberRegex").asText());assertTrue(rule.path("default").asBoolean());
+        }
         assertTrue(rows.keySet().stream().allMatch(key->key.startsWith("newtown|")));
-        signup.setCountryCode("ET");op.getRecordProgress().remove("mobile");
-        rows.put("et|common-masters.MobileNumberValidation|+251",mapper.valueToTree(Map.of("isActive",true,"data",Map.of("countryCode","+251","mobileNumberRegex","^[0-9]{9}$","default",true))));
-        steps.perform("PLATFORM_BASELINE",signup,op,progress);assertTrue(rows.containsKey("newtown|common-masters.MobileNumberValidation|+251"));
-    }
-    @Test public void countryTransportFailureNeverUsesCanonicalFallback() {
-        when(client.read(eq("mdms"),contains("/v2/_search"),argThat(body->body.toString().contains("tenantId=in"))))
-                .thenThrow(new OnboardingFailure("PROVISIONING_UNAVAILABLE",true));
-        assertEquals("PROVISIONING_UNAVAILABLE",assertThrows(OnboardingFailure.class,this::prerequisites).getCode());
-        assertFalse(rows.containsKey("newtown|common-masters.MobileNumberValidation|+91"));assertEquals("STARTED",op.getRecordProgress().get("mobile"));
+        verify(client,never()).read(eq("mdms"),anyString(),argThat(b->!b.toString().contains("tenantId=newtown")));
     }
 
     @Test public void foreignOrInactiveBoundaryEntriesDoNotProvePrerequisites() {
