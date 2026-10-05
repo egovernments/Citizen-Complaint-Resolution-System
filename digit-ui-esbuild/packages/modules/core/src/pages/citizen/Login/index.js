@@ -7,14 +7,12 @@ import SelectMobileNumber from "./SelectMobileNumber";
 import SelectName from "./SelectName";
 import SelectOtp from "./SelectOtp";
 import { useMobileValidationConfig } from "./useMobileValidationConfig";
+import { setCitizenDetail } from "../../../components/citizenSession";
 
 const TYPE_REGISTER = { type: "register" };
 const TYPE_LOGIN = { type: "login" };
 const DEFAULT_USER = "digit-user";
 let DEFAULT_REDIRECT_URL = `/${window?.contextPath || window?.globalConfigs?.getConfig("CONTEXT_PATH")}/citizen`;
-
-import { setCitizenDetail } from "../../../components/citizenSession";
-export { setCitizenDetail };
 
 const getFromLocation = (state, searchParams) => {
   return state?.from || searchParams?.from || DEFAULT_REDIRECT_URL;

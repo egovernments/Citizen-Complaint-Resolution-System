@@ -10,7 +10,7 @@ import {
 
 import { SignInFailureCard, useIdentityBffSignIn } from "../../../components/IdentityBffSignIn";
 import { loginSteps } from "./config";
-import { setCitizenDetail } from "./index";
+import { setCitizenDetail } from "../../../components/citizenSession";
 import SelectMobileNumber, { V2LoginShell } from "./SelectMobileNumber";
 import SelectOtp from "./SelectOtp";
 import { useMobileValidationConfig } from "./useMobileValidationConfig";
