@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * PGR Postal Code Validation — Employee Create Complaint
  *
@@ -36,7 +37,7 @@ const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || ADMIN_PASS;
 // the profile reads the pattern out of the SPA's own globalConfigs. So these
 // specs compare the form to its own config.
 
-const CREATE_URL = `${BASE_URL}/digit-ui/employee/pgr/create-complaint`;
+const identityCreateUrl = () => `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/create-complaint`;
 
 /**
  * Derive postal samples the DEPLOYMENT's own pattern rejects, so the negative
@@ -191,7 +192,7 @@ async function submitForm(page: Page): Promise<void> {
 
 /** Log in, open the create-complaint form, and return its postal input. */
 async function openCreateComplaint(page: Page) {
-  await page.goto(CREATE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.goto(identityCreateUrl(), { waitUntil: 'domcontentloaded', timeout: 30_000 });
   const postalInput = page.locator('input[name="postalCode"]');
   await expect(postalInput).toBeVisible({ timeout: 30_000 });
   // The field's container must resolve, or every scoped assertion below would be

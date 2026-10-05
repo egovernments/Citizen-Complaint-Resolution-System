@@ -46,6 +46,7 @@ export function clearLocalSession(): void {
 export function installDigitContext(
   context: DigitContext,
   identityUser?: Pick<SessionUser, 'name' | 'email'> | null,
+  completedPhases: number[] = [1, 2, 3, 4, 5],
 ): void {
   const { UserRequest: user, access_token: authToken } = context;
   window.localStorage.setItem(
@@ -63,9 +64,9 @@ export function installDigitContext(
       environment: API_ORIGIN || window.location.origin,
       tenant: user.tenantId,
       targetTenant: user.tenantId,
-      mode: 'management',
+      mode: completedPhases.length === 5 ? 'management' : 'onboarding',
       currentPhase: 1,
-      completedPhases: [],
+      completedPhases,
       authToken,
     }),
   );

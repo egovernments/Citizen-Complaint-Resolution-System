@@ -46,7 +46,7 @@ export const ENDPOINTS = {
   USER_CREATE: '/user/users/_createnovalidate',
 
   // Encryption (for tenant bootstrap — register a new tenant with egov-enc-service
-  // before any encrypt/decrypt call targets it; see tenantBootstrap.ts)
+  // before any encrypt/decrypt call targets it; handled by PGR onboarding)
   ENC_GENERATE_KEY: '/egov-enc-service/crypto/v1/_generatekey',
 
   // Workflow (for tenant bootstrap — PGR state machine clone)

@@ -1,3 +1,4 @@
+import { isIdentityBffAuth } from "@egovernments/digit-ui-libraries";
 import React from "react";
 import { Redirect, Route, Switch, useLocation, useRouteMatch } from "react-router-dom";
 
@@ -62,7 +63,7 @@ export const AppModules = ({ stateCode, userType, modules, appTenants, additiona
           <ForgotPassword />
         </Route>
         <Route path={`${path}/change-password`}>
-          <ChangePassword />
+          {isIdentityBffAuth() ? <Redirect to={`${path}/user/account`} /> : <ChangePassword />}
         </Route>
         <Route>
           <AppHome userType={userType} modules={modules} additionalComponent={additionalComponent} />

@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
+const BASE_URL = process.env.BASE_URL || 'http://localhost';
 const LOCAL_STACK = process.env.LOCAL_STACK === '1';
 const EXCLUDE_LOCAL_ONLY = LOCAL_STACK ? undefined : /@local-only/;
 
@@ -22,6 +22,7 @@ export default defineConfig({
     'fixtures/citizen.setup.ts',
     'fixtures/profile.setup.ts',
   ],
+  testIgnore: /tests\/identity-real\//,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   retries: 0,
@@ -85,7 +86,7 @@ export default defineConfig({
         // spec ran a second time under chromium with the UI storage state,
         // duplicating every api result in report.json (38 pass/fail/skip rows
         // counted twice) and inflating suite runtime for zero added coverage.
-        /tests\/(api|smoke)\//,
+        /tests\/(api|smoke|identity-real)\//,
       ],
       grepInvert: EXCLUDE_LOCAL_ONLY,
     },

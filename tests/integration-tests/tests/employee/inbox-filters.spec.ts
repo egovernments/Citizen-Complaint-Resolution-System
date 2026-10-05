@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee PGR inbox-v2 — FILTERS ACTUALLY NARROW THE LIST (TEST-COVERAGE-GAPS #1).
  *
@@ -55,7 +56,7 @@ function toPrincipal(p: ResolvedPersona): Principal {
   return { token: p.token, userInfo: p.userInfo, roles: p.roles, authTenant: p.tenant };
 }
 
-const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
+const identityInboxUrl = () => `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/inbox-v2`;
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
 
 // Seed artefacts + skip reasons resolved in beforeAll.
@@ -156,7 +157,7 @@ async function openInbox(page: Page): Promise<void> {
   test.skip(!ok, `employee ${employee.username} login failed on this deployment`);
   await Promise.all([
     page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
-    page.goto(INBOX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }),
+    page.goto(identityInboxUrl(), { waitUntil: 'domcontentloaded', timeout: 30_000 }),
   ]);
   await page.locator('[role="row"]').first().waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForTimeout(1_500);

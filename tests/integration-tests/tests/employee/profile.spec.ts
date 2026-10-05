@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee profile — country prefix regression (CCRS #444 sub-1).
  *
@@ -64,7 +65,7 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
       password: ADMIN_PASS,
     });
 
-    await page.goto(`${BASE_URL}/digit-ui/employee/user/profile`, {
+    await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/employee/user/profile`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

@@ -1,25 +1,12 @@
 import Urls from "../../atoms/urls";
 import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
-import { getAuthAdapter } from "../../auth/index";
-import { isKeycloakAuth } from "../../auth/authSurface";
+import { getAuthSurface, isIdentityBffAuth } from "../../auth/authSurface";
+import { identityBffLogout, identityBffLogoutRedirect } from "../../auth/identityBffLogin";
+import { currentAppBasePath, tenantContext } from "../../tenant/tenantRoute";
 
 export const UserService = {
   authenticate: async (details) => {
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      const result = await adapter.login({
-        email: details.username,
-        password: details.password,
-        tenantId: details.tenantId,
-      });
-      return {
-        UserRequest: result.user,
-        access_token: result.token,
-        token_type: "bearer",
-      };
-    }
-
     const data = new URLSearchParams();
     Object.entries(details).forEach(([key, value]) => data.append(key, value));
     data.append("scope", "read");
@@ -62,10 +49,23 @@ export const UserService = {
   getUser: () => {
     return Digit.SessionStorage.get("User");
   },
-  logout: async () => {
-    if (isKeycloakAuth()) {
-      const adapter = getAuthAdapter();
-      return adapter.logout();
+  logout: async (scope = "current") => {
+    // Some buttons pass the click event directly.
+    if (typeof scope !== "string") scope = "current";
+    if (isIdentityBffAuth()) {
+      // Sign out of the BFF session for this surface only, then land on the
+      // same tenant's login page for that surface.
+      const surface = tenantContext()?.surface || getAuthSurface();
+      const appBasePath = tenantContext()?.appBasePath || window.contextPath || currentAppBasePath();
+      await identityBffLogout({ surface, scope, fetchImpl: window.fetch.bind(window) });
+      if (scope !== "others") {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+        window.location.replace(
+          `${window.location.origin}${identityBffLogoutRedirect(appBasePath, surface)}`,
+        );
+      }
+      return;
     }
 
     // The session's own user decides where logout lands. `userType` is one

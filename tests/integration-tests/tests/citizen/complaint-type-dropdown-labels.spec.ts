@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL } from '../utils/env';
@@ -34,7 +35,7 @@ drill-down (Bomet ke CRS) wizard shapes.`,
   // Step 1 (the hierarchical complaint-type picker), matching the URL used by
   // wizard.spec.ts's walkWizard.  The older /create-complaint root also works
   // for flat-dropdown deployments because it redirects to the same step.
-  await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
+  await page.goto(`${BASE_URL}/${tenantSlug()}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });

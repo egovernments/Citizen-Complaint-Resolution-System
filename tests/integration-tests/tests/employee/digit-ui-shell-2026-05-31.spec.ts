@@ -1,3 +1,4 @@
+import { tenantSlug } from '../utils/identity-bff';
 /**
  * Employee digit-ui shell — login + chrome + decrypted inbox bundle.
  *
@@ -219,7 +220,7 @@ test.describe('employee digit-ui shell bundle', () => {
 
     // ============ #344 — complaint detail visible decrypt ============
     await page.goto(
-      `${BASE_URL}/digit-ui/employee/pgr/complaint-details/${ASSIGNED_COMPLAINT_ID}?cb=${Date.now()}`,
+      `${BASE_URL}/${tenantSlug()}/digit-ui/employee/pgr/complaint-details/${ASSIGNED_COMPLAINT_ID}?cb=${Date.now()}`,
     );
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(4_500);

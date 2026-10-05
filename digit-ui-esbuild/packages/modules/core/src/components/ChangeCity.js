@@ -31,6 +31,9 @@ export const tenantChoiceCount = () => {
 };
 
 export const showTenantSwitcher = (tenantCount) => {
+  // On a tenant-scoped route (/{tenantSlug}/digit-ui/...) the tenant comes
+  // from the URL, so there is nothing to switch.
+  if (window?.__digitTenantContext) return false;
   // globalConfigs.js is hand-edited and ansible-rendered, so the override
   // arrives as a real boolean from one and the string "true"/"false" from the
   // other. Reading only the boolean meant the documented escape hatch silently
@@ -63,6 +66,7 @@ export const showTenantSwitcher = (tenantCount) => {
  * renders null still takes a slot, leaving an empty 32px gap.
  */
 export const showTenantIndicator = (tenantCount) => {
+  if (window?.__digitTenantContext) return false;
   if (showTenantSwitcher(tenantCount)) return true;
   const count = typeof tenantCount === "number" ? tenantCount : tenantChoiceCount();
   return Boolean(Digit?.Utils?.getMultiRootTenant?.()) && count === 1;

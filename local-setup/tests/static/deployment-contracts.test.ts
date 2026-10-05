@@ -516,6 +516,35 @@ describe('docker-compose.egov-digit.yaml', () => {
   });
 });
 
+describe('tenant-scoped digit-ui routing', () => {
+  const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const helmTenantIngress = read(
+    'devops/deploy-as-code/charts/urban/digit-ui/templates/tenant-ingress.yaml'
+  );
+
+  test('Compose nginx keeps the public slug and rewrites only the internal UI mount', () => {
+    // Quoted: an unquoted `{2,63}` makes nginx read the `{` as a block
+    // opener and reject the config (#2127).
+    expect(nginx).toContain('location ~ "^/([a-z0-9-]{2,63})/digit-ui$" {');
+    expect(nginx).toContain('location ~ "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" {');
+    expect(nginx).toContain(
+      'rewrite "^/[a-z0-9-]{2,63}/digit-ui/(.*)$" /digit-ui/$1 last;'
+    );
+  });
+
+  test('Kubernetes ingress exposes the same tenant-prefixed contract', () => {
+    expect(helmTenantIngress).toContain(
+      'path: /([a-z0-9-]{2,63})/digit-ui(/|$)(.*)'
+    );
+    expect(helmTenantIngress).toContain(
+      '"nginx.ingress.kubernetes.io/rewrite-target" "/digit-ui/$3"'
+    );
+    expect(helmTenantIngress).toContain('.Values.ingress.annotations');
+    expect(helmTenantIngress).toContain('.Values.ingress.waf.annotations');
+    expect(helmTenantIngress).toContain('.Values.ingress.additionalAnnotations');
+  });
+});
+
 describe('Novu workflow creation deployment contract', () => {
   const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
   const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));

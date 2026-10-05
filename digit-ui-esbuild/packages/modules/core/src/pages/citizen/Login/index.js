@@ -6,28 +6,15 @@ import { loginSteps } from "./config";
 import SelectMobileNumber from "./SelectMobileNumber";
 import SelectName from "./SelectName";
 import SelectOtp from "./SelectOtp";
+import { useMobileValidationConfig } from "./useMobileValidationConfig";
 
 const TYPE_REGISTER = { type: "register" };
 const TYPE_LOGIN = { type: "login" };
 const DEFAULT_USER = "digit-user";
 let DEFAULT_REDIRECT_URL = `/${window?.contextPath || window?.globalConfigs?.getConfig("CONTEXT_PATH")}/citizen`;
 
-/* set citizen details to enable backward compatiable */
-const setCitizenDetail = (userObject, token, tenantId) => {
-  if (Digit.Utils.getMultiRootTenant()) {
-    return;
-  }
-  let locale = JSON.parse(sessionStorage.getItem("Digit.initData"))?.value?.selectedLanguage;
-  localStorage.setItem("Citizen.tenant-id", tenantId);
-  localStorage.setItem("tenant-id", tenantId);
-  localStorage.setItem("citizen.userRequestObject", JSON.stringify(userObject));
-  localStorage.setItem("locale", locale);
-  localStorage.setItem("Citizen.locale", locale);
-  localStorage.setItem("token", token);
-  localStorage.setItem("Citizen.token", token);
-  localStorage.setItem("user-info", JSON.stringify(userObject));
-  localStorage.setItem("Citizen.user-info", JSON.stringify(userObject));
-};
+import { setCitizenDetail } from "../../../components/citizenSession";
+export { setCitizenDetail };
 
 const getFromLocation = (state, searchParams) => {
   return state?.from || searchParams?.from || DEFAULT_REDIRECT_URL;
@@ -58,42 +45,7 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
   // Check if individual service context path is configured
   const individualServicePath = window?.globalConfigs?.getConfig("INDIVIDUAL_SERVICE_CONTEXT_PATH");
 
-  // Read from common-masters.MobileNumberValidation — the single source
-  // of truth for mobile validation across all frontends and backends.
-  // Priority: globalConfigs.CORE_MOBILE_CONFIGS → MDMS → constants fallback.
-  const stateId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-  const { data: mdmsValidationConfig } = Digit.Hooks.useCustomMDMS(
-    stateId,
-    "common-masters",
-    [{ name: "MobileNumberValidation" }],
-    {
-      select: (data) => {
-        const list = data?.["common-masters"]?.MobileNumberValidation || [];
-        const record =
-          list.find((x) => x.default === true && x.isActive !== false) ||
-          list.find((x) => x.isActive !== false) ||
-          null;
-        if (!record) return null;
-        const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-        return {
-          prefix: record.countryCode,
-          pattern: record.mobileNumberRegex,
-          errorMessage: gc?.mobileNumberErrorMessage || "CORE_COMMON_MOBILE_ERROR",
-        };
-      },
-      staleTime: 300000,
-      enabled: !!stateId,
-    }
-  );
-
-  // Priority: MDMS common-masters.MobileNumberValidation → globalConfigs.CORE_MOBILE_CONFIGS → constants fallback.
-  const globalCfg = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-  const validationConfig = {
-    countryCode: mdmsValidationConfig?.prefix || globalCfg?.countryCode,
-    prefix: mdmsValidationConfig?.prefix || globalCfg?.countryCode,
-    pattern: mdmsValidationConfig?.pattern || globalCfg?.mobileNumberRegex,
-    errorMessage: mdmsValidationConfig?.errorMessage,
-  };
+  const validationConfig = useMobileValidationConfig();
 
   useEffect(() => {
     let errorTimeout;
