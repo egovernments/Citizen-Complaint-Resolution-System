@@ -483,7 +483,7 @@ Caller: a session with **live DIGIT `ACCOUNT_ADMIN`** at `tenantId` (D5), read l
 - `tenantId` must be the workspace tenant of an `ACTIVE` Organization (`WORKSPACE_TENANT_REQUIRED`). `digitUuid` must be an active EMPLOYEE account there and not a `kcbff-` account. `email` is required (D18) and is normalized by trimming and lower-casing.
 - **Rules:**
   - binding yourself → `SELF_BINDING_FORBIDDEN`;
-  - the account holds a role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`;
+  - the account holds an **administrative** role, at any tenant, that the caller doesn't hold at that tenant or a tenant above it (a workspace role covers the workspace and its sub-tenants, never another root) → `ROLE_ESCALATION_FORBIDDEN`. Administrative roles are `SUPERUSER`, every `*_ADMIN`, `INTERNAL_MICROSERVICE_ROLE`, `SYSTEM`, `REINDEXING_ROLE` and `QA_AUTOMATION`; operational roles (GRO, CSR, PGR_LME, SUPERVISOR, …) are never checked. A caller holding `SUPERUSER` at the tenant itself (the founder, D11) may link an account with any role;
   - the uuid is bound to another person → `DIGIT_ACCOUNT_LINKED_ELSEWHERE`;
   - this person already has a different uuid at the tenant → `BINDING_CONFLICT`.
 - **Find the person** by email, then by username = email. A username match with a different email → `IDENTITY_EMAIL_CHANGED`.
@@ -725,7 +725,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 | `ADMIN_EMAIL_CHANGE_NOT_ALLOWED` | 403 | no | Tenant admin cannot change this global identity email; use UPDATE_EMAIL or operator global recovery |
 | `ADMIN_REQUIRED` | 403 | no | The caller lacks live DIGIT ACCOUNT_ADMIN at the tenant (D5) |
 | `SELF_BINDING_FORBIDDEN` | 403 | no | A browser caller tried to bind themselves |
-| `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds a role the caller lacks |
+| `ROLE_ESCALATION_FORBIDDEN` | 403 | no | The target account holds an administrative role the caller lacks |
 | `SELF_REMOVAL_FORBIDDEN` | 409 | no | An admin tried to remove their own binding |
 | `BINDING_REMOVED` | 409 | after-change | The binding is removed; send reinvite:true to invite again |
 | `BINDING_CONFLICT` | 409 | no | This person already has a different DIGIT account at the tenant |

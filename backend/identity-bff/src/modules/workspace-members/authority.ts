@@ -48,12 +48,17 @@ export async function validateBinding(input: { subject: string; tenantId: string
   if (input.actor.kind !== "browser") return;
   if (input.actor.subject === input.subject) throw new BindingError("SELF_BINDING_FORBIDDEN", "You cannot bind your own account");
   const caller = await requireAccountAdmin(input.actor.subject, input.tenantId);
-  // Every target role counts, at any tenant: the caller must hold the same code at the role's
-  // tenant or at a tenant above it (pg covers pg and pg.citya, never pgx or another root). A role
-  // outside the workspace subtree is therefore only linkable by someone who already holds it there.
+  // A SUPERUSER at the workspace (the founder) may link any role. Otherwise every administrative target role
+  // counts, including HRMS roles at sub-tenants (pg.citya under pg): the caller must hold the same code at the
+  // role's tenant or a tenant above it (pg covers pg and pg.citya, never pgx or another root). Operational roles (GRO, PGR_LME, …) are not guarded.
+  if (caller.roles.some((c) => c.code === "SUPERUSER" && c.tenantId === input.tenantId)) return;
   const covers = (callerTenant: string, roleTenant: string) =>
     callerTenant === roleTenant || roleTenant.startsWith(`${callerTenant}.`);
-  if (target.roles.some((r) => !caller.roles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)))) {
-    throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds a role you do not hold");
+  if (target.roles.some((r) => isAdminRole(r.code) && !caller.roles.some((c) => c.code === r.code && covers(c.tenantId, r.tenantId)))) {
+    throw new BindingError("ROLE_ESCALATION_FORBIDDEN", "The employee holds an administrative role you do not hold");
   }
 }
+
+/** Roles that administer the workspace or act as the platform; operational roles (GRO, PGR_LME, …) are not guarded. */
+const ADMIN_ROLES = new Set(["SUPERUSER", "INTERNAL_MICROSERVICE_ROLE", "SYSTEM", "REINDEXING_ROLE", "QA_AUTOMATION"]);
+const isAdminRole = (code: string) => ADMIN_ROLES.has(code) || code.endsWith("_ADMIN");
