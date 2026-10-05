@@ -1,4 +1,4 @@
-import { cachedToken, recordToken, holdToken, readToken, forgetToken, revokeInventoriedToken, personTokensKey, tokenHoldersKey, parseAccountId, type AccountRef } from "../revocation/inventory.js";
+import { cachedToken, recordToken, holdToken, readToken, forgetToken, revokeInventoriedToken, personTokensKey, parseAccountId, type AccountRef } from "../revocation/inventory.js";
 import { privateRef } from "../citizen-otp/otp-store.js";
 import { accountEntries } from "../sync/state.js";
 import { requireCurrentSession } from "../sessions/session-store.js";
@@ -109,35 +109,19 @@ export function isBffManagedAccount(account: DigitAccount): boolean {
     (account.identificationMark || "").startsWith("keycloak-bff:");
 }
 
-/** The linked account, only while it is still active with its type and tenant. */
-async function findLinkedAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
+/** An existing account, only while it is still active with its type and tenant. */
+export async function findActiveAccount(
+  adminToken: string, link: { uuid: string; tenantId: string; userType: ManagedUserType },
+): Promise<DigitAccount | null> {
   const accounts = await searchAccounts(adminToken, {
-    uuid: [identity.linkedUuid!], tenantId: identity.tenantId, userType: identity.userType, active: true,
+    uuid: [link.uuid], tenantId: link.tenantId, userType: link.userType, active: true,
   });
-  return accounts.find((account) => account.uuid === identity.linkedUuid && account.active &&
-    account.type === identity.userType && account.tenantId === identity.tenantId) || null;
+  return accounts.find((account) => account.uuid === link.uuid && account.active &&
+    account.type === link.userType && account.tenantId === link.tenantId) || null;
 }
 
-/** Logout inventory includes linked and managed accounts, including citizens. */
-async function releaseLinkedLogins(
-  _issuer: string, subject: string, sessionId: string,
-  include: (link: { userType: ManagedUserType; tenantId: string }) => boolean,
-): Promise<void> {
-  await withPersonLease(subject, async lease => {
-    for (const id of await getRedis().smembers(personTokensKey(subject))) {
-      const account = parseAccountId(id);
-      const token = await readToken(account);
-      if (!token || token.subject !== subject) continue;
-      const userType = token.kind === "citizen" ? CITIZEN_USER_TYPE : MANAGED_USER_TYPE;
-      if (!include({ userType, tenantId: account.tenantId })) continue;
-      await lease.assertHeld();
-      if (!await getRedis().srem(tokenHoldersKey(account), sessionTokenRef(sessionId))) continue;
-      if (await getRedis().scard(tokenHoldersKey(account))) continue;
-      await revokeInventoriedToken(account, token, "LOGOUT");
-      await forgetToken(lease, account, token.accessToken);
-    }
-  });
-}
+const findLinkedAccount = (adminToken: string, identity: ManagedIdentity) =>
+  findActiveAccount(adminToken, { uuid: identity.linkedUuid!, tenantId: identity.tenantId, userType: identity.userType });
 
 /**
  * Writes `changes` to an account the BFF does NOT own (a linked legacy
@@ -164,7 +148,7 @@ async function writeLinkedAccount(
 
 /** Unlink: revoke the linked account's cached token for every session. */
 export async function dropLinkedLogin(identity: ManagedIdentity): Promise<void> {
-  await withUserLease(identity, () => dropCachedLogin(identity));
+  await dropCachedLogin(identity);
 }
 
 export function managedIdentity(issuer: string, subject: string, tenantId: string): ManagedIdentity {
@@ -239,19 +223,10 @@ export function oneTimePassword(length = config.digitPasswordLength): string {
 }
 
 /**
- * A DIGIT token cannot be made per-session: egov-user's token store returns
- * the SAME access token for repeated password grants of one account while that
- * token is still live, so two BFF sessions of the same person necessarily
- * share one token. Logout therefore revokes at egov-user only once the last
- * session holding that token has gone; until then it just forgets its own
- * claim. Otherwise signing out on a phone turned every DIGIT call on the
- * laptop into a 401. (Dhruv review, #2088.)
- *
- * Account-level changes (roles rewritten, account deactivated) still revoke
- * unconditionally — those must take effect on every device at once.
- *
- * The session id itself never becomes a Redis key: it is the bearer of the
- * browser session, so it is hashed the same way an opaque credential would be.
+ * Token-holder reference of one browser session. egov-user returns the same
+ * live token to every password grant of one account, so sessions share it and
+ * logout revokes only when the last holder is gone (revocation/index.ts). The
+ * session id is the bearer of the browser session and is never a Redis key.
  */
 export const sessionTokenRef = (sessionId: string) => privateRef("session", sessionId);
 
@@ -268,10 +243,6 @@ const citizenMobileHint = (countryCode: string | null | undefined, mobileNumber:
 /** Hash of `${subject}|${tenantId}` -> issuer for every account this BFF provisioned. */
 export const managedAccountsKey = () => `${config.cachePrefix}:digit-managed-accounts`;
 const indexField = (identity: ManagedIdentity) => `${identity.subject}|${identity.tenantId}`;
-
-async function withUserLease<T>(identity: ManagedIdentity, operation: () => Promise<T>): Promise<T> {
-  return withPersonLease(identity.subject, operation);
-}
 
 async function findAccount(adminToken: string, identity: ManagedIdentity): Promise<DigitAccount | null> {
   for (const active of [true, false]) {
@@ -376,20 +347,6 @@ async function dropCachedLogin(identity: ManagedIdentity): Promise<void> {
     }
   });
 }
-async function releaseCachedLogin(identity: ManagedIdentity, ref: string): Promise<void> {
-  await withPersonLease(identity.subject, async lease => {
-    for (const account of await inventoriedAccounts(identity)) {
-      await lease.assertHeld();
-      if (!await getRedis().srem(tokenHoldersKey(account), ref)) continue;
-      if (await getRedis().scard(tokenHoldersKey(account))) continue;
-      const token = await readToken(account);
-      if (!token) continue;
-      await revokeInventoriedToken(account, token, "LOGOUT");
-      await forgetToken(lease, account, token.accessToken);
-    }
-  });
-}
-
 export interface EnsureResult {
   account: DigitAccount | null;
   created: boolean;
@@ -410,7 +367,7 @@ export async function ensureManagedAccount(
   profile?: ManagedProfile,
   options: { createOnly?: boolean } = {},
 ): Promise<EnsureResult> {
-  return withUserLease(identity, () => withDigitAdmin(async (adminToken) => {
+  return withPersonLease(identity.subject, () => withDigitAdmin(async (adminToken) => {
     const account = await findAccount(adminToken, identity);
     if (account && options.createOnly) return { account, created: false, changed: false };
     const citizen = identity.userType === CITIZEN_USER_TYPE;
@@ -492,136 +449,91 @@ export async function managedUserLogin(
   verifiedMobileNumber?: string,
   verifiedCountryCode?: string,
 ): Promise<DigitLogin> {
-  {
-    const lease = currentPersonLease();
-    if (!lease) {
-      return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber, verifiedCountryCode));
-    }
-    if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
-    await requireCurrentSession(lease, sessionId);
+  const lease = currentPersonLease();
+  if (!lease) {
+    return withPersonLease(identity.subject, () => managedUserLogin(identity, sessionId, verifiedMobileNumber, verifiedCountryCode));
   }
+  if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
+  await requireCurrentSession(lease, sessionId);
   if (identity.linkedUuid) {
     // Every sign-in re-checks a linked account, cached token or not: a
     // deactivation in HRMS or egov-user must end access at the next _select.
     const live = await withDigitAdmin((adminToken) => findLinkedAccount(adminToken, identity));
     if (!live) {
-      await withUserLease(identity, () => dropCachedLogin(identity));
+      await dropCachedLogin(identity);
       throw new ManagedAccountError("The linked DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
     }
   }
+  // The lease is held from here on, so no other request can cache a token.
   const cached = await cachedLogin(identity);
   if (cached) {
     await holdCachedLogin(identity, sessionId);
     return cached;
   }
-  return withUserLease(identity, async () => {
-    const again = await cachedLogin(identity);
-    if (again) {
-      await holdCachedLogin(identity, sessionId);
-      return again;
+  return withDigitAdmin(async (adminToken) => {
+    const account = identity.linkedUuid
+      ? await findLinkedAccount(adminToken, identity)
+      : await findAccount(adminToken, identity);
+    if (!account) {
+      throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
     }
-    return withDigitAdmin(async (adminToken) => {
-      const account = identity.linkedUuid
-        ? await findLinkedAccount(adminToken, identity)
-        : await findAccount(adminToken, identity);
-      if (!account) {
-        throw new ManagedAccountError("No active DIGIT account is managed for this identity", 403);
+    if (!account.active) {
+      throw new ManagedAccountError("The DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
+    }
+    let login: DigitLogin;
+    if (identity.userType === CITIZEN_USER_TYPE) {
+      // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
+      if (!verifiedMobileNumber) {
+        throw new ManagedAccountError("A verified phone number is required", 403, "PHONE_NOT_VERIFIED");
       }
-      if (!account.active) {
-        throw new ManagedAccountError("The DIGIT account is not active", 403, "DIGIT_ACCOUNT_INACTIVE");
-      }
-      let login: DigitLogin;
-      if (identity.userType === CITIZEN_USER_TYPE) {
-        // A citizen password grant is validated as an OTP; see CitizenTokenMinter.
-        if (!verifiedMobileNumber) {
-          throw new ManagedAccountError("A verified phone number is required", 403, "PHONE_NOT_VERIFIED");
+      // egov-user checks the OTP against the STORED mobile number, so a
+      // citizen who verified a new number first has it written through.
+      // Compare with what DIGIT stores; only when the search masks it, fall
+      // back to the number this BFF last wrote.
+      const stored = account.mobileNumber?.trim() || "";
+      const hint = citizenMobileHint(verifiedCountryCode, verifiedMobileNumber);
+      const differs = stored && !stored.includes("*")
+        ? stored !== verifiedMobileNumber ||
+          (!!verifiedCountryCode && (account.countryCode?.trim() || "") !== verifiedCountryCode)
+        : await getRedis().get(citizenMobileKey(identity)) !== hint;
+      if (differs) {
+        const changes = {
+          mobileNumber: verifiedMobileNumber,
+          ...(verifiedCountryCode && { countryCode: verifiedCountryCode }),
+        };
+        if (identity.linkedUuid) {
+          await writeLinkedAccount(adminToken, account, changes);
+        } else {
+          await updateAccount(adminToken, { ...editable(account), ...changes });
         }
-        // egov-user checks the OTP against the STORED mobile number, so a
-        // citizen who verified a new number first has it written through.
-        // Compare with what DIGIT stores; only when the search masks it, fall
-        // back to the number this BFF last wrote.
-        const stored = account.mobileNumber?.trim() || "";
-        const hint = citizenMobileHint(verifiedCountryCode, verifiedMobileNumber);
-        const differs = stored && !stored.includes("*")
-          ? stored !== verifiedMobileNumber ||
-            (!!verifiedCountryCode && (account.countryCode?.trim() || "") !== verifiedCountryCode)
-          : await getRedis().get(citizenMobileKey(identity)) !== hint;
-        if (differs) {
-          const changes = {
-            mobileNumber: verifiedMobileNumber,
-            ...(verifiedCountryCode && { countryCode: verifiedCountryCode }),
-          };
-          if (identity.linkedUuid) {
-            await writeLinkedAccount(adminToken, account, changes);
-          } else {
-            await updateAccount(adminToken, { ...editable(account), ...changes });
-          }
-          await getRedis().set(citizenMobileKey(identity), hint, "EX", CITIZEN_MOBILE_HINT_SECONDS);
-        }
-        login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
-      } else if (staffCredentialMode() === "derived") {
-        const lease = currentPersonLease()!;
-        if (lease.subject !== identity.subject) throw new Error("Staff login requires its person's lease");
-        const response = await request(`/users/${encodeURIComponent(identity.subject)}`);
-        const user = await response.json() as { attributes?: Record<string, string[]> };
-        let keyVersion: number | undefined;
-        try {
-          const entry = accountEntries(user).find((entry) => entry.kind === "staff" &&
-            entry.tenantId === account.tenantId && entry.uuid === account.uuid);
-          if (Number.isSafeInteger(entry?.credential?.keyVersion) && (entry?.credential?.keyVersion ?? 0) > 0) {
-            keyVersion = entry!.credential!.keyVersion;
-          }
-        } catch { /* No readable mirror: staffLogin tries the current key before activation. */ }
-        login = await staffLogin({ ...account, keyVersion }, lease);
-      } else {
-        const password = oneTimePassword();
-        if (identity.linkedUuid) await writeLinkedAccount(adminToken, account, { password });
-        else await updateAccount(adminToken, { ...editable(account), password });
-        // A linked account keeps its own username; its legacy password is
-        // replaced here, as for every account the BFF signs in (#2167).
-        login = await passwordLogin({
-          username: account.userName, password, tenantId: account.tenantId, userType: identity.userType,
-        });
+        await getRedis().set(citizenMobileKey(identity), hint, "EX", CITIZEN_MOBILE_HINT_SECONDS);
       }
-      await cacheLogin(identity, sessionId, login);
-      return login;
-    });
+      login = await citizenTokenMinter().mint(account, verifiedMobileNumber);
+    } else if (staffCredentialMode() === "derived") {
+      const response = await request(`/users/${encodeURIComponent(identity.subject)}`);
+      const user = await response.json() as { attributes?: Record<string, string[]> };
+      let keyVersion: number | undefined;
+      try {
+        const entry = accountEntries(user).find((entry) => entry.kind === "staff" &&
+          entry.tenantId === account.tenantId && entry.uuid === account.uuid);
+        if (Number.isSafeInteger(entry?.credential?.keyVersion) && (entry?.credential?.keyVersion ?? 0) > 0) {
+          keyVersion = entry!.credential!.keyVersion;
+        }
+      } catch { /* No readable mirror: staffLogin tries the current key before activation. */ }
+      login = await staffLogin({ ...account, keyVersion }, lease);
+    } else {
+      const password = oneTimePassword();
+      if (identity.linkedUuid) await writeLinkedAccount(adminToken, account, { password });
+      else await updateAccount(adminToken, { ...editable(account), password });
+      // A linked account keeps its own username; its legacy password is
+      // replaced here, as for every account the BFF signs in (#2167).
+      login = await passwordLogin({
+        username: account.userName, password, tenantId: account.tenantId, userType: identity.userType,
+      });
+    }
+    await cacheLogin(identity, sessionId, login);
+    return login;
   });
-}
-
-/**
- * Logout: releases this BFF session's claim on the subject's cached DIGIT
- * tokens at every tenant it touched, revoking each one at egov-user only when
- * no other live session still holds it.
- */
-export async function revokeManagedUserLogins(
-  issuer: string,
-  subject: string,
-  sessionId: string,
-): Promise<void> {
-  const ref = sessionTokenRef(sessionId);
-  for (const tenantId of await managedTenantsOf(issuer, subject)) {
-    const identity = managedIdentity(issuer, subject, tenantId);
-    await withUserLease(identity, () => releaseCachedLogin(identity, ref));
-  }
-  await releaseLinkedLogins(issuer, subject, sessionId, (link) => link.userType !== CITIZEN_USER_TYPE);
-}
-
-/**
- * Citizen logout: releases this session's claim on the token of the citizen
- * account behind its bound tenant. Sessions on other city routes under the
- * same root hold the same token and keep it until they log out too.
- */
-export async function revokeCitizenLogin(
-  issuer: string,
-  subject: string,
-  tenantId: string,
-  sessionId: string,
-): Promise<void> {
-  const identity = citizenIdentity(issuer, subject, tenantId);
-  await withUserLease(identity, () => releaseCachedLogin(identity, sessionTokenRef(sessionId)));
-  await releaseLinkedLogins(issuer, subject, sessionId, (link) =>
-    link.userType === CITIZEN_USER_TYPE && link.tenantId === identity.tenantId);
 }
 
 /** Tenants where this BFF has provisioned an account for the subject. */

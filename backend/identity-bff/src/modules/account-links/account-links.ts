@@ -8,6 +8,7 @@ import {
   CITIZEN_USER_TYPE,
   citizenIdentity,
   dropLinkedLogin,
+  findActiveAccount,
   findManagedAccount,
   isBffManagedAccount,
   linkedIdentity,
@@ -95,14 +96,6 @@ async function withAccountLease<T>(digitUuid: string, operation: () => Promise<T
   }
 }
 
-async function liveAccount(link: AccountLink): Promise<DigitAccount | null> {
-  const accounts = await withDigitAdmin((adminToken) => searchAccounts(adminToken, {
-    uuid: [link.digitUuid], tenantId: link.tenantId, userType: link.userType, active: true,
-  }));
-  return accounts.find((account) => account.uuid === link.digitUuid && account.active &&
-    account.type === link.userType && account.tenantId === link.tenantId) || null;
-}
-
 /** Finds an existing DIGIT employee by username for an admin import. */
 export async function findEmployeeUuid(tenantId: string, userName: string): Promise<string | null> {
   const accounts = await withDigitAdmin((adminToken) => searchAccounts(adminToken, {
@@ -127,7 +120,8 @@ export async function createAccountLink(input: AccountLink & {
     throw new AccountLinkError(message, status, code);
   };
   return withAccountLease(link.digitUuid, async () => {
-    const account = await liveAccount(link);
+    const account = await withDigitAdmin((adminToken) =>
+      findActiveAccount(adminToken, { uuid: link.digitUuid, tenantId: link.tenantId, userType: link.userType }));
     if (!account) return refuse("No active DIGIT account matches", 404, "DIGIT_ACCOUNT_NOT_FOUND");
     if (isBffManagedAccount(account)) {
       return refuse("Accounts created by the identity service cannot be linked", 409, "DIGIT_ACCOUNT_MANAGED");

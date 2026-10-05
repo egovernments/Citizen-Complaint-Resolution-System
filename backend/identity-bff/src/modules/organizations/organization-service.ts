@@ -54,18 +54,6 @@ export async function managedTenantsFromIdentity(userId: string): Promise<string
   return [...new Set(user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || [])].sort();
 }
 
-/** Durable account inventory; Redis is only an acceleration index. */
-export async function listManagedIdentityAccounts(): Promise<Array<{
-  subject: string;
-  tenantId: string;
-}>> {
-  const users = await paged<UserRepresentation>("/users");
-  return users.flatMap((user) => user.id
-    ? [...new Set(user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || [])]
-        .map((tenantId) => ({ subject: user.id!, tenantId }))
-    : []);
-}
-
 /**
  * Keycloak's user PUT replaces the whole attribute map, so every
  * read-modify-write of a user's attributes runs under one Redis lease per
@@ -91,26 +79,11 @@ async function withUserAttributeLease<T>(userId: string, operation: () => Promis
 }
 
 /** Durable inventory used to deactivate accounts after Organization removal. */
-export function recordManagedTenant(userId: string, tenantId: string): Promise<void> {
-  return withUserAttributeLease(userId, () => writeManagedTenant(userId, tenantId));
-}
-
-async function writeManagedTenant(userId: string, tenantId: string): Promise<void> {
-  const response = await request(`/users/${encodeURIComponent(userId)}`);
-  const user = await response.json() as UserRepresentation;
-  const tenants = [...new Set([...(user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || []), tenantId])].sort();
-  if (tenants.length === (user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || []).length) return;
-  // Profile fields and attributes only, as in `writeCitizenRegistrationValues`:
-  // replaying the stale `enabled` could undo an admin disable.
-  await request(`/users/${encodeURIComponent(userId)}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      attributes: { ...user.attributes, [MANAGED_TENANTS_ATTRIBUTE]: tenants },
-    }),
-  });
+export async function recordManagedTenant(userId: string, tenantId: string): Promise<void> {
+  await withUserAttributeLease(userId, () => updateUserAttributeValues(userId, MANAGED_TENANTS_ATTRIBUTE, (values) => {
+    const tenants = [...new Set([...values, tenantId])].sort();
+    return tenants.length === values.length ? null : tenants;
+  }));
 }
 
 const CITIZEN_REGISTRATIONS_ATTRIBUTE = "digit.citizenRegistrations";

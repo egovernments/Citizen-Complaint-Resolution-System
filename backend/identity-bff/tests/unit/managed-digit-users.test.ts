@@ -8,8 +8,8 @@ import {
   managedIdentity,
   managedUserLogin,
   oneTimePassword,
-  revokeManagedUserLogins,
 } from "../../src/modules/managed-accounts/managed-account-service.js";
+import { logoutSessions } from "../../src/modules/revocation/index.js";
 import { createFakeDigitUser } from "../../mocks/fake-digit-user.js";
 
 const ISSUER = "https://issuer.example/realms/digit";
@@ -236,12 +236,12 @@ describe("managed DIGIT accounts", () => {
     expect(laptop.accessToken).toBe(phone.accessToken);
     expect(await getRedis().scard(holdersKey(identity))).toBe(2);
 
-    await revokeManagedUserLogins(ISSUER, identity.subject, session("phone"));
+    await logoutSessions(identity.subject, "current", session("phone"));
     expect(fake.tokens.has(laptop.accessToken)).toBe(true);
     expect((await managedUserLogin(identity, session("laptop"))).accessToken)
       .toBe(laptop.accessToken);
 
-    await revokeManagedUserLogins(ISSUER, identity.subject, session("laptop"));
+    await logoutSessions(identity.subject, "current", session("laptop"));
     expect(fake.tokens.has(laptop.accessToken)).toBe(false);
     expect(await getRedis().get(tokenKey(identity))).toBeNull();
   });
@@ -250,7 +250,7 @@ describe("managed DIGIT accounts", () => {
     const identity = managedIdentity(ISSUER, subject(), "pg");
     await ensureManagedAccount(identity, [], profile);
     const laptop = await managedUserLogin(identity, session("laptop"));
-    await revokeManagedUserLogins(ISSUER, identity.subject, session("never-selected"));
+    await logoutSessions(identity.subject, "current", session("never-selected"));
     expect(fake.tokens.has(laptop.accessToken)).toBe(true);
     expect(await getRedis().scard(holdersKey(identity))).toBe(1);
   });
