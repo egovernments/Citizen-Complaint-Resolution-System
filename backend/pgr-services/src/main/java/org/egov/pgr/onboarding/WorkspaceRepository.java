@@ -23,8 +23,16 @@ public class WorkspaceRepository {
         }
         return steps;
     }
-    /** Tenants whose onboarding workspace finished; background jobs scan these alongside the state tenant's cities. */
-    public List<String> doneTenantIds() { return jdbc.queryForList("SELECT tenant_id FROM eg_pgr_onboarding_workspace WHERE status='DONE' ORDER BY tenant_id", String.class); }
+    /**
+     * Live tenants this service onboarded or adopted, for background jobs that scan them alongside the state
+     * tenant's cities: every signup whose provisioning succeeded (ACTIVE) plus every workspace row (legacy rows
+     * included). The workspace checklist status is deliberately ignored: a tenant whose setup is NOT_STARTED,
+     * IN_PROGRESS or set back still takes complaints.
+     */
+    public List<String> onboardedTenantIds() {
+        return jdbc.queryForList("SELECT requested_tenant_id FROM eg_pgr_onboarding_signup WHERE status='ACTIVE' " +
+                "UNION SELECT tenant_id FROM eg_pgr_onboarding_workspace ORDER BY 1", String.class);
+    }
     public Optional<Map<String,Object>> find(String tenant, boolean lock) {
         return jdbc.query("SELECT tenant_id,status,steps,version,seed_version,updated_at,updated_by FROM eg_pgr_onboarding_workspace WHERE tenant_id = ?" + (lock ? " FOR UPDATE" : ""),
                 (rs,n) -> {

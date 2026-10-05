@@ -63,9 +63,10 @@ public class EscalationScheduler {
         }
 
         Set<String> scanTenants = new LinkedHashSet<>(discoverStateTenants());
-        // Onboarded root tenants are not listed under the state tenant; their finished workspaces are.
+        // Onboarded root tenants are not listed under the state tenant. Scan each one once its signup is
+        // ACTIVE, whatever its workspace checklist says: IN_PROGRESS or reopened setups still take complaints.
         try {
-            scanTenants.addAll(workspaces.doneTenantIds());
+            scanTenants.addAll(workspaces.onboardedTenantIds());
         } catch (Exception e) {
             log.error("Could not list onboarded workspace tenants; scanning state tenants only", e);
         }

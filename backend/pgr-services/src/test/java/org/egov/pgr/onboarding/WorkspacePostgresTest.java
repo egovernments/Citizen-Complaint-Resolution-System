@@ -88,6 +88,18 @@ public class WorkspacePostgresTest {
         assertEquals(2L, repository.find("example", false).orElseThrow().get("version"));
     }
 
+    /** Escalation scans every live onboarded tenant, whatever its checklist status (#2269 item 8). */
+    @Test public void onboardedTenantsAreEveryActiveSignupAndWorkspaceWhateverItsChecklistStatus() {
+        signup("draft");
+        var failed = signup("failed"); jdbc.update("UPDATE eg_pgr_onboarding_signup SET status='FAILED' WHERE id=?", failed.getId());
+        activate(signup("notstarted"));
+        activate(signup("inprogress")); service.update(update("inprogress", 1));
+        assertEquals("IN_PROGRESS", repository.find("inprogress", false).orElseThrow().get("status"));
+        var unmaterialized = signup("noworkspace"); jdbc.update("UPDATE eg_pgr_onboarding_signup SET status='ACTIVE' WHERE id=?", unmaterialized.getId());
+        repository.materializeLegacy("legacy");
+        assertEquals(List.of("inprogress", "legacy", "notstarted", "noworkspace"), repository.onboardedTenantIds());
+    }
+
     @Test public void signupReservationWinsConcurrentRenameWithoutTheft() throws Exception {
         var signup = signup("newtenant"); activate(signup("existing"));
         var reserved = new CountDownLatch(1); var release = new CountDownLatch(1); var started = new CountDownLatch(1);
