@@ -1,6 +1,8 @@
 import type { KeycloakClaims } from "../authentication/types.js";
+import type { BoundTenant, IdentitySurface } from "../authentication/surfaces.js";
 
 export interface SelectedIdentityContext {
+  digitUuid?: string;
   organizationId: string;
   organizationAlias: string;
   tenantId: string;
@@ -8,6 +10,12 @@ export interface SelectedIdentityContext {
 }
 
 export interface IdentitySession {
+  schemaVersion?: 2;
+  revocationGeneration?: number;
+  kcSessionId?: string;
+  phoneRef?: string;
+  createdAt?: number;
+  lastSeenAt?: number;
   claims: KeycloakClaims;
   /** OIDC client that created this session; absent on older sessions. */
   oidcClientId?: string;
@@ -17,4 +25,23 @@ export interface IdentitySession {
   refreshExpiresAt?: number;
   /** Absolute lifetime of the opaque browser session. */
   sessionExpiresAt: number;
+  /** Surface that created the session; absent means `configurator`. */
+  surface?: IdentitySurface;
+  /** Route-resolved tenant of an employee/citizen session. */
+  boundTenant?: BoundTenant;
+  /**
+   * `phone_otp`: a citizen session opened by the BFF's own OTP check (#2189).
+   * It holds no Keycloak tokens (`accessToken` is empty, no refresh token),
+   * is never refreshed, and ends at `sessionExpiresAt`.
+   */
+  authMethod?: "phone_otp";
+  /** phone_otp: when the Keycloak user was last confirmed enabled (ms). */
+  identityCheckedAt?: number;
+}
+
+/** Surface binding persisted with a session and preserved across refresh. */
+export interface SessionBinding {
+  surface?: IdentitySurface;
+  boundTenant?: BoundTenant;
+  authMethod?: "phone_otp";
 }

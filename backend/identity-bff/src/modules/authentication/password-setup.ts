@@ -3,9 +3,13 @@ import type express from "express";
 import { asyncRoute } from "../../app/async-route.js";
 import { hasTrustedWriteOrigin } from "../../app/request-security.js";
 import { config } from "../../infrastructure/config.js";
-import { getRedis } from "../../infrastructure/redis.js";
+import { withinLimit as withinRateLimit } from "../../infrastructure/rate-limit.js";
+import { errorBody } from "../../contract/error-codes.js";
+import { resolvePublicTenantRoute } from "../access-context/tenant-route.js";
+import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import {
   hasPasswordCredential,
+  IdentityAdminError,
   inspectPasswordSetupAccount,
   inspectPasswordSetupAccountById,
   sendPasswordSetupEmail,
@@ -17,7 +21,9 @@ import {
   createPasswordSetupAttempt,
   getPasswordSetupAttempt,
 } from "../sessions/session-store.js";
-import { safeIdentityReturnTo, withAuthResult } from "./redirects.js";
+import { oidcClientForSurface } from "./oidc.js";
+import { safeIdentityReturnTo, tenantBoundReturnTo, withAuthResult } from "./redirects.js";
+import { isTenantBoundSurface, parseSurface, surfaceReturnPrefix } from "./surfaces.js";
 
 const ACCEPTED = {
   message: "If an eligible account exists, a password setup email has been sent.",
@@ -40,16 +46,8 @@ function completionRedirectUri(state: string): string {
   return callback.toString();
 }
 
-async function withinLimit(bucket: string): Promise<boolean> {
-  const count = await getRedis().eval(
-    `local current = redis.call('INCR', KEYS[1])
-     if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
-     return current`,
-    1,
-    bucket,
-    config.identityPasswordSetupTtlSeconds,
-  );
-  return Number(count) <= config.identityPasswordSetupLimit;
+function withinLimit(bucket: string): Promise<boolean> {
+  return withinRateLimit(bucket, config.identityPasswordSetupLimit, config.identityPasswordSetupTtlSeconds);
 }
 
 function privateRateLimitKey(identifier: string): string {
@@ -65,6 +63,7 @@ async function processPasswordSetup(input: {
   email: string | null;
   authenticatedUserId: string | null;
   returnTo: string;
+  clientId: string;
 }): Promise<void> {
   try {
     const account = input.authenticatedUserId
@@ -92,6 +91,7 @@ async function processPasswordSetup(input: {
       userId: account.userId,
       emailVerified: account.emailVerified,
       redirectUri: completionRedirectUri(state),
+      clientId: input.clientId,
     });
     console.info("Password setup request processed", {
       outcome: "sent",
@@ -107,18 +107,52 @@ async function processPasswordSetup(input: {
 export function registerPasswordSetupRoutes(app: express.Application): void {
   app.post("/identity/v1/password/setup-requests", asyncRoute(async (request, response) => {
     if (!hasTrustedWriteOrigin(request)) {
-      return response.status(403).json({ error: "Untrusted request origin" });
+      return response.status(403).json(errorBody("UNTRUSTED_ORIGIN", "Untrusted request origin"));
+    }
+    // The surface picks the Keycloak client of the email (item 5), so the
+    // action pages use that surface's theme, and the return path.
+    const surface = parseSurface(request.body?.surface);
+    const client = surface && oidcClientForSurface(surface, "password");
+    if (!surface || !client) {
+      return response.status(400).json(errorBody("UNSUPPORTED_SURFACE", "Unsupported sign-in surface"));
+    }
+    let returnTo: string;
+    if (isTenantBoundSurface(surface)) {
+      const tenantSlug = request.body?.tenantSlug;
+      if (typeof tenantSlug !== "string" || !tenantSlug) {
+        return response.status(400).json(errorBody("INVALID_REQUEST", "tenantSlug is required"));
+      }
+      let tenant;
+      try {
+        tenant = await resolvePublicTenantRoute(tenantSlug);
+      } catch (error) {
+        if (error instanceof IdentityAdminError || error instanceof DigitUnavailableError) {
+          console.warn("Tenant route resolution failed:", error.message);
+          return response.status(503).json(errorBody("TENANT_ROUTE_UNAVAILABLE", "Tenant routes are temporarily unavailable"));
+        }
+        throw error;
+      }
+      if (!tenant) return response.status(404).json(errorBody("TENANT_ROUTE_NOT_FOUND", "Tenant route is not available"));
+      const prefix = surfaceReturnPrefix(surface, tenant.urlSlug);
+      const requested = request.body?.returnTo === undefined
+        ? prefix
+        : tenantBoundReturnTo(request.body.returnTo, prefix);
+      if (!requested) {
+        return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
+      }
+      returnTo = requested;
+    } else {
+      const requestedReturnTo = request.body?.returnTo === undefined
+        ? null
+        : safeIdentityReturnTo(request.body.returnTo);
+      if (request.body?.returnTo !== undefined && !requestedReturnTo) {
+        return response.status(400).json(errorBody("UNSUPPORTED_RETURN_TO", "Unsupported return destination"));
+      }
+      returnTo = requestedReturnTo || config.identityPostLoginRedirect;
     }
 
-    const signedIn = await currentSession(request.headers.cookie);
+    const signedIn = await currentSession(request.headers.cookie, surface);
     const email = normalizedEmail(request.body?.email);
-    const requestedReturnTo = request.body?.returnTo === undefined
-      ? null
-      : safeIdentityReturnTo(request.body.returnTo);
-    if (request.body?.returnTo !== undefined && !requestedReturnTo) {
-      return response.status(400).json({ error: "Unsupported return destination" });
-    }
-    const returnTo = requestedReturnTo || config.identityPostLoginRedirect;
     if (!email && !signedIn) return response.status(202).json(ACCEPTED);
 
     const prefix = `${config.cachePrefix}:identity:password-setup-limit`;
@@ -140,6 +174,7 @@ export function registerPasswordSetupRoutes(app: express.Application): void {
       email,
       authenticatedUserId: signedIn?.session.claims.sub || null,
       returnTo,
+      clientId: client.clientId,
     }));
   }));
 

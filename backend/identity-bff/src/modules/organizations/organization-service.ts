@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+import { getRedis } from "../../infrastructure/redis.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 
@@ -12,6 +14,8 @@ interface OrganizationRepresentation {
 interface GroupRepresentation {
   id: string;
   name: string;
+  attributes?: Record<string, string[]>;
+  subGroups?: GroupRepresentation[];
 }
 
 interface RoleRepresentation {
@@ -63,19 +67,192 @@ export async function listManagedIdentityAccounts(): Promise<Array<{
     : []);
 }
 
+/**
+ * Keycloak's user PUT replaces the whole attribute map, so every
+ * read-modify-write of a user's attributes runs under one Redis lease per
+ * user, across replicas. Otherwise a managed-tenant write and a citizen
+ * registration write for the same person can erase each other.
+ */
+async function withUserAttributeLease<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+  const key = `${config.cachePrefix}:identity:user-attributes-lease:${userId}`;
+  const value = randomUUID();
+  const deadline = Date.now() + 5_000;
+  while (await getRedis().set(key, value, "EX", 30, "NX") !== "OK") {
+    if (Date.now() >= deadline) throw new IdentityAdminError("The Keycloak user is busy; retry", 503);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  try {
+    return await operation();
+  } finally {
+    await getRedis().eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1, key, value,
+    );
+  }
+}
+
 /** Durable inventory used to deactivate accounts after Organization removal. */
-export async function recordManagedTenant(userId: string, tenantId: string): Promise<void> {
+export function recordManagedTenant(userId: string, tenantId: string): Promise<void> {
+  return withUserAttributeLease(userId, () => writeManagedTenant(userId, tenantId));
+}
+
+async function writeManagedTenant(userId: string, tenantId: string): Promise<void> {
   const response = await request(`/users/${encodeURIComponent(userId)}`);
   const user = await response.json() as UserRepresentation;
   const tenants = [...new Set([...(user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || []), tenantId])].sort();
   if (tenants.length === (user.attributes?.[MANAGED_TENANTS_ATTRIBUTE] || []).length) return;
+  // Profile fields and attributes only, as in `writeCitizenRegistrationValues`:
+  // replaying the stale `enabled` could undo an admin disable.
   await request(`/users/${encodeURIComponent(userId)}`, {
     method: "PUT",
     body: JSON.stringify({
-      ...user,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
       attributes: { ...user.attributes, [MANAGED_TENANTS_ATTRIBUTE]: tenants },
     }),
   });
+}
+
+const CITIZEN_REGISTRATIONS_ATTRIBUTE = "digit.citizenRegistrations";
+
+/** Raw `digit.citizenRegistrations` values of one Keycloak user. */
+export async function citizenRegistrationValues(userId: string): Promise<string[]> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  return [...(user.attributes?.[CITIZEN_REGISTRATIONS_ATTRIBUTE] || [])];
+}
+
+/**
+ * Read-modify-write of `digit.citizenRegistrations`, the durable citizen
+ * registration record, alongside `digit.managedTenants` on the same user.
+ * `update` returns the new values, or null to leave the user untouched.
+ */
+export function updateCitizenRegistrationValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  return withUserAttributeLease(userId, () => writeCitizenRegistrationValues(userId, update));
+}
+
+async function writeCitizenRegistrationValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  return updateUserAttributeValues(userId, CITIZEN_REGISTRATIONS_ATTRIBUTE, update);
+}
+
+const ACCOUNT_LINKS_ATTRIBUTE = "digit.accountLinks";
+const ACCOUNT_LINK_BLOCKS_ATTRIBUTE = "digit.accountLinkBlocks";
+
+/**
+ * Existing DIGIT accounts linked to a Keycloak user (#2167), one value per
+ * link: `<EMPLOYEE|CITIZEN>|<tenantId>|<digitUuid>`. Admin-edit only, like
+ * `digit.citizenRegistrations`. Blocks record links an admin undid and that
+ * must not re-form automatically.
+ */
+export async function accountLinkValues(userId: string): Promise<{ links: string[]; blocks: string[] }> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  return {
+    links: [...(user.attributes?.[ACCOUNT_LINKS_ATTRIBUTE] || [])],
+    blocks: [...(user.attributes?.[ACCOUNT_LINK_BLOCKS_ATTRIBUTE] || [])],
+  };
+}
+
+export function updateAccountLinkValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINKS_ATTRIBUTE, update));
+}
+
+export function updateAccountLinkBlockValues(
+  userId: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINK_BLOCKS_ATTRIBUTE, update));
+}
+
+/** Keycloak users holding exactly this link value (for one-owner checks). */
+export async function usersWithAccountLink(value: string): Promise<string[]> {
+  const query = new URLSearchParams({ q: `${ACCOUNT_LINKS_ATTRIBUTE}:${value}`, briefRepresentation: "false", max: "5" });
+  const response = await request(`/users?${query}`);
+  return (await response.json() as UserRepresentation[])
+    .filter((user) => user.id && user.attributes?.[ACCOUNT_LINKS_ATTRIBUTE]?.includes(value))
+    .map((user) => user.id!);
+}
+
+/** An enabled Keycloak user, by id or by exact email. */
+export async function findEnabledIdentityUser(input: { id?: string; email?: string }): Promise<string | null> {
+  let user: UserRepresentation | null = null;
+  if (input.id) {
+    const response = await request(`/users/${encodeURIComponent(input.id)}`, {}, [200, 404]);
+    user = response.status === 404 ? null : await response.json() as UserRepresentation;
+  } else if (input.email) {
+    user = await findIdentityUserByEmail(input.email.trim().toLowerCase());
+  }
+  return user?.id && user.enabled !== false ? user.id : null;
+}
+
+interface UserProfileAttribute {
+  name: string;
+  permissions?: { view?: string[]; edit?: string[] };
+}
+
+let phoneTrustCache: { value: boolean; expiresAt: number } | null = null;
+
+/**
+ * Whether a Keycloak-held phone can be trusted as proof: users must not be
+ * able to edit `phoneNumber` or `phoneNumberVerified` themselves. Declared
+ * profile attributes must not grant `user` edit; undeclared ones are only
+ * safe when the realm's unmanagedAttributePolicy keeps users from editing.
+ */
+export async function keycloakPhoneIsAdminControlled(): Promise<boolean> {
+  if (phoneTrustCache && phoneTrustCache.expiresAt > Date.now()) return phoneTrustCache.value;
+  const response = await request("/users/profile");
+  const profile = await response.json() as {
+    attributes?: UserProfileAttribute[];
+    unmanagedAttributePolicy?: string;
+  };
+  const value = [PHONE_ATTRIBUTE, PHONE_VERIFIED_ATTRIBUTE].every((name) => {
+    const declared = profile.attributes?.find((attribute) => attribute.name === name);
+    if (declared) return !(declared.permissions?.edit || []).includes("user");
+    return profile.unmanagedAttributePolicy !== "ENABLED";
+  });
+  phoneTrustCache = { value, expiresAt: Date.now() + 60_000 };
+  return value;
+}
+
+export function resetPhoneTrustCache(): void {
+  phoneTrustCache = null;
+}
+
+async function updateUserAttributeValues(
+  userId: string,
+  attributeName: string,
+  update: (values: string[]) => string[] | null,
+): Promise<string[]> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`);
+  const user = await response.json() as UserRepresentation;
+  const current = [...(user.attributes?.[attributeName] || [])];
+  const next = update(current);
+  if (!next) return current;
+  // Send only the user-profile fields, never the stale `enabled` and friends:
+  // an admin disabling the user between the GET and this PUT must stick.
+  // Keycloak 26 leaves absent top-level fields alone, but a PUT that carries
+  // `attributes` treats email/firstName/lastName as profile attributes and
+  // clears them when absent, and replaces the whole attribute map.
+  await request(`/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      attributes: { ...user.attributes, [attributeName]: next },
+    }),
+  });
+  return next;
 }
 
 export interface IdentityUserProfile {
@@ -168,7 +345,7 @@ function realmPath(path: string): string {
   return `/admin/realms/${encodeURIComponent(config.keycloakOrganizationRealm)}${path}`;
 }
 
-async function request(
+export async function request(
   path: string,
   init: RequestInit = {},
   accepted = [200, 204],
@@ -240,7 +417,7 @@ export async function organizationIdentifierAvailable(type: string, value: strin
   const normalized = type === "ACCOUNT_CODE" ? value.trim().toUpperCase()
     : type === "ORGANIZATION_NAME" ? normalizedName(value)
       : value.trim().toLowerCase();
-  return !organizations.some((organization) => {
+  const organizationCollision = organizations.some((organization) => {
     if (type === "ORGANIZATION_NAME") return normalizedName(organization.name || "") === normalized;
     if (type === "ORGANIZATION_ALIAS") return organization.alias?.toLowerCase() === normalized;
     if (type === "URL_SLUG") {
@@ -251,6 +428,18 @@ export async function organizationIdentifierAvailable(type: string, value: strin
     if (type === "TENANT_ID") return mappedTenant(organization)?.toLowerCase() === normalized;
     throw new IdentityAdminError("Unsupported identifier type", 400);
   });
+  if (organizationCollision) return false;
+  if (type === "URL_SLUG") {
+    return (await organizationGroupCandidatesForAttribute(
+      organizations, "digit.urlSlug", value.trim().toLowerCase(),
+    )).length === 0;
+  }
+  if (type === "TENANT_ID") {
+    return (await organizationGroupCandidatesForAttribute(
+      organizations, "digit.tenantId", value.trim(),
+    )).length === 0;
+  }
+  return true;
 }
 
 async function organizationsForTenant(
@@ -269,20 +458,35 @@ async function organizationsForTenant(
 export interface OrganizationMapping {
   organizationId: string;
   alias: string;
+  urlSlug: string;
   name: string;
   tenantId: string;
+  rootTenantId: string;
+  parentTenantId: null;
+  fallbackTenantIds: string[];
+  mappingType: "organization";
 }
 
 function asMapping(organization: OrganizationRepresentation): OrganizationMapping | null {
   const tenantId = mappedTenant(organization);
-  if (!organization.id || !organization.alias || organization.enabled === false || !tenantId) {
+  const lifecycle = attribute(organization, "digit.lifecycle");
+  if (!organization.id || !organization.alias || organization.enabled === false || !tenantId ||
+      (lifecycle !== null && lifecycle !== "ACTIVE")) {
     return null;
   }
   return {
     organizationId: organization.id,
     alias: organization.alias,
+    // New Organizations persist the independently reserved public URL slug.
+    // Alias is the migration fallback for Organizations created before that
+    // attribute existed; neither value is treated as a DIGIT tenant id.
+    urlSlug: attribute(organization, "digit.urlSlug") || organization.alias,
     name: organization.name || organization.alias,
     tenantId,
+    rootTenantId: tenantId,
+    parentTenantId: null,
+    fallbackTenantIds: organization.attributes?.["digit.fallbackTenantIds"] || [],
+    mappingType: "organization",
   };
 }
 
@@ -299,20 +503,6 @@ export async function readOrganizationMapping(
   }
 }
 
-/**
- * The single enabled Organization mapped to `tenantId`, without listing the
- * realm. Backs the subject-scoped login path. (Dhruv review, #2088.)
- */
-export async function readOrganizationMappingForTenant(
-  tenantId: string,
-): Promise<OrganizationMapping | null> {
-  const matches = await organizationsForTenant(tenantId);
-  if (matches.length > 1) {
-    throw new IdentityAdminError("Multiple Organizations map to this tenant", 409);
-  }
-  return matches[0] ? asMapping(matches[0]) : null;
-}
-
 export async function listOrganizationMappings(): Promise<OrganizationMapping[]> {
   const organizations = await paged<OrganizationRepresentation>(
     "/organizations?briefRepresentation=false",
@@ -321,6 +511,290 @@ export async function listOrganizationMappings(): Promise<OrganizationMapping[]>
     const mapping = asMapping(organization);
     return mapping ? [mapping] : [];
   });
+}
+
+export interface OrganizationGroupMapping {
+  organizationId: string;
+  alias: string;
+  groupId: string;
+  urlSlug: string;
+  name: string;
+  tenantId: string;
+  rootTenantId: string;
+  parentTenantId: string;
+  fallbackTenantIds: string[];
+  mappingType: "organization-group";
+}
+
+export type TenantMapping = OrganizationMapping | OrganizationGroupMapping;
+
+/**
+ * The tenant directory: every usable mapping, plus the tenant ids and slugs
+ * that more than one mapping claimed (those mappings are left out).
+ */
+export interface TenantDirectory {
+  mappings: TenantMapping[];
+  collidedTenantIds: Set<string>;
+  collidedUrlSlugs: Set<string>;
+}
+
+const TENANT_MAPPING_TTL_MS = 60_000;
+let tenantMappingCache: { value: TenantDirectory; expiresAt: number } | null = null;
+let tenantMappingLoad: Promise<TenantDirectory> | null = null;
+let tenantMappingGeneration = 0;
+
+export function clearTenantMappingCache(): void {
+  tenantMappingGeneration += 1;
+  tenantMappingCache = null;
+  tenantMappingLoad = null;
+}
+
+function groupAttribute(group: GroupRepresentation, name: string): string | null {
+  const values = group.attributes?.[name];
+  return Array.isArray(values) && values.length === 1 && values[0]?.trim()
+    ? values[0].trim()
+    : null;
+}
+
+function asGroupMapping(
+  group: GroupRepresentation,
+  organization: OrganizationMapping,
+): OrganizationGroupMapping | null {
+  const organizationId = groupAttribute(group, "digit.organizationId");
+  const tenantId = groupAttribute(group, "digit.tenantId");
+  const rootTenantId = groupAttribute(group, "digit.rootTenantId");
+  const parentTenantId = groupAttribute(group, "digit.parentTenantId");
+  const urlSlug = groupAttribute(group, "digit.urlSlug");
+  if (!organizationId || organizationId !== organization.organizationId ||
+      !tenantId || !rootTenantId || rootTenantId !== organization.tenantId ||
+      !parentTenantId || parentTenantId === tenantId || !urlSlug) {
+    return null;
+  }
+  return {
+    organizationId,
+    alias: organization.alias,
+    groupId: group.id,
+    urlSlug,
+    name: groupAttribute(group, "digit.displayName") || group.name,
+    tenantId,
+    rootTenantId,
+    parentTenantId,
+    fallbackTenantIds: group.attributes?.["digit.fallbackTenantIds"] || [],
+    mappingType: "organization-group",
+  };
+}
+
+async function readOrganizationGroup(
+  organizationId: string,
+  groupId: string,
+): Promise<GroupRepresentation | null> {
+  try {
+    const response = await request(
+      `/organizations/${encodeURIComponent(organizationId)}` +
+      `/groups/${encodeURIComponent(groupId)}?briefRepresentation=false`,
+    );
+    return await response.json() as GroupRepresentation;
+  } catch (error) {
+    if (error instanceof IdentityAdminError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+async function organizationGroupsForAttribute(
+  organizationId: string,
+  name: "digit.urlSlug" | "digit.tenantId",
+  value: string,
+): Promise<GroupRepresentation[]> {
+  const query = new URLSearchParams({
+    q: `${name}:${value}`,
+    exact: "true",
+    briefRepresentation: "false",
+    max: "20",
+  });
+  const response = await request(
+    `/organizations/${encodeURIComponent(organizationId)}/groups?${query}`,
+  );
+  return await response.json() as GroupRepresentation[];
+}
+
+interface OrganizationGroupCandidate {
+  organization: OrganizationMapping;
+  group: GroupRepresentation;
+}
+
+async function organizationGroupCandidatesForAttribute(
+  organizations: OrganizationRepresentation[],
+  name: "digit.urlSlug" | "digit.tenantId",
+  value: string,
+): Promise<OrganizationGroupCandidate[]> {
+  const candidates = await Promise.all(organizations.flatMap((representation) => {
+    const organization = asMapping(representation);
+    return organization ? [organizationGroupsForAttribute(
+      organization.organizationId, name, value,
+    ).then((groups) => groups
+      // Never trust the server-side `q` filter alone: re-check the value.
+      .filter((group) => groupAttribute(group, name)?.toLowerCase() === value.toLowerCase())
+      .map((group) => ({ organization, group })))] : [];
+  }));
+  return candidates.flat();
+}
+
+export async function readTenantMappingForUrlSlug(urlSlug: string): Promise<TenantMapping | null> {
+  const normalized = urlSlug.trim().toLowerCase();
+  const directory = await cachedTenantMappings();
+  return directory.mappings.find((mapping) => mapping.urlSlug.toLowerCase() === normalized) ||
+    await uncachedOrganizationMapping(directory, "digit.urlSlug", normalized);
+}
+
+export async function readTenantMappingForTenant(tenantId: string): Promise<TenantMapping | null> {
+  const directory = await cachedTenantMappings();
+  return directory.mappings.find((mapping) => mapping.tenantId === tenantId) ||
+    await uncachedOrganizationMapping(directory, "digit.rootTenantId", tenantId);
+}
+
+/**
+ * A directory miss may be an Organization created on another replica since
+ * this replica's directory was cached, so it is looked up live by attribute
+ * (one Admin call). Signup creates Organizations, never tenant groups, so only
+ * Organizations are looked up. A slug or tenant id that collided in the
+ * directory stays unavailable, and a live hit that clashes with a cached
+ * mapping is refused.
+ */
+async function uncachedOrganizationMapping(
+  directory: TenantDirectory,
+  name: "digit.urlSlug" | "digit.rootTenantId",
+  value: string,
+): Promise<OrganizationMapping | null> {
+  if (name === "digit.urlSlug" ? directory.collidedUrlSlugs.has(value.toLowerCase())
+    : directory.collidedTenantIds.has(value.toLowerCase())) {
+    return null;
+  }
+  const query = new URLSearchParams({ q: `${name}:${value}`, briefRepresentation: "false", max: "2" });
+  const response = await request(`/organizations?${query}`);
+  const found = (await response.json() as OrganizationRepresentation[])
+    .flatMap((organization) => {
+      const mapping = asMapping(organization);
+      return mapping ? [mapping] : [];
+    })
+    .filter((mapping) => name === "digit.urlSlug"
+      ? mapping.urlSlug.toLowerCase() === value.toLowerCase()
+      : mapping.tenantId === value);
+  if (found.length !== 1) return null;
+  const [mapping] = found;
+  const clashes = directory.mappings.some((cached) =>
+    cached.tenantId.toLowerCase() === mapping.tenantId.toLowerCase() ||
+    cached.urlSlug.toLowerCase() === mapping.urlSlug.toLowerCase());
+  if (clashes) return null;
+  // Pick the new Organization up in the directory at the next read.
+  clearTenantMappingCache();
+  return mapping;
+}
+
+function flattenGroups(groups: GroupRepresentation[]): GroupRepresentation[] {
+  return groups.flatMap((group) => [group, ...flattenGroups(group.subGroups || [])]);
+}
+
+export async function listTenantMappings(): Promise<TenantMapping[]> {
+  return (await listTenantDirectory()).mappings;
+}
+
+export async function listTenantDirectory(): Promise<TenantDirectory> {
+  const organizations = await listOrganizationMappings();
+  const groupMappings = (await Promise.all(organizations.map(async (organization) => {
+    const query = new URLSearchParams({
+      briefRepresentation: "false",
+      populateHierarchy: "true",
+    });
+    const groups = await paged<GroupRepresentation>(
+      `/organizations/${encodeURIComponent(organization.organizationId)}/groups?${query}`,
+    );
+    return flattenGroups(groups).flatMap((group) => {
+      const mapping = asGroupMapping(group, organization);
+      return mapping ? [mapping] : [];
+    });
+  }))).flat();
+  return withoutCollisions([...organizations, ...groupMappings]);
+}
+
+/**
+ * A tenant id or URL slug claimed by more than one mapping is ambiguous, so
+ * every mapping involved is dropped (its routes answer "not available") and
+ * logged. The rest of the directory keeps working: one bad record must never
+ * take sign-in down for every tenant. The dropped tenant ids and slugs are
+ * reported so reconciliation can leave those tenants alone rather than read
+ * them as "no members".
+ */
+function withoutCollisions(mappings: TenantMapping[]): TenantDirectory {
+  const count = (key: (mapping: TenantMapping) => string) => {
+    const counts = new Map<string, number>();
+    for (const mapping of mappings) counts.set(key(mapping), (counts.get(key(mapping)) || 0) + 1);
+    return counts;
+  };
+  const tenantCounts = count((mapping) => mapping.tenantId.toLowerCase());
+  const slugCounts = count((mapping) => mapping.urlSlug.toLowerCase());
+  const kept: TenantMapping[] = [];
+  const collidedTenantIds = new Set<string>();
+  const collidedUrlSlugs = new Set<string>();
+  for (const mapping of mappings) {
+    if (tenantCounts.get(mapping.tenantId.toLowerCase())! > 1 || slugCounts.get(mapping.urlSlug.toLowerCase())! > 1) {
+      collidedTenantIds.add(mapping.tenantId.toLowerCase());
+      collidedUrlSlugs.add(mapping.urlSlug.toLowerCase());
+      console.warn("Tenant directory: dropping a colliding mapping", JSON.stringify({
+        organizationId: mapping.organizationId,
+        ...(mapping.mappingType === "organization-group" && { groupId: mapping.groupId }),
+        tenantId: mapping.tenantId,
+        urlSlug: mapping.urlSlug,
+      }));
+      continue;
+    }
+    kept.push(mapping);
+  }
+  return { mappings: kept, collidedTenantIds, collidedUrlSlugs };
+}
+
+/**
+ * Re-reads a directory mapping from Keycloak before it authorizes anything:
+ * the directory is cached per process for up to a minute, but disabling or
+ * unmapping an Organization (or group) must take effect at the next sign-in.
+ */
+export async function liveTenantMapping(mapping: TenantMapping): Promise<TenantMapping | null> {
+  // The Organization and its group are independent reads; fetch them together.
+  const [organization, group] = await Promise.all([
+    readOrganizationMapping(mapping.organizationId),
+    mapping.mappingType === "organization-group"
+      ? readOrganizationGroup(mapping.organizationId, mapping.groupId)
+      : Promise.resolve(null),
+  ]);
+  if (!organization) return null;
+  if (mapping.mappingType === "organization") {
+    return organization.tenantId === mapping.tenantId && organization.urlSlug === mapping.urlSlug
+      ? organization : null;
+  }
+  const live = group ? asGroupMapping(group, organization) : null;
+  return live && live.tenantId === mapping.tenantId && live.urlSlug === mapping.urlSlug ? live : null;
+}
+
+async function cachedTenantMappings(): Promise<TenantDirectory> {
+  if (tenantMappingCache && tenantMappingCache.expiresAt > Date.now()) {
+    return tenantMappingCache.value;
+  }
+  if (tenantMappingLoad) return tenantMappingLoad;
+
+  const generation = tenantMappingGeneration;
+  const load = listTenantDirectory().then((value) => {
+    // A control-plane write may invalidate the directory while this scan is
+    // still in flight. Never let that older result repopulate the cache.
+    if (generation === tenantMappingGeneration) {
+      tenantMappingCache = { value, expiresAt: Date.now() + TENANT_MAPPING_TTL_MS };
+    }
+    return value;
+  });
+  tenantMappingLoad = load;
+  try {
+    return await load;
+  } finally {
+    if (tenantMappingLoad === load) tenantMappingLoad = null;
+  }
 }
 
 /**
@@ -339,6 +813,21 @@ export async function ensureOrganization(input: {
   urlSlug?: string;
   adoptExisting: boolean;
 }): Promise<{ id: string; tenantId: string; alias: string; name: string }> {
+  const organizations = await paged<OrganizationRepresentation>(
+    "/organizations?briefRepresentation=false",
+  );
+  const [tenantGroups, slugGroups] = await Promise.all([
+    organizationGroupCandidatesForAttribute(organizations, "digit.tenantId", input.tenantId),
+    organizationGroupCandidatesForAttribute(
+      organizations, "digit.urlSlug", input.urlSlug || input.alias,
+    ),
+  ]);
+  if (tenantGroups.length || slugGroups.length) {
+    throw new IdentityAdminError(
+      "The root tenant id or URL slug is already reserved by an Organization group",
+      409,
+    );
+  }
   let matches = await organizationsForTenant(input.tenantId);
   if (matches.length > 1) {
     throw new IdentityAdminError("Multiple Organizations map to this tenant", 409);
@@ -410,6 +899,7 @@ export async function ensureOrganization(input: {
       }),
     });
   }
+  clearTenantMappingCache();
   return {
     id: organization.id,
     tenantId: input.tenantId,
@@ -450,6 +940,15 @@ export async function applyVerifiedSignupIdentityProfile(input: {
   firstName: string;
   lastName: string;
 }): Promise<boolean> {
+  return withUserAttributeLease(input.userId, () => writeVerifiedSignupIdentityProfile(input));
+}
+
+async function writeVerifiedSignupIdentityProfile(input: {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<boolean> {
   const response = await request(`/users/${encodeURIComponent(input.userId)}`);
   const user = await response.json() as UserRepresentation;
   if (user.id !== input.userId || user.enabled === false ||
@@ -466,7 +965,7 @@ export async function applyVerifiedSignupIdentityProfile(input: {
   await request(`/users/${encodeURIComponent(input.userId)}`, {
     method: "PUT",
     body: JSON.stringify({
-      ...user,
+      email: user.email,
       firstName: input.firstName,
       lastName: input.lastName,
       attributes,
@@ -502,13 +1001,20 @@ export async function ensureMagicLinkSignupIdentity(input: {
     }
     if (managedDraft &&
         (existing.firstName !== input.firstName || existing.lastName !== input.lastName)) {
-      await request(`/users/${encodeURIComponent(existing.id)}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          ...existing,
-          firstName: input.firstName,
-          lastName: input.lastName,
-        }),
+      const userId = existing.id;
+      // Under the user's attribute lease, with a fresh read, sending only the
+      // profile and attributes: never the stale `enabled`.
+      await withUserAttributeLease(userId, async () => {
+        const current = await (await request(`/users/${encodeURIComponent(userId)}`)).json() as UserRepresentation;
+        await request(`/users/${encodeURIComponent(userId)}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            email: current.email,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            attributes: current.attributes,
+          }),
+        });
       });
     }
     return { id: existing.id, created: false };
@@ -578,6 +1084,120 @@ async function findIdentityUserByEmail(email: string): Promise<UserRepresentatio
   return matches[0] || null;
 }
 
+const PHONE_ATTRIBUTE = "phoneNumber";
+const PHONE_VERIFIED_ATTRIBUTE = "phoneNumberVerified";
+const BFF_PHONE_USER_ATTRIBUTE = "digit.identityBffPhoneOtp";
+
+export interface PhoneIdentityUser {
+  id: string;
+  name: string;
+  created: boolean;
+}
+
+function verifiedPhoneOwner(user: UserRepresentation, phoneNumber: string): boolean {
+  return user.attributes?.[PHONE_ATTRIBUTE]?.includes(phoneNumber) === true &&
+    user.attributes?.[PHONE_VERIFIED_ATTRIBUTE]?.includes("true") === true;
+}
+
+function phoneIdentityUser(user: UserRepresentation, created: boolean): PhoneIdentityUser {
+  if (!user.id || user.enabled === false) {
+    throw new IdentityAdminError("The Keycloak user for this phone number is disabled", 403);
+  }
+  const name = [user.firstName, user.lastName].map((part) => part?.trim()).filter(Boolean).join(" ");
+  return { id: user.id, name, created };
+}
+
+/**
+ * Every user whose VERIFIED phone is this number. The query already asks for
+ * verified owners only, and all pages are read, so unverified holders of the
+ * number can never hide the real owner behind a result limit.
+ */
+export async function findVerifiedPhoneUsers(phoneNumber: string): Promise<UserRepresentation[]> {
+  const query = new URLSearchParams({
+    q: `${PHONE_ATTRIBUTE}:${phoneNumber} ${PHONE_VERIFIED_ATTRIBUTE}:true`,
+    briefRepresentation: "false",
+  });
+  return (await paged<UserRepresentation>(`/users?${query}`))
+    .filter((user) => verifiedPhoneOwner(user, phoneNumber));
+}
+
+/**
+ * False when the Keycloak user is disabled, no longer exists, or no longer
+ * holds `phoneNumber` as its verified phone (removed, unverified or moved to
+ * another person).
+ */
+export async function phoneIdentityStillValid(userId: string, phoneNumber: string): Promise<boolean> {
+  const response = await request(`/users/${encodeURIComponent(userId)}`, {}, [200, 404]);
+  if (response.status === 404) return false;
+  const user = await response.json() as UserRepresentation;
+  return user.enabled !== false && verifiedPhoneOwner(user, phoneNumber);
+}
+
+/**
+ * The Keycloak user who owns a phone number the caller has just proved with a
+ * citizen OTP (#2189): the one user whose VERIFIED phone matches, or a new
+ * user created with that number marked verified. An unverified match is never
+ * taken over. Two verified owners, or a disabled owner, fail closed.
+ * Caller holds a person lease followed by the normalized phone lock.
+ */
+export async function ensurePhoneIdentityUser(phoneNumber: string): Promise<PhoneIdentityUser> {
+  const owners = await findVerifiedPhoneUsers(phoneNumber);
+  if (owners.length > 1) {
+    throw new IdentityAdminError("Multiple Keycloak users have verified this phone number", 409);
+  }
+  if (owners[0]) return phoneIdentityUser(owners[0], false);
+
+  const user = await createPhoneIdentityUser(`phone-${randomUUID()}`, phoneNumber);
+  if (!user) throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+  return user;
+}
+
+/**
+ * Creates the phone user under `username`, or returns whoever won a race to
+ * create it for the same number. Null when the username belongs to someone
+ * who no longer owns the number.
+ */
+async function createPhoneIdentityUser(
+  username: string,
+  phoneNumber: string,
+): Promise<PhoneIdentityUser | null> {
+  const response = await request("/users", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      enabled: true,
+      attributes: {
+        [PHONE_ATTRIBUTE]: [phoneNumber],
+        [PHONE_VERIFIED_ATTRIBUTE]: ["true"],
+        [BFF_PHONE_USER_ATTRIBUTE]: ["true"],
+      },
+    }),
+  }, [201, 409]);
+  const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+  if (response.status === 201 && id) {
+    // Keycloak drops unmanaged attributes silently unless the realm keeps
+    // them. A user without its verified phone would never be found again and
+    // would block every later sign-in for the number, so it is removed and
+    // the misconfiguration is reported instead.
+    const created = await (await request(`/users/${encodeURIComponent(id)}`)).json() as UserRepresentation;
+    if (!verifiedPhoneOwner(created, phoneNumber)) {
+      await request(`/users/${encodeURIComponent(id)}`, { method: "DELETE" }, [204, 404]);
+      console.error(
+        "Keycloak did not store phoneNumber/phoneNumberVerified on a new user. " +
+        "Set the realm's unmanagedAttributePolicy to ADMIN_EDIT (#2193).",
+      );
+      throw new IdentityAdminError("Keycloak did not store the phone attributes", 503);
+    }
+    return { id, name: "", created: true };
+  }
+
+  const query = new URLSearchParams({ username, exact: "true", briefRepresentation: "false" });
+  const holder = (await (await request(`/users?${query}`)).json() as UserRepresentation[])
+    .find((user) => user.username === username);
+  if (!holder) throw new IdentityAdminError("Keycloak did not identify the phone user", 409);
+  return verifiedPhoneOwner(holder, phoneNumber) ? phoneIdentityUser(holder, false) : null;
+}
+
 export interface PasswordSetupInspection {
   userId: string;
   hasPassword: boolean;
@@ -630,9 +1250,11 @@ export async function sendPasswordSetupEmail(input: {
   userId: string;
   emailVerified: boolean;
   redirectUri: string;
+  /** The surface's Keycloak client: its theme renders the action pages (item 5). */
+  clientId?: string;
 }): Promise<void> {
   const query = new URLSearchParams({
-    client_id: config.keycloakBffClientId,
+    client_id: input.clientId || config.keycloakBffClientId,
     lifespan: String(config.identityPasswordSetupTtlSeconds),
     redirect_uri: input.redirectUri,
   });
@@ -700,6 +1322,27 @@ export async function isOrganizationMember(organizationId: string, userId: strin
   }
 }
 
+export async function isOrganizationGroupMember(
+  organizationId: string,
+  groupId: string,
+  userId: string,
+): Promise<boolean> {
+  // Keycloak answers 404 here for a non-member, so this one call also covers
+  // the Organization membership check.
+  let response: Response;
+  try {
+    response = await request(
+      `/organizations/${encodeURIComponent(organizationId)}` +
+      `/members/${encodeURIComponent(userId)}/groups?briefRepresentation=true`,
+    );
+  } catch (error) {
+    if (error instanceof IdentityAdminError && error.status === 404) return false;
+    throw error;
+  }
+  const groups = await response.json() as GroupRepresentation[];
+  return groups.some((group) => group.id === groupId);
+}
+
 export async function ensureOrganizationMembership(input: {
   organizationId: string;
   userId: string;
@@ -733,6 +1376,100 @@ async function ensureOrganizationGroup(
   group = groups.find((candidate) => candidate.name === name);
   if (!group) throw new IdentityAdminError("Keycloak did not create the Organization group");
   return group;
+}
+
+export async function ensureOrganizationTenantGroup(input: {
+  organizationId: string;
+  tenantId: string;
+  urlSlug: string;
+  name: string;
+  parentTenantId: string;
+  fallbackTenantIds: string[];
+}): Promise<OrganizationGroupMapping> {
+  const organization = await readOrganizationMapping(input.organizationId);
+  if (!organization) {
+    throw new IdentityAdminError("Organization is not mapped to a DIGIT root tenant", 404);
+  }
+  if (input.tenantId === organization.tenantId || input.tenantId === input.parentTenantId) {
+    throw new IdentityAdminError("Subtenant mapping must name a distinct tenant and parent", 400);
+  }
+  const [tenantCollision, slugCollision] = await Promise.all([
+    readTenantMappingForTenant(input.tenantId),
+    readTenantMappingForUrlSlug(input.urlSlug),
+  ]);
+  const sameMapping = (mapping: TenantMapping | null) =>
+    mapping?.mappingType === "organization-group" &&
+    mapping.organizationId === input.organizationId &&
+    mapping.tenantId === input.tenantId;
+  if ((tenantCollision && !sameMapping(tenantCollision)) ||
+      (slugCollision && !sameMapping(slugCollision))) {
+    throw new IdentityAdminError("Subtenant tenantId or URL slug is already mapped", 409);
+  }
+  const organizations = await paged<OrganizationRepresentation>(
+    "/organizations?briefRepresentation=false",
+  );
+  const [tenantGroups, slugGroups] = await Promise.all([
+    organizationGroupCandidatesForAttribute(organizations, "digit.tenantId", input.tenantId),
+    organizationGroupCandidatesForAttribute(organizations, "digit.urlSlug", input.urlSlug),
+  ]);
+  const existingGroupId = tenantCollision?.mappingType === "organization-group"
+    ? tenantCollision.groupId
+    : slugCollision?.mappingType === "organization-group"
+      ? slugCollision.groupId
+      : null;
+  if ([...tenantGroups, ...slugGroups].some(({ group }) => group.id !== existingGroupId)) {
+    throw new IdentityAdminError(
+      "Subtenant tenantId or URL slug is already present on another group",
+      409,
+    );
+  }
+
+  const groupName = `digit-tenant--${input.tenantId}`;
+  const base = `/organizations/${encodeURIComponent(input.organizationId)}/groups`;
+  const query = new URLSearchParams({
+    search: groupName,
+    exact: "true",
+    briefRepresentation: "false",
+    max: "20",
+  });
+  let response = await request(`${base}?${query}`);
+  const matches = await response.json() as GroupRepresentation[];
+  if (matches.length > 1) {
+    throw new IdentityAdminError("Multiple Organization groups use the subtenant record name", 409);
+  }
+  let group = matches[0];
+  if (group && !sameMapping(asGroupMapping(group, organization))) {
+    throw new IdentityAdminError("The subtenant Organization group name is already in use", 409);
+  }
+
+  const attributes = {
+    "digit.organizationId": [input.organizationId],
+    "digit.tenantId": [input.tenantId],
+    "digit.rootTenantId": [organization.tenantId],
+    "digit.parentTenantId": [input.parentTenantId],
+    "digit.urlSlug": [input.urlSlug],
+    "digit.displayName": [input.name],
+    "digit.fallbackTenantIds": [...new Set(input.fallbackTenantIds)],
+  };
+  if (!group) {
+    response = await request(base, {
+      method: "POST",
+      body: JSON.stringify({ name: groupName, attributes }),
+    }, [201]);
+    const id = response.headers.get("location")?.split("/").filter(Boolean).pop();
+    if (!id) throw new IdentityAdminError("Keycloak did not return the subtenant group id");
+    group = { id, name: groupName, attributes };
+  } else {
+    await request(`${base}/${encodeURIComponent(group.id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...group, name: groupName, attributes }),
+    });
+    group = { ...group, name: groupName, attributes };
+  }
+  const mapping = asGroupMapping(group, organization);
+  if (!mapping) throw new IdentityAdminError("Keycloak did not persist the subtenant mapping");
+  clearTenantMappingCache();
+  return mapping;
 }
 
 async function clientUuid(clientId: string): Promise<string> {
@@ -866,9 +1603,13 @@ export async function readOrganizationReconciliation(
 
   const uuid = await clientUuid(roleClientId);
   const groups = await paged<GroupRepresentation>(
-    `/organizations/${encodeURIComponent(organizationId)}/groups`,
+    `/organizations/${encodeURIComponent(organizationId)}/groups?briefRepresentation=false`,
   );
   for (const group of groups) {
+    // A tenant-bearing group is an independent subtenant grant. Its roles must
+    // never bleed into the root tenant merely because both records share an
+    // Organization.
+    if (groupAttribute(group, "digit.tenantId")) continue;
     const owner = assignmentOwner(group.name);
     if (subject !== undefined && owner !== null && owner !== subject) continue;
     const mappingPath =
@@ -893,6 +1634,61 @@ export async function readOrganizationReconciliation(
     memberRoles: new Map([...memberRoles].map(([member, roles]) => [
       member,
       [...roles].sort(),
+    ])),
+  };
+}
+
+/**
+ * Reconciliation state for one explicit subtenant. Organization membership
+ * establishes the root relationship, but only membership and roles on the
+ * tenant-bearing group grant this tenant. No group name/path or dotted tenant
+ * code is interpreted as hierarchy.
+ */
+export async function readOrganizationGroupReconciliation(
+  mapping: OrganizationGroupMapping,
+  roleClientId: string,
+  subject?: string,
+): Promise<OrganizationReconciliationState | null> {
+  if (!config.keycloakAllowedOrganizationRoleClients.includes(roleClientId)) {
+    throw new IdentityAdminError("Keycloak client is not allowed for Organization roles", 400);
+  }
+  const organization = await readOrganizationMapping(mapping.organizationId);
+  if (!organization || organization.tenantId !== mapping.rootTenantId) return null;
+  const group = await readOrganizationGroup(mapping.organizationId, mapping.groupId);
+  if (!group || !asGroupMapping(group, organization)) return null;
+
+  const memberRoles = new Map<string, Set<string>>();
+  if (subject === undefined) {
+    for (const member of await paged<UserRepresentation>(
+      `/organizations/${encodeURIComponent(mapping.organizationId)}` +
+      `/groups/${encodeURIComponent(mapping.groupId)}/members`,
+    )) {
+      if (member.id) memberRoles.set(member.id, new Set());
+    }
+  } else if (await isOrganizationGroupMember(
+    mapping.organizationId, mapping.groupId, subject,
+  )) {
+    memberRoles.set(subject, new Set());
+  }
+  if (memberRoles.size === 0) {
+    return { organizationId: mapping.organizationId, enabled: true, memberRoles: new Map() };
+  }
+
+  const uuid = await clientUuid(roleClientId);
+  const mappingPath =
+    `/organizations/${encodeURIComponent(mapping.organizationId)}` +
+    `/groups/${encodeURIComponent(mapping.groupId)}/role-mappings/clients/${encodeURIComponent(uuid)}`;
+  const rolesResponse = await request(mappingPath);
+  const roles = await rolesResponse.json() as RoleRepresentation[];
+  for (const desired of memberRoles.values()) {
+    for (const role of roles) desired.add(role.name);
+  }
+  return {
+    organizationId: mapping.organizationId,
+    enabled: true,
+    memberRoles: new Map([...memberRoles].map(([member, rolesForMember]) => [
+      member,
+      [...rolesForMember].sort(),
     ])),
   };
 }

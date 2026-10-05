@@ -5,6 +5,7 @@ export interface KeycloakClaims {
   preferred_username?: string;
   email_verified?: boolean;
   phone_number?: string;
+  phone_number_verified?: boolean;
   realm_access?: {
     roles: string[];
   };
@@ -35,8 +36,9 @@ export interface IdentityTokenSet {
 
 export interface IdentityAuthMethod {
   id: string;
-  label: string;
-  type: "password" | "oauth" | "magic_link";
+  labelKey: string;
+  label?: string;
+  type: "password" | "idp" | "magic_link" | "phone_otp" | "hosted";
   idpHint?: string;
   intents: IdentityAuthIntent[];
 }
@@ -44,6 +46,9 @@ export interface IdentityAuthMethod {
 export type IdentityAuthIntent = "signin" | "signup";
 
 export type IdentityAuthResultCode =
+  | "ACTION_COMPLETE"
+  | "ACTION_CANCELLED"
+  | "ACTION_FAILED"
   | "AUTH_CANCELLED"
   | "AUTH_ATTEMPT_EXPIRED"
   | "IDENTITY_PROVIDER_UNAVAILABLE"
@@ -58,6 +63,6 @@ export type IdentityAuthResultCode =
 export interface IdentityAuthResult {
   status: "failed" | "complete";
   code: IdentityAuthResultCode;
-  message: string;
+  message?: string;
   actions: Array<"TRY_AGAIN" | "TRY_EXISTING_METHOD" | "SETUP_PASSWORD">;
 }
