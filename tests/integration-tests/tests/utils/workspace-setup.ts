@@ -275,15 +275,19 @@ export async function signupFounder(request: APIRequestContext, base: string, in
   expect(operationId, 'submit returns an operation').toBeTruthy();
 
   // Provisioning takes about three minutes over a dozen or so retried attempts.
-  const deadline = Date.now() + 8 * 60_000;
-  let operation: { status?: string; currentStep?: string; errorCode?: string } = {};
+  // SUCCEEDED is published to the identity side on a later tick, and the tenant
+  // is not listed until then, so wait for that too, as SignupPage does (#2303).
+  let deadline = Date.now() + 8 * 60_000;
+  let operation: { status?: string; currentStep?: string; errorCode?: string; lifecyclePublishedAt?: number | null } = {};
   while (Date.now() < deadline) {
     const found = await ok(await request.post(`${base}/pgr-services/v2/onboarding/operations/_search`, { headers: origin, data: { Operation: { id: operationId } } }));
     operation = found.Operations?.[0] ?? {};
-    if (operation.status === 'SUCCEEDED' || operation.status === 'TERMINAL_FAILED') break;
+    if ((operation.status === 'SUCCEEDED' && operation.lifecyclePublishedAt) || operation.status === 'TERMINAL_FAILED') break;
+    if (operation.status === 'SUCCEEDED') deadline = Math.min(deadline, Date.now() + 2 * 60_000);
     await sleep(4_000);
   }
   expect(operation.status, `provisioning ended at ${operation.currentStep} (${operation.errorCode ?? 'no error code'})`).toBe('SUCCEEDED');
+  expect(operation.lifecyclePublishedAt, 'SUCCEEDED outcome published to the identity side').toBeTruthy();
   const signup = (await ok(await request.post(`${base}/pgr-services/v2/onboarding/signups/_search`, { headers: origin, data: { Signup: { id: signupId } } }))).Signups?.[0];
   expect(signup?.urlSlug).toBe(input.slug);
   // As SignupPage does: the new tenant is offered to the same session, without another sign-in.
