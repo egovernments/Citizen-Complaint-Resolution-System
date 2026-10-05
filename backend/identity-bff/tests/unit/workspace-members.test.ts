@@ -68,10 +68,10 @@ vi.mock("../../src/modules/accounts/credential-service.js", () => ({
 vi.mock("../../src/modules/sync/mirror.js", () => ({ mirrorPerson: vi.fn(async () => { if (f.crash === "mirror") { f.crash = ""; throw new Error("crash:mirror"); } }) }));
 vi.mock("../../src/modules/revocation/index.js", () => ({ revokeAccount: vi.fn(async (subject: string) => { f.revoked.push(subject); }) }));
 vi.mock("../../src/modules/citizen-otp/audit.js", () => ({ audit: vi.fn(async () => {}) }));
-import { acceptWorkspaceInvitation, linkWorkspaceMember, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
+import { acceptWorkspaceInvitation, linkWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberEmail } from "../../src/modules/workspace-members/service.js";
 import { readOnboardingOrganizations } from "../../src/modules/onboarding/organization-reader.js";
 import { isOrganizationMember } from "../../src/modules/organizations/organization-service.js";
-import { requireWorkspace } from "../../src/modules/workspace-members/authority.js";
+import { readDigitAccount, requireWorkspace } from "../../src/modules/workspace-members/authority.js";
 import { BindingError } from "../../src/modules/bindings/types.js";
 import { activateStaffCredential, StaffLoginError } from "../../src/modules/accounts/credential-service.js";
 const uuid = "00000000-0000-4000-8000-000000000001";
@@ -91,6 +91,18 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")?.attributes?.["digit.linkPending"]).toBeUndefined();
     expect(f.activations).toBe(1);
     expect(bindingDoc(f.users.get("new-1")!).bindings).toHaveLength(1);
+  });
+  it("pages members before the per-member DIGIT lookups", async () => {
+    const bind = (id: string, state: string, extra: object = {}) => f.users.set(id, { id, email: `${id}@example.test`, attributes: {
+      "digit.bindings": [JSON.stringify({ v: 1, bindings: [{ tenantId: "pg", uuid: `uuid-${id}`, state, invitationVersion: 1, createdAt: 1, createdBy: { kind: "conversion" }, ...extra }] })] } });
+    for (const id of ["m5", "m3", "m1", "m4", "m2"]) bind(id, "active", { boundAt: 2 });
+    bind("m0", "removed", { removedAt: 3 });
+    bind("m15", "pending", { expiresAt: Date.now() - 1 });
+    vi.mocked(readDigitAccount).mockClear();
+    const { members } = await listWorkspaceMembers("admin", "pg", 1, 2);
+    expect(members.map((m) => m.subject)).toEqual(["m2", "m3"]);
+    expect(members[0]).toEqual({ subject: "m2", email: "m2@example.test", name: "Employee", digitUuid: "uuid-m2", state: "active", invitationVersion: 1, boundAt: 2 });
+    expect(readDigitAccount).toHaveBeenCalledTimes(2);
   });
   it("uses the existing-user branch for another workspace's in-flight user", async () => {
     f.crash = "create"; await expect(linkWorkspaceMember(input)).rejects.toThrow();
