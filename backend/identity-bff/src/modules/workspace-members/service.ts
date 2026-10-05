@@ -97,6 +97,9 @@ export async function linkWorkspaceMember(input: { actor: string; tenantId: stri
         expiresAt: Date.now() + await invitationExpiryHours(input.tenantId) * 3600_000, reinvite: input.reinvite });
       await mirrorPerson(subject);
       await linkAudit(subject, input.tenantId, input.digitUuid, input.actor, "ACCOUNT_LINK_CREATE");
+      // _accept requires a verified email; give an unverified invitee the way to verify it,
+      // unless a BFF-created account's own setup email (VERIFY_EMAIL pending) already does.
+      if (fresh.emailVerified !== true && !fresh.requiredActions?.includes("VERIFY_EMAIL")) await sendVerifyEmail(subject);
       return { binding: publicBinding(subject, binding), identityUserCreated: false };
     }
     if (previous?.state === "removed") throw new BindingError("BINDING_REMOVED", "This binding was removed");
@@ -222,8 +225,12 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
       throw error;
     }
     await lease.assertHeld();
-    const query = new URLSearchParams({ client_id: config.keycloakBffClientId, lifespan: String(config.identityPasswordSetupTtlSeconds) });
-    await request(`/users/${encodeURIComponent(subject)}/execute-actions-email?${query}`, { method: "PUT", body: JSON.stringify(["VERIFY_EMAIL"]) });
+    await sendVerifyEmail(subject);
     return { status: "verification_sent" as const };
   });
+}
+
+async function sendVerifyEmail(subject: string) {
+  const query = new URLSearchParams({ client_id: config.keycloakBffClientId, lifespan: String(config.identityPasswordSetupTtlSeconds) });
+  await request(`/users/${encodeURIComponent(subject)}/execute-actions-email?${query}`, { method: "PUT", body: JSON.stringify(["VERIFY_EMAIL"]) });
 }

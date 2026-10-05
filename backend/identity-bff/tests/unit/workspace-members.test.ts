@@ -114,6 +114,7 @@ describe("resumable workspace membership", () => {
   it("refuses acceptance by an account whose email is not verified", async () => {
     f.users.set("existing", { id: "existing", email: input.email, username: input.email, enabled: true, emailVerified: false, attributes: {} });
     const invite = await linkWorkspaceMember(input);
+    expect(f.emails).toBe(1);
     await expect(acceptWorkspaceInvitation("existing", "pg", invite.binding.invitationVersion)).rejects.toMatchObject({ code: "INVITATION_EMAIL_UNVERIFIED", status: 403 });
     expect(bindingDoc(f.users.get("existing")!).bindings[0].state).toBe("pending");
     expect(f.members.has("pg:existing")).toBe(false); expect(f.activations).toBe(0);
