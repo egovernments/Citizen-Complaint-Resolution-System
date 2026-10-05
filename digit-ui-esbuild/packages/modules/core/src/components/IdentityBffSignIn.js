@@ -122,6 +122,8 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
   };
 
   useEffect(() => {
+    // A tenantless page keeps its choose-organisation card, whatever the flag says.
+    if (!hasTenant) return;
     // The last sign-out in this tab could not end the BFF session, so its
     // cookie may still be live: do not silently sign that user back in.
     if (identityBffSignOutIncomplete()) {
@@ -129,7 +131,7 @@ export const useIdentityBffSignIn = ({ surface, t, onAuthenticated, onSignedOut 
       setMessage(tr("CORE_IDENTITY_SIGNOUT_INCOMPLETE", "Sign-out may not have finished, so this browser can still be signed in. Try signing out again, or sign in to continue."));
       return;
     }
-    if (hasTenant) retry(establishSession);
+    retry(establishSession);
     // Tenant context is immutable for the lifetime of this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

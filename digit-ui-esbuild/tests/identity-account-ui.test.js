@@ -347,10 +347,12 @@ test("logout dialog keeps a failed sign-out visible for retry", async () => {
 // Medium 4 (Dhruv, #2271 review 2): a login page reached on a tenantless
 // /digit-ui/... URL (legacy ingress, preserved vhost, Kong /digit-ui) has no
 // route tenant. It used to throw a TypeError reading tenant.appBasePath.
-for (const [surface, page] of [["employee", "EmployeeLogin"], ["citizen", "CitizenLogin"]]) {
-  test(`tenantless ${surface} login asks for the organisation's link instead of crashing`, async () => {
+// An unconfirmed earlier sign-out must not replace that card (Dhruv, #2271 review 4).
+for (const [surface, page] of [["employee", "EmployeeLogin"], ["citizen", "CitizenLogin"]]) for (const flagged of [false, true]) {
+  test(`tenantless ${surface} login asks for the organisation's link instead of crashing${flagged ? " (sign-out incomplete)" : ""}`, async () => {
     const calls = [];
     const state = browser(surface, async (url) => { calls.push(url); return json(500, {}); });
+    if (flagged) state.stored["identityBff.signOutIncomplete"] = "1";
     delete window.__digitTenantContext;
     window.location.pathname = surface === "citizen" ? "/digit-ui/citizen/login" : "/digit-ui/employee/user/login";
     const view = await render(ui[page], { t });
