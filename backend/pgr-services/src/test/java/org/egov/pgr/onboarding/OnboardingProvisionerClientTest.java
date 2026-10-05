@@ -128,12 +128,18 @@ public class OnboardingProvisionerClientTest {
         client.write(scope("PLATFORM_BASELINE"),"mdms","/egov-mdms-service/v2/_create/common-masters.Department",Map.of("Mdms",Map.of("tenantId","newtown","schemaCode","common-masters.Department","uniqueIdentifier","ONBOARDING_ADMIN","data",Map.of("code","ONBOARDING_ADMIN"))));
         client.write(scope("PLATFORM_BASELINE"),"mdms","/egov-mdms-service/v2/_update/common-masters.StateInfo",Map.of("Mdms",Map.of("tenantId","newtown","schemaCode","common-masters.StateInfo","uniqueIdentifier","newtown","data",Map.of("code","newtown"))));
         client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of(Map.of("code","TENANT_TENANTS_NEWTOWN","message","New Town"))));
-        client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-hierarchy-definition/_create",Map.of("BoundaryHierarchy",Map.of("tenantId","newtown","hierarchyType","ADMIN")));
+        client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-hierarchy-definition/_create",Map.of("BoundaryHierarchy",Map.of("tenantId","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY)));
         client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary/_create",Map.of("Boundary",List.of(Map.of("tenantId","newtown","code","newtown"))));
-        client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-relationships/_create",Map.of("BoundaryRelationship",Map.of("tenantId","newtown","code","newtown","hierarchyType","ADMIN","boundaryType","ROOT")));
+        client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-relationships/_create",Map.of("BoundaryRelationship",Map.of("tenantId","newtown","code","newtown","hierarchyType",OnboardingSteps.WORKSPACE_HIERARCHY,"boundaryType","ROOT")));
         String founder="FOUNDER_"+signup.getId().toString().replace("-","");
         client.write(scope("FOUNDER_HRMS"),"hrms","/egov-hrms/employees/_create",Map.of("Employees",List.of(Map.of("tenantId","newtown","code",founder,"user",Map.of("tenantId","newtown","userName",founder)))));
         assertEquals(10,writes);assertEquals(writes,details);assertEquals(1,logins);
+    }
+
+    @Test public void baselineBoundaryWritesAreLimitedToTheReservedWorkspaceRoot(){
+        assertEquals("SIGNUP_WRITE_SCOPE_DENIED",assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-hierarchy-definition/_create",Map.of("BoundaryHierarchy",Map.of("tenantId","newtown","hierarchyType","ADMIN")))).getCode());
+        assertEquals("SIGNUP_WRITE_SCOPE_DENIED",assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"boundary","/boundary-service/boundary-relationships/_create",Map.of("BoundaryRelationship",Map.of("tenantId","newtown","code","newtown","hierarchyType","ADMIN","boundaryType","ROOT")))).getCode());
+        assertEquals(0,writes);
     }
 
     @Test public void entireCanonicalBaselineIsAcceptedOnlyForTheLeasedTargetTenant() throws Exception {
