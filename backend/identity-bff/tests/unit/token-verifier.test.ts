@@ -22,6 +22,11 @@ describe("validateJwt", () => {
     expect(claims!.name).toBe("Alice");
   });
 
+  it("passes Keycloak's session id (sid) through", async () => {
+    const token = await signJwt({ sub: "user-1", email: "a@b.com", sid: "kc-session-1", azp: "client" });
+    expect(await validateJwt(`Bearer ${token}`)).toMatchObject({ sid: "kc-session-1", azp: "client" });
+  });
+
   it("returns null for missing auth header", async () => {
     expect(await validateJwt(undefined)).toBeNull();
   });
