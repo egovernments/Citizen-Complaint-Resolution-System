@@ -26,7 +26,6 @@ function hasWorkspaceRoot(trees: Record<string, unknown>[], tenant: string): boo
 const ACCESS_FLOOR_SCHEMAS = ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions'];
 
 interface FloorDb {
-  query<T extends Record<string, any>>(sql: string, params?: unknown[]): Promise<T[]>;
   execute(sql: string, params?: unknown[]): Promise<number>;
 }
 
@@ -230,19 +229,23 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
     // Gateway writes are authorized by egov-accesscontrol from the target's own role-action rows.
     // A brand-new tenant has none, and the only way to grant one is an MDMS write that itself
     // needs a grant, so the seed's actions and role-actions are inserted directly first (CCRS#1928).
-    // Additive and skipped once the target has any role-action. Non-fatal: if the database is
-    // unreachable, the first gateway write fails with the real 403 instead.
+    // Runs every time, so a tenant holding only part of the set (an older bootstrap copied 500 of
+    // 945) is topped up. Additive: a row is skipped when the tenant already has it, by
+    // uniqueidentifier or by content (action id; role code + action id), since rows from
+    // full-dump.sql or an older copy carry other uniqueidentifiers. Non-fatal: if the database
+    // is unreachable, the first gateway write fails with the real 403 instead.
     const db = options.db ?? digitDb;
     try {
       if (!options.db) await digitDb.initialize();
-      const [row] = await db.query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'`, [target]);
-      if (Number(row?.count ?? 0) > 0) return;
       const now = Date.now();
       for (const record of seed.records.filter((r) => ACCESS_FLOOR_SCHEMAS.includes(r.schemaCode))) {
         accessFloorSeeded += await db.execute(
           `INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
-           VALUES ($1, $2, $3, $4, $5::jsonb, true, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $6, $6)
+           SELECT $1::text, $2::text, $3::text, $4::text, $5::jsonb, true, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $6::bigint, $6::bigint
+           WHERE NOT EXISTS (SELECT 1 FROM eg_mdms_data held WHERE held.tenantid = $2 AND held.schemacode = $4
+             AND CASE WHEN $4 = 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+               THEN held.data->>'rolecode' = $5::jsonb->>'rolecode' AND held.data->>'actionid' = $5::jsonb->>'actionid'
+               ELSE held.data->>'id' = $5::jsonb->>'id' END)
            ON CONFLICT (tenantid, schemacode, uniqueidentifier) DO NOTHING`,
           [randomUUID(), target, record.uniqueIdentifier, record.schemaCode, JSON.stringify(substituteTenant(record.data, target)), now]);
       }

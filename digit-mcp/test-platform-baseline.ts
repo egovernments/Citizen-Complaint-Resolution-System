@@ -73,11 +73,15 @@ function fixture(role = 'SUPERUSER') {
   };
   // eg_mdms_data as seen by the role-action floor; rows it inserts become visible to MDMS reads.
   const sql: { tenant: string; schemaCode: string; uniqueIdentifier: string; data: any; writesBefore: number }[] = [];
+  // As the floor's INSERT: skipped on the same uniqueidentifier or the same content (action id;
+  // role code + action id), whatever uniqueidentifier the held row carries.
+  const sameContent = (schemaCode: string, a: any, b: any) => schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+    ? String(a.rolecode) === String(b.rolecode) && String(a.actionid) === String(b.actionid) : String(a.id) === String(b.id);
   const db = {
-    query: async (_text: string, params: any[]) => [{ count: String(sql.filter(r => r.tenant === params[0] && r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions').length) }],
     execute: async (_text: string, params: any[]) => {
       const [, tenant, uniqueIdentifier, schemaCode, data] = params;
-      if (sql.some(r => r.tenant === tenant && r.schemaCode === schemaCode && r.uniqueIdentifier === uniqueIdentifier)) return 0;
+      if (sql.some(r => r.tenant === tenant && r.schemaCode === schemaCode
+        && (r.uniqueIdentifier === uniqueIdentifier || sameContent(schemaCode, r.data, JSON.parse(data))))) return 0;
       sql.push({ tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), writesBefore: writes });
       rows.set(`${tenant}|${schemaCode}/${uniqueIdentifier}`, { tenantId: tenant, schemaCode, uniqueIdentifier, data: JSON.parse(data), isActive: true });
       return 1;
@@ -457,7 +461,7 @@ test('gateway bootstrap seeds the role-action floor before its first write, once
 
   const unreachable = fixture();
   const degraded = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...unreachable.options, direct: false,
-    db: { query: async () => { throw new Error('DIGIT database not available'); }, execute: async () => 0 } });
+    db: { execute: async () => { throw new Error('DIGIT database not available'); } } });
   assert.equal(degraded.summary.access_floor_seeded, 0);
   assert.ok(degraded.results.warnings.some((w: string) => w.includes('CCRS#1928')));
 
@@ -467,6 +471,25 @@ test('gateway bootstrap seeds the role-action floor before its first write, once
   const userOnly = fixture();
   await bootstrapPlatform({ target_tenant: 'ke', country: 'KE', user_only: true }, { ...userOnly.options, direct: false });
   assert.equal(userOnly.sql.length, 0);
+});
+
+test('the role-action floor tops up a tenant holding part of the set, without duplicating held rows (#2269 round-3 item 3)', async () => {
+  const seed = loadPlatformSeed();
+  const floor = seed.records.filter(r => ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions'].includes(r.schemaCode));
+  const f = fixture();
+  // An older bootstrap copied the first 500 rows under the source's hashed uniqueidentifiers.
+  floor.slice(0, 500).forEach((r, i) => f.sql.push({ tenant: 'ke', schemaCode: r.schemaCode, uniqueIdentifier: `hash-${i}`,
+    data: substituteTenant(r.data, 'ke'), writesBefore: 0 }));
+  const result = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct: false });
+  assert.equal(result.summary.access_floor_seeded, floor.length - 500, 'only the missing rows are inserted');
+  assert.equal(f.sql.length, floor.length);
+  const key = (r: any) => r.schemaCode === 'ACCESSCONTROL-ROLEACTIONS.roleactions' ? `${r.data.rolecode}.${r.data.actionid}` : `${r.data.id}`;
+  for (const schemaCode of ['ACCESSCONTROL-ACTIONS-TEST.actions-test', 'ACCESSCONTROL-ROLEACTIONS.roleactions']) {
+    const held = f.sql.filter(r => r.schemaCode === schemaCode).map(key);
+    assert.equal(new Set(held).size, held.length, `no content duplicates in ${schemaCode}`);
+  }
+  const replay = await bootstrapPlatform({ target_tenant: 'ke', country: 'KE' }, { ...f.options, direct: false });
+  assert.equal(replay.summary.access_floor_seeded, 0);
 });
 
 test('a city bootstrap lists the city under its root as Tenant.<city> and in the root modules (#2269 review item 1c)', async () => {
