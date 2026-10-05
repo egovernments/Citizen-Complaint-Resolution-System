@@ -31,6 +31,7 @@ import {
 import { onboardingAuthorization, registerOnboardingRoutes } from "../onboarding/routes.js";
 import { onboardingDependencies } from "../onboarding/production.js";
 import { backfillTenantRoutes } from "../tenant-routes/backfill.js";
+import { validUrlSlug } from "../access-context/url-slug.js";
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -188,8 +189,7 @@ export function registerControlPlaneRoutes(app: express.Application): void {
       const parentTenantId = requiredString(req.body?.parentTenantId, "parentTenantId");
       const urlSlug = requiredString(req.body?.urlSlug, "urlSlug").toLowerCase();
       const name = requiredString(req.body?.name, "name");
-      if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(urlSlug) ||
-          (urlSlug.match(/[a-z]/g) || []).length < 2) {
+      if (!validUrlSlug(urlSlug)) {
         throw new IdentityAdminError("urlSlug is invalid", 400);
       }
       if (req.body?.fallbackTenantIds !== undefined &&
