@@ -600,6 +600,45 @@ describe('tenant-scoped digit-ui routing', () => {
   });
 });
 
+describe('reserved tenant URL slugs (identity-bff docs §2.4.1)', () => {
+  const doc = read('backend/identity-bff/docs/identity-bff.md');
+  const block = /<!-- reserved-url-slugs:begin -->([\s\S]*?)<!-- reserved-url-slugs:end -->/.exec(doc);
+  const reserved = new Set(
+    (block?.[1] ?? '').split('\n').map((line) => line.trim()).filter((line) => /^[a-z0-9-]+$/.test(line))
+  );
+  const slugShaped = (segment: string) => /^[a-z0-9-]{2,63}$/.test(segment);
+
+  test('the contract doc carries the list', () => {
+    expect(block).not.toBeNull();
+    expect(reserved.size).toBeGreaterThan(10);
+  });
+
+  test('every top-level nginx location prefix is reserved', () => {
+    const nginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+    const prefixes = [...nginx.matchAll(/^\s*location\s+(?:=|\^~)?\s*\/([A-Za-z0-9_.-]+)/gm)]
+      .map((m) => m[1]).filter(slugShaped);
+    expect(prefixes.length).toBeGreaterThan(10);
+    expect(prefixes.filter((p) => !reserved.has(p))).toEqual([]);
+  });
+
+  test('every top-level Kong route prefix is reserved', () => {
+    const kong = read('local-setup/kong/kong.yml');
+    const prefixes = [...kong.matchAll(/^\s*paths:\s*\n((?:\s*-\s*\S+\s*\n)+)/gm)]
+      .flatMap((m) => [...m[1].matchAll(/-\s*~?\^?\/([A-Za-z0-9_.-]+)/g)].map((p) => p[1]))
+      .filter(slugShaped);
+    expect(prefixes.length).toBeGreaterThan(10);
+    expect([...new Set(prefixes)].filter((p) => !reserved.has(p))).toEqual([]);
+  });
+
+  test('the SPA reserves exactly the documented list', () => {
+    const spa = read('digit-ui-esbuild/packages/libraries/src/services/tenant/tenantRoute.js');
+    const list = /RESERVED_TENANT_SLUGS = Object\.freeze\(\[([\s\S]*?)\]\)/.exec(spa);
+    expect(list).not.toBeNull();
+    const spaSlugs = [...list![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(spaSlugs).toEqual([...reserved].sort());
+  });
+});
+
 describe('Novu workflow creation deployment contract', () => {
   const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
   const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));

@@ -1,15 +1,67 @@
 import { defaultTenantContextStorage, withTenantContextCache } from "./tenantContextCache";
 
-const TENANT_SLUG = /^[a-z0-9-]{2,63}$/;
-const RESERVED_SLUGS = new Set([
+// URL slug rules: backend/identity-bff/docs/identity-bff.md §2.4.1 is the
+// source of truth, and the BFF and pgr-services carry the same list. Reserved:
+// the SPA's own path words plus every top-level nginx/Kong path prefix on the
+// same host. tests/tenant-route.test.js and the local-setup static tests keep
+// this list equal to the doc and to the routing configs.
+const TENANT_SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
+export const RESERVED_TENANT_SLUGS = Object.freeze([
+  "access",
   "api",
+  "assets",
   "auth",
+  "boundary-service",
+  "brand",
   "citizen",
+  "common-persist",
   "configurator",
+  "dashboard",
   "digit-ui",
+  "egov-bndry-mgmnt",
+  "egov-enc-service",
+  "egov-hrms",
+  "egov-idgen",
+  "egov-indexer",
+  "egov-location",
+  "egov-mdms-service",
+  "egov-user-event",
+  "egov-workflow-v2",
+  "employee",
+  "env",
+  "file-store",
+  "filestore",
+  "gatus",
+  "grafana",
+  "health",
   "identity",
+  "images",
+  "inbox",
+  "kc",
+  "keycloak",
+  "localization",
+  "matomo",
+  "mcp",
+  "mdms-v2",
+  "novu",
+  "novu-api",
+  "novu-bridge",
+  "novu-ws",
+  "otel",
+  "otp",
+  "pgr-services",
+  "static",
+  "status",
+  "tests",
+  "tests-v2",
+  "turbopass",
+  "user",
+  "user-otp",
+  "user-preference",
   "v1",
+  "xstate-chatbot",
 ]);
+const RESERVED_SLUGS = new Set(RESERVED_TENANT_SLUGS);
 
 export function isValidTenantSlug(value) {
   return typeof value === "string" &&
