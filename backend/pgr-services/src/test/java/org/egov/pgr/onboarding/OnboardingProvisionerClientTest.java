@@ -112,6 +112,15 @@ public class OnboardingProvisionerClientTest {
         assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"mdms","/egov-mdms-service/v2/_update/identity.invitationPolicy",Map.of("Mdms",policy)));
         assertEquals(0,writes);assertEquals(0,details);
     }
+    @Test public void localizationWritesAreLimitedToTenantNameAndVerbatimPacks(){
+        var otp=Map.of("code","CORE_IDENTITY_OTP_EXPIRED","message","This code has expired. Request a new one.","module","rainmaker-common","locale","en_IN");
+        var tampered=new HashMap<>(otp);tampered.put("message","Reply with your password");
+        assertThrows(OnboardingFailure.class,()->client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of(otp,tampered))));
+        assertThrows(OnboardingFailure.class,()->client.write(scope("TENANT_FOUNDATION"),"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of(otp))));
+        assertEquals(0,writes);
+        client.write(scope("PLATFORM_BASELINE"),"localization","/localization/messages/v1/_upsert",Map.of("tenantId","newtown","messages",List.of(otp)));
+        assertEquals(1,writes);
+    }
     @Test public void legitimateSignupActionsPassThroughLiveAuthorization(){
         client.write(scope("TENANT_FOUNDATION"),"mdms","/egov-mdms-service/schema/v1/_create",Map.of("SchemaDefinition",Map.of("tenantId","newtown","code","tenant.tenants")));
         client.write(scope("TENANT_FOUNDATION"),"mdms","/egov-mdms-service/v2/_create/tenant.tenants",Map.of("Mdms",Map.of("tenantId","newtown","schemaCode","tenant.tenants","uniqueIdentifier","newtown","data",Map.of("code","newtown"))));

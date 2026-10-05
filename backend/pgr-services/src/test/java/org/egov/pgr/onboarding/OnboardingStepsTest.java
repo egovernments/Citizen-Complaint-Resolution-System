@@ -190,4 +190,38 @@ public class OnboardingStepsTest {
         }
     }
 
+    @Test @SuppressWarnings({"unchecked","rawtypes"}) public void baselineSeedsWholeLocalizationPacksBeforeTheTenantNameKey() throws Exception {
+        prerequisites();
+        var bodies=org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(client,atLeastOnce()).write(any(),eq("localization"),eq("/localization/messages/v1/_upsert"),bodies.capture());
+        Map<String,Integer> seeded=new TreeMap<>();int firstName=-1,lastPack=-1;
+        for(int i=0;i<bodies.getAllValues().size();i++){
+            JsonNode body=mapper.valueToTree(bodies.getAllValues().get(i));
+            assertEquals("newtown",body.path("tenantId").asText());assertTrue(body.path("messages").size()<=500);
+            for(JsonNode m:body.path("messages")){
+                if(m.path("code").asText().equals("TENANT_TENANTS_NEWTOWN")){if(firstName<0)firstName=i;}
+                else{lastPack=i;seeded.merge(m.path("locale").asText()+"/"+m.path("module").asText(),1,Integer::sum);}
+            }
+        }
+        assertTrue("packs precede the tenant-name key",lastPack>=0&&firstName>lastPack);
+        var baseline=new PlatformBaseline(mapper);Map<String,Integer> expected=new TreeMap<>();
+        for(String locale:List.of("en_IN","hi_IN"))baseline.localizationPacks(locale).forEach((module,pack)->expected.put(locale+"/"+module,pack.size()));
+        assertEquals(expected,seeded); // signup languages en,hi (+ en_IN always); no fr_FR/pt_BR
+        assertTrue(seeded.keySet().containsAll(List.of("en_IN/rainmaker-common","en_IN/rainmaker-pgr","en_IN/rainmaker-hr","en_IN/configurator-ui","hi_IN/configurator-ui")));
+    }
+    @Test public void localizationPacksAreTenantNeutral() throws Exception {
+        var forbidden=java.util.regex.Pattern.compile("(^|_)(PG|PB|STATEA|CITYA)(_|$)|^TENANT_TENANTS_|^CS_SELECT_CITY_(?!CHOOSE_CITY$)|^SUN\\d+_|^DDR_",java.util.regex.Pattern.CASE_INSENSITIVE);
+        var places=java.util.regex.Pattern.compile("amritsar|jalandhar|ludhiana|chandigarh|mohali|bhatinda|faridkot|punjab|bomet|nairobi|maputo|\\bcity a\\b|\\bstate a\\b",java.util.regex.Pattern.CASE_INSENSITIVE);
+        var packs=new org.springframework.core.io.support.PathMatchingResourcePatternResolver().getResources("classpath*:onboarding/l10n/*/*.json");
+        assertTrue(packs.length>=4);
+        for(var pack:packs){
+            Set<String> codes=new HashSet<>();
+            for(JsonNode m:mapper.readTree(pack.getInputStream())){
+                String code=m.path("code").asText();
+                assertFalse(pack.getFilename()+": "+code,forbidden.matcher(code).find()||places.matcher(m.path("message").asText()).find());
+                assertTrue("duplicate "+code,codes.add(code));
+            }
+        }
+        assertEquals(7,new PlatformBaseline(mapper).localizationPacks("en_IN").get("rainmaker-common").findValuesAsText("code").stream().filter(c->c.startsWith("CORE_IDENTITY_OTP_")).count());
+    }
 }

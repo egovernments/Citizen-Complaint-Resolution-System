@@ -117,6 +117,18 @@ public class OnboardingSteps {
             data.put("localizationModules", List.of(Map.of("label", "common", "value", "rainmaker-common")));
             ensureRecord(scope, tenant, "common-masters.StateInfo", tenant, data, true);
         });
+        // egov-localization serves the first tenant in [T, default] holding ANY message for the requested
+        // modules, so T must own whole packs before its first key (#2257). digit-ui boot pins en_IN.
+        var locales = new LinkedHashSet<>(List.of("en_IN"));
+        for (String language : signup.getLanguages()) locales.add(locale(language, signup.getCountryCode()));
+        for (String loc : locales) seed.localizationPacks(loc).forEach((module, messages) ->
+                progress.record("localization-pack:" + loc + ":" + module, () -> {
+                    for (int i = 0; i < messages.size(); i += 500) {
+                        var chunk = new ArrayList<JsonNode>();
+                        for (int j = i; j < Math.min(i + 500, messages.size()); j++) chunk.add(messages.get(j));
+                        client.write(scope, "localization", "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", chunk));
+                    }
+                }));
         for (String language : signup.getLanguages()) progress.record("localization:" + language, () -> client.write(scope, "localization",
                 "/localization/messages/v1/_upsert", Map.of("tenantId", tenant, "messages", List.of(Map.of(
                         "code", "TENANT_TENANTS_" + tenant.toUpperCase(Locale.ROOT), "message", signup.getAccountName(),
