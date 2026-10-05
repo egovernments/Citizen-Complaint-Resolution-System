@@ -85,6 +85,14 @@ public class OnboardingSteps {
             String code = row.path("schemaCode").asText(), id = row.path("uniqueIdentifier").asText();
             progress.record("mdms:" + code + ":" + id, () -> ensureRecord(scope, tenant, code, id, substitute(row.path("data"), tenant)));
         }
+        progress.record("id-format", () -> {
+            // Complaint IDs carry the workspace's own code; SEQ_EG_PGR_ID stays one shared sequence.
+            // idgen only interprets [..] tokens, so the literal prefix is kept to A-Z, 0-9 and '-'.
+            String prefix = Objects.toString(signup.getAccountCode(), "").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9-]", "");
+            if (prefix.isEmpty()) throw new OnboardingFailure("ACCOUNT_CODE_INVALID", false);
+            ensureRecord(scope, tenant, "common-masters.IdFormat", "pgr.servicerequestid", Map.of("idname", "pgr.servicerequestid",
+                    "format", prefix + "-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]"));
+        });
         for (JsonNode workflow : seed.workflows()) {
             String code = workflow.path("businessService").asText();
             progress.record("workflow:" + code, () -> {

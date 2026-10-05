@@ -26,7 +26,7 @@ public class OnboardingPostgresTest {
     private DriverManagerDataSource source;
     private JdbcTemplate jdbc;
     private OnboardingRepository repository;
-    private ObjectMapper mapper=new ObjectMapper();
+    private ObjectMapper mapper=new ObjectMapper();private PlatformBaseline seed;
     private String schema;
     private OnboardingSignup signup;
     @Before public void setup() throws Exception {
@@ -34,7 +34,7 @@ public class OnboardingPostgresTest {
         schema="onb_test_"+UUID.randomUUID().toString().replace("-","");
         var admin=new DriverManagerDataSource(url,"postgres","onboarding-test-only");new JdbcTemplate(admin).execute("CREATE SCHEMA "+schema);
         source=new DriverManagerDataSource(url+"?currentSchema="+schema,"postgres","onboarding-test-only");
-        jdbc=new JdbcTemplate(source);repository=new OnboardingRepository(jdbc,mapper);
+        jdbc=new JdbcTemplate(source);repository=new OnboardingRepository(jdbc,mapper);seed=new PlatformBaseline(mapper);
         var migrations=new ResourceDatabasePopulator();
         for(String name:List.of("V20260914000000__create_onboarding_tables.sql","V20260914120000__add_onboarding_operation_lease.sql",
                 "V20260918000000__onboarding_create_idempotency_per_subject.sql","V20261004000000__onboarding_restart_and_publication.sql","V20261004010000__onboarding_workspace.sql","V20261005000000__onboarding_automatic_retry.sql"))migrations.addScript(new ClassPathResource("db/migration/main/"+name));
@@ -67,7 +67,7 @@ public class OnboardingPostgresTest {
     }
     @Test public void terminalBeforeAnyEnsureSettlesPublicationAndRestartKeepsFounder(){
         submit();var lease=claim();var op=lease.getOperation();op.setFounderDigitUuid("founder-uuid");repository.checkpoint(op,lease.getLeaseToken(),System.currentTimeMillis());
-        var worker=transactional(new OnboardingWorkerService(repository,"INPUT_REJECTED"));
+        var worker=transactional(new OnboardingWorkerService(repository,seed,"INPUT_REJECTED"));
         worker.fail(op.getId(),lease.getLeaseToken(),false,"INPUT_REJECTED","input","FOUNDER_HRMS",List.of());
         var failed=repository.findOperation(op.getId()).orElseThrow();assertNotNull(failed.getLifecyclePublishedAt());
         assertEquals("NO_IDENTITY_SIDE_EFFECTS",jdbc.queryForObject("SELECT lifecycle_publication_reason FROM eg_pgr_onboarding_operation WHERE id=?",String.class,op.getId()));
@@ -78,7 +78,7 @@ public class OnboardingPostgresTest {
     }
     @Test public void historicalEnsureCannotUseNoIdentitySideEffectsBypass(){
         submit();var lease=claim();var op=lease.getOperation();op.setOrganizationEnsureStarted(true);repository.checkpoint(op,lease.getLeaseToken(),System.currentTimeMillis());
-        var worker=transactional(new OnboardingWorkerService(repository,"INPUT_REJECTED"));worker.fail(op.getId(),lease.getLeaseToken(),false,"INPUT_REJECTED","input","BINDING",List.of());
+        var worker=transactional(new OnboardingWorkerService(repository,seed,"INPUT_REJECTED"));worker.fail(op.getId(),lease.getLeaseToken(),false,"INPUT_REJECTED","input","BINDING",List.of());
         var failed=repository.findOperation(op.getId()).orElseThrow();assertNull(failed.getLifecyclePublishedAt());
         var tx=new TransactionTemplate(new DataSourceTransactionManager(source));
         assertThrows(RuntimeException.class,()->tx.execute(s->repository.resubmit(failed,"restart",System.currentTimeMillis())));
@@ -89,7 +89,7 @@ public class OnboardingPostgresTest {
         assertNull(repository.findOperation(op.getId()).orElseThrow().getLifecyclePublishedAt());
     }
     @Test public void signupWorkspaceAndDecisionRollbackTogetherThenCommitTogether(){
-        submit();var lease=claim();var worker=new OnboardingWorkerService(repository,"");var tx=new TransactionTemplate(new DataSourceTransactionManager(source));
+        submit();var lease=claim();var worker=new OnboardingWorkerService(repository,seed,"");var tx=new TransactionTemplate(new DataSourceTransactionManager(source));
         assertThrows(IllegalStateException.class,()->tx.execute(s->{worker.complete(lease.getOperation().getId(),lease.getLeaseToken(),List.of("BINDING"));throw new IllegalStateException("crash");}));
         assertEquals("RUNNING",repository.findOperation(lease.getOperation().getId()).orElseThrow().getStatus());
         assertEquals(0,(int)jdbc.queryForObject("SELECT count(*) FROM eg_pgr_onboarding_workspace",Integer.class));
@@ -105,7 +105,7 @@ public class OnboardingPostgresTest {
         MockMvc mvc=MockMvcBuilders.standaloneSetup(new OnboardingApiController(identity,new OnboardingIdentifierService(),service)).build();
         String body=mapper.writeValueAsString(Map.of("Signup",Map.of("id",signup.getId().toString())));
         mvc.perform(post("/v2/onboarding/signups/_submit").header("Cookie","test").header("Idempotency-Key","initial").contentType("application/json").content(body)).andExpect(status().isAccepted());
-        var worker=transactional(new OnboardingWorkerService(repository,"INPUT_REJECTED"));var identitySteps=mock(OnboardingSteps.class);
+        var worker=transactional(new OnboardingWorkerService(repository,seed,"INPUT_REJECTED"));var identitySteps=mock(OnboardingSteps.class);
         var publisher=transactional(new OnboardingLifecyclePublisher(repository,identitySteps));
         UUID operationId=repository.findOperationBySignup(signup.getId()).orElseThrow().getId();
         for(int restart=1;restart<=2;restart++){
@@ -136,7 +136,7 @@ public class OnboardingPostgresTest {
         var env=new org.springframework.mock.env.MockEnvironment().withProperty("pgr.onboarding.identity-bff.url",base).withProperty("pgr.onboarding.identity-bff.token","pgr-fixture-token");
         var client=new OnboardingProvisionerClient(http,mapper,env);
         var realSteps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
-        var worker=transactional(new OnboardingWorkerService(repository,"INPUT_REJECTED,SLUG_TAKEN"));
+        var worker=transactional(new OnboardingWorkerService(repository,seed,"INPUT_REJECTED,SLUG_TAKEN"));
         var publisher=transactional(new OnboardingLifecyclePublisher(repository,realSteps));
         for(int restart=0;restart<=1;restart++) {
             mvc.perform(post("/v2/onboarding/signups/_submit").header("Cookie","test").header("Idempotency-Key","attempt-"+restart).contentType("application/json").content(body)).andExpect(status().isAccepted());
@@ -296,7 +296,7 @@ public class OnboardingPostgresTest {
         };
         when(client.read(anyString(),anyString(),anyMap())).thenAnswer(api);
         when(client.write(any(),anyString(),anyString(),anyMap())).thenAnswer(api);
-        var realSteps=new OnboardingSteps(client,baseline,mapper);var worker=transactional(new OnboardingWorkerService(repository,"COUNTRY_NOT_SUPPORTED"));
+        var realSteps=new OnboardingSteps(client,baseline,mapper);var worker=transactional(new OnboardingWorkerService(repository,seed,"COUNTRY_NOT_SUPPORTED"));
         var publisher=transactional(new OnboardingLifecyclePublisher(repository,realSteps));var runner=new OnboardingRunner(worker,repository,realSteps,publisher);
         var original=submit();int retries=0;
         for(int ticks=0;ticks<30;ticks++) {

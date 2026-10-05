@@ -139,6 +139,9 @@ export async function bootstrapPlatform(args: Record<string, unknown>, options: 
       city: { code: target, name: target, districtName: '', districtTenantCode: target, ulbGrade: '' } });
     for (const row of seed.records) await record(row.schemaCode, row.uniqueIdentifier, substituteTenant(row.data, target));
     for (const rule of rules) await record('common-masters.MobileNumberValidation', String(rule.countryCode), rule);
+    // The seed carries no PG- complaint-ID prefix; derive it from the target (idgen reads only [..] tokens).
+    await record('common-masters.IdFormat', 'pgr.servicerequestid', { idname: 'pgr.servicerequestid',
+      format: `${target.toUpperCase().replace(/[^A-Z0-9-]/g, '-')}-PGR-[cy:yyyy-MM-dd]-[SEQ_EG_PGR_ID]` });
   }
   await api.generateEncKey(target);
   const username = auth.user?.userName || 'ADMIN';
