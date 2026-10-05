@@ -65,6 +65,15 @@ export class BoundaryController {
     return this.boundaryService.search(query, source, match, n, minDesc);
   }
 
+  // GET /boundary/official?country=KE — the official set chosen for a country
+  //   (source, date, licence), the country area to fetch it from, and per
+  //   level how closely the other official source agrees. The configurator's
+  //   "Preconfigured" option is built on it. 404 when the country has none.
+  @Get('official')
+  official(@Query('country') country: string) {
+    return this.boundaryService.officialSet(country);
+  }
+
   @Get('fetch')
   async fetch(@Query('id') id: string, @Query('source') source = 'overture') {
     if (!id) {

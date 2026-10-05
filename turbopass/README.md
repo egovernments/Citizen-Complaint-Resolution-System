@@ -10,7 +10,7 @@ DIGIT box, which suits a single box or local testing.
 
 | Path | What |
 |---|---|
-| `search-api/` | NestJS service: `/boundary/search`, `/boundary/fetch`, `/health`, and the legacy `/search`. Port 3000. |
+| `search-api/` | NestJS service: `/boundary/search`, `/boundary/fetch`, `/boundary/official`, `/health`, and the legacy `/search`. Port 3000. |
 | `overture-scraper/` | Builds the offline boundary DB from Overture Maps plus the official sets (`bootstrap.sh`); `coverage.py` |
 | `data/`, `scraper/` | Name hierarchies for the legacy Trie `/search`, vendored from dhruv-1001/osm-mapped-data |
 | `docker-compose.yml` | The one-shot `bootstrap` and the `search-api` |
@@ -38,6 +38,17 @@ hard-coding it, so `official` follows the data when either source updates.
 geoBoundaries varies by level — public domain, CC BY, or ODbL (share-alike). Credit the
 source wherever the boundaries are shown; the configurator prints the line on its level
 screen.
+
+**How far a set is confirmed.** For each kept level of the chosen set, the bootstrap
+compares it with the same level of the other official source: an area counts as matched
+when the other source has one whose overlap with it is at least 80% of their combined area.
+A level is *confirmed* at 90% matched or more, *partly confirmed* from 50%, and otherwise
+*differs*; a level the other source doesn't have comes from *one source only*. The
+configurator's **Preconfigured** option shows this per level, with a one-line headline
+("Confirmed down to sub-counties. Wards come from one source only."). It is evidence from an
+independently drawn set, not an endorsement: disagreement often means the map changed, and
+the headline says so when the other source is more than five years older (Burundi's 2025
+reform, Ethiopia's new regions).
 
 ## Run it
 
@@ -140,6 +151,14 @@ structure consistently.
 
 Geoapify responses are translated into these same fields (no `descendant_count` or `level_name`;
 `licence` credits OpenStreetMap), so every source returns one shape.
+
+`GET /boundary/official?country=<ISO alpha-2>` — the official set chosen for one country:
+`source`, `licence`, `dataset_date`, `quality`, `url`, `root` (the country area to fetch it from:
+`/boundary/fetch?id=<root.id>&source=official`), and per level `name`, `areas`, `coverage`,
+`other_areas` (0 = the other source has no such level), `matched` (% of areas matched) and
+`unmatched` (their names, when only a few). `agreement_measured` is `false` on a DB built before
+the comparison existed — rebuild to get it. `other` describes the source it was compared with.
+`404` when the country has no official set, `400` for anything but a two-letter code.
 
 `GET /health` — `sources` (which of `overture` / `official` / `cod` / `geoboundaries` /
 `geoapify` can answer here), `overture` (release, countries, build time, number of places) and

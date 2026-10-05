@@ -273,8 +273,25 @@ function makeOfficialDb(file: string): void {
   );
   const levels = JSON.stringify([
     { level: 'ADM0', areas: 1, kept: true },
-    { level: 'ADM1', areas: 47, kept: true },
-    { level: 'ADM2', areas: 291, areas_kept: 290, kept: true },
+    {
+      level: 'ADM1',
+      areas: 47,
+      kept: true,
+      coverage: 100,
+      other_areas: 47,
+      matched: 100,
+      unmatched: [],
+    },
+    {
+      level: 'ADM2',
+      areas: 291,
+      areas_kept: 290,
+      kept: true,
+      coverage: 99.2,
+      other_areas: 0,
+      matched: null,
+      unmatched: [],
+    },
     { level: 'ADM3', areas: 1000, kept: false, coverage: 37.3 },
   ]);
   db.prepare(
@@ -399,6 +416,93 @@ describe('BoundaryService official sources', () => {
     });
   });
 
+  it("describes one country's official set with its agreement evidence", () => {
+    expect(svc.officialSet(' ke ')).toEqual({
+      country: 'KE',
+      source: 'cod',
+      licence: 'CC BY-IGO',
+      dataset_date: '2019-10-31',
+      quality: 'cod-enhanced',
+      url: 'https://data.humdata.org/dataset/cod-ab-ken',
+      root: { id: 'cod:KEN:KE', name: 'Kenya' },
+      agreement_measured: true,
+      levels: [
+        {
+          level: 'ADM1',
+          admin_level: 1,
+          name: 'County',
+          areas: 47,
+          coverage: 100,
+          other_areas: 47,
+          matched: 100,
+          unmatched: [],
+        },
+        {
+          level: 'ADM2',
+          admin_level: 2,
+          name: 'Sub-county',
+          areas: 290,
+          coverage: 99.2,
+          other_areas: 0,
+          matched: null,
+          unmatched: [],
+        },
+      ],
+      other: {
+        source: 'geoboundaries',
+        usable: true,
+        dataset_date: '2020',
+        quality: null,
+        note: null,
+      },
+    });
+  });
+
+  it('marks agreement as unmeasured on a DB built before the comparison', () => {
+    const before = path.join(dir, 'before-agreement.sqlite');
+    fs.copyFileSync(file, before);
+    const db = new Database(before);
+    db.prepare(
+      "UPDATE official_datasets SET levels = ? WHERE country = 'KE' AND chosen = 1",
+    ).run(
+      JSON.stringify([
+        { level: 'ADM0', areas: 1, kept: true },
+        { level: 'ADM1', areas: 47, kept: true, coverage: 100 },
+      ]),
+    );
+    db.close();
+    process.env.OVERTURE_DB_PATH = before;
+    const old = new BoundaryService({} as any, { get: () => undefined } as any);
+    const set = old.officialSet('KE');
+    expect(set.agreement_measured).toBe(false);
+    expect(set.levels).toEqual([
+      {
+        level: 'ADM1',
+        admin_level: 1,
+        name: 'County',
+        areas: 47,
+        coverage: 100,
+        other_areas: null,
+        matched: null,
+        unmatched: [],
+      },
+    ]);
+  });
+
+  it('answers 400 for a malformed code and 404 for a country without a set', () => {
+    const status = (fn: () => unknown) => {
+      try {
+        fn();
+        return 200;
+      } catch (e) {
+        return (e as { getStatus(): number }).getStatus();
+      }
+    };
+    expect(status(() => svc.officialSet('KEN'))).toBe(400);
+    expect(status(() => svc.officialSet(''))).toBe(400);
+    expect(status(() => svc.officialSet('MZ'))).toBe(404);
+  });
+
   it('answers 503 for official on a DB built without official sets', async () => {
     const plain = path.join(dir, 'plain.sqlite');
     makeDb(plain, true);
@@ -406,6 +510,7 @@ describe('BoundaryService official sources', () => {
     const old = new BoundaryService({} as any, { get: () => undefined } as any);
     expect(await statusOf(old.search('Nairobi', 'official'))).toBe(503);
     expect(await statusOf(old.search('Nairobi', 'nowhere'))).toBe(400);
+    expect(() => old.officialSet('KE')).toThrow(/no 'official' boundaries/);
   });
 });
 
