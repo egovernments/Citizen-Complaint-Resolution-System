@@ -43,4 +43,19 @@ public class PlatformBaselineGrantsTest {
             assertTrue(uri + " has no founder grant", actions.getOrDefault(uri, Set.of()).stream()
                     .anyMatch(id -> grants.getOrDefault(id, Set.of()).stream().anyMatch(founder::contains)));
     }
+
+    /** digit-ui calls the inbox route when InboxVisibilityConfig.serverSide is true; a role that can search complaints must reach it. */
+    @Test public void inboxSearchIsGrantedToTheSameEmployeeRolesAsExistingTenants() throws Exception {
+        Map<Long, String> urls = new HashMap<>(); Map<String, Set<String>> roles = new HashMap<>();
+        var records = new PlatformBaseline(new ObjectMapper()).records();
+        for (JsonNode row : records) if ("ACCESSCONTROL-ACTIONS-TEST.actions-test".equals(row.path("schemaCode").asText()))
+            urls.put(row.path("data").path("id").asLong(), row.path("data").path("url").asText());
+        for (JsonNode row : records) if ("ACCESSCONTROL-ROLEACTIONS.roleactions".equals(row.path("schemaCode").asText())) {
+            String url = urls.get(row.path("data").path("actionid").asLong());
+            if (url != null) roles.computeIfAbsent(url, k -> new TreeSet<>()).add(row.path("data").path("rolecode").asText());
+        }
+        // Action 4559 on existing tenants: an employee endpoint, never CITIZEN.
+        assertEquals(new TreeSet<>(List.of("ACCOUNT_ADMIN", "AUTO_ESCALATE", "CSR", "GRO", "PGR_LME", "SUPERUSER")),
+                roles.getOrDefault("/pgr-services/v2/request/inbox/_search", Set.of()));
+    }
 }
