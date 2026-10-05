@@ -34,8 +34,12 @@ function fixture(role = 'SUPERUSER') {
     mdmsV2Create: async (tenant: string, code: string, id: string, data: any) => { const row = { tenantId: tenant, schemaCode: code, uniqueIdentifier: id, data, isActive: true }; rows.set(`${tenant}|${code}/${id}`, row); writes++; return row; },
     mdmsV2UpdateData: async (record: any, data: any) => { update(record, data); return record; },
     generateEncKey: async () => true,
-    userSearch: async () => users,
-    userCreate: async (value: any) => { users.push({ ...value, uuid: 'founder' }); },
+    // Like egov-user: only active users unless `active: false` is asked for.
+    userSearch: async (_tenant: string, opts: any = {}) => users.filter((u: any) => (u.active !== false) === (opts.active ?? true)),
+    userCreate: async (value: any) => {
+      if (users.some((u: any) => u.userName === value.userName)) throw new Error('DuplicateUserName'); // as egov-user
+      users.push({ ...value, uuid: 'founder' });
+    },
     userUpdate: async (value: any) => { users[0] = value; },
     // Default: the WORKSPACE root already exists, so tests not about boundaries make no boundary writes.
     boundaryHierarchySearch: async (_tenant: string, type: string) => [{ hierarchyType: type }],

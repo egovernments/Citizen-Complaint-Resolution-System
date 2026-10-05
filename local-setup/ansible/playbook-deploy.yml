@@ -5948,9 +5948,23 @@
           pwdexpirydate=now()+interval '90 days' WHERE id=<id> AND
           tenantid='{{ pgr_provisioner_tenant_id }}'; UPDATE
           eg_user_login_failed_attempts SET active=false WHERE
-          user_uuid='<uuid>' AND active; then re-run the deploy, which restarts
-          pgr-services (it retries a refused password only every 6 hours).
+          user_uuid='<uuid>' AND active; then restart pgr-services
+          (`docker compose restart pgr-services` in {{ digit_dir }}). Once its
+          provisioner has logged in, PGR retries a refused password only every
+          6 hours; before the first successful login, every 10 minutes.
       when: pgr_onboarding_runner_effective | bool
+
+    # pgr-services was (re)created earlier in the play, before this account
+    # existed, so its runner may already have paused on a refused first login.
+    # A restart makes it re-check now instead of on its 10-minute schedule.
+    - name: "onboarding provisioner — restart pgr-services after creating its account"
+      ansible.builtin.shell: docker compose {{ compose_files }} restart pgr-services
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when:
+        - pgr_onboarding_runner_effective | bool
+        - pgr_provisioner_seed is changed
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-

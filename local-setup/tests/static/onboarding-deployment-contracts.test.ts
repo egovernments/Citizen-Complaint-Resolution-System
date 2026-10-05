@@ -130,6 +130,17 @@ describe('PGR onboarding cutover deployment contract', () => {
       .toBeLessThan(playbook.indexOf('onboarding provisioner — ensure the account exists'));
   });
 
+  test('the deploy restarts pgr-services after creating the provisioner, so onboarding is not left paused', () => {
+    const playbook = read('local-setup/ansible/playbook-deploy.yml');
+    const ensure = playbook.indexOf('onboarding provisioner — ensure the account exists');
+    const restart = playbook.indexOf('onboarding provisioner — restart pgr-services after creating its account');
+    expect(ensure).toBeGreaterThan(-1);
+    expect(restart).toBeGreaterThan(ensure);
+    const task = playbook.slice(restart, playbook.indexOf('\n    - name:', restart));
+    expect(task).toContain('restart pgr-services');
+    expect(task).toContain('pgr_provisioner_seed is changed');
+  });
+
   test('Helm wires onboarding with the runner off by default', () => {
     const values = read('devops/deploy-as-code/charts/urban/pgr-services/values.yaml');
     expect(values).toMatch(/^onboarding:\n  runnerEnabled: false$/m);

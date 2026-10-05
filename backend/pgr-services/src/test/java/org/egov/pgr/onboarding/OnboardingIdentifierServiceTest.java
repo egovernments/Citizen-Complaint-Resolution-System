@@ -58,10 +58,10 @@ public class OnboardingIdentifierServiceTest {
         MockEnvironment env = new MockEnvironment()
                 .withProperty("pgr.onboarding.reserved-tenant-ids", "pg, mz")
                 .withProperty("state.level.tenant.id", "ke.nairobi")
-                .withProperty("egov.state.level.tenant.id", "ke")
+                .withProperty("egov.state.level.tenant.id", "zm") // a different root from STATE_LEVEL, so each property is pinned
                 .withProperty("pgr.onboarding.provisioner.tenant-id", "et");
         OnboardingIdentifierService configured = new OnboardingIdentifierService(env);
-        assertEquals(Set.of("default", "pg", "mz", "ke", "et"), configured.reservedTenantIds());
+        assertEquals(Set.of("default", "pg", "mz", "ke", "zm", "et"), configured.reservedTenantIds());
         assertFalse("a city id is not a root tenant id", configured.reservedTenantId("nairobi"));
 
         // Unset properties leave only the platform tenant.
