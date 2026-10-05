@@ -147,8 +147,8 @@ export const configuredOtp: ReadOtp = async () => {
   return code;
 };
 
-export async function citizenSignIn(request: APIRequestContext, baseURL: string, mobileNumber: string, readOtp: ReadOtp = configuredOtp) {
-  const tenant = await resolveTenant(request, baseURL);
+export async function citizenSignIn(request: APIRequestContext, baseURL: string, mobileNumber: string, readOtp: ReadOtp = configuredOtp, slug?: string) {
+  const tenant = await resolveTenant(request, baseURL, slug);
   const headers = { Origin: new URL(baseURL).origin };
   const send = () => request.post(`${baseURL}/identity/v1/citizen/otp/_send`, {
     headers, data: { tenantSlug: tenant.urlSlug, mobileNumber, purpose: 'signin', locale: 'en_IN' },
