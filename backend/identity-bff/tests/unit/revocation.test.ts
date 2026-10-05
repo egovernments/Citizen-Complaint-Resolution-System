@@ -169,7 +169,17 @@ describe("token inventory and revocation", () => {
     await inventory(account, login(), keep); await withPersonLease(subject, lease => holdToken(lease, account, other));
     await revokePerson(subject, "CREDENTIAL_CHANGED", { keepSessionId: keep });
     expect(await getIdentitySession(keep)).toMatchObject({ revocationGeneration: 1 });
-    expect(await getIdentitySession(other)).toBeNull(); expect(await readToken(account)).not.toBeNull();
+    expect(await getIdentitySession(other)).toBeNull();
+    // The ended session also held the token, so it goes even though the initiator holds it.
+    expect(await readToken(account)).toBeNull();
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("digit-token");
+  });
+  it("self password change keeps a token only the initiating session holds", async () => {
+    const keep = await session(); const other = await session("other");
+    await inventory(account, login(), keep); await inventory(second, login(second, "other-token"), other);
+    await revokePerson(subject, "CREDENTIAL_CHANGED", { keepSessionId: keep });
+    expect(await readToken(account)).not.toBeNull(); expect(await readToken(second)).toBeNull();
+    expect(digit.revokeToken).toHaveBeenCalledExactlyOnceWith("other-token");
   });
   it("logout current preserves a shared token; logout all revokes last holder", async () => {
     const first = await session(); const other = await session("other");
