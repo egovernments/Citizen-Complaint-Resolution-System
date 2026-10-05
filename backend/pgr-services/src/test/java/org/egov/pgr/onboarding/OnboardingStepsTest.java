@@ -14,6 +14,7 @@ public class OnboardingStepsTest {
     private OnboardingSteps steps; private OnboardingSignup signup; private OnboardingOperation op; private OnboardingProgress progress;
     private Map<String,JsonNode> rows=new LinkedHashMap<>();private Set<String> schemas=new HashSet<>();
     private List<String> writes=new ArrayList<>();private List<JsonNode> employees=new ArrayList<>();private Map<String,Object> createdUser;
+    private List<Object> workflows=new ArrayList<>();
     private OnboardingFailure createFailure;
     @Before @SuppressWarnings("unchecked") public void setup() throws Exception {
         client=mock(OnboardingProvisionerClient.class);steps=new OnboardingSteps(client,new PlatformBaseline(mapper),mapper);
@@ -45,6 +46,10 @@ public class OnboardingStepsTest {
                 createdUser=new LinkedHashMap<>(createdUser);createdUser.put("uuid","founder-uuid");employees.add(mapper.valueToTree(Map.of("user",createdUser)));writes.add("hrms:create");return mapper.valueToTree(Map.of("Employees",employees));
             }
             writes.add(service+":"+path);
+            if(service.equals("workflow")) {
+                if(path.contains("_search"))return mapper.valueToTree(Map.of("BusinessServices",workflows));
+                workflows.addAll((List<Object>)body.get("BusinessServices"));return mapper.createObjectNode();
+            }
             if(service.equals("boundary")&&path.contains("_search"))return mapper.valueToTree(Map.of("BoundaryHierarchy",List.of(Map.of("hierarchyType","ADMIN")),"Boundary",List.of(Map.of("code","newtown")),"TenantBoundary",List.of(Map.of("tenantId","newtown","hierarchyType","ADMIN","boundary",List.of(Map.of("code","newtown","boundaryType","ROOT"))))));
             return mapper.createObjectNode();
         };
@@ -64,6 +69,17 @@ public class OnboardingStepsTest {
         verify(client).read(eq("mdms"),anyString(),argThat(b->b.toString().contains("tenantId=in")&&b.toString().contains("MobileNumberValidation")));
         var order=inOrder(client);order.verify(client).read(eq("hrms"),contains("_search"),anyMap());order.verify(client).write(any(),eq("hrms"),contains("_create"),anyMap());
         steps.perform("FOUNDER_HRMS",signup,op,progress);verify(client,times(1)).write(any(),eq("hrms"),contains("_create"),anyMap());
+    }
+    @Test public void baselineCreatesTenantPgrWorkflowOnceWithSeededRoles(){
+        prerequisites();assertEquals(1,workflows.size());JsonNode bs=mapper.valueToTree(workflows.get(0));
+        assertEquals("PGR",bs.path("businessService").asText());assertEquals("newtown",bs.path("tenantId").asText());assertFalse(bs.toString().contains("{tenantid}"));
+        verify(client).read(eq("workflow"),eq("/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=newtown&businessServices=PGR"),anyMap());
+        for(String state:List.of("PENDINGFORASSIGNMENT","PENDINGFORREASSIGNMENT","PENDINGATLME","RESOLVED","REJECTED","CLOSEDAFTERRESOLUTION","CLOSEDAFTERREJECTION"))
+            assertTrue(state,bs.path("states").findValuesAsText("state").contains(state));
+        for(JsonNode role:bs.findValues("roles"))for(JsonNode code:role)
+            assertTrue("seeded role "+code,rows.containsKey("newtown|ACCESSCONTROL-ROLES.roles|"+code.asText()));
+        op.getRecordProgress().clear();prerequisites();assertEquals(1,workflows.size());
+        verify(client,times(1)).write(any(),eq("workflow"),eq("/egov-workflow-v2/egov-wf/businessservice/_create"),anyMap());
     }
     @Test public void foreignTenantCollisionFailsBeforeEncryptionOrFounder(){
         rows.put("newtown|tenant.tenants|newtown",mapper.valueToTree(Map.of("data",Map.of("code","newtown"))));

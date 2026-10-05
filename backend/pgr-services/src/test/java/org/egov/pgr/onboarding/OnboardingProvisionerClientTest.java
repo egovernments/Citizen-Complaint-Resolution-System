@@ -35,7 +35,7 @@ public class OnboardingProvisionerClientTest {
         server.start();String base="http://127.0.0.1:"+server.getAddress().getPort();
         var env=new MockEnvironment().withProperty("pgr.onboarding.provisioner.username","fixture").withProperty("pgr.onboarding.provisioner.password","fixture-only")
                 .withProperty("pgr.onboarding.provisioner.tenant-id","pg");
-        for(String service:List.of("user","enc","mdms","hrms","boundary","localization"))env.withProperty("egov."+service+".host",base);
+        for(String service:List.of("user","enc","mdms","hrms","boundary","localization","workflow"))env.withProperty("egov."+service+".host",base);
         client=new OnboardingProvisionerClient(new RestTemplate(),mapper,env);
     }
     private void respond(com.sun.net.httpserver.HttpExchange exchange,int status,String body) throws java.io.IOException {
@@ -136,6 +136,14 @@ public class OnboardingProvisionerClientTest {
         for(JsonNode input:baseline.records()) {
             var record=(ObjectNode)mapper.readTree(mapper.writeValueAsString(input).replace("{tenantid}","newtown"));record.put("tenantId","newtown");record.put("isActive",true);
             client.write(scope,"mdms","/egov-mdms-service/v2/_create/"+record.path("schemaCode").asText(),Map.of("Mdms",record));expected++;
+        }
+        for(JsonNode input:baseline.workflows()) {
+            JsonNode workflow=mapper.readTree(mapper.writeValueAsString(input).replace("{tenantid}","newtown"));
+            client.write(scope,"workflow","/egov-workflow-v2/egov-wf/businessservice/_create",Map.of("BusinessServices",List.of(workflow)));expected++;
+            var other=(ObjectNode)workflow.deepCopy();other.put("businessService","OTHER");
+            assertThrows(OnboardingFailure.class,()->client.write(scope,"workflow","/egov-workflow-v2/egov-wf/businessservice/_create",Map.of("BusinessServices",List.of(other))));
+            JsonNode foreign=mapper.readTree(mapper.writeValueAsString(input).replace("{tenantid}","other"));
+            assertThrows(OnboardingFailure.class,()->client.write(scope,"workflow","/egov-workflow-v2/egov-wf/businessservice/_create",Map.of("BusinessServices",List.of(foreign))));
         }
         assertTrue(expected>900);assertEquals(expected,writes);assertEquals(expected,details);
     }

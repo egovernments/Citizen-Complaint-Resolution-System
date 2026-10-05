@@ -20,7 +20,7 @@ public class OnboardingProvisionerClient {
     private final RestTemplate http;
     private final ObjectMapper mapper;
     private final Environment env;
-    private final Set<String> signupSchemas;
+    private final Set<String> signupSchemas, signupWorkflows;
     private Map<String, Object> login;
     private long expiresAt;
 
@@ -32,10 +32,11 @@ public class OnboardingProvisionerClient {
         this.http.setRequestFactory(factory);
         this.mapper = mapper;
         this.env = env;
-        var schemas = new HashSet<String>();
-        try { new PlatformBaseline(mapper).schemas().forEach(schema -> schemas.add(schema.path("code").asText())); }
+        var schemas = new HashSet<String>(); var workflows = new HashSet<String>();
+        try { var seed = new PlatformBaseline(mapper); seed.schemas().forEach(schema -> schemas.add(schema.path("code").asText()));
+            seed.workflows().forEach(workflow -> workflows.add(workflow.path("businessService").asText())); }
         catch (java.io.IOException e) { throw new IllegalStateException("Onboarding baseline unavailable", e); }
-        this.signupSchemas = Set.copyOf(schemas);
+        this.signupSchemas = Set.copyOf(schemas); this.signupWorkflows = Set.copyOf(workflows);
     }
 
     @SuppressWarnings("unchecked")
@@ -74,7 +75,8 @@ public class OnboardingProvisionerClient {
         String endpoint = path == null ? "" : path.split("\\?", 2)[0];
         Set<String> reads = Set.of("mdms:/egov-mdms-service/schema/v1/_search", "mdms:/egov-mdms-service/v2/_search",
                 "hrms:/egov-hrms/employees/_search", "boundary:/boundary-service/boundary/_search",
-                "boundary:/boundary-service/boundary-hierarchy-definition/_search", "boundary:/boundary-service/boundary-relationships/_search");
+                "boundary:/boundary-service/boundary-hierarchy-definition/_search", "boundary:/boundary-service/boundary-relationships/_search",
+                "workflow:/egov-workflow-v2/egov-wf/businessservice/_search");
         if (!reads.contains(service + ":" + endpoint) || path.contains("#")) denied();
         var request = new LinkedHashMap<>(body); request.put("RequestInfo", requestInfo());
         return exchange(base(service) + path, request, null);
@@ -147,6 +149,9 @@ public class OnboardingProvisionerClient {
                 payload = body.path("BoundaryRelationship"); requireTenant(payload, tenant);
                 if (!tenant.equals(payload.path("code").asText()) || !"ADMIN".equals(payload.path("hierarchyType").asText()) || !"ROOT".equals(payload.path("boundaryType").asText())) denied();
             } else denied();
+        } else if ("workflow".equals(service) && baseline && "/egov-workflow-v2/egov-wf/businessservice/_create".equals(path)) {
+            payload = only(body.path("BusinessServices")); requireTenant(payload, tenant);
+            if (!signupWorkflows.contains(payload.path("businessService").asText())) denied();
         } else if ("hrms".equals(service) && "FOUNDER_HRMS".equals(step) && "/egov-hrms/employees/_create".equals(path)) {
             payload = only(body.path("Employees")); requireTenant(payload, tenant); requireTenant(payload.path("user"), tenant);
             String founder = "FOUNDER_" + scope.signupId().toString().replace("-", "");
