@@ -1,5 +1,6 @@
 import { localizationService, mdmsService, MDMS_SCHEMAS } from '@/api';
 import type { MdmsRecord } from '@/api/types';
+import { labelLocales } from '../labelLocales';
 
 /**
  * Departments and designations for the Departments step, read and written as
@@ -73,8 +74,10 @@ function dataFor(kind: MasterKind, input: MasterInput, base: Record<string, unkn
 
 async function label(tenantId: string, kind: MasterKind, entries: MasterInput[]): Promise<void> {
   const pairs = entries.map(({ code, name }) => ({ code, name: name.trim() }));
-  if (kind === 'department') await localizationService.uploadDepartmentLocalizations(tenantId, pairs, 'en_IN');
-  else await localizationService.uploadDesignationLocalizations(tenantId, pairs, 'en_IN');
+  for (const locale of await labelLocales(tenantId)) {
+    if (kind === 'department') await localizationService.uploadDepartmentLocalizations(tenantId, pairs, locale);
+    else await localizationService.uploadDesignationLocalizations(tenantId, pairs, locale);
+  }
 }
 
 async function refreshLabels(): Promise<void> {

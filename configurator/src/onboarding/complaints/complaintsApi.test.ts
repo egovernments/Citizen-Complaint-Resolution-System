@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mdmsService } from '@/api';
+import { localizationService, mdmsService } from '@/api';
 import type { MdmsRecord } from '@/api/types';
 import { loadComplaints, nextData, rowsFingerprint, rowsFor, saveComplaints, type ComplaintDraft } from './complaintsApi';
 
 vi.mock('@/api', () => ({
-  mdmsService: { searchRecords: vi.fn(), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), setActive: vi.fn(async () => ({})) },
+  mdmsService: { searchRecords: vi.fn(), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), setActive: vi.fn(async () => ({})), getStateInfoLocales: vi.fn(async () => ['en_KE']) },
   localizationService: {
     uploadComplaintTypeLocalizations: vi.fn(async () => ({ success: 1, failed: 0 })),
     cacheBust: vi.fn(async () => undefined),
@@ -143,6 +143,8 @@ describe('saveComplaints', () => {
       expect.objectContaining({ parentCode: 'StreetLighting', path: 'StreetLighting.StreetLightsBrokenLamp', department: 'ROADS', slaHours: 72 }),
     );
     expect(setActive).toHaveBeenCalledWith(existing[1], false);
+    // Labels go to digit-ui's en_IN and the workspace's StateInfo locale alike.
+    expect(vi.mocked(localizationService.uploadComplaintTypeLocalizations).mock.calls.map((call) => call[2])).toEqual(['en_IN', 'en_KE']);
   });
 });
 
