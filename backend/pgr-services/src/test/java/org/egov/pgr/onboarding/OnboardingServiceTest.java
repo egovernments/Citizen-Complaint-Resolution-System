@@ -77,6 +77,54 @@ public class OnboardingServiceTest {
         verify(repository).reserveIdentifier(eq("URL_SLUG"), eq("bomet-county"), eq(signupId), anyLong());
     }
 
+    /**
+     * #2269 round-3 review item 1: the tenant id is the slug with non-letters stripped, so a slug
+     * that is not itself reserved can still project onto `default` or a state root.
+     */
+    @Test
+    public void platformTenantIdsAreNeverAvailableWhateverSlugProjectsToThem() {
+        OnboardingService configured = new OnboardingService(repository,
+                new OnboardingIdentifierService(Arrays.asList("pg", "ke.nairobi")));
+        when(repository.identifierAvailable(eq("URL_SLUG"), any(), any())).thenReturn(true);
+        for (String[] slug : new String[][] {{"default", "default"}, {"de-fault", "default"},
+                {"ke", "ke"}, {"k-e", "ke"}, {"pg-2", "pg"}}) {
+            Map<String, Object> request = new LinkedHashMap<>();
+            request.put("type", "URL_SLUG");
+            request.put("value", slug[0]);
+            Map<String, Object> result = configured.checkIdentifier(principal, request);
+            assertEquals(slug[0], slug[1], result.get("derivedTenantId"));
+            assertEquals(slug[0], false, result.get("available"));
+            assertEquals(slug[0], "TENANT_ID", result.get("conflictingType"));
+        }
+        Map<String, Object> direct = new LinkedHashMap<>();
+        direct.put("type", "TENANT_ID");
+        direct.put("value", "default");
+        assertEquals(false, configured.checkIdentifier(principal, direct).get("available"));
+        verify(repository, never()).identifierAvailable(eq("TENANT_ID"), any(), any());
+    }
+
+    @Test
+    public void submitRefusesAPlatformTenantIdBeforeReservingAnything() {
+        OnboardingService configured = new OnboardingService(repository,
+                new OnboardingIdentifierService(Collections.singletonList("ke")));
+        for (String slug : Arrays.asList("de-fault", "k-e")) {
+            UUID signupId = UUID.randomUUID();
+            OnboardingSignup signup = signup(signupId);
+            signup.setUrlSlug(slug);
+            signup.setOrganizationAlias(slug);
+            signup.setRequestedTenantId(slug.replace("-", ""));
+            when(repository.findOwnedSignupForUpdate(signupId, "https://issuer", "subject-1"))
+                    .thenReturn(Optional.of(signup));
+            when(repository.findOperationBySignup(signupId)).thenReturn(Optional.empty());
+
+            CustomException error = assertThrows(slug, CustomException.class, () -> configured.submit(
+                    principal, Collections.singletonMap("id", signupId.toString()), "submit-" + slug));
+            assertEquals("ONBOARDING_IDENTIFIER_TAKEN", error.getCode());
+        }
+        verify(repository, never()).reserveIdentifier(any(), any(), any(), anyLong());
+        verify(repository, never()).submit(any(), any(), anyLong());
+    }
+
     @Test
     public void updateCannotCrossTheAuthenticatedTenantAdminBoundary() {
         UUID signupId = UUID.randomUUID();

@@ -1,13 +1,18 @@
 package org.egov.pgr.onboarding;
 
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**
@@ -41,6 +46,59 @@ public class OnboardingIdentifierService {
             "identity", "images", "inbox", "kc", "keycloak", "localization", "matomo", "mcp", "mdms-v2",
             "novu", "novu-api", "novu-bridge", "novu-ws", "otel", "otp", "pgr-services", "static", "status",
             "tests", "tests-v2", "turbopass", "user", "user-otp", "user-preference", "v1", "xstate-chatbot");
+
+    /**
+     * DIGIT tenant ids a signup may never take, even when no such tenant exists yet. {@code default}
+     * is the platform tenant egov-localization falls back to for every tenant: its admin could rewrite
+     * UI text all tenants inherit. The rest come from deployment configuration, see
+     * {@link #configuredPlatformTenants(Environment)}.
+     */
+    static final Set<String> PLATFORM_TENANT_IDS = Set.of("default");
+    /** Properties naming deployment tenants; each value's root (before any dot) is reserved. */
+    static final List<String> PLATFORM_TENANT_PROPERTIES = List.of(
+            "pgr.onboarding.reserved-tenant-ids", "state.level.tenant.id", "egov.state.level.tenant.id",
+            "pgr.onboarding.provisioner.tenant-id");
+
+    private final Set<String> reservedTenantIds;
+
+    /** Platform tenant ids only; for tests that need no deployment configuration. */
+    public OnboardingIdentifierService() {
+        this(Collections.emptySet());
+    }
+
+    OnboardingIdentifierService(Collection<String> configuredTenantIds) {
+        Set<String> reserved = new TreeSet<>(PLATFORM_TENANT_IDS);
+        for (String tenantId : configuredTenantIds) {
+            String root = tenantId == null ? "" : tenantId.trim().toLowerCase(Locale.ROOT).split("\\.", 2)[0];
+            if (!root.isEmpty()) reserved.add(root);
+        }
+        this.reservedTenantIds = Collections.unmodifiableSet(reserved);
+    }
+
+    @Autowired
+    public OnboardingIdentifierService(Environment env) {
+        this(configuredPlatformTenants(env));
+    }
+
+    /** The state roots and other platform tenants this deployment names, comma-separated per property. */
+    static List<String> configuredPlatformTenants(Environment env) {
+        List<String> tenants = new ArrayList<>();
+        for (String property : PLATFORM_TENANT_PROPERTIES) {
+            for (String value : env.getProperty(property, "").split(",")) tenants.add(value);
+        }
+        return tenants;
+    }
+
+    /**
+     * True when a signup may not take this DIGIT tenant id. This is a "taken" verdict, not an
+     * invalid input: the advisory check reports it unavailable and submit refuses it, like an
+     * id another workspace already holds.
+     */
+    public boolean reservedTenantId(String tenantId) {
+        return tenantId != null && reservedTenantIds.contains(tenantId.toLowerCase(Locale.ROOT));
+    }
+
+    Set<String> reservedTenantIds() { return reservedTenantIds; }
 
     public List<Identifier> forInput(String rawType, String rawValue) {
         String type = required(rawType, "Identifier.type").toUpperCase(Locale.ROOT);

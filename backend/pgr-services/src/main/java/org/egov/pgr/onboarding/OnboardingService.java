@@ -130,7 +130,7 @@ public class OnboardingService {
         if (candidates.size() > 1) result.put("derivedTenantId", candidates.get(1).value());
         result.put("available", true);
         for (OnboardingIdentifierService.Identifier candidate : candidates) {
-            if (!repository.identifierAvailable(candidate.type(), candidate.value(), signupId)) {
+            if (reserved(candidate) || !repository.identifierAvailable(candidate.type(), candidate.value(), signupId)) {
                 result.put("available", false);
                 result.put("conflictingType", candidate.type());
                 break;
@@ -159,11 +159,21 @@ public class OnboardingService {
         repository.snapshotFounder(signup.getId(), principal);
         long now = System.currentTimeMillis();
         for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
+            if (reserved(identifier)) {
+                throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN", identifier.type() + " is already in use");
+            }
+        }
+        for (OnboardingIdentifierService.Identifier identifier : identifiers.forSignup(signup)) {
             repository.reserveIdentifier(identifier.type(), identifier.value(), signup.getId(), now);
         }
         return existing == null
                 ? repository.submit(signup, idempotencyKey.trim(), now)
                 : repository.resubmit(existing, idempotencyKey.trim(), now);
+    }
+
+    /** A platform tenant id (default, a state root): never available, though no workspace holds it. */
+    private boolean reserved(OnboardingIdentifierService.Identifier identifier) {
+        return "TENANT_ID".equals(identifier.type()) && identifiers.reservedTenantId(identifier.value());
     }
 
     /**

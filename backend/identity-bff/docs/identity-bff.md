@@ -156,6 +156,8 @@ xstate-chatbot
 ```
 <!-- reserved-url-slugs:end -->
 
+A valid slug can still be unavailable for signup. Its tenant id (the slug with every non-letter removed, so `de-fault` is `default`) must not be a platform tenant: `default`, the tenant egov-localization falls back to, and the deployment's state roots. pgr-services owns that list (`OnboardingIdentifierService.reservedTenantId`, from `STATE_LEVEL_TENANT_ID`, `EGOV_STATE_LEVEL_TENANT_ID`, `DIGIT_PROVISIONER_TENANT_ID` and `PGR_ONBOARDING_RESERVED_TENANT_IDS`, default `pg`). Its identifier check answers `available: false` with `conflictingType: TENANT_ID`, and submit refuses with `ONBOARDING_IDENTIFIER_TAKEN`.
+
 ### 2.5 Locks and the person lease
 
 All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-delete, renewed by compare-and-pexpire. **Lock order** (D25/A2), outermost first:
