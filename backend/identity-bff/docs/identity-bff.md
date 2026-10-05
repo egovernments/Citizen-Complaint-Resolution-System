@@ -1189,6 +1189,23 @@ Removed by item 14/15: the `DIGIT_PROVISIONER_*` variables, the onboarding worke
 - egov-user or MDMS being down still allows OIDC sign-in, but tenant listing and `_select` fail closed with 503, and no DIGIT token is issued.
 - With the BFF stopped, signed-in people keep working until their DIGIT token expires (revocation pauses: a documented limit).
 
+**Revocation log (#2285).** Every revocation writes one JSON line to stdout, so "why was this person signed out?" can be answered from the logs alone.
+- `event: "identity.revocation.job"`: one line per run of a revocation job (Keycloak events, reconcile, binding removal, tenant fan-out). `outcome` is `ok`, or `retry` (logged as a warning, with `error`) when the job failed and stays queued; the revocation worker runs it again within about 5 s. A retry line still lists what the run did before it failed.
+- `event: "identity.revocation.logout"`: one line per sign-out the BFF performs without a job: `reason` `LOGOUT` (with `scope` `current` | `others` | `all`), `PHONE_CHANGED`, or `KEYCLOAK_LOGOUT` (a Keycloak session ended; `leaseBusy: true` when the realm-scan fallback deleted sessions without the person lease). `outcome` is `ok` or `failed`.
+
+| Field | Meaning |
+|---|---|
+| `reason` | The job's reason: `CREDENTIAL_CHANGED`, `KEYCLOAK_DISABLED`, `KEYCLOAK_DELETED`, `LOGOUT_ALL`, `MEMBERSHIP_REMOVED`, `BINDING_REMOVED`, `ROLE_CHANGED`, `DIGIT_INACTIVE`, `DIGIT_ACCOUNT_MISSING`, `ORGANIZATION_DISABLED`, `TENANT_INACTIVE`, or a logout reason above |
+| `subject` | Keycloak subject |
+| `tenantId`, `account` | The tenant (and `tenantId:uuid` DIGIT account) a scoped job targets; absent for person-wide jobs |
+| `trigger` | `eventId` (`<time>:<id>` for a Keycloak event), `eventType` (the user event type, e.g. `UPDATE_CREDENTIAL`, or the admin event's operation and resource, e.g. `UPDATE USER`), `eventTime` (ISO). A job the BFF started itself has only a generated `eventId` (`tenant:<tenantId>` for a tenant fan-out); a logout line not caused by a Keycloak event has an empty `trigger` |
+| `sessionsEnded`, `sessions.ended` | Count, and a `privateRef` per ended BFF session (the same keyed hash the `token-holders:*` sets store) |
+| `sessionsKept`, `sessions.kept` | Every session of the person the run left alive, each with `reason`: `B3_INITIATOR` (the session that made a self password change), `INITIATOR` (the session that asked for the logout or phone change), `OTHER_TENANT` (a tenant-scoped job and the session is at another tenant), `NOT_TARGETED` (a logout that did not cover it), `CHANGING_SESSION` (the Keycloak session that made a credential change, §10), `AUTHENTICATED_AFTER_CHANGE` (Keycloak authenticated it at or after a credential change, §10) |
+| `tokensRevoked`, `tokensKept`, `tokens[]` | Each DIGIT token decision: `account`, `tokenRef` (first 12 hex digits of SHA-256 of the token, matching the `revoke-retry:*` key), `outcome` `revoked` \| `kept`, and `why`. Revoked: `IN_SCOPE`, `SHARED_WITH_ENDED_SESSION` (a kept session also held it; it gets a fresh token at its next `_select`, §8), `RECOVERED` (not in Redis; found by a staff login, §8), `NO_LIVE_HOLDER` (logout ended its last holder). Kept: `KEPT_SESSIONS_ONLY_HOLDERS`, `STILL_HELD` (another live session holds it), `RETAINED_BY_CURRENT` (logout of other sessions), `OTHER_PERSON` (the account's token belongs to another subject) |
+| `durationMs` | Run time |
+
+No line contains a token, cookie, session id or Keycloak session id.
+
 **Documented limits** (design §6): native refresh tokens issued before binding (up to 14 days) can't be revoked without an egov-user change; revocation pauses while the BFF is down; after Redis loss, citizen tokens, inactive or locked staff tokens, and tokens of a Keycloak user deleted in the same window live until they expire.
 
 The configuration reference for each variable is `deploy/digit-compose/identity-bff.env.example`. The deployment walkthrough is `docs/setup/deployment/identity-bff.md` at the repository root.
