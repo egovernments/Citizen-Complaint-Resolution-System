@@ -10,6 +10,7 @@ const background = { poller: async () => ({ status: "ok" as const, lagSeconds: 0
 describe("readiness dependencies", () => {
   it("authenticates both DIGIT checks and never calls PGR", async () => {
     config.digitMdmsSearchUrl = "https://mdms.test/search";
+    config.digitAdminTenantId = "ke.bomet";
     vi.mocked(searchAccounts).mockResolvedValue([]);
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ MdmsRes: { tenant: { tenants: [] } } }), { status: 200 }));
     vi.stubGlobal("fetch", fetcher);
@@ -18,6 +19,8 @@ describe("readiness dependencies", () => {
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0][0]).toBe(config.digitMdmsSearchUrl);
     expect(JSON.parse(fetcher.mock.calls[0][1].body).RequestInfo.authToken).toBe("service-token");
+    // MDMS is read at the admin's own root tenant, never a fixed source tenant.
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).MdmsCriteria.tenantId).toBe("ke");
   });
   it.each([401, 403, 500])("fails on MDMS HTTP %s while still checking users", async status => {
     config.digitMdmsSearchUrl = "https://mdms.test/search";

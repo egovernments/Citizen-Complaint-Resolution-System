@@ -6,18 +6,17 @@ import type { HttpErrorCode, ResultCode } from "./error-codes.js";
  *
  * tests/contract/routes.test.ts checks this list against the Express app:
  * - every registered route is listed here;
- * - every `live`, `changing` or `deleted-later` route is registered;
+ * - every `live` or `changing` route is registered;
  * - every `planned` route is not registered yet (so the lane that builds it
  *   flips it to `changing`/`live` in the same PR, and adds its contract test).
  *
  * `state`:
  * - live: built, and the contract matches the code today;
  * - changing: built, but a work item still changes its shape or codes;
- * - planned: not built yet;
- * - deleted-later: built today, removed by item 14 once its replacement is on every box.
+ * - planned: not built yet.
  */
 
-export type RouteState = "live" | "changing" | "planned" | "deleted-later";
+export type RouteState = "live" | "changing" | "planned";
 
 /**
  * - none: no auth;
@@ -149,12 +148,9 @@ export const ROUTES: RouteContract[] = [
     codes: [...WORKLOAD_AUTH, "ACCOUNT_LINK_BUSY", "IDENTITY_UNAVAILABLE"] },
   { method: "GET", path: "/internal/identity/v1/account-links", auth: "operator", state: "changing", items: [14],
     codes: [...WORKLOAD_AUTH] },
-  { method: "POST", path: "/internal/identity/v1/tenant-routes/_backfill", auth: "operator", state: "deleted-later", items: [14],
-    codes: [...WORKLOAD_AUTH] },
-  { method: "POST", path: "/internal/identity/v1/tenant-groups/_ensure", auth: "operator", state: "deleted-later", items: [14],
-    codes: [...WORKLOAD_AUTH] },
-  { method: "POST", path: "/internal/identity/v1/role-assignments/_ensure", auth: "operator", state: "deleted-later", items: [14],
-    codes: [...WORKLOAD_AUTH] },
+  // Kept by item 14: the only writer of routes for root tenants that predate signup (e.g. `ke`).
+  { method: "POST", path: "/internal/identity/v1/tenant-routes/_backfill", auth: "operator", state: "live", items: [],
+    codes: [...WORKLOAD_AUTH, "DIGIT_UNAVAILABLE", "IDENTITY_UNAVAILABLE"] },
 ];
 
 export function routeContract(method: string, path: string): RouteContract | undefined {

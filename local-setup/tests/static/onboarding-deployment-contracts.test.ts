@@ -33,9 +33,19 @@ describe('PGR onboarding cutover deployment contract', () => {
       expect(setting(pgr, `DIGIT_PROVISIONER_${suffix}`)).toBe(`\${PGR_DIGIT_PROVISIONER_${suffix}:-}`);
       expect(bff).not.toMatch(new RegExp(`^      DIGIT_PROVISIONER_${suffix}:`, 'm'));
     }
-    expect(bff).not.toMatch(/^      (?:ONBOARDING_WORKER|PGR_ONBOARDING_WORKER|ONBOARDING_TENANT_ADMIN|DIGIT_FOUNDATION_SOURCE_TENANT)/m);
+    expect(bff).not.toMatch(/^      (?:ONBOARDING_WORKER|PGR_ONBOARDING_WORKER|ONBOARDING_TENANT_ADMIN|DIGIT_FOUNDATION_)/m);
     expect(bff).not.toMatch(/^      DIGIT_(?:MDMS_CREATE_URL|MDMS_SCHEMA_CREATE_URL|ENC_GENERATE_KEY_URL):/m);
     expect(setting(pgr, 'PGR_ONBOARDING_RUNNER_ENABLED')).toBe('${PGR_ONBOARDING_RUNNER_ENABLED:-true}');
+    // Compose files that do not set the flag get the jar default, which must agree.
+    expect(read('backend/pgr-services/src/main/resources/application.properties'))
+      .toContain('pgr.onboarding.runner.enabled=${PGR_ONBOARDING_RUNNER_ENABLED:true}');
+  });
+
+  test('the BFF reads no onboarding source tenant (no copy-from-pg foundation)', () => {
+    for (const file of ['backend/identity-bff/src/infrastructure/config.ts',
+      'backend/identity-bff/deploy/digit-compose/identity-bff.env.example']) {
+      expect(read(file)).not.toMatch(/DIGIT_(?:FOUNDATION|BOOTSTRAP)_SOURCE/);
+    }
   });
 
   test('the external worker lease API and its token are gone; only the in-process runner claims work', () => {

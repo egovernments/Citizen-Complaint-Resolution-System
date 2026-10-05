@@ -192,11 +192,6 @@ export const config = {
   digitAdminPassword: process.env.DIGIT_ADMIN_PASSWORD || "",
   digitAdminTenantId: process.env.DIGIT_ADMIN_TENANT_ID || "",
   digitAdminUserType: process.env.DIGIT_ADMIN_USER_TYPE || "EMPLOYEE",
-  // Read-only MDMS tenant used by readiness checks.
-  digitFoundationSourceTenant:
-    process.env.DIGIT_FOUNDATION_SOURCE_TENANT ||
-    process.env.DIGIT_BOOTSTRAP_SOURCE_TENANT ||
-    "pg",
   digitManagedBaseRoles: csv(process.env.DIGIT_MANAGED_BASE_ROLES || "EMPLOYEE"),
   digitManagedRoleAllowlist: csv(
     process.env.DIGIT_MANAGED_ROLE_ALLOWLIST ||

@@ -65,7 +65,7 @@ export function dependencyProbes(background: BackgroundReadiness): ReadinessProb
           if (!config.digitMdmsSearchUrl) throw new Error("MDMS unavailable");
           const response = await fetch(config.digitMdmsSearchUrl, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ RequestInfo: { apiId: "digit-identity-bff-readiness", authToken: token }, MdmsCriteria: { tenantId: config.digitFoundationSourceTenant, moduleDetails: [{ moduleName: "tenant", masterDetails: [{ name: "tenants" }] }] } }),
+            body: JSON.stringify({ RequestInfo: { apiId: "digit-identity-bff-readiness", authToken: token }, MdmsCriteria: { tenantId: config.digitAdminTenantId.split(".")[0], moduleDetails: [{ moduleName: "tenant", masterDetails: [{ name: "tenants" }] }] } }),
             signal: AbortSignal.timeout(config.digitTimeoutMs),
           });
           if (!response.ok || !(await response.json()).MdmsRes) throw new Error("MDMS unavailable");

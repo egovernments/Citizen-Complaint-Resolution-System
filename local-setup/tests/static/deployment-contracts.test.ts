@@ -1528,8 +1528,8 @@ describe('standalone Identity BFF and Keycloak deployment contract', () => {
       'IDENTITY_POLLER_MAX_LAG_SECONDS']) {
       expect(bff).toContain(`${setting}:`);
     }
-    for (const removed of ['ONBOARDING_WORKER_ENABLED', 'PGR_ONBOARDING_WORKER_URL',
-      'PGR_ONBOARDING_WORKER_TOKEN', 'DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
+    expect(bff).not.toMatch(/^ +(?:PGR_)?ONBOARDING_WORKER_\w*:/m);
+    for (const removed of ['DIGIT_PROVISIONER_USERNAME', 'DIGIT_MDMS_CREATE_URL']) {
       expect(bff).not.toContain(`${removed}:`);
     }
     expect(read('local-setup/ansible/playbook-deploy.yml')).toContain("rotate mode requires neither");

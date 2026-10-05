@@ -149,6 +149,7 @@ describe("internal routes: bearer auth", () => {
     contractRoute("POST", "/internal/identity/v1/account-links/_link"),
     contractRoute("POST", "/internal/identity/v1/account-links/_unlink"),
     contractRoute("GET", "/internal/identity/v1/account-links"),
+    contractRoute("POST", "/internal/identity/v1/tenant-routes/_backfill"),
   ];
 
   it.each(internal)("$method $path refuses a missing or wrong token with WORKLOAD_UNAUTHORIZED", async (route) => {

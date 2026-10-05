@@ -88,7 +88,7 @@ Until item 14 removes it, staff resolution is **binding, else the managed `kcbff
 A slug is the first path segment of `/{slug}/digit-ui/...`. This section is the one definition; every layer that accepts or routes a slug enforces exactly it and is tested against the list below:
 
 - the SPA, `digit-ui-esbuild/packages/libraries/src/services/tenant/tenantRoute.js` (`isValidTenantSlug`);
-- this BFF, `src/modules/access-context/url-slug.ts` (`validUrlSlug`), used by tenant-context resolution, `/authorize`, the tenant-route backfill, `organizations/_ensure` and `tenant-groups/_ensure`;
+- this BFF, `src/modules/access-context/url-slug.ts` (`validUrlSlug`), used by tenant-context resolution, `/authorize`, the tenant-route backfill and `organizations/_ensure`;
 - pgr-services, `OnboardingIdentifierService` (signup and identifier checks).
 
 A valid slug:
@@ -179,8 +179,7 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 **States** (from `src/contract/routes.ts`):
 - **live:** built, and the code matches this contract;
 - **changing:** built, but the listed items still change it;
-- **planned:** not built yet;
-- **deleted-later:** removed by item 14 once its replacement is on every box.
+- **planned:** not built yet.
 
 | Method | Path | Auth | State | Items |
 |---|---|---|---|---|
@@ -218,11 +217,11 @@ All locks are Redis leases: `SET key token NX PX ttl`, released by compare-and-d
 | POST | `/internal/identity/v1/account-links/_link` | operator | changing | 14 |
 | POST | `/internal/identity/v1/account-links/_unlink` | operator | changing | 14 |
 | GET | `/internal/identity/v1/account-links` | operator | changing | 14 |
-| POST | `/internal/identity/v1/tenant-routes/_backfill` | operator | deleted-later | 14 |
-| POST | `/internal/identity/v1/tenant-groups/_ensure` | operator | deleted-later | 14 (D15) |
-| POST | `/internal/identity/v1/role-assignments/_ensure` | operator | deleted-later | 14 (D1) |
+| POST | `/internal/identity/v1/tenant-routes/_backfill` | operator | live | — |
 
-**Dropped from the design:** `memberships/_remove` (D25/B9: a signup's founder can't change). There are no separate phone step-up or change routes (D25/B4: they use `citizen/otp/_send|_verify` with `purpose`).
+**Dropped from the design:** `memberships/_remove` (D25/B9: a signup's founder can't change).
+
+**Deleted by item 14:** `tenant-groups/_ensure` (D15) and `role-assignments/_ensure` (D1: roles come from DIGIT/HRMS, mirrored to Keycloak). Groups they created on existing boxes are still read until the Keycloak group clean-up. `tenant-routes/_backfill` stays (§3.5). There are no separate phone step-up or change routes (D25/B4: they use `citizen/otp/_send|_verify` with `purpose`).
 
 Each route's possible error codes are listed in `src/contract/routes.ts`. The contract tests assert them.
 
@@ -671,7 +670,7 @@ Organization membership **only**, and idempotent. The role projection and the ma
 
 - **`POST /internal/identity/v1/reconciliation/_run`** (item 12) → `200 | 202 {acquired, subjects, mirrored, revoked, propagated, unchanged, failures: [{subject, code}], lagSeconds}`. It **never** writes DIGIT `active`, and never creates or restores a membership or binding. `deactivated` and `unprovisioned` are removed.
 - **`account-links/_link`, `_unlink`, `GET account-links`** keep today's shapes. After item 14 they accept `userType: "CITIZEN"` only, and `EMPLOYEE` → `INVALID_REQUEST`. They are how an admin resolves `CITIZEN_ACCOUNT_AMBIGUOUS`. Until item 14, an `EMPLOYEE` link writes an `active` binding (item 19 runs the bulk conversion).
-- `tenant-routes/_backfill`, `tenant-groups/_ensure` and `role-assignments/_ensure` keep today's shapes until item 14 deletes them.
+- **`POST /internal/identity/v1/tenant-routes/_backfill`** `{dryRun?: boolean, actor?: string}` → `200 {created: [tenantId], skipped: [{tenantId, reason: NOT_ROOT | NOT_ACTIVE | ALREADY_MAPPED}], conflicts: [{tenantId, reason: INVALID_SLUG | SLUG_TAKEN | ALIAS_TAKEN}]}`. It gives every active DIGIT root tenant in `IDENTITY_TENANT_ROUTE_BACKFILL_ROOTS` (default: the root of `DIGIT_ADMIN_TENANT_ID`) that no Organization maps an Organization whose alias and URL slug are the tenant id (`ke` → `/ke/digit-ui/...`). Idempotent; it never renames or overwrites a mapping. `IDENTITY_TENANT_ROUTE_BACKFILL=true` runs the same backfill at startup. It is kept after item 14 because it is the only way a root tenant that predates signup gets a route; signup's `organizations/_ensure` covers new tenants. Keycloak or DIGIT failures → `IDENTITY_UNAVAILABLE` / `DIGIT_UNAVAILABLE`.
 
 ### 3.6 Console employee flows
 
