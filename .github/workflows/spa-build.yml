@@ -9,19 +9,14 @@ run-name: Build ${{ github.event.inputs.pipeline_name }}
 # build/build-config.yml and the Dockerfile is passed with --file. That is the
 # same non-maven branch build-images.yml takes, so a manual dispatch here
 # produces the same image the nightly/release build does:
-#   - configurator / digit-ui-v2 use the repo root as context, so they can
-#     consume the shared `ui-shared` feature-flag module;
+#   - configurator uses the repo root as context, so it can consume the
+#     shared `ui-shared` feature-flag module;
 #   - digit-ui-esbuild / digit-mcp keep their app-local context.
 #
 # NOT for the maven services (pgr-services, novu-bridge, digit-config-service,
 # default-data-handler, ...): those build from build/maven/Dockerfile with the
 # repo root as context plus a WORK_DIR build-arg, and they may carry a paired
 # -db image. Use build.yml for those.
-#
-# No build-args are passed here, so digit-ui-v2 builds its tenant-NEUTRAL
-# reference image (its VITE_* args fall back to the Dockerfile defaults) —
-# identical to what the nightly produces. A deploy needing baked Keycloak SSO
-# still builds with explicit build-args; see build/NIGHTLY-BUILDS.md.
 on:
   workflow_dispatch:
     inputs:
@@ -32,7 +27,6 @@ on:
         options:
           - configurator
           - digit-ui-esbuild
-          - digit-ui-v2
           - digit-mcp
           - identity-bff
           - identity-keycloak

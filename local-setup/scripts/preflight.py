@@ -103,19 +103,6 @@ def r_keycloak(cfg):
             yield (FAIL, "auth_provider: keycloak requires bootstrap_secrets.keycloak_admin_password.")
 
 
-@rule(
-    "digit-ui-v2-combo",
-    "nginx_features.digit_ui_v2 renders /citizen/ location blocks pointing at "
-    "a bundle that nothing builds unless enable_digit_ui_v2 is also on — "
-    "users get 404s; historically also a playbook NPE (fixed in 317ec44d4) "
-    "when the repo/branch vars were missing.",
-)
-def r_digit_ui_v2(cfg):
-    if get(cfg, "nginx_features.digit_ui_v2") is True and get(cfg, "enable_digit_ui_v2") is not True:
-        yield (FAIL, "nginx_features.digit_ui_v2: true serves /citizen/ but nothing builds it "
-                     "(enable_digit_ui_v2 is off, and retired since D26) — set it false.")
-
-
 def as_bool(val):
     """Ansible's `| bool`: true, 'yes', 'on', 'true', '1' and 1 are true."""
     if isinstance(val, bool):
@@ -123,10 +110,9 @@ def as_bool(val):
     return str(val).strip().lower() in ("yes", "on", "true", "1")
 
 
-# The two rules below mirror D26 refusals in playbook-deploy.yml ("preflight —
-# identity requires enable_keycloak: true" and "preflight — refuse retired
-# digit-ui-v2 citizen identity"), so a host_vars copied from an example fails
-# here in seconds instead of at the start of the play. Keep them in step.
+# The rule below mirrors the D26 refusal in playbook-deploy.yml ("preflight —
+# identity requires enable_keycloak: true"), so a host_vars copied from an
+# example fails here in seconds instead of at the start of the play. Keep them in step.
 @rule(
     "identity-needs-keycloak",
     "Since D26 every DIGIT UI sign-in (employee and citizen) goes through the "
@@ -139,18 +125,6 @@ def r_identity_needs_keycloak(cfg):
         yield (FAIL, "enable_keycloak must be true: every sign-in goes through the Identity BFF "
                      "since D26. Set enable_keycloak: true and nginx_features.keycloak: true, with "
                      "the keycloak_* and identity_digit_admin_password bootstrap_secrets.")
-
-
-@rule(
-    "digit-ui-v2-retired",
-    "D26 removed digit-ui-v2's fixed-OTP citizen login, direct egov-user "
-    "account creation and profile writes; the playbook refuses "
-    "enable_digit_ui_v2: true (#2271).",
-)
-def r_digit_ui_v2_retired(cfg):
-    if as_bool(get(cfg, "enable_digit_ui_v2", False)):
-        yield (FAIL, "enable_digit_ui_v2 is no longer supported (D26). Set it false and publish "
-                     "/<tenant-slug>/digit-ui/citizen instead.")
 
 
 @rule(
@@ -449,16 +423,9 @@ SELF_TEST_CASES = [
     ("enable_keycloak unset fires", {"enable_keycloak": None},
      {"identity-needs-keycloak"}),
     ("enable_keycloak as the string 'true' is clean", {"enable_keycloak": "true"}, set()),
-    ("enable_digit_ui_v2 true fires", {"enable_digit_ui_v2": True},
-     {"digit-ui-v2-retired"}),
-    ("enable_digit_ui_v2 'yes' fires", {"enable_digit_ui_v2": "yes"},
-     {"digit-ui-v2-retired"}),
-    ("enable_digit_ui_v2 false is clean", {"enable_digit_ui_v2": False}, set()),
     ("keycloak fully wired is clean", {"auth_provider": "keycloak", "enable_keycloak": True,
       "bootstrap_secrets": {"keycloak_admin_password": "x"}},
      set()),
-    ("ui-v2 nginx without enable fires", {"nginx_features": {"digit_ui_v2": True}},
-     {"digit-ui-v2-combo"}),
     ("mcp without registry fires", {"enable_mcp": True, "docker_registry": ""},
      {"mcp-needs-registry"}),
     ("non-compiling mobileNumberRegex fires",

@@ -49,6 +49,3 @@ projects:
   - name: digit-ui-esbuild
     path: digit-ui-esbuild
     ecosystem: npm
-  - name: digit-ui-v2
-    path: digit-ui-v2
-    ecosystem: npm

@@ -658,7 +658,7 @@ function renderCode(d){
     return h;
   }).join("");
   const sec2=$("prioTitle").closest("section"); if(sec2) sec2.style.display="none";   // hide Ansible action-required section
-  $("foot").innerHTML=`Report-only · OSV-Scanner dependency vulnerabilities across the code dirs (backend, frontend, digit-ui-esbuild, digit-ui-v2) · file links open the exact line on commit ${esc(m.shaShort)}.`;
+  $("foot").innerHTML=`Report-only · OSV-Scanner dependency vulnerabilities across the code dirs (backend, frontend, digit-ui-esbuild) · file links open the exact line on commit ${esc(m.shaShort)}.`;
   CUR=d; HASDATA=true; renderModulePage();
 }
 
