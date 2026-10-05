@@ -290,7 +290,9 @@ public class PGRQueryBuilder {
         // (resolved server-side from workflow, see PGRService). An employee must always be able
         // to see what workflow assigned to them, even when a GRO routed it outside their
         // department/jurisdiction. Tenant and citizen-self predicates above stay ANDed.
-        boolean ownAssigned = !CollectionUtils.isEmpty(scope.ownAssignedServiceRequestIds);
+        // Never for a deny-all decision (no policy in strict mode, tenant outside the caller's
+        // subtree): the OR would turn "see nothing" into "see your assignments".
+        boolean ownAssigned = !scope.denyAll && !CollectionUtils.isEmpty(scope.ownAssignedServiceRequestIds);
         addClauseIfRequired(preparedStmtList, builder);
         builder.append(" ( ( 1 = 1 ");
 

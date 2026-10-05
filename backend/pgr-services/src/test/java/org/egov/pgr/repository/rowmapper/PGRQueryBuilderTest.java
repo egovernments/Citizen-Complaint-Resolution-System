@@ -224,4 +224,19 @@ class PGRQueryBuilderTest {
         assertFalse(query.contains("ser.serviceRequestId IN"));
         assertFalse(preparedStmtList.contains("PGR-ASSIGNED"));
     }
+
+    @Test
+    void ownAssignedNeverLoosensADenyAllScope() {
+        // #2281 review: deny-all is encoded with a sentinel department, so it looks like a
+        // department restriction — the own-assigned OR must still never wrap it.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = PgrSearchScope.deniedAll("pg.city", false).withOwnAssigned(java.util.Set.of("PGR-ASSIGNED"));
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(preparedStmtList.contains("__scope_denied__"));
+        assertFalse(query.contains("ser.serviceRequestId IN"));
+        assertFalse(preparedStmtList.contains("PGR-ASSIGNED"));
+    }
 }

@@ -321,6 +321,27 @@ class SearchAccessPolicyServiceTest {
     }
 
     @Test
+    void strictModeDenyIsExplicitAndOwnAssignedComplaintsCannotLoosenIt() {
+        // #2281 review: strict mode with no policy must deny every employee, including the
+        // complaints workflow assigns to them — in Tier-1 (scope) and Tier-2 (enforce) alike.
+        PGRConfiguration strictConfig = new PGRConfiguration();
+        strictConfig.setAbacStrictMode(true);
+        AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), strictConfig);
+        SearchAccessPolicyService serviceWithStrictMode = new SearchAccessPolicyService(
+                mock(PolicyDrivenScopeResolver.class), registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder(), strictConfig);
+        RequestInfo requestInfo = requestInfo("lme-1", "EMPLOYEE");
+
+        PgrSearchScope scope = serviceWithStrictMode.resolveScope(requestInfo, TENANT_ID, 2)
+                .withOwnAssigned(java.util.Set.of("PGR-ASSIGNED"));
+        ServiceWrapper assigned = wrapper("citizen-1", "WATER", "WT_WARD_B", TENANT_ID);
+        assigned.getService().setServiceRequestId("PGR-ASSIGNED");
+
+        assertTrue(scope.denyAll);
+        assertTrue(service.enforce(requestInfo, TENANT_ID, scope, List.of(assigned)).isEmpty(),
+                "the Tier-2 own-assigned bypass must not admit rows under a deny-all scope");
+    }
+
+    @Test
     void resolveScopeFailsClosedRatherThanApplyingTheDefaultDuringAnAccessControlOutage() {
         // Must NOT collapse an outage into "not configured" and silently apply the permissive
         // DEFAULT_SCOPE_POLICY while accesscontrol is down (CodeRabbit #3775816481).

@@ -368,12 +368,12 @@ public class PGRService {
      * Adds the caller's currently-assigned complaints to a department/jurisdiction-restricted
      * employee scope, so an employee can always find what workflow has assigned to them — e.g.
      * a GRO routing a ward-B complaint to a ward-A LME. Resolved exactly like the "My" assignee
-     * filter (workflow process search by assignee). Never widens anything else: citizens,
-     * unrestricted scopes, and the tenant axis are untouched, and a workflow failure leaves the
+     * filter (workflow process search by assignee). Never widens anything else: deny-all
+     * decisions, citizens, unrestricted scopes, and the tenant axis are untouched, and a workflow failure leaves the
      * scope as it was (no exception, not a wider one).
      */
     private PgrSearchScope withOwnAssigned(RequestInfo requestInfo, String tenantId, PgrSearchScope scope) {
-        if (scope == null || scope == PgrSearchScope.UNRESTRICTED || scope.citizenUuid != null
+        if (scope == null || scope == PgrSearchScope.UNRESTRICTED || scope.denyAll || scope.citizenUuid != null
                 || !scope.restrictsDepartmentOrJurisdiction())
             return scope;
         User user = requestInfo == null ? null : requestInfo.getUserInfo();
