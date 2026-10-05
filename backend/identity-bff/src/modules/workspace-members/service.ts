@@ -218,8 +218,11 @@ export async function updateWorkspaceMemberEmail(actor: string, tenantId: string
     const liveElsewhere = (b: (typeof bindings)[number]) => b.tenantId !== tenantId && (b.state === "active"
       || (b.state === "pending" && (!b.expiresAt || Number(b.expiresAt) > Date.now())));
     if (actor === subject || bindings.some(liveElsewhere)) throw denied();
-    // The email also recovers the person's citizen access, which no tenant admin owns.
-    if (accountEntries(await readBindingUser(subject)).some((e) => e.kind === "citizen")) throw denied();
+    // The email also recovers the person's citizen access, which no tenant admin owns: a citizen
+    // account, or a BFF-verified Keycloak phone (staff phones are never synced to Keycloak, §4),
+    // which alone opens the citizen surface. Any "true" fails closed, wider than citizenAccess.
+    const person = await readBindingUser(subject);
+    if (accountEntries(person).some((e) => e.kind === "citizen") || person.attributes?.phoneNumberVerified?.includes("true")) throw denied();
     // Re-read live authority under the lease: email is a global recovery identifier.
     const caller = await requireAccountAdmin(actor, tenantId);
     const target = await readDigitAccount(tenantId, digitUuid);

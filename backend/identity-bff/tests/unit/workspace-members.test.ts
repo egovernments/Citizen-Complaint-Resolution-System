@@ -151,7 +151,7 @@ describe("resumable workspace membership", () => {
     expect(f.users.get("new-1")).toMatchObject({ email: "new@example.test", emailVerified: false, username: input.email });
     expect(f.activations).toBe(before);
   });
-  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "operational role at another root", "other binding", "other membership", "citizen account"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
+  it.each(["self", "higher role", "admin role at a sub-tenant", "same role in another tenant", "founder, role at another root", "operational role at another root", "other binding", "other membership", "citizen account", "verified phone"])("denies admin email recovery for %s without changing the identity or sending email", async (reason) => {
     await linkWorkspaceMember(input);
     if (reason === "higher role") f.targetRoles.push({ code: "SUPERUSER", tenantId: "pg" });
     if (reason === "admin role at a sub-tenant") f.targetRoles.push({ code: "HRMS_ADMIN", tenantId: "pg.citya" });
@@ -165,6 +165,7 @@ describe("resumable workspace membership", () => {
     }
     if (reason === "operational role at another root") f.targetRoles.push({ code: "GRO", tenantId: "other" });
     if (reason === "other membership") f.members.add("other:new-1");
+    if (reason === "verified phone") Object.assign(f.users.get("new-1")!.attributes!, { phoneNumber: ["+254712345678"], phoneNumberVerified: ["true"] });
     if (reason === "citizen account") {
       const user = f.users.get("new-1")!;
       const entries = JSON.parse(user.attributes!["digit.accounts"]![0]).entries;
@@ -228,6 +229,11 @@ describe("resumable workspace membership", () => {
       withOtherBinding(state as string, expiresAt as number);
       await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
     });
+  it("allows recovery with an unverified Keycloak phone", async () => {
+    await linkWorkspaceMember(input);
+    Object.assign(f.users.get("new-1")!.attributes!, { phoneNumber: ["+254712345678"], phoneNumberVerified: ["false"] });
+    await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).resolves.toEqual({ status: "verification_sent" });
+  });
   it("maps a concurrent Keycloak email conflict to IDENTITY_EMAIL_CHANGED", async () => {
     await linkWorkspaceMember(input); f.conflict = true;
     await expect(updateWorkspaceMemberEmail("admin", "pg", uuid, "new@example.test")).rejects.toMatchObject({ code: "IDENTITY_EMAIL_CHANGED" });
