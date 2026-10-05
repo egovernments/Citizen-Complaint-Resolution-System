@@ -12,6 +12,8 @@ import {
   selectionAfterPick,
 } from "../utils/boundaryCascade";
 import { trackEvent } from "../utils/analytics";
+import { useQuery } from "react-query";
+import { getTenantHierarchy } from "../services/tenantHierarchy";
 
 // Humanize a boundary-type code for use as a graceful fallback when its
 // localization key isn't seeded: "SUB_COUNTY" -> "Sub County", "bairro" ->
@@ -78,27 +80,16 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
 
   const { data: rawChildrenData, isLoading: isBoundaryLoading } = Digit.Hooks.pgr.useFetchBoundaries(tenantId);
 
-  // Hierarchy type + highest/lowest level are configured per-state on
-  // CMS-BOUNDARY.HierarchySchema (written by the onboarding tooling — see
-  // utilities/crs_dataloader/unified_loader_v1.py's update_hierarchy_schema)
-  // and take priority over the ansible-templated globalConfigs values, which
-  // are a deploy-time fallback for tenants where this MDMS master hasn't
-  // been seeded yet. Mirrors the established pattern already used on the
-  // citizen/employee create-complaint pages in frontend/micro-ui.
-  const stateId = Digit.ULBService.getStateId();
-  const { data: hierarchySchema } = Digit.Hooks.useCustomMDMS(
-    stateId,
-    "CMS-BOUNDARY",
-    [{ name: "HierarchySchema" }],
-    {
-      select: (data) => {
-        const rows = data?.["CMS-BOUNDARY"]?.HierarchySchema;
-        return Array.isArray(rows) ? rows.find((row) => row.moduleName === "CMS") : null;
-      },
-      retry: false,
-      enabled: !!stateId,
-    }
-  );
+  // Hierarchy type + highest/lowest level come from the tenant's
+  // CMS-BOUNDARY.HierarchySchema (the Geography step writes it for a
+  // workspace; mdms-v2 resolves a city to its state's row), with the
+  // globalConfigs values as the fallback when there is no row. Resolved for
+  // the same tenant, and by the same resolver, as the tree itself
+  // (useFetchBoundaries), so the levels always belong to the tree shown.
+  const { data: hierarchySchema } = useQuery(["PGR_TENANT_HIERARCHY", tenantId], () => getTenantHierarchy(tenantId), {
+    enabled: !!tenantId,
+    staleTime: Infinity,
+  });
 
   const childrenData = useMemo(() => {
     if (!rawChildrenData || !allowedRoots) return rawChildrenData;
@@ -141,7 +132,7 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     return Array.isArray(order) ? order.map((item) => item.code) : [];
   }, [tenantId]);
   const hierarchyType =
-    hierarchySchema?.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
+    hierarchySchema?.hierarchyType || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
 
   // Respect the tenant's configured highest AND lowest boundary levels.
   // PGR_BOUNDARY_LOWEST_LEVEL caps the bottom: a tenant whose boundary tree
@@ -178,9 +169,9 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   // County seeded without children can't become fileable (egovernments/CCRS#478).
   const { effectiveHierarchy, lowestLevelCapped } = useMemo(() => {
     const configuredHighest =
-      hierarchySchema?.highestHierarchy || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_HIGHEST_LEVEL");
+      hierarchySchema?.highestLevel || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_HIGHEST_LEVEL");
     const configuredLowest =
-      hierarchySchema?.lowestHierarchy || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+      hierarchySchema?.lowestLevel || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
 
     const highestIdx = configuredHighest
       ? boundaryHierarchy.findIndex((k) => String(k).toLowerCase() === String(configuredHighest).toLowerCase())
@@ -290,7 +281,8 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     if (hierarchy.length === 0) {
       const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
       hierarchy = Array.isArray(order) ? order.map((item) => item.code) : [];
-      const configuredLowest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+      const configuredLowest =
+        hierarchySchema?.lowestLevel || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
       const idx = configuredLowest ? hierarchy.findIndex((k) => sameLevelName(k, configuredLowest)) : -1;
       if (idx >= 0) hierarchy = hierarchy.slice(0, idx + 1);
     }

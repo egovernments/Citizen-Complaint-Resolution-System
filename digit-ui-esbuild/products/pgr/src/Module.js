@@ -38,7 +38,20 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
   const { path, url } = useRouteMatch();
   const tenantId = Digit.ULBService.getCurrentTenantId();
 
-  const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
+  // Initialize boundary hierarchy for both employee AND citizen users.
+  // Citizens reach the create-complaint flow on naipepea, where the
+  // location step is now driven by `<PGRBoundaryComponent>` (closes
+  // egovernments/CCRS#428 + #433). The component reads
+  // `boundaryHierarchyOrder` from SessionStorage, which this hook
+  // populates on module mount. Without it, the citizen location step
+  // would render nothing.
+  const { isLoading: isPGRInitializing, data: tenantHierarchy } = Digit.Hooks.pgr.usePGRInitialization({
+    tenantId: tenantId,
+  });
+
+  // Boundary names live in rainmaker-boundary-<the tenant's hierarchy type>.
+  const hierarchyType =
+    tenantHierarchy?.hierarchyType || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   const moduleCode = ["pgr", `boundary-${hierarchyType?.toString().toLowerCase()}`];
   const modulePrefix = "rainmaker";
   const language = Digit.StoreData.getCurrentLanguage();
@@ -49,17 +62,6 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
     modulePrefix,
   });
   let user = Digit?.SessionStorage.get("User");
-
-  // Initialize boundary hierarchy for both employee AND citizen users.
-  // Citizens reach the create-complaint flow on naipepea, where the
-  // location step is now driven by `<PGRBoundaryComponent>` (closes
-  // egovernments/CCRS#428 + #433). The component reads
-  // `boundaryHierarchyOrder` from SessionStorage, which this hook
-  // populates on module mount. Without it, the citizen location step
-  // would render nothing.
-  const { isLoading: isPGRInitializing } = Digit.Hooks.pgr.usePGRInitialization({
-    tenantId: tenantId,
-  });
 
   Digit.SessionStorage.set("PGR_TENANTS", tenants);
 
