@@ -60,8 +60,9 @@ export async function currentSession(
           return null;
         }
         if (valid) {
-          session = { ...session, identityCheckedAt: Date.now() };
-          if (!await touchIdentitySession(sessionId, session)) return null;
+          const checkedAt = Date.now();
+          session = { ...session, identityCheckedAt: checkedAt };
+          if (!await touchIdentitySession(sessionId, session, fresh => ({ ...fresh, identityCheckedAt: checkedAt }))) return null;
         }
       }
       return { sessionId, session };

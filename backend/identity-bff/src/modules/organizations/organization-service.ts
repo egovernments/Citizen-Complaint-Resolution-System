@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { withRedisLease } from "../../infrastructure/redis.js";
+import { currentPersonLease, LeaseBusyError, withPersonLease } from "../accounts/person-lease.js";
 import { config } from "../../infrastructure/config.js";
 import { getAdminToken } from "../../integrations/keycloak/admin-session.js";
 import type { UserRepresentation } from "../sync/keycloak-writer.js";
@@ -44,19 +44,24 @@ export async function managedTenantsFromIdentity(userId: string): Promise<string
 
 /**
  * Keycloak's user PUT replaces the whole attribute map, so every
- * read-modify-write of a user's attributes runs under one Redis lease per
- * user, across replicas. Otherwise a managed-tenant write and a citizen
- * registration write for the same person can erase each other.
+ * read-modify-write of a user runs under that person's lease (§2.5), the same
+ * one `updateKeycloakUser` requires for `digit.bindings`, `digit.accounts`
+ * and the phone. A caller already holding it reuses it. Busy keeps this
+ * module's IdentityAdminError 503, which callers already map.
  */
-function withUserAttributeLease<T>(userId: string, operation: () => Promise<T>): Promise<T> {
-  return withRedisLease(`${config.cachePrefix}:identity:user-attributes-lease:${userId}`, {
-    ttlMs: 30_000, waitMs: 5_000, busy: () => new IdentityAdminError("The Keycloak user is busy; retry", 503),
-  }, operation);
+async function withUserAttributeWrite<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+  if (currentPersonLease()?.subject === userId) return operation();
+  try {
+    return await withPersonLease(userId, () => operation());
+  } catch (error) {
+    if (error instanceof LeaseBusyError) throw new IdentityAdminError("The Keycloak user is busy; retry", 503);
+    throw error;
+  }
 }
 
 /** Durable inventory used to deactivate accounts after Organization removal. */
 export async function recordManagedTenant(userId: string, tenantId: string): Promise<void> {
-  await withUserAttributeLease(userId, () => updateUserAttributeValues(userId, MANAGED_TENANTS_ATTRIBUTE, (values) => {
+  await withUserAttributeWrite(userId, () => updateUserAttributeValues(userId, MANAGED_TENANTS_ATTRIBUTE, (values) => {
     const tenants = [...new Set([...values, tenantId])].sort();
     return tenants.length === values.length ? null : tenants;
   }));
@@ -78,7 +83,7 @@ export function updateCitizenRegistrationValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, CITIZEN_REGISTRATIONS_ATTRIBUTE, update));
+  return withUserAttributeWrite(userId, () => updateUserAttributeValues(userId, CITIZEN_REGISTRATIONS_ATTRIBUTE, update));
 }
 
 const ACCOUNT_LINKS_ATTRIBUTE = "digit.accountLinks";
@@ -102,14 +107,14 @@ export function updateAccountLinkValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINKS_ATTRIBUTE, update));
+  return withUserAttributeWrite(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINKS_ATTRIBUTE, update));
 }
 
 export function updateAccountLinkBlockValues(
   userId: string,
   update: (values: string[]) => string[] | null,
 ): Promise<string[]> {
-  return withUserAttributeLease(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINK_BLOCKS_ATTRIBUTE, update));
+  return withUserAttributeWrite(userId, () => updateUserAttributeValues(userId, ACCOUNT_LINK_BLOCKS_ATTRIBUTE, update));
 }
 
 /** Keycloak users holding exactly this link value (for one-owner checks). */
@@ -174,6 +179,7 @@ async function updateUserAttributeValues(
   const current = [...(user.attributes?.[attributeName] || [])];
   const next = update(current);
   if (!next) return current;
+  await currentPersonLease()?.assertHeld();
   // Send only the user-profile fields, never the stale `enabled` and friends:
   // an admin disabling the user between the GET and this PUT must stick.
   // Keycloak 26 leaves absent top-level fields alone, but a PUT that carries
@@ -820,7 +826,7 @@ export async function applyVerifiedSignupIdentityProfile(input: {
   firstName: string;
   lastName: string;
 }): Promise<boolean> {
-  return withUserAttributeLease(input.userId, () => writeVerifiedSignupIdentityProfile(input));
+  return withUserAttributeWrite(input.userId, () => writeVerifiedSignupIdentityProfile(input));
 }
 
 async function writeVerifiedSignupIdentityProfile(input: {
@@ -881,9 +887,9 @@ export async function ensureMagicLinkSignupIdentity(input: {
     if (managedDraft &&
         (existing.firstName !== input.firstName || existing.lastName !== input.lastName)) {
       const userId = existing.id;
-      // Under the user's attribute lease, with a fresh read, sending only the
+      // Under the person lease, with a fresh read, sending only the
       // profile and attributes: never the stale `enabled`.
-      await withUserAttributeLease(userId, async () => {
+      await withUserAttributeWrite(userId, async () => {
         const current = await readUser(userId);
         await request(`/users/${encodeURIComponent(userId)}`, {
           method: "PUT",

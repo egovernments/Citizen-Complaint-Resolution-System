@@ -13,7 +13,26 @@ export interface SurfaceConfig {
 }
 export const DEFAULT_SURFACE: IdentitySurface = "configurator";
 
+const registryInputs = () => [config.identitySurfacesJson,
+  config.keycloakBffClientId, config.keycloakBffClientSecret, config.identityScope, config.identityCookieName,
+  config.keycloakEmployeeClientId, config.keycloakEmployeeClientSecret, config.identityEmployeeScope, config.identityEmployeeCookieName,
+  config.keycloakCitizenClientId, config.keycloakCitizenClientSecret, config.identityCitizenScope, config.identityCitizenCookieName];
+let cached: { inputs: unknown[]; registry: Record<string, SurfaceConfig> } | null = null;
+
+/**
+ * Parsed and validated once per configuration (createIdentityApp calls it at startup, so a
+ * malformed IDENTITY_SURFACES_JSON fails boot). Keyed by the raw inputs so a config change
+ * (tests) rebuilds it; per-request callers only compare a few strings.
+ */
 export function surfaceRegistry(): Record<string, SurfaceConfig> {
+  const inputs = registryInputs();
+  if (cached && cached.inputs.every((value, i) => value === inputs[i])) return cached.registry;
+  const registry = buildSurfaceRegistry();
+  cached = { inputs, registry };
+  return registry;
+}
+
+function buildSurfaceRegistry(): Record<string, SurfaceConfig> {
   const registry: Record<string, SurfaceConfig> = {
     configurator: { contextKind: "configurator", clientId: config.keycloakBffClientId, clientSecret: config.keycloakBffClientSecret, scope: config.identityScope, cookieName: config.identityCookieName },
     employee: { contextKind: "employee", clientId: config.keycloakEmployeeClientId, clientSecret: config.keycloakEmployeeClientSecret, scope: config.identityEmployeeScope, cookieName: config.identityEmployeeCookieName, prompt: "login" },

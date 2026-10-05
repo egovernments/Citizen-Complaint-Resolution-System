@@ -1,11 +1,17 @@
 import { config } from "../../infrastructure/config.js";
 import { DigitUnavailableError } from "../managed-accounts/digit-user-client.js";
 import { readOrganizationByTenant } from "../onboarding/organization-reader.js";
-import { readBindings } from "./store.js";
+import { bindingsFromUser, effectiveBinding, readBindingUser } from "./store.js";
 
+/**
+ * Read-only: an expired invitation is shown as gone without taking the person
+ * lease to record its expiry (writers record it under the lease), so
+ * `GET /session` never waits on a write.
+ */
 export async function pendingInvitationsFor(subject: string) {
   const result: Array<{ tenantId: string; invitationVersion: number; name: string; invitedAt: number; expiresAt: number }> = [];
-  for (const binding of await readBindings(subject)) {
+  const now = Date.now();
+  for (const binding of bindingsFromUser(await readBindingUser(subject)).map(b => effectiveBinding(b, now))) {
     if (binding.state !== "pending") continue;
     const org = await readOrganizationByTenant(binding.tenantId);
     if (!org?.enabled || (org.lifecycle !== null && org.lifecycle !== "ACTIVE")) continue;

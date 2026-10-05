@@ -1,6 +1,6 @@
 import { propagateVerifiedIdentifiers } from "../sync/identifiers.js";
 import { getRedis } from "../../infrastructure/redis.js";
-import { listPersonSessions } from "../sessions/session-store.js";
+import { listPersonSessions, subjectForKcSession } from "../sessions/session-store.js";
 import { key } from "./inventory.js";
 import { endKeycloakSessions, enqueueRevocation, revokeTenantMembers } from "./index.js";
 import type { EventStream, KeycloakEvent } from "./event-source.js";
@@ -75,7 +75,11 @@ export async function applyKeycloakEvent(stream: EventStream, event: KeycloakEve
   }
   const session = /^sessions\/([^/]+)$/.exec(path);
   if (event.resourceType === "USER_SESSION" && event.operationType === "DELETE" && session) {
-    await endKeycloakSessions(session[1]); return;
+    // O(1): the index written with the session, else the event's own user;
+    // only a session with neither falls back to the realm scan.
+    const rep = representation(event);
+    const subject = await subjectForKcSession(session[1]) ?? (typeof rep.userId === "string" && rep.userId ? rep.userId : undefined);
+    await endKeycloakSessions(session[1], undefined, subject); return;
   }
   const membership = /^organizations\/([^/]+)\/members\/([^/]+)$/.exec(path);
   if (event.resourceType === "ORGANIZATION_MEMBERSHIP" && event.operationType === "DELETE" && membership) {

@@ -1,5 +1,6 @@
 import { config } from "../../infrastructure/config.js";
 import { withRedisLease } from "../../infrastructure/redis.js";
+import { LeaseBusyError, withPersonLease } from "../accounts/person-lease.js";
 import { audit } from "../citizen-otp/audit.js";
 import { withDigitAdmin } from "../managed-accounts/digit-admin-session.js";
 import { searchAccounts, type DigitAccount } from "../managed-accounts/digit-user-client.js";
@@ -84,6 +85,21 @@ function withAccountLease<T>(digitUuid: string, operation: () => Promise<T>): Pr
   }, operation);
 }
 
+/**
+ * The person lease is taken first (lock order person → uuid, §2.5) and held
+ * across the read and every attribute write, so a concurrent `_select` or
+ * mirror write for the same person cannot erase a link or a block. A caller
+ * already holding it reuses it.
+ */
+async function withLinkPersonLease<T>(subject: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await withPersonLease(subject, () => operation());
+  } catch (error) {
+    if (error instanceof LeaseBusyError) throw new AccountLinkError("The person is busy; retry", 503, "ACCOUNT_LINK_BUSY");
+    throw error;
+  }
+}
+
 /** Finds an existing DIGIT employee by username for an admin import. */
 export async function findEmployeeUuid(tenantId: string, userName: string): Promise<string | null> {
   const accounts = await withDigitAdmin((adminToken) => searchAccounts(adminToken, {
@@ -107,7 +123,7 @@ export async function createAccountLink(input: AccountLink & {
     await audit({ ...base, event: "ACCOUNT_LINK_REFUSED", outcome: "REFUSED", reason: code });
     throw new AccountLinkError(message, status, code);
   };
-  return withAccountLease(link.digitUuid, async () => {
+  return withLinkPersonLease(input.subject, () => withAccountLease(link.digitUuid, async () => {
     const account = await withDigitAdmin((adminToken) =>
       findActiveAccount(adminToken, { uuid: link.digitUuid, tenantId: link.tenantId, userType: link.userType }));
     if (!account) return refuse("No active DIGIT account matches", 404, "DIGIT_ACCOUNT_NOT_FOUND");
@@ -135,7 +151,7 @@ export async function createAccountLink(input: AccountLink & {
     }
     await audit({ ...base, event: "ACCOUNT_LINK_CREATE", outcome: "SUCCESS" });
     return { status: "LINKED" as const, account };
-  });
+  }));
 }
 
 /**
@@ -149,24 +165,26 @@ export async function removeAccountLink(input: AccountLink & {
 }): Promise<{ removed: boolean }> {
   const link: AccountLink = { userType: input.userType, tenantId: input.tenantId, digitUuid: input.digitUuid };
   const value = encodeLink(link);
-  // Block first: a phone sign-in racing this unlink then finds either the
-  // link (still valid) or the block, never a gap in which to re-link.
-  if (input.block) {
-    await updateAccountLinkBlockValues(input.subject, (values) =>
-      values.includes(value) ? null : [...values, value].sort());
-  }
-  let removed = false;
-  await updateAccountLinkValues(input.subject, (values) => {
-    removed = values.includes(value);
-    return removed ? values.filter((candidate) => candidate !== value) : null;
+  return withLinkPersonLease(input.subject, async () => {
+    // Block first: a phone sign-in racing this unlink then finds either the
+    // link (still valid) or the block, never a gap in which to re-link.
+    if (input.block) {
+      await updateAccountLinkBlockValues(input.subject, (values) =>
+        values.includes(value) ? null : [...values, value].sort());
+    }
+    let removed = false;
+    await updateAccountLinkValues(input.subject, (values) => {
+      removed = values.includes(value);
+      return removed ? values.filter((candidate) => candidate !== value) : null;
+    });
+    await dropLinkedLogin(linkedIdentity(config.keycloakIssuer, input.subject, link));
+    await audit({
+      event: "ACCOUNT_LINK_REVOKE", outcome: "SUCCESS", subject: input.subject, tenantId: link.tenantId,
+      userType: link.userType, digitUserUuid: link.digitUuid, actor: input.actor,
+      ...(!removed && { reason: "NOT_LINKED" }), ...(input.block && { detail: "blocked" }),
+    });
+    return { removed };
   });
-  await dropLinkedLogin(linkedIdentity(config.keycloakIssuer, input.subject, link));
-  await audit({
-    event: "ACCOUNT_LINK_REVOKE", outcome: "SUCCESS", subject: input.subject, tenantId: link.tenantId,
-    userType: link.userType, digitUserUuid: link.digitUuid, actor: input.actor,
-    ...(!removed && { reason: "NOT_LINKED" }), ...(input.block && { detail: "blocked" }),
-  });
-  return { removed };
 }
 
 /**

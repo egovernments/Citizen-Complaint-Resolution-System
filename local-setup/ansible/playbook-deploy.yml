@@ -60,6 +60,22 @@
           no OTP can be sent. Set enable_novu: true (and enable SMS for the tenant under
           Configurator -> Notifications -> Channels), or leave enable_otp_services false.
 
+    # The fixed OTP (123456) and log delivery are opt-in only, so a Keycloak box
+    # with no SMS stack and neither opt-in has no way to deliver a citizen code.
+    # Warn, never fail: staff sign-in and citizen password sign-in still work.
+    - name: "preflight — warn when citizen phone sign-in has no OTP channel"
+      when:
+        - enable_keycloak | default(false) | bool
+        - not (enable_otp_services | default(false) | bool)
+        - not (identity_dev_fixed_otp | default(false) | bool)
+        - not (identity_citizen_otp_sender | default('', true) | length > 0)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: citizen phone sign-in is unavailable on this box. enable_otp_services
+          is false and neither identity_dev_fixed_otp: true (development only: accepts
+          123456) nor identity_citizen_otp_sender is set in host_vars. Set one of them to
+          offer phone sign-in.
+
     # pgr-services, pgr-services-db, novu-bridge and novu-bridge-db must come from ONE
     # build (see notification_stack_tag in host_vars/_example.yml). They all follow
     # notification_stack_tag unless a per-image override pins one of them, and a partial

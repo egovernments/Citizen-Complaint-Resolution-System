@@ -68,6 +68,16 @@ describe("session revocation fencing", () => {
     const next = await createIdentitySession(tokens, claims, "client");
     expect((await getIdentitySession(next.sessionId))?.revocationGeneration).toBe(1);
   });
+  it("touch never reverts a newer write with the caller's stale copy", async () => {
+    const { sessionId } = await createIdentitySession(tokens, claims, "client");
+    const stale = (await getIdentitySession(sessionId))!;
+    // An account-action callback rotates the tokens after the caller's read.
+    await saveIdentitySession(sessionId, { ...tokens, accessToken: "rotated-access", refreshToken: "rotated-refresh" }, claims);
+    expect(await touchIdentitySession(sessionId, stale, fresh => ({ ...fresh, identityCheckedAt: 42 }))).toBe(true);
+    expect(await getIdentitySession(sessionId)).toMatchObject({ accessToken: "rotated-access", refreshToken: "rotated-refresh", identityCheckedAt: 42 });
+    expect(await touchIdentitySession(sessionId, stale)).toBe(true);
+    expect(await getIdentitySession(sessionId)).toMatchObject({ refreshToken: "rotated-refresh", identityCheckedAt: 42 });
+  });
   it("touch keeps TTL, and a lost lease cannot write context or refresh", async () => {
     const { sessionId } = await createIdentitySession(tokens, claims, "client");
     const session = (await getIdentitySession(sessionId))!;

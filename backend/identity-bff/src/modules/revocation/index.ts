@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getRedis } from "../../infrastructure/redis.js";
-import { currentPersonLease, LeaseLostError, personLeaseKey, withPersonLease, type PersonLease } from "../accounts/person-lease.js";
+import { currentPersonLease, LeaseBusyError, LeaseLostError, personLeaseKey, withPersonLease, type PersonLease } from "../accounts/person-lease.js";
 import { privateRef } from "../citizen-otp/otp-store.js";
 import { deleteIdentitySession, getIdentitySession, getSelectedIdentityContext, listPersonSessions, personSessionsKey, revocationGenerationKey, sessionKey } from "../sessions/session-store.js";
 import type { IdentitySession } from "../sessions/types.js";
@@ -196,41 +196,114 @@ async function releaseSessionTokens(lease: PersonLease, ended: string[], retaine
   }
 }
 
+const KC_LOGOUT_RETRY = "kc-logout-retry";
+const kcLogoutEntryKey = (kcSessionId: string) => key(`${KC_LOGOUT_RETRY}:${kcSessionId}`);
+/** How long a logout waits on Keycloak before leaving the end to the retry worker. */
+export const KEYCLOAK_LOGOUT_WAIT_MS = 2_000;
+
+/**
+ * Durable before the BFF session goes: a crash or Keycloak outage after the
+ * delete still ends the Keycloak session later. The entry lives as long as
+ * the BFF session would have, which bounds the Keycloak session it mirrors.
+ */
+async function queueKeycloakLogout(kcSessionId: string, expiresAt: number): Promise<void> {
+  const entry = kcLogoutEntryKey(kcSessionId);
+  await getRedis().multi().hset(entry, "attempts", 0).pexpireat(entry, Math.max(Date.now() + 60_000, Math.ceil(expiresAt)))
+    .zadd(key(KC_LOGOUT_RETRY), Date.now() + KEYCLOAK_LOGOUT_WAIT_MS, kcSessionId).exec();
+}
+
+async function attemptKeycloakLogout(kcSessionId: string): Promise<boolean> {
+  const entry = kcLogoutEntryKey(kcSessionId);
+  try {
+    await endKeycloakSession(kcSessionId);
+    await getRedis().multi().del(entry).zrem(key(KC_LOGOUT_RETRY), kcSessionId).exec();
+    return true;
+  } catch {
+    await getRedis().eval(`
+      if redis.call('exists', KEYS[1]) == 0 then redis.call('zrem', KEYS[2], ARGV[1]); return 0 end
+      local attempts = redis.call('hincrby', KEYS[1], 'attempts', 1)
+      redis.call('zadd', KEYS[2], tonumber(ARGV[2]) + math.min(60000, 1000 * 2 ^ math.min(attempts, 6)), ARGV[1])
+      return 1`, 2, entry, key(KC_LOGOUT_RETRY), kcSessionId, Date.now());
+    return false;
+  }
+}
+
+/** Best effort: one bounded attempt each. Anything unfinished stays queued for the worker. */
+async function endKeycloakSessionsBestEffort(kcSessionIds: string[]): Promise<void> {
+  await Promise.all(kcSessionIds.map(id => Promise.race([
+    attemptKeycloakLogout(id).catch(() => false),
+    new Promise<boolean>(resolve => setTimeout(resolve, KEYCLOAK_LOGOUT_WAIT_MS, false).unref()),
+  ])));
+}
+
+export async function drainKeycloakLogoutRetries(limit = 100): Promise<void> {
+  for (const id of await getRedis().zrangebyscore(key(KC_LOGOUT_RETRY), "-inf", Date.now(), "LIMIT", 0, limit)) {
+    if (!await getRedis().exists(kcLogoutEntryKey(id))) { await getRedis().zrem(key(KC_LOGOUT_RETRY), id); continue; }
+    await attemptKeycloakLogout(id);
+  }
+}
+
 /**
  * Ends the person's sessions matching `ends`, then releases their token
- * claims. With `keycloak`, each ended session's Keycloak session is ended
- * first, unless a session that stays still uses it; a failure there leaves
- * the session indexed for a retry.
+ * claims. With `keycloak`, each ended session's Keycloak session (unless a
+ * session that stays still uses it) is queued for ending and returned; the
+ * BFF session is deleted regardless, and the caller ends Keycloak's side
+ * best-effort once it is outside the lease.
  */
 async function endSessions(lease: PersonLease, ends: (item: { sessionId: string; session: IdentitySession }) => boolean,
-  options: { keycloak: boolean; bump?: boolean; retained?: RetainedSessionTokens }): Promise<void> {
+  options: { keycloak: boolean; bump?: boolean; retained?: RetainedSessionTokens }): Promise<string[]> {
   const sessions = await sessionsRaw(lease.subject);
   const ended = sessions.filter(ends);
   const retainedKcSessions = new Set(sessions.filter(item => !ended.includes(item)).map(item => item.session.kcSessionId));
+  const kcSessions = new Set<string>();
   for (const { sessionId, session } of ended) {
     await lease.assertHeld();
-    if (options.keycloak && session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) await endKeycloakSession(session.kcSessionId);
+    if (options.keycloak && session.kcSessionId && !retainedKcSessions.has(session.kcSessionId)) {
+      await queueKeycloakLogout(session.kcSessionId, session.sessionExpiresAt);
+      kcSessions.add(session.kcSessionId);
+    }
     await deleteIdentitySession(sessionId);
   }
   if (options.bump) await bumpGeneration(lease);
   await releaseSessionTokens(lease, ended.map(item => item.sessionId), options.retained);
+  return [...kcSessions];
 }
 
 export async function logoutSessions(subject: string, scope: "current" | "others" | "all", currentSessionId: string): Promise<void> {
-  await withPersonLease(subject, async lease => {
+  const kcSessions = await withPersonLease(subject, async lease => {
     const retained = scope === "others" ? await retainedSessionTokens(lease, currentSessionId) : undefined;
-    await endSessions(lease, item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId),
+    return endSessions(lease, item => scope === "all" || (scope === "current" ? item.sessionId === currentSessionId : item.sessionId !== currentSessionId),
       { keycloak: true, bump: scope === "all", retained });
   });
+  await endKeycloakSessionsBestEffort(kcSessions);
 }
 export async function endPhoneSessions(subject: string, oldPhoneRef: string, keepSessionId?: string): Promise<void> {
-  await withPersonLease(subject, lease => endSessions(lease,
+  const kcSessions = await withPersonLease(subject, lease => endSessions(lease,
     item => item.sessionId !== keepSessionId && item.session.phoneRef === oldPhoneRef, { keycloak: true }));
+  await endKeycloakSessionsBestEffort(kcSessions);
 }
 
-/** Event already ended Keycloak's session; do not call back to Keycloak again. */
+/**
+ * Event already ended Keycloak's session; do not call back to Keycloak again.
+ * Without a subject this is the last-resort realm scan: people are matched
+ * with a lock-free read first, so only those holding the session take a
+ * lease, and one busy person cannot stall the effect: their matching BFF
+ * sessions are deleted directly (a delete never revives anything), and their
+ * token claims are pruned as stale at their next logout.
+ */
+const SCAN_LEASE_WAIT_MS = 2_000;
 export async function endKeycloakSessions(kcSessionId: string, clientId?: string, subject?: string): Promise<void> {
-  const subjects = subject ? [subject] : (await listRevocationUsers()).map(user => user.id);
-  for (const sub of subjects) await withPersonLease(sub, lease => endSessions(lease,
-    ({ session }) => session.kcSessionId === kcSessionId && (!clientId || session.oidcClientId === clientId), { keycloak: false }));
+  const matches = ({ session }: { session: IdentitySession }) =>
+    session.kcSessionId === kcSessionId && (!clientId || session.oidcClientId === clientId);
+  const end = (sub: string, waitMs?: number) => withPersonLease(sub, async lease => { await endSessions(lease, matches, { keycloak: false }); }, { waitMs });
+  if (subject) return end(subject);
+  for (const user of await listRevocationUsers()) {
+    const held = (await sessionsRaw(user.id)).filter(matches);
+    if (!held.length) continue;
+    try { await end(user.id, SCAN_LEASE_WAIT_MS); }
+    catch (error) {
+      if (!(error instanceof LeaseBusyError)) throw error;
+      for (const { sessionId } of held) await deleteIdentitySession(sessionId);
+    }
+  }
 }

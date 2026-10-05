@@ -83,6 +83,15 @@ describe("binding transitions with real person and uuid locks", () => {
     await expect(ensureActive(input())).rejects.toMatchObject({ code: "BINDING_REMOVED" });
     await expect(accept({ subject: "invitee", tenantId: "pg", invitationVersion: 1 })).rejects.toMatchObject({ code: "INVITATION_STALE" });
   });
+  it("re-invites a removed key to the person's new DIGIT uuid", async () => {
+    await ensureActive(input());
+    await remove({ ...input(), removedBy: { kind: "browser", subject: "admin" } });
+    await expect(createPending({ ...input("invitee", "pg", otherUuid), expiresAt: Date.now() + 60_000 })).rejects.toMatchObject({ code: "BINDING_CONFLICT" });
+    const { binding } = await createPending({ ...input("invitee", "pg", otherUuid), expiresAt: Date.now() + 60_000, reinvite: true });
+    expect(binding).toMatchObject({ uuid: otherUuid, state: "pending", invitationVersion: 2 });
+    expect(db.users.get("invitee")?.attributes?.["digit.boundUuids"]).toEqual([`pg|${otherUuid}`]);
+    expect(await accept({ subject: "invitee", tenantId: "pg", invitationVersion: 2 })).toMatchObject({ uuid: otherUuid, state: "active" });
+  });
   it("explicit re-invite invalidates older invitation versions", async () => {
     await pending();
     expect((await createPending({ ...input(), expiresAt: Date.now() + 60_000, reinvite: true })).binding.invitationVersion).toBe(2);

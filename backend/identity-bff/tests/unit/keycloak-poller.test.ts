@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { config } from "../../src/infrastructure/config.js";
 import { closeCache, getRedis, initCache } from "../../src/infrastructure/redis.js";
 import { withPersonLease } from "../../src/modules/accounts/person-lease.js";
-import { createIdentitySession, getIdentitySession, sessionCookie, saveSelectedIdentityContext } from "../../src/modules/sessions/session-store.js";
+import { createIdentitySession, getIdentitySession, kcSessionSubjectKey, sessionCookie, saveSelectedIdentityContext, sessionKey } from "../../src/modules/sessions/session-store.js";
+import { personLeaseKey } from "../../src/modules/accounts/person-lease.js";
 import { currentSession } from "../../src/modules/sessions/current-session.js";
 import { checkpointKey, getPollerReadiness, pollKeycloakEvents, seenKey } from "../../src/modules/revocation/poller.js";
 import { applyKeycloakEvent, type IdentifierEffects } from "../../src/modules/revocation/event-effects.js";
@@ -108,6 +109,35 @@ describe("Keycloak event poller", () => {
     expect(await getIdentitySession(sid)).toBeNull(); expect(await readToken(account)).toBeNull();
     expect(digit.revokeToken).toHaveBeenCalledWith("digit");
     expect(await getRedis().hget(checkpointKey("user"), "time")).toBe(String(now));
+  });
+  const sessionDeleted = (kcSessionId: string, extra: Partial<KeycloakEvent> = {}) => event(`end-${kcSessionId}`,
+    { userId: undefined, resourceType: "USER_SESSION", operationType: "DELETE", resourcePath: `sessions/${kcSessionId}`, ...extra });
+  it("an admin USER_SESSION DELETE resolves its person from the kcSessionId index, without a realm scan", async () => {
+    const sid = await session("kc-indexed");
+    expect(await getRedis().get(kcSessionSubjectKey("kc-indexed"))).toBe(subject);
+    expect(await getRedis().pttl(kcSessionSubjectKey("kc-indexed"))).toBeGreaterThanOrEqual(await getRedis().pttl(sessionKey(sid)) - 1000);
+    await effect("admin", sessionDeleted("kc-indexed"));
+    expect(await getIdentitySession(sid)).toBeNull();
+    expect(keycloak.listRevocationUsers).not.toHaveBeenCalled();
+  });
+  it("without an index entry, the event's own user id is used before any scan", async () => {
+    const sid = await session("kc-unindexed");
+    await getRedis().del(kcSessionSubjectKey("kc-unindexed"));
+    await effect("admin", sessionDeleted("kc-unindexed", { representation: JSON.stringify({ id: "kc-unindexed", userId: subject }) }));
+    expect(await getIdentitySession(sid)).toBeNull();
+    expect(keycloak.listRevocationUsers).not.toHaveBeenCalled();
+  });
+  it("the last-resort scan skips people without the session and survives a busy one", async () => {
+    const sid = await session("kc-scan");
+    await getRedis().del(kcSessionSubjectKey("kc-scan"));
+    vi.mocked(keycloak.listRevocationUsers).mockResolvedValue([{ id: "busy-bystander" }, { id: subject }]);
+    await getRedis().set(personLeaseKey("busy-bystander"), "someone-else", "PX", 30_000);
+    await getRedis().set(personLeaseKey(subject), "someone-else", "PX", 30_000);
+    const started = Date.now();
+    await effect("admin", sessionDeleted("kc-scan"));
+    expect(await getIdentitySession(sid)).toBeNull();
+    // Only the holder waited for (and then bypassed) a busy lease; the bystander was never locked.
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
   it("writes deletion audit before scheduling revocation", async () => {
     const sid = await session();

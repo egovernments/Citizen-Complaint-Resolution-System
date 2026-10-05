@@ -3,7 +3,7 @@ import { withPersonLease, type PersonLease } from "../accounts/person-lease.js";
 import { activateStaffCredential, staffCredentialMode, StaffLoginError } from "../accounts/credential-service.js";
 import { linkRequestId, normalizeLinkEmail } from "../bindings/link-request-id.js";
 import { invitationExpiryHours } from "../bindings/invitations.js";
-import { accept, bindingsFromUser, createPending, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
+import { accept, bindingsFromUser, createPending, effectiveBinding, ensureActive, readBindings, readBindingUser, remove, type Binding } from "../bindings/store.js";
 import { BindingConflictError, BindingError, type BindingUser } from "../bindings/types.js";
 import { ensureOrganizationMembership, isOrganizationMember, request } from "../organizations/organization-service.js";
 import { createdId, paged, readUser } from "../../integrations/keycloak/admin-api.js";
@@ -154,19 +154,33 @@ async function membersAt(tenantId: string) {
   return result;
 }
 
+/** Runs fn over items with at most `limit` in flight, keeping input order in the result. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => { while (next < items.length) { const i = next++; results[i] = await fn(items[i]); } };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export async function listWorkspaceMembers(actor: string, tenantId: string, first = 0, max = 100) {
   await requireAccountAdmin(actor, tenantId);
-  const members = [];
-  for (const row of await membersAt(tenantId)) {
-    const binding = (await readBindings(row.user.id!)).find((b) => b.tenantId === tenantId)!;
-    if (binding.state === "removed") continue;
+  // Page on the realm snapshot first, then enrich only the page: the per-member binding
+  // re-read (which also persists lazy expiry) and DIGIT lookups cost O(page), not O(members).
+  const page = (await membersAt(tenantId))
+    .filter((row) => effectiveBinding(row.binding).state !== "removed")
+    .sort((a, b) => a.user.id!.localeCompare(b.user.id!))
+    .slice(first, first + max);
+  const members = await mapLimit(page, 8, async (row) => {
+    const binding = (await readBindings(row.user.id!)).find((b) => b.tenantId === tenantId);
+    if (!binding || binding.state === "removed") return null;
     const account = await readDigitAccount(tenantId, binding.uuid);
-    members.push({ subject: row.user.id!, email: row.user.email, name: account?.name || row.user.firstName || "",
+    return { subject: row.user.id!, email: row.user.email, name: account?.name || row.user.firstName || "",
       digitUuid: binding.uuid, state: binding.state, invitationVersion: binding.invitationVersion,
       ...(binding.boundAt !== undefined && { boundAt: binding.boundAt }), ...(binding.expiresAt !== undefined && { expiresAt: binding.expiresAt }),
-      ...(!account && { missing: true }) });
-  }
-  return { members: members.sort((a, b) => a.subject.localeCompare(b.subject)).slice(first, first + max) };
+      ...(!account && { missing: true }) };
+  });
+  return { members: members.filter((m) => m !== null) };
 }
 
 export async function removeWorkspaceMember(actor: string, tenantId: string, digitUuid: string) {

@@ -314,12 +314,23 @@ enable_integration_tests_runner: false
 # send/validate). The OTP SMS itself goes out through novu-bridge like every
 # other SMS (it consumes DIGIT core's egov.core.notification.sms topic).
 # Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
-# 200 response so login/register work via the fixed OTP (123456, see
-# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
-# Set true for production. The deploy then strips the two Kong OTP mocks and
-# turns the fixed OTP off. REQUIRES enable_novu: true (preflight asserts it)
-# and SMS enabled for the tenant (Configurator -> Notifications -> Channels).
+# 200 response. Citizen OTP login then works ONLY on a box that opts into the
+# fixed development OTP below; otherwise no citizen code can be delivered.
+# Set true for production. The deploy then strips the two Kong OTP mocks.
+# REQUIRES enable_novu: true (preflight asserts it) and SMS enabled for the
+# tenant (Configurator -> Notifications -> Channels).
 enable_otp_services: false
+
+# Fixed citizen OTP (123456, CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) for egov-user
+# and the identity BFF, plus the BFF's `log` sender. DEVELOPMENT ONLY: anyone can
+# sign in as any citizen number with it. Off by default, never derived from
+# enable_otp_services. With enable_keycloak and neither this nor real OTP nor
+# identity_citizen_otp_sender, citizen phone sign-in is unavailable (the deploy
+# warns).
+# identity_dev_fixed_otp: false
+# The BFF's citizen OTP sender (IDENTITY_CITIZEN_OTP_SENDER). Empty by default;
+# `log` only when identity_dev_fixed_otp is true.
+# identity_citizen_otp_sender: ""
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
