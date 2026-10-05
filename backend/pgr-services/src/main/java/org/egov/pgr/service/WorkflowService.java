@@ -364,7 +364,8 @@ public class WorkflowService {
     }
 
     private List<ProcessInstance> searchProcessInstances(StringBuilder url, RequestInfoWrapper requestInfoWrapper) {
-        Object result = repository.fetchResult(url, requestInfoWrapper);
+        // Runs on every employee search/count: time-boxed so a hung workflow cannot hang them.
+        Object result = repository.fetchResultWithTimeout(url, requestInfoWrapper);
         if (result == null)
             throw new CustomException("WORKFLOW_SEARCH_FAILED", "Workflow process instance search returned no response");
         ProcessInstanceResponse response;

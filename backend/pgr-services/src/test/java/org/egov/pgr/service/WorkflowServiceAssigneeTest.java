@@ -50,7 +50,7 @@ class WorkflowServiceAssigneeTest {
     /** Stubs workflow: latest-only assignee search, history assignee search, batched history search. */
     private void stubWorkflow(List<ProcessInstance> latestNamingLme, List<ProcessInstance> everNamingLme,
                               List<ProcessInstance> histories) {
-        when(repository.fetchResult(any(), any())).thenAnswer(inv -> {
+        when(repository.fetchResultWithTimeout(any(), any())).thenAnswer(inv -> {
             String url = inv.getArgument(0).toString();
             urls.add(url);
             if (url.contains("assignee=") && url.contains("history=false"))
@@ -113,7 +113,7 @@ class WorkflowServiceAssigneeTest {
     @Test
     void historyFailureKeepsTheLatestTransitionResult() {
         ProcessInstance assign = instance("PGR-1", PENDING_AT_LME, LME);
-        when(repository.fetchResult(any(), any())).thenAnswer(inv -> {
+        when(repository.fetchResultWithTimeout(any(), any())).thenAnswer(inv -> {
             String url = inv.getArgument(0).toString();
             if (url.contains("history=false"))
                 return response(List.of(assign));

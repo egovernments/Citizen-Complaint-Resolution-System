@@ -172,13 +172,12 @@ public class PGRService {
             return new ArrayList<>();
 
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        PgrSearchScope scope = withOwnAssigned(requestInfo, tenantIdForScope,
-                searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength()));
+        PgrSearchScope resolvedScope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        Set<String> ownAssigned = ownAssigned(requestInfo, tenantIdForScope, resolvedScope);
+        PgrSearchScope scope = withOwnAssigned(resolvedScope, ownAssigned);
 
         if (criteria.getAssignee() != null) {
-            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
-                    : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
-            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+            Set<String> serviceRequestIds = assignedTo(requestInfo, criteria, ownAssigned);
             if (serviceRequestIds.isEmpty()) {
                 return new ArrayList<>();
             }
@@ -341,14 +340,17 @@ public class PGRService {
         if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
             return 0;
 
+        String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        PgrSearchScope resolvedScope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        Set<String> ownAssigned = ownAssigned(requestInfo, tenantIdForScope, resolvedScope);
+        PgrSearchScope scope = withOwnAssigned(resolvedScope, ownAssigned);
+
         // Mirror search()'s assignee handling: resolve the assignee to
         // serviceRequestIds via workflow before counting. Without this the
         // assignee param was silently ignored on _count, so count and search
         // disagreed for assignee-scoped queries (e.g. the My-tab badge).
         if (criteria.getAssignee() != null) {
-            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
-                    : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
-            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+            Set<String> serviceRequestIds = assignedTo(requestInfo, criteria, ownAssigned);
             if (CollectionUtils.isEmpty(serviceRequestIds)) {
                 return 0;
             }
@@ -356,39 +358,56 @@ public class PGRService {
         }
 
         criteria.setIsPlainSearch(false);
-        String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        PgrSearchScope scope = withOwnAssigned(requestInfo, tenantIdForScope,
-                searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength()));
         Integer count = repository.getCount(criteria, scope);
         return count;
     }
 
 
     /**
-     * Adds the caller's currently-assigned complaints to a department/jurisdiction-restricted
-     * employee scope, so an employee can always find what workflow has assigned to them — e.g.
-     * a GRO routing a ward-B complaint to a ward-A LME. Resolved exactly like the "My" assignee
-     * filter ({@link WorkflowService#getServiceRequestIdsByAssignee}: who currently holds it, read
-     * from workflow history, bounded newest-first). Workflow matches the tenant exactly, so a
-     * state-level search gets no exception; search the city tenant. Never widens anything else: deny-all
-     * decisions, citizens, unrestricted scopes, and the tenant axis are untouched, and a workflow failure leaves the
-     * scope as it was (no exception, not a wider one).
+     * The caller's currently-assigned complaints, for the exception that keeps them visible to a
+     * department/jurisdiction-restricted employee whatever their scope — e.g. a GRO routing a
+     * ward-B complaint to a ward-A LME. Resolved exactly like the "My" assignee filter
+     * ({@link WorkflowService#getServiceRequestIdsByAssignee}: who currently holds it, read from
+     * workflow history, bounded newest-first). Workflow matches the tenant exactly, so a
+     * state-level search gets no exception; search the city tenant.
+     *
+     * @return null when the exception does not apply — deny-all decisions, citizens, non-employees
+     *         and unrestricted scopes — or when workflow fails, so the scope stays as it was (no
+     *         exception, never a wider one); otherwise the (possibly empty) set.
      */
-    private PgrSearchScope withOwnAssigned(RequestInfo requestInfo, String tenantId, PgrSearchScope scope) {
+    private Set<String> ownAssigned(RequestInfo requestInfo, String tenantId, PgrSearchScope scope) {
         if (scope == null || scope == PgrSearchScope.UNRESTRICTED || scope.denyAll || scope.citizenUuid != null
                 || !scope.restrictsDepartmentOrJurisdiction())
-            return scope;
+            return null;
         User user = requestInfo == null ? null : requestInfo.getUserInfo();
         if (user == null || user.getUuid() == null || !"EMPLOYEE".equalsIgnoreCase(user.getType()))
-            return scope;
+            return null;
         try {
-            Set<String> assigned = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, user.getUuid());
-            return CollectionUtils.isEmpty(assigned) ? scope : scope.withOwnAssigned(assigned);
+            return workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, user.getUuid());
         } catch (Exception e) {
             log.warn("PGRService: could not resolve own-assigned complaints for uuid={} tenant={} — searching without them: {}",
                     user.getUuid(), tenantId, e.getMessage());
-            return scope;
+            return null;
         }
+    }
+
+    /** The scope plus the own-assigned exception. Never touches the tenant or citizen-self axes. */
+    private static PgrSearchScope withOwnAssigned(PgrSearchScope scope, Set<String> ownAssigned) {
+        return CollectionUtils.isEmpty(ownAssigned) ? scope : scope.withOwnAssigned(ownAssigned);
+    }
+
+    /**
+     * Complaint ids for the assignee filter. When the filter is the caller themself (the "My" tab)
+     * and their own-assigned set was already resolved for this request, that is the same workflow
+     * query at the same tenant, so reuse it instead of asking workflow twice.
+     */
+    private Set<String> assignedTo(RequestInfo requestInfo, RequestSearchCriteria criteria, Set<String> callerOwnAssigned) {
+        User user = requestInfo.getUserInfo();
+        if (callerOwnAssigned != null && user != null && criteria.getAssignee().equals(user.getUuid()))
+            return callerOwnAssigned;
+        String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
+                : (user != null ? user.getTenantId() : null);
+        return workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
     }
 
     public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {

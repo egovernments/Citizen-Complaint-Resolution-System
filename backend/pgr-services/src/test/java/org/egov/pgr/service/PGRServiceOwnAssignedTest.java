@@ -21,11 +21,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,12 +77,40 @@ class PGRServiceOwnAssignedTest {
         // #2281 review: strict mode with no policy, or a tenant outside the caller's subtree.
         PgrSearchScope denied = PgrSearchScope.deniedAll(TENANT, false);
         when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(denied);
-        when(workflowService.getServiceRequestIdsByAssignee(any(), any(), any())).thenReturn(java.util.Set.of("PGR-1"));
+        when(workflowService.getServiceRequestIdsByAssignee(any(), any(), any())).thenReturn(Set.of("PGR-1"));
 
         pgrService.count(employee("lme-1"), criteria());
 
         assertSame(denied, countScope());
         verify(workflowService, never()).getServiceRequestIdsByAssignee(any(), any(), any());
+    }
+
+    @Test
+    void myTabReusesTheOwnAssignedLookupInsteadOfAskingWorkflowTwice() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, List.of("WATER"), List.of("WT_WARD_A"));
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), eq(TENANT), eq("lme-1"))).thenReturn(Set.of("PGR-B"));
+        RequestSearchCriteria criteria = criteria();
+        criteria.setAssignee("lme-1");
+
+        pgrService.count(employee("lme-1"), criteria);
+
+        verify(workflowService, times(1)).getServiceRequestIdsByAssignee(any(), any(), any());
+        assertEquals(Set.of("PGR-B"), criteria.getServiceRequestIds());
+    }
+
+    @Test
+    void assigneeFilterForSomeoneElseStillAsksWorkflowForThem() {
+        PgrSearchScope resolved = new PgrSearchScope(TENANT, false, null, List.of("WATER"), List.of("WT_WARD_A"));
+        when(searchAccessPolicyService.resolveScope(any(), eq(TENANT), anyInt())).thenReturn(resolved);
+        when(workflowService.getServiceRequestIdsByAssignee(any(), eq(TENANT), eq("gro-1"))).thenReturn(Set.of("PGR-A"));
+        when(workflowService.getServiceRequestIdsByAssignee(any(), eq(TENANT), eq("lme-2"))).thenReturn(Set.of("PGR-C"));
+        RequestSearchCriteria criteria = criteria();
+        criteria.setAssignee("lme-2");
+
+        pgrService.count(employee("gro-1"), criteria);
+
+        assertEquals(Set.of("PGR-C"), criteria.getServiceRequestIds());
     }
 
     static RequestSearchCriteria criteria() {
