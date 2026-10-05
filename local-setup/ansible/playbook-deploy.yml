@@ -5400,13 +5400,17 @@
           migration didn't run.
 
     # ────────────────────────────────────────────────────────────────
-    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
-    # everything from `pg` → `state_root` (e.g. `ke`) and `pg.citest` →
-    # `tenant_id` (e.g. `ke.kericho`). This seeds 30 schemas, ~1K data
-    # rows, ~8K localizations, the PGR workflow, an ADMIN eg_user, and
-    # an ADMIN HRMS Employee with all departments — enough for a full
-    # PGR lifecycle on day 1, and enough for the ui-tenant probe below
-    # to succeed so the SPA lands on the operator's tenant (not pg).
+    # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to seed
+    # `state_root` (e.g. `ke`) and `tenant_id` (e.g. `ke.kericho`) from the
+    # versioned platform baseline shared with PGR onboarding: its schemas and
+    # ~1K platform records (behind a role-action floor so Kong admits the
+    # writes), the PGR workflow, the localization packs of `source_tenant`
+    # (`pg` / `pg.citest`, plus the source's root), the city listed under the
+    # root as Tenant.<city>, an ADMIN eg_user (roles only ever added), and an
+    # ADMIN HRMS Employee rooted in the reserved WORKSPACE hierarchy. That is
+    # enough for the ui-tenant probe below to land the SPA on the operator's
+    # tenant (not pg); departments, complaint types and geography stay
+    # workspace-owned.
     #
     # Gating: skipped when state_tenant_id == 'pg' (nothing to bootstrap)
     # or when MCP isn't actually reachable at runtime. We don't gate on
