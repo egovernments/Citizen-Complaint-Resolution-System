@@ -4,10 +4,14 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType;
 import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,10 +38,30 @@ public class OnboardingService {
 
     private final OnboardingRepository repository;
     private final OnboardingIdentifierService identifiers;
+    // Countries the platform baseline carries a mobile rule for. The worker cannot provision
+    // any other country (COUNTRY_NOT_SUPPORTED), and by then the reopened draft has locked
+    // the country, so an unsupported one is refused here, before anything runs.
+    private final Set<String> supportedCountries;
 
-    public OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers) {
+    @Autowired
+    public OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers,
+                             PlatformBaseline baseline) {
         this.repository = repository;
         this.identifiers = identifiers;
+        this.supportedCountries = baseline.supportedCountries();
+    }
+
+    /** Uses the committed platform baseline. */
+    OnboardingService(OnboardingRepository repository, OnboardingIdentifierService identifiers) {
+        this(repository, identifiers, committedBaseline());
+    }
+
+    private static PlatformBaseline committedBaseline() {
+        try {
+            return new PlatformBaseline(new ObjectMapper());
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 
     @Transactional
@@ -204,6 +228,7 @@ public class OnboardingService {
         if (values.containsKey("countryCode")) {
             String country = requiredString(values.get("countryCode"), "Signup.countryCode").toUpperCase(Locale.ROOT);
             if (!country.matches("^[A-Z]{2}$")) invalid("Signup.countryCode");
+            requireSupportedCountry(country);
             signup.setCountryCode(country);
         }
         if (values.containsKey("languages")) {
@@ -267,7 +292,7 @@ public class OnboardingService {
         requiredString(signup.getUrlSlug(), "Signup.urlSlug");
         requiredString(signup.getOrganizationAlias(), "Signup.organizationAlias");
         requiredString(signup.getRequestedTenantId(), "Signup.requestedTenantId");
-        requiredString(signup.getCountryCode(), "Signup.countryCode");
+        requireSupportedCountry(requiredString(signup.getCountryCode(), "Signup.countryCode"));
         requiredString(signup.getTimeZone(), "Signup.timeZone");
         requiredString(signup.getFinancialYearPolicy(), "Signup.financialYearPolicy");
         requiredString(signup.getAcceptedTermsVersion(), "Signup.acceptedTermsVersion");
@@ -332,6 +357,12 @@ public class OnboardingService {
         } catch (NumberParseException exception) {
             invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
             return Collections.emptyMap(); // unreachable: invalid always throws
+        }
+    }
+
+    private void requireSupportedCountry(String country) {
+        if (!supportedCountries.contains(country.toUpperCase(Locale.ROOT))) {
+            throw new CustomException("ONBOARDING_VALIDATION_ERROR", "Signup.countryCode is not supported");
         }
     }
 
