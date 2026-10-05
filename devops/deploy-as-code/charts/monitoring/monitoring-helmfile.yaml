@@ -144,7 +144,7 @@ releases:
           - job_name: blackbox
             metrics_path: /probe
             params:
-              module: [http_2xx]
+              module: [http_2xx_javascript]
             static_configs:
               # Not the bare root: NOTHING in this tier serves `/` (unless
               # root-ingress.defaultTenantSlug is set). Every ingress is a
@@ -155,11 +155,16 @@ releases:
               # Not /digit-ui/ either: since D26 the app is served only under
               # /<tenant-slug>/digit-ui/ and the legacy /digit-ui ingress is
               # off (ingress.legacyPathEnabled), so that probe is permanently
-              # red. The bundle is the tenant-independent 2xx: tenant pages
-              # load it from the absolute /digit-ui/ prefix, which the
+              # red. globalConfigs.js is the tenant-independent 2xx: tenant
+              # pages load it from the absolute /digit-ui/ prefix, which the
               # digit-ui chart's static-assets ingress routes to the SPA pod.
+              # It is ~4.5 KB (index.js is ~8.4 MB, too heavy for a 30 s probe
+              # under a 5 s timeout), and the SPA cannot render without it.
+              # The http_2xx_javascript module also requires a JavaScript
+              # Content-Type, so the pod's index.html fallback (a 200
+              # text/html) does not count as up.
               - targets:
-                  - https://{{ .Values.global.domain }}/digit-ui/index.js
+                  - https://{{ .Values.global.domain }}/digit-ui/globalConfigs.js
             relabel_configs:
               - source_labels: [__address__]
                 target_label: __param_target

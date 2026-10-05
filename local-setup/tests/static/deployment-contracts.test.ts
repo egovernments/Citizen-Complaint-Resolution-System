@@ -1775,8 +1775,25 @@ describe('D26 legacy identity paths are retired', () => {
     expect(gate).toContain('is search(item.type)');
     expect(playbook).not.toContain('- name: "validate — public UI returns 200"');
     const probe = read('devops/deploy-as-code/charts/monitoring/monitoring-helmfile.yaml');
-    expect(probe).toContain('- https://{{ .Values.global.domain }}/digit-ui/index.js');
     expect(probe).not.toContain('- https://{{ .Values.global.domain }}/digit-ui/\n');
+  });
+
+  // Low (Dhruv, #2271 review 3): the blackbox probe fetched the 8.4 MB index.js
+  // every 30 s under a 5 s timeout. It now fetches globalConfigs.js and, since
+  // the pod answers a missing file with index.html and a 200, requires a
+  // JavaScript Content-Type.
+  test('the blackbox probe fetches the small globalConfigs.js and checks it is JavaScript', () => {
+    const probe = read('devops/deploy-as-code/charts/monitoring/monitoring-helmfile.yaml');
+    const job = probe.slice(probe.indexOf('- job_name: blackbox\n'), probe.indexOf('- job_name: blackbox_exporter'));
+    expect(job).toContain('module: [http_2xx_javascript]');
+    expect(job).toContain('- https://{{ .Values.global.domain }}/digit-ui/globalConfigs.js');
+    expect(job).not.toMatch(/^\s+- https:\/\/\S+\/digit-ui\/index\.js/m);
+    const blackbox = read('devops/deploy-as-code/charts/monitoring/values/blackbox-exporter.yaml');
+    const module = blackbox.slice(blackbox.indexOf('    http_2xx_javascript:'), blackbox.indexOf('    http_post_2xx:'));
+    expect(module).toMatch(/fail_if_header_not_matches:\n\s+- header: Content-Type\n\s+regexp: "javascript"/);
+    // The chart serves it with that type.
+    expect(read('devops/deploy-as-code/charts/urban/digit-ui/templates/globalconfigs-configmap.yaml'))
+      .toMatch(/location = \/\{\{ \.Values\.ingress\.context \}\}\/globalConfigs\.js \{[^}]*default_type application\/javascript;/);
   });
 
   test('Helm publishes only tenant-scoped digit-ui routes by default', () => {
